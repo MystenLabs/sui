@@ -3,12 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::btree_map::Entry;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::PathBuf;
 use std::time::Duration;
-use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    pin::Pin,
-};
 
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -20,7 +17,6 @@ use move_core_types::value::MoveStructLayout;
 use typed_store::rocks::open_cf;
 use typed_store::Map;
 
-use sui_types::crypto::Signature;
 use sui_types::error::SuiResult;
 use sui_types::{
     base_types::*,
@@ -47,52 +43,6 @@ use std::{
 
 use self::gateway_responses::*;
 
-/// A trait for supplying transaction signature asynchronously.
-///
-/// The transaction data can be validated inside [`Self::sign`] function before signing,
-/// return `signature::Error` if the transaction data is incorrect or unexpected.
-///
-/// # Example
-/// ```
-/// use signature::Error;
-/// use sui_core::gateway_state::AsyncTransactionSigner;
-/// use sui_types::base_types::SuiAddress;
-/// use sui_types::crypto::Signature;
-/// use sui_types::messages::TransactionData;
-/// use async_trait::async_trait;
-///
-/// struct ExampleTransactionSigner{
-///     signer: dyn signature::Signer<Signature> + Sync + Send
-/// }
-/// #[async_trait]
-/// impl AsyncTransactionSigner for ExampleTransactionSigner {
-///     async fn sign(&self, address: &SuiAddress, data: TransactionData) -> Result<Signature, Error> {
-///         // 1. Validate the transaction data
-///
-///         // 2. Create a signature if the transaction data is valid
-///         let signature = Signature::new(&data, &self.signer);
-///         // 3. return the signature
-///         Ok(signature)
-///     }
-/// }
-/// ```
-/// This trait is typically use with [`StableSyncTransactionSigner`] to supply signature to the [`GatewayAPI`] trait
-#[async_trait]
-pub trait AsyncTransactionSigner {
-    async fn sign(
-        &self,
-        address: &SuiAddress,
-        data: TransactionData,
-    ) -> Result<Signature, signature::Error>;
-}
-
-/// a Trait object for [`AsyncTransactionSigner`] that is:
-/// - Pin, i.e. confined to one place in memory.
-/// - Sync, i.e. can be safely shared between threads.
-///
-/// Typically instantiated with Box::pin(tx_signer) where tx_signer is a [`AsyncTransactionSigner`]
-pub type StableSyncTransactionSigner = Pin<Box<dyn AsyncTransactionSigner + Send + Sync>>;
-
 pub mod gateway_responses;
 pub mod gateway_store;
 
@@ -104,7 +54,6 @@ pub struct GatewayState<A> {
     authorities: AuthorityAggregator<A>,
     store: GatewayStore,
     address_states: BTreeMap<SuiAddress, AccountState>,
-    unsigned_tx: BTreeMap<TransactionDigest, (TransactionData, GatewayRequestType)>,
 }
 
 impl<A> GatewayState<A>
@@ -121,7 +70,6 @@ where
             store: gateway_store::GatewayStore::open(path),
             authorities: AuthorityAggregator::new(committee, authority_clients),
             address_states: BTreeMap::new(),
-            unsigned_tx: Default::default(),
         }
     }
 
@@ -169,8 +117,7 @@ pub struct AccountState {
 pub trait GatewayAPI {
     async fn execute_transaction(
         &mut self,
-        digest: TransactionDigest,
-        signature: Signature,
+        tx: Transaction,
     ) -> Result<TransactionResponse, anyhow::Error>;
 
     /// Send coin object to a Sui address.
@@ -180,7 +127,7 @@ pub trait GatewayAPI {
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: SuiAddress,
-    ) -> Result<TransactionSignatureRequest, anyhow::Error>;
+    ) -> Result<TransactionData, anyhow::Error>;
 
     /// Synchronise account state with a random authorities, updates all object_ids and certificates
     /// from account_addr, request only goes out to one authority.
@@ -200,7 +147,7 @@ pub trait GatewayAPI {
         shared_object_arguments: Vec<ObjectID>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
-    ) -> Result<TransactionSignatureRequest, anyhow::Error>;
+    ) -> Result<TransactionData, anyhow::Error>;
 
     /// Publish Move modules
     async fn publish(
@@ -209,7 +156,7 @@ pub trait GatewayAPI {
         package_bytes: Vec<Vec<u8>>,
         gas_object_ref: ObjectRef,
         gas_budget: u64,
-    ) -> Result<TransactionSignatureRequest, anyhow::Error>;
+    ) -> Result<TransactionData, anyhow::Error>;
 
     /// Split the coin object (identified by `coin_object_ref`) into
     /// multiple new coins. The amount of each new coin is specified in
@@ -224,7 +171,7 @@ pub trait GatewayAPI {
         split_amounts: Vec<u64>,
         gas_payment: ObjectID,
         gas_budget: u64,
-    ) -> Result<TransactionSignatureRequest, anyhow::Error>;
+    ) -> Result<TransactionData, anyhow::Error>;
 
     /// Merge the `coin_to_merge` coin object into `primary_coin`.
     /// After this merge, the balance of `primary_coin` will become the
@@ -241,7 +188,7 @@ pub trait GatewayAPI {
         coin_to_merge: ObjectID,
         gas_payment: ObjectID,
         gas_budget: u64,
-    ) -> Result<TransactionSignatureRequest, anyhow::Error>;
+    ) -> Result<TransactionData, anyhow::Error>;
 
     /// Get the object information
     /// TODO: move this out to AddressManager
@@ -823,32 +770,34 @@ where
 {
     async fn execute_transaction(
         &mut self,
-        digest: TransactionDigest,
-        signature: Signature,
+        tx: Transaction,
     ) -> Result<TransactionResponse, anyhow::Error> {
-        let (tx, req_type) = self
-            .unsigned_tx
-            .get(&digest)
-            .ok_or(SuiError::TransactionNotFound { digest })?
-            .clone();
+        tx.check_signature()?;
+        let tx_kind = tx.data.kind.clone();
+        let (certificate, effects) = self.execute_transaction(tx).await?;
 
-        let (certificate, effects) = self
-            .execute_transaction(Transaction::new(tx.clone(), signature))
-            .await?;
-        self.unsigned_tx.remove(&digest);
-
-        match req_type {
-            GatewayRequestType::Call | GatewayRequestType::Transfer => {
-                Ok(TransactionResponse::EffectResponse(certificate, effects))
-            }
-            GatewayRequestType::Publish => self.to_publish_response(certificate, effects).await,
-            GatewayRequestType::SplitCoin => {
-                self.to_split_coin_response(certificate, effects).await
-            }
-            GatewayRequestType::MergeCoin => {
-                self.to_merge_coin_response(certificate, effects).await
+        // Create custom response base on the request type
+        if let TransactionKind::Single(tx_kind) = tx_kind {
+            match tx_kind {
+                SingleTransactionKind::Publish(_) => {
+                    return self.to_publish_response(certificate, effects).await
+                }
+                // Work out if the transaction is split coin or merge coin transaction
+                SingleTransactionKind::Call(move_call) => {
+                    if move_call.package == self.get_framework_object_ref().await?
+                        && move_call.module.as_ref() == coin::COIN_MODULE_NAME
+                    {
+                        if move_call.function.as_ref() == coin::COIN_SPLIT_VEC_FUNC_NAME {
+                            return self.to_split_coin_response(certificate, effects).await;
+                        } else if move_call.function.as_ref() == coin::COIN_JOIN_FUNC_NAME {
+                            return self.to_merge_coin_response(certificate, effects).await;
+                        }
+                    }
+                }
+                _ => {}
             }
         }
+        return Ok(TransactionResponse::EffectResponse(certificate, effects));
     }
 
     async fn transfer_coin(
@@ -857,7 +806,7 @@ where
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: SuiAddress,
-    ) -> Result<TransactionSignatureRequest, anyhow::Error> {
+    ) -> Result<TransactionData, anyhow::Error> {
         let account = self.get_or_create_account(signer)?;
         let object_ref = account.latest_object_ref(&object_id)?;
         self.get_object_info(object_id)
@@ -869,9 +818,7 @@ where
         let gas_payment = account.latest_object_ref(&gas_payment)?;
         let data = TransactionData::new_transfer(recipient, object_ref, signer, gas_payment);
 
-        self.unsigned_tx
-            .insert(data.digest(), (data.clone(), GatewayRequestType::Transfer));
-        Ok(TransactionSignatureRequest::new(signer, data))
+        Ok(data)
     }
 
     async fn sync_account_state(&mut self, account_addr: SuiAddress) -> Result<(), anyhow::Error> {
@@ -903,7 +850,7 @@ where
         shared_object_arguments: Vec<ObjectID>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
-    ) -> Result<TransactionSignatureRequest, anyhow::Error> {
+    ) -> Result<TransactionData, anyhow::Error> {
         let data = TransactionData::new_move_call(
             signer,
             package_object_ref,
@@ -916,9 +863,7 @@ where
             pure_arguments,
             gas_budget,
         );
-        self.unsigned_tx
-            .insert(data.digest(), (data.clone(), GatewayRequestType::Call));
-        Ok(TransactionSignatureRequest::new(signer, data))
+        Ok(data)
     }
 
     async fn publish(
@@ -927,11 +872,9 @@ where
         package_bytes: Vec<Vec<u8>>,
         gas_object_ref: ObjectRef,
         gas_budget: u64,
-    ) -> Result<TransactionSignatureRequest, anyhow::Error> {
+    ) -> Result<TransactionData, anyhow::Error> {
         let data = TransactionData::new_module(signer, gas_object_ref, package_bytes, gas_budget);
-        self.unsigned_tx
-            .insert(data.digest(), (data.clone(), GatewayRequestType::Publish));
-        Ok(TransactionSignatureRequest::new(signer, data))
+        Ok(data)
     }
 
     async fn split_coin(
@@ -941,7 +884,7 @@ where
         split_amounts: Vec<u64>,
         gas_payment: ObjectID,
         gas_budget: u64,
-    ) -> Result<TransactionSignatureRequest, anyhow::Error> {
+    ) -> Result<TransactionData, anyhow::Error> {
         let account = self.get_or_create_account(signer)?;
         let coin_object_ref = account.latest_object_ref(&coin_object_id)?;
         let gas_payment = account.latest_object_ref(&gas_payment)?;
@@ -963,10 +906,7 @@ where
             vec![bcs::to_bytes(&split_amounts)?],
             gas_budget,
         );
-
-        self.unsigned_tx
-            .insert(data.digest(), (data.clone(), GatewayRequestType::SplitCoin));
-        Ok(TransactionSignatureRequest::new(signer, data))
+        Ok(data)
     }
 
     async fn merge_coins(
@@ -976,7 +916,7 @@ where
         coin_to_merge: ObjectID,
         gas_payment: ObjectID,
         gas_budget: u64,
-    ) -> Result<TransactionSignatureRequest, anyhow::Error> {
+    ) -> Result<TransactionData, anyhow::Error> {
         let account = self.get_or_create_account(signer)?;
         let primary_coin = account.latest_object_ref(&primary_coin)?;
         let coin_to_merge = account.latest_object_ref(&coin_to_merge)?;
@@ -1000,10 +940,7 @@ where
             vec![],
             gas_budget,
         );
-
-        self.unsigned_tx
-            .insert(data.digest(), (data.clone(), GatewayRequestType::MergeCoin));
-        Ok(TransactionSignatureRequest::new(signer, data))
+        Ok(data)
     }
 
     async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error> {
@@ -1025,13 +962,4 @@ where
         self.download_objects_not_in_db(account_addr, object_refs)
             .await
     }
-}
-
-#[derive(Copy, Clone)]
-enum GatewayRequestType {
-    Publish,
-    Transfer,
-    Call,
-    SplitCoin,
-    MergeCoin,
 }

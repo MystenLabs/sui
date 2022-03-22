@@ -32,12 +32,11 @@ use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
 use sui::keystore::Keystore;
 use sui::sui_commands;
 use sui::sui_json::{resolve_move_function_args, SuiJsonValue};
-use sui::wallet_commands::SimpleTransactionSigner;
-use sui_core::gateway_state::{AsyncTransactionSigner, GatewayClient};
+use sui_core::gateway_state::GatewayClient;
 use sui_types::base_types::*;
 use sui_types::committee::Committee;
 use sui_types::event::Event;
-use sui_types::messages::{ExecutionStatus, TransactionEffects};
+use sui_types::messages::{ExecutionStatus, Transaction, TransactionEffects};
 use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::Object as SuiObject;
 use sui_types::object::ObjectRead;
@@ -751,19 +750,19 @@ async fn transfer_object(
         )
     })?;
 
-    let tx_signer = Box::pin(SimpleTransactionSigner {
-        keystore: state.keystore.clone(),
-    });
-
     let response: Result<_, anyhow::Error> = async {
-        let sig_req = state
+        let data = state
             .gateway
             .transfer_coin(owner, object_id, gas_object_id, to_address)
             .await?;
-        let signature = tx_signer.sign(&owner, sig_req.data).await?;
+        let signature = state
+            .keystore
+            .read()
+            .unwrap()
+            .sign(&owner, &data.to_bytes())?;
         Ok(state
             .gateway
-            .execute_transaction(sig_req.digest, signature)
+            .execute_transaction(Transaction::new(data, signature))
             .await?
             .to_effect_response()?)
     }
@@ -1153,12 +1152,8 @@ async fn handle_move_call(
         object_args_refs.push(object_ref);
     }
 
-    let tx_signer = Box::pin(SimpleTransactionSigner {
-        keystore: state.keystore.clone(),
-    });
-
     let response: Result<_, anyhow::Error> = async {
-        let sig_req = state
+        let data = state
             .gateway
             .move_call(
                 sender,
@@ -1174,10 +1169,14 @@ async fn handle_move_call(
                 gas_budget,
             )
             .await?;
-        let signature = tx_signer.sign(&sender, sig_req.data).await?;
+        let signature = state
+            .keystore
+            .read()
+            .unwrap()
+            .sign(&sender, &data.to_bytes())?;
         Ok(state
             .gateway
-            .execute_transaction(sig_req.digest, signature)
+            .execute_transaction(Transaction::new(data, signature))
             .await?
             .to_effect_response()?)
     }

@@ -8,10 +8,10 @@ use std::fmt::{Display, Formatter};
 use serde::ser::Error;
 use serde::Serialize;
 
-use sui_types::base_types::{ObjectRef, SuiAddress, TransactionDigest};
+use sui_types::base_types::ObjectRef;
 use sui_types::error::SuiError;
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::{CertifiedTransaction, TransactionData, TransactionEffects};
+use sui_types::messages::{CertifiedTransaction, TransactionEffects};
 use sui_types::object::Object;
 
 #[derive(Serialize, Debug)]
@@ -23,55 +23,37 @@ pub enum TransactionResponse {
 }
 
 impl TransactionResponse {
-    pub fn to_publish_response(&self) -> Result<PublishResponse, SuiError> {
+    pub fn to_publish_response(self) -> Result<PublishResponse, SuiError> {
         if let TransactionResponse::PublishResponse(resp) = self {
-            Ok(resp.clone())
+            Ok(resp)
         } else {
             Err(SuiError::UnexpectedMessage)
         }
     }
 
-    pub fn to_merge_coin_response(&self) -> Result<MergeCoinResponse, SuiError> {
+    pub fn to_merge_coin_response(self) -> Result<MergeCoinResponse, SuiError> {
         if let TransactionResponse::MergeCoinResponse(resp) = self {
-            Ok(resp.clone())
+            Ok(resp)
         } else {
             Err(SuiError::UnexpectedMessage)
         }
     }
 
-    pub fn to_split_coin_response(&self) -> Result<SplitCoinResponse, SuiError> {
+    pub fn to_split_coin_response(self) -> Result<SplitCoinResponse, SuiError> {
         if let TransactionResponse::SplitCoinResponse(resp) = self {
-            Ok(resp.clone())
+            Ok(resp)
         } else {
             Err(SuiError::UnexpectedMessage)
         }
     }
 
     pub fn to_effect_response(
-        &self,
+        self,
     ) -> Result<(CertifiedTransaction, TransactionEffects), SuiError> {
         if let TransactionResponse::EffectResponse(cert, effects) = self {
-            Ok((cert.clone(), effects.clone()))
+            Ok((cert, effects))
         } else {
             Err(SuiError::UnexpectedMessage)
-        }
-    }
-}
-
-#[derive(Serialize, Debug)]
-pub struct TransactionSignatureRequest {
-    pub data: TransactionData,
-    pub digest: TransactionDigest,
-    pub signer: SuiAddress,
-}
-
-impl TransactionSignatureRequest {
-    pub fn new(signer: SuiAddress, data: TransactionData) -> Self {
-        let digest = data.digest();
-        Self {
-            data,
-            digest,
-            signer,
         }
     }
 }

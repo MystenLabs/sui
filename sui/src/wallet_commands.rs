@@ -7,9 +7,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 use anyhow::anyhow;
-use async_trait::async_trait;
 use colored::Colorize;
-use ed25519_dalek::ed25519::signature;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::parser::parse_type_tag;
@@ -22,14 +20,11 @@ use tracing::info;
 use sui_core::gateway_state::gateway_responses::{
     MergeCoinResponse, PublishResponse, SplitCoinResponse,
 };
-use sui_core::gateway_state::{AsyncTransactionSigner, GatewayClient};
+use sui_core::gateway_state::GatewayClient;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress};
-use sui_types::crypto::{Signable, Signature};
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::{
-    CertifiedTransaction, ExecutionStatus, TransactionData, TransactionEffects,
-};
+use sui_types::messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects};
 use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::ObjectRead;
 use sui_types::object::ObjectRead::Exists;
@@ -187,30 +182,11 @@ pub struct SimpleTransactionSigner {
     pub keystore: Arc<RwLock<Box<dyn Keystore>>>,
 }
 
-// A simple signer callback implementation, which signs the content without validation.
-#[async_trait]
-impl AsyncTransactionSigner for SimpleTransactionSigner {
-    async fn sign(
-        &self,
-        address: &SuiAddress,
-        data: TransactionData,
-    ) -> Result<Signature, signature::Error> {
-        let keystore = self.keystore.read().unwrap();
-        let mut msg = Vec::new();
-        data.write(&mut msg);
-        keystore.sign(address, &msg)
-    }
-}
-
 impl WalletCommands {
     pub async fn execute(
         &mut self,
         context: &mut WalletContext,
     ) -> Result<WalletCommandResult, anyhow::Error> {
-        let tx_signer = Box::pin(SimpleTransactionSigner {
-            keystore: context.keystore.clone(),
-        });
-
         Ok(match self {
             WalletCommands::Publish {
                 path,
@@ -223,14 +199,18 @@ impl WalletCommands {
                 let gas_obj_ref = gas_object.compute_object_reference();
 
                 let compiled_modules = build_move_package_to_bytes(Path::new(path))?;
-                let signature_req = context
+                let data = context
                     .gateway
                     .publish(sender, compiled_modules, gas_obj_ref, *gas_budget)
                     .await?;
-                let signature = tx_signer.sign(&sender, signature_req.data).await?;
+                let signature = context
+                    .keystore
+                    .read()
+                    .unwrap()
+                    .sign(&sender, &data.to_bytes())?;
                 let response = context
                     .gateway
-                    .execute_transaction(signature_req.digest, signature)
+                    .execute_transaction(Transaction::new(data, signature))
                     .await?
                     .to_publish_response()?;
 
@@ -306,7 +286,7 @@ impl WalletCommands {
                     object_args_refs.push(obj_info.object()?.compute_object_reference());
                 }
 
-                let sig_req = context
+                let data = context
                     .gateway
                     .move_call(
                         sender,
@@ -321,10 +301,14 @@ impl WalletCommands {
                         *gas_budget,
                     )
                     .await?;
-                let signature = tx_signer.sign(&sender, sig_req.data).await?;
+                let signature = context
+                    .keystore
+                    .read()
+                    .unwrap()
+                    .sign(&sender, &data.to_bytes())?;
                 let (cert, effects) = context
                     .gateway
-                    .execute_transaction(sig_req.digest, signature)
+                    .execute_transaction(Transaction::new(data, signature))
                     .await?
                     .to_effect_response()?;
 
@@ -341,14 +325,18 @@ impl WalletCommands {
 
                 let time_start = Instant::now();
 
-                let sig_req = context
+                let data = context
                     .gateway
                     .transfer_coin(from, *object_id, *gas, *to)
                     .await?;
-                let signature = tx_signer.sign(&from, sig_req.data).await?;
+                let signature = context
+                    .keystore
+                    .read()
+                    .unwrap()
+                    .sign(&from, &data.to_bytes())?;
                 let (cert, effects) = context
                     .gateway
-                    .execute_transaction(sig_req.digest, signature)
+                    .execute_transaction(Transaction::new(data, signature))
                     .await?
                     .to_effect_response()?;
 
@@ -408,14 +396,18 @@ impl WalletCommands {
                 let gas_object = gas_object_info.object()?;
                 let signer = gas_object.owner.get_owner_address()?;
 
-                let sig_req = context
+                let data = context
                     .gateway
                     .split_coin(signer, *coin_id, amounts.clone(), *gas, *gas_budget)
                     .await?;
-                let signature = tx_signer.sign(&signer, sig_req.data).await?;
+                let signature = context
+                    .keystore
+                    .read()
+                    .unwrap()
+                    .sign(&signer, &data.to_bytes())?;
                 let response = context
                     .gateway
-                    .execute_transaction(sig_req.digest, signature)
+                    .execute_transaction(Transaction::new(data, signature))
                     .await?
                     .to_split_coin_response()?;
                 WalletCommandResult::SplitCoin(response)
@@ -429,14 +421,18 @@ impl WalletCommands {
                 let gas_object_info = context.gateway.get_object_info(*gas).await?;
                 let gas_object = gas_object_info.object()?;
                 let signer = gas_object.owner.get_owner_address()?;
-                let sig_req = context
+                let data = context
                     .gateway
                     .merge_coins(signer, *primary_coin, *coin_to_merge, *gas, *gas_budget)
                     .await?;
-                let signature = tx_signer.sign(&signer, sig_req.data).await?;
+                let signature = context
+                    .keystore
+                    .read()
+                    .unwrap()
+                    .sign(&signer, &data.to_bytes())?;
                 let response = context
                     .gateway
-                    .execute_transaction(sig_req.digest, signature)
+                    .execute_transaction(Transaction::new(data, signature))
                     .await?
                     .to_merge_coin_response()?;
 
