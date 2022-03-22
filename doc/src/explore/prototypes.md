@@ -23,9 +23,9 @@ With Sui, we believe game developers should not be limited by the platform perfo
 
 ## How we did it
 
-Created by game development studio Geniteam, these prototypes use both the Unity SDK and Sui [APIs](https://app.swaggerhub.com/apis/MystenLabs/sui-api/0.1).
+Created by game development studio GenITeam, these prototypes use both the Unity SDK and Sui [APIs](https://app.swaggerhub.com/apis/MystenLabs/sui-api/0.1).
 
-Geniteam’s developers that worked on this collaboration are neither smart contract nor Move developers. Based on their input we created a data model and shared simple APIs. With these APIs, Geniteam was able to mint fully on-chain NFTs that are mutable, own other on-chain assets, and freely transfer to other applications.
+GenITeam’s developers who worked on this collaboration are neither smart contract nor Move developers. Based on their input, we created a data model and shared simple APIs. With these APIs, Geniteam was able to mint fully on-chain NFTs that are mutable, own other on-chain assets, and freely transfer to other applications.
 
 This proof of concept build is meant to demonstrate the capabilities for game developers unlocked through Sui. We look forward to seeing what the creative minds in the gaming community come up with as we unveil additional capabilities in the upcoming months. With each bug fixed we learned insights on what game developers look for in a SDK. Sui is committed to building SDKs that are accessible for all levels of developers with varying degrees of smart contracts expertise.
 
@@ -191,7 +191,7 @@ GET /object_info?objectId={{monster_id}}
 
 ## Protype 1 Sui Monstar
 
-The first prototype is [Sui Monstar](https://sui.io/sui_monstar), a pet simulation game.
+The first prototype is [Sui Monstar](https://sui.io/monstar), a pet simulation game.
 
 Gameplay:
 
