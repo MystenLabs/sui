@@ -42,7 +42,7 @@ use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::Object as SuiObject;
 use sui_types::object::ObjectRead;
 
-const REST_SERVER_PORT: u16 = 5000;
+const REST_SERVER_PORT: u16 = 5001;
 const REST_SERVER_ADDR_IPV4: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
 
 #[path = "unit_tests/rest_server_tests.rs"]
