@@ -1,5 +1,7 @@
+// Copyright (c) 2020 Christian Vallentin
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use std::{collections::VecDeque, iter::Extend};
 
 /// [Breadth-First Traversal] (or Level Order Traversal).
