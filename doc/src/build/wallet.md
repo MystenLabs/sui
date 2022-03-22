@@ -9,7 +9,7 @@ Sui wallet and execute wallet commands through its command line
 interface, *Wallet CLI*.
 
 
-## Install
+## Set up
 
 1. Follow the instructions to [install Sui binaries](install.md).
 
