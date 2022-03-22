@@ -23,7 +23,7 @@ remainder of this tutorial.
 
 We will follow the same convention as the one described in the [Sui
 setup instructions](../build/wallet.md#setup) and assume that Sui
-configuration files generated durind Sui genesis state creation are
+configuration files generated during Sui genesis state creation are
 stored in the `"$SUI_ROOT"/sui_instance` directory.
 
 *IMPORTANT*: For the remainder of this tutorial, we will assume that you are
