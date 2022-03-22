@@ -48,7 +48,7 @@ newly created accounts.
 ## Wallet configuration
 The genesis process creates a configuration file `wallet.conf`, and a keystore file `wallet.key` for the
 Sui wallet.  The config file contains information of the accounts and
-the Sui network gateway. The keystore file contains all the public-private key pair of the created accounts.
+the Sui Network Gateway. The keystore file contains all the public-private key pair of the created accounts.
 Sui wallet uses the network information in `wallet.conf` to communicate
 with the Sui network authorities  and create transactions using the key
 pairs residing in the keystore file.
@@ -102,8 +102,9 @@ database. This database stores all the transaction data, certificates
 and object data belonging to the account.
 
 ### Sui Network Gateway
-The Sui network gateway is an abstraction layer that acts as the entry point to the Sui network.
-Different gateway implementation can be use by the application layer base on their use cases.
+The Sui Network Gateway (or simply, Sui Gateway) is an abstraction layer that acts as the entry
+point to the Sui network. Different gateway implementations can be used by the application layer
+based on their use cases.
 
 #### Embedded Gateway
 As the name suggests, embedded gateway embeds the gateway logic into the application;
