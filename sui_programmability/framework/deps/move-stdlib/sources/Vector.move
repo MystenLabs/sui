@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// A variable-sized container that can hold any type. Indexing is 0-based, and
 /// vectors are growable. This module has many native functions.
 /// Verification of modules that use this one uses model functions that are implemented

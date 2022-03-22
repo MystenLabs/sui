@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// A flash loan that works for any Coin type
 module DeFi::FlashLender {
     use Sui::Coin::{Self, Coin};
@@ -30,8 +33,8 @@ module DeFi::FlashLender {
         repay_amount: u64
     }
 
-    /// An object conveying the privilege to withdraw funds from and deposit funds to the 
-    /// `FlashLender` instance with ID `flash_lender_id`. Initially granted to the creator 
+    /// An object conveying the privilege to withdraw funds from and deposit funds to the
+    /// `FlashLender` instance with ID `flash_lender_id`. Initially granted to the creator
     /// of the `FlashLender`, and only one `AdminCap` per lender exists.
     struct AdminCap has key, store {
         id: VersionedID,
@@ -82,7 +85,7 @@ module DeFi::FlashLender {
     // === Core functionality: requesting a loan and repaying it ===
 
     /// Request a loan of `amount` from `lender`. The returned `Receipt<T>` "hot potato" ensures
-    /// that the borrower will call `repay(lender, ...)` later on in this tx. 
+    /// that the borrower will call `repay(lender, ...)` later on in this tx.
     /// Aborts if `amount` is greater that the amount that `lender` has available for lending.
     public fun loan<T>(
         self: &mut FlashLender<T>, amount: u64, ctx: &mut TxContext
@@ -91,14 +94,14 @@ module DeFi::FlashLender {
         assert!(Coin::value(to_lend) >= amount, ELOAN_TOO_LARGE);
         let loan = Coin::withdraw(to_lend, amount, ctx);
 
-        let repay_amount = amount + self.fee;        
+        let repay_amount = amount + self.fee;
         let receipt = Receipt { flash_lender_id: *ID::id(self), repay_amount };
         (loan, receipt)
     }
 
     /// Repay the loan recorded by `receipt` to `lender` with `payment`.
     /// Aborts if the repayment amount is incorrect or `lender` is not the `FlashLender`
-    /// that issued the original loan. 
+    /// that issued the original loan.
     public fun repay<T>(self: &mut FlashLender<T>, payment: Coin<T>, receipt: Receipt<T>) {
         let Receipt { flash_lender_id, repay_amount } = receipt;
         assert!(ID::id(self) == &flash_lender_id, EREPAY_TO_WRONG_LENDER);
@@ -111,9 +114,9 @@ module DeFi::FlashLender {
 
     /// Allow admin for `self` to withdraw funds.
     public fun withdraw<T>(
-        self: &mut FlashLender<T>, 
+        self: &mut FlashLender<T>,
         admin_cap: &AdminCap,
-        amount: u64, 
+        amount: u64,
         ctx: &mut TxContext
     ): Coin<T> {
         // only the holder of the `AdminCap` for `self` can withdraw funds

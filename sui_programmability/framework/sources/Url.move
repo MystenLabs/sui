@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// URL: standard Uniform Resource Locator string
 /// Url: Sui type which wraps a URL
 /// UrlCommitment: Sui type which wraps a Url but also includes an immutable commitment

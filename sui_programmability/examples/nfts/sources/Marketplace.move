@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module NFTs::Marketplace {
     use Sui::TxContext::{Self, TxContext};
     use Sui::ID::{Self, ID, VersionedID};
@@ -22,7 +25,7 @@ module NFTs::Marketplace {
         id: VersionedID,
         objects: vector<ID>,
         owner: address,
-    }  
+    }
 
     /// A single listing which contains the listed item and its price in [`Coin<C>`].
     struct Listing<T: key + store, phantom C> has key, store {
@@ -91,7 +94,7 @@ module NFTs::Marketplace {
         let listing = internal_remove(marketplace, listing);
         let Listing { id, item, ask, owner } = listing;
 
-        assert!(ask == Coin::value(&paid), EAMOUNT_INCORRECT); 
+        assert!(ask == Coin::value(&paid), EAMOUNT_INCORRECT);
 
         Transfer::transfer(paid, owner);
         ID::delete(id);
@@ -192,10 +195,10 @@ module NFTs::MarketplaceTests {
 
     // SELLER lists KITTY at the Marketplace for 100 GAS.
     fun list_kitty(scenario: &mut Scenario) {
-        TestScenario::next_tx(scenario, &SELLER);  
+        TestScenario::next_tx(scenario, &SELLER);
         let mkp = TestScenario::remove_object<Marketplace>(scenario);
         let nft = TestScenario::remove_object<NFT<KITTY>>(scenario);
-            
+
         Marketplace::list<NFT<KITTY>, GAS>(&mut mkp, nft, 100, TestScenario::ctx(scenario));
         TestScenario::return_object(scenario, mkp);
     }
@@ -207,7 +210,7 @@ module NFTs::MarketplaceTests {
         create_marketplace(scenario);
         mint_kitty(scenario);
         list_kitty(scenario);
-        
+
         TestScenario::next_tx(scenario, &SELLER);
         {
             let mkp = TestScenario::remove_object<Marketplace>(scenario);
@@ -216,7 +219,7 @@ module NFTs::MarketplaceTests {
             // Do the delist operation on a Marketplace.
             let nft = Marketplace::delist<NFT<KITTY>, GAS>(&mut mkp, listing, TestScenario::ctx(scenario));
             let kitten = NFT::burn<KITTY>(nft);
-        
+
             assert!(kitten.id == 1, 0);
 
             TestScenario::return_object(scenario, mkp);
@@ -238,7 +241,7 @@ module NFTs::MarketplaceTests {
         {
             let mkp = TestScenario::remove_object<Marketplace>(scenario);
             let listing = TestScenario::remove_nested_object<Marketplace, Listing<NFT<KITTY>, GAS>>(scenario, &mkp);
-            
+
             // Do the delist operation on a Marketplace.
             let nft = Marketplace::delist<NFT<KITTY>, GAS>(&mut mkp, listing, TestScenario::ctx(scenario));
             let _ = NFT::burn<KITTY>(nft);
@@ -267,14 +270,14 @@ module NFTs::MarketplaceTests {
             // Do the buy call and expect successful purchase.
             let nft = Marketplace::buy<NFT<KITTY>, GAS>(&mut mkp, listing, payment);
             let kitten = NFT::burn<KITTY>(nft);
-            
+
             assert!(kitten.id == 1, 0);
 
             TestScenario::return_object(scenario, mkp);
             TestScenario::return_object(scenario, coin);
         };
     }
-    
+
     #[test]
     #[expected_failure(abort_code = 0)]
     fun fail_to_buy() {
@@ -291,14 +294,14 @@ module NFTs::MarketplaceTests {
             let coin = TestScenario::remove_object<Coin<GAS>>(scenario);
             let mkp = TestScenario::remove_object<Marketplace>(scenario);
             let listing = TestScenario::remove_nested_object<Marketplace, Listing<NFT<KITTY>, GAS>>(scenario, &mkp);
-            
+
             // AMOUNT here is 10 while expected is 100.
             let payment = Coin::withdraw(&mut coin, 10, TestScenario::ctx(scenario));
 
             // Attempt to buy and expect failure purchase.
             let nft = Marketplace::buy<NFT<KITTY>, GAS>(&mut mkp, listing, payment);
             let _ = NFT::burn<KITTY>(nft);
-            
+
             TestScenario::return_object(scenario, mkp);
             TestScenario::return_object(scenario, coin);
         };

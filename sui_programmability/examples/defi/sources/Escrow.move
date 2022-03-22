@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// An escrow for atomic swap of objects that trusts a third party for liveness, but not safety.
 module DeFi::Escrow {
     use Sui::ID::{Self, ID, VersionedID};

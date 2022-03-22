@@ -1,7 +1,10 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module MyFirstPackage::M1 {
     use Sui::ID::VersionedID;
     use Sui::TxContext::TxContext;
-    
+
     struct Sword has key, store {
         id: VersionedID,
         magic: u64,
@@ -24,12 +27,12 @@ module MyFirstPackage::M1 {
         // transfer the forge object to the module/package publisher
         // (presumably the game admin)
         Transfer::transfer(admin, TxContext::sender(ctx));
-    }    
+    }
 
     public fun swords_created(self: &Forge): u64 {
         self.swords_created
     }
-    
+
     public fun magic(self: &Sword): u64 {
         self.magic
     }
@@ -45,7 +48,7 @@ module MyFirstPackage::M1 {
         let sword = Sword {
             id: TxContext::new_id(ctx),
             magic: magic,
-            strength: strength,                
+            strength: strength,
         };
         // transfer the sword
         Transfer::transfer(sword, recipient);
@@ -66,7 +69,7 @@ module MyFirstPackage::M1 {
         let admin = @0xBABE;
 
         // first transaction to emulate module initialization
-        let scenario = &mut TestScenario::begin(&admin);        
+        let scenario = &mut TestScenario::begin(&admin);
         {
             init(TestScenario::ctx(scenario));
         };
@@ -116,7 +119,7 @@ module MyFirstPackage::M1 {
         // fourth transaction executed by the final sword owner
         TestScenario::next_tx(scenario, &final_owner);
         {
-            
+
             // extract the sword owned by the final owner
             let sword = TestScenario::remove_object<Sword>(scenario);
             // verify that the sword has expected properties
@@ -125,29 +128,29 @@ module MyFirstPackage::M1 {
             TestScenario::return_object(scenario, sword)
         }
     }
-    
-    
+
+
     #[test]
     public fun test_sword_create() {
         use Sui::Transfer;
         use Sui::TxContext;
-        
+
         // create a dummy TxContext for testing
         let ctx = TxContext::dummy();
-        
+
         // create a sword
         let sword = Sword {
             id: TxContext::new_id(&mut ctx),
             magic: 42,
-            strength: 7,                
+            strength: 7,
         };
-        
+
         // check if accessor functions return correct values
         assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
 
         // create a dummy address and transfer the sword
-        let dummy_address = @0xCAFE;        
+        let dummy_address = @0xCAFE;
         Transfer::transfer(sword, dummy_address);
     }
-    
+
 }

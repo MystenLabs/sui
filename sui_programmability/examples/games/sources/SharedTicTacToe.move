@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // This is a rewrite of TicTacToe using a completely different approach.
 // In TicTacToe, since the game object is owned by the admin, the players was not
 // able to directly mutate the gameboard. Hence each marker placement takes

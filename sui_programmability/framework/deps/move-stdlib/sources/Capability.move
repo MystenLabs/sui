@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// A module which defines the basic concept of
 /// [*capabilities*](https://en.wikipedia.org/wiki/Capability-based_security) for managing access control.
 ///

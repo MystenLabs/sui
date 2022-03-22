@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module Examples::TicTacToe {
     use Std::Option::{Self, Option};
     use Std::Vector;
