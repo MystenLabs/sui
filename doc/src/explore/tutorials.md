@@ -1,10 +1,10 @@
 ---
-title: An end-to-end tutorial of playing TicTacToe on Sui
+title: End-to-End Tutorial: Set Up and Play TicTacToe on Sui
 ---
 
-In this tutorial, we demonstrate an end-to-end process of starting a
-Sui network locally, connecting to it through our demo wallet app,
-publishing a TicTacToe game on Sui, and playing it to the end.
+In this tutorial, we demonstrate the end-to-end process for starting a
+Sui network locally, connecting to it through our [wallet](../build/wallet.md)
+app, publishing a TicTacToe game on Sui, and playing it to the end.
 
 ## Setup
 
@@ -24,10 +24,10 @@ remainder of this tutorial.
 We will follow the same convention as the one described in the [Sui
 setup instructions](../build/wallet.md#setup) and assume that Sui
 configuration files generated durind Sui genesis state creation are
-stored in the `"$SUI_ROOT"/sui_instance` directory, and **for the
-remainder of this tutorial we will assume that you are executing the
-`wallet` command in this directory**.
+stored in the `"$SUI_ROOT"/sui_instance` directory.
 
+*IMPORTANT*: For the remainder of this tutorial, we will assume that you are
+executing the `wallet` command in the `"$SUI_ROOT"/sui_instance` directory.
 
 ## Gather Accounts and Gas Objects
 
