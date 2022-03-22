@@ -227,6 +227,9 @@ impl<K> GlobalCheckpoint<K>
 where
     K: Eq + Ord + Clone,
 {
+
+    /// Initializes an empty global checkpoint at a specific 
+    /// sequence number.
     pub fn new(sequence_number: u64) -> GlobalCheckpoint<K> {
         GlobalCheckpoint {
             reference_waypoint: Waypoint::new(sequence_number),
@@ -234,6 +237,12 @@ where
         }
     }
 
+    /// Inserts a waypoint diff into the checkpoint. If the checkpoint
+    /// is empty both ends of the diff are inserted, and the reference
+    /// waypoint set to their union. If there are already waypoints into
+    /// this checkpoint the first part of the diff should be in the 
+    /// checkpoint and the second is added and updates all waypoints with
+    /// the new union of all items.
     pub fn insert(&mut self, diff: WaypointDiff<K>) -> Result<(), WaypointError> {
         if !diff.check() {
             return Err(WaypointError::generic("Bad waypoint diff".to_string()));
@@ -320,6 +329,9 @@ where
         Ok(())
     }
 
+    /// Checks the internal invariants of the checkpoint, namely that 
+    /// all the contained waypoints + the associated items lead to the 
+    /// reference waypoint.
     pub fn check(&self) -> bool {
         let root = self.reference_waypoint.accumulator.clone();
         for (_k, v) in &self.authority_waypoints {
