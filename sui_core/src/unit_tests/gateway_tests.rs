@@ -112,6 +112,18 @@ impl AuthorityAPI for LocalAuthorityClient {
             .await;
         result
     }
+
+    /// Handle Batch information requests for this authority.
+    async fn handle_batch_streaming<'a, 'b, A>(
+        &'a self,
+        _request: BatchInfoRequest,
+        _channel: &mut A,
+    ) -> Result<(), SuiError>
+        where
+            A: RwChannel<'b>
+    {
+        todo!()
+    }
 }
 
 impl LocalAuthorityClient {

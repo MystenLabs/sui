@@ -2,9 +2,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::VecDeque;
 use async_trait::async_trait;
+use futures::StreamExt;
 use sui_network::network::NetworkClient;
+use sui_network::transport::RwChannel;
 use sui_types::{error::SuiError, messages::*, serialize::*};
+use sui_types::batch::UpdateItem;
 
 #[async_trait]
 pub trait AuthorityAPI {
@@ -37,6 +41,15 @@ pub trait AuthorityAPI {
         &self,
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError>;
+
+    /// Handle Batch information requests for this authority.
+    async fn handle_batch_streaming<'a, 'b, A>(
+        &'a self,
+        request: BatchInfoRequest,
+        channel: &mut A,
+    ) -> Result<(), SuiError>
+        where
+            A: RwChannel<'b>;
 }
 
 #[derive(Clone)]
@@ -106,5 +119,22 @@ impl AuthorityAPI for AuthorityClient {
             .send_recv_bytes(serialize_transaction_info_request(&request))
             .await?;
         deserialize_transaction_info(response)
+    }
+
+    /// Handle Batch information requests for this authority.
+    async fn handle_batch_streaming<'a, 'b, A>(
+        &'a self,
+        request: BatchInfoRequest,
+        _channel: &mut A,
+    ) -> Result<(), SuiError>
+        where
+            A: RwChannel<'b>
+    {
+        let _response = self
+            .0
+            .send_recv_bytes_stream(serialize_batch_request(&request))
+            .await?;
+        //deserialize_batch
+        todo!()
     }
 }
