@@ -28,6 +28,7 @@ stored in the `"$SUI_ROOT"/sui_instance` directory.
 
 *IMPORTANT*: For the remainder of this tutorial, we will assume that you are
 executing the `wallet` command in the `"$SUI_ROOT"/sui_instance` directory.
+Adjust your paths accordingly.
 
 ## Gather Accounts and Gas Objects
 
