@@ -301,6 +301,7 @@ const ObjectResult = ((): JSX.Element => {
 
         const clickSetShowDescription = () => setShowDescription(!showDescription);
         const clickSetShowProperties = () => setShowProperties(!showProperties);
+        const clickSetShowConnectedEntities = () => setShowConnectedEntities(!showConnectedEntities);
         return (<>
             <div className={styles.resultbox}>
                 {data?.data.contents.display && (
@@ -435,11 +436,7 @@ const ObjectResult = ((): JSX.Element => {
                         <>
                             <h2
                                 className={styles.clickableheader}
-                                onClick={() =>
-                                    setShowConnectedEntities(
-                                        !showConnectedEntities
-                                    )
-                                }
+                                onClick={clickSetShowConnectedEntities}
                             >
                                 Owned Objects {showConnectedEntities ? '' : '+'}
                             </h2>
