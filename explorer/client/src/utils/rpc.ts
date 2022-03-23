@@ -111,7 +111,7 @@ const isValidSuiIdBytes = (obj: { bytes: string | number[] }) => {
     if (bytesFieldType === 'object') {
         if (Array.isArray(obj.bytes)) {
             const objBytesAsArray = obj.bytes as number[];
-            if(objBytesAsArray.length != SUI_ADDRESS_LEN)
+            if(objBytesAsArray.length !== SUI_ADDRESS_LEN)
                 return false;
 
             for (let i = 0; i < objBytesAsArray.length; i++) {
