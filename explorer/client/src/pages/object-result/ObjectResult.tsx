@@ -297,9 +297,9 @@ const ObjectResult = ((): JSX.Element => {
             .filter(([_, value]) => checkIsPropertyType(value))
             .filter(([key, _]) => key !== 'display');
 
-        const clickSetShowDescription = function () { setShowDescription(!showDescription) }
-        const clickSetShowProperties = function () { setShowProperties(!showProperties) }
-        const clickSetShowConnectedEntities = function () { setShowConnectedEntities(!showConnectedEntities) }
+        const clickSetShowDescription = useCallback(() => setShowDescription(!showDescription), [showDescription]);
+        const clickSetShowProperties = useCallback(() => setShowProperties(!showProperties), [showProperties]);
+        const clickSetShowConnectedEntities = useCallback(() => setShowConnectedEntities(!showConnectedEntities), [showConnectedEntities]);
         return (<>
             <div className={styles.resultbox}>
                 {data?.data.contents.display && (
