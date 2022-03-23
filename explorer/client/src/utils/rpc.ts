@@ -98,7 +98,7 @@ type SuiAddressHexStr = string;
 const suiAddressHexPattern = /^0x[0-9a-fA-F]{20}/;
 const isSuiAddressHexStr = (str: string) => suiAddressHexPattern.test(str);
 
-const isValidSuiIdBytes = (obj: { bytes: string | number[] }) => {
+export const isValidSuiIdBytes = (obj: { bytes: string | number[] }) => {
     const bytesFieldType = typeof obj.bytes;
 
     if (bytesFieldType === 'object') {
