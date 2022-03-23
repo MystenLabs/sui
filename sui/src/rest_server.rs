@@ -29,7 +29,7 @@ use tracing::{error, info};
 
 use sui::config::{GenesisConfig, NetworkConfig, PersistedConfig};
 use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
-use sui::keystore::Keystore;
+use sui::keystore::{Keystore, SuiKeystore};
 use sui::sui_commands;
 use sui::sui_json::{resolve_move_function_args, SuiJsonValue};
 use sui_core::gateway_state::GatewayClient;
@@ -185,8 +185,8 @@ Request for genesis type.
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct GenesisRequest {
-    /** Set to read genesis state from file. */
-    path: Option<String>,
+    /** Set to read genesis & keystore state from file. */
+    custom: bool,
 }
 
 /**
@@ -231,29 +231,35 @@ async fn genesis(
         ));
     }
 
-    let genesis_conf = if let Some(path) = genesis_params.path {
-        PersistedConfig::read(&PathBuf::from(path)).map_err(|error| {
+    let genesis_conf = if genesis_params.custom {
+        PersistedConfig::read(&PathBuf::from("genesis.conf")).map_err(|error| {
             custom_http_error(
-                StatusCode::CONFLICT,
-                format!("Unable to create custom genesis configuration: {error}"),
+                StatusCode::BAD_REQUEST,
+                format!("Could not load custom genesis configuration: {error}"),
             )
         })?
     } else {
         GenesisConfig::default_genesis(&working_dir).map_err(|error| {
             custom_http_error(
-                StatusCode::CONFLICT,
+                StatusCode::BAD_REQUEST,
                 format!("Unable to create default genesis configuration: {error}"),
             )
         })?
     };
 
-    let (network_config, accounts, keystore) =
+    let (network_config, accounts, mut keystore) =
         sui_commands::genesis(genesis_conf).await.map_err(|err| {
+            custom_http_error(StatusCode::BAD_REQUEST, format!("Genesis error: {:?}", err))
+        })?;
+
+    if genesis_params.custom {
+        keystore = SuiKeystore::load_or_create(&PathBuf::from("wallet.key")).map_err(|err| {
             custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Genesis error: {:?}", err),
+                StatusCode::BAD_REQUEST,
+                format!("Could not load keystore: {:?}", err),
             )
         })?;
+    }
 
     let authorities = network_config.get_authority_infos();
     let gateway = GatewayType::Embedded(EmbeddedGatewayConfig {
