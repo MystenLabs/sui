@@ -99,7 +99,7 @@ pub struct SequencerCore {
     /// The global consensus index.
     consensus_index: SequenceNumber,
     /// The current number of subscribers.
-    subscribers_count: usize
+    subscribers_count: usize,
 }
 
 impl SequencerCore {
@@ -118,7 +118,7 @@ impl SequencerCore {
             rx_subscriber,
             store,
             consensus_index,
-            subscribers_count: 0
+            subscribers_count: 0,
         })
     }
 
@@ -165,10 +165,16 @@ impl SequencerCore {
                     // Increment the consensus index.
                     self.consensus_index = self.consensus_index.increment();
 
-                    // Notify the subscribers of the new output.
+                    // Notify the subscribers of the new output. If a subscriber's channel is full
+                    // (the subscriber is slow), we simply skip this output. The subscriber will
+                    // eventually sync to catch up.
                     let mut to_drop = Vec::new();
                     for (id, subscriber) in &subscribers {
-                        if subscriber.send(output.clone()).await.is_err() {
+                        if subscriber.is_closed() {
+                            to_drop.push(*id);
+                            continue;
+                        }
+                        if subscriber.capacity() > 0 && subscriber.send(output.clone()).await.is_err() {
                             to_drop.push(*id);
                         }
                     }
@@ -249,6 +255,9 @@ struct SubscriberServer {
 }
 
 impl SubscriberServer {
+    /// The number of pending updates that the subscriber can hold in memory.
+    pub const CHANNEL_SIZE: usize = 1_000;
+
     /// Create a new subscriber server.
     pub fn new(tx_subscriber: Sender<SubscriberMessage>, store: Arc<SequencerStore>) -> Self {
         Self {
@@ -294,7 +303,7 @@ where
     Stream: 'static + RwChannel<'a> + Unpin + Send,
 {
     async fn handle_messages(&self, mut stream: Stream) {
-        let (tx_output, mut rx_output) = channel(100);
+        let (tx_output, mut rx_output) = channel(Self::CHANNEL_SIZE);
         let subscriber_id = self.counter.fetch_add(1, Ordering::SeqCst);
 
         // Notify the core of a new subscriber.
