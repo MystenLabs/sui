@@ -243,7 +243,12 @@ impl ClientServerBenchmark {
                 let mut gas_object_id = [0; 20];
                 gas_object_id[8..16].clone_from_slice(&(offset + x).to_be_bytes()[..8]);
                 let gas_object_id = ObjectID::from(gas_object_id);
-                let gas_object = Object::with_id_owner_for_testing(gas_object_id, address);
+                let gas_object = Object::with_id_owner_gas_coin_object_for_testing(
+                    gas_object_id,
+                    SequenceNumber::new(),
+                    address,
+                    2000000,
+                );
                 assert!(gas_object.version() == SequenceNumber::from(0));
 
                 (objects, gas_object)
