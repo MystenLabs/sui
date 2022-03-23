@@ -93,13 +93,19 @@ pub struct SequencerCore {
     rx_input: Receiver<Bytes>,
     /// Communicate with subscribers to update with the output of the sequence.
     rx_subscriber: Receiver<SubscriberMessage>,
-    /// Persistent storage to hold all consensus outputs.
+    /// Persistent storage to hold all consensus outputs. This task is the only one
+    /// that writes to the store.
     store: Arc<SequencerStore>,
     /// The global consensus index.
     consensus_index: SequenceNumber,
+    /// The current number of subscribers.
+    subscribers_count: usize
 }
 
 impl SequencerCore {
+    /// The maximum number of subscribers.
+    pub const MAX_SUBSCRIBERS: usize = 1_000;
+
     /// Create a new sequencer core instance.
     pub fn new(
         rx_input: Receiver<Bytes>,
@@ -112,6 +118,7 @@ impl SequencerCore {
             rx_subscriber,
             store,
             consensus_index,
+            subscribers_count: 0
         })
     }
 
@@ -134,8 +141,11 @@ impl SequencerCore {
 
                 // Receive subscribers to update with the sequencer's output.
                 Some(message) = self.rx_subscriber.recv() => {
-                    let SubscriberMessage(sender, id) = message;
-                    subscribers.insert(id, sender);
+                    if self.subscribers_count < Self::MAX_SUBSCRIBERS {
+                        let SubscriberMessage(sender, id) = message;
+                        subscribers.insert(id, sender);
+                        self.subscribers_count +=1 ;
+                    }
                 },
 
                 // Bytes are ready to be delivered, notify the subscribers.
@@ -166,6 +176,7 @@ impl SequencerCore {
                     // Cleanup the list subscribers that dropped connection.
                     for id in to_drop {
                         subscribers.remove(&id);
+                        self.subscribers_count -= 1;
                     }
                 }
             }
