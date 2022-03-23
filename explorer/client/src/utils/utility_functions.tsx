@@ -1,10 +1,6 @@
 import mockTransactionData from './mock_data.json';
 import { DefaultRpcClient as rpc } from './rpc';
 
-// API info
-// const BACKEND_URL = "http://3.229.149.13:5000";
-// const ADDRESS_URL = `${BACKEND_URL}/objects?address=`;
-// const OBJECT_URL = `${BACKEND_URL}/object_info?objectId=`;
 
 const navigateWithUnknown = async (input: string, navigate: Function) => {
     console.log('searching for ' + input);
@@ -15,8 +11,7 @@ const navigateWithUnknown = async (input: string, navigate: Function) => {
             console.log('address found:', data);
             navigate(`../addresses/${input}`, { state: data });
     })
-    .catch(error => console.log(error))
-  ;
+    .catch(error => console.log(error));
 
     const objInfoPromise = rpc.getObjectInfo(input)
     .then(data => {

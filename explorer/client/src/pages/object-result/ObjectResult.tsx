@@ -155,13 +155,6 @@ function DisplayBox({ data }: { data: DataType }) {
 
 
 async function getObjectState(objID: string): Promise<object> {
-    /*
-    return new Promise((resolve, reject) => {
-        let data = findDataFromID(objID, {});
-        if (data) resolve(data);
-        else reject('object ID not found');
-    });
-    */
     return _rpc.getObjectInfo(objID);
 }
 
@@ -190,7 +183,7 @@ const ObjectResult = ((): JSX.Element => {
         /owned/.test(key) || (/_id/.test(key) && value?.bytes) || value?.vec;
     const checkSingleID = (value: any) => value?.bytes;
     const checkVecIDs = (value: any) => value?.vec;
-    
+
     //TODO - improve move code handling:
     // const isMoveVecType = (value: { vec?: [] }) => Array.isArray(value?.vec);
 
