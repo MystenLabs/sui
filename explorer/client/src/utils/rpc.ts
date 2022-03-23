@@ -290,7 +290,7 @@ const isValidHttpUrl = (url: string) => {
     try { new URL(url); }
     catch (e) { return false; }
     return url.startsWith('http') || url.startsWith('https');
-  };
+};
 
 
 // allow switching the default url with another RPC url (for local testing)
