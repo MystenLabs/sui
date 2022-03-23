@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// An example of a custom object with comments explaining the relevant bits
 module Examples::CustomObjectTemplate {
     use Sui::ID::VersionedID;

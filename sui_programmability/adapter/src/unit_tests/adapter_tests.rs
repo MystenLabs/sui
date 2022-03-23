@@ -187,7 +187,6 @@ fn call(
     native_functions: &NativeFunctionTable,
     module_name: &str,
     fun_name: &str,
-    gas_object: Object,
     gas_budget: u64,
     type_args: Vec<TypeTag>,
     object_args: Vec<Object>,
@@ -207,7 +206,6 @@ fn call(
         object_args,
         pure_args,
         gas_budget,
-        gas_object,
         &mut TxContext::random_for_testing_only(),
     )
 }
@@ -226,7 +224,7 @@ fn test_object_basics() {
     // 0. Create a gas object for gas payment.
     let gas_object =
         Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
-    storage.write_object(gas_object.clone());
+    storage.write_object(gas_object);
     storage.flush();
 
     // 1. Create obj1 owned by addr1
@@ -240,7 +238,6 @@ fn test_object_basics() {
         &native_functions,
         "ObjectBasics",
         "create",
-        gas_object.clone(),
         GAS_BUDGET,
         Vec::new(),
         Vec::new(),
@@ -250,7 +247,7 @@ fn test_object_basics() {
     .unwrap();
 
     assert_eq!(storage.created().len(), 1);
-    assert_eq!(storage.updated().len(), 1); // The gas object
+    assert!(storage.updated().is_empty());
     assert!(storage.deleted().is_empty());
     let id1 = storage.get_created_keys().pop().unwrap();
     storage.flush();
@@ -266,7 +263,6 @@ fn test_object_basics() {
         &native_functions,
         "ObjectBasics",
         "transfer",
-        gas_object.clone(),
         GAS_BUDGET,
         Vec::new(),
         vec![obj1.clone()],
@@ -275,7 +271,7 @@ fn test_object_basics() {
     .unwrap()
     .unwrap();
 
-    assert_eq!(storage.updated().len(), 2);
+    assert_eq!(storage.updated().len(), 1);
     assert!(storage.created().is_empty());
     assert!(storage.deleted().is_empty());
     storage.flush();
@@ -304,7 +300,6 @@ fn test_object_basics() {
         &native_functions,
         "ObjectBasics",
         "create",
-        gas_object.clone(),
         GAS_BUDGET,
         Vec::new(),
         Vec::new(),
@@ -326,7 +321,6 @@ fn test_object_basics() {
         &native_functions,
         "ObjectBasics",
         "update",
-        gas_object.clone(),
         GAS_BUDGET,
         Vec::new(),
         vec![obj1.clone(), obj2],
@@ -334,7 +328,7 @@ fn test_object_basics() {
     )
     .unwrap()
     .unwrap();
-    assert_eq!(storage.updated().len(), 2);
+    assert_eq!(storage.updated().len(), 1);
     assert!(storage.created().is_empty());
     assert!(storage.deleted().is_empty());
     // test than an event was emitted as expected
@@ -364,7 +358,6 @@ fn test_object_basics() {
         &native_functions,
         "ObjectBasics",
         "delete",
-        gas_object,
         GAS_BUDGET,
         Vec::new(),
         vec![obj1],
@@ -374,7 +367,7 @@ fn test_object_basics() {
     .unwrap();
     assert_eq!(storage.deleted().len(), 1);
     assert!(storage.created().is_empty());
-    assert_eq!(storage.updated().len(), 1);
+    assert!(storage.updated().is_empty());
     storage.flush();
     assert!(storage.read_object(&id1).is_none())
 }
@@ -392,7 +385,7 @@ fn test_wrap_unwrap() {
 
     // 0. Create a gas object for gas payment. Note that we won't really use it because we won't be providing a gas budget.
     let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), addr);
-    storage.write_object(gas_object.clone());
+    storage.write_object(gas_object);
     storage.flush();
 
     // 1. Create obj1 owned by addr
@@ -405,7 +398,6 @@ fn test_wrap_unwrap() {
         &native_functions,
         "ObjectBasics",
         "create",
-        gas_object.clone(),
         GAS_BUDGET,
         Vec::new(),
         Vec::new(),
@@ -431,7 +423,6 @@ fn test_wrap_unwrap() {
         &native_functions,
         "ObjectBasics",
         "wrap",
-        gas_object.clone(),
         GAS_BUDGET,
         Vec::new(),
         vec![obj1],
@@ -454,7 +445,6 @@ fn test_wrap_unwrap() {
         &native_functions,
         "ObjectBasics",
         "unwrap",
-        gas_object,
         GAS_BUDGET,
         Vec::new(),
         vec![obj2],
@@ -495,7 +485,7 @@ fn test_move_call_insufficient_gas() {
     let gas_object_id = ObjectID::random();
     let gas_object =
         Object::with_id_owner_for_testing(gas_object_id, base_types::SuiAddress::default());
-    storage.write_object(gas_object.clone());
+    storage.write_object(gas_object);
     storage.flush();
 
     // 1. Create obj1 owned by addr1
@@ -510,7 +500,6 @@ fn test_move_call_insufficient_gas() {
         &native_functions,
         "ObjectBasics",
         "create",
-        gas_object,
         15, // This budget is not enough to execute all bytecode.
         Vec::new(),
         Vec::new(),
@@ -522,13 +511,11 @@ fn test_move_call_insufficient_gas() {
     assert_eq!(err.0, 15);
 
     // Trying again with a different gas budget.
-    let gas_object = storage.read_object(&gas_object_id).unwrap();
     let response = call(
         &mut storage,
         &native_functions,
         "ObjectBasics",
         "create",
-        gas_object,
         50, // This budget is enough to execute bytecode, but not enough for processing transfer events.
         Vec::new(),
         Vec::new(),
@@ -538,45 +525,6 @@ fn test_move_call_insufficient_gas() {
     assert!(matches!(err.1, SuiError::InsufficientGas { .. }));
     // Provided gas_budget will be deducted as gas.
     assert_eq!(err.0, 50);
-}
-
-#[test]
-fn test_publish_module_insufficient_gas() {
-    let native_functions =
-        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_packages();
-    let mut storage = InMemoryStorage::new(genesis_objects);
-
-    // 0. Create a gas object for gas payment.
-    let gas_object = Object::with_id_owner_gas_for_testing(
-        ObjectID::random(),
-        SequenceNumber::from(1),
-        base_types::SuiAddress::default(),
-        30,
-    );
-    storage.write_object(gas_object.clone());
-    storage.flush();
-
-    // 1. Create a module.
-    let module = file_format::empty_module();
-    let mut module_bytes = Vec::new();
-    module.serialize(&mut module_bytes).unwrap();
-    let module_bytes = vec![module_bytes];
-
-    let mut tx_context = TxContext::random_for_testing_only();
-    let response = adapter::publish(
-        &mut storage,
-        native_functions,
-        module_bytes,
-        &mut tx_context,
-        GAS_BUDGET,
-        gas_object,
-    );
-    let err = response.unwrap().unwrap_err();
-    assert!(err
-        .1
-        .to_string()
-        .contains("Gas balance is 30, not enough to pay"));
 }
 
 #[test]
@@ -591,7 +539,7 @@ fn test_freeze() {
     // 0. Create a gas object for gas payment.
     let gas_object =
         Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
-    storage.write_object(gas_object.clone());
+    storage.write_object(gas_object);
     storage.flush();
 
     // 1. Create obj1 owned by addr1
@@ -605,7 +553,6 @@ fn test_freeze() {
         &native_functions,
         "ObjectBasics",
         "create",
-        gas_object.clone(),
         GAS_BUDGET,
         Vec::new(),
         Vec::new(),
@@ -625,7 +572,6 @@ fn test_freeze() {
         &native_functions,
         "ObjectBasics",
         "freeze_object",
-        gas_object.clone(),
         GAS_BUDGET,
         Vec::new(),
         vec![obj1],
@@ -633,7 +579,7 @@ fn test_freeze() {
     )
     .unwrap()
     .unwrap();
-    assert_eq!(storage.updated().len(), 2);
+    assert_eq!(storage.updated().len(), 1);
     storage.flush();
     let obj1 = storage.read_object(&id1).unwrap();
     assert!(obj1.is_read_only());
@@ -646,7 +592,6 @@ fn test_freeze() {
         &native_functions,
         "ObjectBasics",
         "transfer",
-        gas_object.clone(),
         GAS_BUDGET,
         Vec::new(),
         vec![obj1],
@@ -669,7 +614,6 @@ fn test_freeze() {
         &native_functions,
         "ObjectBasics",
         "set_value",
-        gas_object,
         GAS_BUDGET,
         Vec::new(),
         vec![obj1],
@@ -695,7 +639,7 @@ fn test_move_call_args_type_mismatch() {
     // 0. Create a gas object for gas payment.
     let gas_object =
         Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
-    storage.write_object(gas_object.clone());
+    storage.write_object(gas_object);
     storage.flush();
 
     // ObjectBasics::create expects 2 args: integer value and recipient address
@@ -706,7 +650,6 @@ fn test_move_call_args_type_mismatch() {
         &native_functions,
         "ObjectBasics",
         "create",
-        gas_object,
         GAS_BUDGET,
         Vec::new(),
         Vec::new(),
@@ -763,14 +706,13 @@ fn test_move_call_incorrect_function() {
         &vm,
         &mut storage,
         native_functions.clone(),
-        gas_object.clone(),
+        gas_object,
         &Identifier::new("ObjectBasics").unwrap(),
         &Identifier::new("create").unwrap(),
         vec![],
         vec![],
         vec![],
         GAS_BUDGET,
-        gas_object.clone(),
         &mut TxContext::random_for_testing_only(),
     )
     .unwrap();
@@ -787,7 +729,6 @@ fn test_move_call_incorrect_function() {
         &native_functions,
         "ObjectBasics",
         "foo",
-        gas_object,
         GAS_BUDGET,
         Vec::new(),
         Vec::new(),
@@ -823,7 +764,7 @@ fn test_publish_module_linker_error() {
     // 0. Create a gas object for gas payment.
     let gas_object =
         Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
-    storage.write_object(gas_object.clone());
+    storage.write_object(gas_object);
     storage.flush();
 
     // 1. Create a module that depends on a genesis module that exists, but via an invalid handle
@@ -861,7 +802,6 @@ fn test_publish_module_linker_error() {
         module_bytes,
         &mut tx_context,
         GAS_BUDGET,
-        gas_object,
     );
     let err = response.unwrap().unwrap_err();
     assert_eq!(err.0, gas::MIN_MOVE);
@@ -883,7 +823,7 @@ fn test_publish_module_non_zero_address() {
     // 0. Create a gas object for gas payment.
     let gas_object =
         Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
-    storage.write_object(gas_object.clone());
+    storage.write_object(gas_object);
     storage.flush();
 
     // 1. Create an empty module.
@@ -903,7 +843,6 @@ fn test_publish_module_non_zero_address() {
         module_bytes,
         &mut tx_context,
         GAS_BUDGET,
-        gas_object,
     );
     let err = response.unwrap().unwrap_err();
     assert_eq!(err.0, gas::MIN_MOVE);
@@ -926,7 +865,7 @@ fn test_coin_transfer() {
     // 1. Create an object to transfer
     let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), addr);
     let to_transfer = Object::with_id_owner_for_testing(ObjectID::random(), addr);
-    storage.write_object(gas_object.clone());
+    storage.write_object(gas_object);
     storage.write_object(to_transfer.clone());
     storage.flush();
 
@@ -937,7 +876,6 @@ fn test_coin_transfer() {
         &native_functions,
         "Coin",
         "transfer_",
-        gas_object,
         GAS_BUDGET,
         vec![GAS::type_tag()],
         vec![to_transfer],
@@ -949,8 +887,8 @@ fn test_coin_transfer() {
     .unwrap()
     .unwrap();
 
-    // should update gas object and input coin
-    assert_eq!(storage.updated().len(), 2);
+    // should update input coin
+    assert_eq!(storage.updated().len(), 1);
     // should create one new coin
     assert_eq!(storage.created().len(), 1);
 }
@@ -963,7 +901,7 @@ fn publish_from_src(
     gas_object: Object,
     gas_budget: u64,
 ) {
-    storage.write_object(gas_object.clone());
+    storage.write_object(gas_object);
     storage.flush();
 
     // build modules to be published
@@ -988,7 +926,6 @@ fn publish_from_src(
         all_module_bytes,
         &mut tx_context,
         gas_budget,
-        gas_object,
     );
     assert!(matches!(response.unwrap(), ExecutionStatus::Success { .. }));
 }
@@ -1009,12 +946,9 @@ fn test_simple_call() {
         &mut storage,
         &native_functions,
         "src/unit_tests/data/simple_call",
-        gas_object.clone(),
+        gas_object,
         GAS_BUDGET,
     );
-    // TODO: to be honest I am not sure why this flush is needed but
-    // without it, the following assertion below fails:
-    // assert!(obj.owner.is_address(&addr));
     storage.flush();
 
     // call published module function
@@ -1031,7 +965,6 @@ fn test_simple_call() {
         &native_functions,
         "M1",
         "create",
-        gas_object,
         GAS_BUDGET,
         Vec::new(),
         Vec::new(),
@@ -1167,4 +1100,156 @@ fn test_publish_init_param() {
 
     // only a package object should have been crated
     assert_eq!(storage.created().len(), 1);
+}
+
+#[test]
+/// Tests calls to entry functions returning values.
+fn test_call_ret() {
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_packages();
+    let mut storage = InMemoryStorage::new(genesis_objects);
+
+    // crate gas object for payment
+    let gas_object =
+        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
+
+    // publish modules at a given path
+    publish_from_src(
+        &mut storage,
+        &native_functions,
+        "src/unit_tests/data/call_ret",
+        gas_object,
+        GAS_BUDGET,
+    );
+    storage.flush();
+
+    // call published module function returning a u64 (42)
+    let response = call(
+        &mut storage,
+        &native_functions,
+        "M1",
+        "get_u64",
+        GAS_BUDGET,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+    let mut success_64 = false;
+    if let ExecutionStatus::Success {
+        gas_used: _,
+        results,
+    } = response.unwrap()
+    {
+        if let CallResult::U64(val) = results.get(0).unwrap() {
+            if val == &42 {
+                success_64 = true;
+            }
+        }
+    }
+
+    // call published module function returning an address (0x42)
+    let response = call(
+        &mut storage,
+        &native_functions,
+        "M1",
+        "get_addr",
+        GAS_BUDGET,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+    let mut success_addr = false;
+    if let ExecutionStatus::Success {
+        gas_used: _,
+        results,
+    } = response.unwrap()
+    {
+        if let CallResult::Address(val) = results.get(0).unwrap() {
+            if val.to_hex_literal() == "0x42" {
+                success_addr = true;
+            }
+        }
+    }
+
+    // call published module function returning two values: a u64 (42)
+    // and an address (0x42)
+    let response = call(
+        &mut storage,
+        &native_functions,
+        "M1",
+        "get_tuple",
+        GAS_BUDGET,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+    let mut success_tuple = false;
+    if let ExecutionStatus::Success {
+        gas_used: _,
+        results,
+    } = response.unwrap()
+    {
+        if let CallResult::U64(val1) = results.get(0).unwrap() {
+            if let CallResult::Address(val2) = results.get(1).unwrap() {
+                if val1 == &42 && val2.to_hex_literal() == "0x42" {
+                    success_tuple = true;
+                }
+            }
+        }
+    }
+
+    // call published module function returning a vector
+    let response = call(
+        &mut storage,
+        &native_functions,
+        "M1",
+        "get_vec",
+        GAS_BUDGET,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+    let mut success_vec = false;
+    if let ExecutionStatus::Success {
+        gas_used: _,
+        results,
+    } = response.unwrap()
+    {
+        if let CallResult::U64Vec(val) = results.get(0).unwrap() {
+            if val.len() == 2 && val.get(0).unwrap() == &42 && val.get(1).unwrap() == &7 {
+                success_vec = true;
+            }
+        }
+    }
+
+    // call published module function returning a vector of vectors
+    let response = call(
+        &mut storage,
+        &native_functions,
+        "M1",
+        "get_vec_vec",
+        GAS_BUDGET,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+    let mut success_vec_vec = false;
+    if let ExecutionStatus::Success {
+        gas_used: _,
+        results,
+    } = response.unwrap()
+    {
+        if let CallResult::U64VecVec(val) = results.get(0).unwrap() {
+            if val.len() == 1
+                && val.get(0).unwrap().len() == 2
+                && val.get(0).unwrap().get(0).unwrap() == &42
+                && val.get(0).unwrap().get(1).unwrap() == &7
+            {
+                success_vec_vec = true;
+            }
+        }
+    }
+
+    assert!(success_64 && success_addr && success_tuple && success_vec && success_vec_vec);
 }

@@ -44,6 +44,70 @@ BatchInfoRequest:
 BatchInfoResponseItem:
   NEWTYPESTRUCT:
     TYPENAME: UpdateItem
+CallResult:
+  ENUM:
+    0:
+      Bool:
+        NEWTYPE: BOOL
+    1:
+      U8:
+        NEWTYPE: U8
+    2:
+      U64:
+        NEWTYPE: U64
+    3:
+      U128:
+        NEWTYPE: U128
+    4:
+      Address:
+        NEWTYPE:
+          TYPENAME: AccountAddress
+    5:
+      BoolVec:
+        NEWTYPE:
+          SEQ: BOOL
+    6:
+      U8Vec:
+        NEWTYPE:
+          SEQ: U8
+    7:
+      U64Vec:
+        NEWTYPE:
+          SEQ: U64
+    8:
+      U128Vec:
+        NEWTYPE:
+          SEQ: U128
+    9:
+      AddrVec:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: AccountAddress
+    10:
+      BoolVecVec:
+        NEWTYPE:
+          SEQ: BOOL
+    11:
+      U8VecVec:
+        NEWTYPE:
+          SEQ:
+            SEQ: U8
+    12:
+      U64VecVec:
+        NEWTYPE:
+          SEQ:
+            SEQ: U64
+    13:
+      U128VecVec:
+        NEWTYPE:
+          SEQ:
+            SEQ: U128
+    14:
+      AddrVecVec:
+        NEWTYPE:
+          SEQ:
+            SEQ:
+              TYPENAME: AccountAddress
 CertifiedTransaction:
   STRUCT:
     - transaction:
@@ -53,6 +117,11 @@ CertifiedTransaction:
           TUPLE:
             - TYPENAME: PublicKeyBytes
             - TYPENAME: AuthoritySignature
+ConsensusOutput:
+  STRUCT:
+    - message: BYTES
+    - sequencer_number:
+        TYPENAME: SequenceNumber
 Data:
   ENUM:
     0:
@@ -74,6 +143,9 @@ ExecutionStatus:
       Success:
         STRUCT:
           - gas_used: U64
+          - results:
+              SEQ:
+                TYPENAME: CallResult
     1:
       Failure:
         STRUCT:
@@ -301,6 +373,10 @@ SerializedMessage:
       BatchInfoResp:
         NEWTYPE:
           TYPENAME: BatchInfoResponseItem
+    12:
+      ConsensusOutput:
+        NEWTYPE:
+          TYPENAME: ConsensusOutput
 Signature:
   NEWTYPESTRUCT: BYTES
 SignedBatch:
@@ -327,6 +403,20 @@ SignedTransactionEffects:
         TYPENAME: PublicKeyBytes
     - signature:
         TYPENAME: AuthoritySignature
+SingleTransactionKind:
+  ENUM:
+    0:
+      Transfer:
+        NEWTYPE:
+          TYPENAME: Transfer
+    1:
+      Publish:
+        NEWTYPE:
+          TYPENAME: MoveModulePublish
+    2:
+      Call:
+        NEWTYPE:
+          TYPENAME: MoveCall
 StructTag:
   STRUCT:
     - address:
@@ -368,206 +458,218 @@ SuiError:
     8:
       SharedObjectLockNotSetObject: UNIT
     9:
-      InvalidSignature:
+      InvalidBatchTransaction:
         STRUCT:
           - error: STR
     10:
-      IncorrectSigner: UNIT
+      InvalidSignature:
+        STRUCT:
+          - error: STR
     11:
-      UnknownSigner: UNIT
+      IncorrectSigner:
+        STRUCT:
+          - error: STR
     12:
-      CertificateRequiresQuorum: UNIT
+      UnknownSigner: UNIT
     13:
+      CertificateRequiresQuorum: UNIT
+    14:
       UnexpectedSequenceNumber:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - expected_sequence:
               TYPENAME: SequenceNumber
-    14:
+          - given_sequence:
+              TYPENAME: SequenceNumber
+    15:
       ConflictingTransaction:
         STRUCT:
           - pending_transaction:
-              TYPENAME: Transaction
-    15:
-      ErrorWhileProcessingTransaction: UNIT
+              TYPENAME: TransactionDigest
     16:
+      ErrorWhileProcessingTransaction: UNIT
+    17:
       ErrorWhileProcessingTransactionTransaction:
         STRUCT:
           - err: STR
-    17:
+    18:
       ErrorWhileProcessingConfirmationTransaction:
         STRUCT:
           - err: STR
-    18:
-      ErrorWhileRequestingCertificate: UNIT
     19:
+      ErrorWhileRequestingCertificate: UNIT
+    20:
       ErrorWhileProcessingPublish:
         STRUCT:
           - err: STR
-    20:
+    21:
       ErrorWhileProcessingMoveCall:
         STRUCT:
           - err: STR
-    21:
-      ErrorWhileRequestingInformation: UNIT
     22:
+      ErrorWhileRequestingInformation: UNIT
+    23:
       ObjectFetchFailed:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - err: STR
-    23:
-      MissingEalierConfirmations:
+    24:
+      MissingEarlierConfirmations:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - current_sequence_number:
               TYPENAME: SequenceNumber
-    24:
-      UnexpectedTransactionIndex: UNIT
     25:
+      UnexpectedTransactionIndex: UNIT
+    26:
+      ConcurrentIteratorError: UNIT
+    27:
+      ClosedNotifierError: UNIT
+    28:
       CertificateNotfound:
         STRUCT:
           - certificate_digest:
               TYPENAME: TransactionDigest
-    26:
+    29:
       ParentNotfound:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - sequence:
               TYPENAME: SequenceNumber
-    27:
-      UnknownSenderAccount: UNIT
-    28:
-      CertificateAuthorityReuse: UNIT
-    29:
-      InvalidSequenceNumber: UNIT
     30:
-      SequenceOverflow: UNIT
+      UnknownSenderAccount: UNIT
     31:
-      SequenceUnderflow: UNIT
+      CertificateAuthorityReuse: UNIT
     32:
-      WrongShard: UNIT
+      InvalidSequenceNumber: UNIT
     33:
-      InvalidCrossShardUpdate: UNIT
+      SequenceOverflow: UNIT
     34:
-      InvalidAuthenticator: UNIT
+      SequenceUnderflow: UNIT
     35:
-      InvalidAddress: UNIT
+      WrongShard: UNIT
     36:
-      InvalidTransactionDigest: UNIT
+      InvalidCrossShardUpdate: UNIT
     37:
+      InvalidAuthenticator: UNIT
+    38:
+      InvalidAddress: UNIT
+    39:
+      InvalidTransactionDigest: UNIT
+    40:
       InvalidObjectDigest:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - expected_digest:
               TYPENAME: ObjectDigest
-    38:
-      InvalidDecoding: UNIT
-    39:
-      UnexpectedMessage: UNIT
-    40:
-      DuplicateObjectRefInput: UNIT
     41:
+      InvalidDecoding: UNIT
+    42:
+      UnexpectedMessage: UNIT
+    43:
+      DuplicateObjectRefInput: UNIT
+    44:
       ClientIoError:
         STRUCT:
           - error: STR
-    42:
+    45:
       TransferImmutableError: UNIT
-    43:
+    46:
       TooManyItemsError:
         NEWTYPE: U64
-    44:
-      InvalidSequenceRangeError: UNIT
-    45:
-      NoBatchesFoundError: UNIT
-    46:
-      CannotSendClientMessageError: UNIT
     47:
-      SubscriptionItemsDropedError:
-        NEWTYPE: U64
+      InvalidSequenceRangeError: UNIT
     48:
-      SubscriptionServiceClosed: UNIT
+      NoBatchesFoundError: UNIT
     49:
+      CannotSendClientMessageError: UNIT
+    50:
+      SubscriptionItemsDroppedError:
+        NEWTYPE: U64
+    51:
+      SubscriptionServiceClosed: UNIT
+    52:
       ModuleLoadFailure:
         STRUCT:
           - error: STR
-    50:
+    53:
       ModuleVerificationFailure:
         STRUCT:
           - error: STR
-    51:
+    54:
       ModuleDeserializationFailure:
         STRUCT:
           - error: STR
-    52:
+    55:
       ModulePublishFailure:
         STRUCT:
           - error: STR
-    53:
+    56:
       ModuleBuildFailure:
         STRUCT:
           - error: STR
-    54:
+    57:
       DependentPackageNotFound:
         STRUCT:
           - package_id:
               TYPENAME: ObjectID
-    55:
+    58:
       MoveUnitTestFailure:
         STRUCT:
           - error: STR
-    56:
+    59:
       FunctionNotFound:
         STRUCT:
           - error: STR
-    57:
+    60:
       ModuleNotFound:
         STRUCT:
           - module_name: STR
-    58:
+    61:
       InvalidFunctionSignature:
         STRUCT:
           - error: STR
-    59:
+    62:
       TypeError:
         STRUCT:
           - error: STR
-    60:
+    63:
       AbortedExecution:
         STRUCT:
           - error: STR
-    61:
+    64:
       InvalidMoveEvent:
         STRUCT:
           - error: STR
-    62:
+    65:
       CircularObjectOwnership: UNIT
-    63:
+    66:
       GasBudgetTooHigh:
         STRUCT:
           - error: STR
-    64:
+    67:
       InsufficientGas:
         STRUCT:
           - error: STR
-    65:
-      InvalidTxUpdate: UNIT
-    66:
-      TransactionLockExists: UNIT
-    67:
-      TransactionLockDoesNotExist: UNIT
     68:
-      TransactionLockReset: UNIT
+      InvalidTxUpdate: UNIT
     69:
+      TransactionLockExists: UNIT
+    70:
+      TransactionLockDoesNotExist: UNIT
+    71:
+      TransactionLockReset: UNIT
+    72:
       ObjectNotFound:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
-    70:
+    73:
       ObjectDeleted:
         STRUCT:
           - object_ref:
@@ -575,26 +677,26 @@ SuiError:
                 - TYPENAME: ObjectID
                 - TYPENAME: SequenceNumber
                 - TYPENAME: ObjectDigest
-    71:
+    74:
       BadObjectType:
         STRUCT:
           - error: STR
-    72:
-      MoveExecutionFailure: UNIT
-    73:
-      ObjectInputArityViolation: UNIT
-    74:
-      ExecutionInvariantViolation: UNIT
     75:
-      AuthorityInformationUnavailable: UNIT
+      MoveExecutionFailure: UNIT
     76:
-      AuthorityUpdateFailure: UNIT
+      ObjectInputArityViolation: UNIT
     77:
+      ExecutionInvariantViolation: UNIT
+    78:
+      AuthorityInformationUnavailable: UNIT
+    79:
+      AuthorityUpdateFailure: UNIT
+    80:
       ByzantineAuthoritySuspicion:
         STRUCT:
           - authority:
               TYPENAME: PublicKeyBytes
-    78:
+    81:
       PairwiseSyncFailed:
         STRUCT:
           - xsource:
@@ -605,34 +707,42 @@ SuiError:
               TYPENAME: TransactionDigest
           - error:
               TYPENAME: SuiError
-    79:
+    82:
       StorageError:
         NEWTYPE:
           TYPENAME: TypedStoreError
-    80:
+    83:
       BatchErrorSender: UNIT
-    81:
+    84:
       GenericAuthorityError:
         STRUCT:
           - error: STR
-    82:
+    85:
       QuorumNotReached:
         STRUCT:
           - errors:
               SEQ:
                 TYPENAME: SuiError
-    83:
-      ObjectSerializationError: UNIT
-    84:
-      ConcurrentTransactionError: UNIT
-    85:
-      IncorrectRecipientError: UNIT
     86:
-      TooManyIncorrectAuthorities: UNIT
+      ObjectSerializationError: UNIT
     87:
-      IncorrectGasSplit: UNIT
+      ConcurrentTransactionError: UNIT
     88:
-      IncorrectGasMerge: UNIT
+      IncorrectRecipientError: UNIT
+    89:
+      TooManyIncorrectAuthorities:
+        STRUCT:
+          - errors:
+              SEQ:
+                TUPLE:
+                  - TYPENAME: PublicKeyBytes
+                  - TYPENAME: SuiError
+    90:
+      InconsistentGatewayResult:
+        STRUCT:
+          - error: STR
+    91:
+      OnlyOneConsensusClientPermitted: UNIT
 Transaction:
   STRUCT:
     - data:
@@ -725,17 +835,14 @@ TransactionInfoResponse:
 TransactionKind:
   ENUM:
     0:
-      Transfer:
+      Single:
         NEWTYPE:
-          TYPENAME: Transfer
+          TYPENAME: SingleTransactionKind
     1:
-      Publish:
+      Batch:
         NEWTYPE:
-          TYPENAME: MoveModulePublish
-    2:
-      Call:
-        NEWTYPE:
-          TYPENAME: MoveCall
+          SEQ:
+            TYPENAME: SingleTransactionKind
 Transfer:
   STRUCT:
     - recipient:

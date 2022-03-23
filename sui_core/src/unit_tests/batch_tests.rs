@@ -1,11 +1,47 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use sui_adapter::genesis;
+use sui_types::committee::Committee;
+use sui_types::crypto::get_key_pair;
+use sui_types::crypto::KeyPair;
+
 use super::*;
 use crate::authority::authority_tests::*;
+use crate::authority::*;
 
+use std::collections::BTreeMap;
 use std::env;
 use std::fs;
+use std::sync::Arc;
+
+fn init_state_parameters() -> (Committee, SuiAddress, KeyPair) {
+    let (authority_address, authority_key) = get_key_pair();
+    let mut authorities = BTreeMap::new();
+    authorities.insert(
+        /* address */ *authority_key.public_key_bytes(),
+        /* voting right */ 1,
+    );
+    let committee = Committee::new(authorities);
+
+    (committee, authority_address, authority_key)
+}
+
+async fn init_state(
+    committee: Committee,
+    authority_key: KeyPair,
+    store: Arc<AuthorityStore>,
+) -> AuthorityState {
+    AuthorityState::new(
+        committee,
+        *authority_key.public_key_bytes(),
+        Arc::pin(authority_key),
+        store,
+        genesis::clone_genesis_compiled_modules(),
+        &mut genesis::get_genesis_context(),
+    )
+    .await
+}
 
 #[tokio::test]
 async fn test_open_manager() {
@@ -16,22 +52,18 @@ async fn test_open_manager() {
     let path = dir.join(format!("DB_{:?}", ObjectID::random()));
     fs::create_dir(&path).unwrap();
 
-    // Make a test key pair
-    let (_, key_pair) = get_key_pair();
-    let key_pair = Arc::pin(key_pair);
-    let address = *key_pair.public_key_bytes();
-
+    let (committee_source, _, authority_key_source) = init_state_parameters();
+    let (committee, authority_key) = (committee_source.clone(), authority_key_source.copy());
     {
         // Create an authority
         let mut opts = rocksdb::Options::default();
         opts.set_max_open_files(max_files_authority_tests());
         let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
+        let mut authority_state = init_state(committee, authority_key, store.clone()).await;
 
         // TEST 1: init from an empty database should return to a zero block
-        let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
-        let last_block = manager
-            .init_from_database(address, key_pair.clone())
-            .await
+        let last_block = authority_state
+            .init_batches_from_database()
             .expect("No error expected.");
 
         assert_eq!(0, last_block.next_sequence_number);
@@ -45,16 +77,16 @@ async fn test_open_manager() {
             .expect("no error on write");
     }
     // drop all
+    let (committee, authority_key) = (committee_source.clone(), authority_key_source.copy());
     {
         // Create an authority
         let mut opts = rocksdb::Options::default();
         opts.set_max_open_files(max_files_authority_tests());
         let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
+        let mut authority_state = init_state(committee, authority_key, store.clone()).await;
 
-        let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
-        let last_block = manager
-            .init_from_database(address, key_pair.clone())
-            .await
+        let last_block = authority_state
+            .init_batches_from_database()
             .expect("No error expected.");
 
         assert_eq!(1, last_block.next_sequence_number);
@@ -66,17 +98,15 @@ async fn test_open_manager() {
             .expect("no error on write");
     }
     // drop all
+    let (committee, authority_key) = (committee_source.clone(), authority_key_source.copy());
     {
         // Create an authority
         let mut opts = rocksdb::Options::default();
         opts.set_max_open_files(max_files_authority_tests());
         let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
+        let mut authority_state = init_state(committee, authority_key, store.clone()).await;
 
-        let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
-        let last_block = manager
-            .init_from_database(address, key_pair.clone())
-            .await
-            .unwrap();
+        let last_block = authority_state.init_batches_from_database().unwrap();
 
         assert_eq!(last_block.next_sequence_number, 3);
         assert_eq!(last_block.initial_sequence_number, 2);
@@ -86,8 +116,6 @@ async fn test_open_manager() {
 
 #[tokio::test]
 async fn test_batch_manager_happy_path() {
-    // let (_, authority_key) = get_key_pair();
-
     // Create a random directory to store the DB
     let dir = env::temp_dir();
     let path = dir.join(format!("DB_{:?}", ObjectID::random()));
@@ -99,26 +127,26 @@ async fn test_batch_manager_happy_path() {
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
 
     // Make a test key pair
-    let (_, key_pair) = get_key_pair();
-    let key_pair = Arc::pin(key_pair);
-    let address = *key_pair.public_key_bytes();
+    let (committee, _, authority_key) = init_state_parameters();
+    let authority_state = Arc::new(init_state(committee, authority_key, store.clone()).await);
+
+    let inner_state = authority_state.clone();
+    let _join = tokio::task::spawn(async move {
+        inner_state
+            .run_batch_service(1000, Duration::from_millis(500))
+            .await
+    });
 
     // TEST 1: init from an empty database should return to a zero block
-    let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
-    let _join = manager
-        .start_service(address, key_pair, 1000, Duration::from_millis(500))
-        .await
-        .expect("No errors starting manager.");
 
     // Send a transaction.
-    let tx_zero = TransactionDigest::new([0; 32]);
-    _send
-        .send_item(0, tx_zero)
-        .await
-        .expect("Send to the channel.");
+    {
+        let t0 = &authority_state.batch_notifier.ticket().expect("ok");
+        store.side_sequence(t0.seq(), &TransactionDigest::random());
+    }
 
     // First we get a transaction update
-    let (_tx, mut rx) = _pair;
+    let mut rx = authority_state.subscribe_batch();
     assert!(matches!(
         rx.recv().await.unwrap(),
         UpdateItem::Transaction((0, _))
@@ -127,16 +155,13 @@ async fn test_batch_manager_happy_path() {
     // Then we (eventually) get a batch
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
 
-    _send
-        .send_item(1, tx_zero)
-        .await
-        .expect("Send to the channel.");
+    {
+        let t0 = &authority_state.batch_notifier.ticket().expect("ok");
+        store.side_sequence(t0.seq(), &TransactionDigest::random());
+    }
 
     // When we close the sending channel we also also end the service task
-    drop(_send);
-    drop(_tx);
-
-    _join.await.expect("No errors in task");
+    authority_state.batch_notifier.close();
 
     // But the block is made, and sent as a notification.
     assert!(matches!(
@@ -144,7 +169,8 @@ async fn test_batch_manager_happy_path() {
         UpdateItem::Transaction((1, _))
     ));
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
-    assert!(matches!(rx.recv().await, Err(_)));
+
+    _join.await.expect("No errors in task").expect("ok");
 }
 
 #[tokio::test]
@@ -160,41 +186,31 @@ async fn test_batch_manager_out_of_order() {
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
 
     // Make a test key pair
-    let (_, key_pair) = get_key_pair();
-    let key_pair = Arc::pin(key_pair);
-    let address = *key_pair.public_key_bytes();
+    let (committee, _, authority_key) = init_state_parameters();
+    let authority_state = Arc::new(init_state(committee, authority_key, store.clone()).await);
 
-    // TEST 1: init from an empty database should return to a zero block
-    let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
-    let _join = manager
-        .start_service(address, key_pair, 4, Duration::from_millis(5000))
-        .await
-        .expect("Start service with no issues.");
-
+    let inner_state = authority_state.clone();
+    let _join = tokio::task::spawn(async move {
+        inner_state
+            .run_batch_service(1000, Duration::from_millis(500))
+            .await
+    });
     // Send transactions out of order
-    let tx_zero = TransactionDigest::new([0; 32]);
-    _send
-        .send_item(1, tx_zero)
-        .await
-        .expect("Send to the channel.");
+    let mut rx = authority_state.subscribe_batch();
 
-    _send
-        .send_item(3, tx_zero)
-        .await
-        .expect("Send to the channel.");
+    {
+        let t0 = &authority_state.batch_notifier.ticket().expect("ok");
+        let t1 = &authority_state.batch_notifier.ticket().expect("ok");
+        let t2 = &authority_state.batch_notifier.ticket().expect("ok");
+        let t3 = &authority_state.batch_notifier.ticket().expect("ok");
 
-    _send
-        .send_item(2, tx_zero)
-        .await
-        .expect("Send to the channel.");
-
-    _send
-        .send_item(0, tx_zero)
-        .await
-        .expect("Send to the channel.");
+        store.side_sequence(t1.seq(), &TransactionDigest::random());
+        store.side_sequence(t3.seq(), &TransactionDigest::random());
+        store.side_sequence(t2.seq(), &TransactionDigest::random());
+        store.side_sequence(t0.seq(), &TransactionDigest::random());
+    }
 
     // Get transactions in order then batch.
-    let (_tx, mut rx) = _pair;
     assert!(matches!(
         rx.recv().await.unwrap(),
         UpdateItem::Transaction((0, _))
@@ -217,41 +233,29 @@ async fn test_batch_manager_out_of_order() {
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
 
     // When we close the sending channel we also also end the service task
-    drop(_send);
-    drop(_tx);
+    authority_state.batch_notifier.close();
 
-    _join.await.expect("No errors in task");
-
-    assert!(matches!(rx.recv().await, Err(_)));
+    _join.await.expect("No errors in task").expect("ok");
 }
 
-use sui_types::{crypto::get_key_pair, object::Object};
+use sui_types::object::Object;
 
 #[tokio::test]
 async fn test_handle_move_order_with_batch() {
     let (sender, sender_key) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
-    let mut authority_state = init_state_with_objects(vec![gas_payment_object]).await;
+    let authority_state = Arc::new(init_state_with_objects(vec![gas_payment_object]).await);
 
-    // Create a listening infrastrucure.
-    let (_send, manager, _pair) = BatchManager::new(authority_state.db(), 100);
-    let _join = manager
-        .start_service(
-            authority_state.name,
-            authority_state.secret.clone(),
-            4,
-            Duration::from_millis(500),
-        )
-        .await
-        .expect("No issues starting service.");
+    let inner_state = authority_state.clone();
+    let _join = tokio::task::spawn(async move {
+        inner_state
+            .run_batch_service(1000, Duration::from_millis(500))
+            .await
+    });
+    // Send transactions out of order
+    let mut rx = authority_state.subscribe_batch();
 
-    // Check we can subscribe
-    let mut rx = _pair.0.subscribe();
-
-    authority_state
-        .set_batch_sender(_send, _pair.0)
-        .expect("No problem registering");
     tokio::task::yield_now().await;
 
     let effects = create_move_object(
@@ -273,9 +277,8 @@ async fn test_handle_move_order_with_batch() {
 
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
 
-    drop(authority_state);
-
-    _join.await.expect("No issues ending task.");
+    authority_state.batch_notifier.close();
+    _join.await.expect("No issues ending task.").expect("ok");
 }
 
 #[tokio::test]
@@ -291,46 +294,43 @@ async fn test_batch_store_retrieval() {
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
 
     // Make a test key pair
-    let (_, key_pair) = get_key_pair();
-    let key_pair = Arc::pin(key_pair);
-    let address = *key_pair.public_key_bytes();
+    let (committee, _, authority_key) = init_state_parameters();
+    let authority_state = Arc::new(init_state(committee, authority_key, store.clone()).await);
 
-    // TEST 1: init from an empty database should return to a zero block
-    let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
-    let _join = manager
-        .start_service(address, key_pair, 10, Duration::from_secs(60))
-        .await
-        .expect("Start service with no issues.");
-
+    let inner_state = authority_state.clone();
+    let _join = tokio::task::spawn(async move {
+        inner_state
+            .run_batch_service(10, Duration::from_secs(6000))
+            .await
+    });
     // Send transactions out of order
     let tx_zero = TransactionDigest::new([0; 32]);
 
     let inner_store = store.clone();
-    for i in 0u64..105 {
+    for _i in 0u64..105 {
+        let t0 = &authority_state.batch_notifier.ticket().expect("ok");
         inner_store
             .executed_sequence
-            .insert(&i, &tx_zero)
+            .insert(&t0.seq(), &tx_zero)
             .expect("Failed to write.");
-
-        _send
-            .send_item(i, tx_zero)
-            .await
-            .expect("Send to the channel.");
     }
 
     // Add a few out of order transactions that should be ignored
-    // NOTE: gap between 104 and 110
-    for i in 110u64..120 {
+    // NOTE: gap between 105 and 110
+    (105u64..110).into_iter().for_each(|_| {
+        let _ = &authority_state.batch_notifier.ticket().expect("ok");
+    });
+
+    for _i in 110u64..120 {
+        let t0 = &authority_state.batch_notifier.ticket().expect("ok");
         inner_store
             .executed_sequence
-            .insert(&i, &tx_zero)
+            .insert(&t0.seq(), &tx_zero)
             .expect("Failed to write.");
-
-        _send
-            .send_item(i, tx_zero)
-            .await
-            .expect("Send to the channel.");
     }
+
+    // Give a change to the channels to send.
+    tokio::task::yield_now().await;
 
     // TEST 1: Get batches across boundaries
 
@@ -360,8 +360,6 @@ async fn test_batch_store_retrieval() {
         .batches_and_transactions(30, 50)
         .expect("Retrieval failed!");
 
-    println!("{:?}", batches);
-
     assert_eq!(3, batches.len());
     assert_eq!(30, batches.first().unwrap().batch.next_sequence_number);
     assert_eq!(50, batches.last().unwrap().batch.next_sequence_number);
@@ -374,28 +372,23 @@ async fn test_batch_store_retrieval() {
         .expect("Retrieval failed!");
 
     println!("{:?}", batches);
-
-    assert_eq!(2, batches.len());
+    assert_eq!(3, batches.len());
     assert_eq!(90, batches.first().unwrap().batch.next_sequence_number);
-    assert_eq!(100, batches.last().unwrap().batch.next_sequence_number);
+    assert_eq!(115, batches.last().unwrap().batch.next_sequence_number);
 
-    assert_eq!(15, transactions.len());
+    assert_eq!(25, transactions.len());
 
     // TEST 5: Both past the end
     let (batches, transactions) = store
         .batches_and_transactions(123, 222)
         .expect("Retrieval failed!");
 
-    println!("{:?}", batches);
-
     assert_eq!(1, batches.len());
-    assert_eq!(100, batches.first().unwrap().batch.next_sequence_number);
+    assert_eq!(115, batches.first().unwrap().batch.next_sequence_number);
 
     assert_eq!(5, transactions.len());
 
     // When we close the sending channel we also also end the service task
-    drop(_send);
-    drop(_pair);
-
-    _join.await.expect("No errors in task");
+    authority_state.batch_notifier.close();
+    _join.await.expect("No errors in task").expect("ok");
 }

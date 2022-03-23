@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module Test::M1 {
     use Sui::ID::VersionedID;
     use Sui::TxContext::{Self, TxContext};
@@ -10,7 +13,7 @@ module Test::M1 {
     }
 
     fun foo<T: key, T2: drop>(_p1: u64, value1: T, _value2: &Coin<T2>, _p2: u64): T {
-        value1 
+        value1
     }
 
     public fun create(value: u64, recipient: address, ctx: &mut TxContext) {
@@ -18,5 +21,5 @@ module Test::M1 {
             Object { id: TxContext::new_id(ctx), value },
             recipient
         )
-    }    
+    }
 }

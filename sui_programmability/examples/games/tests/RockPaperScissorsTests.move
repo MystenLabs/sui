@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 #[test_only]
 module Games::RockPaperScissorsTests {
     use Games::RockPaperScissors::{Self as Game, Game, PlayerTurn, Secret, ThePrize};
@@ -7,7 +10,7 @@ module Games::RockPaperScissorsTests {
 
     #[test]
     public fun play_rock_paper_scissors() {
-        // So these are our heros.
+        // So these are our heroes.
         let the_main_guy = @0xA1C05;
         let mr_lizard = @0xA55555;
         let mr_spock = @0x590C;
@@ -15,10 +18,10 @@ module Games::RockPaperScissorsTests {
         let scenario = &mut TestScenario::begin(&the_main_guy);
 
         // Let the game begin!
-        Game::new_game(mr_spock, mr_lizard, TestScenario::ctx(scenario));        
+        Game::new_game(mr_spock, mr_lizard, TestScenario::ctx(scenario));
 
         // Mr Spock makes his move. He does it secretly and hashes the gesture with a salt
-        // so that only he knows what it is. 
+        // so that only he knows what it is.
         TestScenario::next_tx(scenario, &mr_spock);
         {
             let hash = hash(Game::rock(), b"my_phaser_never_failed_me!");
@@ -30,11 +33,11 @@ module Games::RockPaperScissorsTests {
         {
             let game = TestScenario::remove_object<Game>(scenario);
             let cap = TestScenario::remove_object<PlayerTurn>(scenario);
-            
+
             assert!(Game::status(&game) == 0, 0); // STATUS_READY
-            
+
             Game::add_hash(&mut game, cap, TestScenario::ctx(scenario));
-            
+
             assert!(Game::status(&game) == 1, 0); // STATUS_HASH_SUBMISSION
 
             TestScenario::return_object(scenario, game);
@@ -92,10 +95,10 @@ module Games::RockPaperScissorsTests {
         };
 
         TestScenario::next_tx(scenario, &mr_spock);
-        // If it works, then MrSpock is in posession of the prize;
-        let prize = TestScenario::remove_object<ThePrize>(scenario); 
+        // If it works, then MrSpock is in possession of the prize;
+        let prize = TestScenario::remove_object<ThePrize>(scenario);
         // Don't forget to give it back!
-        TestScenario::return_object(scenario, prize); 
+        TestScenario::return_object(scenario, prize);
     }
 
     // Copy of the hashing function from the main module.

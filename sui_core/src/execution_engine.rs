@@ -10,7 +10,7 @@ use sui_types::{
     base_types::{SuiAddress, TxContext},
     error::{SuiError, SuiResult},
     gas,
-    messages::{ExecutionStatus, Transaction, TransactionKind},
+    messages::{ExecutionStatus, InputObjectKind, SingleTransactionKind, Transaction},
     object::Object,
     storage::{BackingPackageStore, Storage},
 };
@@ -18,61 +18,81 @@ use sui_types::{
 pub fn execute_transaction<S: BackingPackageStore>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
     transaction: Transaction,
-    mut inputs: Vec<Object>,
+    mut objects_by_kind: Vec<(InputObjectKind, Object)>,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<adapter::MoveVM>,
     native_functions: NativeFunctionTable,
 ) -> SuiResult<ExecutionStatus> {
     // unwraps here are safe because we built `inputs`
-    let mut gas_object = inputs.pop().unwrap();
-
-    let status = match transaction.data.kind {
-        TransactionKind::Transfer(t) => {
-            transfer(temporary_store, inputs, t.recipient, gas_object.clone())
-        }
-        TransactionKind::Call(c) => {
-            // unwraps here are safe because we built `inputs`
-            let package = inputs.pop().unwrap();
-            adapter::execute(
-                move_vm,
+    let mut gas_object = objects_by_kind.pop().unwrap().1;
+    let mut total_gas = 0;
+    // TODO: We only keep the last result for now.
+    // We should make the results a vector of results.
+    let mut last_results = vec![];
+    // TODO: Since we require all mutable objects to not show up more than
+    // once across single tx, we should be able to run them in parallel.
+    let mut object_input_iter = objects_by_kind.into_iter().map(|(_, object)| object);
+    for single_tx in transaction.into_single_transactions() {
+        let input_size = single_tx.input_object_count();
+        let status = match single_tx {
+            SingleTransactionKind::Transfer(t) => {
+                let inputs = object_input_iter.by_ref().take(input_size).collect();
+                transfer(temporary_store, inputs, t.recipient)
+            }
+            SingleTransactionKind::Call(c) => {
+                let mut inputs: Vec<_> = object_input_iter.by_ref().take(input_size).collect();
+                // unwraps here are safe because we built `inputs`
+                let package = inputs.pop().unwrap();
+                adapter::execute(
+                    move_vm,
+                    temporary_store,
+                    native_functions.clone(),
+                    package,
+                    &c.module,
+                    &c.function,
+                    c.type_arguments.clone(),
+                    inputs,
+                    c.pure_arguments.clone(),
+                    c.gas_budget,
+                    tx_ctx,
+                )
+            }
+            SingleTransactionKind::Publish(m) => adapter::publish(
                 temporary_store,
-                native_functions,
-                package,
-                &c.module,
-                &c.function,
-                c.type_arguments,
-                inputs,
-                c.pure_arguments,
-                c.gas_budget,
-                gas_object.clone(),
+                native_functions.clone(),
+                m.modules,
                 tx_ctx,
-            )
+                m.gas_budget,
+            ),
+        }?;
+        match status {
+            ExecutionStatus::Failure { gas_used, error } => {
+                // Roll back the temporary store if execution failed.
+                temporary_store.reset();
+                temporary_store.ensure_active_inputs_mutated();
+                total_gas += gas_used;
+                return Ok(ExecutionStatus::new_failure(total_gas, *error));
+            }
+            ExecutionStatus::Success { gas_used, results } => {
+                last_results = results;
+                total_gas += gas_used;
+            }
         }
-        TransactionKind::Publish(m) => adapter::publish(
-            temporary_store,
-            native_functions,
-            m.modules,
-            tx_ctx,
-            m.gas_budget,
-            gas_object.clone(),
-        ),
-    }?;
-    if let ExecutionStatus::Failure { gas_used, .. } = &status {
-        // Roll back the temporary store if execution failed.
-        temporary_store.reset();
-        // This gas deduction cannot fail.
-        gas::deduct_gas(&mut gas_object, *gas_used);
-        temporary_store.write_object(gas_object);
     }
+    gas::deduct_gas(&mut gas_object, total_gas);
+    temporary_store.write_object(gas_object);
+
     temporary_store.ensure_active_inputs_mutated();
-    Ok(status)
+    Ok(ExecutionStatus::Success {
+        gas_used: total_gas,
+        results: last_results,
+    })
 }
 
 fn transfer<S>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
     mut inputs: Vec<Object>,
     recipient: SuiAddress,
-    mut gas_object: Object,
 ) -> SuiResult<ExecutionStatus> {
     if !inputs.len() == 1 {
         return Ok(ExecutionStatus::Failure {
@@ -85,13 +105,6 @@ fn transfer<S>(
     let mut output_object = inputs.pop().unwrap();
 
     let gas_used = gas::calculate_object_transfer_cost(&output_object);
-    if let Err(err) = gas::try_deduct_gas(&mut gas_object, gas_used) {
-        return Ok(ExecutionStatus::Failure {
-            gas_used: gas::MIN_OBJ_TRANSFER_GAS,
-            error: Box::new(err),
-        });
-    }
-    temporary_store.write_object(gas_object);
 
     if let Err(err) = output_object.transfer(recipient) {
         return Ok(ExecutionStatus::Failure {
@@ -100,5 +113,8 @@ fn transfer<S>(
         });
     }
     temporary_store.write_object(output_object);
-    Ok(ExecutionStatus::Success { gas_used })
+    Ok(ExecutionStatus::Success {
+        gas_used,
+        results: vec![],
+    })
 }

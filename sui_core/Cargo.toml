@@ -22,6 +22,7 @@ tempfile = "3.3.0"
 tracing = { version = "0.1.31", features = ["log"] }
 signature = "1.5.0"
 ed25519-dalek = "1.0.1"
+scopeguard = "1.1.0"
 structopt = "0.3.26"
 log = "0.4.14"
 
@@ -30,13 +31,13 @@ sui-framework = { path = "../sui_programmability/framework" }
 sui-network = { path = "../network_utils" }
 sui-types = { path = "../sui_types" }
 
-move-binary-format = { git = "https://github.com/diem/move", rev = "584bfc8c5f8e582223581975106ffa2545677e2a" }
-move-bytecode-utils = { git = "https://github.com/diem/move", rev = "584bfc8c5f8e582223581975106ffa2545677e2a" }
-move-core-types = { git = "https://github.com/diem/move", rev = "584bfc8c5f8e582223581975106ffa2545677e2a", features = ["address20"] }
-move-package = { git = "https://github.com/diem/move", rev = "584bfc8c5f8e582223581975106ffa2545677e2a" }
-move-vm-runtime = { git = "https://github.com/diem/move", rev = "584bfc8c5f8e582223581975106ffa2545677e2a" }
+move-binary-format = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
+move-bytecode-utils = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
+move-core-types = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a", features = ["address20"] }
+move-package = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
+move-vm-runtime = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
 
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "97a056f85555fa2afe497d6abb7cf6bf8faa63cf"}
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "e44bca4513a6ff6c97399cd79e82e4bc00571ac3"}
 
 [dev-dependencies]
 fdlimit = "0.2.1"
@@ -44,7 +45,9 @@ naughty-strings = "0.2.4"
 similar-asserts = "1.2.0"
 serde-reflection = "0.3.5"
 serde_yaml = "0.8.23"
-assert-str = "0.1.0"
+pretty_assertions = "1.2.0"
+
+test_utils = { path = "../test_utils" }
 
 [[example]]
 name = "generate-format"

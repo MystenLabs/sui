@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::transport::*;
-use bytes::Bytes;
-use futures::future::FutureExt;
+use bytes::{Bytes, BytesMut};
 use std::{
     net::TcpListener,
     sync::atomic::{AtomicUsize, Ordering},
@@ -13,7 +12,11 @@ use sui_types::{error::*, serialize::*};
 use tracing::*;
 
 use std::io;
-use tokio::time;
+use tokio::{task::JoinError, time};
+
+use futures::stream;
+use futures::SinkExt;
+use futures::StreamExt;
 
 #[derive(Clone)]
 pub struct NetworkClient {
@@ -76,66 +79,41 @@ impl NetworkClient {
     async fn batch_send_one_chunk(
         &self,
         requests: Vec<Bytes>,
-        max_in_flight: u64,
-    ) -> Result<Vec<Bytes>, io::Error> {
+        _max_in_flight: u64,
+    ) -> Vec<Result<BytesMut, std::io::Error>> {
         let address = format!("{}:{}", self.base_address, self.base_port);
-        let mut stream = connect(address, self.buffer_size).await?;
-        let mut requests = requests.iter();
-        let mut in_flight: u64 = 0;
-        let mut responses = Vec::new();
+        let stream = connect(address, self.buffer_size)
+            .await
+            .expect("Must be able to connect.");
+        let total = requests.len();
 
-        loop {
-            while in_flight < max_in_flight {
-                let request = match requests.next() {
-                    None => {
-                        if in_flight == 0 {
-                            return Ok(responses);
-                        }
-                        // No more entries to send.
-                        break;
-                    }
-                    Some(request) => request,
-                };
-                let status = time::timeout(self.send_timeout, stream.write_data(request)).await;
-                if let Err(error) = status {
-                    error!("Failed to send request: {}", error);
-                    continue;
+        let (read_stream, mut write_stream) = (stream.framed_read, stream.framed_write);
+
+        let mut requests = stream::iter(requests.into_iter().map(Ok));
+        tokio::spawn(async move { write_stream.send_all(&mut requests).await });
+
+        let mut received = 0;
+        let responses: Vec<Result<BytesMut, std::io::Error>> = read_stream
+            .take_while(|_buf| {
+                received += 1;
+                if received % 5000 == 0 && received > 0 {
+                    debug!("Received {}", received);
                 }
-                in_flight += 1;
-            }
-            if requests.len() % 5000 == 0 && requests.len() > 0 {
-                info!("In flight {} Remaining {}", in_flight, requests.len());
-            }
-            match time::timeout(self.recv_timeout, stream.read_data()).await {
-                Ok(Some(Ok(buffer))) => {
-                    in_flight -= 1;
-                    responses.push(Bytes::from(buffer));
-                }
-                Ok(Some(Err(error))) => {
-                    error!("Received error response: {}", error);
-                }
-                Ok(None) => {
-                    info!("Socket closed by server");
-                    return Ok(responses);
-                }
-                Err(error) => {
-                    error!(
-                        "Timeout while receiving response: {} (in flight: {})",
-                        error, in_flight
-                    );
-                }
-            }
-        }
+                let xcontinue = received <= total;
+                futures::future::ready(xcontinue)
+            })
+            .collect()
+            .await;
+
+        responses
     }
 
-    pub fn batch_send<I>(
+    pub fn batch_send(
         &self,
-        requests: I,
+        requests: Vec<Bytes>,
         connections: usize,
         max_in_flight: u64,
-    ) -> impl futures::stream::Stream<Item = Vec<Bytes>>
-    where
-        I: IntoIterator<Item = Bytes>,
+    ) -> impl futures::stream::Stream<Item = Result<Vec<Result<BytesMut, std::io::Error>>, JoinError>>
     {
         let handles = futures::stream::FuturesUnordered::new();
 
@@ -150,17 +128,14 @@ impl NetworkClient {
                         "Sending TCP requests to {}:{}",
                         client.base_address, client.base_port,
                     );
-                    let responses = client
-                        .batch_send_one_chunk(requests, max_in_flight)
-                        .await
-                        .unwrap_or_else(|_| Vec::new());
+                    let responses = client.batch_send_one_chunk(requests, max_in_flight).await;
+                    // .unwrap_or_else(|_| Vec::new());
                     info!(
                         "Done sending TCP requests to {}:{}",
                         client.base_address, client.base_port,
                     );
                     responses
-                })
-                .then(|x| async { x.unwrap_or_else(|_| Vec::new()) }),
+                }), // .then(|x| async { x.unwrap_or_else(|_| Vec::new()) }),
             );
         }
 

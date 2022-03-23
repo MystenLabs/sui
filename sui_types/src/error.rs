@@ -4,9 +4,9 @@
 
 use std::fmt::Debug;
 use thiserror::Error;
+use typed_store::rocks::TypedStoreError;
 
 use crate::base_types::*;
-use crate::messages::Transaction;
 use move_binary_format::errors::PartialVMError;
 use serde::{Deserialize, Serialize};
 
@@ -27,9 +27,8 @@ macro_rules! fp_ensure {
 }
 pub(crate) use fp_ensure;
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 /// Custom error type for Sui.
-
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 #[allow(clippy::large_enum_variant)]
 pub enum SuiError {
     // Object misuse issues
@@ -51,26 +50,31 @@ pub enum SuiError {
     DeleteObjectOwnedObject,
     #[error("The shared locks for this transaction have not yet been set.")]
     SharedObjectLockNotSetObject,
+    #[error("Invalid Batch Transaction: {}", error)]
+    InvalidBatchTransaction { error: String },
 
     // Signature verification
     #[error("Signature is not valid: {}", error)]
     InvalidSignature { error: String },
-    #[error("Value was not signed by the correct sender")]
-    IncorrectSigner,
+    #[error("Value was not signed by the correct sender: {}", error)]
+    IncorrectSigner { error: String },
     #[error("Value was not signed by a known authority")]
     UnknownSigner,
     // Certificate verification
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
     #[error(
-        "The given sequence number must match the next expected sequence ({expected_sequence:?}) number of the object ({object_id:?})"
+        "The given sequence number ({given_sequence:?}) must match the next expected sequence ({expected_sequence:?}) number of the object ({object_id:?})"
     )]
     UnexpectedSequenceNumber {
         object_id: ObjectID,
         expected_sequence: SequenceNumber,
+        given_sequence: SequenceNumber,
     },
     #[error("Conflicting transaction already received: {pending_transaction:?}")]
-    ConflictingTransaction { pending_transaction: Transaction },
+    ConflictingTransaction {
+        pending_transaction: TransactionDigest,
+    },
     #[error("Transaction was processed but no signature was produced by authority")]
     ErrorWhileProcessingTransaction,
     #[error("Transaction transaction processing failed: {err}")]
@@ -88,13 +92,18 @@ pub enum SuiError {
     #[error("Object fetch failed for {object_id:?}, err {err:?}.")]
     ObjectFetchFailed { object_id: ObjectID, err: String },
     #[error("Object {object_id:?} at old version: {current_sequence_number:?}")]
-    MissingEalierConfirmations {
+    MissingEarlierConfirmations {
         object_id: ObjectID,
         current_sequence_number: VersionNumber,
     },
     // Synchronization validation
     #[error("Transaction index must increase by one")]
     UnexpectedTransactionIndex,
+    #[error("Once one iterator is allowed on a stream at once.")]
+    ConcurrentIteratorError,
+    #[error("The notifier subsystem is closed.")]
+    ClosedNotifierError,
+
     // Account access
     #[error("No certificate with digest: {certificate_digest:?}")]
     CertificateNotfound {
@@ -148,12 +157,12 @@ pub enum SuiError {
     TooManyItemsError(u64),
     #[error("The range specified is invalid.")]
     InvalidSequenceRangeError,
-    #[error("No batches mached the range requested.")]
+    #[error("No batches matched the range requested.")]
     NoBatchesFoundError,
     #[error("The channel to repond to the client returned an error.")]
     CannotSendClientMessageError,
     #[error("Subscription service had to drop {0} items")]
-    SubscriptionItemsDropedError(u64),
+    SubscriptionItemsDroppedError(u64),
     #[error("Subscription service closed.")]
     SubscriptionServiceClosed,
 
@@ -234,7 +243,7 @@ pub enum SuiError {
         error: Box<SuiError>,
     },
     #[error("Storage error")]
-    StorageError(#[from] typed_store::rocks::TypedStoreError),
+    StorageError(#[from] TypedStoreError),
     #[error("Batch error: cannot send transaction to batch.")]
     BatchErrorSender,
     #[error("Authority Error: {error:?}")]
@@ -255,12 +264,15 @@ pub enum SuiError {
     ConcurrentTransactionError,
     #[error("Transfer should be received by us.")]
     IncorrectRecipientError,
-    #[error("Too many authority errors were detected.")]
-    TooManyIncorrectAuthorities,
-    #[error("Inconsistent gas coin split result.")]
-    IncorrectGasSplit,
-    #[error("Inconsistent gas coin merge result.")]
-    IncorrectGasMerge,
+    #[error("Too many authority errors were detected: {:?}", errors)]
+    TooManyIncorrectAuthorities {
+        errors: Vec<(AuthorityName, SuiError)>,
+    },
+    #[error("Inconsistent results observed in the Gateway. This should not happen and typically means there is a bug in the Sui implementation. Details: {error:?}")]
+    InconsistentGatewayResult { error: String },
+
+    #[error("Authority state can be modified by a single consensus client at the time")]
+    OnlyOneConsensusClientPermitted,
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

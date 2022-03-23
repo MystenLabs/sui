@@ -2,6 +2,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{
+    authority_batch::{BroadcastReceiver, BroadcastSender},
+    execution_engine, transaction_input_checker,
+};
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::ModuleCache;
 use move_core_types::{
@@ -9,6 +13,7 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_runtime::native_functions::NativeFunctionTable;
+use std::sync::atomic::AtomicUsize;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     pin::Pin,
@@ -21,22 +26,21 @@ use sui_types::{
     committee::Committee,
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
-    fp_bail, fp_ensure, gas,
+    fp_bail, fp_ensure,
     messages::*,
-    object::{Data, Object, Owner},
+    object::{Data, Object},
     storage::{BackingPackageStore, DeleteKind, Storage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 use tracing::*;
 
-use crate::{
-    authority_batch::{BatchSender, BroadcastReceiver, BroadcastSender},
-    execution_engine,
-};
-
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
 pub mod authority_tests;
+
+#[cfg(test)]
+#[path = "unit_tests/batch_transaction_tests.rs"]
+mod batch_transaction_tests;
 
 #[cfg(test)]
 #[path = "unit_tests/move_integration_tests.rs"]
@@ -48,9 +52,12 @@ pub use temporary_store::AuthorityTemporaryStore;
 mod authority_store;
 pub use authority_store::AuthorityStore;
 
+pub mod authority_notifier;
+
 // based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
 const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
 const MAX_ITEMS_LIMIT: u64 = 10_000;
+const BROADCAST_CAPACITY: usize = 10_000;
 
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
@@ -75,13 +82,19 @@ pub struct AuthorityState {
     move_vm: Arc<adapter::MoveVM>,
 
     /// The database
-    _database: Arc<AuthorityStore>,
+    pub(crate) _database: Arc<AuthorityStore>, // TODO: remove pub
 
     // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
     /// and create batches for this authority.
     /// Keep as None if there is no need for this.
-    batch_channels: Option<(BatchSender, BroadcastSender)>,
+    pub(crate) batch_channels: BroadcastSender, // TODO: remove pub
+
+    // The Transaction notifier ticketing engine.
+    pub(crate) batch_notifier: Arc<authority_notifier::TransactionNotifier>, // TODO: remove pub
+
+    /// Ensures there can only be a single consensus client is updating the state.
+    pub consensus_guardrail: AtomicUsize,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -91,173 +104,20 @@ pub struct AuthorityState {
 ///
 /// Repeating valid commands should produce no changes and return no error.
 impl AuthorityState {
-    /// Set a listener for transaction certificate updates. Returns an
-    /// error if a listener is already registered.
-    pub fn set_batch_sender(
-        &mut self,
-        batch_sender: BatchSender,
-        broadcast_sender: BroadcastSender,
-    ) -> SuiResult {
-        if self.batch_channels.is_some() {
-            return Err(SuiError::AuthorityUpdateFailure);
-        }
-        self.batch_channels = Some((batch_sender, broadcast_sender));
-        Ok(())
-    }
-
     /// Get a broadcast receiver for updates
-    pub fn subscribe(&self) -> Result<BroadcastReceiver, SuiError> {
-        self.batch_channels
-            .as_ref()
-            .map(|(_, tx)| tx.subscribe())
-            .ok_or(SuiError::GenericAuthorityError {
-                error: "No broadcast subscriptions allowed for this authority.".to_string(),
-            })
+    pub fn subscribe_batch(&self) -> BroadcastReceiver {
+        self.batch_channels.subscribe()
     }
 
-    /// The logic to check one object against a reference, and return the object if all is well
-    /// or an error if not.
-    fn check_one_lock(
-        &self,
-        transaction: &Transaction,
-        object_kind: InputObjectKind,
-        object: &Object,
-        owned_object_authenticators: &HashSet<SuiAddress>,
-    ) -> SuiResult {
-        match object_kind {
-            InputObjectKind::MovePackage(package_id) => {
-                fp_ensure!(
-                    object.data.try_as_package().is_some(),
-                    SuiError::MoveObjectAsPackage {
-                        object_id: package_id
-                    }
-                );
-            }
-            InputObjectKind::OwnedMoveObject((object_id, sequence_number, object_digest)) => {
-                fp_ensure!(
-                    sequence_number <= SequenceNumber::MAX,
-                    SuiError::InvalidSequenceNumber
-                );
-
-                // Check that the seq number is the same
-                fp_ensure!(
-                    object.version() == sequence_number,
-                    SuiError::UnexpectedSequenceNumber {
-                        object_id,
-                        expected_sequence: object.version(),
-                    }
-                );
-
-                // Check the digest matches
-                fp_ensure!(
-                    object.digest() == object_digest,
-                    SuiError::InvalidObjectDigest {
-                        object_id,
-                        expected_digest: object_digest
-                    }
-                );
-
-                // If the object is the gas object, check that it is an owned object
-                // and there is enough gas.
-                if object_kind.object_id() == transaction.gas_payment_object_ref().0 {
-                    gas::check_gas_requirement(transaction, object)?;
-                }
-
-                // If the object is the transfer object, check that it is not shared object.
-                if let TransactionKind::Transfer(t) = &transaction.data.kind {
-                    if object_kind.object_id() == t.object_ref.0 {
-                        fp_ensure!(
-                            matches!(object.owner, Owner::AddressOwner(..)),
-                            SuiError::TransferSharedError
-                        );
-                    }
-                }
-
-                match object.owner {
-                    Owner::SharedImmutable => {
-                        // Nothing else to check for SharedImmutable.
-                    }
-                    Owner::AddressOwner(owner) => {
-                        // Check the owner is the transaction sender.
-                        fp_ensure!(
-                            transaction.sender_address() == owner,
-                            SuiError::IncorrectSigner
-                        );
-                    }
-                    Owner::ObjectOwner(owner) => {
-                        // Check that the object owner is another mutable object in the input.
-                        fp_ensure!(
-                            owned_object_authenticators.contains(&owner),
-                            SuiError::IncorrectSigner
-                        );
-                    }
-                    Owner::SharedMutable => {
-                        return Err(SuiError::UnsupportedSharedObjectError);
-                    }
-                };
-            }
-            InputObjectKind::SharedMoveObject(..) => {
-                // When someone locks an object as shared it must be shared already.
-                fp_ensure!(object.is_shared(), SuiError::NotSharedObjectError);
-            }
-        };
-        Ok(())
-    }
-
-    /// Check all the objects used in the transaction against the database, and ensure
-    /// that they are all the correct version and number.
-    async fn check_locks(
+    async fn check_locks_and_gas(
         &self,
         transaction: &Transaction,
     ) -> Result<Vec<(InputObjectKind, Object)>, SuiError> {
-        let input_objects = transaction.input_objects();
-
+        let input_objects = transaction.input_objects()?;
         // These IDs act as authenticators that can own other objects.
         let objects = self.fetch_objects(&input_objects).await?;
-        let owned_object_authenticators: HashSet<_> = objects
-            .iter()
-            .flat_map(|opt_obj| match opt_obj {
-                Some(obj) if !obj.is_read_only() => Some(obj.id().into()),
-                _ => None,
-            })
-            .collect();
-
-        // Gather all objects and errors.
-        let mut all_objects = Vec::with_capacity(input_objects.len());
-        let mut errors = Vec::new();
-        for (object_kind, object) in input_objects.into_iter().zip(objects) {
-            // All objects must exist in the DB.
-            let object = match object {
-                Some(object) => object,
-                None => {
-                    errors.push(object_kind.object_not_found_error());
-                    continue;
-                }
-            };
-
-            // Check if the object contents match the type of lock we need for
-            // this object.
-            match self.check_one_lock(
-                transaction,
-                object_kind,
-                &object,
-                &owned_object_authenticators,
-            ) {
-                Ok(()) => all_objects.push((object_kind, object)),
-                Err(e) => {
-                    errors.push(e);
-                }
-            }
-        }
-
-        // If any errors with the locks were detected, we return all errors to give the client
-        // a chance to update the authority if possible.
-        if !errors.is_empty() {
-            return Err(SuiError::LockErrors { errors });
-        }
-
-        fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
-
+        let all_objects =
+            transaction_input_checker::check_locks(transaction, input_objects, objects)?;
         Ok(all_objects)
     }
 
@@ -265,17 +125,6 @@ impl AuthorityState {
         &self,
         input_objects: &[InputObjectKind],
     ) -> Result<Vec<Option<Object>>, SuiError> {
-        // There is at least one input
-        fp_ensure!(
-            !input_objects.is_empty(),
-            SuiError::ObjectInputArityViolation
-        );
-        // Ensure that there are no duplicate inputs
-        let mut used = HashSet::new();
-        if !input_objects.iter().all(|o| used.insert(o.object_id())) {
-            return Err(SuiError::DuplicateObjectRefInput);
-        }
-
         let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
 
         self.get_objects(&ids[..]).await
@@ -290,28 +139,20 @@ impl AuthorityState {
         transaction.check_signature()?;
         let transaction_digest = transaction.digest();
 
-        let owned_objects: Vec<_> = self
-            .check_locks(&transaction)
-            .instrument(tracing::trace_span!("tx_check_locks"))
-            .await?
-            .into_iter()
-            .filter_map(|(object_kind, object)| match object_kind {
-                InputObjectKind::MovePackage(_) => None,
-                InputObjectKind::OwnedMoveObject(object_ref) => {
-                    if object.is_read_only() {
-                        None
-                    } else {
-                        Some(object_ref)
-                    }
-                }
-                InputObjectKind::SharedMoveObject(..) => None,
-            })
-            .collect();
+        // Ensure an idempotent answer.
+        if self
+            ._database
+            .signed_transaction_exists(&transaction_digest)?
+        {
+            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
+            return Ok(transaction_info);
+        }
 
-        debug!(
-            num_mutable_objects = owned_objects.len(),
-            "Checked locks and found mutable objects"
-        );
+        let all_objects: Vec<_> = self
+            .check_locks_and_gas(&transaction)
+            .instrument(tracing::trace_span!("tx_check_locks"))
+            .await?;
+        let owned_objects = transaction_input_checker::filter_owned_objects(all_objects);
 
         let signed_transaction = SignedTransaction::new(transaction, self.name, &*self.secret);
 
@@ -319,7 +160,7 @@ impl AuthorityState {
         // The call to self.set_transaction_lock checks the lock is not conflicting,
         // and returns ConflictingTransaction error in case there is a lock on a different
         // existing transaction.
-        self.set_transaction_lock(&owned_objects, signed_transaction)
+        self.set_transaction_lock(&owned_objects, transaction_digest, signed_transaction)
             .instrument(tracing::trace_span!("db_set_transaction_lock"))
             .await?;
 
@@ -332,25 +173,25 @@ impl AuthorityState {
         &self,
         confirmation_transaction: ConfirmationTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
-        let certificate = &confirmation_transaction.certificate;
-        let transaction = &certificate.transaction;
-        let transaction_digest = transaction.digest();
+        let transaction_digest = *confirmation_transaction.certificate.digest();
 
         // Ensure an idempotent answer.
-        let transaction_info = self.make_transaction_info(&transaction_digest).await?;
-        if transaction_info.signed_effects.is_some() {
+        if self._database.signed_effects_exists(&transaction_digest)? {
+            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
             return Ok(transaction_info);
         }
 
         // Check the certificate and retrieve the transfer data.
-        certificate.check(&self.committee)?;
+        confirmation_transaction
+            .certificate
+            .check(&self.committee)?;
 
         self.process_certificate(confirmation_transaction).await
     }
 
     async fn check_shared_locks(
         &self,
-        transaction_digest: TransactionDigest,
+        transaction_digest: &TransactionDigest,
         transaction: &Transaction,
         inputs: &[(InputObjectKind, Object)],
     ) -> Result<(), SuiError> {
@@ -396,6 +237,7 @@ impl AuthorityState {
                         Some(SuiError::UnexpectedSequenceNumber {
                             object_id: *object_id,
                             expected_sequence: shared_locks[object_id],
+                            given_sequence: *version,
                         })
                     } else {
                         None
@@ -419,15 +261,15 @@ impl AuthorityState {
         confirmation_transaction: ConfirmationTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let certificate = confirmation_transaction.certificate;
-        let transaction = certificate.transaction.clone();
-        let transaction_digest = transaction.digest();
+        let transaction_digest = *certificate.digest();
+        let transaction = &certificate.transaction;
 
-        let objects_by_kind: Vec<_> = self.check_locks(&transaction).await?;
+        let objects_by_kind = self.check_locks_and_gas(transaction).await?;
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
         let _shared_objects = self
-            .check_shared_locks(transaction_digest, &transaction, &objects_by_kind)
+            .check_shared_locks(&transaction_digest, transaction, &objects_by_kind)
             .await?;
         // inputs.extend(shared_objects);
 
@@ -436,26 +278,21 @@ impl AuthorityState {
             "Read inputs for transaction from DB"
         );
 
-        let inputs: Vec<_> = objects_by_kind
-            .into_iter()
-            .map(|(_, object)| object)
-            .collect();
-
-        let mut transaction_dependencies: BTreeSet<_> = inputs
+        let mut transaction_dependencies: BTreeSet<_> = objects_by_kind
             .iter()
-            .map(|object| object.previous_transaction)
+            .map(|(_, object)| object.previous_transaction)
             .collect();
 
         // Insert into the certificates map
-        let mut tx_ctx = TxContext::new(&transaction.sender_address(), transaction_digest);
+        let mut tx_ctx = TxContext::new(&transaction.sender_address(), &transaction_digest);
 
         let gas_object_id = transaction.gas_payment_object_ref().0;
         let mut temporary_store =
-            AuthorityTemporaryStore::new(self._database.clone(), &inputs, tx_ctx.digest());
+            AuthorityTemporaryStore::new(self._database.clone(), &objects_by_kind, tx_ctx.digest());
         let status = execution_engine::execute_transaction(
             &mut temporary_store,
-            transaction,
-            inputs,
+            transaction.clone(),
+            objects_by_kind,
             &mut tx_ctx,
             &self.move_vm,
             self._native_functions.clone(),
@@ -477,39 +314,34 @@ impl AuthorityState {
             &gas_object_id,
         );
         // Update the database in an atomic manner
-        let (seq, resp) = self
-            .update_state(temporary_store, certificate, signed_effects)
+
+        self.update_state(temporary_store, certificate, signed_effects)
             .instrument(tracing::debug_span!("db_update_state"))
-            .await?; // Returns the OrderInfoResponse
-
-        // If there is a notifier registered, notify:
-        if let Some((sender, _)) = &self.batch_channels {
-            sender.send_item(seq, transaction_digest).await?;
-        }
-
-        Ok(resp)
+            .await // Returns the OrderInfoResponse
     }
 
     /// Process certificates coming from the consensus. It is crucial that this function is only
     /// called by a single task (ie. the task handling consensus outputs).
     pub async fn handle_consensus_certificate(
         &self,
-        certificate: &CertifiedTransaction,
+        certificate: CertifiedTransaction,
+        last_consensus_index: SequenceNumber,
     ) -> SuiResult<()> {
-        let transaction = &certificate.transaction;
-
         // Ensure it is a shared object certificate
-        if !transaction.contains_shared_object() {
-            // TODO: Maybe add a warning here, no respectable authority should
-            // have sequenced this.
+        if !certificate.transaction.contains_shared_object() {
+            log::debug!(
+                "Transaction without shared object has been sequenced: {:?}",
+                certificate.transaction
+            );
             return Ok(());
         }
 
         // Ensure it is the first time we see this certificate.
-        let transaction_digest = transaction.digest();
-        if self
-            ._database
-            .sequenced(transaction_digest, transaction.shared_input_objects())?[0]
+        let transaction_digest = *certificate.digest();
+        if self._database.sequenced(
+            &transaction_digest,
+            certificate.transaction.shared_input_objects(),
+        )?[0]
             .is_some()
         {
             return Ok(());
@@ -518,14 +350,15 @@ impl AuthorityState {
         // Check the certificate.
         certificate.check(&self.committee)?;
 
-        // Persist the certificate. We are about to lock one or more shared object.
+        // Persist the certificate since we are about to lock one or more shared object.
         // We thus need to make sure someone (if not the client) can continue the protocol.
-        // Also atomically lock the shared objects for this particular transaction.
-        self._database.persist_certificate_and_lock_shared_objects(
-            transaction_digest,
-            transaction,
-            certificate.clone(),
-        )
+        // Also atomically lock the shared objects for this particular transaction and
+        // increment the last consensus index. Note that a single process can ever call
+        // this function and that the last consensus index is also kept in memory. It is
+        // thus ok to only persist now (despite this function may have returned earlier).
+        // In the worst case, the synchronizer of the consensus client will catch up.
+        self._database
+            .persist_certificate_and_lock_shared_objects(certificate, last_consensus_index)
     }
 
     pub async fn handle_transaction_info_request(
@@ -590,7 +423,7 @@ impl AuthorityState {
                             // Read only objects have no locks.
                             None
                         } else {
-                            self.get_transaction_lock(&object.to_object_reference())
+                            self.get_transaction_lock(&object.compute_object_reference())
                                 .await?
                         };
                         let layout = match request_layout {
@@ -689,35 +522,60 @@ impl AuthorityState {
         genesis_packages: Vec<Vec<CompiledModule>>,
         genesis_ctx: &mut TxContext,
     ) -> Self {
+        let state =
+            AuthorityState::new_without_genesis(committee, name, secret, store.clone()).await;
+
+        // Only initialize an empty database.
+        if store
+            .database_is_empty()
+            .expect("Database read should not fail.")
+        {
+            for genesis_modules in genesis_packages {
+                state
+                    .store_package_and_init_modules_for_genesis(genesis_ctx, genesis_modules)
+                    .await
+                    .expect("We expect publishing the Genesis packages to not fail");
+            }
+        }
+
+        state
+    }
+
+    pub async fn new_without_genesis(
+        committee: Committee,
+        name: AuthorityName,
+        secret: StableSyncAuthoritySigner,
+        store: Arc<AuthorityStore>,
+    ) -> Self {
+        let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-        let state = AuthorityState {
+
+        let mut state = AuthorityState {
             committee,
             name,
             secret,
             _native_functions: native_functions.clone(),
             move_vm: adapter::new_move_vm(native_functions)
                 .expect("We defined natives to not fail here"),
-            _database: store,
-            batch_channels: None,
+            _database: store.clone(),
+            batch_channels: tx,
+            batch_notifier: Arc::new(
+                authority_notifier::TransactionNotifier::new(store)
+                    .expect("Notifier cannot start."),
+            ),
+            consensus_guardrail: AtomicUsize::new(0),
         };
 
-        for genesis_modules in genesis_packages {
-            state
-                .store_package_and_init_modules_for_genesis(genesis_ctx, genesis_modules)
-                .await
-                .expect("We expect publishing the Genesis packages to not fail");
-        }
+        state
+            .init_batches_from_database()
+            .expect("Init batches failed!");
+
         state
     }
 
     pub(crate) fn db(&self) -> Arc<AuthorityStore> {
         self._database.clone()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn batch_sender(&self) -> &BatchSender {
-        &self.batch_channels.as_ref().unwrap().0
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
@@ -738,15 +596,34 @@ impl AuthorityState {
     ) -> SuiResult {
         debug_assert!(ctx.digest() == TransactionDigest::genesis());
         let inputs = Transaction::input_objects_in_compiled_modules(&modules);
-        let input_objects = self
-            .fetch_objects(&inputs)
-            .await?
+        let input_objects = self.fetch_objects(&inputs).await?;
+        // When publishing genesis packages, since the std framework packages all have
+        // non-zero addresses, [`Transaction::input_objects_in_compiled_modules`] will consider
+        // them as dependencies even though they are not. Hence input_objects contain objects
+        // that don't exist on-chain because they are yet to be published.
+        #[cfg(debug_assertions)]
+        {
+            let to_be_published_addresses: HashSet<_> = modules
+                .iter()
+                .map(|module| *module.self_id().address())
+                .collect();
+            assert!(
+                // An object either exists on-chain, or is one of the packages to be published.
+                inputs
+                    .iter()
+                    .zip(input_objects.iter())
+                    .all(|(kind, obj_opt)| obj_opt.is_some()
+                        || to_be_published_addresses.contains(&kind.object_id()))
+            );
+        }
+        let filtered = inputs
             .into_iter()
-            .flatten()
+            .zip(input_objects.into_iter())
+            .filter_map(|(input, object_opt)| object_opt.map(|object| (input, object)))
             .collect::<Vec<_>>();
 
         let mut temporary_store =
-            AuthorityTemporaryStore::new(self._database.clone(), &input_objects, ctx.digest());
+            AuthorityTemporaryStore::new(self._database.clone(), &filtered, ctx.digest());
         let package_id = ObjectID::from(*modules[0].self_id().address());
         let natives = self._native_functions.clone();
         let vm = adapter::verify_and_link(&temporary_store, &modules, package_id, natives)?;
@@ -759,7 +636,7 @@ impl AuthorityState {
         ) {
             return Err(*error);
         };
-        self._database
+        self.db()
             .update_objects_state_for_genesis(temporary_store, ctx.digest())
     }
 
@@ -782,31 +659,33 @@ impl AuthorityState {
 
     // Helper function to manage transaction_locks
 
-    /// Initialize a transaction lock for an object/sequence to None
-    pub async fn init_transaction_lock(&self, object_ref: ObjectRef) {
-        self._database
-            .init_transaction_lock(object_ref)
-            .expect("TODO: propagate the error")
-    }
-
     /// Set the transaction lock to a specific transaction
     pub async fn set_transaction_lock(
         &self,
         mutable_input_objects: &[ObjectRef],
+        tx_digest: TransactionDigest,
         signed_transaction: SignedTransaction,
     ) -> Result<(), SuiError> {
         self._database
-            .set_transaction_lock(mutable_input_objects, signed_transaction)
+            .set_transaction_lock(mutable_input_objects, tx_digest, signed_transaction)
     }
 
+    /// Update state and signals that a new transactions has been processed
+    /// to the batch maker service.
     async fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore<AuthorityStore>,
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
-    ) -> Result<(u64, TransactionInfoResponse), SuiError> {
-        self._database
-            .update_state(temporary_store, certificate, signed_effects)
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        let notifier_ticket = self.batch_notifier.ticket()?;
+        self._database.update_state(
+            temporary_store,
+            certificate,
+            signed_effects,
+            Some(notifier_ticket.seq()),
+        )
+        // implicitly we drop the ticket here and that notifies the batch manager
     }
 
     /// Get a read reference to an object/seq lock
@@ -857,6 +736,10 @@ impl AuthorityState {
         object_id: ObjectID,
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
         self._database.get_latest_parent_entry(object_id)
+    }
+
+    pub fn last_consensus_index(&self) -> SuiResult<SequenceNumber> {
+        self._database.last_consensus_index()
     }
 }
 

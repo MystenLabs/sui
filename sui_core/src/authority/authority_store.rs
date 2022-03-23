@@ -2,23 +2,30 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
-use rocksdb::Options;
+use rocksdb::{ColumnFamilyDescriptor, Options};
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::path::Path;
+
+use rocksdb::MultiThreaded;
 use std::sync::atomic::AtomicU64;
 
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use tracing::warn;
-use typed_store::rocks::{open_cf, DBBatch, DBMap};
+use typed_store::rocks::{DBBatch, DBMap, TypedStoreError};
 
-use std::sync::atomic::Ordering;
 use typed_store::{reopen, traits::Map};
 
-pub type AuthorityStore = SuiDataStore<true>;
+pub type AuthorityStore = SuiDataStore<false>;
 #[allow(dead_code)]
-pub type ReplicaStore = SuiDataStore<false>;
+pub type ReplicaStore = SuiDataStore<true>;
+
+const NUM_SHARDS: usize = 4096;
+
+/// The key where the latest consensus index is stored in the database.
+// TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
+const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 
 /// ALL_OBJ_VER determines whether we want to store all past
 /// versions of every object in the store. Authority doesn't store
@@ -90,29 +97,93 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
     /// A sequence of batches indexing into the sequence of executed transactions.
     pub batches: DBMap<TxSequenceNumber, SignedBatch>,
 
+    /// The following table is used to store a single value (the corresponding key is a constant). The value
+    /// represents the index of the latest consensus message this authority processed. This field is written
+    /// by a single process acting as consensus (light) client. It is used to ensure the authority processes
+    /// every message output by consensus (and in the right order).
+    last_consensus_index: DBMap<u64, SequenceNumber>,
+
     /// The next available sequence number to use in the `executed sequence` table.
     pub next_sequence_number: AtomicU64,
+}
+
+/// Opens a database with options, and a number of column families that are created if they do not exist.
+pub fn open_cf_opts<P: AsRef<Path>>(
+    path: P,
+    db_options: Option<rocksdb::Options>,
+    opt_cfs: &[(&str, &rocksdb::Options)],
+) -> Result<Arc<rocksdb::DBWithThreadMode<MultiThreaded>>, TypedStoreError> {
+    // Customize database options
+    let mut options = db_options.unwrap_or_default();
+    let mut cfs = rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&options, &path)
+        .ok()
+        .unwrap_or_default();
+
+    // Customize CFs
+
+    for cf_key in opt_cfs.iter().map(|(name, _)| name) {
+        let key = (*cf_key).to_owned();
+        if !cfs.contains(&key) {
+            cfs.push(key);
+        }
+    }
+
+    let primary = path.as_ref().to_path_buf();
+
+    let rocksdb = {
+        options.create_if_missing(true);
+        options.create_missing_column_families(true);
+        Arc::new(
+            rocksdb::DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(
+                &options,
+                &primary,
+                opt_cfs
+                    .iter()
+                    .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),
+            )?,
+        )
+    };
+    Ok(rocksdb)
 }
 
 impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     /// Open an authority store by directory path
     pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> AuthorityStore {
-        let db = open_cf(
+        let mut options = db_options.unwrap_or_default();
+
+        /* The table cache is locked for updates and this determines the number
+           of shareds, ie 2^10. Increase in case of lock contentions.
+        */
+        let row_cache = rocksdb::Cache::new_lru_cache(1_000_000).expect("Cache is ok");
+        options.set_row_cache(&row_cache);
+        options.set_table_cache_num_shard_bits(10);
+        options.set_compression_type(rocksdb::DBCompressionType::None);
+
+        let mut point_lookup = options.clone();
+        point_lookup.optimize_for_point_lookup(1024 * 1024);
+        point_lookup.set_memtable_whole_key_filtering(true);
+
+        let transform = rocksdb::SliceTransform::create("bytes_8_to_16", |key| &key[8..16], None);
+        point_lookup.set_prefix_extractor(transform);
+        point_lookup.set_memtable_prefix_bloom_ratio(0.2);
+
+        let db = open_cf_opts(
             &path,
-            db_options,
+            Some(options.clone()),
             &[
-                "objects",
-                "all_object_versions",
-                "owner_index",
-                "transaction_lock",
-                "signed_transactions",
-                "certificates",
-                "parent_sync",
-                "signed_effects",
-                "sequenced",
-                "schedule",
-                "executed_sequence",
-                "batches",
+                ("objects", &point_lookup),
+                ("all_object_versions", &options),
+                ("owner_index", &options),
+                ("transaction_lock", &point_lookup),
+                ("signed_transactions", &point_lookup),
+                ("certificates", &point_lookup),
+                ("parent_sync", &options),
+                ("signed_effects", &point_lookup),
+                ("sequenced", &options),
+                ("schedule", &options),
+                ("executed_sequence", &options),
+                ("batches", &options),
+                ("last_consensus_index", &options),
             ],
         )
         .expect("Cannot open DB.");
@@ -144,6 +215,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             sequenced,
             schedule,
             batches,
+            last_consensus_index,
         ) = reopen! (
             &db,
             "objects";<ObjectID, Object>,
@@ -156,7 +228,8 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             "signed_effects";<TransactionDigest, SignedTransactionEffects>,
             "sequenced";<(TransactionDigest, ObjectID), SequenceNumber>,
             "schedule";<ObjectID, SequenceNumber>,
-            "batches";<TxSequenceNumber, SignedBatch>
+            "batches";<TxSequenceNumber, SignedBatch>,
+            "last_consensus_index";<u64, SequenceNumber>
         );
         AuthorityStore {
             objects,
@@ -169,14 +242,57 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             signed_effects,
             sequenced,
             schedule,
-            lock_table: (0..1024)
+            lock_table: (0..NUM_SHARDS)
                 .into_iter()
                 .map(|_| parking_lot::Mutex::new(()))
                 .collect(),
             executed_sequence,
             batches,
+            last_consensus_index,
             next_sequence_number,
         }
+    }
+
+    /// Returns true if we have a signed_effects structure for this transaction digest
+    pub fn signed_effects_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
+        self.signed_effects
+            .contains_key(transaction_digest)
+            .map_err(|e| e.into())
+    }
+
+    /// Returns true if we have a signed_effects structure for this transaction digest
+    pub fn signed_transaction_exists(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<bool> {
+        self.signed_transactions
+            .contains_key(transaction_digest)
+            .map_err(|e| e.into())
+    }
+
+    /// Returns true if there are no objects in the database
+    pub fn database_is_empty(&self) -> SuiResult<bool> {
+        Ok(self
+            .objects
+            .iter()
+            .skip_to(&ObjectID::ZERO)?
+            .next()
+            .is_none())
+    }
+
+    pub fn next_sequence_number(&self) -> Result<TxSequenceNumber, SuiError> {
+        Ok(self
+            .executed_sequence
+            .iter()
+            .skip_prior_to(&TxSequenceNumber::MAX)?
+            .next()
+            .map(|(v, _)| v + 1u64)
+            .unwrap_or(0))
+    }
+
+    #[cfg(test)]
+    pub fn side_sequence(&self, seq: TxSequenceNumber, digest: &TransactionDigest) {
+        self.executed_sequence.insert(&seq, digest).unwrap();
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
@@ -301,29 +417,26 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     }
 
     /// Read a lock for a specific (transaction, shared object) pair.
-    pub fn sequenced(
+    pub fn sequenced<'a>(
         &self,
-        transaction_digest: TransactionDigest,
-        object_ids: &[ObjectID],
+        transaction_digest: &TransactionDigest,
+        object_ids: impl Iterator<Item = &'a ObjectID>,
     ) -> Result<Vec<Option<SequenceNumber>>, SuiError> {
-        let keys: Vec<_> = object_ids
-            .iter()
-            .map(|objid| (transaction_digest, *objid))
-            .collect();
+        let keys = object_ids.map(|objid| (*transaction_digest, *objid));
 
-        self.sequenced.multi_get(&keys[..]).map_err(SuiError::from)
+        self.sequenced.multi_get(keys).map_err(SuiError::from)
     }
 
     /// Read a lock for a specific (transaction, shared object) pair.
     pub fn all_shared_locks(
         &self,
-        transaction_digest: TransactionDigest,
+        transaction_digest: &TransactionDigest,
     ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
         Ok(self
             .sequenced
             .iter()
-            .skip_to(&(transaction_digest, ObjectID::ZERO))?
-            .take_while(|((tx, _objid), _ver)| *tx == transaction_digest)
+            .skip_to(&(*transaction_digest, ObjectID::ZERO))?
+            .take_while(|((tx, _objid), _ver)| tx == transaction_digest)
             .map(|((_tx, objid), ver)| (objid, ver))
             .collect())
     }
@@ -332,17 +445,23 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
 
     /// Insert an object
     pub fn insert_object(&self, object: Object) -> Result<(), SuiError> {
-        self.objects.insert(&object.id(), &object)?;
+        // We only side load objects with a genesis parent transaction.
+        debug_assert!(object.previous_transaction == TransactionDigest::genesis());
+
+        // Insert object
+        let object_ref = object.compute_object_reference();
+        self.objects.insert(&object_ref.0, &object)?;
+
+        self.transaction_lock.get_or_insert(&object_ref, || None)?;
 
         // Update the index
         if let Some(address) = object.get_single_owner() {
             self.owner_index
-                .insert(&(address, object.id()), &object.to_object_reference())?;
+                .insert(&(address, object_ref.0), &object_ref)?;
         }
-
         // Update the parent
         self.parent_sync
-            .insert(&object.to_object_reference(), &object.previous_transaction)?;
+            .insert(&object_ref, &object.previous_transaction)?;
 
         // We only side load objects with a genesis parent transaction.
         debug_assert!(object.previous_transaction == TransactionDigest::genesis());
@@ -350,10 +469,40 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         Ok(())
     }
 
-    /// Initialize a lock to an object reference to None, but keep it
-    /// as it is if a value is already present.
-    pub fn init_transaction_lock(&self, object_ref: ObjectRef) -> Result<(), SuiError> {
-        self.transaction_lock.get_or_insert(&object_ref, || None)?;
+    /// This function is used by the bench.rs script, and should not be used in other contexts
+    /// In particular it does not check the old locks before inserting new ones, so the objects
+    /// must be new.
+    pub fn bulk_object_insert(&self, objects: &[&Object]) -> SuiResult<()> {
+        let batch = self.objects.batch();
+        let ref_and_objects: Vec<_> = objects
+            .iter()
+            .map(|o| (o.compute_object_reference(), o))
+            .collect();
+
+        batch
+            .insert_batch(
+                &self.objects,
+                ref_and_objects.iter().map(|(oref, o)| (oref.0, **o)),
+            )?
+            .insert_batch(
+                &self.transaction_lock,
+                ref_and_objects.iter().map(|(oref, _)| (oref, None)),
+            )?
+            .insert_batch(
+                &self.owner_index,
+                ref_and_objects.iter().filter_map(|(oref, o)| {
+                    o.get_single_owner()
+                        .map(|address| ((address, oref.0), oref))
+                }),
+            )?
+            .insert_batch(
+                &self.parent_sync,
+                ref_and_objects
+                    .iter()
+                    .map(|(oref, o)| (oref, o.previous_transaction)),
+            )?
+            .write()?;
+
         Ok(())
     }
 
@@ -365,16 +514,16 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     ///
     pub fn set_transaction_lock(
         &self,
-        mutable_input_objects: &[ObjectRef],
+        owned_input_objects: &[ObjectRef],
+        tx_digest: TransactionDigest,
         signed_transaction: SignedTransaction,
     ) -> Result<(), SuiError> {
-        let tx_digest = signed_transaction.transaction.digest();
         let lock_batch = self
             .transaction_lock
             .batch()
             .insert_batch(
                 &self.transaction_lock,
-                mutable_input_objects
+                owned_input_objects
                     .iter()
                     .map(|obj_ref| (obj_ref, Some(tx_digest))),
             )?
@@ -385,39 +534,41 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
 
         // This is the critical region: testing the locks and writing the
         // new locks must be atomic, and not writes should happen in between.
+        let mut need_write = false;
         {
             // Acquire the lock to ensure no one else writes when we are in here.
             // MutexGuards are unlocked on drop (ie end of this block)
-            let _mutexes = self.acquire_locks(mutable_input_objects);
+            let _mutexes = self.acquire_locks(owned_input_objects);
 
-            let locks = self.transaction_lock.multi_get(mutable_input_objects)?;
+            let locks = self.transaction_lock.multi_get(owned_input_objects)?;
 
-            for (obj_ref, lock) in mutable_input_objects.iter().zip(locks) {
+            for lock in locks {
                 // The object / version must exist, and therefore lock initialized.
                 let lock = lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
 
                 if let Some(previous_tx_digest) = lock {
                     if previous_tx_digest != tx_digest {
-                        let prev_transaction = self
-                            .get_transaction_lock(obj_ref)?
-                            .expect("If we have a lock we should have a transaction.");
-
                         warn!(prev_tx_digest =? previous_tx_digest,
                               cur_tx_digest =? tx_digest,
                               "Conflicting transaction!  Lock state changed in unexpected way");
-                        // TODO: modify ConflictingTransaction to only return the transaction digest here.
                         return Err(SuiError::ConflictingTransaction {
-                            pending_transaction: prev_transaction.transaction,
+                            pending_transaction: previous_tx_digest,
                         });
                     }
+                } else {
+                    need_write |= true;
                 }
             }
 
-            // Atomic write of all locks
-            lock_batch.write().map_err(|e| e.into())
+            if need_write {
+                // Atomic write of all locks
+                lock_batch.write()?
+            }
 
             // Implicit: drop(_mutexes);
         } // End of critical region
+
+        Ok(())
     }
 
     /// Updates the state resulting from the execution of a certificate.
@@ -429,13 +580,14 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         temporary_store: AuthorityTemporaryStore<S>,
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
-    ) -> Result<(TxSequenceNumber, TransactionInfoResponse), SuiError> {
+        sequence_number: Option<TxSequenceNumber>,
+    ) -> Result<TransactionInfoResponse, SuiError> {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
         let mut write_batch = self.transaction_lock.batch();
 
         // Store the certificate indexed by transaction digest
-        let transaction_digest: TransactionDigest = certificate.transaction.digest();
+        let transaction_digest: &TransactionDigest = certificate.digest();
         write_batch = write_batch.insert_batch(
             &self.certificates,
             std::iter::once((transaction_digest, &certificate)),
@@ -455,18 +607,18 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         )?;
 
         // Safe to unwrap since the "true" flag ensures we get a sequence value back.
-        let seq: TxSequenceNumber = self
-            .batch_update_objects(write_batch, temporary_store, transaction_digest, true)?
-            .unwrap();
+        self.batch_update_objects(
+            write_batch,
+            temporary_store,
+            *transaction_digest,
+            sequence_number,
+        )?;
 
-        Ok((
-            seq,
-            TransactionInfoResponse {
-                signed_transaction: self.signed_transactions.get(&transaction_digest)?,
-                certified_transaction: Some(certificate),
-                signed_effects: Some(signed_effects),
-            },
-        ))
+        Ok(TransactionInfoResponse {
+            signed_transaction: self.signed_transactions.get(transaction_digest)?,
+            certified_transaction: Some(certificate),
+            signed_effects: Some(signed_effects),
+        })
     }
 
     /// Persist temporary storage to DB for genesis modules
@@ -477,8 +629,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     ) -> Result<(), SuiError> {
         debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
         let write_batch = self.transaction_lock.batch();
-        self.batch_update_objects(write_batch, temporary_store, transaction_digest, false)
-            .map(|_| ())
+        self.batch_update_objects(write_batch, temporary_store, transaction_digest, None)
     }
 
     /// Helper function for updating the objects in the state
@@ -487,8 +638,8 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         mut write_batch: DBBatch,
         temporary_store: AuthorityTemporaryStore<S>,
         transaction_digest: TransactionDigest,
-        should_sequence: bool,
-    ) -> Result<Option<TxSequenceNumber>, SuiError> {
+        seq_opt: Option<TxSequenceNumber>,
+    ) -> Result<(), SuiError> {
         let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
 
         // Archive the old lock.
@@ -513,7 +664,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             .chain(
                 written
                     .iter()
-                    .filter_map(|(id, new_object)| match objects.get(id) {
+                    .filter_map(|(id, (_, new_object))| match objects.get(id) {
                         Some(old_object) if old_object.owner != new_object.owner => {
                             old_object.get_single_owner_and_id()
                         }
@@ -529,7 +680,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             &self.parent_sync,
             written
                 .iter()
-                .map(|(_, object)| (object.to_object_reference(), transaction_digest)),
+                .map(|(_, (object_ref, _object_))| (object_ref, transaction_digest)),
         )?;
 
         // Index the certificate by the objects deleted
@@ -554,9 +705,9 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         // Create locks for new objects, if they are not immutable
         write_batch = write_batch.insert_batch(
             &self.transaction_lock,
-            written.iter().filter_map(|(_, new_object)| {
+            written.iter().filter_map(|(_, (object_ref, new_object))| {
                 if !new_object.is_read_only() {
-                    Some((new_object.to_object_reference(), None))
+                    Some((object_ref, None))
                 } else {
                     None
                 }
@@ -569,28 +720,34 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
                 &self.all_object_versions,
                 written
                     .iter()
-                    .map(|(id, object)| ((*id, object.version()), object)),
+                    .map(|(id, (_object_ref, object))| ((*id, object.version()), object)),
             )?;
         }
 
         // Update the indexes of the objects written
         write_batch = write_batch.insert_batch(
             &self.owner_index,
-            written.iter().filter_map(|(_id, new_object)| {
-                new_object
-                    .get_single_owner_and_id()
-                    .map(|owner_id| (owner_id, new_object.to_object_reference()))
-            }),
+            written
+                .iter()
+                .filter_map(|(_id, (object_ref, new_object))| {
+                    new_object
+                        .get_single_owner_and_id()
+                        .map(|owner_id| (owner_id, object_ref))
+                }),
         )?;
 
         // Insert each output object into the stores
-        write_batch = write_batch.insert_batch(&self.objects, written.iter())?;
+        write_batch = write_batch.insert_batch(
+            &self.objects,
+            written
+                .iter()
+                .map(|(object_id, (_, new_object))| (object_id, new_object)),
+        )?;
 
         // Update the indexes of the objects written
 
         // This is the critical region: testing the locks and writing the
         // new locks must be atomic, and no writes should happen in between.
-        let mut return_seq = None;
         {
             // Acquire the lock to ensure no one else writes when we are in here.
             let _mutexes = self.acquire_locks(&active_inputs[..]);
@@ -602,7 +759,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
                 object_lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
             }
 
-            if should_sequence {
+            if let Some(next_seq) = seq_opt {
                 // Now we are sure we are going to execute, add to the sequence
                 // number and insert into authority sequence.
                 //
@@ -610,13 +767,10 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
                 //       out of order with respect to their sequence number. It is also
                 //       possible for the authority to crash without committing the
                 //       full sequence, and the batching logic needs to deal with this.
-                let next_seq = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
                 write_batch = write_batch.insert_batch(
                     &self.executed_sequence,
                     std::iter::once((next_seq, transaction_digest)),
                 )?;
-
-                return_seq = Some(next_seq);
             }
 
             // Atomic write of all locks & other data
@@ -625,7 +779,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             // implicit: drop(_mutexes);
         } // End of critical region
 
-        Ok(return_seq)
+        Ok(())
     }
 
     /// Returns the last entry we have for this object in the parents_sync index used
@@ -662,15 +816,15 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     pub fn remove_shared_objects_locks(
         &self,
         mut write_batch: DBBatch,
-        transaction_digest: TransactionDigest,
+        transaction_digest: &TransactionDigest,
         transaction: &Transaction,
     ) -> SuiResult<DBBatch> {
         let mut sequenced_to_delete = Vec::new();
         let mut schedule_to_delete = Vec::new();
         for object_id in transaction.shared_input_objects() {
-            sequenced_to_delete.push((transaction_digest, *object_id));
+            sequenced_to_delete.push((*transaction_digest, *object_id));
             if self.get_object(object_id)?.is_none() {
-                schedule_to_delete.push(object_id);
+                schedule_to_delete.push(*object_id);
             }
         }
         write_batch = write_batch.delete_batch(&self.sequenced, sequenced_to_delete)?;
@@ -678,28 +832,46 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         Ok(write_batch)
     }
 
-    /// Lock a sequence number for the shared objects of the input transaction.
+    /// Lock a sequence number for the shared objects of the input transaction. Also update the
+    /// last consensus index.
     pub fn persist_certificate_and_lock_shared_objects(
         &self,
-        transaction_digest: TransactionDigest,
-        transaction: &Transaction,
         certificate: CertifiedTransaction,
+        global_certificate_index: SequenceNumber,
     ) -> Result<(), SuiError> {
-        let certificate_to_write = std::iter::once((transaction_digest, certificate));
+        // Make an iterator to save the certificate.
+        let transaction_digest = *certificate.digest();
+        let certificate_to_write = std::iter::once((transaction_digest, &certificate));
 
-        let mut sequenced_to_write = Vec::new();
-        let mut schedule_to_write = Vec::new();
-        for id in transaction.shared_input_objects() {
-            let version = self.schedule.get(id)?.unwrap_or_default();
-            sequenced_to_write.push(((transaction_digest, *id), version));
-            let next_version = version.increment();
-            schedule_to_write.push((id, next_version));
-        }
+        // Make an iterator to update the locks of the transaction's shared objects.
+        let ids = certificate.transaction.shared_input_objects();
+        let versions = self.schedule.multi_get(ids)?;
 
+        let ids = certificate.transaction.shared_input_objects();
+        let (sequenced_to_write, schedule_to_write): (Vec<_>, Vec<_>) = ids
+            .zip(versions.iter())
+            .map(|(id, v)| {
+                let version = v.unwrap_or_else(SequenceNumber::new);
+                let next_version = v
+                    .map(|v| v.increment())
+                    .unwrap_or_else(|| SequenceNumber::from(1));
+
+                let sequenced = ((transaction_digest, *id), version);
+                let scheduled = (id, next_version);
+
+                (sequenced, scheduled)
+            })
+            .unzip();
+
+        // Make an iterator to update the last consensus index.
+        let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, global_certificate_index));
+
+        // Atomically store all elements.
         let mut write_batch = self.sequenced.batch();
         write_batch = write_batch.insert_batch(&self.certificates, certificate_to_write)?;
         write_batch = write_batch.insert_batch(&self.sequenced, sequenced_to_write)?;
         write_batch = write_batch.insert_batch(&self.schedule, schedule_to_write)?;
+        write_batch = write_batch.insert_batch(&self.last_consensus_index, index_to_write)?;
         write_batch.write().map_err(SuiError::from)
     }
 
@@ -803,6 +975,14 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             .collect();
 
         Ok((batches, transactions))
+    }
+
+    /// Return the latest consensus index. It is used to bootstrap the consensus client.
+    pub fn last_consensus_index(&self) -> SuiResult<SequenceNumber> {
+        self.last_consensus_index
+            .get(&LAST_CONSENSUS_INDEX_ADDR)
+            .map(|x| x.unwrap_or_default())
+            .map_err(SuiError::from)
     }
 }
 

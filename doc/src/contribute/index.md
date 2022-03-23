@@ -2,13 +2,17 @@
 title: Contributing to Sui
 ---
 
-To contribute, ensure you have the latest version of the codebase. To clone the repository, run the following:
+Now that you understand Sui, consider helping the project. To contribute to Sui, ensure you have the latest version of the codebase.
+
+To clone the repository, run the following:
 ```bash
 git clone https://github.com/mystenlabs/sui.git
 cd sui
 cargo build --all --all-targets
 cargo test
 ```
+
+See [Install Sui](../build/install.md) for installation instructions and our [end-to-end tutorial](../explore/tutorials.md) to work with Sui immediately.
 
 ## Pull requests
 
@@ -22,10 +26,24 @@ To submit your pull request:
 6. Complete the Contributor License Agreement (CLA), if you haven't already done so.
 7. Submit your pull request.
 
+## File issues
+
+Report bugs and make feature requests in the [Sui GitHub](https://github.com/MystenLabs/sui/issues) repository
+using the [Template for Reporting Issues](https://github.com/MystenLabs/sui/blob/main/ISSUES.md).
+
+## Provide docs feedback
+
+Send us documentation fixes or requests for improvement at:
+doc@mystenlabs.com
+
+You may also suggest changes to the docs directly in GitHub right here using the **Source Code** link below.
+
+Simply edit the file in question and generate a pull request. We will get back to you shortly.
+
 ## Further reading
 
 * Learn [about Mysten Labs](https://mystenlabs.com/) the company on our public site.
 * Read the [Sui Smart Contract Platform](../../paper/sui.pdf) white paper.
-* * Implementing [logging](observability.md) in Sui to observe the behavior of your development.
-* Find related [research papers](research-papers.md).
-* See and adhere to our [code of conduct](code-of-conduct.md).
+* Implementing [logging](../contribute/observability.md) in Sui to observe the behavior of your development.
+* Find related [research papers](../contribute/research-papers.md).
+* See and adhere to our [code of conduct](../contribute/code-of-conduct.md).

@@ -1,8 +1,13 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module Sui::Transfer {
     use Sui::ID::{Self, ID, VersionedID};
 
     // To allow access to transfer_to_object_unsafe.
     friend Sui::Bag;
+    // To allow access to is_child_unsafe.
+    friend Sui::Collection;
 
     // When transferring a child object, this error is thrown if the child object
     // doesn't match the ChildRef that represents the onwershp.
@@ -20,9 +25,20 @@ module Sui::Transfer {
         child_id: ID,
     }
 
-    /// Getter for ChildRefs child id.
-    public fun child_id<T: key>(child_ref: &ChildRef<T>): &ID {
-        &child_ref.child_id
+    /// Check whether the `child` object is actually the child object
+    /// owned by the parent through the given `child_ref`.
+    public fun is_child<T: key>(child_ref: &ChildRef<T>, child: &T): bool {
+        &child_ref.child_id == ID::id(child)
+    }
+
+    /// Check whether the `child_ref`'s child_id is `id`.
+    /// This is less safe compared to `is_child` because we won't be able to check
+    /// whether the type of the child object is the same as what `ChildRef` represents.
+    /// We should always call `is_child` whenever we can.
+    /// This is currently only exposed to friend classes. If there turns out to be
+    /// general needs, we can open it up.
+    public(friend) fun is_child_unsafe<T: key>(child_ref: &ChildRef<T>, id: &ID): bool {
+        &child_ref.child_id == id
     }
 
     /// Transfers are implemented by emitting a
@@ -71,7 +87,7 @@ module Sui::Transfer {
     /// Similar to transfer_to_object, to transfer an object to another object.
     /// However it does not return the ChildRef. This can be unsafe to use since there is
     /// no longer guarantee that the ID stored in the parent actually represent ownership.
-    public(friend) fun transfer_to_object_unsafe<T: key, R: key>(obj: T, owner: &mut R) {
+    public fun transfer_to_object_unsafe<T: key, R: key>(obj: T, owner: &mut R) {
         let ChildRef { child_id: _ } = transfer_to_object(obj, owner);
     }
 

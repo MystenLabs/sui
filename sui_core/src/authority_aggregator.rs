@@ -154,7 +154,7 @@ where
             for returned_digest in &signed_effects.effects.dependencies {
                 // We check that we are not processing twice the same certificate, as
                 // it would be common if two objects used by one transaction, were also both
-                // mutated by the same preceeding transaction.
+                // mutated by the same preceding transaction.
                 if !candidate_certificates.contains(returned_digest) {
                     // Add this cert to the set we have processed
                     candidate_certificates.insert(*returned_digest);
@@ -181,7 +181,7 @@ where
     /// Sync a certificate to an authority.
     ///
     /// This function infers which authorities have the history related to
-    /// a certificate and attempts `retries` number of them, sampled accoding to
+    /// a certificate and attempts `retries` number of them, sampled according to
     /// stake, in order to bring the destination authority up to date to accept
     /// the certificate. The time devoted to each attempt is bounded by
     /// `timeout_milliseconds`.
@@ -255,7 +255,7 @@ where
             };
 
             if timeout(timeout_period, logic).await.is_ok() {
-                // If the updates suceeds we return, since there is no need
+                // If the updates succeeds we return, since there is no need
                 // to try other sources.
                 return Ok(());
             }
@@ -269,7 +269,7 @@ where
         }
 
         // Eventually we should add more information to this error about the destination
-        // and maybe event the certificiate.
+        // and maybe event the certificate.
         Err(SuiError::AuthorityUpdateFailure)
     }
 
@@ -278,7 +278,7 @@ where
     ///
     /// FMap can do io, and returns a result V. An error there may not be fatal, and could be consumed by the
     /// MReduce function to overall recover from it. This is necessary to ensure byzantine authorities cannot
-    /// interupt the logic of this function.
+    /// interrupt the logic of this function.
     ///
     /// FReduce returns a result to a ReduceOutput. If the result is Err the function
     /// shortcuts and the Err is returned. An Ok ReduceOutput result can be used to shortcut and return
@@ -374,7 +374,13 @@ where
         ),
         SuiError,
     > {
-        let initial_state = ((0usize, 0usize), Vec::new());
+        #[derive(Default)]
+        struct GetObjectByIDRequestState {
+            good_weight: usize,
+            bad_weight: usize,
+            responses: Vec<(AuthorityName, SuiResult<ObjectInfoResponse>)>,
+        }
+        let initial_state = GetObjectByIDRequestState::default();
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
         let final_state = self
@@ -391,33 +397,41 @@ where
                         client.handle_object_info_request(request).await
                     })
                 },
-                |(mut total_stake, mut state), name, weight, result| {
+                |mut state, name, weight, result| {
                     Box::pin(async move {
                         // Here we increase the stake counter no matter if we got an error or not. The idea is that a
-                        // call to ObjectInfoRequest should suceed for correct authorities no matter what. Therefore
+                        // call to ObjectInfoRequest should succeed for correct authorities no matter what. Therefore
                         // if there is an error it means that we are accessing an incorrect authority. However, an
                         // object is final if it is on 2f+1 good nodes, and any set of 2f+1 intersects with this, so
                         // after we have 2f+1 of stake (good or bad) we should get a response with the object.
-                        total_stake.0 += weight;
+                        state.good_weight += weight;
+                        let is_err = result.is_err();
+                        state.responses.push((name, result));
 
-                        if result.is_err() {
+                        if is_err {
                             // We also keep an error stake counter, and if it is larger than f+1 we return an error,
                             // since either there are too many faulty authorities or we are not connected to the network.
-                            total_stake.1 += weight;
-                            if total_stake.1 > validity {
-                                return Err(SuiError::TooManyIncorrectAuthorities);
+                            state.bad_weight += weight;
+                            if state.bad_weight > validity {
+                                return Err(SuiError::TooManyIncorrectAuthorities {
+                                    errors: state
+                                        .responses
+                                        .into_iter()
+                                        .filter_map(|(name, response)| {
+                                            response.err().map(|err| (name, err))
+                                        })
+                                        .collect(),
+                                });
                             }
                         }
 
-                        state.push((name, result));
-
-                        if total_stake.0 < threshold {
+                        if state.good_weight < threshold {
                             // While we are under the threshold we wait for a longer time
-                            Ok(ReduceOutput::Continue((total_stake, state)))
+                            Ok(ReduceOutput::Continue(state))
                         } else {
                             // After we reach threshold we wait for potentially less time.
                             Ok(ReduceOutput::ContinueWithTimeout(
-                                (total_stake, state),
+                                state,
                                 timeout_after_quorum,
                             ))
                         }
@@ -439,7 +453,7 @@ where
         >::new();
         let mut certificates = HashMap::new();
 
-        for (name, result) in final_state.1 {
+        for (name, result) in final_state.responses {
             if let Ok(ObjectInfoResponse {
                 parent_certificate,
                 requested_object_reference,
@@ -495,9 +509,9 @@ where
     }
 
     /// This function returns a map between object references owned and authorities that hold the objects
-    /// at this version, as well as a list of authorities that responsed to the query for the objects owned.
+    /// at this version, as well as a list of authorities that responded to the query for the objects owned.
     ///
-    /// We do not expose this function to users, as its output is hard for callers to interpet. In particular,
+    /// We do not expose this function to users, as its output is hard for callers to interpret. In particular,
     /// some of the entries in the list might be the result of a query to a byzantine authority, so further
     /// sanitization and checks are necessary to rely on this information.
     ///
@@ -507,14 +521,18 @@ where
         address: SuiAddress,
         timeout_after_quorum: Duration,
     ) -> Result<(BTreeMap<ObjectRef, Vec<AuthorityName>>, Vec<AuthorityName>), SuiError> {
-        let initial_state = (
-            (0usize, 0usize),
-            BTreeMap::<ObjectRef, Vec<AuthorityName>>::new(),
-            Vec::new(),
-        );
+        #[derive(Default)]
+        struct OwnedObjectQueryState {
+            good_weight: usize,
+            bad_weight: usize,
+            object_map: BTreeMap<ObjectRef, Vec<AuthorityName>>,
+            responded_authorities: Vec<AuthorityName>,
+            errors: Vec<(AuthorityName, SuiError)>,
+        }
+        let initial_state = OwnedObjectQueryState::default();
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
-        let (_, object_map, authority_list) = self
+        let final_state = self
             .quorum_map_then_reduce_with_timeout(
                 initial_state,
                 |_name, client| {
@@ -527,34 +545,43 @@ where
                             .await
                     })
                 },
-                |mut state, name, weight, _result| {
+                |mut state, name, weight, result| {
                     Box::pin(async move {
                         // Here we increase the stake counter no matter if we got a correct
                         // response or not. A final transaction will have effects on 2f+1 so if we
                         // ask any 2f+1 we should get the version of the latest object.
-                        state.0 .0 += weight;
+                        state.good_weight += weight;
 
                         // For each non error result we get we add the objects to the map
                         // as keys and append the authority that holds them in the values.
-                        if let Ok(AccountInfoResponse { object_ids, .. }) = _result {
-                            // Also keep a record of all authorities that responded.
-                            state.2.push(name);
-                            // Update the map.
-                            for obj_ref in object_ids {
-                                state.1.entry(obj_ref).or_insert_with(Vec::new).push(name);
+                        match result {
+                            Ok(AccountInfoResponse { object_ids, .. }) => {
+                                // Also keep a record of all authorities that responded.
+                                state.responded_authorities.push(name);
+                                // Update the map.
+                                for obj_ref in object_ids {
+                                    state
+                                        .object_map
+                                        .entry(obj_ref)
+                                        .or_insert_with(Vec::new)
+                                        .push(name);
+                                }
                             }
-                        } else {
-                            // We also keep an error weight counter, and if it exceeds 1/3
-                            // we return an error as it is likely we do not have enough
-                            // evidence to return a correct result.
-
-                            state.0 .1 += weight;
-                            if state.0 .1 > validity {
-                                return Err(SuiError::TooManyIncorrectAuthorities);
+                            Err(err) => {
+                                state.errors.push((name, err));
+                                // We also keep an error weight counter, and if it exceeds 1/3
+                                // we return an error as it is likely we do not have enough
+                                // evidence to return a correct result.
+                                state.bad_weight += weight;
+                                if state.bad_weight > validity {
+                                    return Err(SuiError::TooManyIncorrectAuthorities {
+                                        errors: state.errors,
+                                    });
+                                }
                             }
-                        }
+                        };
 
-                        if state.0 .0 < threshold {
+                        if state.good_weight < threshold {
                             // While we are under the threshold we wait for a longer time
                             Ok(ReduceOutput::Continue(state))
                         } else {
@@ -570,7 +597,7 @@ where
                 Duration::from_secs(60),
             )
             .await?;
-        Ok((object_map, authority_list))
+        Ok((final_state.object_map, final_state.responded_authorities))
     }
 
     /// Takes a list of object IDs, goes to all (quorum+timeout) of authorities to find their
@@ -596,7 +623,7 @@ where
         // We update each object at each authority that does not have it.
         for object_id in objects {
             // Authorities to update.
-            let mut authorites: HashSet<AuthorityName> = self
+            let mut authorities: HashSet<AuthorityName> = self
                 .committee
                 .voting_rights
                 .iter()
@@ -637,7 +664,7 @@ where
 
                 // Remove authorities at this version, they will not need to be updated.
                 for (name, _signed_transaction) in object_authorities {
-                    authorites.remove(&name);
+                    authorities.remove(&name);
                 }
 
                 // NOTE: Just above we have access to signed transactions that have not quite
@@ -649,7 +676,7 @@ where
                 let entry = certs_to_sync
                     .entry(cert.transaction.digest())
                     .or_insert((cert.clone(), HashSet::new()));
-                entry.1.extend(authorites);
+                entry.1.extend(authorities);
 
                 // Return the latest version of an object, or a deleted object
                 match object_option {
@@ -663,7 +690,7 @@ where
 
         for (_, (cert, authorities)) in certs_to_sync {
             for name in authorities {
-                // For each certificate authority pair run a sync to upate this authority to this
+                // For each certificate authority pair run a sync to update this authority to this
                 // certificate.
                 // NOTE: this is right now done sequentially, we should do them in parallel using
                 //       the usual FuturesUnordered.
@@ -684,7 +711,7 @@ where
     }
 
     /// Ask authorities for the user owned objects. Then download all objects at all versions present
-    /// on authorites, along with the certificates preceeding them, and update lagging authorities to
+    /// on authorities, along with the certificates preceding them, and update lagging authorities to
     /// the latest version of the object.
     ///
     /// This function returns all objects, including those that are
@@ -730,7 +757,7 @@ where
         // Find out which objects are required by this transaction and
         // ensure they are synced on authorities.
         let required_ids: Vec<ObjectID> = transaction
-            .input_objects()
+            .input_objects()?
             .iter()
             .map(|o| o.object_id())
             .collect();
@@ -805,10 +832,11 @@ where
                                     .push((name, inner_signed_transaction.signature));
                                 state.good_stake += weight;
                                 if state.good_stake >= threshold {
-                                    state.certificate = Some(CertifiedTransaction {
-                                        transaction: transaction_ref.clone(),
-                                        signatures: state.signatures.clone(),
-                                    });
+                                    state.certificate =
+                                        Some(CertifiedTransaction::new_with_signatures(
+                                            transaction_ref.clone(),
+                                            state.signatures.clone(),
+                                        ));
                                 }
                             }
                             // If we get back an error, then we aggregate and check
@@ -821,37 +849,33 @@ where
                                 // Append to the list off errors
                                 state.errors.push(err);
                                 state.bad_stake += weight; // This is the bad stake counter
-                                if state.bad_stake > validity {
-                                    // Too many errors
-                                    debug!(
-                                        num_errors = state.errors.len(),
-                                        bad_stake = state.bad_stake,
-                                        "Too many errors, validity threshold exceeded. Errors={:?}",
-                                        state.errors
-                                    );
-                                    return Err(SuiError::QuorumNotReached {
-                                        errors: state.errors,
-                                    });
-                                }
                             }
                             // In case we don't get an error but also don't get a valid value
                             _ => {
                                 state.errors.push(SuiError::ErrorWhileProcessingTransaction);
                                 state.bad_stake += weight; // This is the bad stake counter
-                                if state.bad_stake > validity {
-                                    // Too many errors
-                                    debug!(
-                                        num_errors = state.errors.len(),
-                                        bad_stake = state.bad_stake,
-                                        "Too many errors, validity threshold exceeded. Errors={:?}",
-                                        state.errors
-                                    );
-                                    return Err(SuiError::QuorumNotReached {
-                                        errors: state.errors,
-                                    });
-                                }
                             }
                         };
+
+                        if state.bad_stake > validity {
+                            // Too many errors
+                            debug!(
+                                num_errors = state.errors.len(),
+                                bad_stake = state.bad_stake,
+                                "Too many errors, validity threshold exceeded. Errors={:?}",
+                                state.errors
+                            );
+                            let unique_errors: HashSet<_> = state.errors.into_iter().collect();
+                            // If no authority succeeded and all authorities returned the same error,
+                            // return that error.
+                            if unique_errors.len() == 1 && state.good_stake == 0 {
+                                return Err(unique_errors.into_iter().next().unwrap());
+                            } else {
+                                return Err(SuiError::QuorumNotReached {
+                                    errors: unique_errors.into_iter().collect(),
+                                });
+                            }
+                        }
 
                         // If we have a certificate, then finish, otherwise continue.
                         if state.certificate.is_some() {
@@ -884,7 +908,7 @@ where
             .ok_or(SuiError::ErrorWhileProcessingTransaction)
     }
 
-    /// Process a certificate assuming that 2f+1 authorites already are up to date.
+    /// Process a certificate assuming that 2f+1 authorities already are up to date.
     ///
     /// This call is meant to be called after `process_transaction` returns a certificate.
     /// At that point (and after) enough authorities are up to date with all objects
@@ -992,15 +1016,13 @@ where
                                     timeout_after_quorum,
                                 ));
                             }
-                        }
-
-                        // Evan: couldn't we get here if entry.0 above is < threshold but response was valid? wtf??
-                        // If instead we have more than f bad responses, then we fail.
-                        state.bad_stake += weight;
-                        if state.bad_stake > validity {
-                            debug!(bad_stake = state.bad_stake,
-                                   "Too many bad responses from cert processing, validity threshold exceeded.");
-                            return Err(SuiError::ErrorWhileRequestingCertificate);
+                        } else {
+                            state.bad_stake += weight;
+                            if state.bad_stake > validity {
+                                debug!(bad_stake = state.bad_stake,
+                                    "Too many bad responses from cert processing, validity threshold exceeded.");
+                                return Err(SuiError::ErrorWhileRequestingCertificate);
+                            }
                         }
 
                         Ok(ReduceOutput::Continue(state))

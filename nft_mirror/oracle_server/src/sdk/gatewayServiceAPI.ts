@@ -1,4 +1,10 @@
-import { paths as GatewayServicePaths } from './gateway-generated-schema';
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import {
+    paths as GatewayServicePaths,
+    components,
+} from './gateway-generated-schema';
 import { Fetcher } from 'openapi-typescript-fetch';
 
 export interface GatewayConnection {
@@ -18,5 +24,11 @@ export const gatewayServiceAPI = ({ baseUrl }: GatewayConnection) => {
 
     return {
         getAddresses: fetcher.path('/addresses').method('get').create(),
+        getObjects: fetcher.path('/objects').method('get').create(),
+        getObjectInfo: fetcher.path('/object_info').method('get').create(),
+        callMoveFunction: fetcher.path('/call').method('post').create(),
     };
 };
+
+export type CallRequest = components['schemas']['CallRequest'];
+export type ObjectInfoResponse = components['schemas']['ObjectInfoResponse'];
