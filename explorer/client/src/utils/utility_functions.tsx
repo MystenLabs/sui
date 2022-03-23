@@ -3,19 +3,15 @@ import { DefaultRpcClient as rpc } from './rpc';
 
 
 const navigateWithUnknown = async (input: string, navigate: Function) => {
-    console.log('searching for ' + input);
-
     // feels crude to just search each category for an ID, but works for now
     const addrPromise = rpc.getAddressObjects(input)
     .then(data => {
-            console.log('address found:', data);
             navigate(`../addresses/${input}`, { state: data });
     })
     .catch(error => console.log(error));
 
     const objInfoPromise = rpc.getObjectInfo(input)
     .then(data => {
-        console.log('object found:', data);
         navigate(`../objects/${input}`, { state: data });
     });
 
@@ -28,13 +24,6 @@ const findDataFromID = (targetID: string | undefined, state: any) =>
     state?.category !== undefined
         ? state
         : mockTransactionData.data.find(({ id }) => id === targetID);
-
-const logResult = function logResult<T>(task: () => Promise<T>) {
-    task()
-    .then((result) => {
-        console.log(result);
-    }, console.error);
-}
 
 export function asciiFromNumberBytes(bytes: number[]) {
     return bytes.map(n => String.fromCharCode(n)).join('');
@@ -56,4 +45,4 @@ export function hexToAscii(hex: string)
 const stdLibPrefix = /^0x2::/;
 export const trimStdLibPrefix = (str: string): string => str.replace(stdLibPrefix, '');
 
-export { findDataFromID, navigateWithUnknown, logResult };
+export { findDataFromID, navigateWithUnknown };
