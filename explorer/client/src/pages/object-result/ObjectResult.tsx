@@ -58,7 +58,6 @@ function instanceOfDataType(object: any) {
 
 
 const _rpc = DefaultRpcClient;
-console.log(_rpc);
 
 type SuiIdBytes = { bytes: number[] };
 
@@ -280,7 +279,6 @@ const ObjectResult = ((): JSX.Element => {
                 const ownerObj = innerData.owner as object;
                 if ('AddressOwner' in ownerObj) {
                     innerData.owner = toHexString((ownerObj as AddressOwner).AddressOwner);
-                    console.log(innerData);
                 }
                 break;
         }

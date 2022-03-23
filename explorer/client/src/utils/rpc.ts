@@ -65,14 +65,7 @@ export class SuiRpcClient {
     public static modifyForDemo <T extends object>(obj: T): T {
         for (var prop in obj) {
             let property = obj[prop];
-
             if (typeof(property) == 'object') {
-                if ('bytes' in property) {
-                    const pb = property as unknown as JsonHexBytes;
-                    if(isValidSuiIdBytes(pb))
-                        console.log("valid sui id bytes", pb.bytes);
-                }
-
                 this.modifyForDemo(property as unknown as object);
             }
         }
@@ -260,16 +253,13 @@ const tryGetRpcLocalStorage = (): string | null => {
     const lastUpdated = window.localStorage.getItem(LOCALSTORE_RPC_TIME_KEY);
 
     if(lastUpdated) {
-        console.log(lastUpdated);
         const last = Number.parseInt(lastUpdated);
         const now = Date.now().valueOf();
-        console.log(last, now);
         if(now === last)
             return value;
 
         const elapsed = now.valueOf() - last.valueOf();
         if (elapsed >= LOCALSTORE_RPC_VALID_MS) {
-            console.log(`removing stale rpc url preference`);
             window.localStorage.removeItem(LOCALSTORE_RPC_KEY);
             window.localStorage.removeItem(LOCALSTORE_RPC_TIME_KEY);
             value = null;
