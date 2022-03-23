@@ -2,10 +2,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::VecDeque;
 use crate::authority_client::AuthorityAPI;
 use async_trait::async_trait;
-use sui_network::transport::RwChannel;
 use sui_types::crypto::PublicKeyBytes;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 
@@ -13,8 +11,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };
-use sui_types::batch::UpdateItem;
-use sui_types::serialize::{deserialize_message, SerializedMessage};
+use tokio::sync::mpsc::Sender;
 
 #[derive(Clone)]
 pub struct SafeClient<C> {
@@ -263,13 +260,12 @@ where
     }
 
     /// Handle Batch information requests for this authority.
-    async fn handle_batch_streaming<'a, 'b, A>(
-        &'a self,
+    async fn handle_batch_streaming(
+        &self,
         _request: BatchInfoRequest,
-        _channel: &mut A,
+        _channel: Sender<Result<BatchInfoResponseItem, SuiError>>,
+        _max_errors: i32,
     ) -> Result<(), SuiError>
-        where
-            A: RwChannel<'b>
     {
         todo!()
     }

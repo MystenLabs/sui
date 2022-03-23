@@ -13,6 +13,7 @@ use tracing::*;
 
 use std::io;
 use tokio::task::{JoinError, JoinHandle};
+use std::time::Duration;
 use tokio::time;
 
 use futures::stream;
@@ -49,56 +50,44 @@ impl NetworkClient {
         }
     }
 
-    async fn send_recv_stream_internal(&mut self, buf: Vec<u8>, rx_cancellation: oneshotReceiver<()>) -> Result<Receiver<Option<Vec<u8>>>, io::Error> {
+    pub async fn send_recv_bytes_stream(&self, buf: Vec<u8>, rx_cancellation: oneshotReceiver<()>) -> Result<InflightStream, SuiError> {
+        let result = self.send_recv_bytes_stream_internal(buf, rx_cancellation).await;
+        match result {
+            Ok(r) => Ok(r),
+            Err(error) => Err(SuiError::ClientIoError {
+                error: format!("{}", error),
+            }),
+        }
+    }
+
+    async fn send_recv_bytes_stream_internal(&self, buf: Vec<u8>, rx_cancellation: oneshotReceiver<()>) -> Result<InflightStream, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port);
         let mut stream = connect(address, self.buffer_size).await?;
         // Send message
         time::timeout(self.send_timeout, stream.write_data(&buf)).await??;
         let (tx_output, tr_output) = channel(100);
-        let inflight_stream = tokio::spawn(async move {
-                tokio::select! {
-                    _ = rx_cancellation => {}
-                    _ = async {
-                        loop {
-                            // make a call to read_data and send it on the returned channel
-
-                            let res = time::timeout(self.recv_timeout, async {
-                                stream.read_data().await.transpose()
-                            })
-                            .await.unwrap(); // TODO: what is the correct action on timeout?
-
-                            match res {
-                                Ok(data) => {
-                                    tx_output.send(data);
-                                }
-                                _ => {} // TODO: batch and return errors or attach error via result?
-                            }
+        let join_handle = tokio::spawn(async move {
+            // give a second for the caller to begin listening on the tr_output
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            tokio::select! {
+                _ = rx_cancellation => {
+                    return;
+                }
+                _ = async {
+                    loop {
+                        // make a call to read_data, parse the result and send it on the channel
+                        let data = stream.read_data().await.transpose();
+                        let result = parse_recv_bytes(data);
+                        let _ = tx_output.send(result).await;
                     }
                 } => {}
             }
-        }); // TODO: where to store the inflight streams?
-        // self.inflight_streams.push(inflight_stream);
-        return Ok(tr_output);
-    }
-
-    pub async fn send_recv_bytes_stream(&self, buf: Vec<u8>) -> Result<SerializedMessage, SuiError> {
-        match self.send_recv_bytes_internal(buf).await {
-            Err(error) => Err(SuiError::ClientIoError {
-                error: format!("{}", error),
-            }),
-            Ok(Some(response)) => {
-                // Parse reply
-                match deserialize_message(&response[..]) {
-                    Ok(SerializedMessage::Error(error)) => Err(*error),
-                    Ok(message) => Ok(message),
-                    Err(_) => Err(SuiError::InvalidDecoding),
-                    // _ => Err(SuiError::UnexpectedMessage),
-                }
-            }
-            Ok(None) => Err(SuiError::ClientIoError {
-                error: "Empty response from authority.".to_string(),
-            }),
-        }
+        });
+        let inflight_stream = InflightStream {
+            receiver: tr_output,
+            join_handle: Some(join_handle)
+        };
+        return Ok(inflight_stream);
     }
 
     async fn send_recv_bytes_internal(&self, buf: Vec<u8>) -> Result<Option<Vec<u8>>, io::Error> {
@@ -255,5 +244,33 @@ impl PortAllocator {
             }
         }
         None
+    }
+}
+
+
+
+/// Represents and Inflight stream that fulfills a BatchInfoRequest potentially containing a
+/// subscription to future updates.
+pub struct InflightStream {
+    pub receiver: Receiver<Result<SerializedMessage, SuiError>>,
+    pub join_handle: Option<JoinHandle<()>>,
+}
+
+pub fn parse_recv_bytes(response: Result<Option<Vec<u8>>, io::Error>) -> Result<SerializedMessage, SuiError> {
+    match response {
+        Err(error) => Err(SuiError::ClientIoError {
+            error: format!("{}", error),
+        }),
+        Ok(Some(response)) => {
+            // Parse reply
+            match deserialize_message(&response[..]) {
+                Ok(SerializedMessage::Error(error)) => Err(*error),
+                Ok(message) => Ok(message),
+                Err(_) => Err(SuiError::InvalidDecoding),
+            }
+        }
+        Ok(None) => Err(SuiError::ClientIoError {
+            error: "Empty response from authority.".to_string(),
+        }),
     }
 }

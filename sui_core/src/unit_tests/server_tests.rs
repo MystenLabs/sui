@@ -165,7 +165,7 @@ async fn test_subscription() {
 
     let req = BatchInfoRequest { start: 12, end: 34 };
 
-    let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);
+    let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req, )[..]);
     tx.send(Ok(bytes)).await.expect("Problem sending");
 
     println!("TEST1: Send request.");
@@ -223,7 +223,7 @@ async fn test_subscription() {
         end: 112,
     };
 
-    let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);
+    let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req, )[..]);
     tx.send(Ok(bytes)).await.expect("Problem sending");
 
     println!("TEST2: Send request.");

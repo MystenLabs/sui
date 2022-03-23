@@ -26,6 +26,7 @@ use sui_types::error::SuiError::ObjectNotFound;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::Transaction;
 use sui_types::object::{Data, Object, Owner, GAS_VALUE_FOR_TESTING};
+use tokio::sync::mpsc::Sender;
 
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::gateway_state::gateway_store::AccountStore;
@@ -114,13 +115,12 @@ impl AuthorityAPI for LocalAuthorityClient {
     }
 
     /// Handle Batch information requests for this authority.
-    async fn handle_batch_streaming<'a, 'b, A>(
-        &'a self,
+    async fn handle_batch_streaming(
+        &self,
         _request: BatchInfoRequest,
-        _channel: &mut A,
+        _channel: Sender<Result<BatchInfoResponseItem, SuiError>>,
+        _max_errors: i32,
     ) -> Result<(), SuiError>
-        where
-            A: RwChannel<'b>
     {
         todo!()
     }
