@@ -131,6 +131,7 @@ impl AsRef<[u8]> for SuiAddress {
 
 // We use SHA3-256 hence 32 bytes here
 pub const TRANSACTION_DIGEST_LENGTH: usize = 32;
+pub const OBJECT_DIGEST_LENGTH: usize = 32;
 
 /// A transaction will have a (unique) digest.
 #[serde_as]
@@ -139,7 +140,7 @@ pub struct TransactionDigest(#[serde_as(as = "Bytes")] [u8; TRANSACTION_DIGEST_L
 // Each object has a unique digest
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct ObjectDigest(#[serde_as(as = "Bytes")] pub [u8; 32]); // We use SHA3-256 hence 32 bytes here
+pub struct ObjectDigest(#[serde_as(as = "Bytes")] pub [u8; OBJECT_DIGEST_LENGTH]);
 
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
@@ -400,6 +401,17 @@ impl std::fmt::Debug for ObjectDigest {
 impl AsRef<[u8]> for ObjectDigest {
     fn as_ref(&self) -> &[u8] {
         &self.0[..]
+    }
+}
+
+impl TryFrom<&[u8]> for ObjectDigest {
+    type Error = SuiError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, SuiError> {
+        let arr: [u8; OBJECT_DIGEST_LENGTH] = bytes
+            .try_into()
+            .map_err(|_| SuiError::InvalidTransactionDigest)?;
+        Ok(Self(arr))
     }
 }
 

@@ -1,8 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::{Debug, Formatter};
-use std::fs;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -14,9 +12,7 @@ use dropshot::{
     ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError,
     HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext,
 };
-use ed25519_dalek::ed25519::signature::Signature;
 use futures::lock::Mutex;
-use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use http::Response;
 use hyper::{Body, StatusCode};
 use move_core_types::identifier::Identifier;
@@ -25,21 +21,15 @@ use move_core_types::value::MoveStructLayout;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use serde_with::hex::Hex;
-use serde_with::serde_as;
-use tokio::task::{self, JoinHandle};
-use tracing::{error, info};
+use tracing::info;
 
 use sui::config::{GenesisConfig, NetworkConfig, PersistedConfig};
 use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
 use sui::sui_commands;
 use sui::sui_json::{resolve_move_function_args, SuiJsonValue};
-use sui_core::gateway_state::GatewayClient;
+use sui_core::gateway_state::{GatewayClient, GatewayState};
 use sui_types::base_types::*;
-use sui_types::committee::Committee;
-use sui_types::crypto;
-use sui_types::crypto::SUI_SIGNATURE_LENGTH;
-use sui_types::messages::{Transaction, TransactionData};
+use sui_types::messages::TransactionData;
 use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::Object as SuiObject;
 use sui_types::object::ObjectRead;
@@ -74,7 +64,17 @@ async fn main() -> Result<(), String> {
         .json()
         .map_err(|e| e.to_string())?;
 
-    let api_context = ServerContext::new(documentation);
+    let config: EmbeddedGatewayConfig =
+        PersistedConfig::read(&PathBuf::from("./gateway.conf")).unwrap();
+    let committee = config.make_committee();
+    let authority_clients = config.make_authority_clients();
+    let gateway = Box::new(GatewayState::new(
+        config.db_folder_path,
+        committee,
+        authority_clients,
+    ));
+
+    let api_context = ServerContext::new(documentation, gateway);
 
     let server = HttpServerStarter::new(&config_dropshot, api, api_context, &log)
         .map_err(|error| format!("failed to create server: {error}"))?
@@ -90,12 +90,12 @@ fn create_api() -> ApiDescription<ServerContext> {
     api.register(docs).unwrap();
 
     // [DEBUG]
-    api.register(genesis).unwrap();
-    api.register(sui_start).unwrap();
-    api.register(sui_stop).unwrap();
+    // api.register(genesis).unwrap();
+    /*    api.register(sui_start).unwrap();
+    api.register(sui_stop).unwrap();*/
 
     // [WALLET]
-    api.register(get_addresses).unwrap();
+    //api.register(get_addresses).unwrap();
     api.register(get_objects).unwrap();
     api.register(object_schema).unwrap();
     api.register(object_info).unwrap();
@@ -104,6 +104,8 @@ fn create_api() -> ApiDescription<ServerContext> {
     api.register(call).unwrap();
     api.register(sync).unwrap();
     api.register(execute_transaction).unwrap();
+
+    // [GATEWAY_API]
 
     api
 }
@@ -114,10 +116,10 @@ fn create_api() -> ApiDescription<ServerContext> {
 struct ServerContext {
     documentation: serde_json::Value,
     // ServerState is created after genesis.
-    server_state: Arc<Mutex<Option<ServerState>>>,
+    gateway: Arc<Mutex<GatewayClient>>,
 }
 
-pub struct ServerState {
+/*pub struct ServerState {
     gateway: GatewayClient,
     // The fields below are for genesis and starting demo network.
     // TODO: Remove these fields when we fully transform rest_server into GatewayServer.
@@ -132,23 +134,15 @@ impl Debug for ServerState {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "ServerState")
     }
-}
+}*/
 
 impl ServerContext {
-    pub fn new(documentation: serde_json::Value) -> ServerContext {
+    pub fn new(documentation: serde_json::Value, gateway: GatewayClient) -> ServerContext {
         ServerContext {
             documentation,
-            server_state: Arc::new(Mutex::new(None)),
+            gateway: Arc::new(Mutex::new(gateway)),
         }
     }
-}
-
-fn server_state_error() -> HttpError {
-    custom_http_error(
-        StatusCode::FAILED_DEPENDENCY,
-        "Server state does not exist. Please make a POST request to `sui/genesis/` and `sui/start/` to bootstrap the network."
-            .to_string(),
-    )
 }
 
 /**
@@ -213,7 +207,7 @@ You can specify a genesis file to start network with custom genesis state.
 Note: This is a temporary endpoint that will no longer be needed once the
 network has been started on testnet or mainnet.
  */
-#[endpoint {
+/*#[endpoint {
     method = POST,
     path = "/sui/genesis",
     tags = [ "debug" ],
@@ -292,7 +286,7 @@ async fn genesis(
             network_config: network_config_json,
         },
     )
-}
+}*/
 
 /**
 Start servers with the specified configurations from the genesis endpoint.
@@ -300,7 +294,7 @@ Start servers with the specified configurations from the genesis endpoint.
 Note: This is a temporary endpoint that will no longer be needed once the
 network has been started on testnet or main-net.
  */
-#[endpoint {
+/*#[endpoint {
     method = POST,
     path = "/sui/start",
     tags = [ "debug" ],
@@ -375,7 +369,7 @@ async fn sui_start(ctx: Arc<RequestContext<ServerContext>>) -> Result<Response<B
         StatusCode::OK,
         format!("Started {num_authorities} authorities"),
     )
-}
+}*/
 
 /**
 Stop sui network and delete generated configs & storage.
@@ -383,7 +377,7 @@ Stop sui network and delete generated configs & storage.
 Note: This is a temporary endpoint that will no longer be needed once the
 network has been started on testnet or mainnet.
  */
-#[endpoint {
+/*#[endpoint {
     method = POST,
     path = "/sui/stop",
     tags = [ "debug" ],
@@ -405,7 +399,7 @@ async fn sui_stop(
 
     Ok(HttpResponseUpdatedNoContent())
 }
-
+*/
 /**
 Response containing the managed addresses for this client.
  */
@@ -419,7 +413,7 @@ pub struct GetAddressResponse {
 /**
 Retrieve all managed addresses for this client.
  */
-#[endpoint {
+/*#[endpoint {
     method = GET,
     path = "/addresses",
     tags = [ "wallet" ],
@@ -450,7 +444,7 @@ async fn get_addresses(
                 .collect(),
         },
     )
-}
+}*/
 
 /**
 Request containing the address of which objecst are to be retrieved.
@@ -499,8 +493,7 @@ async fn get_objects(
     ctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectsRequest>,
 ) -> Result<Response<Body>, HttpError> {
-    let mut state = ctx.context().server_state.lock().await;
-    let state = state.as_mut().ok_or_else(server_state_error)?;
+    let mut gateway = ctx.context().gateway.lock().await;
     let get_objects_params = query.into_inner();
     let address = get_objects_params.address;
     let address = &decode_bytes_hex(address.as_str()).map_err(|error| {
@@ -510,39 +503,18 @@ async fn get_objects(
         )
     })?;
 
-    let objects = state
-        .gateway
+    let objects = gateway
         .get_owned_objects(*address)
+        .await
+        .unwrap()
         .into_iter()
         .map(NamedObjectRef::from)
         .collect();
+
     let response = ObjectResponse { objects };
 
-    custom_http_response(StatusCode::OK, JsonResponse::from(response)?)
-}
-#[derive(Serialize)]
-struct ObjectResponse {
-    objects: Vec<NamedObjectRef>,
-}
-
-#[serde_as]
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct NamedObjectRef {
-    object_id: ObjectID,
-    version: SequenceNumber,
-    #[serde_as(as = "Hex")]
-    digest: ObjectDigest,
-}
-
-impl NamedObjectRef {
-    fn from((object_id, version, digest): ObjectRef) -> Self {
-        Self {
-            object_id,
-            version,
-            digest,
-        }
-    }
+    let value = serde_json::to_value(response).unwrap();
+    custom_http_response(StatusCode::OK, value)
 }
 
 /**
@@ -581,8 +553,7 @@ async fn object_schema(
     ctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectSchemaRequest>,
 ) -> Result<Response<Body>, HttpError> {
-    let mut state = ctx.context().server_state.lock().await;
-    let state = state.as_mut().ok_or_else(server_state_error)?;
+    let gateway = ctx.context().gateway.lock().await;
     let object_info_params = query.into_inner();
 
     let object_id = match ObjectID::try_from(object_info_params.object_id) {
@@ -595,7 +566,7 @@ async fn object_schema(
         }
     };
 
-    let layout = match state.gateway.get_object_info(object_id).await {
+    let layout = match gateway.get_object_info(object_id).await {
         Ok(ObjectRead::Exists(_, _, layout)) => layout,
         Ok(ObjectRead::Deleted(_)) => {
             return Err(custom_http_error(
@@ -672,14 +643,13 @@ async fn object_info(
     ctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectInfoRequest>,
 ) -> Result<Response<Body>, HttpError> {
-    let mut state = ctx.context().server_state.lock().await;
-    let state = state.as_mut().ok_or_else(server_state_error)?;
+    let gateway = ctx.context().gateway.lock().await;
 
     let object_info_params = query.into_inner();
     let object_id = ObjectID::try_from(object_info_params.object_id)
         .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, format!("{error}")))?;
 
-    let (_, object, layout) = get_object_info(state, object_id).await?;
+    let (_, object, layout) = get_object_info(&gateway, object_id).await?;
     let object_data = object.to_json(&layout).unwrap_or_else(|_| json!(""));
     custom_http_response(
         StatusCode::OK,
@@ -741,11 +711,11 @@ async fn transfer_object(
     ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<TransferTransactionRequest>,
 ) -> Result<Response<Body>, HttpError> {
-    let mut state = ctx.context().server_state.lock().await;
-    let state = state.as_mut().ok_or_else(server_state_error)?;
+    let mut gateway = ctx.context().gateway.lock().await;
+
     let request = request.into_inner();
 
-    let signature_req = transfer_object_internal(state, request)
+    let signature_req = transfer_object_internal(&mut gateway, request)
         .await
         .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, error.to_string()))?;
 
@@ -753,7 +723,7 @@ async fn transfer_object(
 }
 
 async fn transfer_object_internal(
-    state: &mut ServerState,
+    gateway: &mut GatewayClient,
     request: TransferTransactionRequest,
 ) -> Result<TransactionData, anyhow::Error> {
     let to_address = decode_bytes_hex(request.to_address.as_str())?;
@@ -761,8 +731,7 @@ async fn transfer_object_internal(
     let gas_object_id = ObjectID::try_from(request.gas_object_id)?;
     let owner = decode_bytes_hex(request.from_address.as_str())?;
 
-    state
-        .gateway
+    gateway
         .transfer_coin(owner, object_id, gas_object_id, to_address)
         .await
 }
@@ -863,11 +832,10 @@ async fn call(
     ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<CallRequest>,
 ) -> Result<Response<Body>, HttpError> {
-    let mut state = ctx.context().server_state.lock().await;
-    let state = state.as_mut().ok_or_else(server_state_error)?;
+    let mut gateway = ctx.context().gateway.lock().await;
 
     let call_params = request.into_inner();
-    let transaction_response = handle_move_call(call_params, state)
+    let transaction_response = handle_move_call(call_params, &mut gateway)
         .await
         .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{:#}", err)))?;
     custom_http_response(StatusCode::OK, transaction_response)
@@ -884,13 +852,6 @@ struct SyncRequest {
     address: String,
 }
 
-#[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct TransactionSignatureResponse {
-    data: Value,
-    signature: String,
-}
-
 /**
 Synchronize client state with authorities. This will fetch the latest information
 on all objects owned by each address that is managed by this client state.
@@ -905,8 +866,7 @@ async fn sync(
     request: TypedBody<SyncRequest>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     let sync_params = request.into_inner();
-    let mut state = ctx.context().server_state.lock().await;
-    let state = state.as_mut().ok_or_else(server_state_error)?;
+    let mut gateway = ctx.context().gateway.lock().await;
 
     let address = decode_bytes_hex(sync_params.address.as_str()).map_err(|error| {
         custom_http_error(
@@ -915,16 +875,12 @@ async fn sync(
         )
     })?;
 
-    state
-        .gateway
-        .sync_account_state(address)
-        .await
-        .map_err(|err| {
-            custom_http_error(
-                StatusCode::BAD_REQUEST,
-                format!("Can't create client state: {err}"),
-            )
-        })?;
+    gateway.sync_account_state(address).await.map_err(|err| {
+        custom_http_error(
+            StatusCode::BAD_REQUEST,
+            format!("Can't create client state: {err}"),
+        )
+    })?;
     Ok(HttpResponseUpdatedNoContent())
 }
 
@@ -939,21 +895,14 @@ tags = [ "wallet" ],
 }]
 async fn execute_transaction(
     ctx: Arc<RequestContext<ServerContext>>,
-    response: TypedBody<TransactionSignatureResponse>,
+    response: TypedBody<JsonResponse>,
 ) -> Result<HttpResponseOk<JsonResponse>, HttpError> {
     let response = response.into_inner();
-    let mut state = ctx.context().server_state.lock().await;
-    let state = state.as_mut().ok_or_else(server_state_error)?;
+    let mut gateway = ctx.context().gateway.lock().await;
 
     let response: Result<_, anyhow::Error> = async {
-        let data = serde_json::from_value(response.data)?;
-        let signature_byte: [u8; SUI_SIGNATURE_LENGTH] = decode_bytes_hex(&response.signature)?;
-        let signature = crypto::Signature::from_bytes(&signature_byte)?;
-
-        state
-            .gateway
-            .execute_transaction(Transaction::new(data, signature))
-            .await
+        let tx = serde_json::from_value(response.0)?;
+        gateway.execute_transaction(tx).await
     }
     .await;
     let response = response
@@ -1075,10 +1024,10 @@ async fn execute_transaction(
 }*/
 
 async fn get_object_info(
-    state: &ServerState,
+    gateway: &GatewayClient,
     object_id: ObjectID,
 ) -> Result<(ObjectRef, SuiObject, Option<MoveStructLayout>), HttpError> {
-    let (object_ref, object, layout) = match state.gateway.get_object_info(object_id).await {
+    let (object_ref, object, layout) = match gateway.get_object_info(object_id).await {
         Ok(ObjectRead::Exists(object_ref, object, layout)) => (object_ref, object, layout),
         Ok(ObjectRead::Deleted(_)) => {
             return Err(custom_http_error(
@@ -1147,7 +1096,7 @@ async fn handle_publish(
 
 async fn handle_move_call(
     call_params: CallRequest,
-    state: &mut ServerState,
+    gateway: &mut GatewayClient,
 ) -> Result<JsonResponse, anyhow::Error> {
     let module = Identifier::from_str(&call_params.module.to_owned())?;
     let function = Identifier::from_str(&call_params.function.to_owned())?;
@@ -1164,7 +1113,8 @@ async fn handle_move_call(
 
     let sender: SuiAddress = decode_bytes_hex(call_params.sender.as_str())?;
 
-    let (package_object_ref, package_object, _) = get_object_info(state, package_object_id).await?;
+    let (package_object_ref, package_object, _) =
+        get_object_info(gateway, package_object_id).await?;
 
     // Extract the input args
     let (object_ids, pure_args) =
@@ -1175,7 +1125,7 @@ async fn handle_move_call(
     // Fetch all the objects needed for this call
     let mut input_objs = vec![];
     for obj_id in object_ids.clone() {
-        let (_, object, _) = get_object_info(state, obj_id).await?;
+        let (_, object, _) = get_object_info(gateway, obj_id).await?;
         input_objs.push(object);
     }
 
@@ -1190,17 +1140,16 @@ async fn handle_move_call(
     )?;
 
     // Fetch the object info for the gas obj
-    let (gas_obj_ref, _, _) = get_object_info(state, gas_object_id).await?;
+    let (gas_obj_ref, _, _) = get_object_info(gateway, gas_object_id).await?;
 
     // Fetch the objects for the object args
     let mut object_args_refs = Vec::new();
     for obj_id in object_ids {
-        let (object_ref, _, _) = get_object_info(state, obj_id).await?;
+        let (object_ref, _, _) = get_object_info(gateway, obj_id).await?;
         object_args_refs.push(object_ref);
     }
 
-    let sig_req = state
-        .gateway
+    let sig_req = gateway
         .move_call(
             sender,
             package_object_ref,

@@ -21,11 +21,11 @@ use sui_network::network::NetworkClient;
 use sui_network::transport;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
 use sui_types::committee::Committee;
-use sui_types::error::SuiError;
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 
-use crate::config::AuthorityInfo;
+use crate::config::{AuthorityInfo, Config};
+use crate::rest_server_response::{NamedObjectRef, ObjectResponse};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -74,9 +74,7 @@ impl GatewayType {
                 let authority_clients = config.make_authority_clients();
                 Box::new(GatewayState::new(path, committee, authority_clients))
             }
-            _ => {
-                panic!("Unsupported gateway type")
-            }
+            GatewayType::Rest(url) => Box::new(RestGatewayClient { url: url.clone() }),
         }
     }
 }
@@ -89,6 +87,8 @@ pub struct EmbeddedGatewayConfig {
     pub buffer_size: usize,
     pub db_folder_path: PathBuf,
 }
+
+impl Config for EmbeddedGatewayConfig {}
 
 impl EmbeddedGatewayConfig {
     pub fn make_committee(&self) -> Committee {
@@ -151,7 +151,9 @@ impl GatewayAPI for RestGatewayClient {
     }
 
     async fn sync_account_state(&mut self, account_addr: SuiAddress) -> Result<(), Error> {
-        todo!()
+        let url = format!("{}/sync?address={}", self.url, account_addr);
+        reqwest::get(url).await?;
+        Ok(())
     }
 
     async fn move_call(
@@ -206,14 +208,25 @@ impl GatewayAPI for RestGatewayClient {
         todo!()
     }
 
-    fn get_owned_objects(&mut self, account_addr: SuiAddress) -> Vec<ObjectRef> {
-        todo!()
+    async fn get_owned_objects(
+        &mut self,
+        account_addr: SuiAddress,
+    ) -> Result<Vec<ObjectRef>, anyhow::Error> {
+        let url = format!("{}/objects?address={}", self.url, account_addr);
+        let response = reqwest::get(url).await?;
+        let response: ObjectResponse = response.json().await?;
+        let objects = response
+            .objects
+            .into_iter()
+            .map(NamedObjectRef::to_object_ref)
+            .collect();
+        Ok(objects)
     }
 
     async fn download_owned_objects_not_in_db(
         &mut self,
         account_addr: SuiAddress,
-    ) -> Result<BTreeSet<ObjectRef>, SuiError> {
+    ) -> Result<BTreeSet<ObjectRef>, anyhow::Error> {
         todo!()
     }
 }

@@ -11,3 +11,4 @@ pub mod shell;
 pub mod sui_commands;
 pub mod sui_json;
 pub mod wallet_commands;
+pub mod rest_server_response;

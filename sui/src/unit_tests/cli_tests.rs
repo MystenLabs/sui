@@ -293,7 +293,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
         .await?
         .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address);
+    let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
     for (object_id, _, _) in object_refs {
@@ -411,7 +411,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
         .await?
         .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address);
+    let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
     let object_id = object_refs.first().unwrap().0;
@@ -448,7 +448,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
         .execute(&mut context)
         .await?;
 
-    let object_refs = context.gateway.get_owned_objects(address);
+    let object_refs = context.gateway.get_owned_objects(address).await?;
 
     let object_id = object_refs.first().unwrap().0;
     let object_to_send = object_refs.get(1).unwrap().0;
@@ -698,7 +698,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         .print(true);
     tokio::time::sleep(Duration::from_millis(2000)).await;
 
-    let object_refs = context.gateway.get_owned_objects(address1);
+    let object_refs = context.gateway.get_owned_objects(address1).await?;
 
     // Check log output contains all object ids.
     for (object_id, _, _) in &object_refs {
@@ -864,7 +864,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         .await?
         .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address);
+    let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
     let gas_obj_id = object_refs.first().unwrap().0;
@@ -890,7 +890,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
             resppnse.created_objects[0].compute_object_reference(),
         )
     } else {
-        unreachable!("Invaldi response");
+        unreachable!("Invalid response");
     };
 
     // One is the actual module, while the other is the object created at init
@@ -944,7 +944,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         .await?
         .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address);
+    let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
     let gas_obj_id = object_refs.first().unwrap().0;

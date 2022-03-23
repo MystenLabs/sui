@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+/*// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::anyhow;
 use dropshot::test_util::{LogContext, TestContext};
@@ -65,3 +65,4 @@ async fn test_concurrency() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
+*/
