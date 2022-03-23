@@ -203,12 +203,11 @@ pub fn deserialize_batch_info(
     message: Result<SerializedMessage, SuiError>,
 ) -> Result<BatchInfoResponseItem, SuiError> {
     match message {
-        Ok(message) => match message
-        {
+        Ok(message) => match message {
             SerializedMessage::BatchInfoResp(resp) => Ok(*resp),
             SerializedMessage::Error(error) => Err(*error),
             _ => Err(SuiError::UnexpectedMessage),
-        }
+        },
         Err(e) => Err(e),
     }
 }

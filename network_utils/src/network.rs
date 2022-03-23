@@ -12,16 +12,16 @@ use sui_types::{error::*, serialize::*};
 use tracing::*;
 
 use std::io;
-use tokio::task::{JoinError, JoinHandle};
 use std::time::Duration;
+use tokio::task::{JoinError, JoinHandle};
 use tokio::time;
 
 use futures::stream;
 use futures::SinkExt;
 use futures::StreamExt;
 use tokio::sync::{
+    mpsc::{channel,Receiver},
     oneshot::Receiver as oneshotReceiver,
-    mpsc::{channel,Receiver}
 };
 
 #[derive(Clone)]
@@ -50,8 +50,13 @@ impl NetworkClient {
         }
     }
 
-    pub async fn send_recv_bytes_stream(&self, buf: Vec<u8>, rx_cancellation: oneshotReceiver<()>) -> Result<InflightStream, SuiError> {
-        let result = self.send_recv_bytes_stream_internal(buf, rx_cancellation).await;
+    pub async fn send_recv_bytes_stream(
+        &self, buf: Vec<u8>,
+        rx_cancellation: oneshotReceiver<()>
+    ) -> Result<InflightStream, SuiError> {
+        let result = self
+            .send_recv_bytes_stream_internal(buf, rx_cancellation)
+            .await;
         match result {
             Ok(r) => Ok(r),
             Err(error) => Err(SuiError::ClientIoError {
@@ -60,7 +65,10 @@ impl NetworkClient {
         }
     }
 
-    async fn send_recv_bytes_stream_internal(&self, buf: Vec<u8>, rx_cancellation: oneshotReceiver<()>) -> Result<InflightStream, io::Error> {
+    async fn send_recv_bytes_stream_internal(
+        &self, buf: Vec<u8>,
+        rx_cancellation: oneshotReceiver<()>
+    ) -> Result<InflightStream, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port);
         let mut stream = connect(address, self.buffer_size).await?;
         // Send message
@@ -85,7 +93,7 @@ impl NetworkClient {
         });
         let inflight_stream = InflightStream {
             receiver: tr_output,
-            join_handle: Some(join_handle)
+            join_handle: Some(join_handle),
         };
         return Ok(inflight_stream);
     }
@@ -247,8 +255,6 @@ impl PortAllocator {
     }
 }
 
-
-
 /// Represents and Inflight stream that fulfills a BatchInfoRequest potentially containing a
 /// subscription to future updates.
 pub struct InflightStream {
@@ -256,7 +262,9 @@ pub struct InflightStream {
     pub join_handle: Option<JoinHandle<()>>,
 }
 
-pub fn parse_recv_bytes(response: Result<Option<Vec<u8>>, io::Error>) -> Result<SerializedMessage, SuiError> {
+pub fn parse_recv_bytes(
+    response: Result<Option<Vec<u8>>, io::Error>
+) -> Result<SerializedMessage, SuiError> {
     match response {
         Err(error) => Err(SuiError::ClientIoError {
             error: format!("{}", error),

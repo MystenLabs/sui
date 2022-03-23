@@ -4,8 +4,8 @@
 
 use async_trait::async_trait;
 use sui_network::network::NetworkClient;
-use sui_types::{error::SuiError, messages::*, serialize::*};
 use sui_types::batch::UpdateItem;
+use sui_types::{error::SuiError, messages::*, serialize::*};
 use tokio::sync::mpsc::Sender;
 
 #[async_trait]
@@ -124,9 +124,7 @@ impl AuthorityAPI for AuthorityClient {
         request: BatchInfoRequest,
         channel: Sender<Result<BatchInfoResponseItem, SuiError>>,
         max_errors: i32,
-    ) -> Result<(), SuiError>
-
-    {
+    ) -> Result<(), SuiError> {
         let (tx_cancellation, tr_cancellation) = tokio::sync::oneshot::channel();
         let mut inflight_stream = self
             .0
@@ -141,26 +139,26 @@ impl AuthorityAPI for AuthorityClient {
         // request, and when we do, end the inflight stream task using tx_cancellation.
         while let Some(data) = inflight_stream.receiver.recv().await {
             match deserialize_batch_info(data) {
-               Ok(batch_info_response_item) => {
-                   // send to the caller via the channel
-                   let _ = channel.send(Ok(batch_info_response_item.clone())).await;
+                Ok(batch_info_response_item) => {
+                    // send to the caller via the channel
+                    let _ = channel.send(Ok(batch_info_response_item.clone())).await;
 
-                   // check for ending conditions
-                   match batch_info_response_item {
-                       BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
-                           if signed_batch.batch.next_sequence_number > request.end {
-                               let _ = tx_cancellation.send(());
-                               break;
-                           }
-                       }
-                       BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
-                           if seq > request.end {
-                               let _ = tx_cancellation.send(());
-                               break;
-                           }
-                       }
-                   }
-               }
+                    // check for ending conditions
+                    match batch_info_response_item {
+                        BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                            if signed_batch.batch.next_sequence_number > request.end {
+                                let _ = tx_cancellation.send(());
+                                break;
+                            }
+                        }
+                        BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
+                            if seq > request.end {
+                                let _ = tx_cancellation.send(());
+                                break;
+                            }
+                        }
+                    }
+                }
                 Err(e) => {
                     let _ = channel.send(Result::Err(e)).await;
                     error_count = error_count + 1;
@@ -169,7 +167,7 @@ impl AuthorityAPI for AuthorityClient {
                         break;
                     }
                 }
-           }
+            }
         }
         Ok(())
     }

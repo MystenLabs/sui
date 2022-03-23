@@ -265,8 +265,7 @@ where
         _request: BatchInfoRequest,
         _channel: Sender<Result<BatchInfoResponseItem, SuiError>>,
         _max_errors: i32,
-    ) -> Result<(), SuiError>
-    {
+    ) -> Result<(), SuiError> {
         todo!()
     }
 }
