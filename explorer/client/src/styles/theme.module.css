@@ -27,6 +27,5 @@ div.textresults > div > div:nth-child(2) > div {
 /* Pending State CSS */
 
 div.pending {
-  @apply font-sans mt-2 ml-[5vw];
+    @apply font-sans mt-2 ml-[5vw];
 }
-

@@ -43,26 +43,21 @@ function Longtext({
         icon = <span className={styles.copied}>&#10003; Copied</span>;
     }
 
-
-    const navigateUnknown = useCallback(() => navigateWithUnknown(text, navigate), [text, navigate]);
+    const navigateUnknown = useCallback(
+        () => navigateWithUnknown(text, navigate),
+        [text, navigate]
+    );
     let textComponent;
     if (isLink) {
         if (category === 'objectId') {
             textComponent = (
-                <span
-                    className={styles.longtext}
-                >
-                    <a href={'/objects/' + text}>
-                        {text}
-                    </a>
+                <span className={styles.longtext}>
+                    <a href={'/objects/' + text}>{text}</a>
                 </span>
             );
         } else if (category === 'unknown') {
             textComponent = (
-                <span
-                    className={styles.longtext}
-                    onClick={navigateUnknown}
-                >
+                <span className={styles.longtext} onClick={navigateUnknown}>
                     {text}
                 </span>
             );
