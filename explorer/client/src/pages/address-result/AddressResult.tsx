@@ -32,13 +32,12 @@ function AddressResult() {
 
         rpc.getAddressObjects(addressID)
         .then((json) => {
-            console.log(json);
             setData(
               {
                 id: addressID,
                 objects: json,
                 loadState: 'loaded'
-              } 
+              }
             )
         })
       .catch((error) => {
