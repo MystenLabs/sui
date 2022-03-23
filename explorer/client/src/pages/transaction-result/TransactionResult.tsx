@@ -28,6 +28,14 @@ function TransactionResult() {
     const { state } = useLocation();
     const { id: txID } = useParams();
 
+    if (process.env.REACT_APP_DATA !== 'static') {
+        return (
+            <div className={theme.textresults}>
+                <div>This page is in Development</div>
+            </div>
+        );
+    }
+
     const data = findDataFromID(txID, state);
 
     if (instanceOfDataType(data)) {
