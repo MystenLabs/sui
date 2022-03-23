@@ -1,6 +1,6 @@
 import mockTransactionData from './mock_data.json';
 
-const navigateWithUnknown = (input: string, navigate: Function) => {
+const navigateWithUnknown = async (input: string, navigate: Function) => {
     const data = findDataFromID(input, false);
     if (data === undefined || !('category' in data)) {
         navigate(`../missing/${input}`);

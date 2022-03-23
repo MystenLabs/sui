@@ -19,7 +19,7 @@ const navigateWithUnknown = async (input: string, navigate: Function) => {
     }));
 
     //if none of the queries find a result, show missing page
-    Promise.any([objInfoPromise, addrPromise])
+    return Promise.any([objInfoPromise, addrPromise])
         .then((pac) => {
             if (
                 pac?.data &&
