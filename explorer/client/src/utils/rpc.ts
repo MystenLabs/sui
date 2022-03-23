@@ -1,5 +1,3 @@
-import { Console } from "console";
-
 export class SuiRpcClient {
     public readonly host: string;
 
@@ -106,9 +104,6 @@ export type Signature = number[];
 
 type SuiAddressHexStr = string;
 
-const TX_DIGEST_LEN = 32;
-type SuiTxDigest = number[];   // 32 bytes
-
 const hexStringPattern = /$0x[0-9a-fA-F]*^/;
 const suiAddressHexPattern = /$0x[0-9a-fA-F]{20}^/;
 const isBytesHexStr = (str: string) => hexStringPattern.test(str);
@@ -142,7 +137,6 @@ export type AddressOwner = { AddressOwner: SuiAddressBytes }
 type ObjectOwner = { ObjectOwner: SuiAddressBytes }
 export type AnyVec = { vec: any[] }
 type BoolString = "true" | "false";
-const parseBoolString = (bs: BoolString) => bs === "true" ? true : false;
 
 export type JsonBytes = { bytes: number[] }
 export type JsonHexBytes = { bytes: string | number[] }
