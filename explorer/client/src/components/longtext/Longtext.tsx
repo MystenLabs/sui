@@ -1,11 +1,8 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 import { useCallback, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { ReactComponent as ContentCopyIcon } from '../../assets/content_copy_black_18dp.svg';
-import { navigateWithUnknown } from '../../utils/searchUtil';
+import { navigateWithUnknown } from '../../utils/utility_functions';
 import ExternalLink from '../external-link/ExternalLink';
 
 import styles from './Longtext.module.css';
@@ -46,21 +43,26 @@ function Longtext({
         icon = <span className={styles.copied}>&#10003; Copied</span>;
     }
 
-    const navigateUnknown = useCallback(
-        () => navigateWithUnknown(text, navigate),
-        [text, navigate]
-    );
+
+    const navigateUnknown = useCallback(() => navigateWithUnknown(text, navigate), [text, navigate]);
     let textComponent;
     if (isLink) {
         if (category === 'objectId') {
             textComponent = (
-                <span className={styles.longtext}>
-                    <a href={'/objects/' + text}>{text}</a>
+                <span
+                    className={styles.longtext}
+                >
+                    <a href={'/objects/' + text}>
+                        {text}
+                    </a>
                 </span>
             );
         } else if (category === 'unknown') {
             textComponent = (
-                <span className={styles.longtext} onClick={navigateUnknown}>
+                <span
+                    className={styles.longtext}
+                    onClick={navigateUnknown}
+                >
                     {text}
                 </span>
             );

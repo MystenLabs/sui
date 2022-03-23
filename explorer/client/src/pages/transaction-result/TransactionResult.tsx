@@ -1,12 +1,9 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 import { useLocation, useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
-import { findDataFromID } from '../../utils/mockUtil';
+import { findDataFromID } from '../../utils/utility_functions';
 
 import styles from './TransactionResult.module.css';
 

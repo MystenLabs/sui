@@ -1,6 +1,3 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 const defaultColors = require('tailwindcss/colors');
 const defaultTheme = require('tailwindcss/defaultTheme');
 

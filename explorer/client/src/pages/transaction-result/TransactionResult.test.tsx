@@ -1,6 +1,3 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 import { instanceOfDataType } from './TransactionResult';
 
 describe('tests for Type Guard', () => {
