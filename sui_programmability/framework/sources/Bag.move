@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// A Bag is a heterogeneous collection of objects with arbitrary types, i.e.
 /// the objects in the bag don't need to be of the same type.
 /// These objects are not stored in the Bag directly, instead only a reference

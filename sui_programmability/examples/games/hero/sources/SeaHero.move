@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Example of a game mod or different game that uses objects from the Hero
 /// game.
 /// This mod introduces sea monsters that can also be slain with the hero's

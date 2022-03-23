@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module Sui::ERC721Metadata {
     use Std::ASCII;
     use Sui::Url::{Self, Url};
@@ -5,17 +8,17 @@ module Sui::ERC721Metadata {
 
     // TODO: add symbol()?
     /// A wrapper type for the ERC721 metadata standard https://eips.ethereum.org/EIPS/eip-721
-    struct ERC721Metadata has store {       
+    struct ERC721Metadata has store {
         /// The token id associated with the source contract on Ethereum
         token_id: TokenID,
-        /// A descriptive name for a collection of NFTs in this contract. 
+        /// A descriptive name for a collection of NFTs in this contract.
         /// This corresponds to the `name()` method in the
         /// ERC721Metadata interface in EIP-721.
-        name: UTF8::String,        
+        name: UTF8::String,
         /// A distinct Uniform Resource Identifier (URI) for a given asset.
-        /// This corresponds to the `tokenURI()` method in the ERC721Metadata 
+        /// This corresponds to the `tokenURI()` method in the ERC721Metadata
         /// interface in EIP-721.
-        token_uri: Url,    
+        token_uri: Url,
     }
 
     // TODO: replace u64 with u256 once the latter is supported
@@ -30,7 +33,7 @@ module Sui::ERC721Metadata {
     public fun new(token_id: TokenID, name: vector<u8>, token_uri: vector<u8>): ERC721Metadata {
         // Note: this will abort if `token_uri` is not valid ASCII
         let uri_str = ASCII::string(token_uri);
-        ERC721Metadata { 
+        ERC721Metadata {
             token_id,
             name: UTF8::string_unsafe(name),
             token_uri: Url::new_unsafe(uri_str),

@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Example of objects that can be combined to create
 /// new objects
 module Basics::Sandwich {

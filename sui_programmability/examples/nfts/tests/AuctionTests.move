@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 #[test_only]
 module NFTs::AuctionTests {
     use Std::Vector;
@@ -20,7 +23,7 @@ module NFTs::AuctionTests {
         value: u64,
     }
 
-    // Initializes the "state of the world" that mimicks what should
+    // Initializes the "state of the world" that mimics what should
     // be available in Sui genesis state (e.g., mints and distributes
     // coins to users).
     fun init(ctx: &mut TxContext, bidders: vector<address>) {
