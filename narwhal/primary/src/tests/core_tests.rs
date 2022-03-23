@@ -143,7 +143,7 @@ async fn process_header_missing_parent() {
         parents: [CertificateDigest::default()].iter().cloned().collect(),
         ..header()
     };
-    let id = header.id.clone();
+    let id = header.id;
     tx_primary_messages
         .send(PrimaryMessage::Header(header))
         .await
@@ -204,7 +204,7 @@ async fn process_header_missing_payload() {
         payload: [(BatchDigest::default(), 0)].iter().cloned().collect(),
         ..header()
     };
-    let id = header.id.clone();
+    let id = header.id;
     tx_primary_messages
         .send(PrimaryMessage::Header(header))
         .await

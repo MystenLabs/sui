@@ -288,12 +288,12 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
     ) -> Option<BoxFuture<'a, BlockResult<GetBlockResponse>>> {
         match command {
             BlockCommand::GetBlock { id, sender } => {
-                match self.certificate_store.read(id.clone()).await {
+                match self.certificate_store.read(id).await {
                     Ok(Some(certificate)) => {
                         // If similar request is already under processing, don't start a new one
                         if self.pending_get_block.contains_key(&id.clone()) {
                             self.tx_get_block_map
-                                .entry(id.clone())
+                                .entry(id)
                                 .or_insert_with(Vec::new)
                                 .push(sender);
 
@@ -307,15 +307,14 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
                         let batch_receivers =
                             self.send_batch_requests(certificate.header.clone()).await;
 
-                        let fut = Self::wait_for_all_batches(id.clone(), batch_receivers);
+                        let fut = Self::wait_for_all_batches(id, batch_receivers);
 
                         // Ensure that we mark this block retrieval
                         // as pending so no other can initiate the process
-                        self.pending_get_block
-                            .insert(id.clone(), certificate.clone());
+                        self.pending_get_block.insert(id, certificate.clone());
 
                         self.tx_get_block_map
-                            .entry(id.clone())
+                            .entry(id)
                             .or_insert_with(Vec::new)
                             .push(sender);
 
@@ -324,7 +323,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
                     _ => {
                         sender
                             .send(Err(BlockError {
-                                id: id.clone(),
+                                id,
                                 error: BlockErrorType::BlockNotFound,
                             }))
                             .await
@@ -408,7 +407,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
                 .expect("Worker id not found")
                 .primary_to_worker;
 
-            let message = PrimaryWorkerMessage::<PublicKey>::RequestBatch(digest.clone());
+            let message = PrimaryWorkerMessage::<PublicKey>::RequestBatch(digest);
             let bytes = bincode::serialize(&message).expect("Failed to serialize batch request");
 
             self.network.send(worker_address, Bytes::from(bytes)).await;
@@ -417,10 +416,10 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
             // per block, a clean up on a block request will also clean
             // up all the pending batch requests.
             let (tx, rx) = oneshot::channel();
-            self.tx_pending_batch.insert(digest.clone(), (tx, now));
+            self.tx_pending_batch.insert(digest, (tx, now));
 
             // add the receiver to a vector to poll later
-            batch_receivers.push((digest.clone(), rx));
+            batch_receivers.push((digest, rx));
         }
 
         batch_receivers
@@ -451,7 +450,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
     ) -> BlockResult<GetBlockResponse> {
         let waiting: Vec<_> = batches_receivers
             .into_iter()
-            .map(|p| Self::wait_for_batch(block_id.clone(), p.1))
+            .map(|p| Self::wait_for_batch(block_id, p.1))
             .collect();
 
         let result = try_join_all(waiting).await?;

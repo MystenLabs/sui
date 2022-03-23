@@ -147,7 +147,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
                     self.last_parents = parents;
                 }
                 Some((digest, worker_id)) = self.rx_workers.recv() => {
-                    self.payload_size += Digest::from(digest.clone()).size();
+                    self.payload_size += Digest::from(digest).size();
                     self.digests.push((digest, worker_id));
                 }
                 () = &mut timer => {

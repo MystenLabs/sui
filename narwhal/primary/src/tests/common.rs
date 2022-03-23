@@ -125,7 +125,7 @@ pub fn header() -> Header<Ed25519PublicKey> {
 
     let header_digest = header.digest();
     Header {
-        id: header_digest.clone(),
+        id: header_digest,
         signature: kp.sign(Digest::from(header_digest).as_ref()),
         ..header
     }
@@ -147,7 +147,7 @@ pub fn headers() -> Vec<Header<Ed25519PublicKey>> {
             };
             let header_digest = header.digest();
             Header {
-                id: header_digest.clone(),
+                id: header_digest,
                 signature: kp.sign(Digest::from(header_digest).as_ref()),
                 ..header
             }
@@ -180,7 +180,7 @@ pub fn fixture_header_with_payload(number_of_batches: u8) -> Header<Ed25519Publi
     };
     let header_digest = header.digest();
     Header {
-        id: header_digest.clone(),
+        id: header_digest,
         signature: kp.sign(Digest::from(header_digest).as_ref()),
         ..header
     }
@@ -192,7 +192,7 @@ pub fn votes(header: &Header<Ed25519PublicKey>) -> Vec<Vote<Ed25519PublicKey>> {
         .into_iter()
         .map(|kp| {
             let vote = Vote {
-                id: header.id.clone(),
+                id: header.id,
                 round: header.round,
                 origin: header.author.clone(),
                 author: kp.public().clone(),

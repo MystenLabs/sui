@@ -61,10 +61,7 @@ async fn propose_payload() {
     let name_bytes: [u8; 32] = *name.0.as_bytes();
     let digest = BatchDigest(name_bytes);
     let worker_id = 0;
-    tx_our_digests
-        .send((digest.clone(), worker_id))
-        .await
-        .unwrap();
+    tx_our_digests.send((digest, worker_id)).await.unwrap();
 
     // Ensure the proposer makes a correct header from the provided payload.
     let header = rx_headers.recv().await.unwrap();

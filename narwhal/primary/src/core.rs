@@ -155,7 +155,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         self.processing
             .entry(header.round)
             .or_insert_with(HashSet::new)
-            .insert(header.id.clone());
+            .insert(header.id);
 
         // If the following condition is valid, it means we already garbage collected the parents. There is thus
         // no points in trying to synchronize them or vote for the header. We just need to gather the payload.
@@ -180,13 +180,13 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         for x in parents {
             ensure!(
                 x.round() + 1 == header.round,
-                DagError::MalformedHeader(header.id.clone())
+                DagError::MalformedHeader(header.id)
             );
             stake += self.committee.stake(&x.origin());
         }
         ensure!(
             stake >= self.committee.quorum_threshold(),
-            DagError::HeaderRequiresQuorum(header.id.clone())
+            DagError::HeaderRequiresQuorum(header.id)
         );
 
         // Ensure we have the payload. If we don't, the synchronizer will ask our workers to get it, and then
@@ -197,9 +197,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         }
 
         // Store the header.
-        self.header_store
-            .write(header.id.clone(), header.clone())
-            .await;
+        self.header_store.write(header.id, header.clone()).await;
 
         // Check if we can vote for this header.
         if self
@@ -316,7 +314,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         }
 
         // Send it to the consensus layer.
-        let id = certificate.header.id.clone();
+        let id = certificate.header.id;
         if let Err(e) = self.tx_consensus.send(certificate).await {
             warn!(
                 "Failed to deliver certificate {} to the consensus: {}",
@@ -329,7 +327,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     fn sanitize_header(&mut self, header: &Header<PublicKey>) -> DagResult<()> {
         ensure!(
             self.gc_round < header.round,
-            DagError::TooOld(header.id.clone().into(), header.round)
+            DagError::TooOld(header.id.into(), header.round)
         );
 
         // Verify the header's signature.
@@ -351,7 +349,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
             vote.id == self.current_header.id
                 && vote.origin == self.current_header.author
                 && vote.round == self.current_header.round,
-            DagError::UnexpectedVote(vote.id.clone())
+            DagError::UnexpectedVote(vote.id)
         );
 
         // Verify the vote.

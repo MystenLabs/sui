@@ -40,7 +40,7 @@ impl Processor {
                     BatchDigest::new(Sha512::digest(&batch).as_slice()[..32].try_into().unwrap());
 
                 // Store the batch.
-                store.write(digest.clone(), batch).await;
+                store.write(digest, batch).await;
 
                 // Deliver the batch's digest.
                 let message = match own_digest {

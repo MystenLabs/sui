@@ -102,13 +102,15 @@ pub fn make_certificates(
         })
         .take(ancestors.len())
         .zip(ancestors)
-        .flat_map(|(parenthood, parent)| {
-            if parenthood {
-                Some(parent.clone())
-            } else {
-                None
-            }
-        })
+        .flat_map(
+            |(parenthood, parent)| {
+                if parenthood {
+                    Some(*parent)
+                } else {
+                    None
+                }
+            },
+        )
         .collect::<BTreeSet<_>>()
     }
 

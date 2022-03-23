@@ -81,12 +81,10 @@ async fn test_successful_request_batch() {
     let expected_batch = batch();
     let batch_serialised = serialise_batch(expected_batch.clone());
     let expected_digest = resolve_batch_digest(batch_serialised.clone());
-    store
-        .write(expected_digest.clone(), batch_serialised.clone())
-        .await;
+    store.write(expected_digest, batch_serialised.clone()).await;
 
     // WHEN we send a message to retrieve the batch
-    let message = PrimaryWorkerMessage::<Ed25519PublicKey>::RequestBatch(expected_digest.clone());
+    let message = PrimaryWorkerMessage::<Ed25519PublicKey>::RequestBatch(expected_digest);
 
     tx_message
         .send(message)
@@ -137,7 +135,7 @@ async fn test_request_batch_not_found() {
     let expected_batch_id = BatchDigest::default();
 
     // WHEN we send a message to retrieve the batch that doesn't exist
-    let message = PrimaryWorkerMessage::<Ed25519PublicKey>::RequestBatch(expected_batch_id.clone());
+    let message = PrimaryWorkerMessage::<Ed25519PublicKey>::RequestBatch(expected_batch_id);
 
     tx_message
         .send(message)
@@ -194,9 +192,9 @@ async fn test_successful_batch_delete() {
         let s = serialise_batch(batch);
         let digest = resolve_batch_digest(s.clone());
 
-        batch_digests.push(digest.clone());
+        batch_digests.push(digest);
 
-        store.write(digest.clone(), s.clone()).await;
+        store.write(digest, s.clone()).await;
     }
 
     // WHEN we send a message to delete batches

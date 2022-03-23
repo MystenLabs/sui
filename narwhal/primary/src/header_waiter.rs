@@ -148,7 +148,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                     match message {
                         WaiterMessage::SyncBatches(missing, header) => {
                             debug!("Synching the payload of {}", header);
-                            let header_id = header.id.clone();
+                            let header_id = header.id;
                             let round = header.round;
                             let author = header.author.clone();
 
@@ -160,7 +160,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                             // Add the header to the waiter pool. The waiter will return it to when all
                             // its parents are in the store.
                             let wait_for = missing
-                                .iter().map(|(x, y)| (x.clone(), *y))
+                                .iter().map(|(x, y)| (*x, *y))
                                 .collect();
                             let (tx_cancel, rx_cancel) = channel(1);
                             self.pending.insert(header_id, (round, tx_cancel));
@@ -171,7 +171,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                             // Ensure we didn't already send a sync request for these parents.
                             let mut requires_sync = HashMap::new();
                             for (digest, worker_id) in missing.into_iter() {
-                                self.batch_requests.entry(digest.clone()).or_insert_with(|| {
+                                self.batch_requests.entry(digest).or_insert_with(|| {
                                     requires_sync.entry(worker_id).or_insert_with(Vec::new).push(digest);
                                     round
                                 });
@@ -190,7 +190,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
 
                         WaiterMessage::SyncParents(missing, header) => {
                             debug!("Synching the parents of {}", header);
-                            let header_id = header.id.clone();
+                            let header_id = header.id;
                             let round = header.round;
                             let author = header.author.clone();
 
@@ -217,7 +217,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                                 .as_millis();
                             let mut requires_sync = Vec::new();
                             for missing in missing {
-                                self.parent_requests.entry(missing.clone()).or_insert_with(|| {
+                                self.parent_requests.entry(missing).or_insert_with(|| {
                                     requires_sync.push(missing);
                                     (round, now)
                                 });
@@ -268,7 +268,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                     for (digest, (_, timestamp)) in &self.parent_requests {
                         if timestamp + (self.sync_retry_delay as u128) < now {
                             debug!("Requesting sync for certificate {} (retry)", digest);
-                            retry.push(digest.clone());
+                            retry.push(*digest);
                         }
                     }
 

@@ -22,7 +22,7 @@ pub type Transaction = Vec<u8>;
 #[derive(Clone, Serialize, Deserialize, Default, Debug, PartialEq, Eq)]
 pub struct Batch(pub Vec<Transaction>);
 
-#[derive(Clone, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct BatchDigest(pub(crate) [u8; crypto::DIGEST_LEN]);
 
 impl fmt::Debug for BatchDigest {
@@ -93,7 +93,7 @@ impl<PublicKey: VerifyingKey> Header<PublicKey> {
             signature: PublicKey::Sig::default(),
         };
         let id = header.digest();
-        let signature = signature_service.request_signature(id.clone().into()).await;
+        let signature = signature_service.request_signature(id.into()).await;
         Self {
             id,
             signature,
@@ -116,18 +116,18 @@ impl<PublicKey: VerifyingKey> Header<PublicKey> {
         for worker_id in self.payload.values() {
             committee
                 .worker(&self.author, worker_id)
-                .map_err(|_| DagError::MalformedHeader(self.id.clone()))?;
+                .map_err(|_| DagError::MalformedHeader(self.id))?;
         }
 
         // Check the signature.
-        let id_digest: Digest = Digest::from(self.id.clone());
+        let id_digest: Digest = Digest::from(self.id);
         self.author
             .verify(id_digest.as_ref(), &self.signature)
             .map_err(DagError::from)
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct HeaderDigest([u8; DIGEST_LEN]);
 
 impl From<HeaderDigest> for Digest {
@@ -156,11 +156,11 @@ impl<PublicKey: VerifyingKey> Hash for Header<PublicKey> {
         hasher.update(&self.author);
         hasher.update(self.round.to_le_bytes());
         for (x, y) in &self.payload {
-            hasher.update(Digest::from(x.clone()).as_ref());
+            hasher.update(Digest::from(*x).as_ref());
             hasher.update(y.to_le_bytes());
         }
         for x in &self.parents {
-            hasher.update(Digest::from(x.clone()).as_ref());
+            hasher.update(Digest::from(*x).as_ref());
         }
         HeaderDigest(
             hasher.finalize().as_slice()[..DIGEST_LEN]
@@ -180,7 +180,7 @@ impl<PublicKey: VerifyingKey> fmt::Debug for Header<PublicKey> {
             self.author.encode_base64(),
             self.payload
                 .keys()
-                .map(|x| Digest::from(x.clone()).size())
+                .map(|x| Digest::from(*x).size())
                 .sum::<usize>(),
         )
     }
@@ -210,7 +210,7 @@ impl<PublicKey: VerifyingKey> Vote<PublicKey> {
         signature_service: &mut SignatureService<PublicKey::Sig>,
     ) -> Self {
         let vote = Self {
-            id: header.id.clone(),
+            id: header.id,
             round: header.round,
             origin: header.author.clone(),
             author: author.clone(),
@@ -262,7 +262,7 @@ impl<PublicKey: VerifyingKey> Hash for Vote<PublicKey> {
 
     fn digest(&self) -> VoteDigest {
         let mut hasher = Sha512::new();
-        let header_id: Digest = self.id.clone().into();
+        let header_id: Digest = self.id.into();
         hasher.update(header_id);
         hasher.update(self.round.to_le_bytes());
         hasher.update(&self.origin);
@@ -352,7 +352,7 @@ impl<PublicKey: VerifyingKey> Certificate<PublicKey> {
         self.header.author.clone()
     }
 }
-#[derive(Clone, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct CertificateDigest([u8; DIGEST_LEN]);
 
 impl From<CertificateDigest> for Digest {
@@ -378,7 +378,7 @@ impl<PublicKey: VerifyingKey> Hash for Certificate<PublicKey> {
 
     fn digest(&self) -> CertificateDigest {
         let mut hasher = Sha512::new();
-        let header_id: Digest = self.header.id.clone().into();
+        let header_id: Digest = self.header.id.into();
         hasher.update(header_id);
         hasher.update(self.round().to_le_bytes());
         hasher.update(self.origin());

@@ -88,7 +88,7 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
         loop {
             tokio::select! {
                 Some(certificate) = self.rx_synchronizer.recv() => {
-                    let header_id = certificate.header.id.clone();
+                    let header_id = certificate.header.id;
 
                     // Ensure we process only once this certificate.
                     if self.pending.contains_key(&header_id) {

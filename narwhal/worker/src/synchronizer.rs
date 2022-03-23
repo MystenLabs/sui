@@ -133,9 +133,9 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                             }
 
                             // Check if we received the batch in the meantime.
-                            match self.store.read(digest.clone()).await {
+                            match self.store.read(digest).await {
                                 Ok(None) => {
-                                    missing.push(digest.clone());
+                                    missing.push(digest);
                                     debug!("Requesting sync for batch {}", digest);
                                 },
                                 Ok(Some(_)) => {
@@ -148,9 +148,9 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                             }
 
                             // Add the digest to the waiter.
-                            let deliver = digest.clone();
+                            let deliver = digest;
                             let (tx_cancel, rx_cancel) = channel(1);
-                            let fut = Self::waiter(digest.clone(), self.store.clone(), deliver, rx_cancel);
+                            let fut = Self::waiter(digest, self.store.clone(), deliver, rx_cancel);
                             waiting.push(fut);
                             self.pending.insert(digest, (self.round, tx_cancel, now));
                         }
@@ -219,7 +219,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                     for (digest, (_, _, timestamp)) in &self.pending {
                         if timestamp + (self.sync_retry_delay as u128) < now {
                             debug!("Requesting sync for batch {} (retry)", digest);
-                            retry.push(digest.clone());
+                            retry.push(*digest);
                         }
                     }
                     if !retry.is_empty() {
@@ -242,7 +242,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
     }
 
     async fn handle_request_batch(&mut self, digest: BatchDigest) {
-        let message = match self.store.read(digest.clone()).await {
+        let message = match self.store.read(digest).await {
             Ok(Some(batch_serialised)) => {
                 let batch = match bincode::deserialize(&batch_serialised).unwrap() {
                     WorkerMessage::<PublicKey>::Batch(batch) => batch,
@@ -250,11 +250,9 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                         panic!("Wrong type has been stored!");
                     }
                 };
-                WorkerPrimaryMessage::RequestedBatch(digest.clone(), batch)
+                WorkerPrimaryMessage::RequestedBatch(digest, batch)
             }
-            _ => WorkerPrimaryMessage::Error(WorkerPrimaryError::RequestedBatchNotFound(
-                digest.clone(),
-            )),
+            _ => WorkerPrimaryMessage::Error(WorkerPrimaryError::RequestedBatchNotFound(digest)),
         };
 
         let serialised = bincode::serialize(&message).expect("Failed to serialise message");

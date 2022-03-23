@@ -75,11 +75,11 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
             //         X as they will be querying worker #1.
             if self
                 .payload_store
-                .read((digest.clone(), *worker_id))
+                .read((*digest, *worker_id))
                 .await?
                 .is_none()
             {
-                missing.insert(digest.clone(), *worker_id);
+                missing.insert(*digest, *worker_id);
             }
         }
 
@@ -114,9 +114,9 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                 continue;
             }
 
-            match self.certificate_store.read(digest.clone()).await? {
+            match self.certificate_store.read(*digest).await? {
                 Some(certificate) => parents.push(certificate),
-                None => missing.push(digest.clone()),
+                None => missing.push(*digest),
             };
         }
 
@@ -142,7 +142,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                 continue;
             }
 
-            if self.certificate_store.read(digest.clone()).await?.is_none() {
+            if self.certificate_store.read(*digest).await?.is_none() {
                 self.tx_certificate_waiter
                     .send(certificate.clone())
                     .await

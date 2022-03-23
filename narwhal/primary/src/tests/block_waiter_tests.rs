@@ -63,7 +63,7 @@ async fn test_successfully_retrieve_block() {
     let mut expected_batch_messages = HashMap::new();
     for (batch_id, _) in header.payload {
         expected_batch_messages.insert(
-            batch_id.clone(),
+            batch_id,
             BatchMessage {
                 id: batch_id,
                 transactions: Batch(vec![vec![10u8, 5u8, 2u8], vec![8u8, 2u8, 3u8]]),
@@ -87,7 +87,7 @@ async fn test_successfully_retrieve_block() {
     // WHEN we send a request to get a block
     tx_commands
         .send(BlockCommand::GetBlock {
-            id: block_id.clone(),
+            id: block_id,
             sender: tx_get_block,
         })
         .await
@@ -164,7 +164,7 @@ async fn test_one_pending_request_for_block_at_time() {
     // WHEN we send GetBlock command
     let result_some = waiter
         .handle_command(BlockCommand::GetBlock {
-            id: block_id.clone(),
+            id: block_id,
             sender: get_mock_sender(),
         })
         .await;
@@ -175,7 +175,7 @@ async fn test_one_pending_request_for_block_at_time() {
         results_none.push(
             waiter
                 .handle_command(BlockCommand::GetBlock {
-                    id: block_id.clone(),
+                    id: block_id,
                     sender: get_mock_sender(),
                 })
                 .await,
@@ -238,7 +238,7 @@ async fn test_unlocking_pending_get_block_request_after_response() {
     for _ in 0..3 {
         waiter
             .handle_command(BlockCommand::GetBlock {
-                id: block_id.clone(),
+                id: block_id,
                 sender: get_mock_sender(),
             })
             .await;
@@ -246,7 +246,7 @@ async fn test_unlocking_pending_get_block_request_after_response() {
 
     // WHEN
     let result = BlockResult::Ok(GetBlockResponse {
-        id: block_id.clone(),
+        id: block_id,
         batches: vec![],
     });
 
@@ -290,7 +290,7 @@ async fn test_batch_timeout() {
     // WHEN we send a request to get a block
     tx_commands
         .send(BlockCommand::GetBlock {
-            id: block_id.clone(),
+            id: block_id,
             sender: tx_get_block,
         })
         .await
@@ -341,7 +341,7 @@ async fn test_return_error_when_certificate_is_missing() {
     // WHEN we send a request to get a block
     tx_commands
         .send(BlockCommand::GetBlock {
-            id: block_id.clone(),
+            id: block_id,
             sender: tx_get_block,
         })
         .await
