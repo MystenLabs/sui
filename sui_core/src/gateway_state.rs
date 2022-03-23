@@ -182,7 +182,6 @@ pub trait GatewayAPI {
     ) -> Result<TransactionData, anyhow::Error>;
 
     /// Get the object information
-    /// TODO: move this out to AddressManager
     async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error>;
 
     /// Get refs of all objects we own from local cache.
@@ -383,7 +382,7 @@ impl AccountState {
     /// It is important to check that the object is not locked before locking again
     /// One should call can_lock_or_unlock before locking as this overwrites the previous lock
     /// If the object is already locked, ensure it is unlocked by calling unlock_pending_transaction_objects
-    /// Client runs sequentially right now so access to this is safe
+    /// Gateway runs sequentially right now so access to this is safe
     /// Double-locking can cause equivocation. TODO: https://github.com/MystenLabs/sui/issues/335
     pub fn lock_pending_transaction_objects(
         &self,
