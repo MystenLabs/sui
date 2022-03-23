@@ -1,6 +1,3 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 import { useParams } from 'react-router-dom';
 
 import styles from './OtherDetails.module.css';

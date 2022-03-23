@@ -1,7 +1,7 @@
 module.exports = {
     extends: ['react-app', 'react-app/jest', 'prettier'],
     rules: {
-        'react/jsx-no-bind': ['error'],
+        'react/jsx-no-bind': ['warn'],
         'import/order': [
             'warn',
             {
@@ -30,5 +30,6 @@ module.exports = {
                 disallowTypeAnnotations: true,
             },
         ],
+        'react/jsx-key': ['error', {}],
     },
 };

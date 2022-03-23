@@ -1,19 +1,20 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
+import { useLocation, useParams } from 'react-router-dom';
 
-import { useParams } from 'react-router-dom';
-
-import mockTransactionData from '../../utils/transaction_mock.json';
+import ErrorResult from '../../components/error-result/ErrorResult';
+import Longtext from '../../components/longtext/Longtext';
+import theme from '../../styles/theme.module.css';
+import { findDataFromID } from '../../utils/utility_functions';
 
 import styles from './TransactionResult.module.css';
 
 type DataType = {
     id: string;
-    status: string;
+    status: 'success' | 'fail' | 'pending';
     sender: string;
     created?: string[];
     deleted?: string[];
     mutated?: string[];
+    recipients: string[];
 };
 
 function instanceOfDataType(object: any): object is DataType {
@@ -24,8 +25,10 @@ function instanceOfDataType(object: any): object is DataType {
 }
 
 function TransactionResult() {
+    const { state } = useLocation();
     const { id: txID } = useParams();
-    const data = mockTransactionData.data.find(({ id }) => id === txID);
+
+    const data = findDataFromID(txID, state);
 
     if (instanceOfDataType(data)) {
         let action: string;
@@ -42,13 +45,15 @@ function TransactionResult() {
             objectIDs = data.mutated;
         } else {
             action = 'Fail';
-            objectIDs = ['-'];
+            objectIDs = [];
         }
 
         const statusClass =
             data.status === 'success'
                 ? styles['status-success']
-                : styles['status-fail'];
+                : data.status === 'fail'
+                ? styles['status-fail']
+                : styles['status-pending'];
 
         let actionClass;
 
@@ -67,33 +72,76 @@ function TransactionResult() {
         }
 
         return (
-            <dl className={styles.data}>
-                <dt>Transaction ID</dt>
-                <dd>{data.id}</dd>
+            <div className={theme.textresults}>
+                <div>
+                    <div>Transaction ID</div>
+                    <div>
+                        <Longtext
+                            text={data.id}
+                            category="transactions"
+                            isLink={false}
+                        />
+                    </div>
+                </div>
 
-                <dt>Status</dt>
-                <dd data-testid="transaction-status" className={statusClass}>
-                    {data.status}
-                </dd>
+                <div>
+                    <div>Status</div>
+                    <div
+                        data-testid="transaction-status"
+                        className={statusClass}
+                    >
+                        {data.status}
+                    </div>
+                </div>
 
-                <dt>Sender</dt>
-                <dd>{data.sender}</dd>
+                <div>
+                    <div>From</div>
+                    <div>
+                        <Longtext text={data.sender} category="addresses" />
+                    </div>
+                </div>
 
-                <dt>Did</dt>
-                <dd className={actionClass}>{action}</dd>
+                <div>
+                    <div>Event</div>
+                    <div className={actionClass}>{action}</div>
+                </div>
 
-                <dt>Object</dt>
-                {objectIDs.map((objectID, index) => (
-                    <dd key={`object-${index}`}>{objectID}</dd>
-                ))}
-            </dl>
+                <div>
+                    <div>Object</div>
+                    <div>
+                        {objectIDs.map((objectID, index) => (
+                            <div key={`object-${index}`}>
+                                <Longtext text={objectID} category="objects" />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div>
+                    <div>To</div>
+                    <div>
+                        {data.recipients.length !== 0 ? (
+                            data.recipients.map((address, index) => (
+                                <div key={`recipient-${index}`}>
+                                    <Longtext
+                                        text={address}
+                                        category="addresses"
+                                    />
+                                </div>
+                            ))
+                        ) : (
+                            <div />
+                        )}
+                    </div>
+                </div>
+            </div>
         );
     }
     return (
-        <dl className={styles.data}>
-            <dt>This transaction could not be found:</dt>
-            <dd>{txID}</dd>
-        </dl>
+        <ErrorResult
+            id={txID}
+            errorMsg="There was an issue with the data on the following transaction"
+        />
     );
 }
 

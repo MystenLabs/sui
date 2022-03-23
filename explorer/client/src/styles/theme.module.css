@@ -1,0 +1,32 @@
+div.textresults > div {
+    @apply py-[1vh] sm:table ml-[5vw] 
+  border-0 border-b border-solid border-gray-300 w-[90%];
+}
+
+div.textresults > div:first-child {
+    @apply mt-[1vh];
+}
+
+div.textresults > div:last-child {
+    @apply mb-[2vh];
+}
+
+div.textresults > div > div:first-child {
+    @apply font-sans tracking-tight font-semibold block
+    sm:w-[10vw] sm:table-cell sm:pr-[2vw];
+}
+
+div.textresults > div > div:nth-child(2) {
+    @apply font-mono tracking-tight text-gray-900 break-all rounded-l-md block sm:table-cell;
+}
+
+div.textresults > div > div:nth-child(2) > div {
+    @apply mb-[2vh];
+}
+
+/* Pending State CSS */
+
+div.pending {
+  @apply font-sans mt-2 ml-[5vw];
+}
+
