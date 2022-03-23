@@ -157,8 +157,8 @@
       {
         "name": "Build with Examples",
         "sublist": [{
-            "name": "Hold an auction",
-            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/Auction.move",
+            "name": "Create an escrow",
+            "url": "hhttps://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/Escrow.move",
             "external": true
           },
           {
