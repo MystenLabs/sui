@@ -22,6 +22,7 @@ function Longtext({
     isLink?: boolean;
 }) {
     const [isCopyIcon, setCopyIcon] = useState(true);
+    const [pleaseWait, setPleaseWait] = useState(false);
     const navigate = useNavigate();
 
     const handleCopyEvent = useCallback(() => {
@@ -32,7 +33,9 @@ function Longtext({
 
     let icon;
 
-    if (isCopyIcon) {
+    if (pleaseWait) {
+        icon = <span className={styles.copied}>&#8987; Please Wait</span>;
+    } else if (isCopyIcon) {
         icon = (
             <span className={styles.copy} onClick={handleCopyEvent}>
                 <ContentCopyIcon />
@@ -42,10 +45,11 @@ function Longtext({
         icon = <span className={styles.copied}>&#10003; Copied</span>;
     }
 
-    const navigateUnknown = useCallback(
-        () => navigateWithUnknown(text, navigate),
-        [text, navigate]
-    );
+    const navigateUnknown = useCallback(() => {
+        setPleaseWait(true);
+        navigateWithUnknown(text, navigate).then(() => setPleaseWait(false));
+    }, [text, navigate]);
+
     let textComponent;
     if (isLink) {
         if (category === 'unknown') {
