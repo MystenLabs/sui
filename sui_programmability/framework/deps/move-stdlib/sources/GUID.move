@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// A module for generating globally unique identifiers
 module Std::GUID {
     use Std::Signer;

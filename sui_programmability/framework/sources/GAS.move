@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Coin<Gas> is the token used to pay for gas in Sui
 module Sui::GAS {
     use Sui::Coin;

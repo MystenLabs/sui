@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// This is an implementation of an English auction
 /// (https://en.wikipedia.org/wiki/English_auction) using single-owner
 /// objects only. There are 3 types of parties participating in an

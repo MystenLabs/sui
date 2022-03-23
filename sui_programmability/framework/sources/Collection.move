@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// The `Collection` type represents a collection of objects of the same type `T`.
 /// In contrast to `vector<T>` which stores the object in the vector directly,
 /// `Collection<T>` only tracks the ownership indirectly, by keeping a list of

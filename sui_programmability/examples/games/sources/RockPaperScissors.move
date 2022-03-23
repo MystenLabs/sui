@@ -1,9 +1,12 @@
-// This is an idea of a module which will allow some asset to be 
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// This is an idea of a module which will allow some asset to be
 // won by playing a rock-paper-scissors (then lizard-spoke) game.
 //
-// Initial implementation implies so-called commit-reveal scheme 
+// Initial implementation implies so-called commit-reveal scheme
 // in which players first submit their commitments
-// and then reveal the data that led to these commitments. The 
+// and then reveal the data that led to these commitments. The
 // data is then being verified by one of the parties or a third
 // party (depends on implementation and security measures).
 //
@@ -49,15 +52,15 @@ module Games::RockPaperScissors {
     const STATUS_REVEALING: u8 = 3;
     const STATUS_REVEALED: u8 = 4;
 
-    /// The Prize that's being held inside the [`Game`] object. Should be 
-    /// eventually replaced with some generic T inside the [`Game`]. 
+    /// The Prize that's being held inside the [`Game`] object. Should be
+    /// eventually replaced with some generic T inside the [`Game`].
     struct ThePrize has key, store {
         id: VersionedID
     }
 
     /// The main resource of the RockPaperScissors module. Contains all the
     /// information about the game state submitted by both players. By default
-    /// contains empty values and fills as the game progresses. 
+    /// contains empty values and fills as the game progresses.
     /// Being destroyed in the end, once [`select_winner`] is called and the game
     /// has reached its final state by that time.
     struct Game has key {
@@ -155,7 +158,7 @@ module Games::RockPaperScissors {
         } else {
             abort 0 // unreachable!()
         };
-        
+
         ID::delete(id);
     }
 
@@ -170,8 +173,8 @@ module Games::RockPaperScissors {
     }
 
     /// Use submitted [`Secret`]'s salt to find the gesture played by the player and set it
-    /// in the [`Game`] object. 
-    /// TODO: think of ways to 
+    /// in the [`Game`] object.
+    /// TODO: think of ways to
     public fun match_secret(game: &mut Game, secret: Secret, _ctx: &mut TxContext) {
         let Secret { salt, player, id } = secret;
 
@@ -186,11 +189,11 @@ module Games::RockPaperScissors {
         ID::delete(id);
     }
 
-    /// The final accord to the game logic. After both secrets have been revealed, 
+    /// The final accord to the game logic. After both secrets have been revealed,
     /// the game owner can choose a winner and release the prize.
     public fun select_winner(game: Game, ctx: &mut TxContext) {
         assert!(status(&game) == STATUS_REVEALED, 0);
-        
+
         let Game {
             id,
             prize,
@@ -201,7 +204,7 @@ module Games::RockPaperScissors {
             gesture_one,
             gesture_two,
         } = game;
-        
+
         let p1_wins = play(gesture_one, gesture_two);
         let p2_wins = play(gesture_two, gesture_one);
 
@@ -209,22 +212,22 @@ module Games::RockPaperScissors {
 
         // If one of the players wins, he takes the prize.
         // If there's a tie, the game owner gets the prize.
-        if (p1_wins) { 
+        if (p1_wins) {
             Transfer::transfer(prize, player_one)
         } else if (p2_wins) {
             Transfer::transfer(prize, player_two)
-        } else { 
+        } else {
             Transfer::transfer(prize, TxContext::sender(ctx))
-        };           
+        };
     }
 
-    /// Implement the basic logic of the game. 
+    /// Implement the basic logic of the game.
     fun play(one: u8, two: u8): bool {
         if (one == ROCK && two == SCISSORS) { true }
         else if (one == PAPER && two == ROCK) { true }
         else if (one == SCISSORS && two == PAPER) { true }
         else if (one != CHEAT && two == CHEAT) { true }
-        else { false } 
+        else { false }
     }
 
     /// Hash the salt and the gesture_id and match it against the stored hash. If something
@@ -245,7 +248,7 @@ module Games::RockPaperScissors {
     /// Internal hashing function to build a [`Secret`] and match it later at the reveal stage.
     ///
     /// - `salt` argument here is a secret that is only known to the sender. That way we ensure
-    /// that nobody knows the gesture until the end, but at the same time each player commits 
+    /// that nobody knows the gesture until the end, but at the same time each player commits
     /// to the result with his hash;
     fun hash(gesture: u8, salt: vector<u8>): vector<u8> {
         Vector::push_back(&mut salt, gesture);

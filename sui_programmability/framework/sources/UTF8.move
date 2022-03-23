@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module Sui::UTF8 {
     use Std::ASCII;
     use Std::Option::Option;
@@ -24,7 +27,7 @@ module Sui::UTF8 {
         ASCII::try_string(self.bytes)
     }
 
-    /// Return the underyling bytes of `self`
+    /// Return the underlying bytes of `self`
     public fun bytes(self: &String): &vector<u8> {
         &self.bytes
     }

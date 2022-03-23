@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module Sui::TxContext {
     use Std::Signer;
     use Sui::ID::{Self, VersionedID};
@@ -14,7 +17,7 @@ module Sui::TxContext {
     const EBAD_TX_HASH_LENGTH: u64 = 0;
 
     /// Information about the transaction currently being executed.
-    /// This cannot be constructed by a transaction--it is a privileged object created by 
+    /// This cannot be constructed by a transaction--it is a privileged object created by
     /// the VM and passed in to the entrypoint of the transaction as `&mut TxContext`.
     struct TxContext has drop {
         /// A `signer` wrapping the address of the user that signed the current transaction
@@ -37,7 +40,7 @@ module Sui::TxContext {
         &self.signer
     }
 
-    /// Generate a new, globally unqiue object ID with version 0
+    /// Generate a new, globally unique object ID with version 0
     public fun new_id(ctx: &mut TxContext): VersionedID {
         let ids_created = ctx.ids_created;
         let id = ID::new_versioned_id(fresh_id(*&ctx.tx_hash, ids_created));

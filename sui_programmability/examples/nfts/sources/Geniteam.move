@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module NFTs::Geniteam {
     use Sui::ID::{Self, ID, VersionedID};
     use Sui::TxContext::{Self, TxContext};
