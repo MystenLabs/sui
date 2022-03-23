@@ -11,9 +11,9 @@
 use config::{Committee, Stake};
 use crypto::{
     traits::{EncodeDecodeBase64, VerifyingKey},
-    Digest, Hash as _,
+    Hash as _,
 };
-use primary::{Certificate, Round};
+use primary::{Certificate, CertificateDigest, Round};
 use std::{
     cmp::max,
     collections::{HashMap, HashSet},
@@ -28,7 +28,8 @@ pub mod consensus_tests;
 pub mod dag;
 
 /// The representation of the DAG in memory.
-type Dag<PublicKey> = HashMap<Round, HashMap<PublicKey, (Digest, Certificate<PublicKey>)>>;
+type Dag<PublicKey> =
+    HashMap<Round, HashMap<PublicKey, (CertificateDigest, Certificate<PublicKey>)>>;
 
 /// The state that needs to be persisted for crash-recovery.
 pub struct State<PublicKey: VerifyingKey> {
@@ -55,7 +56,10 @@ impl<PublicKey: VerifyingKey> State<PublicKey> {
                 .iter()
                 .map(|(x, (_, y))| (x.clone(), y.round()))
                 .collect(),
-            dag: [(0, genesis)].iter().cloned().collect(),
+            dag: [(0, genesis)]
+                .iter()
+                .cloned()
+                .collect::<HashMap<_, HashMap<_, _>>>(),
         }
     }
 
@@ -246,7 +250,7 @@ impl<PublicKey: VerifyingKey> Consensus<PublicKey> {
         committee: &Committee<PublicKey>,
         round: Round,
         dag: &'a Dag<PublicKey>,
-    ) -> Option<&'a (Digest, Certificate<PublicKey>)> {
+    ) -> Option<&'a (CertificateDigest, Certificate<PublicKey>)> {
         // TODO: We should elect the leader of round r-2 using the common coin revealed at round r.
         // At this stage, we are guaranteed to have 2f+1 certificates from round r (which is enough to
         // compute the coin). We currently just use round-robin.

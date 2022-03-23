@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    batch_maker::{Batch, BatchMaker, Transaction},
+    batch_maker::BatchMaker,
     helper::Helper,
     primary_connector::PrimaryConnector,
     processor::{Processor, SerializedBatchMessage},
@@ -12,10 +12,10 @@ use crate::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use config::{Committee, Parameters, WorkerId};
-use crypto::{traits::VerifyingKey, Digest};
+use crypto::traits::VerifyingKey;
 use futures::sink::SinkExt as _;
 use network::{MessageHandler, Receiver, Writer};
-use primary::PrimaryWorkerMessage;
+use primary::{Batch, BatchDigest, PrimaryWorkerMessage, Transaction};
 use serde::{Deserialize, Serialize};
 use std::{
     error::Error,
@@ -44,7 +44,7 @@ pub type SerializedWorkerPrimaryMessage = Vec<u8>;
 #[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
 pub enum WorkerMessage<PublicKey: VerifyingKey> {
     Batch(Batch),
-    BatchRequest(Vec<Digest>, /* origin */ PublicKey),
+    BatchRequest(Vec<BatchDigest>, /* origin */ PublicKey),
 }
 
 pub struct Worker<PublicKey: VerifyingKey> {
@@ -57,7 +57,7 @@ pub struct Worker<PublicKey: VerifyingKey> {
     /// The configuration parameters.
     parameters: Parameters,
     /// The persistent storage.
-    store: Store<Digest, SerializedBatchMessage>,
+    store: Store<BatchDigest, SerializedBatchMessage>,
 }
 
 const INADDR_ANY: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
@@ -68,7 +68,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         id: WorkerId,
         committee: Committee<PublicKey>,
         parameters: Parameters,
-        store: Store<Digest, SerializedBatchMessage>,
+        store: Store<BatchDigest, SerializedBatchMessage>,
     ) {
         // Define a worker instance.
         let worker = Self {
@@ -274,7 +274,7 @@ impl MessageHandler for TxReceiverHandler {
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
 struct WorkerReceiverHandler<PublicKey: VerifyingKey> {
-    tx_helper: Sender<(Vec<Digest>, PublicKey)>,
+    tx_helper: Sender<(Vec<BatchDigest>, PublicKey)>,
     tx_processor: Sender<SerializedBatchMessage>,
 }
 

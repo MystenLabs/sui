@@ -16,9 +16,12 @@ async fn hash_and_store() {
     let (tx_digest, mut rx_digest) = channel(1);
 
     // Create a new test store.
-    let db =
-        rocks::DBMap::<Digest, SerializedBatchMessage>::open(temp_dir(), None, Some("batches"))
-            .unwrap();
+    let db = rocks::DBMap::<BatchDigest, SerializedBatchMessage>::open(
+        temp_dir(),
+        None,
+        Some("batches"),
+    )
+    .unwrap();
     let store = Store::new(db);
 
     // Spawn a new `Processor` instance.
@@ -38,7 +41,7 @@ async fn hash_and_store() {
 
     // Ensure the `Processor` outputs the batch's digest.
     let output = rx_digest.recv().await.unwrap();
-    let digest = Digest::new(
+    let digest = BatchDigest::new(
         Sha512::digest(&serialized).as_slice()[..32]
             .try_into()
             .unwrap(),

@@ -7,9 +7,10 @@ use crypto::{
     ed25519::{Ed25519KeyPair, Ed25519PublicKey},
     traits::KeyPair,
 };
-use primary::Header;
+use primary::{CertificateDigest, Header};
 use rand::{rngs::StdRng, Rng, SeedableRng as _};
 use std::collections::{BTreeSet, VecDeque};
+#[allow(unused_imports)] // WT*?
 use tokio::sync::mpsc::channel;
 
 // Fixture
@@ -44,8 +45,8 @@ pub fn mock_committee(keys: &[Ed25519PublicKey]) -> Committee<Ed25519PublicKey> 
 pub fn mock_certificate(
     origin: Ed25519PublicKey,
     round: Round,
-    parents: BTreeSet<Digest>,
-) -> (Digest, Certificate<Ed25519PublicKey>) {
+    parents: BTreeSet<CertificateDigest>,
+) -> (CertificateDigest, Certificate<Ed25519PublicKey>) {
     let certificate = Certificate {
         header: Header {
             author: origin,
@@ -64,24 +65,33 @@ pub fn mock_certificate(
 pub fn make_optimal_certificates(
     start: Round,
     stop: Round,
-    initial_parents: &BTreeSet<Digest>,
+    initial_parents: &BTreeSet<CertificateDigest>,
     keys: &[Ed25519PublicKey],
-) -> (VecDeque<Certificate<Ed25519PublicKey>>, BTreeSet<Digest>) {
+) -> (
+    VecDeque<Certificate<Ed25519PublicKey>>,
+    BTreeSet<CertificateDigest>,
+) {
     make_certificates(start, stop, initial_parents, keys, 0.0)
 }
 
 pub fn make_certificates(
     start: Round,
     stop: Round,
-    initial_parents: &BTreeSet<Digest>,
+    initial_parents: &BTreeSet<CertificateDigest>,
     keys: &[Ed25519PublicKey],
     failure_probability: f64,
-) -> (VecDeque<Certificate<Ed25519PublicKey>>, BTreeSet<Digest>) {
+) -> (
+    VecDeque<Certificate<Ed25519PublicKey>>,
+    BTreeSet<CertificateDigest>,
+) {
     let mut certificates = VecDeque::new();
     let mut parents = initial_parents.iter().cloned().collect::<BTreeSet<_>>();
     let mut next_parents = BTreeSet::new();
 
-    fn this_cert_parents(ancestors: &BTreeSet<Digest>, failure_prob: f64) -> BTreeSet<Digest> {
+    fn this_cert_parents(
+        ancestors: &BTreeSet<CertificateDigest>,
+        failure_prob: f64,
+    ) -> BTreeSet<CertificateDigest> {
         std::iter::from_fn(|| {
             let f: f64 = rand::thread_rng().gen();
             if f > failure_prob {

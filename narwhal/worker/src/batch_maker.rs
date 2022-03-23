@@ -4,11 +4,13 @@
 use crate::{quorum_waiter::QuorumWaiterMessage, worker::WorkerMessage};
 use bytes::Bytes;
 use crypto::traits::VerifyingKey;
-#[cfg(feature = "benchmark")]
-use crypto::Digest;
+
 #[cfg(feature = "benchmark")]
 use ed25519_dalek::{Digest as _, Sha512};
 use network::ReliableSender;
+#[cfg(feature = "benchmark")]
+use primary::BatchDigest;
+use primary::{Batch, Transaction};
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto as _;
 use std::net::SocketAddr;
@@ -22,9 +24,6 @@ use tracing::info;
 #[cfg(test)]
 #[path = "tests/batch_maker_tests.rs"]
 pub mod batch_maker_tests;
-
-pub type Transaction = Vec<u8>;
-pub type Batch = Vec<Transaction>;
 
 /// Assemble clients transactions into batches.
 pub struct BatchMaker<PublicKey> {
@@ -61,7 +60,7 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
                 rx_transaction,
                 tx_message,
                 workers_addresses,
-                current_batch: Batch::with_capacity(batch_size * 2),
+                current_batch: Batch(Vec::with_capacity(batch_size * 2)),
                 current_batch_size: 0,
                 network: ReliableSender::new(),
             }
@@ -80,7 +79,7 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
                 // Assemble client transactions into batches of preset size.
                 Some(transaction) = self.rx_transaction.recv() => {
                     self.current_batch_size += transaction.len();
-                    self.current_batch.push(transaction);
+                    self.current_batch.0.push(transaction);
                     if self.current_batch_size >= self.batch_size {
                         self.seal().await;
                         timer.as_mut().reset(Instant::now() + Duration::from_millis(self.max_batch_delay));
@@ -89,7 +88,7 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
 
                 // If the timer triggers, seal the batch even if it contains few transactions.
                 () = &mut timer => {
-                    if !self.current_batch.is_empty() {
+                    if !self.current_batch.0.is_empty() {
                         self.seal().await;
                     }
                     timer.as_mut().reset(Instant::now() + Duration::from_millis(self.max_batch_delay));
@@ -110,6 +109,7 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
         #[cfg(feature = "benchmark")]
         let tx_ids: Vec<_> = self
             .current_batch
+            .0
             .iter()
             .filter(|tx| tx[0] == 0u8 && tx.len() > 8)
             .filter_map(|tx| tx[1..9].try_into().ok())
@@ -117,14 +117,14 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
 
         // Serialize the batch.
         self.current_batch_size = 0;
-        let batch: Vec<_> = self.current_batch.drain(..).collect();
+        let batch: Batch = Batch(self.current_batch.0.drain(..).collect());
         let message = WorkerMessage::<PublicKey>::Batch(batch);
         let serialized = bincode::serialize(&message).expect("Failed to serialize our own batch");
 
         #[cfg(feature = "benchmark")]
         {
             // NOTE: This is one extra hash that is only needed to print the following log entries.
-            let digest = Digest::new(
+            let digest = BatchDigest::new(
                 Sha512::digest(&serialized).as_slice()[..32]
                     .try_into()
                     .unwrap(),

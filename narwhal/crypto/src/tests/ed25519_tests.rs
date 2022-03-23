@@ -13,6 +13,8 @@ use rand::{rngs::StdRng, SeedableRng as _};
 use signature::{Signature, Signer, Verifier};
 
 impl Hash for &[u8] {
+    type TypedDigest = Digest;
+
     fn digest(&self) -> Digest {
         Digest(Sha512::digest(self).as_slice()[..32].try_into().unwrap())
     }

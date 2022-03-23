@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
 use config::{Committee, WorkerId};
-use crypto::{traits::VerifyingKey, Digest};
+use crypto::traits::VerifyingKey;
 use network::SimpleSender;
+use primary::BatchDigest;
 use store::Store;
 use tokio::sync::mpsc::Receiver;
 use tracing::{error, warn};
@@ -22,9 +23,9 @@ pub struct Helper<PublicKey: VerifyingKey> {
     /// The committee information.
     committee: Committee<PublicKey>,
     /// The persistent storage.
-    store: Store<Digest, SerializedBatchMessage>,
+    store: Store<BatchDigest, SerializedBatchMessage>,
     /// Input channel to receive batch requests.
-    rx_request: Receiver<(Vec<Digest>, PublicKey)>,
+    rx_request: Receiver<(Vec<BatchDigest>, PublicKey)>,
     /// A network sender to send the batches to the other workers.
     network: SimpleSender,
 }
@@ -33,8 +34,8 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
     pub fn spawn(
         id: WorkerId,
         committee: Committee<PublicKey>,
-        store: Store<Digest, SerializedBatchMessage>,
-        rx_request: Receiver<(Vec<Digest>, PublicKey)>,
+        store: Store<BatchDigest, SerializedBatchMessage>,
+        rx_request: Receiver<(Vec<BatchDigest>, PublicKey)>,
     ) {
         tokio::spawn(async move {
             Self {

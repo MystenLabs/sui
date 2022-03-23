@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::worker::SerializedWorkerPrimaryMessage;
 use config::WorkerId;
-use crypto::Digest;
+
 use ed25519_dalek::{Digest as _, Sha512};
-use primary::WorkerPrimaryMessage;
+use primary::{BatchDigest, WorkerPrimaryMessage};
 use std::convert::TryInto;
 use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -25,7 +25,7 @@ impl Processor {
         // Our worker's id.
         id: WorkerId,
         // The persistent storage.
-        store: Store<Digest, SerializedBatchMessage>,
+        store: Store<BatchDigest, SerializedBatchMessage>,
         // Input channel to receive batches.
         mut rx_batch: Receiver<SerializedBatchMessage>,
         // Output channel to send out batches' digests.
@@ -37,7 +37,7 @@ impl Processor {
             while let Some(batch) = rx_batch.recv().await {
                 // Hash the batch.
                 let digest =
-                    Digest::new(Sha512::digest(&batch).as_slice()[..32].try_into().unwrap());
+                    BatchDigest::new(Sha512::digest(&batch).as_slice()[..32].try_into().unwrap());
 
                 // Store the batch.
                 store.write(digest.clone(), batch).await;

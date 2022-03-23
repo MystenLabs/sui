@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    messages::{Certificate, Header, Vote},
+    messages::{BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Vote},
     primary::PayloadToken,
 };
 use bytes::Bytes;
@@ -123,9 +123,10 @@ pub fn header() -> Header<Ed25519PublicKey> {
         ..Header::default()
     };
 
+    let header_digest = header.digest();
     Header {
-        id: header.digest(),
-        signature: kp.sign(header.digest().as_ref()),
+        id: header_digest.clone(),
+        signature: kp.sign(Digest::from(header_digest).as_ref()),
         ..header
     }
 }
@@ -144,9 +145,10 @@ pub fn headers() -> Vec<Header<Ed25519PublicKey>> {
                     .collect(),
                 ..Header::default()
             };
+            let header_digest = header.digest();
             Header {
-                id: header.digest(),
-                signature: kp.sign(header.digest().as_ref()),
+                id: header_digest.clone(),
+                signature: kp.sign(Digest::from(header_digest).as_ref()),
                 ..header
             }
         })
@@ -155,10 +157,10 @@ pub fn headers() -> Vec<Header<Ed25519PublicKey>> {
 
 pub fn fixture_header_with_payload(number_of_batches: u8) -> Header<Ed25519PublicKey> {
     let kp = keys().pop().unwrap();
-    let mut payload: BTreeMap<Digest, WorkerId> = BTreeMap::new();
+    let mut payload: BTreeMap<BatchDigest, WorkerId> = BTreeMap::new();
 
     for i in 0..number_of_batches {
-        let batch_digest = Digest::new(
+        let batch_digest = BatchDigest(
             Sha512::digest(vec![10u8, 5u8, 8u8, 20u8, i].as_slice()).as_slice()[..32]
                 .try_into()
                 .unwrap(),
@@ -176,10 +178,10 @@ pub fn fixture_header_with_payload(number_of_batches: u8) -> Header<Ed25519Publi
         payload,
         ..Header::default()
     };
-
+    let header_digest = header.digest();
     Header {
-        id: header.digest(),
-        signature: kp.sign(header.digest().as_ref()),
+        id: header_digest.clone(),
+        signature: kp.sign(Digest::from(header_digest).as_ref()),
         ..header
     }
 }
@@ -197,7 +199,7 @@ pub fn votes(header: &Header<Ed25519PublicKey>) -> Vec<Vote<Ed25519PublicKey>> {
                 signature: Ed25519Signature::default(),
             };
             Vote {
-                signature: kp.sign(vote.digest().as_ref()),
+                signature: kp.sign(Digest::from(vote.digest()).as_ref()),
                 ..vote
             }
         })
@@ -233,18 +235,18 @@ pub fn listener(address: SocketAddr) -> JoinHandle<Bytes> {
 }
 
 pub fn create_db_stores() -> (
-    Store<Digest, Header<Ed25519PublicKey>>,
-    Store<Digest, Certificate<Ed25519PublicKey>>,
-    Store<(Digest, WorkerId), PayloadToken>,
+    Store<HeaderDigest, Header<Ed25519PublicKey>>,
+    Store<CertificateDigest, Certificate<Ed25519PublicKey>>,
+    Store<(BatchDigest, WorkerId), PayloadToken>,
 ) {
     // Create a new test store.
     let rocksdb = rocks::open_cf(temp_dir(), None, &[HEADERS_CF, CERTIFICATES_CF, PAYLOAD_CF])
         .expect("Failed creating database");
 
     let (header_map, certificate_map, payload_map) = reopen!(&rocksdb,
-        HEADERS_CF;<Digest, Header<Ed25519PublicKey>>,
-        CERTIFICATES_CF;<Digest, Certificate<Ed25519PublicKey>>,
-        PAYLOAD_CF;<(Digest, WorkerId), PayloadToken>);
+        HEADERS_CF;<HeaderDigest, Header<Ed25519PublicKey>>,
+        CERTIFICATES_CF;<CertificateDigest, Certificate<Ed25519PublicKey>>,
+        PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>);
 
     (
         Store::new(header_map),

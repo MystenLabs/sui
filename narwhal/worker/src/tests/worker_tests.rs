@@ -20,9 +20,12 @@ async fn handle_clients_transactions() {
     };
 
     // Create a new test store.
-    let db =
-        rocks::DBMap::<Digest, SerializedBatchMessage>::open(temp_dir(), None, Some("batches"))
-            .unwrap();
+    let db = rocks::DBMap::<BatchDigest, SerializedBatchMessage>::open(
+        temp_dir(),
+        None,
+        Some("batches"),
+    )
+    .unwrap();
     let store = Store::new(db);
 
     // Spawn a `Worker` instance.

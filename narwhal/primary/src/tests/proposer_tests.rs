@@ -59,7 +59,7 @@ async fn propose_payload() {
 
     // Send enough digests for the header payload.
     let name_bytes: [u8; 32] = *name.0.as_bytes();
-    let digest = Digest::new(name_bytes);
+    let digest = BatchDigest(name_bytes);
     let worker_id = 0;
     tx_our_digests
         .send((digest.clone(), worker_id))

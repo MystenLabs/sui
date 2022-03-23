@@ -134,7 +134,7 @@ async fn test_request_batch_not_found() {
     );
 
     // The non existing batch id
-    let expected_batch_id = Digest::default();
+    let expected_batch_id = BatchDigest::default();
 
     // WHEN we send a message to retrieve the batch that doesn't exist
     let message = PrimaryWorkerMessage::<Ed25519PublicKey>::RequestBatch(expected_batch_id.clone());

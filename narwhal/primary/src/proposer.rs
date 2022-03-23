@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    messages::{Certificate, Header},
+    messages::{BatchDigest, Certificate, CertificateDigest, Header},
     primary::Round,
 };
 use config::{Committee, WorkerId};
@@ -31,18 +31,18 @@ pub struct Proposer<PublicKey: VerifyingKey> {
     max_header_delay: u64,
 
     /// Receives the parents to include in the next header (along with their round number).
-    rx_core: Receiver<(Vec<Digest>, Round)>,
+    rx_core: Receiver<(Vec<CertificateDigest>, Round)>,
     /// Receives the batches' digests from our workers.
-    rx_workers: Receiver<(Digest, WorkerId)>,
+    rx_workers: Receiver<(BatchDigest, WorkerId)>,
     /// Sends newly created headers to the `Core`.
     tx_core: Sender<Header<PublicKey>>,
 
     /// The current round of the dag.
     round: Round,
     /// Holds the certificates' ids waiting to be included in the next header.
-    last_parents: Vec<Digest>,
+    last_parents: Vec<CertificateDigest>,
     /// Holds the batches' digests waiting to be included in the next header.
-    digests: Vec<(Digest, WorkerId)>,
+    digests: Vec<(BatchDigest, WorkerId)>,
     /// Keeps track of the size (in bytes) of batches' digests that we received so far.
     payload_size: usize,
 }
@@ -54,8 +54,8 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
         signature_service: SignatureService<PublicKey::Sig>,
         header_size: usize,
         max_header_delay: u64,
-        rx_core: Receiver<(Vec<Digest>, Round)>,
-        rx_workers: Receiver<(Digest, WorkerId)>,
+        rx_core: Receiver<(Vec<CertificateDigest>, Round)>,
+        rx_workers: Receiver<(BatchDigest, WorkerId)>,
         tx_core: Sender<Header<PublicKey>>,
     ) {
         let genesis = Certificate::genesis(committee)
@@ -147,7 +147,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
                     self.last_parents = parents;
                 }
                 Some((digest, worker_id)) = self.rx_workers.recv() => {
-                    self.payload_size += digest.size();
+                    self.payload_size += Digest::from(digest.clone()).size();
                     self.digests.push((digest, worker_id));
                 }
                 () = &mut timer => {

@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::primary::Round;
+use crate::{messages::HeaderDigest, primary::Round};
 use crypto::{CryptoError, Digest};
 use store::StoreError;
 use thiserror::Error;
@@ -39,7 +39,7 @@ pub enum DagError {
     InvalidHeaderId,
 
     #[error("Malformed header {0}")]
-    MalformedHeader(Digest),
+    MalformedHeader(HeaderDigest),
 
     #[error("Received message from unknown authority {0}")]
     UnknownAuthority(String),
@@ -48,13 +48,13 @@ pub enum DagError {
     AuthorityReuse(String),
 
     #[error("Received unexpected vote fo header {0}")]
-    UnexpectedVote(Digest),
+    UnexpectedVote(HeaderDigest),
 
     #[error("Received certificate without a quorum")]
     CertificateRequiresQuorum,
 
     #[error("Parents of header {0} are not a quorum")]
-    HeaderRequiresQuorum(Digest),
+    HeaderRequiresQuorum(HeaderDigest),
 
     #[error("Message {0} (round {1}) too old")]
     TooOld(Digest, Round),

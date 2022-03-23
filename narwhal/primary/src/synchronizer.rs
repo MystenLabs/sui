@@ -4,11 +4,11 @@
 use crate::{
     error::DagResult,
     header_waiter::WaiterMessage,
-    messages::{Certificate, Header},
+    messages::{BatchDigest, Certificate, CertificateDigest, Header},
     primary::PayloadToken,
 };
 use config::{Committee, WorkerId};
-use crypto::{traits::VerifyingKey, Digest, Hash as _};
+use crypto::{traits::VerifyingKey, Hash as _};
 use std::collections::HashMap;
 use store::Store;
 use tokio::sync::mpsc::Sender;
@@ -19,22 +19,22 @@ pub struct Synchronizer<PublicKey: VerifyingKey> {
     /// The public key of this primary.
     name: PublicKey,
     /// The persistent storage.
-    certificate_store: Store<Digest, Certificate<PublicKey>>,
-    payload_store: Store<(Digest, WorkerId), PayloadToken>,
+    certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     /// Send commands to the `HeaderWaiter`.
     tx_header_waiter: Sender<WaiterMessage<PublicKey>>,
     /// Send commands to the `CertificateWaiter`.
     tx_certificate_waiter: Sender<Certificate<PublicKey>>,
     /// The genesis and its digests.
-    genesis: Vec<(Digest, Certificate<PublicKey>)>,
+    genesis: Vec<(CertificateDigest, Certificate<PublicKey>)>,
 }
 
 impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
     pub fn new(
         name: PublicKey,
         committee: &Committee<PublicKey>,
-        certificate_store: Store<Digest, Certificate<PublicKey>>,
-        payload_store: Store<(Digest, WorkerId), PayloadToken>,
+        certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+        payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         tx_header_waiter: Sender<WaiterMessage<PublicKey>>,
         tx_certificate_waiter: Sender<Certificate<PublicKey>>,
     ) -> Self {

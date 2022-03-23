@@ -16,9 +16,10 @@ use crypto::{
     ed25519::{Ed25519KeyPair, Ed25519PublicKey},
     generate_production_keypair,
     traits::{KeyPair, VerifyingKey},
-    Digest,
 };
-use primary::{Certificate, Header, PayloadToken, Primary};
+use primary::{
+    BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, PayloadToken, Primary,
+};
 use store::{reopen, rocks, rocks::DBMap, Store};
 use tokio::sync::mpsc::{channel, Receiver};
 use tracing::{debug, subscriber::set_global_default};
@@ -132,10 +133,10 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
     .expect("Failed creating database");
 
     let (header_map, certificate_map, payload_map, batch_map) = reopen!(&rocksdb,
-        HEADERS_CF;<Digest, Header<Ed25519PublicKey>>,
-        CERTIFICATES_CF;<Digest, Certificate<Ed25519PublicKey>>,
-        PAYLOAD_CF;<(Digest, WorkerId), PayloadToken>,
-        BATCHES_CF;<Digest, Vec<u8>>);
+        HEADERS_CF;<HeaderDigest, Header<Ed25519PublicKey>>,
+        CERTIFICATES_CF;<CertificateDigest, Certificate<Ed25519PublicKey>>,
+        PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>,
+        BATCHES_CF;<BatchDigest, Vec<u8>>);
 
     // Channels the sequence of certificates.
     let (tx_output, rx_output) = channel(CHANNEL_CAPACITY);

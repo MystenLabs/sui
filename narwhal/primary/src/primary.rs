@@ -2,24 +2,25 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    block_waiter::{BatchMessage, BatchMessageError, BatchResult, BlockWaiter, Transaction},
+    block_waiter::{BatchMessage, BatchMessageError, BatchResult, BlockWaiter},
     certificate_waiter::CertificateWaiter,
     core::Core,
     error::DagError,
     garbage_collector::GarbageCollector,
     header_waiter::HeaderWaiter,
     helper::Helper,
-    messages::{Certificate, Header, Vote},
+    messages::{BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Vote},
     payload_receiver::PayloadReceiver,
     proposer::Proposer,
     synchronizer::Synchronizer,
+    Batch,
 };
 use async_trait::async_trait;
 use bytes::Bytes;
 use config::{Committee, Parameters, WorkerId};
 use crypto::{
     traits::{EncodeDecodeBase64, Signer, VerifyingKey},
-    Digest, SignatureService,
+    SignatureService,
 };
 use futures::sink::SinkExt as _;
 use network::{MessageHandler, Receiver as NetworkReceiver, Writer};
@@ -46,34 +47,34 @@ pub enum PrimaryMessage<PublicKey: VerifyingKey> {
     Header(Header<PublicKey>),
     Vote(Vote<PublicKey>),
     Certificate(Certificate<PublicKey>),
-    CertificatesRequest(Vec<Digest>, /* requestor */ PublicKey),
+    CertificatesRequest(Vec<CertificateDigest>, /* requestor */ PublicKey),
 }
 
 /// The messages sent by the primary to its workers.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum PrimaryWorkerMessage<PublicKey> {
     /// The primary indicates that the worker need to sync the target missing batches.
-    Synchronize(Vec<Digest>, /* target */ PublicKey),
+    Synchronize(Vec<BatchDigest>, /* target */ PublicKey),
     /// The primary indicates a round update.
     Cleanup(Round),
     /// The primary requests a batch from the worker
-    RequestBatch(Digest),
+    RequestBatch(BatchDigest),
     /// Delete the batches, dictated from the provided vector of digest, from the worker node
-    DeleteBatches(Vec<Digest>),
+    DeleteBatches(Vec<BatchDigest>),
 }
 
 /// The messages sent by the workers to their primary.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum WorkerPrimaryMessage {
     /// The worker indicates it sealed a new batch.
-    OurBatch(Digest, WorkerId),
+    OurBatch(BatchDigest, WorkerId),
     /// The worker indicates it received a batch's digest from another authority.
-    OthersBatch(Digest, WorkerId),
+    OthersBatch(BatchDigest, WorkerId),
     /// The worker sends a requested batch
-    RequestedBatch(Digest, Vec<Transaction>),
+    RequestedBatch(BatchDigest, Batch),
     /// When batches are successfully deleted, this message is sent dictating the
     /// batches that have been deleted from the worker.
-    DeletedBatches(Vec<Digest>),
+    DeletedBatches(Vec<BatchDigest>),
     /// An error has been returned by worker
     Error(WorkerPrimaryError),
 }
@@ -81,10 +82,10 @@ pub enum WorkerPrimaryMessage {
 #[derive(Debug, Serialize, Deserialize, Error, Clone, PartialEq)]
 pub enum WorkerPrimaryError {
     #[error("Batch with id {0} has not been found")]
-    RequestedBatchNotFound(Digest),
+    RequestedBatchNotFound(BatchDigest),
 
     #[error("An error occurred while deleting batches. None deleted")]
-    ErrorWhileDeletingBatches(Vec<Digest>),
+    ErrorWhileDeletingBatches(Vec<BatchDigest>),
 }
 
 // A type alias marking the "payload" tokens sent by workers to their primary as batch acknowledgements
@@ -100,9 +101,9 @@ impl Primary {
         signer: Signatory,
         committee: Committee<PublicKey>,
         parameters: Parameters,
-        header_store: Store<Digest, Header<PublicKey>>,
-        certificate_store: Store<Digest, Certificate<PublicKey>>,
-        payload_store: Store<(Digest, WorkerId), PayloadToken>,
+        header_store: Store<HeaderDigest, Header<PublicKey>>,
+        certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+        payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         tx_consensus: Sender<Certificate<PublicKey>>,
         rx_consensus: Receiver<Certificate<PublicKey>>,
     ) {
@@ -184,7 +185,7 @@ impl Primary {
         Core::spawn(
             name.clone(),
             committee.clone(),
-            header_store.clone(),
+            header_store,
             certificate_store.clone(),
             synchronizer,
             signature_service.clone(),
@@ -223,7 +224,7 @@ impl Primary {
         HeaderWaiter::spawn(
             name.clone(),
             committee.clone(),
-            header_store,
+            certificate_store.clone(),
             payload_store,
             consensus_round.clone(),
             parameters.gc_depth,
@@ -276,7 +277,7 @@ impl Primary {
 #[derive(Clone)]
 struct PrimaryReceiverHandler<PublicKey: VerifyingKey> {
     tx_primary_messages: Sender<PrimaryMessage<PublicKey>>,
-    tx_cert_requests: Sender<(Vec<Digest>, PublicKey)>,
+    tx_cert_requests: Sender<(Vec<CertificateDigest>, PublicKey)>,
 }
 
 #[async_trait]
@@ -305,8 +306,8 @@ impl<PublicKey: VerifyingKey> MessageHandler for PrimaryReceiverHandler<PublicKe
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
 struct WorkerReceiverHandler {
-    tx_our_digests: Sender<(Digest, WorkerId)>,
-    tx_others_digests: Sender<(Digest, WorkerId)>,
+    tx_our_digests: Sender<(BatchDigest, WorkerId)>,
+    tx_others_digests: Sender<(BatchDigest, WorkerId)>,
     tx_batches: Sender<BatchResult>,
 }
 

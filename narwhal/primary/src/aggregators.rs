@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     error::{DagError, DagResult},
-    messages::{Certificate, Header, Vote},
+    messages::{Certificate, CertificateDigest, Header, Vote},
 };
 use config::{Committee, Stake};
 use crypto::{
     traits::{EncodeDecodeBase64, VerifyingKey},
-    Digest, Hash as _,
+    Hash as _,
 };
 use std::collections::HashSet;
 
@@ -58,7 +58,7 @@ impl<PublicKey: VerifyingKey> VotesAggregator<PublicKey> {
 /// Aggregate certificates and check if we reach a quorum.
 pub struct CertificatesAggregator<PublicKey: VerifyingKey> {
     weight: Stake,
-    certificates: Vec<Digest>,
+    certificates: Vec<CertificateDigest>,
     used: HashSet<PublicKey>,
 }
 
@@ -75,7 +75,7 @@ impl<PublicKey: VerifyingKey> CertificatesAggregator<PublicKey> {
         &mut self,
         certificate: Certificate<PublicKey>,
         committee: &Committee<PublicKey>,
-    ) -> Option<Vec<Digest>> {
+    ) -> Option<Vec<CertificateDigest>> {
         let origin = certificate.origin();
 
         // Ensure it is the first time this authority votes.

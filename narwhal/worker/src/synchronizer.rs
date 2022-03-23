@@ -7,10 +7,10 @@ use crate::{
 };
 use bytes::Bytes;
 use config::{Committee, WorkerId};
-use crypto::{traits::VerifyingKey, Digest};
+use crypto::traits::VerifyingKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::SimpleSender;
-use primary::{PrimaryWorkerMessage, WorkerPrimaryError, WorkerPrimaryMessage};
+use primary::{BatchDigest, PrimaryWorkerMessage, WorkerPrimaryError, WorkerPrimaryMessage};
 use std::{
     collections::HashMap,
     time::{SystemTime, UNIX_EPOCH},
@@ -38,7 +38,7 @@ pub struct Synchronizer<PublicKey: VerifyingKey> {
     /// The committee information.
     committee: Committee<PublicKey>,
     // The persistent storage.
-    store: Store<Digest, SerializedBatchMessage>,
+    store: Store<BatchDigest, SerializedBatchMessage>,
     /// The depth of the garbage collection.
     gc_depth: Round,
     /// The delay to wait before re-trying to send sync requests.
@@ -55,7 +55,7 @@ pub struct Synchronizer<PublicKey: VerifyingKey> {
     /// Keeps the digests (of batches) that are waiting to be processed by the primary. Their
     /// processing will resume when we get the missing batches in the store or we no longer need them.
     /// It also keeps the round number and a time stamp (`u128`) of each request we sent.
-    pending: HashMap<Digest, (Round, Sender<()>, u128)>,
+    pending: HashMap<BatchDigest, (Round, Sender<()>, u128)>,
     // Output channel to send out the batch requests.
     tx_primary: Sender<SerializedWorkerPrimaryMessage>,
 }
@@ -65,7 +65,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
         name: PublicKey,
         id: WorkerId,
         committee: Committee<PublicKey>,
-        store: Store<Digest, SerializedBatchMessage>,
+        store: Store<BatchDigest, SerializedBatchMessage>,
         gc_depth: Round,
         sync_retry_delay: u64,
         sync_retry_nodes: usize,
@@ -95,11 +95,11 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
     /// Helper function. It waits for a batch to become available in the storage
     /// and then delivers its digest.
     async fn waiter(
-        missing: Digest,
-        store: Store<Digest, SerializedBatchMessage>,
-        deliver: Digest,
+        missing: BatchDigest,
+        store: Store<BatchDigest, SerializedBatchMessage>,
+        deliver: BatchDigest,
         mut handler: Receiver<()>,
-    ) -> Result<Option<Digest>, StoreError> {
+    ) -> Result<Option<BatchDigest>, StoreError> {
         tokio::select! {
             result = store.notify_read(missing) => {
                 result.map(|_| Some(deliver))
@@ -241,7 +241,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
         }
     }
 
-    async fn handle_request_batch(&mut self, digest: Digest) {
+    async fn handle_request_batch(&mut self, digest: BatchDigest) {
         let message = match self.store.read(digest.clone()).await {
             Ok(Some(batch_serialised)) => {
                 let batch = match bincode::deserialize(&batch_serialised).unwrap() {
@@ -250,7 +250,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                         panic!("Wrong type has been stored!");
                     }
                 };
-                WorkerPrimaryMessage::RequestedBatch(digest.clone(), batch.to_vec())
+                WorkerPrimaryMessage::RequestedBatch(digest.clone(), batch)
             }
             _ => WorkerPrimaryMessage::Error(WorkerPrimaryError::RequestedBatchNotFound(
                 digest.clone(),
@@ -264,7 +264,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
             .expect("Failed to send message to primary channel");
     }
 
-    async fn handle_delete_batches(&mut self, digests: Vec<Digest>) {
+    async fn handle_delete_batches(&mut self, digests: Vec<BatchDigest>) {
         let message = match self.store.remove_all(digests.clone()).await {
             Ok(_) => WorkerPrimaryMessage::DeletedBatches(digests),
             Err(err) => {

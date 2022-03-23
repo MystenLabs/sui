@@ -29,7 +29,9 @@ mod common;
 
 pub use crate::{
     block_waiter::{BatchMessage, BlockCommand, BlockWaiter},
-    messages::{Certificate, Header},
+    messages::{
+        Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Transaction,
+    },
     primary::{
         PayloadToken, Primary, PrimaryWorkerMessage, Round, WorkerPrimaryError,
         WorkerPrimaryMessage,

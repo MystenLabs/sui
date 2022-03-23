@@ -1,19 +1,13 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    batch_maker::{Batch, Transaction},
-    processor::SerializedBatchMessage,
-    worker::WorkerMessage,
-};
+use crate::{processor::SerializedBatchMessage, worker::WorkerMessage};
 use bytes::Bytes;
 use config::{Authority, Committee, PrimaryAddresses, WorkerAddresses};
-use crypto::{
-    ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
-    Digest,
-};
+use crypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
 use ed25519_dalek::{Digest as _, Sha512};
 use futures::{sink::SinkExt as _, stream::StreamExt as _};
+use primary::{Batch, BatchDigest, Transaction};
 use rand::{rngs::StdRng, SeedableRng as _};
 use std::{convert::TryInto as _, net::SocketAddr};
 use store::{rocks, Store};
@@ -105,7 +99,7 @@ pub fn transaction() -> Transaction {
 
 // Fixture
 pub fn batch() -> Batch {
-    vec![transaction(), transaction()]
+    Batch(vec![transaction(), transaction()])
 }
 
 pub fn batch_with_transactions(num_of_transactions: usize) -> Batch {
@@ -115,7 +109,7 @@ pub fn batch_with_transactions(num_of_transactions: usize) -> Batch {
         transactions.push(transaction());
     }
 
-    transactions
+    Batch(transactions)
 }
 
 /// generate multiple fixture batches. The number of generated batches
@@ -141,13 +135,13 @@ pub fn serialise_batch(batch: Batch) -> Vec<u8> {
 }
 
 // Fixture
-pub fn batch_digest() -> Digest {
+pub fn batch_digest() -> BatchDigest {
     resolve_batch_digest(serialized_batch())
 }
 
 // Fixture
-pub fn resolve_batch_digest(batch_serialised: Vec<u8>) -> Digest {
-    Digest::new(
+pub fn resolve_batch_digest(batch_serialised: Vec<u8>) -> BatchDigest {
+    BatchDigest::new(
         Sha512::digest(&batch_serialised).as_slice()[..32]
             .try_into()
             .unwrap(),
@@ -173,9 +167,12 @@ pub fn listener(address: SocketAddr, expected: Option<Bytes>) -> JoinHandle<()> 
     })
 }
 
-pub fn open_batch_store() -> Store<Digest, SerializedBatchMessage> {
-    let db =
-        rocks::DBMap::<Digest, SerializedBatchMessage>::open(temp_dir(), None, Some(BATCHES_CF))
-            .unwrap();
+pub fn open_batch_store() -> Store<BatchDigest, SerializedBatchMessage> {
+    let db = rocks::DBMap::<BatchDigest, SerializedBatchMessage>::open(
+        temp_dir(),
+        None,
+        Some(BATCHES_CF),
+    )
+    .unwrap();
     Store::new(db)
 }

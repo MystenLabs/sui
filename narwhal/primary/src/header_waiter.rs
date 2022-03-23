@@ -3,12 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     error::{DagError, DagResult},
-    messages::Header,
+    messages::{BatchDigest, CertificateDigest, Header, HeaderDigest},
     primary::{PayloadToken, PrimaryMessage, PrimaryWorkerMessage, Round},
+    Certificate,
 };
 use bytes::Bytes;
 use config::{Committee, WorkerId};
-use crypto::{traits::VerifyingKey, Digest};
+use crypto::traits::VerifyingKey;
 use futures::{
     future::{try_join_all, BoxFuture},
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
@@ -37,8 +38,8 @@ const TIMER_RESOLUTION: u64 = 1_000;
 /// The commands that can be sent to the `Waiter`.
 #[derive(Debug)]
 pub enum WaiterMessage<PublicKey: VerifyingKey> {
-    SyncBatches(HashMap<Digest, WorkerId>, Header<PublicKey>),
-    SyncParents(Vec<Digest>, Header<PublicKey>),
+    SyncBatches(HashMap<BatchDigest, WorkerId>, Header<PublicKey>),
+    SyncParents(Vec<CertificateDigest>, Header<PublicKey>),
 }
 
 /// Waits for missing parent certificates and batches' digests.
@@ -47,10 +48,10 @@ pub struct HeaderWaiter<PublicKey: VerifyingKey> {
     name: PublicKey,
     /// The committee information.
     committee: Committee<PublicKey>,
-    /// The persistent storage for headers.
-    header_store: Store<Digest, Header<PublicKey>>,
+    /// The persistent storage for parent Certificates.
+    header_store: Store<CertificateDigest, Certificate<PublicKey>>,
     /// The persistent storage for payload markers from workers.
-    payload_store: Store<(Digest, WorkerId), PayloadToken>,
+    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     /// The current consensus round (used for cleanup).
     consensus_round: Arc<AtomicU64>,
     /// The depth of the garbage collector.
@@ -69,21 +70,21 @@ pub struct HeaderWaiter<PublicKey: VerifyingKey> {
     network: SimpleSender,
     /// Keeps the digests of the all certificates for which we sent a sync request,
     /// along with a time stamp (`u128`) indicating when we sent the request.
-    parent_requests: HashMap<Digest, (Round, u128)>,
+    parent_requests: HashMap<CertificateDigest, (Round, u128)>,
     /// Keeps the digests of the all TX batches for which we sent a sync request,
     /// similarly to `header_requests`.
-    batch_requests: HashMap<Digest, Round>,
+    batch_requests: HashMap<BatchDigest, Round>,
     /// List of digests (headers or tx batch) that are waiting to be processed.
     /// Their processing will resume when we get all their dependencies.
-    pending: HashMap<Digest, (Round, Sender<()>)>,
+    pending: HashMap<HeaderDigest, (Round, Sender<()>)>,
 }
 
 impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
     pub fn spawn(
         name: PublicKey,
         committee: Committee<PublicKey>,
-        header_store: Store<Digest, Header<PublicKey>>,
-        payload_store: Store<(Digest, WorkerId), PayloadToken>,
+        header_store: Store<CertificateDigest, Certificate<PublicKey>>,
+        payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         consensus_round: Arc<AtomicU64>,
         gc_depth: Round,
         sync_retry_delay: u64,

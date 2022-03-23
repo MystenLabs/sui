@@ -4,14 +4,14 @@
 use crate::{
     aggregators::{CertificatesAggregator, VotesAggregator},
     error::{DagError, DagResult},
-    messages::{Certificate, Header, Vote},
+    messages::{Certificate, CertificateDigest, Header, HeaderDigest, Vote},
     primary::{PrimaryMessage, Round},
     synchronizer::Synchronizer,
 };
 use async_recursion::async_recursion;
 use bytes::Bytes;
 use config::Committee;
-use crypto::{traits::VerifyingKey, Digest, Hash as _, SignatureService};
+use crypto::{traits::VerifyingKey, Hash as _, SignatureService};
 use network::{CancelHandler, ReliableSender};
 use std::{
     collections::{HashMap, HashSet},
@@ -34,9 +34,9 @@ pub struct Core<PublicKey: VerifyingKey> {
     /// The committee information.
     committee: Committee<PublicKey>,
     /// The persistent storage keyed to headers.
-    header_store: Store<Digest, Header<PublicKey>>,
+    header_store: Store<HeaderDigest, Header<PublicKey>>,
     /// The persistent storage keyed to certificates.
-    certificate_store: Store<Digest, Certificate<PublicKey>>,
+    certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
     /// Handles synchronization with other nodes and our workers.
     synchronizer: Synchronizer<PublicKey>,
     /// Service to sign headers.
@@ -57,14 +57,14 @@ pub struct Core<PublicKey: VerifyingKey> {
     /// Output all certificates to the consensus layer.
     tx_consensus: Sender<Certificate<PublicKey>>,
     /// Send valid a quorum of certificates' ids to the `Proposer` (along with their round).
-    tx_proposer: Sender<(Vec<Digest>, Round)>,
+    tx_proposer: Sender<(Vec<CertificateDigest>, Round)>,
 
     /// The last garbage collected round.
     gc_round: Round,
     /// The authors of the last voted headers.
     last_voted: HashMap<Round, HashSet<PublicKey>>,
     /// The set of headers we are currently processing.
-    processing: HashMap<Round, HashSet<Digest>>,
+    processing: HashMap<Round, HashSet<HeaderDigest>>,
     /// The last header we proposed (for which we are waiting votes).
     current_header: Header<PublicKey>,
     /// Aggregates votes into a certificate.
@@ -81,8 +81,8 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     pub fn spawn(
         name: PublicKey,
         committee: Committee<PublicKey>,
-        header_store: Store<Digest, Header<PublicKey>>,
-        certificate_store: Store<Digest, Certificate<PublicKey>>,
+        header_store: Store<HeaderDigest, Header<PublicKey>>,
+        certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
         synchronizer: Synchronizer<PublicKey>,
         signature_service: SignatureService<PublicKey::Sig>,
         consensus_round: Arc<AtomicU64>,
@@ -92,7 +92,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         rx_certificate_waiter: Receiver<Certificate<PublicKey>>,
         rx_proposer: Receiver<Header<PublicKey>>,
         tx_consensus: Sender<Certificate<PublicKey>>,
-        tx_proposer: Sender<(Vec<Digest>, Round)>,
+        tx_proposer: Sender<(Vec<CertificateDigest>, Round)>,
     ) {
         tokio::spawn(async move {
             Self {
@@ -329,7 +329,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     fn sanitize_header(&mut self, header: &Header<PublicKey>) -> DagResult<()> {
         ensure!(
             self.gc_round < header.round,
-            DagError::TooOld(header.id.clone(), header.round)
+            DagError::TooOld(header.id.clone().into(), header.round)
         );
 
         // Verify the header's signature.
@@ -343,7 +343,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     fn sanitize_vote(&mut self, vote: &Vote<PublicKey>) -> DagResult<()> {
         ensure!(
             self.current_header.round <= vote.round,
-            DagError::TooOld(vote.digest(), vote.round)
+            DagError::TooOld(vote.digest().into(), vote.round)
         );
 
         // Ensure we receive a vote on the expected header.
@@ -361,7 +361,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     fn sanitize_certificate(&mut self, certificate: &Certificate<PublicKey>) -> DagResult<()> {
         ensure!(
             self.gc_round < certificate.round(),
-            DagError::TooOld(certificate.digest(), certificate.round())
+            DagError::TooOld(certificate.digest().into(), certificate.round())
         );
 
         // Verify the certificate (and the embedded header).

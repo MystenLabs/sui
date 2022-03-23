@@ -6,14 +6,15 @@ use crate::{
     },
     common,
     common::{certificate, committee_with_base_port, create_db_stores, keys},
-    Certificate, PrimaryWorkerMessage,
+    messages::BatchDigest,
+    Batch, Certificate, PrimaryWorkerMessage,
 };
 use bincode::deserialize;
 use config::Committee;
 use crypto::{
     ed25519::Ed25519PublicKey,
     traits::{KeyPair, VerifyingKey},
-    Digest, Hash,
+    Hash,
 };
 
 use crate::block_waiter::BatchResult;
@@ -65,7 +66,7 @@ async fn test_successfully_retrieve_block() {
             batch_id.clone(),
             BatchMessage {
                 id: batch_id,
-                transactions: vec![vec![10u8, 5u8, 2u8], vec![8u8, 2u8, 3u8]],
+                transactions: Batch(vec![vec![10u8, 5u8, 2u8], vec![8u8, 2u8, 3u8]]),
             },
         );
     }
@@ -113,7 +114,7 @@ async fn test_successfully_retrieve_block() {
             assert_eq!(block.id, block_id.clone());
 
             for (_, batch) in expected_batch_messages {
-                assert_eq!(batch.transactions.len(), 2);
+                assert_eq!(batch.transactions.0.len(), 2);
             }
         },
         () = &mut timer => {
@@ -380,7 +381,7 @@ fn resolve_name_and_committee() -> (Ed25519PublicKey, Committee<Ed25519PublicKey
 // RequestBatch requests for the provided expected_batches.
 pub fn worker_listener<PublicKey: VerifyingKey>(
     address: SocketAddr,
-    expected_batches: HashMap<Digest, BatchMessage>,
+    expected_batches: HashMap<BatchDigest, BatchMessage>,
     tx_batch_messages: Sender<BatchResult>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {

@@ -26,7 +26,7 @@ async fn make_batch() {
     tx_transaction.send(transaction()).await.unwrap();
 
     // Ensure the batch is as expected.
-    let expected_batch = vec![transaction(), transaction()];
+    let expected_batch = Batch(vec![transaction(), transaction()]);
     let QuorumWaiterMessage { batch, handlers: _ } = rx_message.recv().await.unwrap();
     match bincode::deserialize(&batch).unwrap() {
         WorkerMessage::<Ed25519PublicKey>::Batch(batch) => assert_eq!(batch, expected_batch),
@@ -53,7 +53,7 @@ async fn batch_timeout() {
     tx_transaction.send(transaction()).await.unwrap();
 
     // Ensure the batch is as expected.
-    let expected_batch = vec![transaction()];
+    let expected_batch = Batch(vec![transaction()]);
     let QuorumWaiterMessage { batch, handlers: _ } = rx_message.recv().await.unwrap();
     match bincode::deserialize(&batch).unwrap() {
         WorkerMessage::<Ed25519PublicKey>::Batch(batch) => assert_eq!(batch, expected_batch),

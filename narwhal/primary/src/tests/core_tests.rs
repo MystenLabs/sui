@@ -2,9 +2,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::common::{
-    certificate, committee, committee_with_base_port, create_db_stores, header, headers, keys,
-    listener, votes,
+use crate::{
+    common::{
+        certificate, committee, committee_with_base_port, create_db_stores, header, headers, keys,
+        listener, votes,
+    },
+    BatchDigest,
 };
 use crypto::traits::KeyPair;
 use futures::future::try_join_all;
@@ -137,7 +140,7 @@ async fn process_header_missing_parent() {
 
     // Send a header to the core.
     let header = Header {
-        parents: [Digest::default()].iter().cloned().collect(),
+        parents: [CertificateDigest::default()].iter().cloned().collect(),
         ..header()
     };
     let id = header.id.clone();
@@ -198,7 +201,7 @@ async fn process_header_missing_payload() {
 
     // Send a header to the core.
     let header = Header {
-        payload: [(Digest::default(), 0)].iter().cloned().collect(),
+        payload: [(BatchDigest::default(), 0)].iter().cloned().collect(),
         ..header()
     };
     let id = header.id.clone();

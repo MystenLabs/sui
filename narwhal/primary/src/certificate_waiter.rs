@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     error::{DagError, DagResult},
-    messages::Certificate,
+    messages::{Certificate, CertificateDigest, HeaderDigest},
     primary::Round,
 };
-use crypto::{traits::VerifyingKey, Digest};
+use crypto::traits::VerifyingKey;
 use futures::{
     future::try_join_all,
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
@@ -26,7 +26,7 @@ use tracing::error;
 /// for further processing.
 pub struct CertificateWaiter<PublicKey: VerifyingKey> {
     /// The persistent storage.
-    store: Store<Digest, Certificate<PublicKey>>,
+    store: Store<CertificateDigest, Certificate<PublicKey>>,
     /// The current consensus round (used for cleanup).
     consensus_round: Arc<AtomicU64>,
     /// The depth of the garbage collector.
@@ -38,12 +38,12 @@ pub struct CertificateWaiter<PublicKey: VerifyingKey> {
     /// List of digests (certificates) that are waiting to be processed. Their processing will
     /// resume when we get all their dependencies. The map holds a cancellation `Sender`
     /// which we can use to give up on a certificate.
-    pending: HashMap<Digest, (Round, Sender<()>)>,
+    pending: HashMap<HeaderDigest, (Round, Sender<()>)>,
 }
 
 impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
     pub fn spawn(
-        store: Store<Digest, Certificate<PublicKey>>,
+        store: Store<CertificateDigest, Certificate<PublicKey>>,
         consensus_round: Arc<AtomicU64>,
         gc_depth: Round,
         rx_synchronizer: Receiver<Certificate<PublicKey>>,
@@ -66,8 +66,8 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
     /// Helper function. It waits for particular data to become available in the storage and then
     /// delivers the specified header.
     async fn waiter(
-        missing: Vec<Digest>,
-        store: &Store<Digest, Certificate<PublicKey>>,
+        missing: Vec<CertificateDigest>,
+        store: &Store<CertificateDigest, Certificate<PublicKey>>,
         deliver: Certificate<PublicKey>,
         mut cancel_handle: Receiver<()>,
     ) -> DagResult<Certificate<PublicKey>> {

@@ -40,12 +40,14 @@ pub mod traits;
 
 pub type CryptoError = ed25519_dalek::ed25519::Error;
 
+pub const DIGEST_LEN: usize = 32;
+
 /// Represents a hash digest (32 bytes).
 #[derive(Hash, PartialEq, Default, Eq, Clone, Deserialize, Serialize, Ord, PartialOrd)]
-pub struct Digest([u8; 32]);
+pub struct Digest([u8; DIGEST_LEN]);
 
 impl Digest {
-    pub fn new(val: [u8; 32]) -> Self {
+    pub fn new(val: [u8; DIGEST_LEN]) -> Self {
         Digest(val)
     }
 
@@ -78,7 +80,8 @@ impl AsRef<[u8]> for Digest {
 
 /// This trait is implemented by all messages that can be hashed.
 pub trait Hash {
-    fn digest(&self) -> Digest;
+    type TypedDigest: Into<Digest>;
+    fn digest(&self) -> Self::TypedDigest;
 }
 
 ////////////////////////////////////////////////////////////////

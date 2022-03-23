@@ -1,9 +1,13 @@
+use crate::Batch;
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{messages::Header, Certificate, PrimaryWorkerMessage};
+use crate::{
+    messages::{BatchDigest, CertificateDigest, Header},
+    Certificate, PrimaryWorkerMessage,
+};
 use bytes::Bytes;
 use config::Committee;
-use crypto::{traits::VerifyingKey, Digest};
+use crypto::traits::VerifyingKey;
 use futures::{
     future::{try_join_all, BoxFuture},
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
@@ -29,8 +33,6 @@ use Result::*;
 
 const BATCH_RETRIEVE_TIMEOUT: Duration = Duration::from_secs(1);
 
-pub type Transaction = Vec<u8>;
-
 #[cfg(test)]
 #[path = "tests/block_waiter_tests.rs"]
 pub mod block_waiter_tests;
@@ -43,7 +45,7 @@ pub enum BlockCommand {
     /// basically the Certificate digest id.
     #[allow(dead_code)]
     GetBlock {
-        id: Digest,
+        id: CertificateDigest,
         // The channel to send the results to.
         sender: Sender<BlockResult<GetBlockResponse>>,
     },
@@ -51,7 +53,7 @@ pub enum BlockCommand {
 
 #[derive(Clone, Debug)]
 pub struct GetBlockResponse {
-    id: Digest,
+    id: CertificateDigest,
     #[allow(dead_code)]
     batches: Vec<BatchMessage>,
 }
@@ -60,22 +62,22 @@ pub type BatchResult = Result<BatchMessage, BatchMessageError>;
 
 #[derive(Clone, Default, Debug)]
 pub struct BatchMessage {
-    pub id: Digest,
-    pub transactions: Vec<Transaction>,
+    pub id: BatchDigest,
+    pub transactions: Batch,
 }
 
 #[derive(Clone, Default, Debug)]
 // If worker couldn't send us a batch, this error message
 // should be passed to BlockWaiter.
 pub struct BatchMessageError {
-    pub id: Digest,
+    pub id: BatchDigest,
 }
 
 type BlockResult<T> = Result<T, BlockError>;
 
 #[derive(Debug, Clone)]
 pub struct BlockError {
-    id: Digest,
+    id: CertificateDigest,
     error: BlockErrorType,
 }
 
@@ -122,12 +124,11 @@ impl fmt::Display for BlockErrorType {
 /// # use tokio::sync::mpsc::{channel};
 /// # use crypto::Hash;
 /// # use std::env::temp_dir;
-/// # use crypto::Digest;
 /// # use crypto::ed25519::Ed25519PublicKey;
 /// # use config::Committee;
 /// # use std::collections::BTreeMap;
 /// # use primary::Certificate;
-/// # use primary::{BatchMessage, BlockWaiter, BlockCommand};
+/// # use primary::{BatchMessage, BlockWaiter, BlockCommand,BatchDigest, CertificateDigest, Batch};
 ///
 /// #[tokio::main(flavor = "current_thread")]
 /// # async fn main() {
@@ -138,7 +139,7 @@ impl fmt::Display for BlockErrorType {
 ///         .expect("Failed creating database");
 ///
 ///     let (certificate_map) = reopen!(&rocksdb,
-///             CERTIFICATES_CF;<Digest, Certificate<Ed25519PublicKey>>);
+///             CERTIFICATES_CF;<CertificateDigest, Certificate<Ed25519PublicKey>>);
 ///     let certificate_store = Store::new(certificate_map);
 ///
 ///     let (tx_commands, rx_commands) = channel(1);
@@ -169,7 +170,7 @@ impl fmt::Display for BlockErrorType {
 ///
 ///     // Dummy - we expect to receive the requested batches via another component
 ///     // and get fed via the tx_batches channel.
-///     tx_batches.send(Ok(BatchMessage{ id: Digest::default(), transactions: vec![] })).await;
+///     tx_batches.send(Ok(BatchMessage{ id: BatchDigest::default(), transactions: Batch(vec![]) })).await;
 ///
 ///     // Wait to receive the block output to the provided sender channel
 ///     match rx_get_block.recv().await {
@@ -193,7 +194,7 @@ pub struct BlockWaiter<PublicKey: VerifyingKey> {
     committee: Committee<PublicKey>,
 
     /// Storage that keeps the Certificates by their digest id.
-    certificate_store: Store<Digest, Certificate<PublicKey>>,
+    certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
 
     /// Receive all the requests to get a block
     rx_commands: Receiver<BlockCommand>,
@@ -203,7 +204,7 @@ pub struct BlockWaiter<PublicKey: VerifyingKey> {
     /// we have a result back - or timeout - we expect to remove
     /// the digest from the map. The key is the block id, and
     /// the value is the corresponding certificate.
-    pending_get_block: HashMap<Digest, Certificate<PublicKey>>,
+    pending_get_block: HashMap<CertificateDigest, Certificate<PublicKey>>,
 
     /// Network driver allowing to send messages.
     network: SimpleSender,
@@ -216,11 +217,11 @@ pub struct BlockWaiter<PublicKey: VerifyingKey> {
     /// On the key we hold the batch id (we assume it's globally unique).
     /// On the value we hold a tuple of the channel to communicate the result
     /// to and also a timestamp of when the request was sent.
-    tx_pending_batch: HashMap<Digest, (oneshot::Sender<BatchResult>, u128)>,
+    tx_pending_batch: HashMap<BatchDigest, (oneshot::Sender<BatchResult>, u128)>,
 
     /// A map that holds the channels we should notify with the
     /// GetBlock responses.
-    tx_get_block_map: HashMap<Digest, Vec<Sender<BlockResult<GetBlockResponse>>>>,
+    tx_get_block_map: HashMap<CertificateDigest, Vec<Sender<BlockResult<GetBlockResponse>>>>,
 }
 
 impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
@@ -229,7 +230,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
     pub fn spawn(
         name: PublicKey,
         committee: Committee<PublicKey>,
-        certificate_store: Store<Digest, Certificate<PublicKey>>,
+        certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
         rx_commands: Receiver<BlockCommand>,
         batch_receiver: Receiver<BatchResult>,
     ) {
@@ -383,7 +384,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
     async fn send_batch_requests(
         &mut self,
         header: Header<PublicKey>,
-    ) -> Vec<(Digest, oneshot::Receiver<BatchResult>)> {
+    ) -> Vec<(BatchDigest, oneshot::Receiver<BatchResult>)> {
         // Get the "now" time
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -426,7 +427,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
     }
 
     async fn handle_batch_message(&mut self, result: BatchResult) {
-        let batch_id = result.clone().map_or_else(|e| e.id, |r| r.id);
+        let batch_id: BatchDigest = result.clone().map_or_else(|e| e.id, |r| r.id);
 
         match self.tx_pending_batch.remove(&batch_id) {
             Some((sender, _)) => {
@@ -445,8 +446,8 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
     /// It gets the fetched batches and creates a GetBlockResponse ready
     /// to be sent back to the request.
     async fn wait_for_all_batches(
-        block_id: Digest,
-        batches_receivers: Vec<(Digest, oneshot::Receiver<BatchResult>)>,
+        block_id: CertificateDigest,
+        batches_receivers: Vec<(BatchDigest, oneshot::Receiver<BatchResult>)>,
     ) -> BlockResult<GetBlockResponse> {
         let waiting: Vec<_> = batches_receivers
             .into_iter()
@@ -463,7 +464,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
     /// Waits for a batch to be received. If batch is not received in time,
     /// then a timeout is yielded and an error is returned.
     async fn wait_for_batch(
-        block_id: Digest,
+        block_id: CertificateDigest,
         batch_receiver: oneshot::Receiver<BatchResult>,
     ) -> BlockResult<BatchMessage> {
         // ensure that we won't wait forever for a batch result to come
