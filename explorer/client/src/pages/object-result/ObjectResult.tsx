@@ -300,6 +300,7 @@ const ObjectResult = ((): JSX.Element => {
             .filter(([key, _]) => key !== 'display');
 
         const clickSetShowDescription = () => setShowDescription(!showDescription);
+        const clickSetShowProperties = () => setShowProperties(!showProperties);
         return (<>
             <div className={styles.resultbox}>
                 {data?.data.contents.display && (
@@ -414,9 +415,7 @@ const ObjectResult = ((): JSX.Element => {
                         <>
                             <h2
                                 className={styles.clickableheader}
-                                onClick={() =>
-                                    setShowProperties(!showProperties)
-                                }
+                                onClick={clickSetShowProperties}
                             >
                                 Properties {showProperties ? '' : '+'}
                             </h2>
