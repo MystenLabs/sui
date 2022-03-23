@@ -299,6 +299,7 @@ const ObjectResult = ((): JSX.Element => {
             .filter(([_, value]) => checkIsPropertyType(value))
             .filter(([key, _]) => key !== 'display');
 
+        const clickSetShowDescription = () => setShowDescription(!showDescription);
         return (<>
             <div className={styles.resultbox}>
                 {data?.data.contents.display && (
@@ -317,7 +318,7 @@ const ObjectResult = ((): JSX.Element => {
                     )}
                     <h2
                         className={styles.clickableheader}
-                        onClick={() => setShowDescription(!showDescription)}
+                        onClick={clickSetShowDescription}
                     >
                         Description {showDescription ? '' : '+'}
                     </h2>
