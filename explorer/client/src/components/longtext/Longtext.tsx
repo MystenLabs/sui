@@ -18,8 +18,7 @@ function Longtext({
         | 'transactions'
         | 'addresses'
         | 'ethAddress'
-        | 'unknown'
-        | 'objectId';
+        | 'unknown';
     isLink?: boolean;
 }) {
     const [isCopyIcon, setCopyIcon] = useState(true);
@@ -49,13 +48,7 @@ function Longtext({
     );
     let textComponent;
     if (isLink) {
-        if (category === 'objectId') {
-            textComponent = (
-                <span className={styles.longtext}>
-                    <a href={'/objects/' + text}>{text}</a>
-                </span>
-            );
-        } else if (category === 'unknown') {
+        if (category === 'unknown') {
             textComponent = (
                 <span className={styles.longtext} onClick={navigateUnknown}>
                     {text}
