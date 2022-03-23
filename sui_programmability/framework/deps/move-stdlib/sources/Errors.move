@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Module defining error codes used in Move aborts throughout the framework.
 ///
 /// A `u64` error code is constructed from two values:

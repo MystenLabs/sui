@@ -8,7 +8,7 @@ use super::*;
 pub type InnerTemporaryStore = (
     BTreeMap<ObjectID, Object>,
     Vec<ObjectRef>,
-    BTreeMap<ObjectID, Object>,
+    BTreeMap<ObjectID, (ObjectRef, Object)>,
     BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     Vec<Event>,
 );
@@ -21,10 +21,7 @@ pub struct AuthorityTemporaryStore<S> {
     tx_digest: TransactionDigest,
     objects: BTreeMap<ObjectID, Object>,
     active_inputs: Vec<ObjectRef>, // Inputs that are not read only
-    // TODO: We need to study whether it's worth to optimize the lookup of
-    // object reference by caching object reference in the map as well.
-    // Object reference calculation involves hashing which could be expensive.
-    written: BTreeMap<ObjectID, Object>, // Objects written
+    written: BTreeMap<ObjectID, (ObjectRef, Object)>, // Objects written
     /// Objects actively deleted.
     deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     /// Ordered sequence of events emitted by execution
@@ -39,17 +36,29 @@ impl<S> AuthorityTemporaryStore<S> {
     /// initial objects.
     pub fn new(
         package_store: Arc<S>,
-        _input_objects: &'_ [Object],
+        input_objects: &[(InputObjectKind, Object)],
         tx_digest: TransactionDigest,
     ) -> Self {
         Self {
             package_store,
             tx_digest,
-            objects: _input_objects.iter().map(|v| (v.id(), v.clone())).collect(),
-            active_inputs: _input_objects
+            objects: input_objects
                 .iter()
-                .filter(|v| !v.is_read_only())
-                .map(|v| v.to_object_reference())
+                .map(|(_, object)| (object.id(), object.clone()))
+                .collect(),
+            active_inputs: input_objects
+                .iter()
+                .filter_map(|(kind, object)| match kind {
+                    InputObjectKind::MovePackage(_) => None,
+                    InputObjectKind::OwnedMoveObject(object_ref) => {
+                        if object.is_read_only() {
+                            None
+                        } else {
+                            Some(*object_ref)
+                        }
+                    }
+                    InputObjectKind::SharedMoveObject(_) => Some(object.compute_object_reference()),
+                })
                 .collect(),
             written: BTreeMap::new(),
             deleted: BTreeMap::new(),
@@ -63,7 +72,7 @@ impl<S> AuthorityTemporaryStore<S> {
         &self.objects
     }
 
-    pub fn written(&self) -> &BTreeMap<ObjectID, Object> {
+    pub fn written(&self) -> &BTreeMap<ObjectID, (ObjectRef, Object)> {
         &self.written
     }
 
@@ -95,7 +104,8 @@ impl<S> AuthorityTemporaryStore<S> {
                 let mut object = self.objects[id].clone();
                 // Active input object must be Move object.
                 object.data.try_as_move_mut().unwrap().increment_version();
-                self.written.insert(*id, object);
+                self.written
+                    .insert(*id, (object.compute_object_reference(), object));
             }
         }
     }
@@ -109,7 +119,7 @@ impl<S> AuthorityTemporaryStore<S> {
         status: ExecutionStatus,
         gas_object_id: &ObjectID,
     ) -> SignedTransactionEffects {
-        let gas_object = &self.written[gas_object_id];
+        let (gas_reference, gas_object) = &self.written[gas_object_id];
         let effects = TransactionEffects {
             status,
             transaction_digest: *transaction_digest,
@@ -117,13 +127,13 @@ impl<S> AuthorityTemporaryStore<S> {
                 .written
                 .iter()
                 .filter(|(id, _)| self.created_object_ids.contains(*id))
-                .map(|(_, object)| (object.to_object_reference(), object.owner))
+                .map(|(_, (object_ref, object))| (*object_ref, object.owner))
                 .collect(),
             mutated: self
                 .written
                 .iter()
                 .filter(|(id, _)| self.objects.contains_key(*id))
-                .map(|(_, object)| (object.to_object_reference(), object.owner))
+                .map(|(_, (object_ref, object))| (*object_ref, object.owner))
                 .collect(),
             unwrapped: self
                 .written
@@ -131,7 +141,7 @@ impl<S> AuthorityTemporaryStore<S> {
                 .filter(|(id, _)| {
                     !self.objects.contains_key(*id) && !self.created_object_ids.contains(*id)
                 })
-                .map(|(_, object)| (object.to_object_reference(), object.owner))
+                .map(|(_, (object_ref, object))| (*object_ref, object.owner))
                 .collect(),
             deleted: self
                 .deleted
@@ -155,7 +165,7 @@ impl<S> AuthorityTemporaryStore<S> {
                     }
                 })
                 .collect(),
-            gas_object: (gas_object.to_object_reference(), gas_object.owner),
+            gas_object: (*gas_reference, gas_object.owner),
             events: self.events.clone(),
             dependencies: transaction_dependencies,
         };
@@ -216,7 +226,7 @@ impl<S> Storage for AuthorityTemporaryStore<S> {
         // there should be no read after delete
         debug_assert!(self.deleted.get(id) == None);
         match self.written.get(id) {
-            Some(x) => Some(x.clone()),
+            Some(x) => Some(x.1.clone()),
             None => self.objects.get(id).cloned(),
         }
     }
@@ -247,7 +257,8 @@ impl<S> Storage for AuthorityTemporaryStore<S> {
         // The adapter is not very disciplined at filling in the correct
         // previous transaction digest, so we ensure it is correct here.
         object.previous_transaction = self.tx_digest;
-        self.written.insert(object.id(), object);
+        self.written
+            .insert(object.id(), (object.compute_object_reference(), object));
     }
 
     fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind) {

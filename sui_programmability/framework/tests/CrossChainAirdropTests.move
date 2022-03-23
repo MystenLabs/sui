@@ -3,7 +3,8 @@
 
 #[test_only]
 module Sui::CrossChainAirdropTests {
-    use Sui::CrossChainAirdrop::{Self, CrossChainAirdropOracle, NFT};
+    use Sui::CrossChainAirdrop::{Self, CrossChainAirdropOracle, ERC721};
+    use Sui::NFT::NFT;
     use Sui::ID::{VersionedID};
     use Sui::TestScenario::{Self, Scenario};
 
@@ -13,6 +14,7 @@ module Sui::CrossChainAirdropTests {
     const ETOKEN_ID_CLAIMED: u64 = 0;
     const EOBJECT_NOT_FOUND: u64 = 1;
 
+    const ORACLE_ADDRESS: address = @0x1000;
     const RECIPIENT_ADDRESS: address = @0x10;
     const SOURCE_CONTRACT_ADDRESS: vector<u8> = x"BC4CA0EdA7647A8aB7C2061c2E118A18a936f13D";
     const SOURCE_TOKEN_ID: u64 = 101;
@@ -47,13 +49,12 @@ module Sui::CrossChainAirdropTests {
     }
 
     fun init(): (Scenario, address) {
-        let oracle_address = CrossChainAirdrop::oracle_address();
-        let scenario = TestScenario::begin(&oracle_address);
+        let scenario = TestScenario::begin(&ORACLE_ADDRESS);
         {
             let ctx = TestScenario::ctx(&mut scenario);
             CrossChainAirdrop::test_init(ctx);
         };
-        (scenario, oracle_address)
+        (scenario, ORACLE_ADDRESS)
     }
 
     fun claim_token(scenario: &mut Scenario, oracle_address: &address, token_id: u64) {
@@ -77,6 +78,6 @@ module Sui::CrossChainAirdropTests {
     fun owns_object(scenario: &mut Scenario, owner: &address): bool{
         // Verify the token has been transfer to the recipient
         TestScenario::next_tx(scenario, owner);
-        TestScenario::can_remove_object<NFT>(scenario)
+        TestScenario::can_remove_object<NFT<ERC721>>(scenario)
     }
 }

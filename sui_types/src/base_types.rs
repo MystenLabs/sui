@@ -155,7 +155,7 @@ pub struct TxContext {
 }
 
 impl TxContext {
-    pub fn new(sender: &SuiAddress, digest: TransactionDigest) -> Self {
+    pub fn new(sender: &SuiAddress, digest: &TransactionDigest) -> Self {
         Self {
             sender: AccountAddress::new(sender.0),
             digest: digest.0.to_vec(),
@@ -199,7 +199,7 @@ impl TxContext {
     pub fn random_for_testing_only() -> Self {
         Self::new(
             &SuiAddress::random_for_testing_only(),
-            TransactionDigest::random(),
+            &TransactionDigest::random(),
         )
     }
 
@@ -633,21 +633,16 @@ impl TryFrom<String> for ObjectID {
     type Error = ObjectIDParseError;
 
     fn try_from(s: String) -> Result<ObjectID, ObjectIDParseError> {
-        match Self::from_hex(s.clone()) {
-            Ok(q) => Ok(q),
-            Err(_) => Self::from_hex_literal(&s),
-        }
+        Self::from_hex(s.clone()).or_else(|_| Self::from_hex_literal(&s))
     }
 }
 
 impl std::str::FromStr for ObjectID {
     type Err = ObjectIDParseError;
-    // Try to match both the literal (0xABC..) and the normal (ABC)
+
     fn from_str(s: &str) -> Result<Self, ObjectIDParseError> {
-        match Self::from_hex(s) {
-            Ok(q) => Ok(q),
-            Err(_) => Self::from_hex_literal(s),
-        }
+        // Try to match both the literal (0xABC..) and the normal (ABC)
+        Self::from_hex(s).or_else(|_| Self::from_hex_literal(s))
     }
 }
 

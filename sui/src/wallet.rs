@@ -3,6 +3,7 @@
 
 use std::io::Write;
 use std::io::{stderr, stdout};
+use std::ops::Deref;
 use std::path::PathBuf;
 
 use async_trait::async_trait;
@@ -15,7 +16,6 @@ use tracing::error;
 use tracing::subscriber::set_global_default;
 use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 
-use sui::config::{Config, WalletConfig};
 use sui::shell::{
     install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
 };
@@ -35,6 +35,7 @@ const SUI: &str = "   _____       _    _       __      ____     __
 )]
 struct ClientOpt {
     #[structopt(long, global = true)]
+    /// Run wallet command without interactive shell
     no_shell: bool,
     /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
     #[structopt(long, default_value = "./wallet.conf")]
@@ -84,13 +85,11 @@ async fn main() -> Result<(), anyhow::Error> {
     app = app.unset_setting(AppSettings::NoBinaryName);
     let options: ClientOpt = ClientOpt::from_clap(&app.get_matches());
     let wallet_conf_path = options.config;
-    let config =
-        WalletConfig::read_or_create(&wallet_conf_path).expect("Unable to read wallet config");
-    let addresses = config.accounts.clone();
-    let mut context = WalletContext::new(config)?;
+
+    let mut context = WalletContext::new(&wallet_conf_path)?;
 
     // Sync all accounts on start up.
-    for address in addresses {
+    for address in context.config.accounts.clone() {
         WalletCommands::SyncClientState { address }
             .execute(&mut context)
             .await?;
@@ -108,7 +107,7 @@ async fn main() -> Result<(), anyhow::Error> {
             .unwrap_or_else(|| app.p.meta.version.unwrap_or("unknown"));
         writeln!(out, "--- sui wallet {} ---", version)?;
         writeln!(out)?;
-        writeln!(out, "{}", context.config)?;
+        writeln!(out, "{}", context.config.deref())?;
         writeln!(out, "Welcome to the Sui interactive shell.")?;
         writeln!(out)?;
 

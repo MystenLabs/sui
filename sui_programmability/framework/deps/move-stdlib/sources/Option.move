@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// This module defines the Option type and its methods to represent and handle an optional value.
 module Std::Option {
     use Std::Errors;

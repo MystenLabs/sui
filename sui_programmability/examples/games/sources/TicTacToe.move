@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // This is an implementation of the TicTacToe game.
 // The game object (which includes gameboard) is owned by a game admin.
 // Since players don't have ownership over the game object, they cannot

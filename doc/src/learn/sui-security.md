@@ -124,4 +124,4 @@ they are willing to operate, Sui users also have a meaningful say on the future 
 ## Further reading
 
 If you are looking for an in-depth technical explanation of the computer science behind Sui security, you 
-may have a look at our white paper on [The Sui Smart Contracts Platform](../../paper/sui.pdf).
+may have a look at our white paper on the [Sui Smart Contracts Platform](../../paper/sui.pdf).

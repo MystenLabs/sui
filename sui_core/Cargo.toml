@@ -23,6 +23,7 @@ tracing = { version = "0.1.31", features = ["log"] }
 tracing-opentelemetry = "0.17"
 signature = "1.5.0"
 ed25519-dalek = "1.0.1"
+scopeguard = "1.1.0"
 structopt = "0.3.26"
 log = "0.4.14"
 
@@ -37,7 +38,7 @@ move-core-types = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc7
 move-package = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
 move-vm-runtime = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
 
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "97a056f85555fa2afe497d6abb7cf6bf8faa63cf"}
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "e44bca4513a6ff6c97399cd79e82e4bc00571ac3"}
 
 [dev-dependencies]
 fdlimit = "0.2.1"
@@ -45,7 +46,9 @@ naughty-strings = "0.2.4"
 similar-asserts = "1.2.0"
 serde-reflection = "0.3.5"
 serde_yaml = "0.8.23"
-assert-str = "0.1.0"
+pretty_assertions = "1.2.0"
+
+test_utils = { path = "../test_utils" }
 
 [[example]]
 name = "generate-format"

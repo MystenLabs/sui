@@ -11,6 +11,7 @@ anyhow = "1.0.55"
 base64 = "0.13.0"
 bcs = "0.1.3"
 bincode = "1.3.3"
+itertools = "0.10.3"
 once_cell = "1.9.0"
 rand = "0.7.3"
 serde = { version = "1.0.136", features = ["derive"] }
@@ -28,7 +29,7 @@ tracing-opentelemetry = "0.17.0"
 opentelemetry = { version = "0.17", features = ["rt-tokio"] }
 
 name_variant = { git = "https://github.com/MystenLabs/mysten-infra", rev ="97a056f85555fa2afe497d6abb7cf6bf8faa63cf"}
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev ="97a056f85555fa2afe497d6abb7cf6bf8faa63cf"}
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev ="e44bca4513a6ff6c97399cd79e82e4bc00571ac3"}
 
 move-binary-format = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
 move-bytecode-utils = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }

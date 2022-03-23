@@ -88,8 +88,6 @@ and analyzed for tracing, performance analysis, etc.
 The idea is that every event and span would get tagged with key-value pairs.  Events that log within any context or nested contexts would also inherit the context-level tags.
 These tags represent *fields* that can be analyzed and filtered by.  For example, one could filter out broadcasts and see the errors for all instances where the bad stake exceeded a certain amount, but not enough for an error.
 
-TODO: see if keys need to be scoped by contexts
-
 |         Key         |      Place(s)      |                                  Meaning                                   |
 | ------------------- | ------------------ | -------------------------------------------------------------------------- |
 | tx_digest           | Gateway, Authority | Hex digest of transaction                                                  |
@@ -124,14 +122,6 @@ Going from info to debug results in a much larger spew of messages.
 The `RUST_LOG` environment variable can be used to set both the overall logging level as well as the level for
 individual components, and even filtering down to specific spans or tags within spans are possible too.
 For more details, please see the [EnvFilter](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) docs.
-
-## (Re)Configuration
-
-## Observability of MOVE programs, events, etc.
-
-TODO.
-
-We need to provide means to authenticate the events etc (by linking them to signed effects).
 
 ## Viewing logs, traces, metrics
 

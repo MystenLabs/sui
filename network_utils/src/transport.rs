@@ -4,6 +4,7 @@
 
 use futures::{Sink, SinkExt, Stream, StreamExt};
 use std::io::ErrorKind;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpSocket;
 use tokio::net::{TcpListener, TcpStream};
@@ -13,15 +14,15 @@ use async_trait::async_trait;
 use tracing::*;
 
 use bytes::{Bytes, BytesMut};
-use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};
 
 #[cfg(test)]
 #[path = "unit_tests/transport_tests.rs"]
 mod transport_tests;
 
 /// Suggested buffer size
-pub const DEFAULT_MAX_DATAGRAM_SIZE: usize = 65507;
-pub const DEFAULT_MAX_DATAGRAM_SIZE_STR: &str = "65507";
+pub const DEFAULT_MAX_DATAGRAM_SIZE: usize = 650000;
+pub const DEFAULT_MAX_DATAGRAM_SIZE_STR: &str = "650000";
 
 /// The handler required to create a service.
 #[async_trait]
@@ -50,8 +51,9 @@ pub trait RwChannel<'a> {
 
 /// The result of spawning a server is oneshot channel to kill it and a handle to track completion.
 pub struct SpawnedServer {
-    complete: futures::channel::oneshot::Sender<()>,
+    tx_cancellation: futures::channel::oneshot::Sender<()>,
     handle: tokio::task::JoinHandle<Result<(), std::io::Error>>,
+    local_addr: SocketAddr,
 }
 
 impl SpawnedServer {
@@ -62,9 +64,13 @@ impl SpawnedServer {
     }
 
     pub async fn kill(self) -> Result<(), std::io::Error> {
-        self.complete.send(()).unwrap();
+        self.tx_cancellation.send(()).unwrap();
         self.handle.await??;
         Ok(())
+    }
+
+    pub fn get_port(&self) -> u16 {
+        self.local_addr.port()
     }
 }
 
@@ -85,28 +91,37 @@ pub async fn spawn_server<S>(
 where
     S: MessageHandler<TcpDataStream> + Send + Sync + 'static,
 {
-    let (complete, receiver) = futures::channel::oneshot::channel();
-    let handle = {
-        // see https://fly.io/blog/the-tokio-1-x-upgrade/#tcplistener-from_std-needs-to-be-set-to-nonblocking
-        let std_listener = std::net::TcpListener::bind(address)?;
+    let (tx_cancellation, rx_cancellation) = futures::channel::oneshot::channel();
+    let std_listener = std::net::TcpListener::bind(address)?;
 
-        if let Ok(local_addr) = std_listener.local_addr() {
-            let host = local_addr.ip();
-            let port = local_addr.port();
-            info!("Listening to TCP traffic on {host}:{port}");
-        }
+    let local_addr = std_listener.local_addr()?;
+    let host = local_addr.ip();
+    let port = local_addr.port();
+    info!("Listening to TCP traffic on {host}:{port}");
+    // see https://fly.io/blog/the-tokio-1-x-upgrade/#tcplistener-from_std-needs-to-be-set-to-nonblocking
+    std_listener.set_nonblocking(true)?;
+    let listener = TcpListener::from_std(std_listener)?;
 
-        std_listener.set_nonblocking(true)?;
-        let listener = TcpListener::from_std(std_listener)?;
-
-        tokio::spawn(run_tcp_server(listener, state, receiver, buffer_size))
-    };
-    Ok(SpawnedServer { complete, handle })
+    let handle = tokio::spawn(run_tcp_server(
+        listener,
+        state,
+        rx_cancellation,
+        buffer_size,
+    ));
+    Ok(SpawnedServer {
+        tx_cancellation,
+        handle,
+        local_addr,
+    })
 }
+
+use tokio::net::tcp::OwnedReadHalf;
+use tokio::net::tcp::OwnedWriteHalf;
 
 /// An implementation of DataStream based on TCP.
 pub struct TcpDataStream {
-    framed: Framed<TcpStream, LengthDelimitedCodec>,
+    pub framed_read: FramedRead<OwnedReadHalf, LengthDelimitedCodec>,
+    pub framed_write: FramedWrite<OwnedWriteHalf, LengthDelimitedCodec>,
 }
 
 impl TcpDataStream {
@@ -123,37 +138,49 @@ impl TcpDataStream {
     }
 
     fn from_tcp_stream(stream: TcpStream, max_data_size: usize) -> TcpDataStream {
-        let framed = Framed::new(
-            stream,
+        let (read_half, write_half) = stream.into_split();
+
+        let framed_read = FramedRead::new(
+            read_half,
             LengthDelimitedCodec::builder()
                 .max_frame_length(max_data_size)
                 .new_codec(),
         );
 
-        Self { framed }
+        let framed_write = FramedWrite::new(
+            write_half,
+            LengthDelimitedCodec::builder()
+                .max_frame_length(max_data_size)
+                .new_codec(),
+        );
+
+        Self {
+            framed_read,
+            framed_write,
+        }
     }
 
     // TODO: Eliminate vecs and use Byte, ByteBuf
 
     pub async fn write_data<'a>(&'a mut self, buffer: &'a [u8]) -> Result<(), std::io::Error> {
-        self.framed.send(buffer.to_vec().into()).await
+        self.framed_write.send(buffer.to_vec().into()).await
     }
 
     pub async fn read_data(&mut self) -> Option<Result<Vec<u8>, std::io::Error>> {
-        let result = self.framed.next().await;
+        let result = self.framed_read.next().await;
         result.map(|v| v.map(|w| w.to_vec()))
     }
 }
 
 impl<'a> RwChannel<'a> for TcpDataStream {
-    type W = Framed<TcpStream, LengthDelimitedCodec>;
-    type R = Framed<TcpStream, LengthDelimitedCodec>;
+    type W = FramedWrite<OwnedWriteHalf, LengthDelimitedCodec>;
+    type R = FramedRead<OwnedReadHalf, LengthDelimitedCodec>;
 
     fn sink(&mut self) -> &mut Self::W {
-        &mut self.framed
+        &mut self.framed_write
     }
     fn stream(&mut self) -> &mut Self::R {
-        &mut self.framed
+        &mut self.framed_read
     }
 }
 
