@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import Footer from '../components/footer/Footer';
 import Search from '../components/search/Search';
 import AppRoutes from '../pages/config/AppRoutes';
