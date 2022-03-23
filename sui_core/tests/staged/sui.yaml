@@ -120,11 +120,11 @@ CertifiedTransaction:
 ConsensusOutput:
   STRUCT:
     - message: BYTES
-    - sequencer_number:
+    - sequence_number:
         TYPENAME: SequenceNumber
 ConsensusSync:
   STRUCT:
-    - sequencer_number:
+    - sequence_number:
         TYPENAME: SequenceNumber
 Data:
   ENUM:

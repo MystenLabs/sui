@@ -1102,10 +1102,10 @@ impl BcsSignable for TransactionData {}
 pub struct ConsensusOutput {
     #[serde(with = "serde_bytes")]
     pub message: Vec<u8>,
-    pub sequencer_number: SequenceNumber,
+    pub sequence_number: SequenceNumber,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ConsensusSync {
-    pub sequencer_number: SequenceNumber,
+    pub sequence_number: SequenceNumber,
 }
