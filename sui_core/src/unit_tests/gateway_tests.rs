@@ -138,9 +138,9 @@ async fn extract_cert(
         {
             votes.push((signed.authority, signed.signature));
             if let Some(inner_transaction) = transaction {
-                assert!(inner_transaction == signed.transaction);
+                assert!(inner_transaction == signed.data);
             }
-            transaction = Some(signed.transaction);
+            transaction = Some(signed.data);
         }
     }
 
@@ -283,7 +283,7 @@ async fn do_cert(
         .unwrap()
         .signed_effects
         .unwrap()
-        .effects
+        .data
 }
 
 async fn init_local_authorities(

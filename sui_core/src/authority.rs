@@ -140,10 +140,7 @@ impl AuthorityState {
         let transaction_digest = transaction.digest();
 
         // Ensure an idempotent answer.
-        if self
-            ._database
-            .signed_transaction_exists(&transaction_digest)?
-        {
+        if self._database.transaction_exists(&transaction_digest)? {
             let transaction_info = self.make_transaction_info(&transaction_digest).await?;
             return Ok(transaction_info);
         }
@@ -176,7 +173,7 @@ impl AuthorityState {
         let transaction_digest = *confirmation_transaction.certificate.digest();
 
         // Ensure an idempotent answer.
-        if self._database.signed_effects_exists(&transaction_digest)? {
+        if self._database.effects_exists(&transaction_digest)? {
             let transaction_info = self.make_transaction_info(&transaction_digest).await?;
             return Ok(transaction_info);
         }
@@ -666,8 +663,11 @@ impl AuthorityState {
         tx_digest: TransactionDigest,
         signed_transaction: SignedTransaction,
     ) -> Result<(), SuiError> {
-        self._database
-            .set_transaction_lock(mutable_input_objects, tx_digest, signed_transaction)
+        self._database.set_transaction_lock(
+            mutable_input_objects,
+            tx_digest,
+            signed_transaction.into(),
+        )
     }
 
     /// Update state and signals that a new transactions has been processed
@@ -679,12 +679,19 @@ impl AuthorityState {
         signed_effects: SignedTransactionEffects,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let notifier_ticket = self.batch_notifier.ticket()?;
-        self._database.update_state(
+        let signed_effects = self._database.update_state(
             temporary_store,
-            certificate,
-            signed_effects,
+            &certificate,
+            signed_effects.into(),
             Some(notifier_ticket.seq()),
-        )
+        )?;
+        Ok(TransactionInfoResponse {
+            signed_transaction: self
+                ._database
+                .get_signed_transaction(certificate.digest())?,
+            certified_transaction: Some(certificate),
+            signed_effects: Some(signed_effects.into()),
+        })
         // implicitly we drop the ticket here and that notifies the batch manager
     }
 

@@ -313,7 +313,7 @@ fn test_time_vote() {
     for _ in 0..100 {
         if let SerializedMessage::Vote(vote) = deserialize_message(&mut buf2).unwrap() {
             vote.signature
-                .check(&vote.transaction.data, vote.authority)
+                .check(&vote.data.data, vote.authority)
                 .unwrap();
         }
     }

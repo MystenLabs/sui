@@ -334,13 +334,28 @@ const_assert_eq!(
 
 */
 
-/// An transaction signed by a single authority
 #[derive(Debug, Eq, Clone, Serialize, Deserialize)]
-pub struct SignedTransaction {
-    pub transaction: Transaction,
+pub struct AuthoritySignedData<D> {
+    pub data: D,
     pub authority: AuthorityName,
     pub signature: AuthoritySignature,
 }
+
+impl<D: Hash> Hash for AuthoritySignedData<D> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.data.hash(state);
+        self.authority.hash(state);
+    }
+}
+
+impl<D: Eq> PartialEq for AuthoritySignedData<D> {
+    fn eq(&self, other: &Self) -> bool {
+        self.data == other.data && self.authority == other.authority
+    }
+}
+
+/// An transaction signed by a single authority
+pub type SignedTransaction = AuthoritySignedData<Transaction>;
 
 /// An transaction signed by a quorum of authorities
 ///
@@ -689,13 +704,7 @@ impl Display for TransactionEffects {
     }
 }
 
-/// An transaction signed by a single authority
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct SignedTransactionEffects {
-    pub effects: TransactionEffects,
-    pub authority: AuthorityName,
-    pub signature: AuthoritySignature,
-}
+pub type SignedTransactionEffects = AuthoritySignedData<TransactionEffects>;
 
 impl Hash for Transaction {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -706,19 +715,6 @@ impl Hash for Transaction {
 impl PartialEq for Transaction {
     fn eq(&self, other: &Self) -> bool {
         self.data == other.data
-    }
-}
-
-impl Hash for SignedTransaction {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.transaction.hash(state);
-        self.authority.hash(state);
-    }
-}
-
-impl PartialEq for SignedTransaction {
-    fn eq(&self, other: &Self) -> bool {
-        self.transaction == other.transaction && self.authority == other.authority
     }
 }
 
@@ -900,7 +896,7 @@ impl SignedTransaction {
     ) -> Self {
         let signature = AuthoritySignature::new(&transaction.data, secret);
         Self {
-            transaction,
+            data: transaction,
             authority,
             signature,
         }
@@ -908,11 +904,10 @@ impl SignedTransaction {
 
     /// Verify the signature and return the non-zero voting right of the authority.
     pub fn check(&self, committee: &Committee) -> Result<usize, SuiError> {
-        self.transaction.check_signature()?;
+        self.data.check_signature()?;
         let weight = committee.weight(&self.authority);
         fp_ensure!(weight > 0, SuiError::UnknownSigner);
-        self.signature
-            .check(&self.transaction.data, self.authority)?;
+        self.signature.check(&self.data.data, self.authority)?;
         Ok(weight)
     }
 }

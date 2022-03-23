@@ -264,7 +264,7 @@ async fn test_handle_transfer_transaction_ok() {
             .unwrap()
             .as_ref()
             .unwrap()
-            .transaction
+            .data
             .data,
         transfer_transaction.data
     );
@@ -425,7 +425,7 @@ async fn test_publish_dependent_module_ok() {
     let response = send_and_confirm_transaction(&authority, transaction)
         .await
         .unwrap();
-    response.signed_effects.unwrap().effects.status.unwrap();
+    response.signed_effects.unwrap().data.status.unwrap();
 
     // check that the dependent module got published
     assert!(authority.get_object(&dependent_module_id).await.is_ok());
@@ -455,7 +455,7 @@ async fn test_publish_module_no_dependencies_ok() {
     let response = send_and_confirm_transaction(&authority, transaction)
         .await
         .unwrap();
-    response.signed_effects.unwrap().effects.status.unwrap();
+    response.signed_effects.unwrap().data.status.unwrap();
 
     // check that the module actually got published
     assert!(response.certified_transaction.is_some());
@@ -835,7 +835,7 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         ))
         .await
         .unwrap();
-    response.signed_effects.unwrap().effects.status.unwrap();
+    response.signed_effects.unwrap().data.status.unwrap();
     let account = authority_state
         .get_object(&object_id)
         .await
@@ -941,7 +941,7 @@ async fn test_handle_confirmation_transaction_ok() {
         ))
         .await
         .unwrap();
-    info.signed_effects.unwrap().effects.status.unwrap();
+    info.signed_effects.unwrap().data.status.unwrap();
     // Key check: the ownership has changed
 
     let new_account = authority_state
@@ -1022,7 +1022,7 @@ async fn test_handle_confirmation_transaction_idempotent() {
         ))
         .await
         .unwrap();
-    assert!(info.signed_effects.as_ref().unwrap().effects.status.is_ok());
+    assert!(info.signed_effects.as_ref().unwrap().data.status.is_ok());
 
     let info2 = authority_state
         .handle_confirmation_transaction(ConfirmationTransaction::new(
@@ -1030,13 +1030,7 @@ async fn test_handle_confirmation_transaction_idempotent() {
         ))
         .await
         .unwrap();
-    assert!(info2
-        .signed_effects
-        .as_ref()
-        .unwrap()
-        .effects
-        .status
-        .is_ok());
+    assert!(info2.signed_effects.as_ref().unwrap().data.status.is_ok());
 
     // this is valid because we're checking the authority state does not change the certificate
     compare_transaction_info_responses(&info, &info2);
@@ -1510,7 +1504,7 @@ pub async fn call_move(
     let transaction = Transaction::new(data, signature);
 
     let response = send_and_confirm_transaction(authority, transaction).await?;
-    Ok(response.signed_effects.unwrap().effects)
+    Ok(response.signed_effects.unwrap().data)
 }
 
 async fn call_framework_code(

@@ -518,7 +518,7 @@ async fn build_and_publish_test_package(
         .unwrap()
         .signed_effects
         .unwrap()
-        .effects;
+        .data;
 
     assert!(
         matches!(effects.status, ExecutionStatus::Success { .. }),

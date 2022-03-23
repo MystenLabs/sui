@@ -151,7 +151,7 @@ where
                 .signed_effects
                 .ok_or(SuiError::AuthorityInformationUnavailable)?;
 
-            for returned_digest in &signed_effects.effects.dependencies {
+            for returned_digest in &signed_effects.data.dependencies {
                 // We check that we are not processing twice the same certificate, as
                 // it would be common if two objects used by one transaction, were also both
                 // mutated by the same preceding transaction.
@@ -1005,8 +1005,8 @@ where
                             // Note: here we aggregate votes by the hash of the effects structure
                             let entry = state
                                 .effects_map
-                                .entry(sha3_hash(&inner_effects.effects))
-                                .or_insert((0usize, inner_effects.effects));
+                                .entry(sha3_hash(&inner_effects.data))
+                                .or_insert((0usize, inner_effects.data));
                             entry.0 += weight;
 
                             if entry.0 >= threshold {

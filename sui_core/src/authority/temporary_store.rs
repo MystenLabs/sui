@@ -172,7 +172,7 @@ impl<S> AuthorityTemporaryStore<S> {
         let signature = AuthoritySignature::new(&effects, secret);
 
         SignedTransactionEffects {
-            effects,
+            data: effects,
             authority: *authority_name,
             signature,
         }
