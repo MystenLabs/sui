@@ -984,6 +984,12 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             .map(|x| x.unwrap_or_default())
             .map_err(SuiError::from)
     }
+
+    #[cfg(test)]
+    /// Provide read access to the `schedule` table (useful for testing).
+    pub fn get_schedule(&self, object_id: &ObjectID) -> SuiResult<Option<SequenceNumber>> {
+        self.schedule.get(object_id).map_err(SuiError::from)
+    }
 }
 
 impl<const ALL_OBJ_VER: bool> BackingPackageStore for SuiDataStore<ALL_OBJ_VER> {
