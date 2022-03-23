@@ -27,6 +27,7 @@ pub enum SerializedMessage {
     BatchInfoReq(Box<BatchInfoRequest>),
     BatchInfoResp(Box<BatchInfoResponseItem>),
     ConsensusOutput(Box<ConsensusOutput>),
+    ConsensusSync(Box<ConsensusSync>),
 }
 
 // This helper structure is only here to avoid cloning while serializing commands.
@@ -48,6 +49,7 @@ enum ShallowSerializedMessage<'a> {
     BatchInfoReq(&'a BatchInfoRequest),
     BatchInfoResp(&'a BatchInfoResponseItem),
     ConsensusOutput(&'a ConsensusOutput),
+    ConsensusSync(&'a ConsensusSync),
 }
 
 fn serialize_into<T, W>(writer: W, msg: &T) -> Result<(), anyhow::Error>
@@ -156,6 +158,10 @@ where
 
 pub fn serialize_consensus_output(value: &ConsensusOutput) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::ConsensusOutput(value))
+}
+
+pub fn serialize_consensus_sync(value: &ConsensusSync) -> Vec<u8> {
+    serialize(&ShallowSerializedMessage::ConsensusSync(value))
 }
 
 pub fn deserialize_message<R>(reader: R) -> Result<SerializedMessage, anyhow::Error>
