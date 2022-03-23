@@ -274,8 +274,6 @@ pub enum SuiError {
     // Errors related to the authority-consensus interface.
     #[error("Authority state can be modified by a single consensus client at the time")]
     OnlyOneConsensusClientPermitted,
-    #[error("Authority needs to sync with the consensus node")]
-    RequireSyncWithConsensus,
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

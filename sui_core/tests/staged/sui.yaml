@@ -751,8 +751,6 @@ SuiError:
           - error: STR
     91:
       OnlyOneConsensusClientPermitted: UNIT
-    92:
-      RequireSyncWithConsensus: UNIT
 Transaction:
   STRUCT:
     - data:

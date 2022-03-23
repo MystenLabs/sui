@@ -3,12 +3,13 @@
 
 use crate::authority::AuthorityState;
 use bytes::Bytes;
+use futures::{SinkExt, StreamExt};
 use std::cmp::Ordering;
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering as AtomicOrdering;
 use std::sync::Arc;
 use sui_network::transport;
-use sui_network::transport::TcpDataStream;
+use sui_network::transport::{RwChannel, TcpDataStream};
 use sui_types::base_types::SequenceNumber;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{ConfirmationTransaction, ConsensusOutput, ConsensusSync};
@@ -19,6 +20,14 @@ use tokio::task::JoinHandle;
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
 pub mod consensus_tests;
+
+/// The possible successful outcome when processing a consensus message.
+enum ProcessingOutcome {
+    /// All went well (or at least there is nothing to do on our side).
+    Ok,
+    /// We missed some outputs and need to sync with the consensus node.
+    MissingOutputs,
+}
 
 /// The `ConsensusClient` receives certificates sequenced by the consensus and updates
 /// the authority's database. The client assumes that the messages it receives have
@@ -69,14 +78,16 @@ impl ConsensusClient {
     }
 
     /// Synchronize with the consensus in case we missed part of its output sequence.
-    /// It is safety-critical that we process the consensus outputs in the right order.
+    /// It is safety-critical that we process the consensus' outputs in the complete
+    /// and right order.
     async fn synchronize(&mut self, connection: &mut TcpDataStream) -> SuiResult<()> {
         let request = ConsensusSync {
             sequencer_number: self.last_consensus_index,
         };
-        let bytes = serialize_consensus_sync(&request);
+        let bytes = Bytes::from(serialize_consensus_sync(&request));
         connection
-            .write_data(&bytes)
+            .sink()
+            .send(bytes)
             .await
             .map_err(|e| SuiError::ClientIoError {
                 error: e.to_string(),
@@ -84,7 +95,7 @@ impl ConsensusClient {
     }
 
     /// Process a single sequenced certificate.
-    async fn handle_consensus_message(&mut self, bytes: Bytes) -> SuiResult<()> {
+    async fn handle_consensus_message(&mut self, bytes: Bytes) -> SuiResult<ProcessingOutcome> {
         // We first deserialize the consensus output message. If deserialization fails
         // we may be have a liveness issue. We stop processing of this certificate to
         // ensure safety, and the synchronizer will try again to ask for that certificate.
@@ -111,11 +122,11 @@ impl ConsensusClient {
             Ordering::Greater => {
                 // Something is very wrong. Liveness may be lost (but not safety).
                 log::error!("Consensus index of authority bigger than expected");
-                return Ok(());
+                return Ok(ProcessingOutcome::Ok);
             }
             Ordering::Less => {
                 log::debug!("Authority is synchronizing missed sequenced certificates");
-                return Err(SuiError::RequireSyncWithConsensus);
+                return Ok(ProcessingOutcome::MissingOutputs);
             }
             Ordering::Equal => (),
         }
@@ -153,7 +164,8 @@ impl ConsensusClient {
         let certificate = confirmation.certificate;
         self.state
             .handle_consensus_certificate(certificate, self.last_consensus_index)
-            .await
+            .await?;
+        Ok(ProcessingOutcome::Ok)
     }
 
     /// Main loop connecting to the consensus. This mainly acts as a light client.
@@ -173,7 +185,7 @@ impl ConsensusClient {
 
             // Listen to sequenced certificates and process them.
             loop {
-                let bytes = match connection.read_data().await {
+                let bytes = match connection.stream().next().await {
                     Some(Ok(data)) => Bytes::from(data),
                     Some(Err(e)) => {
                         log::warn!("Failed to receive data from consensus: {}", e);
@@ -197,17 +209,18 @@ impl ConsensusClient {
                         // it (the core is idempotent).
                         fp_bail!(SuiError::StorageError(e));
                     }
+                    // Log the errors that are the client's fault (not ours). This is
+                    // only for debug purposes: all correct authorities will do the same.
+                    Err(e) => log::debug!("{}", e),
                     // The authority missed some consensus outputs and needs to sync.
-                    Err(SuiError::RequireSyncWithConsensus) => {
+                    Ok(ProcessingOutcome::MissingOutputs) => {
                         if let Err(e) = self.synchronize(&mut connection).await {
                             log::warn!("Failed to send sync request to consensus: {}", e);
                             continue 'main;
                         }
                     }
-                    // Log the errors that are the client's fault (not ours). This is
-                    // only for debug purposes: all correct authorities will do the same.
-                    Err(e) => log::debug!("{}", e),
-                    Ok(()) => (),
+                    // Nothing to do.
+                    Ok(ProcessingOutcome::Ok) => (),
                 }
             }
         }
