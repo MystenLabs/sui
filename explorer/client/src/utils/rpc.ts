@@ -8,7 +8,7 @@ export class SuiRpcClient {
     public constructor(host: string) {
         this.host = host;
         this.moveCallUrl = `${host}/wallet/call`;
-        this.addressesUrl = `${this.host}/addresses`;
+        this.addressesUrl = `${host}/addresses`;
     }
 
     public getAddresses = async (): Promise<Addresses> =>
