@@ -14,17 +14,14 @@ module Sui::Geniteam {
     /// Trying to add more than 1 farm to a Player
     const ETOO_MANY_FARMS: u64 = 1;
 
-    /// Too many Cosmetics for the slot
-    const ETOO_MANY_COSMETICS: u64 = 2;
-
     /// Monster collection not owned by farm
-    const EMONSTER_COLLECTION_NOT_OWNED_BY_FARM: u64 = 3;
+    const EMONSTER_COLLECTION_NOT_OWNED_BY_FARM: u64 = 2;
 
     /// Inventory not owned by player
-    const EINVENTORY_NOT_OWNED_BY_PLAYER: u64 = 4;
+    const EINVENTORY_NOT_OWNED_BY_PLAYER: u64 = 3;
 
     /// Invalid cosmetic slot
-    const EINVALID_COSMETICS_SLOT: u64 = 5;
+    const EINVALID_COSMETICS_SLOT: u64 = 4;
 
     struct Player has key {
         id: VersionedID,
@@ -262,17 +259,9 @@ module Sui::Geniteam {
 
         // Assign by slot
         if (cosmetic_slot_id == 0) {
-            // Check that the slot has no items
-            assert!(Option::is_none(&farm.applied_farm_cosmetic_0),
-                    ETOO_MANY_COSMETICS);
-
             // Store the cosmetic
             Option::fill(&mut farm.applied_farm_cosmetic_0, child_ref)
         } else {
-            // Check that the slot has no items
-            assert!(Option::is_none(&farm.applied_farm_cosmetic_1),
-                    ETOO_MANY_COSMETICS);
-
             // Store the cosmetic
             Option::fill(&mut farm.applied_farm_cosmetic_1, child_ref)
         };
@@ -293,15 +282,9 @@ module Sui::Geniteam {
 
         // Assign by slot
         if (cosmetic_slot_id == 0) {
-            // Check that the slot has no items
-            assert!(Option::is_none(&monster.applied_monster_cosmetic_0), ETOO_MANY_COSMETICS);
-
             // Store the cosmetic
             Option::fill(&mut monster.applied_monster_cosmetic_0, child_ref)
         } else {
-            // Check that the slot has no items
-            assert!(Option::is_none(&monster.applied_monster_cosmetic_1), ETOO_MANY_COSMETICS);
-
             // Store the cosmetic
             Option::fill(&mut monster.applied_monster_cosmetic_1, child_ref)
         };
