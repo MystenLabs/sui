@@ -278,7 +278,10 @@ impl ConnectionWaiter {
 
     /// Wait for a bit (depending on the number of failed connections).
     pub async fn wait(&mut self) {
-        sleep(Duration::from_millis(self.delay)).await;
+        if self.delay != 0 {
+            sleep(Duration::from_millis(self.delay)).await;
+        }
+
         self.delay = match self.delay {
             0 => self.min_delay,
             _ => min(2 * self.delay, self.max_delay),
