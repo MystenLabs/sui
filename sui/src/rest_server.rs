@@ -814,8 +814,8 @@ Request representing the contents of the Move module to be published.
 struct PublishRequest {
     /** Required; Hex code as string representing the sender's address */
     sender: String,
-    /** Required; Move module serialized as bytes? */
-    module: String,
+    /** Required; Move module serialized as bytes */
+    compiled_module: Vec<Vec<u8>>,
     /** Required; Hex code as string representing the gas object id */
     gas_object_id: String,
     /** Required; Gas budget required because of the need to execute module initializers */
@@ -833,14 +833,45 @@ need to execute module initializers.
     method = POST,
     path = "/publish",
     tags = [ "wallet" ],
-    // TODO: Figure out how to pass modules over the network before publishing this.
-    unpublished = true
 }]
 #[allow(unused_variables)]
 async fn publish(
-    rqctx: Arc<RequestContext<ServerContext>>,
+    ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<PublishRequest>,
 ) -> Result<HttpResponseOk<TransactionResponse>, HttpError> {
+    let mut state = ctx.context().server_state.lock().await;
+    let state = state.as_mut().ok_or_else(server_state_error)?;
+
+    let publish_params = request.into_inner();
+    let compiled_module = publish_params.compiled_module;
+    let gas_budget = publish_params.gas_budget;
+    let gas_object_id = ObjectID::try_from(publish_params.gas_object_id)
+        .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, format!("{error}")))?;
+    let sender: SuiAddress = decode_bytes_hex(publish_params.sender.as_str())
+        .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, format!("{error}")))?;
+    // Fetch the object info for the gas obj
+    let (gas_obj_ref, _, _) = get_object_info(state, gas_object_id)
+        .await
+        .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, format!("{error}")))?;
+    let data = state
+        .gateway
+        .publish(sender, compiled_module, gas_obj_ref, gas_budget)
+        .await
+        .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, format!("{error}")))?;
+    let signature = state
+        .keystore
+        .read()
+        .unwrap()
+        .sign(&sender, &data.to_bytes())
+        .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, format!("{error}")))?;
+    let response = state
+        .gateway
+        .execute_transaction(Transaction::new(data, signature))
+        .await
+        .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, format!("{error}")))?
+        .to_publish_response()
+        .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, format!("{error}")))?;
+
     let transaction_response = TransactionResponse {
         gas_used: 0,
         object_effects_summary: json!(""),
