@@ -7,7 +7,7 @@ use consensus::{
 use criterion::{
     criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode, Throughput,
 };
-use crypto::Hash;
+use crypto::{traits::KeyPair, Hash};
 use pprof::criterion::{Output, PProfProfiler};
 use primary::{Certificate, Round};
 use std::collections::BTreeSet;
@@ -23,7 +23,7 @@ pub fn process_certificates(c: &mut Criterion) {
         let rounds: Round = *size;
 
         // process certificates for rounds, check we don't grow the dag too much
-        let keys: Vec<_> = keys().into_iter().map(|(x, _)| x).collect();
+        let keys: Vec<_> = keys().into_iter().map(|kp| kp.public().clone()).collect();
         let genesis = Certificate::genesis(&mock_committee(&keys[..]))
             .iter()
             .map(|x| x.digest())
