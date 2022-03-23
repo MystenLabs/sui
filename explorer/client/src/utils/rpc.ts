@@ -64,9 +64,7 @@ export class SuiRpcClient {
 
     public static modifyForDemo <T extends object, U>(obj: T): T {
         for (var prop in obj) {
-            //console.log('obj prop', prop);
             let property = obj[prop];
-            //console.log('property', property);
 
             if (typeof(property) == 'object') {
                 if ('bytes' in property) {
@@ -106,7 +104,6 @@ type SuiAddressHexStr = string;
 
 const hexStringPattern = /$0x[0-9a-fA-F]*^/;
 const suiAddressHexPattern = /$0x[0-9a-fA-F]{20}^/;
-const isBytesHexStr = (str: string) => hexStringPattern.test(str);
 const isSuiAddressHexStr = (str: string) => suiAddressHexPattern.test(str);
 
 const isValidSuiIdBytes = (obj: { bytes: string | number[] }) => {
