@@ -222,8 +222,9 @@ export interface AddressObjectsResponse {
     objects: AddressObjectSummary[]
 }
 
-// TODO - this format is inconsistent with other object summaries (camelCase vs snake_case, lack of type field)
-// also needs stronger types for fields
+// TODO - this format is inconsistent with other object summaries (camelCase vs snake_case, lack of type field),
+// which needs to be changed in the backend RPC
+// TODO - also needs stronger types for fields
 export interface AddressObjectSummary {
     objectId: string,
     version: string,
