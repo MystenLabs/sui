@@ -62,7 +62,7 @@ export class SuiRpcClient {
         }
     }
 
-    public static modifyForDemo <T extends object, U>(obj: T): T {
+    public static modifyForDemo <T extends object>(obj: T): T {
         for (var prop in obj) {
             let property = obj[prop];
 
