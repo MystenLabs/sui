@@ -35,7 +35,7 @@ impl Display for GatewayType {
                 writeln!(writer, "Gateway Type : Embedded")?;
                 writeln!(
                     writer,
-                    "Client state DB folder path : {:?}",
+                    "Gateway state DB folder path : {:?}",
                     config.db_folder_path
                 )?;
                 let authorities = config
