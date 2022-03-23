@@ -1,17 +1,60 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use serde::ser::Error;
-use serde::Serialize;
 use std::fmt;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
+
+use serde::ser::Error;
+use serde::Serialize;
+
 use sui_types::base_types::ObjectRef;
+use sui_types::error::SuiError;
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::CertifiedTransaction;
+use sui_types::messages::{CertifiedTransaction, TransactionEffects};
 use sui_types::object::Object;
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
+pub enum TransactionResponse {
+    EffectResponse(CertifiedTransaction, TransactionEffects),
+    PublishResponse(PublishResponse),
+    MergeCoinResponse(MergeCoinResponse),
+    SplitCoinResponse(SplitCoinResponse),
+}
+
+impl TransactionResponse {
+    pub fn to_publish_response(self) -> Result<PublishResponse, SuiError> {
+        match self {
+            TransactionResponse::PublishResponse(resp) => Ok(resp),
+            _ => Err(SuiError::UnexpectedMessage),
+        }
+    }
+
+    pub fn to_merge_coin_response(self) -> Result<MergeCoinResponse, SuiError> {
+        match self {
+            TransactionResponse::MergeCoinResponse(resp) => Ok(resp),
+            _ => Err(SuiError::UnexpectedMessage),
+        }
+    }
+
+    pub fn to_split_coin_response(self) -> Result<SplitCoinResponse, SuiError> {
+        match self {
+            TransactionResponse::SplitCoinResponse(resp) => Ok(resp),
+            _ => Err(SuiError::UnexpectedMessage),
+        }
+    }
+
+    pub fn to_effect_response(
+        self,
+    ) -> Result<(CertifiedTransaction, TransactionEffects), SuiError> {
+        match self {
+            TransactionResponse::EffectResponse(cert, effects) => Ok((cert, effects)),
+            _ => Err(SuiError::UnexpectedMessage),
+        }
+    }
+}
+
+#[derive(Serialize, Clone, Debug)]
 pub struct SplitCoinResponse {
     /// Certificate of the transaction
     pub certificate: CertifiedTransaction,
@@ -48,7 +91,7 @@ impl Display for SplitCoinResponse {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct MergeCoinResponse {
     /// Certificate of the transaction
     pub certificate: CertifiedTransaction,
@@ -73,7 +116,7 @@ impl Display for MergeCoinResponse {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct PublishResponse {
     /// Certificate of the transaction
     pub certificate: CertifiedTransaction,
