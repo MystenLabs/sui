@@ -102,8 +102,7 @@ export type Signature = number[];
 
 type SuiAddressHexStr = string;
 
-const hexStringPattern = /$0x[0-9a-fA-F]*^/;
-const suiAddressHexPattern = /$0x[0-9a-fA-F]{20}^/;
+const suiAddressHexPattern = /^0x[0-9a-fA-F]{20}/;
 const isSuiAddressHexStr = (str: string) => suiAddressHexPattern.test(str);
 
 const isValidSuiIdBytes = (obj: { bytes: string | number[] }) => {
