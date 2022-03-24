@@ -5,16 +5,14 @@ use std::borrow::Borrow;
 use std::fmt::Debug;
 use thiserror::Error;
 
-use std::collections::{BTreeSet, BTreeMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 use curve25519_dalek::ristretto::RistrettoPoint;
 use ed25519_dalek::Sha512;
 
-
 #[cfg(test)]
 #[path = "unit_tests/waypoint_tests.rs"]
 mod waypoint_tests;
-
 
 #[derive(Eq, PartialEq, Clone, Debug, Error)]
 #[allow(clippy::large_enum_variant)]
@@ -88,7 +86,6 @@ pub struct Waypoint {
 }
 
 impl Waypoint {
-    
     /// Make a new waypoint.
     pub fn new(sequence_number: u64) -> Waypoint {
         Waypoint {
@@ -234,8 +231,7 @@ impl<K> GlobalCheckpoint<K>
 where
     K: Eq + Ord + Clone,
 {
-
-    /// Initializes an empty global checkpoint at a specific 
+    /// Initializes an empty global checkpoint at a specific
     /// sequence number.
     pub fn new(sequence_number: u64) -> GlobalCheckpoint<K> {
         GlobalCheckpoint {
@@ -247,7 +243,7 @@ where
     /// Inserts a waypoint diff into the checkpoint. If the checkpoint
     /// is empty both ends of the diff are inserted, and the reference
     /// waypoint set to their union. If there are already waypoints into
-    /// this checkpoint the first part of the diff should be in the 
+    /// this checkpoint the first part of the diff should be in the
     /// checkpoint and the second is added and updates all waypoints with
     /// the new union of all items.
     pub fn insert(&mut self, diff: WaypointDiff<K>) -> Result<(), WaypointError> {
@@ -319,7 +315,7 @@ where
                 .insert_all(additional_first_items.iter());
 
             // Update existing keys
-            for (_k, v) in &mut self.authority_waypoints {
+            for v in self.authority_waypoints.values_mut() {
                 let add_items = additional_first_items.clone();
                 v.items.extend(add_items);
             }
@@ -336,12 +332,12 @@ where
         Ok(())
     }
 
-    /// Checks the internal invariants of the checkpoint, namely that 
-    /// all the contained waypoints + the associated items lead to the 
+    /// Checks the internal invariants of the checkpoint, namely that
+    /// all the contained waypoints + the associated items lead to the
     /// reference waypoint.
     pub fn check(&self) -> bool {
         let root = self.reference_waypoint.accumulator.clone();
-        for (_k, v) in &self.authority_waypoints {
+        for v in self.authority_waypoints.values() {
             let mut inner_root = v.waypoint.accumulator.clone();
             inner_root.insert_all(v.items.iter());
 
@@ -382,8 +378,7 @@ where
             first_root.insert_all(item_sum.iter());
 
             let mut ck2 = self.clone();
-            ck2.insert(diff.clone().swap()).is_ok()
-                && first_root == ck2.reference_waypoint.accumulator
+            ck2.insert(diff.swap()).is_ok() && first_root == ck2.reference_waypoint.accumulator
         });
 
         Ok(item_sum)
