@@ -5,32 +5,9 @@ import { useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import theme from '../../styles/theme.module.css';
-import {
-    type AddressOwner,
-    DefaultRpcClient,
-} from '../../utils/internetapi/rpc';
+import { DefaultRpcClient } from '../../utils/internetapi/rpc';
 import ObjectLoaded from './ObjectLoaded';
-
-type DataType = {
-    id: string;
-    category?: string;
-    owner: string | AddressOwner;
-    version: string;
-    readonly?: string;
-    objType: string;
-    name?: string;
-    ethAddress?: string;
-    ethTokenId?: string;
-    contract_id?: { bytes: string };
-    data: {
-        contents: {
-            [key: string]: any;
-        };
-        owner?: { ObjectOwner: [] };
-        tx_digest?: number[] | string;
-    };
-    loadState?: string;
-};
+import { type DataType } from './ObjectResultType';
 
 const DATATYPE_DEFAULT: DataType = {
     id: '',

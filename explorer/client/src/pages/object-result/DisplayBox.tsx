@@ -1,29 +1,9 @@
 import { useState, useCallback } from 'react';
 
-import { type AddressOwner } from '../../utils/internetapi/rpc';
 import { asciiFromNumberBytes } from '../../utils/internetapi/utility_functions';
+import { type DataType } from './ObjectResultType';
 
 import styles from './ObjectResult.module.css';
-type DataType = {
-    id: string;
-    category?: string;
-    owner: string | AddressOwner;
-    version: string;
-    readonly?: string;
-    objType: string;
-    name?: string;
-    ethAddress?: string;
-    ethTokenId?: string;
-    contract_id?: { bytes: string };
-    data: {
-        contents: {
-            [key: string]: any;
-        };
-        owner?: { ObjectOwner: [] };
-        tx_digest?: number[] | string;
-    };
-    loadState?: string;
-};
 
 function DisplayBox({ data }: { data: DataType }) {
     const [hasDisplayLoaded, setHasDisplayLoaded] = useState(false);
