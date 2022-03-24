@@ -127,7 +127,10 @@ async fn handle_consensus_output() {
         buffer_size: NETWORK_BUFFER_SIZE,
         consensus_delay: Duration::from_millis(0),
     };
-    Sequencer::spawn(sequencer).await;
+    let store_path = temp_testdir::TempDir::default();
+    Sequencer::spawn(sequencer, store_path.as_ref())
+        .await
+        .unwrap();
 
     // Spawn a consensus client.
     let state = Arc::new(authority);
@@ -154,6 +157,9 @@ async fn handle_consensus_output() {
         state.db().last_consensus_index().unwrap(),
         SequenceNumber::from(1)
     );
+
+    // Cleanup the storage.
+    let _ = std::fs::remove_dir_all(store_path);
 }
 
 #[tokio::test]
@@ -170,7 +176,7 @@ async fn test_guardrail() {
 }
 
 #[tokio::test]
-async fn test_sync() {
+async fn sync_with_consensus() {
     // Initialize an authority with a (owned) gas object and a shared object.
     let mut objects = test_gas_objects();
     objects.push(test_shared_object());
@@ -192,7 +198,10 @@ async fn test_sync() {
         buffer_size: NETWORK_BUFFER_SIZE,
         consensus_delay: Duration::from_millis(0),
     };
-    Sequencer::spawn(sequencer).await;
+    let store_path = temp_testdir::TempDir::default();
+    Sequencer::spawn(sequencer, store_path.as_ref())
+        .await
+        .unwrap();
 
     // Submit a certificate to the sequencer.
     tokio::task::yield_now().await;
@@ -252,4 +261,7 @@ async fn test_sync() {
         .unwrap()
         .unwrap();
     assert_eq!(certificate_1_sequence, SequenceNumber::from(1));
+
+    // Cleanup the storage.
+    let _ = std::fs::remove_dir_all(store_path);
 }
