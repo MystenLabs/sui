@@ -40,7 +40,7 @@ pub struct Sequencer {
 impl Sequencer {
     /// Spawn a new sequencer. The sequencer is made of a number of component each running
     /// in their own tokio task.
-    pub async fn spawn(sequencer: Self, store_path: &str) -> SuiResult<()> {
+    pub async fn spawn(sequencer: Self, store_path: &Path) -> SuiResult<()> {
         let (tx_input, rx_input) = channel(100);
         let (tx_subscriber, rx_subscriber) = channel(100);
 

@@ -127,9 +127,10 @@ async fn handle_consensus_output() {
         buffer_size: NETWORK_BUFFER_SIZE,
         consensus_delay: Duration::from_millis(0),
     };
-    let store_path = "test_storage_handle_consensus_output";
-    let _ = std::fs::remove_dir_all(store_path);
-    Sequencer::spawn(sequencer, store_path).await.unwrap();
+    let store_path = temp_testdir::TempDir::default();
+    Sequencer::spawn(sequencer, store_path.as_ref())
+        .await
+        .unwrap();
 
     // Spawn a consensus client.
     let state = Arc::new(authority);
@@ -197,9 +198,10 @@ async fn sync_with_consensus() {
         buffer_size: NETWORK_BUFFER_SIZE,
         consensus_delay: Duration::from_millis(0),
     };
-    let store_path = "test_storage_sync_with_consensus";
-    let _ = std::fs::remove_dir_all(store_path);
-    Sequencer::spawn(sequencer, store_path).await.unwrap();
+    let store_path = temp_testdir::TempDir::default();
+    Sequencer::spawn(sequencer, store_path.as_ref())
+        .await
+        .unwrap();
 
     // Submit a certificate to the sequencer.
     tokio::task::yield_now().await;
