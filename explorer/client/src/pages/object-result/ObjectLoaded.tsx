@@ -14,8 +14,6 @@ import styles from './ObjectResult.module.css';
 
 function ObjectLoaded({ data }: { data: DataType }) {
     // TODO - restore or remove this functionality
-    const IS_SMART_CONTRACT = (data: any) => false;
-
     const [showDescription, setShowDescription] = useState(true);
     const [showProperties, setShowProperties] = useState(false);
     const [showConnectedEntities, setShowConnectedEntities] = useState(false);
@@ -295,7 +293,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             )}
                         </div>
                     )}
-                    {!IS_SMART_CONTRACT(data) && properties.length > 0 && (
+                    {properties.length > 0 && (
                         <>
                             <h2
                                 className={styles.clickableheader}

@@ -1,6 +1,4 @@
-//import 'ace-builds/src-noconflict/theme-github';
 import React, { useEffect, useState } from 'react';
-//import AceEditor from 'react-ace';
 import { useLocation, useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
