@@ -4,7 +4,9 @@
 use anyhow::Result;
 
 use crate::bytecode_rewriter::ModuleHandleRewriter;
-use move_binary_format::{errors::PartialVMResult, file_format::CompiledModule, normalized::Type};
+use move_binary_format::{
+    access::ModuleAccess, errors::PartialVMResult, file_format::CompiledModule, normalized::Type,
+};
 use sui_framework::EventType;
 use sui_types::{
     base_types::*,
@@ -30,7 +32,7 @@ use move_vm_runtime::{native_functions::NativeFunctionTable, session::ExecutionR
 use std::{
     borrow::Borrow,
     cmp,
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     convert::TryFrom,
     fmt::Debug,
     sync::Arc,
@@ -368,6 +370,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         modules,
         ctx,
         gas_budget - gas_used_for_publish,
+        package_id
     ) {
         ExecutionStatus::Success { gas_used, .. } => gas_used,
         ExecutionStatus::Failure { gas_used, error } => {
@@ -395,6 +398,7 @@ pub fn store_package_and_init_modules<
     modules: Vec<CompiledModule>,
     ctx: &mut TxContext,
     gas_budget: u64,
+    package_id: ObjectID,
 ) -> ExecutionStatus {
     let mut modules_to_init = Vec::new();
     for module in modules.iter() {
@@ -405,7 +409,33 @@ pub fn store_package_and_init_modules<
 
     // wrap the modules in an object, write it to the store
     // The call to unwrap() will go away once we remove address owner from Immutable objects.
-    let package_object = Object::new_package(modules, ctx.digest());
+
+    // Must populate commitments to deps
+    let mut deps = BTreeSet::new();
+    for m in &modules {
+        let mut g: BTreeSet<ObjectID> = m
+            .module_handles
+            .iter()
+            .filter_map(|j| {
+                let r = ObjectID::from(*m.address_identifier_at(j.address));
+                if r == package_id {
+                    None
+                } else {
+                    Some(r)
+                }
+            })
+            .collect();
+        deps.append(&mut g);
+    }
+
+    // Get the hashes of all the external deps
+    // Okay to unwrap since dep objects must exist on chain for new package to exist
+    let deps: Vec<PackageObjectRef> = deps
+        .iter()
+        .map(|id| (*id, state_view.read_object(id).unwrap().digest()))
+        .collect();
+
+    let package_object = Object::new_package(modules, deps, ctx.digest());
     state_view.set_create_object_ids(HashSet::from([package_object.id()]));
     state_view.write_object(package_object);
 

@@ -14,7 +14,7 @@ use sui_types::{
     crypto::get_key_pair,
     error::SuiResult,
     gas_coin::GAS,
-    object::{Data, Owner},
+    object::{Data, Owner, OBJECT_START_VERSION},
     storage::{BackingPackageStore, Storage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
@@ -252,7 +252,7 @@ fn test_object_basics() {
     let id1 = storage.get_created_keys().pop().unwrap();
     storage.flush();
     let mut obj1 = storage.read_object(&id1).unwrap();
-    let mut obj1_seq = SequenceNumber::from(1);
+    let mut obj1_seq = OBJECT_START_VERSION;
     assert!(obj1.owner == addr1);
     assert_eq!(obj1.version(), obj1_seq);
 
@@ -415,7 +415,7 @@ fn test_wrap_unwrap() {
         .unwrap()
         .type_specific_contents()
         .to_vec();
-    assert_eq!(obj1.version(), SequenceNumber::from(1));
+    assert_eq!(obj1.version(), OBJECT_START_VERSION);
 
     // 2. wrap addr
     call(
@@ -977,7 +977,7 @@ fn test_simple_call() {
     storage.flush();
     let obj = storage.read_object(&id).unwrap();
     assert!(obj.owner == addr);
-    assert_eq!(obj.version(), SequenceNumber::from(1));
+    assert_eq!(obj.version(), OBJECT_START_VERSION);
     let move_obj = obj.data.try_as_move().unwrap();
     assert_eq!(
         u64::from_le_bytes(move_obj.type_specific_contents().try_into().unwrap()),

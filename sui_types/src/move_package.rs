@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    base_types::{ObjectID, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
+    base_types::{ObjectDigest, ObjectID, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
     error::SuiError,
     object::{Data, Object},
     SUI_FRAMEWORK_ADDRESS,
@@ -19,7 +19,10 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
-use std::{collections::BTreeMap, u32};
+use std::{
+    collections::{BTreeMap},
+    u32,
+};
 
 // TODO: robust MovePackage tests
 // #[cfg(test)]
@@ -36,10 +39,19 @@ pub struct TypeCheckSuccess {
     pub return_types: Vec<Type>, // to validate return types after the call
 }
 
+// Remove need to download objects in Gateway
+// Add verify package deps by checking package refs
+
+// Change package hash to constant. Cache it
+
+// No need for seq# as its always OBJECT_START_VERSION
+pub type PackageObjectRef = (ObjectID, ObjectDigest);
+
 // serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MovePackage {
     id: ObjectID,
+    deps: Vec<PackageObjectRef>,
     module_map: BTreeMap<String, ByteBuf>,
 }
 
@@ -48,9 +60,14 @@ impl MovePackage {
         &self.module_map
     }
 
-    pub fn from_map(id: ObjectID, module_map: &BTreeMap<String, ByteBuf>) -> Self {
+    pub fn from_map(
+        id: ObjectID,
+        module_map: &BTreeMap<String, ByteBuf>,
+        deps: &[PackageObjectRef],
+    ) -> Self {
         Self {
             id,
+            deps: deps.to_vec(),
             module_map: module_map.clone(),
         }
     }
@@ -67,6 +84,11 @@ impl MovePackage {
                 module_name: module.to_string(),
             })?;
         Ok(CompiledModule::deserialize(ser)?.self_id())
+    }
+
+    pub fn dependency_commitments(&self) -> &[PackageObjectRef] {
+        // The package dependencies comprise the union of the modules dependencies
+        &self.deps
     }
 
     /// Get the function signature for the specified function
@@ -138,8 +160,9 @@ impl MovePackage {
     }
 }
 
-impl From<&Vec<CompiledModule>> for MovePackage {
-    fn from(compiled_modules: &Vec<CompiledModule>) -> Self {
+impl From<(&Vec<CompiledModule>, &Vec<PackageObjectRef>)> for MovePackage {
+    fn from(compiled_modules_and_deps: (&Vec<CompiledModule>, &Vec<PackageObjectRef>)) -> Self {
+        let (compiled_modules, deps) = compiled_modules_and_deps;
         let id = ObjectID::from(*compiled_modules[0].self_id().address());
 
         MovePackage::from_map(
@@ -152,6 +175,7 @@ impl From<&Vec<CompiledModule>> for MovePackage {
                     (module.self_id().name().to_string(), ByteBuf::from(bytes))
                 })
                 .collect(),
+            deps,
         )
     }
 }

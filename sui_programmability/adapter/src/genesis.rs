@@ -42,10 +42,17 @@ fn create_genesis_module_objects(lib_dir: &Path) -> SuiResult<Genesis> {
     let sui_modules = sui_framework::get_sui_framework_modules(lib_dir)?;
     let std_modules =
         sui_framework::get_move_stdlib_modules(&lib_dir.join("deps").join("move-stdlib"))?;
-    let objects = vec![
-        Object::new_package(std_modules.clone(), TransactionDigest::genesis()),
-        Object::new_package(sui_modules.clone(), TransactionDigest::genesis()),
-    ];
+
+    // STD has no external dependencies
+    let std_obj = Object::new_package(std_modules.clone(), vec![], TransactionDigest::genesis());
+    let std_ref = std_obj.compute_object_reference();
+    // Sui depends at most on STD
+    let sui_obj = Object::new_package(
+        sui_modules.clone(),
+        vec![(std_ref.0, std_ref.2)],
+        TransactionDigest::genesis(),
+    );
+    let objects = vec![std_obj, sui_obj];
     let modules = vec![std_modules, sui_modules];
     Ok(Genesis { objects, modules })
 }

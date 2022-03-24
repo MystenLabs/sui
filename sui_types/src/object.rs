@@ -4,7 +4,7 @@
 use crate::coin::Coin;
 use crate::crypto::{sha3_hash, BcsSignable};
 use crate::error::{SuiError, SuiResult};
-use crate::move_package::MovePackage;
+use crate::move_package::{MovePackage, PackageObjectRef};
 use crate::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -324,10 +324,11 @@ impl Object {
 
     pub fn new_package(
         modules: Vec<CompiledModule>,
+        deps: Vec<PackageObjectRef>,
         previous_transaction: TransactionDigest,
     ) -> Self {
         Object {
-            data: Data::Package(MovePackage::from(&modules)),
+            data: Data::Package(MovePackage::from((&modules, &deps))),
             owner: Owner::SharedImmutable,
             previous_transaction,
         }
@@ -374,7 +375,7 @@ impl Object {
 
         match &self.data {
             Move(v) => v.version(),
-            Package(_) => SequenceNumber::from(1), // modules are immutable, version is always 1
+            Package(_) => OBJECT_START_VERSION, // modules are immutable, version is constant
         }
     }
 
