@@ -370,7 +370,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         modules,
         ctx,
         gas_budget - gas_used_for_publish,
-        package_id
+        package_id,
     ) {
         ExecutionStatus::Success { gas_used, .. } => gas_used,
         ExecutionStatus::Failure { gas_used, error } => {
