@@ -4,6 +4,21 @@
 use super::*;
 use rand::Rng;
 
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Item([u8; 8]);
+
+impl Borrow<[u8]> for Item {
+    fn borrow(&self) -> &[u8] {
+        &self.0[..]
+    }
+}
+
+impl Borrow<[u8]> for &Item {
+    fn borrow(&self) -> &[u8] {
+        &self.0[..]
+    }
+}
+
 fn make_item() -> Item {
     let mut rng = rand::thread_rng();
     let item: [u8; 8] = rng.gen();

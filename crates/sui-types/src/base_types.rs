@@ -189,6 +189,11 @@ pub struct ObjectDigest(
     pub [u8; 32],
 ); // We use SHA3-256 hence 32 bytes here
 
+#[serde_as]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
+pub struct TransactionEffectsDigest(#[serde_as(as = "Bytes")] pub [u8; TRANSACTION_DIGEST_LENGTH]);
+
+
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
 

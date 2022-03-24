@@ -10,6 +10,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use curve25519_dalek::ristretto::RistrettoPoint;
 use ed25519_dalek::Sha512;
 
+use crate::{base_types::AuthorityName, committee::Committee};
+
 #[cfg(test)]
 #[path = "unit_tests/waypoint_tests.rs"]
 mod waypoint_tests;
@@ -24,21 +26,6 @@ pub enum WaypointError {
 impl WaypointError {
     pub fn generic(msg: String) -> WaypointError {
         WaypointError::Generic { msg }
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Item([u8; 8]);
-
-impl Borrow<[u8]> for Item {
-    fn borrow(&self) -> &[u8] {
-        &self.0[..]
-    }
-}
-
-impl Borrow<[u8]> for &Item {
-    fn borrow(&self) -> &[u8] {
-        &self.0[..]
     }
 }
 
@@ -63,13 +50,13 @@ impl Accumulator {
     }
 
     // Insert all items from an iterator into the accumulator
-    pub fn insert_all<I, It>(&mut self, items: It)
+    pub fn insert_all<'a, I, It>(&'a mut self, items: It)
     where
-        It: Iterator<Item = I>,
-        I: Borrow<[u8]>,
+        It: Iterator<Item = &'a I>,
+        I: 'a + Borrow<[u8]>,
     {
         for i in items {
-            self.insert(&i);
+            self.insert(i);
         }
     }
 }
@@ -95,7 +82,10 @@ impl Waypoint {
     }
 
     /// Inserts an element into the accumulator
-    pub fn insert(&mut self, item: &Item) {
+    pub fn insert<I>(&mut self, item: &I)
+    where
+        I: Borrow<[u8]>,
+    {
         self.accumulator.insert(item);
     }
 }
@@ -108,20 +98,22 @@ impl Waypoint {
 */
 
 #[derive(Clone)]
-pub struct WaypointWithItems<K>
+pub struct WaypointWithItems<K, I>
 where
     K: Clone,
+    I:,
 {
     pub key: K,
     pub waypoint: Waypoint,
-    pub items: BTreeSet<Item>,
+    pub items: BTreeSet<I>,
 }
 
-impl<K> WaypointWithItems<K>
+impl<K, I> WaypointWithItems<K, I>
 where
     K: Clone,
+    I: Borrow<[u8]> + Ord,
 {
-    pub fn new(key: K, sequence_number: u64) -> WaypointWithItems<K> {
+    pub fn new(key: K, sequence_number: u64) -> WaypointWithItems<K, I> {
         WaypointWithItems {
             key,
             waypoint: Waypoint::new(sequence_number),
@@ -130,18 +122,18 @@ where
     }
 
     /// Insert an element in the accumulator and list of items
-    pub fn insert_full(&mut self, item: Item) {
+    pub fn insert_full(&mut self, item: I) {
         self.waypoint.accumulator.insert(&item);
         self.items.insert(item);
     }
 
     /// Insert an element in the accumulator only
-    pub fn insert_accumulator(&mut self, item: &Item) {
+    pub fn insert_accumulator(&mut self, item: &I) {
         self.waypoint.accumulator.insert(item);
     }
 
     /// Insert an element in the items only
-    pub fn insert_item(&mut self, item: Item) {
+    pub fn insert_item(&mut self, item: I) {
         self.items.insert(item);
     }
 }
@@ -151,17 +143,19 @@ where
     and elements that make up this difference.
 */
 #[derive(Clone)]
-pub struct WaypointDiff<K>
+pub struct WaypointDiff<K, I>
 where
     K: Clone,
+    I: Borrow<[u8]> + Ord,
 {
-    pub first: WaypointWithItems<K>,
-    pub second: WaypointWithItems<K>,
+    pub first: WaypointWithItems<K, I>,
+    pub second: WaypointWithItems<K, I>,
 }
 
-impl<K> WaypointDiff<K>
+impl<K, I> WaypointDiff<K, I>
 where
     K: Clone,
+    I: Borrow<[u8]> + Ord,
 {
     pub fn new<V>(
         first_key: K,
@@ -170,9 +164,9 @@ where
         second_key: K,
         second: Waypoint,
         missing_from_second: V,
-    ) -> WaypointDiff<K>
+    ) -> WaypointDiff<K, I>
     where
-        V: Iterator<Item = Item>,
+        V: Iterator<Item = I>,
     {
         let w1 = WaypointWithItems {
             key: first_key,
@@ -192,7 +186,7 @@ where
     }
 
     /// Swap the two waypoints.
-    pub fn swap(self) -> WaypointDiff<K> {
+    pub fn swap(self) -> WaypointDiff<K, I> {
         WaypointDiff {
             first: self.second,
             second: self.first,
@@ -219,21 +213,23 @@ where
     that can be derived between all of them.
 */
 #[derive(Clone)]
-pub struct GlobalCheckpoint<K>
+pub struct GlobalCheckpoint<K, I>
 where
     K: Clone,
+    I: Borrow<[u8]> + Ord,
 {
     pub reference_waypoint: Waypoint,
-    pub authority_waypoints: BTreeMap<K, WaypointWithItems<K>>,
+    pub authority_waypoints: BTreeMap<K, WaypointWithItems<K, I>>,
 }
 
-impl<K> GlobalCheckpoint<K>
+impl<K, I> GlobalCheckpoint<K, I>
 where
     K: Eq + Ord + Clone,
+    I: Borrow<[u8]> + Ord + Clone,
 {
     /// Initializes an empty global checkpoint at a specific
     /// sequence number.
-    pub fn new(sequence_number: u64) -> GlobalCheckpoint<K> {
+    pub fn new(sequence_number: u64) -> GlobalCheckpoint<K, I> {
         GlobalCheckpoint {
             reference_waypoint: Waypoint::new(sequence_number),
             authority_waypoints: BTreeMap::new(),
@@ -246,7 +242,7 @@ where
     /// this checkpoint the first part of the diff should be in the
     /// checkpoint and the second is added and updates all waypoints with
     /// the new union of all items.
-    pub fn insert(&mut self, diff: WaypointDiff<K>) -> Result<(), WaypointError> {
+    pub fn insert(&mut self, diff: WaypointDiff<K, I>) -> Result<(), WaypointError> {
         if !diff.check() {
             return Err(WaypointError::generic("Bad waypoint diff".to_string()));
         }
@@ -350,7 +346,7 @@ where
 
     /// Provides the set of element that need to be added to the first party
     /// to catch up with the checkpoint (and maybe surpass it).
-    pub fn catch_up_items(&self, diff: WaypointDiff<K>) -> Result<BTreeSet<Item>, WaypointError> {
+    pub fn catch_up_items(&self, diff: WaypointDiff<K, I>) -> Result<BTreeSet<I>, WaypointError> {
         // If the authority is one of the participants in the checkpoint
         // just read the different.
         if self.authority_waypoints.contains_key(&diff.first.key) {
@@ -382,5 +378,21 @@ where
         });
 
         Ok(item_sum)
+    }
+}
+
+impl<I> GlobalCheckpoint<AuthorityName, I>
+where
+    I: Borrow<[u8]> + Ord,
+{
+    /// In case keys are authority names we can check if the set of
+    /// authorities represented in this checkpoint represent a quorum
+    pub fn has_quorum(&self, committee: &Committee) -> bool {
+        let authority_weights: usize = self
+            .authority_waypoints
+            .keys()
+            .map(|name| committee.weight(name))
+            .sum();
+        authority_weights > committee.quorum_threshold()
     }
 }
