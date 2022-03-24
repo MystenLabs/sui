@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2044
+# shellcheck disable=SC2044,SC2086,SC2016
 # This script checks each file starts with a license comment
 set -e
 set -o pipefail
