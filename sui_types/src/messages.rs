@@ -18,6 +18,7 @@ use move_core_types::{
 use name_variant::NamedVariant;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
+use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
 
 use crate::crypto::{
     sha3_hash, AuthoritySignature, BcsSignable, Signable, Signature, VerificationObligation,
@@ -334,11 +335,44 @@ const_assert_eq!(
 
 */
 
+// Generic types instantiated multiple times in the same Serde tracing session
+// requires a walk-around: https://crates.io/crates/serde-name
 #[derive(Debug, Eq, Clone, Serialize, Deserialize)]
+#[serde(remote = "AuthoritySignedData")]
 pub struct AuthoritySignedData<D> {
     pub data: D,
     pub authority: AuthorityName,
     pub signature: AuthoritySignature,
+}
+
+impl<'de, T> Deserialize<'de> for AuthoritySignedData<T>
+where
+    T: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        AuthoritySignedData::deserialize(DeserializeNameAdapter::new(
+            deserializer,
+            std::any::type_name::<Self>(),
+        ))
+    }
+}
+
+impl<T> Serialize for AuthoritySignedData<T>
+where
+    T: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        AuthoritySignedData::serialize(
+            self,
+            SerializeNameAdapter::new(serializer, std::any::type_name::<Self>()),
+        )
+    }
 }
 
 impl<D: Hash> Hash for AuthoritySignedData<D> {

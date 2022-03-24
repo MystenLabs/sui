@@ -305,7 +305,7 @@ ObjectResponse:
         TYPENAME: Object
     - lock:
         OPTION:
-          TYPENAME: SignedTransaction
+          TYPENAME: "sui_types::messages::AuthoritySignedData<sui_types::messages::Transaction>"
     - layout:
         OPTION:
           TYPENAME: MoveStructLayout
@@ -336,7 +336,7 @@ SerializedMessage:
     1:
       Vote:
         NEWTYPE:
-          TYPENAME: SignedTransaction
+          TYPENAME: "sui_types::messages::AuthoritySignedData<sui_types::messages::Transaction>"
     2:
       Cert:
         NEWTYPE:
@@ -391,22 +391,6 @@ SignedBatch:
   STRUCT:
     - batch:
         TYPENAME: AuthorityBatch
-    - authority:
-        TYPENAME: PublicKeyBytes
-    - signature:
-        TYPENAME: AuthoritySignature
-SignedTransaction:
-  STRUCT:
-    - transaction:
-        TYPENAME: Transaction
-    - authority:
-        TYPENAME: PublicKeyBytes
-    - signature:
-        TYPENAME: AuthoritySignature
-SignedTransactionEffects:
-  STRUCT:
-    - effects:
-        TYPENAME: TransactionEffects
     - authority:
         TYPENAME: PublicKeyBytes
     - signature:
@@ -833,13 +817,13 @@ TransactionInfoResponse:
   STRUCT:
     - signed_transaction:
         OPTION:
-          TYPENAME: SignedTransaction
+          TYPENAME: "sui_types::messages::AuthoritySignedData<sui_types::messages::Transaction>"
     - certified_transaction:
         OPTION:
           TYPENAME: CertifiedTransaction
     - signed_effects:
         OPTION:
-          TYPENAME: SignedTransactionEffects
+          TYPENAME: "sui_types::messages::AuthoritySignedData<sui_types::messages::TransactionEffects>"
 TransactionKind:
   ENUM:
     0:
@@ -907,4 +891,20 @@ UpdateItem:
       Batch:
         NEWTYPE:
           TYPENAME: SignedBatch
+"sui_types::messages::AuthoritySignedData<sui_types::messages::Transaction>":
+  STRUCT:
+    - data:
+        TYPENAME: Transaction
+    - authority:
+        TYPENAME: PublicKeyBytes
+    - signature:
+        TYPENAME: AuthoritySignature
+"sui_types::messages::AuthoritySignedData<sui_types::messages::TransactionEffects>":
+  STRUCT:
+    - data:
+        TYPENAME: TransactionEffects
+    - authority:
+        TYPENAME: PublicKeyBytes
+    - signature:
+        TYPENAME: AuthoritySignature
 
