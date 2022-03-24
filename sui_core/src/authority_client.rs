@@ -3,10 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use sui_network::network::NetworkClient;
+use futures::channel::mpsc::{channel, Receiver};
+use futures::SinkExt;
+use std::io;
+use sui_network::network::{parse_recv_bytes, NetworkClient};
 use sui_types::batch::UpdateItem;
 use sui_types::{error::SuiError, messages::*, serialize::*};
-use tokio::sync::mpsc::Sender;
+
+static MAX_ERRORS: i32 = 10;
+static BUFFER_SIZE: usize = 100;
 
 #[async_trait]
 pub trait AuthorityAPI {
@@ -44,9 +49,7 @@ pub trait AuthorityAPI {
     async fn handle_batch_streaming(
         &self,
         request: BatchInfoRequest,
-        channel: Sender<Result<BatchInfoResponseItem, SuiError>>,
-        max_errors: i32,
-    ) -> Result<(), SuiError>;
+    ) -> Result<Receiver<Result<BatchInfoResponseItem, SuiError>>, io::Error>;
 }
 
 #[derive(Clone)]
@@ -122,13 +125,11 @@ impl AuthorityAPI for AuthorityClient {
     async fn handle_batch_streaming(
         &self,
         request: BatchInfoRequest,
-        channel: Sender<Result<BatchInfoResponseItem, SuiError>>,
-        max_errors: i32,
-    ) -> Result<(), SuiError> {
-        let (tx_cancellation, tr_cancellation) = tokio::sync::oneshot::channel();
-        let mut inflight_stream = self
+    ) -> Result<Receiver<Result<BatchInfoResponseItem, SuiError>>, io::Error> {
+        let (mut tx_output, tr_output) = channel(BUFFER_SIZE);
+        let mut tcp_stream = self
             .0
-            .send_recv_bytes_stream(serialize_batch_request(&request), tr_cancellation)
+            .connect_for_stream(serialize_batch_request(&request))
             .await?;
 
         let mut error_count = 0;
@@ -137,38 +138,37 @@ impl AuthorityAPI for AuthorityClient {
         // BatchInfoResponseItem, then send a Result<BatchInfoResponseItem, SuiError to the channel
         // that was passed in. For each message, also check if we have reached the last batch in the
         // request, and when we do, end the inflight stream task using tx_cancellation.
-        while let Some(data) = inflight_stream.receiver.recv().await {
-            match deserialize_batch_info(data) {
+        loop {
+            let next_data = tcp_stream.read_data().await.transpose();
+            let data_result = parse_recv_bytes(next_data);
+            match deserialize_batch_info(data_result) {
                 Ok(batch_info_response_item) => {
                     // send to the caller via the channel
-                    let _ = channel.send(Ok(batch_info_response_item.clone())).await;
+                    let _ = tx_output.send(Ok(batch_info_response_item.clone())).await;
 
                     // check for ending conditions
                     match batch_info_response_item {
                         BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
                             if signed_batch.batch.next_sequence_number > request.end {
-                                let _ = tx_cancellation.send(());
                                 break;
                             }
                         }
                         BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
                             if seq > request.end {
-                                let _ = tx_cancellation.send(());
                                 break;
                             }
                         }
                     }
                 }
                 Err(e) => {
-                    let _ = channel.send(Result::Err(e)).await;
-                    error_count = error_count + 1;
-                    if error_count >= max_errors {
-                        let _ = tx_cancellation.send(());
+                    let _ = tx_output.send(Result::Err(e)).await;
+                    error_count += 1;
+                    if error_count >= MAX_ERRORS {
                         break;
                     }
                 }
             }
         }
-        Ok(())
+        Ok(tr_output)
     }
 }

@@ -3,16 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::same_item_push)] // get_key_pair returns random elements
 
-use std::env;
 use std::fs;
 use std::path::Path;
 use std::{
     collections::{BTreeMap, HashMap},
     convert::TryInto,
+    env, io,
     sync::Arc,
 };
 
 use async_trait::async_trait;
+use futures::channel::mpsc::Receiver;
 use futures::lock::Mutex;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
 use signature::Signer;
@@ -26,7 +27,6 @@ use sui_types::error::SuiError::ObjectNotFound;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::Transaction;
 use sui_types::object::{Data, Object, Owner, GAS_VALUE_FOR_TESTING};
-use tokio::sync::mpsc::Sender;
 
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::gateway_state::gateway_store::AccountStore;
@@ -118,10 +118,7 @@ impl AuthorityAPI for LocalAuthorityClient {
     async fn handle_batch_streaming(
         &self,
         _request: BatchInfoRequest,
-        _channel: Sender<Result<BatchInfoResponseItem, SuiError>>,
-        _max_errors: i32,
-    ) -> Result<(), SuiError>
-    {
+    ) -> Result<Receiver<Result<BatchInfoResponseItem, SuiError>>, io::Error> {
         todo!()
     }
 }

@@ -4,6 +4,8 @@
 
 use crate::authority_client::AuthorityAPI;
 use async_trait::async_trait;
+use futures::channel::mpsc::Receiver;
+use std::io;
 use sui_types::crypto::PublicKeyBytes;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 
@@ -11,7 +13,6 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };
-use tokio::sync::mpsc::Sender;
 
 #[derive(Clone)]
 pub struct SafeClient<C> {
@@ -263,9 +264,7 @@ where
     async fn handle_batch_streaming(
         &self,
         _request: BatchInfoRequest,
-        _channel: Sender<Result<BatchInfoResponseItem, SuiError>>,
-        _max_errors: i32,
-    ) -> Result<(), SuiError> {
+    ) -> Result<Receiver<Result<BatchInfoResponseItem, SuiError>>, io::Error> {
         todo!()
     }
 }

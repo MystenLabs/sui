@@ -12,17 +12,12 @@ use sui_types::{error::*, serialize::*};
 use tracing::*;
 
 use std::io;
-use std::time::Duration;
-use tokio::task::{JoinError, JoinHandle};
-use tokio::time;
 
 use futures::stream;
 use futures::SinkExt;
 use futures::StreamExt;
-use tokio::sync::{
-    mpsc::{channel,Receiver},
-    oneshot::Receiver as oneshotReceiver,
-};
+use tokio::task::JoinError;
+use tokio::time;
 
 #[derive(Clone)]
 pub struct NetworkClient {
@@ -50,52 +45,12 @@ impl NetworkClient {
         }
     }
 
-    pub async fn send_recv_bytes_stream(
-        &self, buf: Vec<u8>,
-        rx_cancellation: oneshotReceiver<()>
-    ) -> Result<InflightStream, SuiError> {
-        let result = self
-            .send_recv_bytes_stream_internal(buf, rx_cancellation)
-            .await;
-        match result {
-            Ok(r) => Ok(r),
-            Err(error) => Err(SuiError::ClientIoError {
-                error: format!("{}", error),
-            }),
-        }
-    }
-
-    async fn send_recv_bytes_stream_internal(
-        &self, buf: Vec<u8>,
-        rx_cancellation: oneshotReceiver<()>
-    ) -> Result<InflightStream, io::Error> {
+    pub async fn connect_for_stream(&self, buf: Vec<u8>) -> Result<TcpDataStream, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port);
-        let mut stream = connect(address, self.buffer_size).await?;
+        let mut tcp_stream = connect(address, self.buffer_size).await?;
         // Send message
-        time::timeout(self.send_timeout, stream.write_data(&buf)).await??;
-        let (tx_output, tr_output) = channel(100);
-        let join_handle = tokio::spawn(async move {
-            // give a second for the caller to begin listening on the tr_output
-            tokio::time::sleep(Duration::from_secs(1)).await;
-            tokio::select! {
-                _ = rx_cancellation => {
-                    return;
-                }
-                _ = async {
-                    loop {
-                        // make a call to read_data, parse the result and send it on the channel
-                        let data = stream.read_data().await.transpose();
-                        let result = parse_recv_bytes(data);
-                        let _ = tx_output.send(result).await;
-                    }
-                } => {}
-            }
-        });
-        let inflight_stream = InflightStream {
-            receiver: tr_output,
-            join_handle: Some(join_handle),
-        };
-        return Ok(inflight_stream);
+        time::timeout(self.send_timeout, tcp_stream.write_data(&buf)).await??;
+        Ok(tcp_stream)
     }
 
     async fn send_recv_bytes_internal(&self, buf: Vec<u8>) -> Result<Option<Vec<u8>>, io::Error> {
@@ -255,15 +210,8 @@ impl PortAllocator {
     }
 }
 
-/// Represents and Inflight stream that fulfills a BatchInfoRequest potentially containing a
-/// subscription to future updates.
-pub struct InflightStream {
-    pub receiver: Receiver<Result<SerializedMessage, SuiError>>,
-    pub join_handle: Option<JoinHandle<()>>,
-}
-
 pub fn parse_recv_bytes(
-    response: Result<Option<Vec<u8>>, io::Error>
+    response: Result<Option<Vec<u8>>, io::Error>,
 ) -> Result<SerializedMessage, SuiError> {
     match response {
         Err(error) => Err(SuiError::ClientIoError {
