@@ -1,7 +1,7 @@
 {
   "title": "Sui Developer Portal",
   "tagline": "Welcome to Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move",
-  "URL": "https://docs.sui.io",
+  "URL": "https://docs.sui.io/",
   "baseUrl": "/",
   "favIcon": "/favicon2.png",
   "organizationName": "Mysten Labs",
