@@ -6,7 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use futures::future::join_all;
 use move_binary_format::CompiledModule;
 use move_package::BuildConfig;
@@ -32,7 +32,8 @@ use crate::keystore::{Keystore, KeystoreType, SuiKeystore};
 
 const SUI_DIR: &str = ".sui";
 const SUI_CONFIG_DIR: &str = "sui_config";
-const SUI_NETWORK_CONFIG: &str = "network.conf";
+pub const SUI_NETWORK_CONFIG: &str = "network.conf";
+pub const SUI_WALLET_CONFIG: &str = "wallet.conf";
 
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
@@ -53,31 +54,23 @@ pub enum SuiCommand {
 }
 
 pub fn sui_config_dir() -> Result<PathBuf, anyhow::Error> {
-    let mut p = match dirs::home_dir() {
-        Some(v) => v,
-        None => return Err(anyhow!("Cannot obtain home directory path")),
-    };
-    p.push(SUI_DIR);
-    p.push(SUI_CONFIG_DIR);
-    Ok(p)
+    match dirs::home_dir() {
+        Some(v) => Ok(v.join(SUI_DIR).join(SUI_CONFIG_DIR)),
+        None => bail!("Cannot obtain home directory path"),
+    }
 }
 
 impl SuiCommand {
     pub async fn execute(&self) -> Result<(), anyhow::Error> {
         match self {
             SuiCommand::Start { config } => {
-                let config_path = match config {
-                    Some(v) => v.clone(),
-                    None => {
-                        let mut p = sui_config_dir()?;
-                        p.push(SUI_NETWORK_CONFIG);
-                        p
-                    }
-                };
+                let config_path = config
+                    .clone()
+                    .unwrap_or(sui_config_dir()?.join(SUI_NETWORK_CONFIG));
                 let config: NetworkConfig = PersistedConfig::read(&config_path).map_err(|err| {
                     err.context(format!(
-                        "Cannot open Sui network config file at {}",
-                        config_path.to_str().unwrap()
+                        "Cannot open Sui network config file at {:?}",
+                        config_path
                     ))
                 })?;
                 SuiNetwork::start(&config)
@@ -87,11 +80,13 @@ impl SuiCommand {
             }
             SuiCommand::Genesis { working_dir, force } => {
                 let sui_config_dir = &match working_dir {
+                    // if a directory is specified, it must exist (it
+                    // will not be created)
                     Some(v) => v.clone(),
+                    // create default Sui config dir if not specified
+                    // on the command line and if it does not exist
+                    // yet
                     None => {
-                        // create default Sui config dir if not specified
-                        // on the command line and if it does not exist
-                        // yet
                         let config_path = sui_config_dir()?;
                         fs::create_dir_all(&config_path)?;
                         config_path
@@ -104,10 +99,8 @@ impl SuiCommand {
                 if sui_config_dir
                     .read_dir()
                     .map_err(|err| {
-                        anyhow!(err).context(format!(
-                            "Cannot open Sui config dir {}",
-                            sui_config_dir.to_str().unwrap()
-                        ))
+                        anyhow!(err)
+                            .context(format!("Cannot open Sui config dir {:?}", sui_config_dir))
                     })?
                     .next()
                     .is_some()
@@ -115,23 +108,23 @@ impl SuiCommand {
                     if *force {
                         fs::remove_dir_all(sui_config_dir).map_err(|err| {
                             anyhow!(err).context(format!(
-                                "Cannot remove Sui config dir {}",
-                                sui_config_dir.to_str().unwrap()
+                                "Cannot remove Sui config dir {:?}",
+                                sui_config_dir
                             ))
                         })?;
                         fs::create_dir(sui_config_dir).map_err(|err| {
                             anyhow!(err).context(format!(
-                                "Cannot create Sui config dir {}",
-                                sui_config_dir.to_str().unwrap()
+                                "Cannot create Sui config dir {:?}",
+                                sui_config_dir
                             ))
                         })?;
                     } else {
-                        return Err(anyhow!(format!("Cannot run genesis with non-empty Sui config directory {}, please use --force/-f option to remove existing configuration", sui_config_dir.to_str().unwrap())));
+                        bail!("Cannot run genesis with non-empty Sui config directory {}, please use --force/-f option to remove existing configuration", sui_config_dir.to_str().unwrap());
                     }
                 }
 
-                let network_path = sui_config_dir.join("network.conf");
-                let wallet_path = sui_config_dir.join("wallet.conf");
+                let network_path = sui_config_dir.join(SUI_NETWORK_CONFIG);
+                let wallet_path = sui_config_dir.join(SUI_WALLET_CONFIG);
                 let keystore_path = sui_config_dir.join("wallet.key");
                 let db_folder_path = sui_config_dir.join("client_db");
 
@@ -305,7 +298,7 @@ pub async fn genesis(
             let package_id = generate_package_id(&mut modules, &mut genesis_ctx)?;
 
             info!("Loaded package [{}] from {:?}.", package_id, path);
-            // Writing package id to network.conf for user to retrieve later.
+            // Writing package id to network config for user to retrieve later.
             network_config.loaded_move_packages.push((path, package_id));
             preload_modules.push(modules)
         }

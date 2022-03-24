@@ -17,7 +17,7 @@ use sui::config::{
 };
 use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
 use sui::keystore::KeystoreType;
-use sui::sui_commands::{genesis, SuiNetwork};
+use sui::sui_commands::{genesis, SuiNetwork, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
@@ -51,7 +51,7 @@ macro_rules! retry_assert {
 async fn test_genesis() -> Result<(), anyhow::Error> {
     let temp_dir = tempfile::tempdir()?;
     let working_dir = temp_dir.path();
-    let config = working_dir.join("network.conf");
+    let config = working_dir.join(SUI_NETWORK_CONFIG);
 
     // Start network without authorities
     let start = SuiCommand::Start {
@@ -75,17 +75,18 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         .collect::<Vec<_>>();
 
     assert_eq!(4, files.len());
-    assert!(files.contains(&"wallet.conf".to_string()));
+    assert!(files.contains(&SUI_WALLET_CONFIG.to_string()));
     assert!(files.contains(&AUTHORITIES_DB_NAME.to_string()));
-    assert!(files.contains(&"network.conf".to_string()));
+    assert!(files.contains(&SUI_NETWORK_CONFIG.to_string()));
     assert!(files.contains(&"wallet.key".to_string()));
 
-    // Check network.conf
-    let network_conf = PersistedConfig::<NetworkConfig>::read(&working_dir.join("network.conf"))?;
+    // Check network config
+    let network_conf =
+        PersistedConfig::<NetworkConfig>::read(&working_dir.join(SUI_NETWORK_CONFIG))?;
     assert_eq!(4, network_conf.authorities.len());
 
-    // Check wallet.conf
-    let wallet_conf = PersistedConfig::<WalletConfig>::read(&working_dir.join("wallet.conf"))?;
+    // Check wallet config
+    let wallet_conf = PersistedConfig::<WalletConfig>::read(&working_dir.join(SUI_WALLET_CONFIG))?;
 
     if let GatewayType::Embedded(config) = &wallet_conf.gateway {
         assert_eq!(4, config.authorities.len());
@@ -123,7 +124,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
             ..Default::default()
         }),
     };
-    let wallet_conf_path = working_dir.join("wallet.conf");
+    let wallet_conf_path = working_dir.join(SUI_WALLET_CONFIG);
     let mut wallet_config = wallet_config.persisted(&wallet_conf_path);
 
     // Add 3 accounts
@@ -160,7 +161,7 @@ async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
     let network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context with the oracle account
-    let wallet_conf_path = working_dir.path().join("wallet.conf");
+    let wallet_conf_path = working_dir.path().join(SUI_WALLET_CONFIG);
     let mut context = WalletContext::new(&wallet_conf_path)?;
 
     let recipient_address = *context.config.accounts.first().unwrap();
@@ -276,7 +277,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     let network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context.
-    let mut context = WalletContext::new(&working_dir.path().join("wallet.conf"))?;
+    let mut context = WalletContext::new(&working_dir.path().join(SUI_WALLET_CONFIG))?;
     let address = context.config.accounts.first().cloned().unwrap();
 
     // Sync client to retrieve objects from the network.
@@ -322,7 +323,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     let network = start_test_network(working_dir.path(), Some(config)).await?;
 
     // Wallet config
-    let mut context = WalletContext::new(&working_dir.path().join("wallet.conf"))?;
+    let mut context = WalletContext::new(&working_dir.path().join(SUI_WALLET_CONFIG))?;
     assert_eq!(1, context.config.accounts.len());
     let address = context.config.accounts.first().cloned().unwrap();
 
@@ -369,7 +370,8 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
 
     assert!(logs_contain("Loading 2 Move packages"));
     // Checks network config contains package ids
-    let network_conf = PersistedConfig::<NetworkConfig>::read(&working_dir.join("network.conf"))?;
+    let network_conf =
+        PersistedConfig::<NetworkConfig>::read(&working_dir.join(SUI_NETWORK_CONFIG))?;
     assert_eq!(2, network_conf.loaded_move_packages.len());
 
     // Make sure we log out package id
@@ -378,7 +380,7 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     }
 
     // Create Wallet context.
-    let wallet_conf_path = working_dir.join("wallet.conf");
+    let wallet_conf_path = working_dir.join(SUI_WALLET_CONFIG);
     let wallet_conf: WalletConfig = PersistedConfig::read(&wallet_conf_path)?;
     let address = *wallet_conf.accounts.last().unwrap();
     let mut context = WalletContext::new(&wallet_conf_path)?;
@@ -398,7 +400,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     let network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context.
-    let wallet_conf = working_dir.path().join("wallet.conf");
+    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
     let mut context = WalletContext::new(&wallet_conf)?;
     let address = context.config.accounts.first().cloned().unwrap();
 
@@ -435,7 +437,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     let network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context.
-    let wallet_conf = working_dir.path().join("wallet.conf");
+    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
     let mut context = WalletContext::new(&wallet_conf)?;
     let address = context.config.accounts.first().cloned().unwrap();
     let recipient = context.config.accounts.get(1).cloned().unwrap();
@@ -609,8 +611,8 @@ async fn start_test_network(
     genesis_config: Option<GenesisConfig>,
 ) -> Result<SuiNetwork, anyhow::Error> {
     let working_dir = working_dir.to_path_buf();
-    let network_path = working_dir.join("network.conf");
-    let wallet_path = working_dir.join("wallet.conf");
+    let network_path = working_dir.join(SUI_NETWORK_CONFIG);
+    let wallet_path = working_dir.join(SUI_WALLET_CONFIG);
     let keystore_path = working_dir.join("wallet.key");
     let db_folder_path = working_dir.join("client_db");
 
@@ -646,7 +648,7 @@ async fn start_test_network(
         })
         .collect();
 
-    // Create wallet.conf with stated authorities port
+    // Create wallet config with stated authorities port
     WalletConfig {
         accounts,
         keystore: KeystoreType::File(keystore_path),
@@ -671,7 +673,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context.
-    let wallet_conf = working_dir.path().join("wallet.conf");
+    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
 
     let mut context = WalletContext::new(&wallet_conf)?;
     let address1 = context.config.accounts.first().cloned().unwrap();
@@ -850,7 +852,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context.
-    let wallet_conf = working_dir.path().join("wallet.conf");
+    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
     let mut context = WalletContext::new(&wallet_conf)?;
     let address = context.config.accounts.first().cloned().unwrap();
 
@@ -929,7 +931,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context.
-    let wallet_conf = working_dir.path().join("wallet.conf");
+    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
 
     let mut context = WalletContext::new(&wallet_conf)?;
     let address = context.config.accounts.first().cloned().unwrap();

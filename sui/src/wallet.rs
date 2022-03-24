@@ -19,8 +19,6 @@ use sui::shell::{
 use sui::sui_commands;
 use sui::wallet_commands::*;
 
-const SUI_WALLET_CONFIG: &str = "wallet.conf";
-
 const SUI: &str = "   _____       _    _       __      ____     __
   / ___/__  __(_)  | |     / /___ _/ / /__  / /_
   \\__ \\/ / / / /   | | /| / / __ `/ / / _ \\/ __/
@@ -67,14 +65,10 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut app: App = ClientOpt::clap();
     app = app.unset_setting(AppSettings::NoBinaryName);
     let options: ClientOpt = ClientOpt::from_clap(&app.get_matches());
-    let wallet_conf_path = match options.config {
-        Some(v) => v.clone(),
-        None => {
-            let mut p = sui_commands::sui_config_dir()?;
-            p.push(SUI_WALLET_CONFIG);
-            p
-        }
-    };
+    let wallet_conf_path = options
+        .config
+        .clone()
+        .unwrap_or(sui_commands::sui_config_dir()?.join(sui_commands::SUI_WALLET_CONFIG));
 
     let mut context = WalletContext::new(&wallet_conf_path)?;
 

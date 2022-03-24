@@ -452,8 +452,8 @@ impl WalletContext {
     pub fn new(config_path: &Path) -> Result<Self, anyhow::Error> {
         let config: WalletConfig = PersistedConfig::read(config_path).map_err(|err| {
             err.context(format!(
-                "Cannot open wallet config file at {}",
-                config_path.to_str().unwrap()
+                "Cannot open wallet config file at {:?}",
+                config_path
             ))
         })?;
         let config = config.persisted(config_path);
