@@ -54,11 +54,16 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     let config = working_dir.join("network.conf");
 
     // Start network without authorities
-    let start = SuiCommand::Start { config }.execute().await;
+    let start = SuiCommand::Start {
+        config: Some(config),
+    }
+    .execute()
+    .await;
     assert!(matches!(start, Err(..)));
     // Genesis
     SuiCommand::Genesis {
-        working_dir: working_dir.to_path_buf(),
+        working_dir: Some(working_dir.to_path_buf()),
+        force: false,
     }
     .execute()
     .await?;
@@ -93,7 +98,8 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
 
     // Genesis 2nd time should fail
     let result = SuiCommand::Genesis {
-        working_dir: working_dir.to_path_buf(),
+        working_dir: Some(working_dir.to_path_buf()),
+        force: false,
     }
     .execute()
     .await;
