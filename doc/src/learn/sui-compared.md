@@ -4,9 +4,9 @@ title: How Sui Differs from Other Blockchains
 
 This page summarizes how Sui compares with existing blockchains and is intended for potential adopters of Sui to decide whether it fits their use cases. Here are Sui's key features:
 
-* Causal order vs total order (enables massively parallel execution)
-* [Sui's variant of Move](../build/move.md) and its object-centric data model (enables composable objects/NFTs)
-* Easier developer experience with the blockchain-oriented [Move programming language](https://github.com/MystenLabs/awesome-move)
+* [Causal order vs. total order](#causal-order-vs-total-order) enables massively parallel execution
+* [Sui's variant of Move](../build/move.md) and its object-centric data model make composable objects/NFTs possible
+* The blockchain-oriented [Move programming language](https://github.com/MystenLabs/awesome-move) eases the developer experience
 
 ## Traditional blockchains
 
@@ -55,7 +55,7 @@ An authority plays a role similar to "validators" or "miners" in other blockchai
 
 * Authorities do nothing until they receive a transaction or certificate from a user. Upon receiving a transaction or certificate, an authority need not communicate with other authorities in order to take action and advance its internal state machine. It may wish to communicate with other authorities to share certificates but need not do so.
 
-## Causal order vs total order
+## Causal order vs. total order
 
 Unlike most existing blockchain systems (and as the reader may have guessed from the description of write requests above), Sui does not always impose a total order on the transactions submitted by clients, with shared objects being the exception. Instead, most transactions are *causally* ordered--if a transaction `T1` produces output objects `O1` that are used as input objects in a transaction `T2`, an authority must execute `T1` before it executes `T2`. Note that `T2` need not use these objects directly for a causal relationship to exist--e.g., `T1` might produce output objects which are then used by `T3`, and `T2` might use `T3`'s output objects. However, transactions with no causal relationship can be processed by Sui authorities in any order.
 
