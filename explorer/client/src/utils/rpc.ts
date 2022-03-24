@@ -138,13 +138,8 @@ export type JsonHexBytes = { bytes: string | number[] };
 
 export type SuiRefHexBytes = { bytes: string }; // TODO - better types for hex strings
 
-export interface SuiParentChildRef {
-    child_id: SuiRefHexBytes;
-    parent_id: SuiRefHexBytes;
-}
-
-export type MoveVec = { vec: any[] };
-export type TMoveVec<T extends object> = { vec: T[] };
+export type MoveVec = { vec: any[] }
+export type TMoveVec<T extends object> = { vec: T[] }
 
 export interface ObjectInfoResponse<T> {
     owner: string;

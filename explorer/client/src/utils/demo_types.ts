@@ -1,4 +1,5 @@
-import type { AnyVec, JsonBytes, SuiParentChildRef } from './rpc';
+import type { AnyVec, JsonBytes } from "./rpc";
+
 
 export type CosmeticOption = AnyVec | RawCosmetic;
 
@@ -23,7 +24,6 @@ export interface RawMonster {
     monster_xp: number;
 }
 
-export type RawPetMonsters = SuiParentChildRef;
 
 export interface RawFarm {
     applied_farm_cosmetic_0: CosmeticOption;
@@ -34,6 +34,6 @@ export interface RawFarm {
     id: string;
     level: number;
     occupied_monster_slots: number;
-    pet_monsters: RawPetMonsters;
+    pet_monsters: any;
     total_monster_slots: number;
 }
