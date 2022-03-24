@@ -11,11 +11,11 @@
     "copyRight": "©2022 Copyright Sui. All rights reserved.",
     "privacyPolicy": {
       "label": "Privacy Policy",
-      "link": "#"
+      "link": "https://sui.io/policy/"
     },
     "terms": {
       "label": "Terms of Service",
-      "link": "#"
+      "link": "https://sui.io/terms/"
     },
     "menu": [{
         "title": "Docs",
