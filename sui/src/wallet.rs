@@ -16,7 +16,10 @@ use tracing_subscriber::EnvFilter;
 use sui::shell::{
     install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
 };
+use sui::sui_commands;
 use sui::wallet_commands::*;
+
+const SUI_WALLET_CONFIG: &str = "wallet.conf";
 
 const SUI: &str = "   _____       _    _       __      ____     __
   / ___/__  __(_)  | |     / /___ _/ / /__  / /_
@@ -35,8 +38,8 @@ struct ClientOpt {
     /// Run wallet command without interactive shell
     no_shell: bool,
     /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
-    #[structopt(long, default_value = "./wallet.conf")]
-    config: PathBuf,
+    #[structopt(long)]
+    config: Option<PathBuf>,
     /// Subcommands. Acceptable values are transfer, query_objects, benchmark, and create_accounts.
     #[structopt(subcommand)]
     cmd: Option<WalletCommands>,
@@ -64,7 +67,14 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut app: App = ClientOpt::clap();
     app = app.unset_setting(AppSettings::NoBinaryName);
     let options: ClientOpt = ClientOpt::from_clap(&app.get_matches());
-    let wallet_conf_path = options.config;
+    let wallet_conf_path = match options.config {
+        Some(v) => v.clone(),
+        None => {
+            let mut p = sui_commands::sui_config_dir()?;
+            p.push(SUI_WALLET_CONFIG);
+            p
+        }
+    };
 
     let mut context = WalletContext::new(&wallet_conf_path)?;
 
