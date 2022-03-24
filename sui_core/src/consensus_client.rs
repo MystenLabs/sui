@@ -85,7 +85,7 @@ impl ConsensusClient {
     /// and right order.
     async fn synchronize(&mut self, connection: &mut TcpDataStream) -> SuiResult<()> {
         let request = ConsensusSync {
-            sequencer_number: self.last_consensus_index,
+            sequence_number: self.last_consensus_index,
         };
         let bytes = Bytes::from(serialize_consensus_sync(&request));
         connection
@@ -106,9 +106,9 @@ impl ConsensusClient {
             Ok(SerializedMessage::ConsensusOutput(value)) => {
                 let ConsensusOutput {
                     message,
-                    sequencer_number,
+                    sequence_number,
                 } = *value;
-                (message, sequencer_number)
+                (message, sequence_number)
             }
             Ok(_) => {
                 log::error!("{}", SuiError::UnexpectedMessage);
