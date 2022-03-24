@@ -8,13 +8,9 @@ use std::path::PathBuf;
 
 use async_trait::async_trait;
 use colored::Colorize;
-use opentelemetry::global;
-use opentelemetry::sdk::propagation::TraceContextPropagator;
 use structopt::clap::{App, AppSettings};
 use structopt::StructOpt;
 use tracing::error;
-use tracing::subscriber::set_global_default;
-use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 
 use sui::shell::{
     install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
@@ -50,36 +46,15 @@ struct ClientOpt {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let file_appender = tracing_appender::rolling::daily("", "wallet.log");
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-
-    let format = tracing_subscriber::fmt::layer()
-        .with_thread_names(false)
-        .with_writer(non_blocking)
-        .compact();
-
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    let subscriber = Registry::default().with(env_filter).with(format);
-
-    if std::env::var("SUI_TRACING_ENABLE").is_ok() {
-        // Install a tracer to send traces to Jaeger.  Batching for better performance.
-        let tracer = opentelemetry_jaeger::new_pipeline()
-            .with_service_name("Sui wallet")
-            .with_max_packet_size(9216) // Default max UDP packet size on OSX
-            .with_auto_split_batch(true) // Auto split batches so they fit under packet size
-            .install_batch(opentelemetry::runtime::Tokio)
-            .expect("Could not create async Tracer");
-
-        // Create a tracing subscriber with the configured tracer
-        let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-
-        // Enable Trace Contexts for tying spans together
-        global::set_text_map_propagator(TraceContextPropagator::new());
-
-        set_global_default(subscriber.with(telemetry)).expect("Failed to set subscriber");
-    } else {
-        set_global_default(subscriber).expect("Failed to set subscriber");
-    }
+    let config = telemetry::TelemetryConfig {
+        service_name: "wallet".into(),
+        enable_tracing: std::env::var("SUI_TRACING_ENABLE").is_ok(),
+        json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
+        log_file: Some("wallet.log".into()),
+        ..Default::default()
+    };
+    #[allow(unused)]
+    let guard = telemetry::init(config);
 
     let mut app: App = ClientOpt::clap();
     app = app.unset_setting(AppSettings::NoBinaryName);
@@ -136,7 +111,7 @@ impl AsyncHandler<WalletContext> for ClientCommandHandler {
         completion_cache: CompletionCache,
     ) -> bool {
         if let Err(e) = handle_command(get_command(args), context, completion_cache).await {
-            error!("{}", e.to_string().red());
+            let _err = writeln!(stderr(), "{}", e);
         }
         false
     }
