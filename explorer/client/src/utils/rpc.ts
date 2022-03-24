@@ -72,16 +72,6 @@ export class SuiRpcClient {
         }
     }
 
-    public static modifyForDemo<T extends object>(obj: T): T {
-        for (var prop in obj) {
-            let property = obj[prop];
-            if (typeof property == 'object') {
-                this.modifyForDemo(property as unknown as object);
-            }
-        }
-
-        return obj;
-    }
 }
 
 export const hexToAscii = function (hex: string) {

@@ -278,7 +278,6 @@ const ObjectResult = (): JSX.Element => {
         let data = showObjectState;
         const innerData = data.data;
 
-        data = SuiRpcClient.modifyForDemo(data);
         data.objType = trimStdLibPrefix(data.objType);
 
         // hardcode a friendly name for gas for now
@@ -318,6 +317,7 @@ const ObjectResult = (): JSX.Element => {
             //TO DO: remove when have distinct 'name' field in Description
             .filter(([key, value]) => !/name/i.test(key))
             .filter(([_, value]) => checkIsPropertyType(value))
+            // TODO: 'display' is a object property added during demo, replace with metadata ptr?
             .filter(([key, _]) => key !== 'display');
 
         return (
