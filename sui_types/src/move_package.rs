@@ -36,11 +36,6 @@ pub struct TypeCheckSuccess {
     pub return_types: Vec<Type>, // to validate return types after the call
 }
 
-// Remove need to download objects in Gateway
-// Add verify package deps by checking package refs
-
-// Change package hash to constant. Cache it
-
 // No need for seq# as its always OBJECT_START_VERSION
 pub type PackageObjectRef = (ObjectID, ObjectDigest);
 
