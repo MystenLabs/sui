@@ -2,7 +2,7 @@
 title: Sui Prototypes
 ---
 
-Here are two short gaming pre-alpha prototypes that demonstrate the speed, scalability, and rich interactions made possible with mutable, expressive NFTs. The first prototype [Sui Monstar](https://sui.io/monstar), is playable now.
+Here are two short gaming pre-alpha prototypes that demonstrate the speed, scalability, and rich interactions made possible with mutable, expressive NFTs. The first prototype [Sui Monstars](https://sui.io/monstar), is playable now.
 
 
 ## Sui and gaming
@@ -29,7 +29,7 @@ GenITeam’s developers who worked on this collaboration are neither smart contr
 
 This proof of concept build is meant to demonstrate the capabilities for game developers unlocked through Sui. We look forward to seeing what the creative minds in the gaming community come up with as we unveil additional capabilities in the upcoming months. With each bug fixed we learned insights on what game developers look for in a SDK. Sui is committed to building SDKs that are accessible for all levels of developers with varying degrees of smart contracts expertise.
 
-Here are examples of APIs we shared, along with the smart contracts to create and update monster (named MonStars in the prototype):
+Here are examples of APIs we shared, along with the smart contracts to create and update monster (named Monstars in the prototype):
 
 
 ### API Move call - Create Monster
@@ -200,7 +200,7 @@ Gameplay:
 * Decorate your farm.
 * Raise your farm and pet levels through gameplay and interactions.
 
-In Sui Monstar, capture cute monstars and watch them get closer to you as you feed and interact with them. These monstars, your farm, and accessories are all NFTs on-chain. As you play through the game, attributes such as health, friendliness, and accessories are all updated live.
+In Sui Monstars, capture cute monstars and watch them get closer to you as you feed and interact with them. These monstars, your farm, and accessories are all NFTs on-chain. As you play through the game, attributes such as health, friendliness, and accessories are all updated live.
 
 <section class="sui-dev-video">
    <iframe id="ytplayer" type="text/html" src="https://www.youtube.com/embed/sAMT5x8W3B8?autoplay=0"  frameborder="0"></iframe>
@@ -209,7 +209,7 @@ In Sui Monstar, capture cute monstars and watch them get closer to you as you fe
 ![Update NFT properties](../../static/nft-properties.png "Equip elemental runes to your Monstar")
 *Equip elemental runes to your Monstar and watch your NFT evolve with updated properties*
 
-That’s not all! As your Monstar become stronger, you can use them to help you battle…in the next prototype>>>
+That’s not all! As your Monstars become stronger, you can use them to help you battle…in the next prototype>>>
 
 ## Prototype 2 Sui Battler
 
@@ -218,8 +218,8 @@ Welcome to Sui Battler, where your cute monstars transform into warriors!
 Gameplay:
 
 * Battle waves of enemies and gain experience and power-ups.
-* Get help from your own pet in Sui Monstar.
-* Evolve your pet in Sui Monstar and unlock special battle abilities.
+* Get help from your own pet from Sui Monstars.
+* Evolve your pet in Sui Monstars and unlock special battle abilities.
 * Your monstars record the history of your battle on-chain!
 
 ![Unlock special abilities](../../static/special-abilities.png "Evolve your Monstars")
