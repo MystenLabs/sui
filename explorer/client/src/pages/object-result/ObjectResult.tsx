@@ -108,14 +108,10 @@ function DisplayBox({ data }: { data: DataType }) {
         [setHasDisplayLoaded]
     );
 
-    if (data.data.contents.display) {
-        if (
-            typeof data.data.contents.display === 'object' &&
-            'bytes' in data.data.contents.display
-        )
-            data.data.contents.display = asciiFromNumberBytes(
-                data.data.contents.display.bytes
-            );
+    const contents = data.data.contents;
+    if (contents.display) {
+        if (typeof contents.display === 'object' && 'bytes' in contents.display)
+            contents.display = asciiFromNumberBytes(contents.display.bytes);
 
         return (
             <div className={styles['display-container']}>
@@ -128,7 +124,7 @@ function DisplayBox({ data }: { data: DataType }) {
                     className={styles.imagebox}
                     style={imageStyle}
                     alt="NFT"
-                    src={data.data.contents.display}
+                    src={contents.display}
                     onLoad={handleImageLoad}
                 />
             </div>
@@ -142,7 +138,7 @@ function DisplayBox({ data }: { data: DataType }) {
             <div className={styles['display-container']}>
                 <AceEditor
                     theme="github"
-                    value={data.data.contents.display}
+                    value={contents.display}
                     showGutter={true}
                     readOnly={true}
                     fontSize="0.8rem"
