@@ -10,7 +10,6 @@ use async_trait::async_trait;
 use colored::Colorize;
 use structopt::clap::{App, AppSettings};
 use structopt::StructOpt;
-use tracing::error;
 
 use sui::shell::{
     install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
