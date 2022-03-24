@@ -7,24 +7,29 @@ import {
 
 import App from '../app/App';
 
-function expectHome() {
-    expect(screen.getByTestId('home-page')).toBeInTheDocument();
-}
+const expectHome = async () => {
+    const el = await screen.findByTestId('home-page');
+    expect(el).toBeInTheDocument();
+};
 
-function searchText(text: string) {
+const searchText = (text: string) => {
     fireEvent.change(screen.getByPlaceholderText(/Search by ID/i), {
         target: { value: text },
     });
     fireEvent.submit(screen.getByRole('form', { name: /search form/i }));
-}
+};
 
-function expectTransactionStatus(result: 'fail' | 'success' | 'pending') {
-    expect(screen.getByTestId('transaction-status')).toHaveTextContent(result);
-}
+const expectTransactionStatus = async (
+    result: 'fail' | 'success' | 'pending'
+) => {
+    const el = await screen.findByTestId('transaction-status');
+    expect(el).toHaveTextContent(result);
+};
 
-function expectReadOnlyStatus(result: 'True' | 'False') {
-    expect(screen.getByTestId('read-only-text')).toHaveTextContent(result);
-}
+const expectReadOnlyStatus = (result: 'True' | 'False') => {
+    const el = screen.getByTestId('read-only-text');
+    expect(el).toHaveTextContent(result);
+};
 
 const successTransactionID = 'txCreateSuccess';
 const failTransactionID = 'txFails';
@@ -45,21 +50,21 @@ const addressID = 'receiverAddress';
 const problemAddressID = 'problemAddress';
 
 describe('End-to-end Tests', () => {
-    it('renders the home page', () => {
+    it('renders the home page', async () => {
         render(<App />, { wrapper: MemoryRouter });
-        expectHome();
+        await expectHome();
     });
 
     describe('Redirects to Home Page', () => {
-        it('redirects to home for every unknown path', () => {
+        it('redirects to home for every unknown path', async () => {
             render(
                 <MemoryRouter initialEntries={['/anything']}>
                     <App />
                 </MemoryRouter>
             );
-            expectHome();
+            await expectHome();
         });
-        it('redirects to home for unknown path by replacing the history', () => {
+        it('redirects to home for unknown path by replacing the history', async () => {
             const history = createMemoryHistory({
                 initialEntries: ['/anything'],
             });
@@ -68,23 +73,24 @@ describe('End-to-end Tests', () => {
                     <App />
                 </HistoryRouter>
             );
-            expectHome();
+            await expectHome();
             expect(history.index).toBe(0);
         });
     });
 
     describe('Displays data on transactions', () => {
-        it('when transaction was a success', () => {
+        it('when transaction was a success', async () => {
             render(<App />, { wrapper: MemoryRouter });
             searchText(successTransactionID);
-            expect(screen.getByText('Transaction ID')).toBeInTheDocument();
-            expectTransactionStatus('success');
-            expect(screen.getByText('From')).toBeInTheDocument();
-            expect(screen.getByText('Event')).toBeInTheDocument();
-            expect(screen.getByText('Object')).toBeInTheDocument();
-            expect(screen.getByText('To')).toBeInTheDocument();
+            await expectTransactionStatus('success');
+            expect(
+                await screen.findByText('Transaction ID')
+            ).toBeInTheDocument();
+            expect(await screen.findByText('From')).toBeInTheDocument();
+            expect(await screen.findByText('Event')).toBeInTheDocument();
+            expect(await screen.findByText('Object')).toBeInTheDocument();
+            expect(await screen.findByText('To')).toBeInTheDocument();
         });
-
         it('when transaction was a failure', () => {
             render(<App />, { wrapper: MemoryRouter });
             searchText(failTransactionID);
@@ -165,11 +171,11 @@ describe('End-to-end Tests', () => {
     });
 
     describe('Returns Home', () => {
-        it('when Home Button is clicked', () => {
+        it('when Home Button is clicked', async () => {
             render(<App />, { wrapper: MemoryRouter });
             searchText('Mysten Labs');
             fireEvent.click(screen.getByRole('link', { name: /home button/i }));
-            expectHome();
+            await expectHome();
         });
     });
 });
