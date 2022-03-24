@@ -19,10 +19,7 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
-use std::{
-    collections::{BTreeMap},
-    u32,
-};
+use std::{collections::BTreeMap, u32};
 
 // TODO: robust MovePackage tests
 // #[cfg(test)]
