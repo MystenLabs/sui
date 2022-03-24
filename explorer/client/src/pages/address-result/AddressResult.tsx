@@ -96,7 +96,7 @@ function AddressResultInternetAPI({
     useEffect(() => {
         if (addressID === undefined) return;
 
-        rpc.getAddressObjects(addressID)
+        rpc.getAddressObjects(addressID as string)
             .then((json) => {
                 setData({
                     id: addressID,
@@ -105,6 +105,7 @@ function AddressResultInternetAPI({
                 });
             })
             .catch((error) => {
+                console.log(error);
                 setData({ ...defaultData(addressID), loadState: 'fail' });
             });
     }, [addressID, rpc]);

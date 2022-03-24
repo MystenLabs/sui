@@ -4,10 +4,9 @@ import { type AddressOwner } from '../../utils/internetapi/rpc';
 import { asciiFromNumberBytes } from '../../utils/internetapi/utility_functions';
 
 import styles from './ObjectResult.module.css';
-
 type DataType = {
     id: string;
-    category: string;
+    category?: string;
     owner: string | AddressOwner;
     version: string;
     readonly?: string;
@@ -20,7 +19,7 @@ type DataType = {
         contents: {
             [key: string]: any;
         };
-        owner?: { AddressOwner: number[] } | string;
+        owner?: { ObjectOwner: [] };
         tx_digest?: number[] | string;
     };
     loadState?: string;

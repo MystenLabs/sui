@@ -1,5 +1,5 @@
 //import 'ace-builds/src-noconflict/theme-github';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 //import AceEditor from 'react-ace';
 import { useParams } from 'react-router-dom';
 
@@ -13,7 +13,7 @@ import ObjectLoaded from './ObjectLoaded';
 
 type DataType = {
     id: string;
-    category: string;
+    category?: string;
     owner: string | AddressOwner;
     version: string;
     readonly?: string;
@@ -26,7 +26,7 @@ type DataType = {
         contents: {
             [key: string]: any;
         };
-        owner?: { AddressOwner: number[] } | string;
+        owner?: { ObjectOwner: [] };
         tx_digest?: number[] | string;
     };
     loadState?: string;
@@ -38,38 +38,36 @@ const DATATYPE_DEFAULT: DataType = {
     owner: '',
     version: '',
     objType: '',
-    data: { contents: {} },
+    data: {
+        contents: {},
+        owner: { ObjectOwner: [] },
+        tx_digest: [],
+    },
     loadState: 'pending',
 };
-
-const _rpc = DefaultRpcClient;
-
-async function getObjectState(objID: string): Promise<object> {
-    return _rpc.getObjectInfo(objID);
-}
 
 const ObjectResult = (): JSX.Element => {
     const { id: objID } = useParams();
 
     const [showObjectState, setObjectState] = useState(DATATYPE_DEFAULT);
-
-    let dataRef = useRef(DATATYPE_DEFAULT);
+    const rpc = DefaultRpcClient;
 
     useEffect(() => {
-        getObjectState(objID as string)
+        rpc.getObjectInfo(objID as string)
             .then((objState) => {
-                let asType = objState as DataType;
-                setObjectState({ ...asType, loadState: 'loaded' });
-                dataRef.current = asType;
+                setObjectState({
+                    ...(objState as DataType),
+                    loadState: 'loaded',
+                });
             })
             .catch((error) => {
                 console.log(error);
                 setObjectState({ ...DATATYPE_DEFAULT, loadState: 'fail' });
             });
-    }, [objID]);
+    }, [objID, rpc]);
 
     if (showObjectState.loadState === 'loaded') {
-      <ObjectLoaded data={showObjectState}/>
+        return <ObjectLoaded data={showObjectState as DataType} />;
     }
     if (showObjectState.loadState === 'pending') {
         return (

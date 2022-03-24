@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 
 import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
-import { type AddressOwner, SuiRpcClient } from '../../utils/internetapi/rpc';
+import { type AddressOwner } from '../../utils/internetapi/rpc';
 import {
     asciiFromNumberBytes,
     trimStdLibPrefix,
@@ -13,7 +13,7 @@ import styles from './ObjectResult.module.css';
 
 type DataType = {
     id: string;
-    category: string;
+    category?: string;
     owner: string | AddressOwner;
     version: string;
     readonly?: string;
@@ -26,7 +26,7 @@ type DataType = {
         contents: {
             [key: string]: any;
         };
-        owner?: { AddressOwner: number[] } | string;
+        owner?: { ObjectOwner: [] };
         tx_digest?: number[] | string;
     };
     loadState?: string;
@@ -39,6 +39,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
     const [showDescription, setShowDescription] = useState(true);
     const [showProperties, setShowProperties] = useState(false);
     const [showConnectedEntities, setShowConnectedEntities] = useState(false);
+
     useEffect(() => {
         setShowDescription(true);
         setShowProperties(true);
@@ -158,44 +159,46 @@ function ObjectLoaded({ data }: { data: DataType }) {
         );
     }
 
-    const innerData = data.data;
+    function processName(name: string | undefined) {
+        // hardcode a friendly name for gas for now
+        const gasTokenTypeStr = 'Coin::Coin<0x2::GAS::GAS>';
+        const gasTokenId = '0000000000000000000000000000000000000003';
+        if (data.objType === gasTokenTypeStr && data.id === gasTokenId)
+            return 'GAS';
 
-    data = SuiRpcClient.modifyForDemo(data);
-    data.objType = trimStdLibPrefix(data.objType);
-
-    // hardcode a friendly name for gas for now
-    const gasTokenTypeStr = 'Coin::Coin<0x2::GAS::GAS>';
-    const gasTokenId = '0000000000000000000000000000000000000003';
-    if (data.objType === gasTokenTypeStr && data.id === gasTokenId)
-        data.name = 'GAS';
-
-    if (!data.name) data.name = handleSpecialDemoNameArrays(innerData.contents);
-
-    if (innerData.tx_digest && typeof innerData.tx_digest === 'object') {
-        const digest_hex = toHexString(innerData.tx_digest as number[]);
-        innerData.tx_digest = digest_hex;
+        if (!name) {
+            return handleSpecialDemoNameArrays(data.data.contents);
+        }
     }
 
-    switch (typeof innerData.owner) {
-        case 'object':
-            const ownerObj = innerData.owner as object;
-            if ('AddressOwner' in ownerObj) {
-                innerData.owner = toHexString(
-                    (ownerObj as AddressOwner).AddressOwner
-                );
-            }
-            break;
+    function processOwner(owner: any) {
+        if (typeof owner === 'object' && 'AddressOwner' in owner) {
+            return toHexString(owner.AddressOwner);
+        }
+
+        return owner;
     }
+
+    const viewedData = {
+        ...data,
+        objType: trimStdLibPrefix(data.objType),
+        name: processName(data.name),
+        tx_digest:
+            data.data.tx_digest && typeof data.data.tx_digest === 'object'
+                ? toHexString(data.data.tx_digest as number[])
+                : data.data.tx_digest,
+        owner: processOwner(data.owner),
+    };
 
     //TO DO remove when have distinct name field under Description
-    const nameKeyValue = Object.entries(innerData?.contents)
+    const nameKeyValue = Object.entries(viewedData.data?.contents)
         .filter(([key, value]) => /name/i.test(key))
         .map(([key, value]) => value);
 
-    const ownedObjects = Object.entries(innerData.contents).filter(
+    const ownedObjects = Object.entries(viewedData.data?.contents).filter(
         ([key, value]) => checkIsIDType(key, value)
     );
-    const properties = Object.entries(innerData.contents)
+    const properties = Object.entries(viewedData.data?.contents)
         //TO DO: remove when have distinct 'name' field in Description
         .filter(([key, value]) => !/name/i.test(key))
         .filter(([_, value]) => checkIsPropertyType(value))
@@ -204,7 +207,9 @@ function ObjectLoaded({ data }: { data: DataType }) {
     return (
         <>
             <div className={styles.resultbox}>
-                {data?.data.contents.display && <DisplayBox data={data} />}
+                {viewedData.data?.contents?.display && (
+                    <DisplayBox data={data} />
+                )}
                 <div
                     className={`${styles.textbox} ${
                         data?.data.contents.display
