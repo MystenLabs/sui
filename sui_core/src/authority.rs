@@ -633,6 +633,7 @@ impl AuthorityState {
             modules,
             ctx,
             MAX_GAS_BUDGET,
+            package_id,
         ) {
             return Err(*error);
         };

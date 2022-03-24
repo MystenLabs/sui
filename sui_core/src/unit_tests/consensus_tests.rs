@@ -17,7 +17,7 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CertifiedTransaction, SignatureAggregator, Transaction, TransactionData,
 };
-use sui_types::object::{Data, MoveObject, Object, Owner};
+use sui_types::object::{Data, MoveObject, Object, Owner, OBJECT_START_VERSION};
 use sui_types::serialize::serialize_cert;
 use test_utils::sequencer::Sequencer;
 
@@ -152,7 +152,7 @@ async fn handle_consensus_output() {
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     assert_eq!(
         state.db().last_consensus_index().unwrap(),
-        SequenceNumber::from(1)
+        OBJECT_START_VERSION
     );
 }
 
@@ -251,5 +251,5 @@ async fn test_sync() {
         .pop()
         .unwrap()
         .unwrap();
-    assert_eq!(certificate_1_sequence, SequenceNumber::from(1));
+    assert_eq!(certificate_1_sequence, OBJECT_START_VERSION);
 }

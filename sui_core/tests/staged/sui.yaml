@@ -206,6 +206,11 @@ MovePackage:
   STRUCT:
     - id:
         TYPENAME: ObjectID
+    - deps:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: ObjectDigest
     - module_map:
         MAP:
           KEY: STR

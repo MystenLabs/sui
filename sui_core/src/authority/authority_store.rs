@@ -6,6 +6,7 @@ use rocksdb::{ColumnFamilyDescriptor, Options};
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::path::Path;
+use sui_types::object::OBJECT_START_VERSION;
 
 use rocksdb::MultiThreaded;
 use std::sync::atomic::AtomicU64;
@@ -852,9 +853,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             .zip(versions.iter())
             .map(|(id, v)| {
                 let version = v.unwrap_or_else(SequenceNumber::new);
-                let next_version = v
-                    .map(|v| v.increment())
-                    .unwrap_or_else(|| SequenceNumber::from(1));
+                let next_version = v.map(|v| v.increment()).unwrap_or(OBJECT_START_VERSION);
 
                 let sequenced = ((transaction_digest, *id), version);
                 let scheduled = (id, next_version);

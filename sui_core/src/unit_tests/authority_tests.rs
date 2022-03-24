@@ -1676,5 +1676,5 @@ async fn shared_object() {
         .unwrap()
         .unwrap()
         .version();
-    assert_eq!(shared_object_version, SequenceNumber::from(1));
+    assert_eq!(shared_object_version, OBJECT_START_VERSION);
 }

@@ -16,8 +16,10 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
 use signature::Signer;
+use sui_types::object::OBJECT_START_VERSION;
 use typed_store::Map;
 
+use move_binary_format::{access::ModuleAccess, CompiledModule};
 use sui_adapter::genesis;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::crypto::Signature;
@@ -499,7 +501,7 @@ async fn test_initiating_valid_transfer() {
     assert!(account.store().pending_transactions.is_empty());
     assert_eq!(
         client.get_authorities().get_latest_owner(object_id_1).await,
-        (recipient, SequenceNumber::from(1))
+        (recipient, OBJECT_START_VERSION)
     );
     assert_eq!(
         client.get_authorities().get_latest_owner(object_id_2).await,
@@ -550,7 +552,7 @@ async fn test_initiating_valid_transfer_despite_bad_authority() {
     assert!(account.store().pending_transactions.is_empty());
     assert_eq!(
         client.get_authorities().get_latest_owner(object_id).await,
-        (recipient, SequenceNumber::from(1))
+        (recipient, OBJECT_START_VERSION)
     );
     // valid since our test authority shouldn't update its certificate set
     compare_certified_transactions(
@@ -654,12 +656,12 @@ async fn test_bidirectional_transfer() {
     // Confirm client1 lose ownership of the object.
     assert_eq!(
         client.get_authorities().get_latest_owner(object_id).await,
-        (addr2, SequenceNumber::from(1))
+        (addr2, OBJECT_START_VERSION)
     );
     // Confirm client2 acquired ownership of the object.
     assert_eq!(
         client.get_authorities().get_latest_owner(object_id).await,
-        (addr2, SequenceNumber::from(1))
+        (addr2, OBJECT_START_VERSION)
     );
 
     // Confirm certificate is consistent between authorities and client.
@@ -679,7 +681,7 @@ async fn test_bidirectional_transfer() {
     // Confirm sequence number are consistent between clients.
     assert_eq!(
         client.get_authorities().get_latest_owner(object_id).await,
-        (addr2, SequenceNumber::from(1))
+        (addr2, OBJECT_START_VERSION)
     );
 
     // Transfer the object back to Client1
@@ -792,7 +794,7 @@ async fn test_client_state_sync_with_transferred_object() {
     // Confirm client2 acquired ownership of the object.
     assert_eq!(
         client.get_authorities().get_latest_owner(object_id).await,
-        (addr2, SequenceNumber::from(1))
+        (addr2, OBJECT_START_VERSION)
     );
 
     // Client 2's local object_id and cert should be empty before sync
@@ -2214,7 +2216,7 @@ async fn test_process_certificate() {
 
     // Check the new object is at version 1
     let new_object_ref = client_object(&mut client, new_ref_1.0).await.0;
-    assert_eq!(SequenceNumber::from(1), new_object_ref.1);
+    assert_eq!(OBJECT_START_VERSION, new_object_ref.1);
 
     // Make a schedule of transactions
     let gas_ref_set = get_latest_ref(&auth_vec[0], gas_object1).await;
@@ -2589,4 +2591,88 @@ async fn test_coin_merge() {
 fn to_transaction(data: TransactionData, signer: &dyn Signer<Signature>) -> Transaction {
     let signature = Signature::new(&data, signer);
     Transaction::new(data, signature)
+}
+
+#[tokio::test]
+async fn test_package_deps_commitment() {
+    // Init the states
+    let (mut client, authority_clients) = make_address_manager(4).await;
+    let (addr1, key1) = make_admin_account();
+
+    let gas_object_id = ObjectID::random();
+
+    // Populate authorities with gas obj data
+    let gas_object_ref =
+        fund_account_with_same_objects(authority_clients, &mut client, addr1, vec![gas_object_id])
+            .await
+            .iter()
+            .next()
+            .unwrap()
+            .1
+            .compute_object_reference();
+
+    // Provide path to well formed package sources
+    let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
+    hero_path.push_str("/src/unit_tests/data/hero/");
+
+    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path)).unwrap();
+    let data = client
+        .publish(
+            addr1,
+            compiled_modules,
+            gas_object_ref,
+            GAS_VALUE_FOR_TESTING / 2,
+        )
+        .await
+        .unwrap();
+
+    let signature = key1.sign(&data.to_bytes());
+    let response = client
+        .execute_transaction(Transaction::new(data, signature))
+        .await
+        .unwrap()
+        .to_publish_response()
+        .unwrap();
+
+    // Two objects resulting from two initializer runs in different modules should be created.
+    assert_eq!(response.created_objects.len(), 2);
+
+    // Verify gas obj
+    assert_eq!(response.updated_gas.id(), gas_object_ref.0);
+
+    let package_ref = response.package;
+
+    let package = client_object(&mut client, package_ref.0).await.1;
+
+    // Get the deps from the actual modules
+    let mut actual_deps_ids = BTreeSet::new();
+    for module in package
+        .data
+        .try_as_package()
+        .unwrap()
+        .serialized_module_map()
+        .values()
+    {
+        let m = CompiledModule::deserialize(module).unwrap();
+        let g = m
+            .module_handles
+            .iter()
+            .map(|j| ObjectID::from(*m.address_identifier_at(j.address)));
+        actual_deps_ids.extend(g);
+    }
+    // Remove self
+    actual_deps_ids.remove(&package_ref.0);
+    // Get the dependencoes
+    let deps_commit = package
+        .data
+        .try_as_package()
+        .unwrap()
+        .dependency_commitments();
+
+    assert_eq!(actual_deps_ids.len(), deps_commit.len());
+
+    for d in deps_commit {
+        assert!(actual_deps_ids.contains(&d.0));
+        assert_eq!(d.1, client_object(&mut client, d.0).await.1.digest());
+    }
 }
