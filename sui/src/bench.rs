@@ -291,7 +291,7 @@ impl ClientServerBenchmark {
 
                         SingleTransactionKind::Call(MoveCall {
                             package: framework_obj_ref,
-                            module: ident_str!("GAS").to_owned(),
+                            module: ident_str!("SUI").to_owned(),
                             function: ident_str!("transfer").to_owned(),
                             type_arguments: Vec::new(),
                             object_arguments: vec![object_ref],
