@@ -109,21 +109,20 @@ impl AuthorityState {
         self.batch_channels.subscribe()
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn check_locks_and_gas(
         &self,
         transaction: &Transaction,
     ) -> Result<Vec<(InputObjectKind, Object)>, SuiError> {
         let input_objects = transaction.input_objects()?;
         // These IDs act as authenticators that can own other objects.
-        let objects = self
-            .fetch_objects(&input_objects)
-            .instrument(tracing::trace_span!("cert_db_get_objects"))
-            .await?;
+        let objects = self.fetch_objects(&input_objects).await?;
         let all_objects =
             transaction_input_checker::check_locks(transaction, input_objects, objects)?;
         Ok(all_objects)
     }
 
+    #[instrument(level = "trace", skip_all, fields(num_objects = input_objects.len()))]
     async fn fetch_objects(
         &self,
         input_objects: &[InputObjectKind],
@@ -151,10 +150,7 @@ impl AuthorityState {
             return Ok(transaction_info);
         }
 
-        let all_objects: Vec<_> = self
-            .check_locks_and_gas(&transaction)
-            .instrument(tracing::trace_span!("tx_check_locks"))
-            .await?;
+        let all_objects: Vec<_> = self.check_locks_and_gas(&transaction).await?;
         let owned_objects = transaction_input_checker::filter_owned_objects(all_objects);
 
         let signed_transaction = SignedTransaction::new(transaction, self.name, &*self.secret);
@@ -164,7 +160,6 @@ impl AuthorityState {
         // and returns ConflictingTransaction error in case there is a lock on a different
         // existing transaction.
         self.set_transaction_lock(&owned_objects, transaction_digest, signed_transaction)
-            .instrument(tracing::trace_span!("db_set_transaction_lock"))
             .await?;
 
         // Return the signed Transaction or maybe a cert.
@@ -188,11 +183,10 @@ impl AuthorityState {
         tracing::trace_span!("cert_check_signature")
             .in_scope(|| confirmation_transaction.certificate.check(&self.committee))?;
 
-        self.process_certificate(confirmation_transaction)
-            .instrument(tracing::debug_span!("process_cert_inner"))
-            .await
+        self.process_certificate(confirmation_transaction).await
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn check_shared_locks(
         &self,
         transaction_digest: &TransactionDigest,
@@ -260,6 +254,7 @@ impl AuthorityState {
         Ok(())
     }
 
+    #[instrument(level = "debug", name = "process_cert_inner", skip_all)]
     async fn process_certificate(
         &self,
         confirmation_transaction: ConfirmationTransaction,
@@ -268,16 +263,12 @@ impl AuthorityState {
         let transaction_digest = *certificate.digest();
         let transaction = &certificate.transaction;
 
-        let objects_by_kind = self
-            .check_locks_and_gas(transaction)
-            .instrument(tracing::trace_span!("cert_check_locks"))
-            .await?;
+        let objects_by_kind = self.check_locks_and_gas(transaction).await?;
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
         let _shared_objects = self
             .check_shared_locks(&transaction_digest, transaction, &objects_by_kind)
-            .instrument(tracing::trace_span!("cert_check_shared_locks"))
             .await?;
         // inputs.extend(shared_objects);
 
@@ -326,7 +317,6 @@ impl AuthorityState {
         // Update the database in an atomic manner
 
         self.update_state(temporary_store, certificate, signed_effects)
-            .instrument(tracing::debug_span!("db_update_state"))
             .await // Returns the OrderInfoResponse
     }
 
@@ -670,6 +660,7 @@ impl AuthorityState {
     // Helper function to manage transaction_locks
 
     /// Set the transaction lock to a specific transaction
+    #[instrument(name = "db_set_transaction_lock", level = "trace", skip_all)]
     pub async fn set_transaction_lock(
         &self,
         mutable_input_objects: &[ObjectRef],
@@ -682,6 +673,7 @@ impl AuthorityState {
 
     /// Update state and signals that a new transactions has been processed
     /// to the batch maker service.
+    #[instrument(name = "db_update_state", level = "debug", skip_all)]
     async fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore<AuthorityStore>,

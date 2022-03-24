@@ -72,13 +72,11 @@ and analyzed for tracing, performance analysis, etc.
 | process_cert            | Gateway, Authority | Send certificate to authorities to execute transaction                         |
 | cert_check_signature    | Authority          | Check certificate signatures                                                   |
 | process_cert_inner      | Authority          | Inner function to process certificates in authority                            |
-| cert_check_locks        | Authority          | Check object locks needed for transaction                                      |
-| cert_db_get_objects     | Authority          | Read objects from database                                                     |
+| fetch_objects           | Authority          | Read objects from database                                                     |
 | tx_execute              | Authority          | Actual execution of transfer/MOVE call etc.                                    |
 | handle_cert             | Gateway            | Send to one authority for certificate processing                               |
 | quorum_map_auth         | Gateway            | Handle one network component with one authority                                |
 | sync_cert               | Gateway, Authority | Gateway-initiated sync of data to authority                                    |
-| tx_check_locks          | Authority          | Check locks on input objects of incoming transaction request                   |
 | db_set_transaction_lock | Authority          | Database set transaction locks on new transaction                              |
 | db_update_state         | Authority          | Update the database with certificate, effects after transaction Move execution |
 |                         |                    |                                                                                |
