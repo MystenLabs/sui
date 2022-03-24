@@ -12,15 +12,22 @@ interface, *Wallet CLI*.
 ## Set up
 
 1. Follow the instructions to [install Sui binaries](install.md).
-
-1. Create a `sui_instance` subdirectory in your desired Sui-specific
-directory. Assuming you followed recommended setup, run:
+1. Create a `sui_instance` subdirectory in your desired Sui-specific directory. Assuming you followed recommended setup, run:
    ```shell
    cd "$SUI_ROOT"
    mkdir sui_instance
    ```
 
 ## Genesis
+
+The `sui genesis` command creates four authorities and five user accounts
+each with five gas objects. These are Sui [objects](objects.md) used
+to pay for Sui [transactions](transactions.md#transaction-metadata),
+such other object transfers or smart contract (Move) calls. These
+numbers represent a sample configuration and have been chosen somewhat
+arbitrarily; the process of generating the genesis state can be
+customized with additional accounts, objects, code, etc. as described
+in [Genesis customization](#customize-genesis).
 
 1. Navigate to that new directory:
    ```shell
@@ -31,15 +38,6 @@ directory. Assuming you followed recommended setup, run:
    ```shell
    sui genesis
    ```
-
-The `genesis` command creates four authorities and five user accounts
-each with five gas objects. These are Sui [objects](objects.md) used
-to pay for Sui [transactions](transactions.md#transaction-metadata),
-such other object transfers or smart contract (Move) calls. These
-numbers represent a sample configuration and have been chosen somewhat
-arbitrarily; the process of generating the genesis state can be
-customized with additional accounts, objects, code, etc. as described
-in [Genesis customization](#customize-genesis).
 
 The network configuration is stored in `network.conf` and
 can be used subsequently to start the network. The `wallet.conf` and `wallet.key` are
