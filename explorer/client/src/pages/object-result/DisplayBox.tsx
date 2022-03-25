@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 
-import { asciiFromNumberBytes } from '../../utils/internetapi/utility_functions';
+import { asciiFromNumberBytes } from '../../utils/stringUtils';
 import { type DataType } from './ObjectResultType';
 
 import styles from './ObjectResult.module.css';

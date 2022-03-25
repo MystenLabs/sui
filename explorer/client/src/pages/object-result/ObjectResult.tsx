@@ -68,7 +68,7 @@ const ObjectResultInternetAPI = ({ objID }: { objID: string }): JSX.Element => {
 };
 
 const ObjectResultStatic = ({ objID }: { objID: string }): JSX.Element => {
-    const { findDataFromID } = require('../../utils/static/utility_functions');
+    const { findDataFromID } = require('../../utils/static/searchUtil');
     const data = findDataFromID(objID, undefined);
 
     if (instanceOfDataType(data)) {

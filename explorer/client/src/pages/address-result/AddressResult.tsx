@@ -70,7 +70,7 @@ function Fail({ id }: { id: string | undefined }) {
 }
 
 function AddressResultStatic({ addressID }: { addressID: string | undefined }) {
-    const { findDataFromID } = require('../../utils/static/utility_functions');
+    const { findDataFromID } = require('../../utils/static/searchUtil');
     const data = findDataFromID(addressID, undefined);
 
     if (instanceOfDataType(data)) {

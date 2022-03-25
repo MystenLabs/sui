@@ -6,7 +6,7 @@ import { type AddressOwner } from '../../utils/internetapi/rpc';
 import {
     asciiFromNumberBytes,
     trimStdLibPrefix,
-} from '../../utils/internetapi/utility_functions';
+} from '../../utils/stringUtils';
 import DisplayBox from './DisplayBox';
 import { type DataType } from './ObjectResultType';
 

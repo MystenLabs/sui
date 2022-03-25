@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { navigateWithUnknown } from '../../utils/fetch_utils';
+import { navigateWithUnknown } from '../../utils/searchUtil';
 
 import styles from './Search.module.css';
 
