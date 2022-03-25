@@ -3,3 +3,9 @@ export const asciiFromNumberBytes = (bytes: number[]): string =>
 
 export const trimStdLibPrefix = (str: string): string =>
     str.replace(/^0x2::/, '');
+
+export const isValidHttpUrl = (url: string) => {
+    try { new URL(url) }
+    catch (e) { return false }
+    return /^https?/.test(url);
+};
