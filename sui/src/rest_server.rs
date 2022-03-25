@@ -27,9 +27,9 @@ use serde_json::json;
 use tokio::task::{self, JoinHandle};
 use tracing::{error, info};
 
-use sui::config::{GenesisConfig, NetworkConfig};
+use sui::config::{GenesisConfig, NetworkConfig, PersistedConfig};
 use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
-use sui::keystore::Keystore;
+use sui::keystore::{Keystore, SuiKeystore};
 use sui::sui_commands;
 use sui::sui_json::{resolve_move_function_args, SuiJsonValue};
 use sui_core::gateway_state::GatewayClient;
@@ -180,14 +180,13 @@ async fn docs(rqctx: Arc<RequestContext<ServerContext>>) -> Result<Response<Body
 }
 
 /**
-Request containing the server configuration.
-All attributes in GenesisRequest are optional, a default value will be used if
-the fields are not set.
+Request for genesis type.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct GenesisRequest {
-    custom_genesis: bool,
+    /** Set to read genesis & keystore state from file. */
+    custom: bool,
 }
 
 /**
@@ -205,8 +204,9 @@ struct GenesisResponse {
 
 /**
 Specify the genesis state of the network.
-You can specify the number of authorities, an initial number of addresses
-and the number of gas objects to be assigned to those addresses.
+
+You can specify a genesis file to start network with custom genesis state.
+
 Note: This is a temporary endpoint that will no longer be needed once the
 network has been started on testnet or mainnet.
  */
@@ -215,8 +215,12 @@ network has been started on testnet or mainnet.
     path = "/sui/genesis",
     tags = [ "debug" ],
 }]
-async fn genesis(rqctx: Arc<RequestContext<ServerContext>>) -> Result<Response<Body>, HttpError> {
+async fn genesis(
+    rqctx: Arc<RequestContext<ServerContext>>,
+    request: TypedBody<GenesisRequest>,
+) -> Result<Response<Body>, HttpError> {
     let context = rqctx.context();
+    let genesis_params = request.into_inner();
     // Using a new working dir for genesis, this directory will be deleted when stop end point is called.
     let working_dir = PathBuf::from(".").join(format!("{}", ObjectID::random()));
 
@@ -227,20 +231,35 @@ async fn genesis(rqctx: Arc<RequestContext<ServerContext>>) -> Result<Response<B
         ));
     }
 
-    let genesis_conf = GenesisConfig::default_genesis(&working_dir).map_err(|error| {
-        custom_http_error(
-            StatusCode::CONFLICT,
-            format!("Unable to create default genesis configuration: {error}"),
-        )
-    })?;
-
-    let (network_config, accounts, keystore) =
-        sui_commands::genesis(genesis_conf).await.map_err(|err| {
+    let genesis_conf = if genesis_params.custom {
+        PersistedConfig::read(&PathBuf::from("genesis.conf")).map_err(|error| {
             custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Genesis error: {:?}", err),
+                StatusCode::BAD_REQUEST,
+                format!("Could not load custom genesis configuration: {error}"),
+            )
+        })?
+    } else {
+        GenesisConfig::default_genesis(&working_dir).map_err(|error| {
+            custom_http_error(
+                StatusCode::BAD_REQUEST,
+                format!("Unable to create default genesis configuration: {error}"),
+            )
+        })?
+    };
+
+    let (network_config, accounts, mut keystore) =
+        sui_commands::genesis(genesis_conf).await.map_err(|err| {
+            custom_http_error(StatusCode::BAD_REQUEST, format!("Genesis error: {:?}", err))
+        })?;
+
+    if genesis_params.custom {
+        keystore = SuiKeystore::load_or_create(&PathBuf::from("wallet.key")).map_err(|err| {
+            custom_http_error(
+                StatusCode::BAD_REQUEST,
+                format!("Could not load keystore: {:?}", err),
             )
         })?;
+    }
 
     let authorities = network_config.get_authority_infos();
     let gateway = GatewayType::Embedded(EmbeddedGatewayConfig {
@@ -275,6 +294,7 @@ async fn genesis(rqctx: Arc<RequestContext<ServerContext>>) -> Result<Response<B
 
 /**
 Start servers with the specified configurations from the genesis endpoint.
+
 Note: This is a temporary endpoint that will no longer be needed once the
 network has been started on testnet or main-net.
  */
@@ -357,6 +377,7 @@ async fn sui_start(ctx: Arc<RequestContext<ServerContext>>) -> Result<Response<B
 
 /**
 Stop sui network and delete generated configs & storage.
+
 Note: This is a temporary endpoint that will no longer be needed once the
 network has been started on testnet or mainnet.
  */
@@ -514,6 +535,7 @@ async fn get_objects(
 
 /**
 Request containing the object schema for which info is to be retrieved.
+
 If owner is specified we look for this object in that address's account store,
 otherwise we look for it in the shared object store.
 */
@@ -594,6 +616,7 @@ async fn object_schema(
 
 /**
 Request containing the object for which info is to be retrieved.
+
 If owner is specified we look for this object in that address's account store,
 otherwise we look for it in the shared object store.
 */
@@ -868,6 +891,7 @@ struct CallRequest {
 Execute a Move call transaction by calling the specified function in the
 module of the given package. Arguments are passed in and type will be
 inferred from function signature. Gas usage is capped by the gas_budget.
+
 Example CallRequest
 {
     "sender": "b378b8d26c4daa95c5f6a2e2295e6e5f34371c1659e95f572788ffa55c265363",
@@ -1205,19 +1229,6 @@ fn custom_http_response<T: Serialize + JsonSchema>(
     let body: Body = serde_json::to_string(&response_body)
         .map_err(|err| custom_http_error(StatusCode::INTERNAL_SERVER_ERROR, format!("{err}")))?
         .into();
-    let res = Response::builder()
-        .status(status_code)
-        .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
-        .header(http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-        .body(body)?;
-    Ok(res)
-}
-
-fn custom_http_response<T: Serialize + JsonSchema>(
-    status_code: StatusCode,
-    response_body: T,
-) -> Result<Response<Body>, anyhow::Error> {
-    let body: Body = serde_json::to_string(&response_body)?.into();
     let res = Response::builder()
         .status(status_code)
         .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)

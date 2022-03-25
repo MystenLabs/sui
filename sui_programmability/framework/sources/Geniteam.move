@@ -9,21 +9,19 @@ module Sui::Geniteam {
     use Std::Option::{Self, Option};
     use Sui::Transfer::{Self, ChildRef};
     use Std::ASCII::{Self, String};
+    use Std::Vector;
 
     /// Trying to add more than 1 farm to a Player
     const ETOO_MANY_FARMS: u64 = 1;
 
-    /// Too many Cosmetics for the slot
-    const ETOO_MANY_COSMETICS: u64 = 2;
-
     /// Monster collection not owned by farm
-    const EMONSTER_COLLECTION_NOT_OWNED_BY_FARM: u64 = 3;
+    const EMONSTER_COLLECTION_NOT_OWNED_BY_FARM: u64 = 2;
 
     /// Inventory not owned by player
-    const EINVENTORY_NOT_OWNED_BY_PLAYER: u64 = 4;
+    const EINVENTORY_NOT_OWNED_BY_PLAYER: u64 = 3;
 
     /// Invalid cosmetic slot
-    const EINVALID_COSMETICS_SLOT: u64 = 5;
+    const EINVALID_COSMETICS_SLOT: u64 = 4;
 
     struct Player has key {
         id: VersionedID,
@@ -72,6 +70,7 @@ module Sui::Geniteam {
         hunger_level: u64,
         affection_level: u64,
         buddy_level: u8,
+        display: String,
 
         // Applied cosmetic at this slot
         applied_monster_cosmetic_0: Option<ChildRef<MonsterCosmetic>>,
@@ -83,11 +82,13 @@ module Sui::Geniteam {
     struct FarmCosmetic has key {
         id: VersionedID,
         cosmetic_type: u8,
+        display: String,
     }
 
     struct MonsterCosmetic has key {
         id: VersionedID,
         cosmetic_type: u8,
+        display: String,
     }
 
     // ============================ Entry functions ============================
@@ -128,6 +129,7 @@ module Sui::Geniteam {
                               breed: u8,
                               monster_affinity: u8,
                               monster_description: vector<u8>,
+                              display: vector<u8>,
                               ctx: &mut TxContext
     ) {
         let monster = new_monster(
@@ -136,6 +138,7 @@ module Sui::Geniteam {
             breed,
             monster_affinity,
             monster_description,
+            display,
             ctx
         );
 
@@ -153,7 +156,7 @@ module Sui::Geniteam {
     /// Create Farm cosmetic owned by player and add to its inventory
     public fun create_farm_cosmetics(
         player: &mut Player, inventory: &mut Bag, cosmetic_type: u8,
-        ctx: &mut TxContext
+        display: vector<u8>, ctx: &mut TxContext
     ) {
         // Check if this is the right collection
         assert!(
@@ -164,7 +167,8 @@ module Sui::Geniteam {
         // Create the farm cosmetic object
         let farm_cosmetic = FarmCosmetic {
             id: TxContext::new_id(ctx),
-            cosmetic_type
+            cosmetic_type,
+            display: ASCII::string(display) 
             };
 
         // Add it to the player's inventory
@@ -174,7 +178,7 @@ module Sui::Geniteam {
     /// Create Monster cosmetic owned by player and add to its inventory
     public fun create_monster_cosmetics(
         player: &mut Player, inventory: &mut Bag, cosmetic_type: u8,
-        ctx: &mut TxContext
+        display: vector<u8>, ctx: &mut TxContext
     ) {
         // Check if this is the right collection
         assert!(
@@ -185,7 +189,8 @@ module Sui::Geniteam {
         // Create the farm cosmetic object
         let monster_cosmetic = MonsterCosmetic {
             id: TxContext::new_id(ctx),
-            cosmetic_type
+            cosmetic_type,
+            display: ASCII::string(display) 
             };
 
         // Add it to the player's inventory
@@ -218,6 +223,7 @@ module Sui::Geniteam {
         hunger_level: u64,
         affection_level: u64,
         buddy_level: u8,
+        display: vector<u8>,
         _ctx: &mut TxContext
     ) {
         self.monster_affinity = monster_affinity;
@@ -225,6 +231,9 @@ module Sui::Geniteam {
         self.hunger_level = hunger_level;
         self.affection_level = affection_level;
         self.buddy_level = buddy_level;
+        if (Vector::length<u8>(&display) != 0) {
+            self.display = ASCII::string(display);
+        }
     }
 
 
@@ -250,17 +259,9 @@ module Sui::Geniteam {
 
         // Assign by slot
         if (cosmetic_slot_id == 0) {
-            // Check that the slot has no items
-            assert!(Option::is_none(&farm.applied_farm_cosmetic_0),
-                    ETOO_MANY_COSMETICS);
-
             // Store the cosmetic
             Option::fill(&mut farm.applied_farm_cosmetic_0, child_ref)
         } else {
-            // Check that the slot has no items
-            assert!(Option::is_none(&farm.applied_farm_cosmetic_1),
-                    ETOO_MANY_COSMETICS);
-
             // Store the cosmetic
             Option::fill(&mut farm.applied_farm_cosmetic_1, child_ref)
         };
@@ -281,15 +282,9 @@ module Sui::Geniteam {
 
         // Assign by slot
         if (cosmetic_slot_id == 0) {
-            // Check that the slot has no items
-            assert!(Option::is_none(&monster.applied_monster_cosmetic_0), ETOO_MANY_COSMETICS);
-
             // Store the cosmetic
             Option::fill(&mut monster.applied_monster_cosmetic_0, child_ref)
         } else {
-            // Check that the slot has no items
-            assert!(Option::is_none(&monster.applied_monster_cosmetic_1), ETOO_MANY_COSMETICS);
-
             // Store the cosmetic
             Option::fill(&mut monster.applied_monster_cosmetic_1, child_ref)
         };
@@ -362,6 +357,7 @@ module Sui::Geniteam {
         breed: u8,
         monster_affinity: u8,
         monster_description: vector<u8>,
+        display: vector<u8>,
         ctx: &mut TxContext
     ): Monster {
 
@@ -377,6 +373,7 @@ module Sui::Geniteam {
             hunger_level: 0,
             affection_level: 0,
             buddy_level: 0,
+            display: ASCII::string(display),
             applied_monster_cosmetic_0: Option::none(),
             applied_monster_cosmetic_1: Option::none(),
         }
