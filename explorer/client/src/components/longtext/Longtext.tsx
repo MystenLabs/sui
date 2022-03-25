@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { ReactComponent as ContentCopyIcon } from '../../assets/content_copy_black_18dp.svg';
-import { navigateWithUnknown } from '../../utils/utility_functions';
+import { navigateWithUnknown } from '../../utils/searchUtil';
 import ExternalLink from '../external-link/ExternalLink';
 
 import styles from './Longtext.module.css';

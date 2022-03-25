@@ -1,7 +1,6 @@
-import mockTransactionData from './mock_data.json';
 import { DefaultRpcClient as rpc } from './rpc';
 
-const navigateWithUnknown = async (input: string, navigate: Function) => {
+export const navigateWithUnknown = async (input: string, navigate: Function) => {
     // feels crude to just search each category for an ID, but works for now
     const addrPromise = rpc.getAddressObjects(input).then((data) => {
         if (data.length > 0) {
@@ -38,10 +37,3 @@ const navigateWithUnknown = async (input: string, navigate: Function) => {
             navigate(`../missing/${input}`);
         });
 };
-
-const findDataFromID = (targetID: string | undefined, state: any) =>
-    state?.category !== undefined
-        ? state
-        : mockTransactionData.data.find(({ id }) => id === targetID);
-
-export { findDataFromID, navigateWithUnknown };
