@@ -35,7 +35,7 @@ export class SuiRpcClient {
     }
 
     // TODO - more detailed type for input
-    public async moveCall<TIn extends object>(
+    public async moveCall<TIn extends object | any[]>(
         input: TIn
     ): Promise<MoveCallResponse> {
         return this.postJson(this.moveCallUrl, input);
