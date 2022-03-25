@@ -1,5 +1,3 @@
-import { isValidHttpUrl } from "./stringUtils";
-
 export class SuiRpcClient {
     public readonly host: string;
 
