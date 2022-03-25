@@ -76,7 +76,6 @@ export class SuiRpcClient {
 
 }
 
-const SUI_ADDRESS_LEN = 20;
 export type AddressBytes = number[];
 export type Signature = number[];
 
@@ -89,8 +88,7 @@ export type AnyVec = { vec: any[] };
 type BoolString = 'true' | 'false';
 
 export type JsonBytes = { bytes: number[] };
-export type MoveVec = { vec: any[] }
-export type TMoveVec<T extends object> = { vec: T[] }
+export type MoveVec<T extends object | string> = { vec: T[] }
 
 export interface ObjectInfoResponse<T> {
     owner: string;
