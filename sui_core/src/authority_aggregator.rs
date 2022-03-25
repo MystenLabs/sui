@@ -1005,6 +1005,7 @@ where
                             // Note: here we aggregate votes by the hash of the effects structure
                             let entry = state
                                 .effects_map
+                                // TODO: We should probably not call the sha3_hash directly here but someghing like .digest() on the effects.
                                 .entry(sha3_hash(&inner_effects.data))
                                 .or_insert((0usize, inner_effects.data));
                             entry.0 += weight;

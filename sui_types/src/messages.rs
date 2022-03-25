@@ -335,6 +335,9 @@ const_assert_eq!(
 
 */
 
+// TODO: Should we have a uniform way to convert AuthoritySignedData to certificates?
+// Should we have a uniform authority certificate type too?
+
 // Generic types instantiated multiple times in the same Serde tracing session
 // requires a walk-around: https://crates.io/crates/serde-name
 #[derive(Debug, Eq, Clone, Serialize, Deserialize)]
