@@ -1,6 +1,3 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 const tryGetRpcParam = (): string | null => {
     const params = new URLSearchParams(window.location.search);
     return params.get('rpc');

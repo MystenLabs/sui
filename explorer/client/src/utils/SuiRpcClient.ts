@@ -1,7 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
-import { tryGetRpcSetting } from './rpcSetting';
+import { isValidHttpUrl } from "./stringUtils";
 
 export class SuiRpcClient {
     public readonly host: string;
@@ -19,7 +16,7 @@ export class SuiRpcClient {
     public getAddresses = async (): Promise<Addresses> =>
         this.fetchJson(this.addressesUrl);
 
-    public getAddressObjects = async (address: AddressHexStr) => {
+    public getAddressObjects = async (address: SuiAddressHexStr) => {
         const url = `${this.host}/objects?address=${address}`;
         return this.fetchJson(url);
     };
@@ -38,7 +35,7 @@ export class SuiRpcClient {
     }
 
     // TODO - more detailed type for input
-    public async moveCall<TIn extends object | any[]>(
+    public async moveCall<TIn extends object>(
         input: TIn
     ): Promise<MoveCallResponse> {
         return this.postJson(this.moveCallUrl, input);
@@ -76,21 +73,50 @@ export class SuiRpcClient {
                 );
         }
     }
+
 }
 
-export type AddressBytes = number[];
+const SUI_ADDRESS_LEN = 20;
+export type SuiAddressBytes = number[];
 export type Signature = number[];
 
-type AddressHexStr = string;
+type SuiAddressHexStr = string;
 
-export type AddressOwner = { AddressOwner: AddressBytes };
-type ObjectOwner = { ObjectOwner: AddressBytes };
+const suiAddressHexPattern = /^0x[0-9a-fA-F]{20}/;
+const isSuiAddressHexStr = (str: string) => suiAddressHexPattern.test(str);
 
+export const isValidSuiIdBytes = (obj: { bytes: string | number[] }) => {
+    const bytesFieldType = typeof obj.bytes;
+
+    if (bytesFieldType === 'object') {
+        if (Array.isArray(obj.bytes)) {
+            const objBytesAsArray = obj.bytes as number[];
+            if (objBytesAsArray.length !== SUI_ADDRESS_LEN) return false;
+
+            for (let i = 0; i < objBytesAsArray.length; i++) {
+                if (objBytesAsArray[i] > 255) return false;
+            }
+            return true;
+        } else return false;
+    } else if (bytesFieldType === 'string') {
+        return isSuiAddressHexStr(obj.bytes as string);
+    }
+
+    return false;
+};
+
+export type AddressOwner = { AddressOwner: SuiAddressBytes };
+type ObjectOwner = { ObjectOwner: SuiAddressBytes };
 export type AnyVec = { vec: any[] };
 type BoolString = 'true' | 'false';
 
 export type JsonBytes = { bytes: number[] };
-export type MoveVec<T extends object | string> = { vec: T[] };
+export type JsonHexBytes = { bytes: string | number[] };
+
+export type SuiRefHexBytes = { bytes: string }; // TODO - better types for hex strings
+
+export type MoveVec = { vec: any[] }
+export type TMoveVec<T extends object> = { vec: T[] }
 
 export interface ObjectInfoResponse<T> {
     owner: string;
@@ -103,7 +129,7 @@ export interface ObjectInfoResponse<T> {
 
 export interface SuiObject<T> {
     contents: T;
-    owner: ObjectOwner | AddressOwner;
+    owner: ObjectOwner;
     tx_digest: number[];
 }
 
@@ -138,7 +164,7 @@ export interface TransactionKind {
 export interface TransactionData {
     gas_payment: any[];
     kind: TransactionKind;
-    sender: AddressBytes;
+    sender: SuiAddressBytes;
 }
 
 export interface Transaction {
@@ -174,6 +200,7 @@ export interface AddressObjectSummary {
     version: string;
     objectDigest: string;
 }
+
 
 const rpcUrl = tryGetRpcSetting() ?? 'https://demo-rpc.sui.io';
 export const DefaultRpcClient = new SuiRpcClient(rpcUrl);
