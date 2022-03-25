@@ -2,6 +2,8 @@
 title: Contributing to Sui
 ---
 
+This page describes how to add to Sui. If you merely need to get the Sui binaries, follow [Install Sui](../build/install.md).
+
 ## File issues
 
 Report bugs and make feature requests in the [Sui GitHub](https://github.com/MystenLabs/sui/issues) repository
@@ -15,6 +17,23 @@ doc@mystenlabs.com
 You may also suggest changes to the docs directly in GitHub right here using the **Source Code** link below.
 
 Simply edit the file in question and generate a pull request. We will get back to you shortly.
+
+## Download and learn Sui?
+
+In order to obtain source code for the game, let us clone the Sui
+repository to the desired directory:
+
+```shell
+git clone https://github.com/MystenLabs/sui.git
+```
+
+The primary directories are:
+
+* [sui](https://github.com/MystenLabs/sui/tree/main/sui) - 
+* [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - examples and games for testing and reuse.
+* sui_core
+* sui_types
+* explorer - 
 
 ## Send pull requests
 
