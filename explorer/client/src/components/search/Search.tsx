@@ -4,6 +4,8 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { navigateWithUnknown } from '../../utils/searchUtil';
+
 import styles from './Search.module.css';
 
 function Search() {
@@ -13,9 +15,7 @@ function Search() {
     const handleSubmit = useCallback(
         (e: React.FormEvent<HTMLFormElement>) => {
             e.preventDefault();
-            input.length < 60
-                ? navigate(`../search/${input}`)
-                : navigate(`../transactions/${input}`);
+            navigateWithUnknown(input, navigate);
             setInput('');
         },
         [input, navigate, setInput]
@@ -36,7 +36,7 @@ function Search() {
             <input
                 className={styles.searchtext}
                 id="search"
-                placeholder="Search transactions by ID"
+                placeholder="Search by ID"
                 value={input}
                 onChange={handleTextChange}
                 type="text"

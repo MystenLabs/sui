@@ -1,0 +1,7 @@
+div > div.problemrow > div:first-child {
+    @apply w-[90vw] text-left mb-[1vh] text-red-600 block;
+}
+
+div > div.problemrow > div:nth-child(2) {
+    @apply w-[80vw] block ml-[10vw];
+}
