@@ -198,7 +198,7 @@ impl WalletCommands {
                 let sender = gas_object.owner.get_owner_address()?;
                 let gas_obj_ref = gas_object.compute_object_reference();
 
-                let compiled_modules = build_move_package_to_bytes(Path::new(path))?;
+                let compiled_modules = build_move_package_to_bytes(Path::new(path), false)?;
                 let data = context
                     .gateway
                     .publish(sender, compiled_modules, gas_obj_ref, *gas_budget)
