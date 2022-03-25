@@ -12,6 +12,7 @@ use dropshot::{
     ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError,
     HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext,
 };
+use ed25519_dalek::ed25519::signature::Signature;
 use futures::lock::Mutex;
 use http::Response;
 use hyper::{Body, StatusCode};
@@ -29,7 +30,9 @@ use sui::sui_commands;
 use sui::sui_json::{resolve_move_function_args, SuiJsonValue};
 use sui_core::gateway_state::{GatewayClient, GatewayState};
 use sui_types::base_types::*;
-use sui_types::messages::TransactionData;
+use sui_types::crypto;
+use sui_types::crypto::SignableBytes;
+use sui_types::messages::{Transaction, TransactionData};
 use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::Object as SuiObject;
 use sui_types::object::ObjectRead;
@@ -99,10 +102,10 @@ fn create_api() -> ApiDescription<ServerContext> {
     api.register(get_objects).unwrap();
     api.register(object_schema).unwrap();
     api.register(object_info).unwrap();
-    api.register(transfer_object).unwrap();
+    api.register(new_transfer).unwrap();
     api.register(publish).unwrap();
     api.register(call).unwrap();
-    api.register(sync).unwrap();
+    api.register(sync_account_state).unwrap();
     api.register(execute_transaction).unwrap();
 
     // [GATEWAY_API]
@@ -118,23 +121,6 @@ struct ServerContext {
     // ServerState is created after genesis.
     gateway: Arc<Mutex<GatewayClient>>,
 }
-
-/*pub struct ServerState {
-    gateway: GatewayClient,
-    // The fields below are for genesis and starting demo network.
-    // TODO: Remove these fields when we fully transform rest_server into GatewayServer.
-    addresses: Vec<SuiAddress>,
-    config: NetworkConfig,
-    working_dir: PathBuf,
-    // Server handles that will be used to restart authorities.
-    authority_handles: Vec<JoinHandle<()>>,
-}
-
-impl Debug for ServerState {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ServerState")
-    }
-}*/
 
 impl ServerContext {
     pub fn new(documentation: serde_json::Value, gateway: GatewayClient) -> ServerContext {
@@ -486,8 +472,8 @@ Returns list of objects owned by an address.
  */
 #[endpoint {
     method = GET,
-    path = "/objects",
-    tags = [ "wallet" ],
+    path = "/api/objects",
+    tags = [ "api" ],
 }]
 async fn get_objects(
     ctx: Arc<RequestContext<ServerContext>>,
@@ -505,7 +491,6 @@ async fn get_objects(
 
     let objects = gateway
         .get_owned_objects(*address)
-        .await
         .unwrap()
         .into_iter()
         .map(NamedObjectRef::from)
@@ -636,7 +621,7 @@ Returns the object information for a specified object.
  */
 #[endpoint {
     method = GET,
-    path = "/object_info",
+    path = "/api/object_info",
     tags = [ "wallet" ],
 }]
 async fn object_info(
@@ -649,22 +634,13 @@ async fn object_info(
     let object_id = ObjectID::try_from(object_info_params.object_id)
         .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, format!("{error}")))?;
 
-    let (_, object, layout) = get_object_info(&gateway, object_id).await?;
-    let object_data = object.to_json(&layout).unwrap_or_else(|_| json!(""));
-    custom_http_response(
-        StatusCode::OK,
-        &ObjectInfoResponse {
-            owner: format!("{:?}", object.owner),
-            version: format!("{:?}", object.version().value()),
-            id: format!("{:?}", object.id()),
-            readonly: format!("{:?}", object.is_read_only()),
-            obj_type: object
-                .data
-                .type_()
-                .map_or("Unknown Type".to_owned(), |type_| format!("{type_}")),
-            data: object_data,
-        },
-    )
+    let object_read = gateway.get_object_info(object_id).await.map_err(|error| {
+        custom_http_error(
+            StatusCode::NOT_FOUND,
+            format!("Error while getting object info: {:?}", error),
+        )
+    })?;
+    custom_http_response(StatusCode::OK, JsonResponse::from(object_read)?)
 }
 
 /**
@@ -704,36 +680,33 @@ Example TransferTransactionRequest
 
 #[endpoint {
     method = POST,
-    path = "/transfer",
-    tags = [ "wallet" ],
+    path = "/api/new_transfer",
+    tags = [ "api" ],
 }]
-async fn transfer_object(
+async fn new_transfer(
     ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<TransferTransactionRequest>,
 ) -> Result<Response<Body>, HttpError> {
     let mut gateway = ctx.context().gateway.lock().await;
-
     let request = request.into_inner();
 
-    let signature_req = transfer_object_internal(&mut gateway, request)
-        .await
-        .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, error.to_string()))?;
+    let tx_data = async {
+        let to_address = decode_bytes_hex(request.to_address.as_str())?;
+        let object_id = ObjectID::try_from(request.object_id)?;
+        let gas_object_id = ObjectID::try_from(request.gas_object_id)?;
+        let owner = decode_bytes_hex(request.from_address.as_str())?;
+        gateway
+            .transfer_coin(owner, object_id, gas_object_id, to_address)
+            .await
+    }
+    .await
+    .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, error.to_string()))?;
 
-    custom_http_response(StatusCode::OK, JsonResponse::from(signature_req)?)
-}
+    let body = json!({
+        "unsigned_tx_base64" : tx_data.to_base64()
+    });
 
-async fn transfer_object_internal(
-    gateway: &mut GatewayClient,
-    request: TransferTransactionRequest,
-) -> Result<TransactionData, anyhow::Error> {
-    let to_address = decode_bytes_hex(request.to_address.as_str())?;
-    let object_id = ObjectID::try_from(request.object_id)?;
-    let gas_object_id = ObjectID::try_from(request.gas_object_id)?;
-    let owner = decode_bytes_hex(request.from_address.as_str())?;
-
-    gateway
-        .transfer_coin(owner, object_id, gas_object_id, to_address)
-        .await
+    custom_http_response(StatusCode::OK, body)
 }
 
 /**
@@ -835,10 +808,10 @@ async fn call(
     let mut gateway = ctx.context().gateway.lock().await;
 
     let call_params = request.into_inner();
-    let transaction_response = handle_move_call(call_params, &mut gateway)
+    let data = handle_move_call(call_params, &mut gateway)
         .await
         .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{:#}", err)))?;
-    custom_http_response(StatusCode::OK, transaction_response)
+    custom_http_response(StatusCode::OK, JsonResponse::from(data)?)
 }
 
 /**
@@ -858,10 +831,10 @@ on all objects owned by each address that is managed by this client state.
  */
 #[endpoint {
     method = POST,
-    path = "/sync",
-    tags = [ "wallet" ],
+    path = "/api/sync_account_state",
+    tags = [ "api" ],
 }]
-async fn sync(
+async fn sync_account_state(
     ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<SyncRequest>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
@@ -890,19 +863,27 @@ on all objects owned by each address that is managed by this client state.
  */
 #[endpoint {
 method = POST,
-path = "/execute_transaction",
-tags = [ "wallet" ],
+path = "/api/execute_transaction",
+tags = [ "api" ],
 }]
 async fn execute_transaction(
     ctx: Arc<RequestContext<ServerContext>>,
-    response: TypedBody<JsonResponse>,
+    response: TypedBody<SignedTransaction>,
 ) -> Result<HttpResponseOk<JsonResponse>, HttpError> {
     let response = response.into_inner();
     let mut gateway = ctx.context().gateway.lock().await;
 
     let response: Result<_, anyhow::Error> = async {
-        let tx = serde_json::from_value(response.0)?;
-        gateway.execute_transaction(tx).await
+        let data = base64::decode(response.unsigned_tx_base64)?;
+        let data = TransactionData::from_signable_bytes(data)?;
+
+        let mut signature_bytes = base64::decode(response.signature)?;
+        let mut pub_key_bytes = base64::decode(response.pub_key)?;
+        signature_bytes.append(&mut pub_key_bytes);
+        let signature = crypto::Signature::from_bytes(&*signature_bytes)?;
+        gateway
+            .execute_transaction(Transaction::new(data, signature))
+            .await
     }
     .await;
     let response = response
@@ -911,6 +892,13 @@ async fn execute_transaction(
         serde_json::to_value(response)
             .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, err.to_string()))?,
     )))
+}
+
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct SignedTransaction {
+    unsigned_tx_base64: String,
+    signature: String,
+    pub_key: String,
 }
 
 /*async fn get_object_effects(
@@ -1097,7 +1085,7 @@ async fn handle_publish(
 async fn handle_move_call(
     call_params: CallRequest,
     gateway: &mut GatewayClient,
-) -> Result<JsonResponse, anyhow::Error> {
+) -> Result<TransactionData, anyhow::Error> {
     let module = Identifier::from_str(&call_params.module.to_owned())?;
     let function = Identifier::from_str(&call_params.function.to_owned())?;
     let args = call_params.args;
@@ -1149,7 +1137,7 @@ async fn handle_move_call(
         object_args_refs.push(object_ref);
     }
 
-    let sig_req = gateway
+    gateway
         .move_call(
             sender,
             package_object_ref,
@@ -1163,9 +1151,7 @@ async fn handle_move_call(
             pure_args,
             gas_budget,
         )
-        .await?;
-
-    Ok(JsonResponse(serde_json::to_value(&sig_req)?))
+        .await
 }
 
 fn publish_response_to_json(
@@ -1233,7 +1219,7 @@ fn custom_http_error(status_code: http::StatusCode, message: String) -> HttpErro
 struct JsonResponse(Value);
 
 impl JsonResponse {
-    fn from<T>(data: T) -> Result<Self, HttpError>
+    pub fn from<T>(data: T) -> Result<Self, HttpError>
     where
         T: Serialize,
     {

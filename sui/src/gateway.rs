@@ -7,12 +7,13 @@ use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use std::time::Duration;
 
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use async_trait::async_trait;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::{json, Value};
 
 use sui_core::authority_client::AuthorityClient;
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
@@ -21,6 +22,7 @@ use sui_network::network::NetworkClient;
 use sui_network::transport;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
 use sui_types::committee::Committee;
+use sui_types::crypto::SignableBytes;
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 
@@ -128,16 +130,31 @@ impl Default for EmbeddedGatewayConfig {
     }
 }
 
-#[allow(dead_code, unused_variables)]
 struct RestGatewayClient {
     url: String,
 }
 
 #[async_trait]
-#[allow(dead_code, unused_variables)]
+#[allow(unused_variables)]
 impl GatewayAPI for RestGatewayClient {
     async fn execute_transaction(&mut self, tx: Transaction) -> Result<TransactionResponse, Error> {
-        todo!()
+        let url = format!("{}/api/execute_transaction", self.url);
+        let client = reqwest::Client::new();
+
+        let data = tx.data.to_base64();
+        let sig_and_pub_key = format!("{:?}", tx.signature);
+        let split = sig_and_pub_key.split('@').collect::<Vec<_>>();
+        let signature = split[0];
+        let pub_key = split[1];
+
+        let body = json!({
+            "unsigned_tx_base64" : data,
+            "signature" : signature,
+            "pub_key" : pub_key
+        });
+        let res = client.post(url).body(body.to_string()).send().await?;
+
+        Ok(res.json().await?)
     }
 
     async fn transfer_coin(
@@ -147,12 +164,34 @@ impl GatewayAPI for RestGatewayClient {
         gas_payment: ObjectID,
         recipient: SuiAddress,
     ) -> Result<TransactionData, Error> {
-        todo!()
+        let url = format!("{}/api/new_transfer", self.url);
+        let client = reqwest::Client::new();
+
+        let object_id = object_id.to_hex();
+        let gas_payment = gas_payment.to_hex();
+
+        let value = json!({
+            "toAddress" : recipient.to_string(),
+            "fromAddress" : signer.to_string(),
+            "objectId" : object_id,
+            "gasObjectId" : gas_payment
+        });
+        let res = client.post(url).body(value.to_string()).send().await?;
+        let res: Value = res.json().await?;
+        let tx = res["unsigned_tx_base64"]
+            .as_str()
+            .ok_or_else(|| anyhow!("Error encountered while retrieving transaction data."))?;
+        let tx = base64::decode(tx)?;
+        Ok(TransactionData::from_signable_bytes(tx)?)
     }
 
     async fn sync_account_state(&mut self, account_addr: SuiAddress) -> Result<(), Error> {
-        let url = format!("{}/sync?address={}", self.url, account_addr);
-        reqwest::get(url).await?;
+        let url = format!("{}/api/sync_account_state", self.url);
+        let client = reqwest::Client::new();
+        let address = account_addr.to_string();
+        let body = json!({ "address": address });
+
+        client.post(url).body(body.to_string()).send().await?;
         Ok(())
     }
 
@@ -205,16 +244,18 @@ impl GatewayAPI for RestGatewayClient {
     }
 
     async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, Error> {
-        todo!()
+        let url = format!("{}/api/object_info?objectId={}", self.url, object_id);
+        let response = reqwest::get(url).await?;
+        Ok(response.json().await?)
     }
 
-    async fn get_owned_objects(
+    fn get_owned_objects(
         &mut self,
         account_addr: SuiAddress,
     ) -> Result<Vec<ObjectRef>, anyhow::Error> {
-        let url = format!("{}/objects?address={}", self.url, account_addr);
-        let response = reqwest::get(url).await?;
-        let response: ObjectResponse = response.json().await?;
+        let url = format!("{}/api/objects?address={}", self.url, account_addr);
+        let response = reqwest::blocking::get(url)?;
+        let response: ObjectResponse = response.json()?;
         let objects = response
             .objects
             .into_iter()

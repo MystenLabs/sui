@@ -526,7 +526,7 @@ impl Object {
 }
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub enum ObjectRead {
     NotExists(ObjectID),
     Exists(ObjectRef, Object, Option<MoveStructLayout>),

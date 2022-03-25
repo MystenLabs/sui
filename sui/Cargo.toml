@@ -60,7 +60,7 @@ move-bytecode-utils = { git = "https://github.com/diem/move", rev = "2ef516919d5
 move-unit-test = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
 
 once_cell = "1.9.0"
-reqwest = { version = "0.11.10", features=["json","serde_json"]}
+reqwest = { version = "0.11.10", features=["json","serde_json", "blocking"]}
 
 [dev-dependencies]
 tracing-test = "0.2.1"

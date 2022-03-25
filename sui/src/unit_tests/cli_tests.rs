@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use ed25519_dalek::Signer;
 use std::fs::read_dir;
 use std::ops::Add;
 use std::path::{Path, PathBuf};
@@ -22,7 +23,7 @@ use sui::sui_commands::{genesis, SuiNetwork, SUI_NETWORK_CONFIG, SUI_WALLET_CONF
 use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
-use sui_types::crypto::get_key_pair;
+use sui_types::crypto::{get_key_pair, get_key_pair_from_bytes, Signature};
 use sui_types::messages::TransactionEffects;
 use sui_types::object::{Object, ObjectRead, GAS_VALUE_FOR_TESTING};
 
@@ -293,7 +294,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
         .await?
         .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address).await?;
+    let object_refs = context.gateway.get_owned_objects(address)?;
 
     // Check log output contains all object ids.
     for (object_id, _, _) in object_refs {
@@ -411,7 +412,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
         .await?
         .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address).await?;
+    let object_refs = context.gateway.get_owned_objects(address)?;
 
     // Check log output contains all object ids.
     let object_id = object_refs.first().unwrap().0;
@@ -448,7 +449,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
         .execute(&mut context)
         .await?;
 
-    let object_refs = context.gateway.get_owned_objects(address).await?;
+    let object_refs = context.gateway.get_owned_objects(address)?;
 
     let object_id = object_refs.first().unwrap().0;
     let object_to_send = object_refs.get(1).unwrap().0;
@@ -698,7 +699,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         .print(true);
     tokio::time::sleep(Duration::from_millis(2000)).await;
 
-    let object_refs = context.gateway.get_owned_objects(address1).await?;
+    let object_refs = context.gateway.get_owned_objects(address1)?;
 
     // Check log output contains all object ids.
     for (object_id, _, _) in &object_refs {
@@ -864,7 +865,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         .await?
         .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address).await?;
+    let object_refs = context.gateway.get_owned_objects(address)?;
 
     // Check log output contains all object ids.
     let gas_obj_id = object_refs.first().unwrap().0;
@@ -944,7 +945,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         .await?
         .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address).await?;
+    let object_refs = context.gateway.get_owned_objects(address)?;
 
     // Check log output contains all object ids.
     let gas_obj_id = object_refs.first().unwrap().0;
@@ -1039,4 +1040,20 @@ fn test_bug_1078() {
     // fmt ObjectRead should not fail.
     write!(writer, "{}", read).unwrap();
     write!(writer, "{:?}", read).unwrap();
+}
+
+#[test]
+fn test() -> Result<(), anyhow::Error> {
+    let key_str =
+        "yepWW8/js1AJtjlr8djyKC4nERkMznE0pB6D/jeb56mIy5JKFapdhkvBTJQf/ipfO+LiXczLUFoQHG/0p946ww==";
+    let value = base64::decode(key_str)?;
+    let (_, kp) = get_key_pair_from_bytes(&value);
+
+    let content_to_sign = "VHJhbnNhY3Rpb25EYXRhOjoAABQz/qZSvIyr2J47fWy5Fn3FrAfCqBY1u/MXMOLWcYtvlyxLjpMcY/XRAQAAAAAAAAAgBNO01Pak/TDfP6UN2kOxqC9oMv/g+VdwKrSyqDQfQYYUM/6mUryMq9ieO31suRZ9xawHwqg2Lti1zncsbI3xy3zp0g5JEArhIQEAAAAAAAAAICJu1MgKDJJi/pNABBuOr+04GZVsecdY/hIgUMlkk0zJ";
+    let value = base64::decode(content_to_sign)?;
+    let signature: Signature = kp.sign(&value);
+
+    println!("{:?}", signature);
+
+    Ok(())
 }
