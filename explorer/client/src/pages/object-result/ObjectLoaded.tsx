@@ -40,10 +40,17 @@ function ObjectLoaded({ data }: { data: DataType }) {
     const checkIsPropertyType = (value: any) =>
         ['number', 'string'].includes(typeof value);
 
+    //TODO - a backend convention on how owned objects are labelled and how values are stored
+    //This would facilitate refactoring the below and stopping bugs when a variant is missed:
     const checkIsIDType = (key: string, value: any) =>
-        /owned/.test(key) || (/_id/.test(key) && value?.bytes) || value?.vec;
+        /owned/.test(key) ||
+        (/_id/.test(key) && value?.bytes) ||
+        value?.vec ||
+        key === 'objects';
     const checkSingleID = (value: any) => value?.bytes;
     const checkVecIDs = (value: any) => value?.vec;
+    const checkVecOfSingleID = (value: any) =>
+        Array.isArray(value) && value.length > 0 && value[0]?.bytes;
     const addrOwnerPattern = /^AddressOwner\(k#/;
     const endParensPattern = /\){1}$/;
 
@@ -338,6 +345,26 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                                 {checkVecIDs(value) && (
                                                     <div>
                                                         {value?.vec.map(
+                                                            (
+                                                                value2: {
+                                                                    bytes: string;
+                                                                },
+                                                                index2: number
+                                                            ) => (
+                                                                <Longtext
+                                                                    text={
+                                                                        value2.bytes
+                                                                    }
+                                                                    category="objects"
+                                                                    key={`ConnectedEntity-${index1}-${index2}`}
+                                                                />
+                                                            )
+                                                        )}
+                                                    </div>
+                                                )}
+                                                {checkVecOfSingleID(value) && (
+                                                    <div>
+                                                        {value.map(
                                                             (
                                                                 value2: {
                                                                     bytes: string;

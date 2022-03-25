@@ -4,7 +4,7 @@ import { useLocation, useParams } from 'react-router-dom';
 import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
-import { DefaultRpcClient as rpc} from '../../utils/internetapi/SuiRpcClient';
+import { DefaultRpcClient as rpc } from '../../utils/internetapi/SuiRpcClient';
 
 type DataType = {
     id: string;
