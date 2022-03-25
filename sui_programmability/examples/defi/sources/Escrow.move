@@ -23,8 +23,11 @@ module DeFi::Escrow {
         escrowed: T,
     }
 
-    // TODO: proper error codes
-    const ETODO: u64 = 0;
+    // Error codes
+    /// The `sender` and `recipient` of the two escrowed objects do not match
+    const EMISMATCHED_SENDER_RECIPIENT: u64 = 0;
+    /// The `exchange_for` fields of the two escrowed objects do not match
+    const EMISMATCHED_EXCHANGE_OBJECT: u64 = 1;
 
     /// Create an escrow for exchanging goods with
     /// `counterparty`, mediated by a `third_party`
@@ -49,7 +52,9 @@ module DeFi::Escrow {
 
     /// Trusted third party can swap compatible objects
     public fun swap<T1: key + store, T2: key + store>(
-        obj1: EscrowedObj<T1, T2>, obj2: EscrowedObj<T1, T2>
+        obj1: EscrowedObj<T1, T2>,
+        obj2: EscrowedObj<T2, T1>,
+        _ctx: &mut TxContext
     ) {
         let EscrowedObj {
             id: id1,
@@ -68,11 +73,11 @@ module DeFi::Escrow {
         ID::delete(id1);
         ID::delete(id2);
         // check sender/recipient compatibility
-        assert!(&sender1 == &recipient2, ETODO);
-        assert!(&sender2 == &recipient1, ETODO);
+        assert!(&sender1 == &recipient2, EMISMATCHED_SENDER_RECIPIENT);
+        assert!(&sender2 == &recipient1, EMISMATCHED_SENDER_RECIPIENT);
         // check object ID compatibility
-        assert!(ID::id(&escrowed1) == &exchange_for2, ETODO);
-        assert!(ID::id(&escrowed2) == &exchange_for1, ETODO);
+        assert!(ID::id(&escrowed1) == &exchange_for2, EMISMATCHED_EXCHANGE_OBJECT);
+        assert!(ID::id(&escrowed2) == &exchange_for1, EMISMATCHED_EXCHANGE_OBJECT);
         // everything matches. do the swap!
         Transfer::transfer(escrowed1, sender2);
         Transfer::transfer(escrowed2, sender1)
@@ -81,6 +86,7 @@ module DeFi::Escrow {
     /// Trusted third party can always return an escrowed object to its original owner
     public fun return_to_sender<T: key + store, ExchangeForT: key + store>(
         obj: EscrowedObj<T, ExchangeForT>,
+        _ctx: &mut TxContext
     ) {
         let EscrowedObj {
             id, sender, recipient: _, exchange_for: _, escrowed

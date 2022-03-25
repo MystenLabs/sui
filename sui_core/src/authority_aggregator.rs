@@ -29,8 +29,8 @@ const OBJECT_DOWNLOAD_CHANNEL_BOUND: usize = 1024;
 pub const DEFAULT_RETRIES: usize = 4;
 
 #[cfg(test)]
-#[path = "unit_tests/client_tests.rs"]
-mod client_tests;
+#[path = "unit_tests/gateway_tests.rs"]
+mod gateway_tests;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 

@@ -1,7 +1,7 @@
 {
   "title": "Sui Developer Portal",
   "tagline": "Welcome to Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move",
-  "URL": "https://devportal-30dd0.web.app/",
+  "URL": "https://docs.sui.io/",
   "baseUrl": "/",
   "favIcon": "/favicon2.png",
   "organizationName": "Mysten Labs",
@@ -11,11 +11,11 @@
     "copyRight": "©2022 Copyright Sui. All rights reserved.",
     "privacyPolicy": {
       "label": "Privacy Policy",
-      "link": "#"
+      "link": "https://sui.io/policy/"
     },
     "terms": {
       "label": "Terms of Service",
-      "link": "#"
+      "link": "https://sui.io/terms/"
     },
     "menu": [{
         "title": "Docs",
@@ -129,7 +129,7 @@
         ]
       },
       {
-        "name": "Learn About Sui",
+        "name": "Learn about Sui",
         "sublist": [{
             "name": "How Sui Works",
             "url": "/learn/how-sui-works"
@@ -157,8 +157,8 @@
       {
         "name": "Build with Examples",
         "sublist": [{
-            "name": "Hold an auction",
-            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/Auction.move",
+            "name": "Create an escrow",
+            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/Escrow.move",
             "external": true
           },
           {

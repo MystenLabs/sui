@@ -19,7 +19,7 @@ module NFTs::SharedAuctionTests {
 
     // Error codes.
     const EWRONG_ITEM_VALUE: u64 = 1;
-    const EWRONG_COIN_VALUE: u64 = 1;
+    const EWRONG_COIN_VALUE: u64 = 2;
 
     // Example of an object type that could be sold at an auction.
     struct SomeItemToSell has key, store {
