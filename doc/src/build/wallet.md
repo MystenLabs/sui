@@ -34,7 +34,7 @@ The network configuration is stored in `network.conf` and can be used
 subsequently to start the network. The `wallet.conf` and `wallet.key`
 are also created to be used by the Sui wallet to manage the newly
 created accounts. By default, these files will be stored in the
-o`~/.sui/sui_config` directory, but you can override this location by
+`~/.sui/sui_config` directory, but you can override this location by
 providing an alternative path:
 
 ```shell
