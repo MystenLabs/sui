@@ -1,4 +1,4 @@
-import type { AnyVec, JsonBytes } from "./rpc";
+import type { AnyVec, JsonBytes } from "./SuiRpcClient";
 
 
 export type CosmeticOption = AnyVec | RawCosmetic;
