@@ -33,11 +33,21 @@ function SmartContractBox({ data }: { data: DataType }) {
 
 function DisplayBox({ data }: { data: DataType }) {
     const [hasDisplayLoaded, setHasDisplayLoaded] = useState(false);
+    const [hasFailedToLoad, setHasFailedToLoad] = useState(false);
 
     const imageStyle = hasDisplayLoaded ? {} : { display: 'none' };
     const handleImageLoad = useCallback(
         () => setHasDisplayLoaded(true),
         [setHasDisplayLoaded]
+    );
+
+    const handleImageFail = useCallback(
+        (error) => {
+            console.log(error);
+            setHasDisplayLoaded(true);
+            setHasFailedToLoad(true);
+        },
+        [setHasFailedToLoad]
     );
 
     const IS_SMART_CONTRACT = (data: any) =>
@@ -62,13 +72,19 @@ function DisplayBox({ data }: { data: DataType }) {
                         Please wait for display to load
                     </div>
                 )}
-                <img
-                    className={styles.imagebox}
-                    style={imageStyle}
-                    alt="NFT"
-                    src={data.data.contents.display}
-                    onLoad={handleImageLoad}
-                />
+                {hasFailedToLoad && (
+                    <div className={styles.imagebox}>No Image was Found</div>
+                )}
+                {!hasFailedToLoad && (
+                    <img
+                        className={styles.imagebox}
+                        style={imageStyle}
+                        alt="NFT"
+                        src={data.data.contents.display}
+                        onLoad={handleImageLoad}
+                        onError={handleImageFail}
+                    />
+                )}
             </div>
         );
     }
