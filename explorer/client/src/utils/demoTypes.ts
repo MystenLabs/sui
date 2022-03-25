@@ -1,7 +1,5 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
+import type { AnyVec, JsonBytes } from "./SuiRpcClient";
 
-import type { AnyVec, JsonBytes } from './SuiRpcClient';
 
 export type CosmeticOption = AnyVec | RawCosmetic;
 
@@ -25,6 +23,7 @@ export interface RawMonster {
     monster_name: JsonBytes;
     monster_xp: number;
 }
+
 
 export interface RawFarm {
     applied_farm_cosmetic_0: CosmeticOption;
