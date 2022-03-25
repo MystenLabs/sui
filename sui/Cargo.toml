@@ -69,6 +69,10 @@ name = "bench"
 path = "src/bench.rs"
 
 [[bin]]
+name = "bench_sweep"
+path = "src/bench_sweep.rs"
+
+[[bin]]
 name = "wallet"
 path = "src/wallet.rs"
 
