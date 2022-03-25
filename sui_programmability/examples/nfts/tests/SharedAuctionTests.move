@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 #[test_only]
 module NFTs::SharedAuctionTests {
     use Std::Vector;
@@ -16,7 +19,7 @@ module NFTs::SharedAuctionTests {
 
     // Error codes.
     const EWRONG_ITEM_VALUE: u64 = 1;
-    const EWRONG_COIN_VALUE: u64 = 1;
+    const EWRONG_COIN_VALUE: u64 = 2;
 
     // Example of an object type that could be sold at an auction.
     struct SomeItemToSell has key, store {
@@ -24,7 +27,7 @@ module NFTs::SharedAuctionTests {
         value: u64,
     }
 
-    // Initializes the "state of the world" that mimicks what should
+    // Initializes the "state of the world" that mimics what should
     // be available in Sui genesis state (e.g., mints and distributes
     // coins to users).
     fun init(ctx: &mut TxContext, bidders: vector<address>) {

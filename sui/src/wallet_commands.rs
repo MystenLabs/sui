@@ -7,9 +7,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 use anyhow::anyhow;
-use async_trait::async_trait;
 use colored::Colorize;
-use ed25519_dalek::ed25519::signature;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::parser::parse_type_tag;
@@ -22,14 +20,11 @@ use tracing::info;
 use sui_core::gateway_state::gateway_responses::{
     MergeCoinResponse, PublishResponse, SplitCoinResponse,
 };
-use sui_core::gateway_state::{AsyncTransactionSigner, GatewayClient};
+use sui_core::gateway_state::GatewayClient;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress};
-use sui_types::crypto::{Signable, Signature};
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::{
-    CertifiedTransaction, ExecutionStatus, TransactionData, TransactionEffects,
-};
+use sui_types::messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects};
 use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::ObjectRead;
 use sui_types::object::ObjectRead::Exists;
@@ -187,30 +182,11 @@ pub struct SimpleTransactionSigner {
     pub keystore: Arc<RwLock<Box<dyn Keystore>>>,
 }
 
-// A simple signer callback implementation, which signs the content without validation.
-#[async_trait]
-impl AsyncTransactionSigner for SimpleTransactionSigner {
-    async fn sign(
-        &self,
-        address: &SuiAddress,
-        data: TransactionData,
-    ) -> Result<Signature, signature::Error> {
-        let keystore = self.keystore.read().unwrap();
-        let mut msg = Vec::new();
-        data.write(&mut msg);
-        keystore.sign(address, &msg)
-    }
-}
-
 impl WalletCommands {
     pub async fn execute(
         &mut self,
         context: &mut WalletContext,
     ) -> Result<WalletCommandResult, anyhow::Error> {
-        let tx_signer = Box::pin(SimpleTransactionSigner {
-            keystore: context.keystore.clone(),
-        });
-
         Ok(match self {
             WalletCommands::Publish {
                 path,
@@ -223,16 +199,20 @@ impl WalletCommands {
                 let gas_obj_ref = gas_object.compute_object_reference();
 
                 let compiled_modules = build_move_package_to_bytes(Path::new(path))?;
+                let data = context
+                    .gateway
+                    .publish(sender, compiled_modules, gas_obj_ref, *gas_budget)
+                    .await?;
+                let signature = context
+                    .keystore
+                    .read()
+                    .unwrap()
+                    .sign(&sender, &data.to_bytes())?;
                 let response = context
                     .gateway
-                    .publish(
-                        sender,
-                        compiled_modules,
-                        gas_obj_ref,
-                        *gas_budget,
-                        tx_signer,
-                    )
-                    .await?;
+                    .execute_transaction(Transaction::new(data, signature))
+                    .await?
+                    .to_publish_response()?;
 
                 WalletCommandResult::Publish(response)
             }
@@ -306,7 +286,7 @@ impl WalletCommands {
                     object_args_refs.push(obj_info.object()?.compute_object_reference());
                 }
 
-                let (cert, effects) = context
+                let data = context
                     .gateway
                     .move_call(
                         sender,
@@ -319,9 +299,19 @@ impl WalletCommands {
                         vec![],
                         pure_args,
                         *gas_budget,
-                        tx_signer,
                     )
                     .await?;
+                let signature = context
+                    .keystore
+                    .read()
+                    .unwrap()
+                    .sign(&sender, &data.to_bytes())?;
+                let (cert, effects) = context
+                    .gateway
+                    .execute_transaction(Transaction::new(data, signature))
+                    .await?
+                    .to_effect_response()?;
+
                 if matches!(effects.status, ExecutionStatus::Failure { .. }) {
                     return Err(anyhow!("Error calling module: {:#?}", effects.status));
                 }
@@ -335,10 +325,21 @@ impl WalletCommands {
 
                 let time_start = Instant::now();
 
+                let data = context
+                    .gateway
+                    .transfer_coin(from, *object_id, *gas, *to)
+                    .await?;
+                let signature = context
+                    .keystore
+                    .read()
+                    .unwrap()
+                    .sign(&from, &data.to_bytes())?;
                 let (cert, effects) = context
                     .gateway
-                    .transfer_coin(from, *object_id, *gas, *to, tx_signer)
-                    .await?;
+                    .execute_transaction(Transaction::new(data, signature))
+                    .await?
+                    .to_effect_response()?;
+
                 let time_total = time_start.elapsed().as_micros();
 
                 if matches!(effects.status, ExecutionStatus::Failure { .. }) {
@@ -395,17 +396,20 @@ impl WalletCommands {
                 let gas_object = gas_object_info.object()?;
                 let signer = gas_object.owner.get_owner_address()?;
 
+                let data = context
+                    .gateway
+                    .split_coin(signer, *coin_id, amounts.clone(), *gas, *gas_budget)
+                    .await?;
+                let signature = context
+                    .keystore
+                    .read()
+                    .unwrap()
+                    .sign(&signer, &data.to_bytes())?;
                 let response = context
                     .gateway
-                    .split_coin(
-                        signer,
-                        *coin_id,
-                        amounts.clone(),
-                        *gas,
-                        *gas_budget,
-                        tx_signer,
-                    )
-                    .await?;
+                    .execute_transaction(Transaction::new(data, signature))
+                    .await?
+                    .to_split_coin_response()?;
                 WalletCommandResult::SplitCoin(response)
             }
             WalletCommands::MergeCoin {
@@ -417,17 +421,21 @@ impl WalletCommands {
                 let gas_object_info = context.gateway.get_object_info(*gas).await?;
                 let gas_object = gas_object_info.object()?;
                 let signer = gas_object.owner.get_owner_address()?;
+                let data = context
+                    .gateway
+                    .merge_coins(signer, *primary_coin, *coin_to_merge, *gas, *gas_budget)
+                    .await?;
+                let signature = context
+                    .keystore
+                    .read()
+                    .unwrap()
+                    .sign(&signer, &data.to_bytes())?;
                 let response = context
                     .gateway
-                    .merge_coins(
-                        signer,
-                        *primary_coin,
-                        *coin_to_merge,
-                        *gas,
-                        *gas_budget,
-                        tx_signer,
-                    )
-                    .await?;
+                    .execute_transaction(Transaction::new(data, signature))
+                    .await?
+                    .to_merge_coin_response()?;
+
                 WalletCommandResult::MergeCoin(response)
             }
         })
@@ -442,7 +450,12 @@ pub struct WalletContext {
 
 impl WalletContext {
     pub fn new(config_path: &Path) -> Result<Self, anyhow::Error> {
-        let config: WalletConfig = PersistedConfig::read(config_path)?;
+        let config: WalletConfig = PersistedConfig::read(config_path).map_err(|err| {
+            err.context(format!(
+                "Cannot open wallet config file at {:?}",
+                config_path
+            ))
+        })?;
         let config = config.persisted(config_path);
         let keystore = Arc::new(RwLock::new(config.keystore.init()?));
         let gateway = config.gateway.init();

@@ -2,16 +2,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::crypto::{
-    sha3_hash, AuthoritySignature, BcsSignable, Signature, VerificationObligation,
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
+use std::{
+    collections::{BTreeSet, HashSet},
+    hash::{Hash, Hasher},
 };
-use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
-
-use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
-
-#[cfg(test)]
-#[path = "unit_tests/messages_tests.rs"]
-mod messages_tests;
 
 use itertools::Either;
 use move_binary_format::{access::ModuleAccess, CompiledModule};
@@ -22,14 +18,17 @@ use move_core_types::{
 use name_variant::NamedVariant;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-// use static_assertions::const_assert_eq;
-use std::fmt::Write;
-use std::fmt::{Display, Formatter};
-//use std::mem::size_of;
-use std::{
-    collections::{BTreeSet, HashSet},
-    hash::{Hash, Hasher},
+
+use crate::crypto::{
+    sha3_hash, AuthoritySignature, BcsSignable, Signable, Signature, VerificationObligation,
 };
+use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
+
+use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
+
+#[cfg(test)]
+#[path = "unit_tests/messages_tests.rs"]
+mod messages_tests;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Transfer {
@@ -229,7 +228,10 @@ pub struct TransactionData {
     gas_payment: ObjectRef,
 }
 
-impl TransactionData {
+impl TransactionData
+where
+    Self: BcsSignable,
+{
     pub fn new(kind: TransactionKind, sender: SuiAddress, gas_payment: ObjectRef) -> Self {
         TransactionData {
             kind,
@@ -292,6 +294,20 @@ impl TransactionData {
     /// Returns the transaction kind as a &str (variant name, no fields)
     pub fn kind_as_str(&self) -> &'static str {
         self.kind.variant_name()
+    }
+
+    pub fn gas(&self) -> ObjectRef {
+        self.gas_payment
+    }
+
+    pub fn signer(&self) -> SuiAddress {
+        self.sender
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut writer = Vec::new();
+        self.write(&mut writer);
+        writer
     }
 }
 
@@ -955,8 +971,6 @@ impl<'a> SignatureAggregator<'a> {
     }
 }
 
-use crate::crypto::Signable;
-
 impl CertifiedTransaction {
     pub fn new(transaction: Transaction) -> CertifiedTransaction {
         CertifiedTransaction {
@@ -1084,9 +1098,14 @@ impl ConfirmationTransaction {
 
 impl BcsSignable for TransactionData {}
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ConsensusOutput {
     #[serde(with = "serde_bytes")]
     pub message: Vec<u8>,
-    pub sequencer_number: SequenceNumber,
+    pub sequence_number: SequenceNumber,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ConsensusSync {
+    pub sequence_number: SequenceNumber,
 }

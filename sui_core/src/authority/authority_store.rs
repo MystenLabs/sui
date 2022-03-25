@@ -8,7 +8,6 @@ use std::convert::TryInto;
 use std::path::Path;
 
 use rocksdb::MultiThreaded;
-use std::sync::atomic::AtomicU64;
 
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
@@ -102,9 +101,6 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
     /// by a single process acting as consensus (light) client. It is used to ensure the authority processes
     /// every message output by consensus (and in the right order).
     last_consensus_index: DBMap<u64, SequenceNumber>,
-
-    /// The next available sequence number to use in the `executed sequence` table.
-    pub next_sequence_number: AtomicU64,
 }
 
 /// Opens a database with options, and a number of column families that are created if they do not exist.
@@ -191,18 +187,6 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         let executed_sequence =
             DBMap::reopen(&db, Some("executed_sequence")).expect("Cannot open CF.");
 
-        // Read the index of the last entry in the sequence of commands
-        // to extract the next sequence number or it is zero.
-        let next_sequence_number = AtomicU64::new(
-            executed_sequence
-                .iter()
-                .skip_prior_to(&TxSequenceNumber::MAX)
-                .expect("Error reading table.")
-                .next()
-                .map(|(v, _)| v + 1u64)
-                .unwrap_or(0),
-        );
-
         let (
             objects,
             all_object_versions,
@@ -249,7 +233,6 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             executed_sequence,
             batches,
             last_consensus_index,
-            next_sequence_number,
         }
     }
 
@@ -983,6 +966,12 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             .get(&LAST_CONSENSUS_INDEX_ADDR)
             .map(|x| x.unwrap_or_default())
             .map_err(SuiError::from)
+    }
+
+    #[cfg(test)]
+    /// Provide read access to the `schedule` table (useful for testing).
+    pub fn get_schedule(&self, object_id: &ObjectID) -> SuiResult<Option<SequenceNumber>> {
+        self.schedule.get(object_id).map_err(SuiError::from)
     }
 }
 

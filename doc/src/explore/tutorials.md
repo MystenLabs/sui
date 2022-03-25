@@ -1,5 +1,5 @@
 ---
-title: End-to-End Tutorial: Set Up and Play TicTacToe on Sui
+title: End-to-End Tutorial to Set Up and Play TicTacToe on Sui
 ---
 
 In this tutorial, we demonstrate the end-to-end process for starting a
@@ -21,26 +21,9 @@ the `wallet` command used in the remainder of this tutorial in your path.
 Simply leave the terminal with Sui running and start a new terminal for the
 remainder of this tutorial.
 
-We will follow the same convention as the one described in the [Sui
-setup instructions](../build/wallet.md#setup) and assume that Sui
-configuration files generated during Sui genesis state creation are
-stored in the `"$SUI_ROOT"/sui_instance` directory.
-
-*IMPORTANT*: For the remainder of this tutorial, we will assume that you are
-executing the `wallet` command in the `"$SUI_ROOT"/sui_instance` directory as well.
-Adjust your paths accordingly.
-
 ## Gather accounts and gas objects
 
-After completing the [Setup section](#setup) you should have a Sui instance running in a terminal window. Now switch to a new terminal window and keep the first terminal running.
-Make sure that you run the `wallet` command in the directory
-where wallet configuration is located or by passing wallet's
-configuration file as a parameter, as described in the `wallet`
-[command description](../build/wallet.md#using-the-wallet).
-This will be the same directory where you ran `sui genesis`,
-so return to $SUI_ROOT/sui_instance.
-
-There take a look at the account addresses we own in our wallet:
+Let us take a look at the account addresses we own in our wallet:
 ```
 $ wallet --no-shell addresses
 Showing 5 results.
@@ -93,9 +76,19 @@ export O_GAS=2110ADFB7BAF889A05EA6F5889AF7724299F9BED
 ```
 
 ## Publish the TicTacToe game on Sui
-We implemented a TicTacToe game in [TicTacToe.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToe.move). To publish the game, we run the publish command and specify the path to the game package. As described in the earlier [setup section](#setup), we assume that Sui repository was cloned locally - *let us further assume that it was cloned into `"$SUI_ROOT"/sui` directory* **Adjust the `--path` to match your own environment if you used different paths**.
+We implemented a TicTacToe game in [TicTacToe.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToe.move).
+
+In order to obtain source code for the game, let us clone the Sui
+repository to the current directory:
+
+```shell
+git clone https://github.com/MystenLabs/sui.git
 ```
-$ wallet --no-shell publish --path "$SUI_ROOT"/sui/sui_programmability/examples/games --gas $ADMIN_GAS --gas-budget 30000
+
+To publish the game, we run the publish command and specify the path to the source code of the game package:
+
+```
+$ wallet --no-shell publish --path ./sui/sui_programmability/examples/games --gas $ADMIN_GAS --gas-budget 30000
 ----- Certificate ----
 Signed Authorities : ...
 Transaction Kind : Publish

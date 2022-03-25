@@ -4,6 +4,8 @@
 
 use crate::authority_client::AuthorityAPI;
 use async_trait::async_trait;
+use futures::channel::mpsc::Receiver;
+use std::io;
 use sui_types::crypto::PublicKeyBytes;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 
@@ -256,5 +258,13 @@ where
             return Err(err);
         }
         Ok(transaction_info)
+    }
+
+    /// Handle Batch information requests for this authority.
+    async fn handle_batch_streaming(
+        &self,
+        _request: BatchInfoRequest,
+    ) -> Result<Receiver<Result<BatchInfoResponseItem, SuiError>>, io::Error> {
+        todo!()
     }
 }

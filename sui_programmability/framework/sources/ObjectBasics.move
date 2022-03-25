@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Test CTURD object basics (create, transfer, update, read, delete)
 module Sui::ObjectBasics {
     use Sui::Event;
@@ -12,7 +15,7 @@ module Sui::ObjectBasics {
 
     struct Wrapper has key {
         id: VersionedID,
-        o: Object 
+        o: Object
     }
 
     struct NewValueEvent has copy, drop {

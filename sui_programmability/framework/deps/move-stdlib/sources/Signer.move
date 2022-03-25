@@ -1,6 +1,9 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module Std::Signer {
     // Borrows the address of the signer
-    // Conceptually, you can think of the `signer` as being a struct wrapper arround an
+    // Conceptually, you can think of the `signer` as being a struct wrapper around an
     // address
     // ```
     // struct Signer has drop { addr: address }
