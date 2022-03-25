@@ -67,6 +67,7 @@ pub use temporary_store::AuthorityTemporaryStore;
 mod authority_store;
 pub use authority_store::{AuthorityStore, GatewayStore, ReplicaStore, SuiDataStore};
 
+pub mod authority_checkpoints;
 pub mod authority_notifier;
 
 pub const MAX_ITEMS_LIMIT: u64 = 100_000;
