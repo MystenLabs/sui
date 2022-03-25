@@ -1,20 +1,16 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
+import { DefaultRpcClient as rpc } from './rpc';
 
-import { DefaultRpcClient as rpc } from './SuiRpcClient';
-
-export const navigateWithUnknown = async (
-    input: string,
-    navigate: Function
-) => {
-    // TODO - replace multi-request search with backend function when ready
+export const navigateWithUnknown = async (input: string, navigate: Function) => {
+    // feels crude to just search each category for an ID, but works for now
     const addrPromise = rpc.getAddressObjects(input).then((data) => {
-        if (data.length <= 0) throw new Error('No objects for Address');
-
-        return {
-            category: 'addresses',
-            data: data,
-        };
+        if (data.length > 0) {
+            return {
+                category: 'addresses',
+                data: data,
+            };
+        } else {
+            throw new Error('No objects for Address');
+        }
     });
 
     const objInfoPromise = rpc.getObjectInfo(input).then((data) => ({
