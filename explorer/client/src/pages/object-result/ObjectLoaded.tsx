@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 
 import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
-import { type AddressOwner } from '../../utils/internetapi/rpc';
+import { type AddressOwner } from '../../utils/internetapi/SuiRpcClient';
 import {
     asciiFromNumberBytes,
     trimStdLibPrefix,

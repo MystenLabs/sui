@@ -1,4 +1,4 @@
-import { DefaultRpcClient as rpc } from './rpc';
+import { DefaultRpcClient as rpc } from './SuiRpcClient';
 
 export const navigateWithUnknown = async (
     input: string,

@@ -1,4 +1,4 @@
-import { type AddressOwner } from '../../utils/internetapi/rpc';
+import { type AddressOwner } from '../../utils/internetapi/SuiRpcClient';
 
 export type DataType = {
     id: string;

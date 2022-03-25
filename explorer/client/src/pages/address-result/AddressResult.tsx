@@ -4,7 +4,7 @@ import { useLocation, useParams } from 'react-router-dom';
 import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
-import { DefaultRpcClient } from '../../utils/internetapi/rpc';
+import { DefaultRpcClient as rpc} from '../../utils/internetapi/SuiRpcClient';
 
 type DataType = {
     id: string;
@@ -85,7 +85,6 @@ function AddressResultInternetAPI({
 }: {
     addressID: string | undefined;
 }) {
-    const rpc = DefaultRpcClient;
     const defaultData = (addressID: string | undefined) => ({
         id: addressID,
         objects: [{}],
@@ -108,7 +107,7 @@ function AddressResultInternetAPI({
                 console.log(error);
                 setData({ ...defaultData(addressID), loadState: 'fail' });
             });
-    }, [addressID, rpc]);
+    }, [addressID]);
 
     if (instanceOfDataType(data) && data.loadState === 'loaded') {
         return <Loaded data={data} />;

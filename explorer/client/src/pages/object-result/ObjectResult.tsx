@@ -3,7 +3,7 @@ import { useLocation, useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import theme from '../../styles/theme.module.css';
-import { DefaultRpcClient } from '../../utils/internetapi/rpc';
+import { DefaultRpcClient as rpc } from '../../utils/internetapi/SuiRpcClient';
 import ObjectLoaded from './ObjectLoaded';
 import { type DataType } from './ObjectResultType';
 
@@ -36,8 +36,6 @@ const Fail = ({ objID }: { objID: string | undefined }): JSX.Element => {
 
 const ObjectResultInternetAPI = ({ objID }: { objID: string }): JSX.Element => {
     const [showObjectState, setObjectState] = useState(DATATYPE_DEFAULT);
-    const rpc = DefaultRpcClient;
-
     useEffect(() => {
         rpc.getObjectInfo(objID as string)
             .then((objState) => {
@@ -50,7 +48,7 @@ const ObjectResultInternetAPI = ({ objID }: { objID: string }): JSX.Element => {
                 console.log(error);
                 setObjectState({ ...DATATYPE_DEFAULT, loadState: 'fail' });
             });
-    }, [objID, rpc]);
+    }, [objID]);
 
     if (showObjectState.loadState === 'loaded') {
         return <ObjectLoaded data={showObjectState as DataType} />;
