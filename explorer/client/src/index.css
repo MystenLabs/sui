@@ -14,6 +14,8 @@ body {
     @apply bg-offwhite m-0 text-offblack;
 }
 
+/* TODO - The below CSS alters how smart contract code is displayed in the Ace Editor
+
 .ace_active-line {
     background-color: rgb(203 213 225) !important;
 }
@@ -32,3 +34,4 @@ body {
         width: 35rem !important;
     }
 }
+*/
