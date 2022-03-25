@@ -7,7 +7,7 @@ dependencies.  As a prerequisite, you will need to [install
 Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
 version 1.59.0 or higher in order to build and install Sui on your machine.
 
-### CLIs
+## CLIs
 
 After installing `cargo`, run:
 
@@ -20,7 +20,11 @@ This will put three binaries in your `PATH`:
 * [`wallet`](wallet.md): Run a local Sui network and gateway service accessible via the wallet CLI. The wallet CLI manage keypairs to sign/send transactions.
 * [`rest_server`](rest-api.md): Run a local Sui network and gateway service accessible via a REST interface.
 
-### IDE
+## Contribute
+
+If you need to download and understand the Sui source code, follow [contributing to Sui](../contribute/index.md).
+
+## IDE
 For Move development, we recommend the [Visual Studio Code (vscode)](https://code.visualstudio.com/) IDE with the [Move Analyzer](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer) plugin. See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [Awesome Move](https://github.com/MystenLabs/awesome-move) docs.
 
 ## Next steps
