@@ -294,15 +294,15 @@ const ObjectResult = (): JSX.Element => {
 
         //TO DO remove when have distinct name field under Description
         const nameKeyValue = Object.entries(innerData?.contents)
-            .filter(([key, value]) => /name/i.test(key))
-            .map(([key, value]) => value);
+            .filter(([key, _]) => /name/i.test(key))
+            .map(([_, value]) => value);
 
         const ownedObjects = Object.entries(innerData.contents).filter(
             ([key, value]) => checkIsIDType(key, value)
         );
         const properties = Object.entries(innerData.contents)
             //TO DO: remove when have distinct 'name' field in Description
-            .filter(([key, value]) => !/name/i.test(key))
+            .filter(([key, _]) => !/name/i.test(key))
             .filter(([_, value]) => checkIsPropertyType(value))
             // TODO: 'display' is a object property added during demo, replace with metadata ptr?
             .filter(([key, _]) => key !== 'display');
