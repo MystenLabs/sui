@@ -23,7 +23,7 @@ const MANAGED_ADDRESS_SUBDIR: &str = "managed_addresses";
 /// The address manager allows multiple addresses to be managed by one store.
 /// It also manages the different DB locations and in future, the configurations
 /// Dir Structure
-/// AddressManagerStore
+/// GatewayStore
 ///     |
 ///     ------ SingleAddressStore1
 ///     |
