@@ -1,20 +1,11 @@
-//import 'ace-builds/src-noconflict/theme-github';
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-//import AceEditor from 'react-ace';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
-import {
-    type AddressOwner,
-    SuiRpcClient,
-    DefaultRpcClient,
-} from '../../utils/rpc';
-import {
-    asciiFromNumberBytes,
-    trimStdLibPrefix,
-} from '../../utils/stringUtils';
+import { type AddressOwner, DefaultRpcClient } from '../../utils/rpc';
+import {asciiFromNumberBytes, trimStdLibPrefix } from '../../utils/stringUtils';
 
 import styles from './ObjectResult.module.css';
 
