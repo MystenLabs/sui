@@ -1,3 +1,5 @@
+import { isSuiAddressHex } from "./stringUtils";
+
 export class SuiRpcClient {
     public readonly host: string;
 
@@ -80,8 +82,6 @@ export type Signature = number[];
 
 type SuiAddressHexStr = string;
 
-const suiAddressHexPattern = /^0x[0-9a-fA-F]{20}/;
-const isSuiAddressHexStr = (str: string) => suiAddressHexPattern.test(str);
 
 export const isValidSuiIdBytes = (obj: { bytes: string | number[] }) => {
     const bytesFieldType = typeof obj.bytes;
@@ -97,7 +97,7 @@ export const isValidSuiIdBytes = (obj: { bytes: string | number[] }) => {
             return true;
         } else return false;
     } else if (bytesFieldType === 'string') {
-        return isSuiAddressHexStr(obj.bytes as string);
+        return isSuiAddressHex(obj.bytes as string);
     }
 
     return false;

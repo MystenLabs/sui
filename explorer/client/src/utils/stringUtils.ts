@@ -9,3 +9,6 @@ export const isValidHttpUrl = (url: string) => {
     catch (e) { return false }
     return /^https?/.test(url);
 };
+
+export const isSuiAddressHex = (str: string) =>
+    /^(0x)?[0-9a-fA-F]{40}$/.test(str);
