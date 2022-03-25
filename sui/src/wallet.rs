@@ -6,6 +6,7 @@ use std::io::{stderr, stdout};
 use std::ops::Deref;
 use std::path::PathBuf;
 
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use clap::*;
 use colored::Colorize;
@@ -63,8 +64,10 @@ async fn main() -> Result<(), anyhow::Error> {
         .clone()
         .unwrap_or(sui_config_dir()?.join(SUI_WALLET_CONFIG));
 
-    let mut context = WalletContext::new(&wallet_conf_path)?;
 
+    let mut context = WalletContext::new(&wallet_conf_path)
+        .context(format!("Unable to open wallet. Are you in a sui directory? (hint: run 'sui genesis' in this directory)"))?;
+    
     // Sync all accounts on start up.
     for address in context.config.accounts.clone() {
         WalletCommands::SyncClientState {
