@@ -1,4 +1,4 @@
-import { tryGetRpcSetting } from "./rpcSetting";
+import { tryGetRpcSetting } from './rpcSetting';
 
 export class SuiRpcClient {
     public readonly host: string;
@@ -73,7 +73,6 @@ export class SuiRpcClient {
                 );
         }
     }
-
 }
 
 export type AddressBytes = number[];
@@ -88,7 +87,7 @@ export type AnyVec = { vec: any[] };
 type BoolString = 'true' | 'false';
 
 export type JsonBytes = { bytes: number[] };
-export type MoveVec<T extends object | string> = { vec: T[] }
+export type MoveVec<T extends object | string> = { vec: T[] };
 
 export interface ObjectInfoResponse<T> {
     owner: string;
@@ -172,7 +171,6 @@ export interface AddressObjectSummary {
     version: string;
     objectDigest: string;
 }
-
 
 const rpcUrl = tryGetRpcSetting() ?? 'https://demo-rpc.sui.io';
 export const DefaultRpcClient = new SuiRpcClient(rpcUrl);
