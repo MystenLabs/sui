@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import theme from '../../styles/theme.module.css';
 
 import styles from './ErrorResult.module.css';

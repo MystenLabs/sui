@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { useCallback, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
