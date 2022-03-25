@@ -1,3 +1,5 @@
+import { isValidHttpUrl } from "./stringUtils";
+
 export class SuiRpcClient {
     public readonly host: string;
 
@@ -222,7 +224,6 @@ export const tryGetRpcParam = (): string | null => {
 
 const LOCALSTORE_RPC_KEY = 'sui-explorer-rpc';
 const LOCALSTORE_RPC_TIME_KEY = 'sui-explorer-rpc-lastset';
-
 const LOCALSTORE_RPC_VALID_MS = 60000 * 60 * 3;
 
 // persisting this preference ad-hoc in local storage is to support localhost rpc
@@ -253,17 +254,5 @@ export const tryGetRpcSetting = (): string | null => {
     return queryParam ? queryParam : localStore;
 };
 
-const isValidHttpUrl = (url: string) => {
-    try {
-        new URL(url);
-    } catch (e) {
-        return false;
-    }
-    return url.startsWith('http') || url.startsWith('https');
-};
-
-// allow switching the default url with another RPC url (for local testing)
-const rpcParam = tryGetRpcSetting();
-const rpcUrl = rpcParam ? rpcParam : 'https://demo-rpc.sui.io';
-
+const rpcUrl = tryGetRpcSetting() ?? 'https://demo-rpc.sui.io';
 export const DefaultRpcClient = new SuiRpcClient(rpcUrl);
