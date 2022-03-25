@@ -21,7 +21,7 @@ This will put three binaries in your `PATH`:
 * [`rest_server`](rest-api.md): Run a local Sui network and gateway service accessible via a REST interface.
 
 ### IDE
-For Move development, the best IDE is vscode with [this](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer) plugin. Some alternative IDE options are [here]( https://github.com/MystenLabs/awesome-move#ide).
+For Move development, we recommend the [Visual Studio Code (vscode)](https://code.visualstudio.com/) IDE with the [Move Analyzer](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer) plugin. See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [Awesome Move](https://github.com/MystenLabs/awesome-move) docs.
 
 ## Next steps
 
