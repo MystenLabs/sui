@@ -136,7 +136,7 @@ async fn extract_cert(
     transaction_digest: TransactionDigest,
 ) -> CertifiedTransaction {
     let mut votes = vec![];
-    let mut transaction = None;
+    let mut transaction: Option<SignedTransaction> = None;
     for authority in authorities {
         if let Ok(TransactionInfoResponse {
             signed_transaction: Some(signed),
@@ -145,18 +145,21 @@ async fn extract_cert(
             .handle_transaction_info_request(TransactionInfoRequest::from(transaction_digest))
             .await
         {
-            votes.push((signed.authority, signed.signature));
+            votes.push((
+                signed.auth_signature.authority,
+                signed.auth_signature.signature,
+            ));
             if let Some(inner_transaction) = transaction {
-                assert!(inner_transaction == signed.transaction);
+                assert!(inner_transaction.data == signed.data);
             }
-            transaction = Some(signed.transaction);
+            transaction = Some(signed);
         }
     }
 
     let stake: usize = votes.iter().map(|(name, _)| committee.weight(name)).sum();
     assert!(stake >= committee.quorum_threshold());
 
-    CertifiedTransaction::new_with_signatures(transaction.unwrap(), votes)
+    CertifiedTransaction::new_with_signatures(transaction.unwrap().to_transaction(), votes)
 }
 
 #[cfg(test)]

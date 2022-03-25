@@ -18,9 +18,11 @@ use move_core_types::{
 use name_variant::NamedVariant;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
+use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
 
 use crate::crypto::{
-    sha3_hash, AuthoritySignature, BcsSignable, Signable, Signature, VerificationObligation,
+    sha3_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature, BcsSignable,
+    EmptyAuthoritySignInfo, Signable, Signature, VerificationObligation,
 };
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 
@@ -311,44 +313,34 @@ where
     }
 }
 
-/// An transaction signed by a client. signature is applied on data.
+/// A transaction signed by a client, optionally signed by an authority (depending on `S`).
+/// `S` indicates the authority signing state. It can be either empty or signed.
+/// TODO: Fill comment.
 /// Any extension to Transaction should add fields to TransactionData, not Transaction.
-// TODO: this should maybe be called ClientSignedTransaction + SignedTransaction -> AuthoritySignedTransaction
-#[derive(Debug, Eq, Clone, Serialize, Deserialize)]
-pub struct Transaction {
+#[derive(Debug, Clone, Eq, Serialize, Deserialize)]
+#[serde(remote = "TransactionEnvelope")]
+pub struct TransactionEnvelope<S>
+where
+    TransactionEnvelope<S>: PartialEq,
+{
     // Deserialization sets this to "false"
     #[serde(skip)]
     pub is_checked: bool,
 
     pub data: TransactionData,
-    pub signature: Signature,
+    /// tx_signature is signed by the transaction sender, applied on `data`.
+    pub tx_signature: Signature,
+    /// auth_signature, if available, is signed by an authority, applied on `data`.
+    pub auth_signature: S,
+    // Note: If any new field is added here, make sure the Hash and PartialEq
+    // implementation are adjusted to include that new field (unless the new field
+    // does not participate in the hash and comparison).
 }
-/* TODO: check this legacy static check is not needed as an invariant
-         elsewhere. The tests pass but invariant checks without docs
-         should not be removed without a note to check.
 
-const_assert_eq!(
-    size_of::<TransactionData>() + size_of::<Signature>(),
-    size_of::<Transaction>()
-);
-
-*/
-
-impl Transaction {
-    #[cfg(test)]
-    pub fn from_data(data: TransactionData, signer: &dyn signature::Signer<Signature>) -> Self {
-        let signature = Signature::new(&data, signer);
-        Self::new(data, signature)
-    }
-
-    pub fn new(data: TransactionData, signature: Signature) -> Self {
-        Transaction {
-            is_checked: false,
-            data,
-            signature,
-        }
-    }
-
+impl<S: AuthoritySignInfoTrait> TransactionEnvelope<S>
+where
+    TransactionEnvelope<S>: PartialEq,
+{
     pub fn check_signature(&self) -> Result<(), SuiError> {
         // We use this flag to see if someone has checked this before
         // and therefore we can skip the check. Note that the flag has
@@ -368,7 +360,7 @@ impl Transaction {
         obligation: &mut VerificationObligation,
     ) -> SuiResult<()> {
         let (message, signature, public_key) = self
-            .signature
+            .tx_signature
             .get_verification_inputs(&self.data, self.data.sender)?;
         let idx = obligation.messages.len();
         obligation.messages.push(message);
@@ -470,6 +462,59 @@ impl Transaction {
     }
 }
 
+impl<'de, T> Deserialize<'de> for TransactionEnvelope<T>
+where
+    T: Deserialize<'de>,
+    TransactionEnvelope<T>: PartialEq,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        TransactionEnvelope::deserialize(DeserializeNameAdapter::new(
+            deserializer,
+            std::any::type_name::<Self>(),
+        ))
+    }
+}
+
+impl<T> Serialize for TransactionEnvelope<T>
+where
+    T: Serialize,
+    TransactionEnvelope<T>: PartialEq,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        TransactionEnvelope::serialize(
+            self,
+            SerializeNameAdapter::new(serializer, std::any::type_name::<Self>()),
+        )
+    }
+}
+
+// TODO: this should maybe be called ClientSignedTransaction + SignedTransaction -> AuthoritySignedTransaction
+/// A transaction that is signed by a sender but not yet by an authority.
+pub type Transaction = TransactionEnvelope<EmptyAuthoritySignInfo>;
+
+impl Transaction {
+    #[cfg(test)]
+    pub fn from_data(data: TransactionData, signer: &dyn signature::Signer<Signature>) -> Self {
+        let signature = Signature::new(&data, signer);
+        Self::new(data, signature)
+    }
+
+    pub fn new(data: TransactionData, signature: Signature) -> Self {
+        Self {
+            is_checked: false,
+            data,
+            tx_signature: signature,
+            auth_signature: EmptyAuthoritySignInfo {},
+        }
+    }
+}
+
 impl Hash for Transaction {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.data.hash(state);
@@ -482,13 +527,8 @@ impl PartialEq for Transaction {
     }
 }
 
-/// An transaction signed by a single authority
-#[derive(Debug, Eq, Clone, Serialize, Deserialize)]
-pub struct SignedTransaction {
-    pub transaction: Transaction,
-    pub authority: AuthorityName,
-    pub signature: AuthoritySignature,
-}
+/// A transaction that is signed by a sender and also by an authority.
+pub type SignedTransaction = TransactionEnvelope<AuthoritySignInfo>;
 
 impl SignedTransaction {
     /// Use signing key to create a signed object.
@@ -499,33 +539,47 @@ impl SignedTransaction {
     ) -> Self {
         let signature = AuthoritySignature::new(&transaction.data, secret);
         Self {
-            transaction,
-            authority,
-            signature,
+            is_checked: transaction.is_checked,
+            data: transaction.data,
+            tx_signature: transaction.tx_signature,
+            auth_signature: AuthoritySignInfo {
+                authority,
+                signature,
+            },
         }
     }
 
     /// Verify the signature and return the non-zero voting right of the authority.
     pub fn check(&self, committee: &Committee) -> Result<usize, SuiError> {
-        self.transaction.check_signature()?;
-        let weight = committee.weight(&self.authority);
+        self.check_signature()?;
+        let weight = committee.weight(&self.auth_signature.authority);
         fp_ensure!(weight > 0, SuiError::UnknownSigner);
-        self.signature
-            .check(&self.transaction.data, self.authority)?;
+        self.auth_signature
+            .signature
+            .check(&self.data, self.auth_signature.authority)?;
         Ok(weight)
+    }
+
+    // Turn a SignedTransaction into a Transaction. This is needed when we are
+    // forming a CertifiedTransaction, where each transaction's authority signature
+    // is taking out to form an aggregated signature.
+    pub fn to_transaction(self) -> Transaction {
+        Transaction::new(self.data, self.tx_signature)
     }
 }
 
 impl Hash for SignedTransaction {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.transaction.hash(state);
-        self.authority.hash(state);
+        self.data.hash(state);
+        self.auth_signature.authority.hash(state);
     }
 }
 
 impl PartialEq for SignedTransaction {
     fn eq(&self, other: &Self) -> bool {
-        self.transaction == other.transaction && self.authority == other.authority
+        // We do not compare the signatures, because there can be multiple
+        // valid signatures for the same data and signer.
+        self.data == other.data && self.auth_signature.authority == other.auth_signature.authority
     }
 }
 

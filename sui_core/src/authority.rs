@@ -140,10 +140,7 @@ impl AuthorityState {
         let transaction_digest = transaction.digest();
 
         // Ensure an idempotent answer.
-        if self
-            ._database
-            .signed_transaction_exists(&transaction_digest)?
-        {
+        if self._database.transaction_exists(&transaction_digest)? {
             let transaction_info = self.make_transaction_info(&transaction_digest).await?;
             return Ok(transaction_info);
         }
@@ -315,9 +312,15 @@ impl AuthorityState {
         );
         // Update the database in an atomic manner
 
-        self.update_state(temporary_store, certificate, signed_effects)
+        self.update_state(temporary_store, &certificate, &signed_effects)
             .instrument(tracing::debug_span!("db_update_state"))
-            .await // Returns the OrderInfoResponse
+            .await?;
+
+        Ok(TransactionInfoResponse {
+            signed_transaction: self._database.get_transaction(&transaction_digest)?,
+            certified_transaction: Some(certificate),
+            signed_effects: Some(signed_effects),
+        })
     }
 
     /// Process certificates coming from the consensus. It is crucial that this function is only
@@ -645,7 +648,8 @@ impl AuthorityState {
         &self,
         transaction_digest: &TransactionDigest,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        self._database.get_transaction_info(transaction_digest)
+        self._database
+            .get_signed_transaction_info(transaction_digest)
     }
 
     fn make_account_info(&self, account: SuiAddress) -> Result<AccountInfoResponse, SuiError> {
@@ -675,9 +679,9 @@ impl AuthorityState {
     async fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore<AuthorityStore>,
-        certificate: CertifiedTransaction,
-        signed_effects: SignedTransactionEffects,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+        certificate: &CertifiedTransaction,
+        signed_effects: &SignedTransactionEffects,
+    ) -> SuiResult {
         let notifier_ticket = self.batch_notifier.ticket()?;
         self._database.update_state(
             temporary_store,

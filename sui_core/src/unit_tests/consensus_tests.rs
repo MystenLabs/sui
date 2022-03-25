@@ -98,7 +98,7 @@ async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTransacti
         let vote = response.signed_transaction.unwrap();
         let certificate = SignatureAggregator::try_new(transaction, &authority.committee)
             .unwrap()
-            .append(vote.authority, vote.signature)
+            .append(vote.auth_signature.authority, vote.auth_signature.signature)
             .unwrap()
             .unwrap();
         certificates.push(certificate);

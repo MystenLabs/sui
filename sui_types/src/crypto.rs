@@ -393,11 +393,13 @@ impl AuthoritySignature {
     }
 }
 
-pub trait AuthoritySignInfoTrait {}
+pub trait AuthoritySignInfoTrait: Eq + Serialize + serde::de::DeserializeOwned {}
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EmptyAuthoritySignInfo {}
 impl AuthoritySignInfoTrait for EmptyAuthoritySignInfo {}
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AuthoritySignInfo {
     pub authority: AuthorityName,
     pub signature: AuthoritySignature,

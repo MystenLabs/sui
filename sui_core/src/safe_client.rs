@@ -41,14 +41,14 @@ impl<C> SafeClient<C> {
             signed_transaction.check(&self.committee)?;
             // Check it has the right signer
             fp_ensure!(
-                signed_transaction.authority == self.address,
+                signed_transaction.auth_signature.authority == self.address,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
             );
             // Check it's the right transaction
             fp_ensure!(
-                signed_transaction.transaction.digest() == digest,
+                signed_transaction.digest() == digest,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
@@ -157,7 +157,7 @@ impl<C> SafeClient<C> {
                 signed_transaction.check(&self.committee)?;
                 // Check it has the right signer
                 fp_ensure!(
-                    signed_transaction.authority == self.address,
+                    signed_transaction.auth_signature.authority == self.address,
                     SuiError::ByzantineAuthoritySuspicion {
                         authority: self.address
                     }
