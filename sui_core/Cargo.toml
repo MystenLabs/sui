@@ -20,7 +20,6 @@ itertools = "0.10.3"
 async-trait = "0.1.52"
 tempfile = "3.3.0"
 tracing = { version = "0.1.31", features = ["log"] }
-tracing-opentelemetry = "0.17"
 signature = "1.5.0"
 ed25519-dalek = "1.0.1"
 scopeguard = "1.1.0"
