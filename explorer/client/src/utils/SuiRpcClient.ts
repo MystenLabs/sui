@@ -1,5 +1,4 @@
 import { tryGetRpcSetting } from "./rpcSetting";
-import { isSuiAddressHex } from "./stringUtils";
 
 export class SuiRpcClient {
     public readonly host: string;
@@ -83,17 +82,13 @@ export type Signature = number[];
 
 type AddressHexStr = string;
 
-
 export type AddressOwner = { AddressOwner: AddressBytes };
 type ObjectOwner = { ObjectOwner: AddressBytes };
+
 export type AnyVec = { vec: any[] };
 type BoolString = 'true' | 'false';
 
 export type JsonBytes = { bytes: number[] };
-export type JsonHexBytes = { bytes: string | number[] };
-
-export type SuiRefHexBytes = { bytes: string }; // TODO - better types for hex strings
-
 export type MoveVec = { vec: any[] }
 export type TMoveVec<T extends object> = { vec: T[] }
 
