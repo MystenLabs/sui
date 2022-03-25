@@ -5,7 +5,10 @@ import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
 import { type AddressOwner, DefaultRpcClient } from '../../utils/SuiRpcClient';
-import {asciiFromNumberBytes, trimStdLibPrefix } from '../../utils/stringUtils';
+import {
+    asciiFromNumberBytes,
+    trimStdLibPrefix,
+} from '../../utils/stringUtils';
 
 import styles from './ObjectResult.module.css';
 

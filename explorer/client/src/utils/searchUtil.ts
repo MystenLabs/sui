@@ -1,20 +1,20 @@
 import { DefaultRpcClient as rpc } from './SuiRpcClient';
 
-export const navigateWithUnknown = async (input: string, navigate: Function) => {
+export const navigateWithUnknown = async (
+    input: string,
+    navigate: Function
+) => {
     // TODO - replace multi-request search with backend function when ready
-    const addrPromise = rpc.getAddressObjects(input)
-    .then((data) => {
-        if (data.length <= 0)
-            throw new Error('No objects for Address');
+    const addrPromise = rpc.getAddressObjects(input).then((data) => {
+        if (data.length <= 0) throw new Error('No objects for Address');
 
         return {
             category: 'addresses',
-            data: data
-        }
+            data: data,
+        };
     });
 
-    const objInfoPromise = rpc.getObjectInfo(input)
-    .then((data) => ({
+    const objInfoPromise = rpc.getObjectInfo(input).then((data) => ({
         category: 'objects',
         data: data,
     }));
