@@ -9,7 +9,7 @@ app, publishing a TicTacToe game on Sui, and playing it to the end.
 ## Set up
 
 1. [Install Sui binaries](../build/install.md) as described in the installation
-   instructions as this tutorial assumes that you have a clone of Sui's repository.
+   instructions as this tutorial assumes that you them in your PATH.
 1. [Create Sui genesis](../build/wallet.md#genesis) by running the
    `sui genesis` command.
 1. [Start the Sui network](../build/wallet.md#starting-the-network) by
