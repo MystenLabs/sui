@@ -14,7 +14,7 @@ import {
 import {
     asciiFromNumberBytes,
     trimStdLibPrefix,
-} from '../../utils/utility_functions';
+} from '../../utils/stringUtils';
 
 import styles from './ObjectResult.module.css';
 
