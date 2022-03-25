@@ -173,7 +173,7 @@ impl AuthorityState {
         let transaction_digest = *confirmation_transaction.certificate.digest();
 
         // Ensure an idempotent answer.
-        if self._database.signed_effects_exists(&transaction_digest)? {
+        if self._database.effects_exists(&transaction_digest)? {
             let transaction_info = self.make_transaction_info(&transaction_digest).await?;
             return Ok(transaction_info);
         }
@@ -302,14 +302,13 @@ impl AuthorityState {
         // Remove from dependencies the generic hash
         transaction_dependencies.remove(&TransactionDigest::genesis());
 
-        let signed_effects = temporary_store.to_signed_effects(
-            &self.name,
-            &*self.secret,
+        let effects = temporary_store.to_effects(
             &transaction_digest,
             transaction_dependencies.into_iter().collect(),
             status,
             &gas_object_id,
         );
+        let signed_effects = effects.sign(&self.name, &*self.secret);
         // Update the database in an atomic manner
 
         self.update_state(temporary_store, &certificate, &signed_effects)
