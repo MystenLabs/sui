@@ -16,7 +16,7 @@ export class SuiRpcClient {
     public getAddresses = async (): Promise<Addresses> =>
         this.fetchJson(this.addressesUrl);
 
-    public getAddressObjects = async (address: SuiAddressHexStr) => {
+    public getAddressObjects = async (address: AddressHexStr) => {
         const url = `${this.host}/objects?address=${address}`;
         return this.fetchJson(url);
     };
@@ -80,7 +80,7 @@ const SUI_ADDRESS_LEN = 20;
 export type AddressBytes = number[];
 export type Signature = number[];
 
-type SuiAddressHexStr = string;
+type AddressHexStr = string;
 
 
 export type AddressOwner = { AddressOwner: AddressBytes };
