@@ -77,7 +77,7 @@ export class SuiRpcClient {
 }
 
 const SUI_ADDRESS_LEN = 20;
-export type SuiAddressBytes = number[];
+export type AddressBytes = number[];
 export type Signature = number[];
 
 type SuiAddressHexStr = string;
@@ -103,8 +103,8 @@ export const isValidSuiIdBytes = (obj: { bytes: string | number[] }) => {
     return false;
 };
 
-export type AddressOwner = { AddressOwner: SuiAddressBytes };
-type ObjectOwner = { ObjectOwner: SuiAddressBytes };
+export type AddressOwner = { AddressOwner: AddressBytes };
+type ObjectOwner = { ObjectOwner: AddressBytes };
 export type AnyVec = { vec: any[] };
 type BoolString = 'true' | 'false';
 
@@ -127,7 +127,7 @@ export interface ObjectInfoResponse<T> {
 
 export interface SuiObject<T> {
     contents: T;
-    owner: ObjectOwner;
+    owner: ObjectOwner | AddressOwner;
     tx_digest: number[];
 }
 
@@ -162,7 +162,7 @@ export interface TransactionKind {
 export interface TransactionData {
     gas_payment: any[];
     kind: TransactionKind;
-    sender: SuiAddressBytes;
+    sender: AddressBytes;
 }
 
 export interface Transaction {
