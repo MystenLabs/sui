@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
 use sha3::Sha3_256;
 
-use crate::base_types::SuiAddress;
+use crate::base_types::{AuthorityName, SuiAddress};
 use crate::error::{SuiError, SuiResult};
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
@@ -392,6 +392,17 @@ impl AuthoritySignature {
         })
     }
 }
+
+pub trait AuthoritySignInfoTrait {}
+
+pub struct EmptyAuthoritySignInfo {}
+impl AuthoritySignInfoTrait for EmptyAuthoritySignInfo {}
+
+pub struct AuthoritySignInfo {
+    pub authority: AuthorityName,
+    pub signature: AuthoritySignature,
+}
+impl AuthoritySignInfoTrait for AuthoritySignInfo {}
 
 /// Something that we know how to hash and sign.
 pub trait Signable<W> {
