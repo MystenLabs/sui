@@ -35,6 +35,8 @@ function DisplayBox({ data }: { data: DataType }) {
     const [hasDisplayLoaded, setHasDisplayLoaded] = useState(false);
     const [hasFailedToLoad, setHasFailedToLoad] = useState(false);
 
+    const contents = data.data.contents;
+
     const imageStyle = hasDisplayLoaded ? {} : { display: 'none' };
     const handleImageLoad = useCallback(
         () => setHasDisplayLoaded(true),
@@ -52,18 +54,14 @@ function DisplayBox({ data }: { data: DataType }) {
 
     const IS_SMART_CONTRACT = (data: any) =>
         data?.data?.contents?.display?.category === 'moveScript';
+
     if (IS_SMART_CONTRACT(data)) {
         return <SmartContractBox data={data} />;
     }
 
-    if (data.data.contents.display) {
-        if (
-            typeof data.data.contents.display === 'object' &&
-            'bytes' in data.data.contents.display
-        )
-            data.data.contents.display = asciiFromNumberBytes(
-                data.data.contents.display.bytes
-            );
+    if (contents.display) {
+        if (typeof contents.display === 'object' && 'bytes' in contents.display)
+            contents.display = asciiFromNumberBytes(contents.display.bytes);
 
         return (
             <div className={styles['display-container']}>
@@ -80,7 +78,7 @@ function DisplayBox({ data }: { data: DataType }) {
                         className={styles.imagebox}
                         style={imageStyle}
                         alt="NFT"
-                        src={data.data.contents.display}
+                        src={contents.display}
                         onLoad={handleImageLoad}
                         onError={handleImageFail}
                     />

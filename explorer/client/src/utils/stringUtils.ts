@@ -13,6 +13,14 @@ export function hexToAscii(hex: string) {
     return str;
 }
 
-const stdLibPrefix = /^0x2::/;
 export const trimStdLibPrefix = (str: string): string =>
-    str.replace(stdLibPrefix, '');
+    str.replace(/^0x2::/, '');
+
+/* Currently unused but potentially useful:
+ *
+ * export const isValidHttpUrl = (url: string) => {
+ *     try { new URL(url) }
+ *         catch (e) { return false }
+ *             return /^https?/.test(url);
+ *             };
+ */

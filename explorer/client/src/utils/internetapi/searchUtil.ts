@@ -4,16 +4,14 @@ export const navigateWithUnknown = async (
     input: string,
     navigate: Function
 ) => {
-    // feels crude to just search each category for an ID, but works for now
+    // TODO - replace multi-request search with backend function when ready
     const addrPromise = rpc.getAddressObjects(input).then((data) => {
-        if (data.length > 0) {
-            return {
-                category: 'addresses',
-                data: data,
-            };
-        } else {
-            throw new Error('No objects for Address');
-        }
+        if (data.length <= 0) throw new Error('No objects for Address');
+
+        return {
+            category: 'addresses',
+            data: data,
+        };
     });
 
     const objInfoPromise = rpc.getObjectInfo(input).then((data) => ({
