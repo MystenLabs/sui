@@ -76,6 +76,7 @@ describe('End-to-end Tests', () => {
         });
     });
 
+    /*
     describe('Displays data on transactions', () => {
         it('when transaction was a success', () => {
             render(<App />, { wrapper: MemoryRouter });
@@ -110,7 +111,10 @@ describe('End-to-end Tests', () => {
             ).toBeInTheDocument();
         });
     });
+    */
 
+
+    /*
     describe('Displays data on objects', () => {
         it('when object was a success', () => {
             render(<App />, { wrapper: MemoryRouter });
@@ -130,7 +134,6 @@ describe('End-to-end Tests', () => {
             expectReadOnlyStatus('False');
         });
 
-        /*
         it('when object data has missing info', () => {
             render(<App />, { wrapper: MemoryRouter });
             searchText(problemObjectID);
@@ -140,8 +143,8 @@ describe('End-to-end Tests', () => {
                 )
             ).toBeInTheDocument();
         });
-        */
     });
+    */
 
     /*
     describe('Displays data on addresses', () => {
