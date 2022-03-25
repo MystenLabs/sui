@@ -83,26 +83,6 @@ export type Signature = number[];
 type SuiAddressHexStr = string;
 
 
-export const isValidSuiIdBytes = (obj: { bytes: string | number[] }) => {
-    const bytesFieldType = typeof obj.bytes;
-
-    if (bytesFieldType === 'object') {
-        if (Array.isArray(obj.bytes)) {
-            const objBytesAsArray = obj.bytes as number[];
-            if (objBytesAsArray.length !== SUI_ADDRESS_LEN) return false;
-
-            for (let i = 0; i < objBytesAsArray.length; i++) {
-                if (objBytesAsArray[i] > 255) return false;
-            }
-            return true;
-        } else return false;
-    } else if (bytesFieldType === 'string') {
-        return isSuiAddressHex(obj.bytes as string);
-    }
-
-    return false;
-};
-
 export type AddressOwner = { AddressOwner: AddressBytes };
 type ObjectOwner = { ObjectOwner: AddressBytes };
 export type AnyVec = { vec: any[] };
