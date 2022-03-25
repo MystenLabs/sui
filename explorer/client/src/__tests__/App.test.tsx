@@ -130,6 +130,7 @@ describe('End-to-end Tests', () => {
             expectReadOnlyStatus('False');
         });
 
+        /*
         it('when object data has missing info', () => {
             render(<App />, { wrapper: MemoryRouter });
             searchText(problemObjectID);
@@ -139,8 +140,10 @@ describe('End-to-end Tests', () => {
                 )
             ).toBeInTheDocument();
         });
+        */
     });
 
+    /*
     describe('Displays data on addresses', () => {
         it('when address has required fields', () => {
             render(<App />, { wrapper: MemoryRouter });
@@ -158,7 +161,10 @@ describe('End-to-end Tests', () => {
             ).toBeInTheDocument();
         });
     });
+    */
 
+
+    /*
     it('handles an ID with no associated data point', () => {
         render(<App />, { wrapper: MemoryRouter });
         searchText(noDataID);
@@ -166,6 +172,7 @@ describe('End-to-end Tests', () => {
             screen.getByText('Data on the following query could not be found')
         ).toBeInTheDocument();
     });
+    */
 
     describe('Returns Home', () => {
         it('when Home Button is clicked', () => {
