@@ -1,7 +1,7 @@
 import { DefaultRpcClient as rpc } from './rpc';
 
 export const navigateWithUnknown = async (input: string, navigate: Function) => {
-    // feels crude to just search each category for an ID, but works for now
+    // TODO - replace multi-request search with backend function when ready
     const addrPromise = rpc.getAddressObjects(input)
     .then((data) => {
         if (data.length <= 0)
