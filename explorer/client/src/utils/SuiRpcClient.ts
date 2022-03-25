@@ -1,3 +1,4 @@
+import { tryGetRpcSetting } from "./rpcSetting";
 import { isSuiAddressHex } from "./stringUtils";
 
 export class SuiRpcClient {
