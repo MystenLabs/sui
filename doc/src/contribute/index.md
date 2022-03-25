@@ -20,8 +20,7 @@ Simply edit the file in question and generate a pull request. We will get back t
 
 ## Download and learn Sui?
 
-In order to obtain source code for the game, let us clone the Sui
-repository to the desired directory:
+In order to obtain the Sui source code, clone the Sui repository:
 
 ```shell
 git clone https://github.com/MystenLabs/sui.git
@@ -29,11 +28,12 @@ git clone https://github.com/MystenLabs/sui.git
 
 The primary directories are:
 
-* [sui](https://github.com/MystenLabs/sui/tree/main/sui) - 
-* [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - examples and games for testing and reuse.
-* sui_core
-* sui_types
-* explorer - 
+* [sui](https://github.com/MystenLabs/sui/tree/main/sui) - the Sui binaries (`wallet`, `sui-move`, and more)
+* [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - games and other examples for testing and reuse
+* [sui_core](https://github.com/MystenLabs/sui/tree/main/sui_core) - authority server and Sui Gateway
+* [sui_types](https://github.com/MystenLabs/sui/tree/main/sui_types) - coins, gas, and other object types
+* [explorer](https://github.com/MystenLabs/sui/tree/main/explorer) - chain explorer for the Sui network
+* [network_utils](https://github.com/MystenLabs/sui/tree/main/network_utils) - networking utilities and related unit tests
 
 ## Send pull requests
 
