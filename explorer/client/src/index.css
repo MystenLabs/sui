@@ -14,21 +14,21 @@ body {
     @apply bg-offwhite m-0 text-offblack;
 }
 
-.ace_active-line {
+.ace-active-line {
     background-color: rgb(203 213 225) !important;
 }
 
-.ace_gutter-layer {
+.ace-gutter-layer {
     color: black !important;
 }
 
-.ace_editor {
+.ace-editor {
     width: 80vw !important;
     font-family: 'Ubuntu Mono', 'Courier New', monospace;
 }
 
 @media only screen and (min-width: 1024px) {
-    .ace_editor {
+    .ace-editor {
         width: 35rem !important;
     }
 }
