@@ -1,11 +1,17 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::Path;
+
+use rocksdb::Options;
 use sui_types::{base_types::TransactionDigest, batch::TxSequenceNumber};
 use typed_store::{
+    reopen,
     rocks::{DBMap, TypedStoreError},
     Map,
 };
+
+use crate::authority::authority_store::open_cf_opts;
 
 pub type CheckpointSequenceNumber = u64;
 
@@ -33,6 +39,56 @@ pub struct CheckpointStore {
 }
 
 impl CheckpointStore {
+    pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> CheckpointStore {
+        let mut options = db_options.unwrap_or_default();
+
+        /* The table cache is locked for updates and this determines the number
+           of shareds, ie 2^10. Increase in case of lock contentions.
+        */
+        let row_cache = rocksdb::Cache::new_lru_cache(1_000_000).expect("Cache is ok");
+        options.set_row_cache(&row_cache);
+        options.set_table_cache_num_shard_bits(10);
+        options.set_compression_type(rocksdb::DBCompressionType::None);
+
+        let mut point_lookup = options.clone();
+        point_lookup.optimize_for_point_lookup(1024 * 1024);
+        point_lookup.set_memtable_whole_key_filtering(true);
+
+        let transform = rocksdb::SliceTransform::create("bytes_8_to_16", |key| &key[8..16], None);
+        point_lookup.set_prefix_extractor(transform);
+        point_lookup.set_memtable_prefix_bloom_ratio(0.2);
+
+        let db = open_cf_opts(
+            &path,
+            Some(options.clone()),
+            &[
+                ("transactions_to_checkpoint", &point_lookup),
+                ("checkpoint_contents", &options),
+                ("unprocessed_transactions", &point_lookup),
+                ("extra_transactions", &point_lookup),
+            ],
+        )
+        .expect("Cannot open DB.");
+
+        let (
+            transactions_to_checkpoint,
+            checkpoint_contents,
+            unprocessed_transactions,
+            extra_transactions,
+        ) = reopen! (
+            &db,
+            "transactions_to_checkpoint";<TransactionDigest,(CheckpointSequenceNumber, TxSequenceNumber)>,
+            "checkpoint_contents";<(CheckpointSequenceNumber,TxSequenceNumber),TransactionDigest>,
+            "unprocessed_transactions";<TransactionDigest,CheckpointSequenceNumber>,
+            "extra_transactions";<TransactionDigest,TxSequenceNumber>
+        );
+        CheckpointStore {
+            transactions_to_checkpoint,
+            checkpoint_contents,
+            unprocessed_transactions,
+            extra_transactions,
+        }
+    }
 
     /// Add transactions associated with a new checkpoint in the structure, and
     /// updates all tables including unprocessed and extra transactions.
