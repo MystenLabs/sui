@@ -11,6 +11,7 @@ use move_core_types::identifier::Identifier;
 use serde_json::{json, Value};
 use tracing_test::traced_test;
 
+use std::fmt::Write;
 use sui::config::{
     AccountConfig, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, ObjectConfig,
     PersistedConfig, WalletConfig, AUTHORITIES_DB_NAME,
@@ -1026,4 +1027,14 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 
     network.kill().await?;
     Ok(())
+}
+
+#[test]
+// Test for issue https://github.com/MystenLabs/sui/issues/1078
+fn test_bug_1078() {
+    let read = WalletCommandResult::Object(ObjectRead::NotExists(ObjectID::random()));
+    let mut writer = String::new();
+    // fmt ObjectRead should not fail.
+    write!(writer, "{}", read).unwrap();
+    write!(writer, "{:?}", read).unwrap();
 }
