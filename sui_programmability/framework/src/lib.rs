@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::{access::ModuleAccess, CompiledModule};
+use move_binary_format::CompiledModule;
 use move_core_types::{account_address::AccountAddress, ident_str, language_storage::ModuleId};
 use move_package::BuildConfig;
 use move_unit_test::UnitTestingConfig;
