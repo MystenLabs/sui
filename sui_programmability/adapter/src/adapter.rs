@@ -532,9 +532,7 @@ pub fn generate_package_id(
             let handle = module.module_handle_at(module.self_module_handle_idx);
             let name = module.identifier_at(handle.name);
             return Err(SuiError::ModulePublishFailure {
-                error: format!(
-                    "Publishing modules with non-zero address is not allowed (module {name})"
-                ),
+                error: format!("Publishing module {name} with non-zero address is not allowed"),
             });
         }
         let new_module_id = ModuleId::new(

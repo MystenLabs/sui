@@ -848,7 +848,10 @@ fn test_publish_module_non_zero_address() {
     assert_eq!(err.0, gas::MIN_MOVE);
     let err_str = err.1.to_string();
     println!("{:?}", err_str);
-    assert!(err_str.contains("Publishing modules with non-zero address is not allowed"));
+    assert!(
+        err_str.contains("Publishing module")
+            && err_str.contains("with non-zero address is not allowed")
+    );
 }
 
 #[test]
