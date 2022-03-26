@@ -4,7 +4,9 @@
 use anyhow::Result;
 
 use crate::bytecode_rewriter::ModuleHandleRewriter;
-use move_binary_format::{errors::PartialVMResult, file_format::CompiledModule, normalized::Type};
+use move_binary_format::{
+    access::ModuleAccess, errors::PartialVMResult, file_format::CompiledModule, normalized::Type,
+};
 use sui_framework::EventType;
 use sui_types::{
     base_types::*,
@@ -527,8 +529,10 @@ pub fn generate_package_id(
         let old_module_id = module.self_id();
         let old_address = *old_module_id.address();
         if old_address != AccountAddress::ZERO {
+            let handle = module.module_handle_at(module.self_module_handle_idx);
+            let name = module.identifier_at(handle.name);
             return Err(SuiError::ModulePublishFailure {
-                error: "Publishing modules with non-zero address is not allowed".to_string(),
+                error: format!("Publishing module {name} with non-zero address is not allowed"),
             });
         }
         let new_module_id = ModuleId::new(
