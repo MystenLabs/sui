@@ -1,0 +1,20 @@
+name: Trigger Dev Docs Portal Update
+
+on:
+  push:
+    branches:
+      - trigger-dev-portal-update
+    paths:
+      - doc
+
+jobs:
+  trigger-dev-portal-update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.RELEASE_HUB_SECRET }}
+          repository: MystenLabs/sui_dev_portal
+          event-type: deploy-qa
+          client-payload: "{}"
