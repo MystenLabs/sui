@@ -3,7 +3,7 @@ name: Trigger Dev Docs Portal Update
 on:
   push:
     branches:
-      - trigger-dev-portal-update
+      - main
     paths:
       - doc/**
 
