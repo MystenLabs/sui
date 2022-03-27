@@ -2,11 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 use itertools::Itertools;
 use rayon::prelude::*;
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, RwLock, Weak},
+};
+use thiserror::Error;
 
 pub mod bft;
 
 pub type NodeRef<T> = Arc<RwLock<Node<T>>>;
+pub type WeakNodeRef<T> = Weak<RwLock<Node<T>>>;
 
 impl<T> From<Node<T>> for NodeRef<T> {
     fn from(node: Node<T>) -> Self {
@@ -14,7 +19,7 @@ impl<T> From<Node<T>> for NodeRef<T> {
     }
 }
 
-/// The DSU tree node.
+/// The Dag node.
 #[derive(Debug, Clone)]
 pub struct Node<T> {
     parents: Vec<NodeRef<T>>,
@@ -142,6 +147,82 @@ pub fn bfs<T: Sync + Send + std::fmt::Debug>(
     initial: NodeRef<T>,
 ) -> impl Iterator<Item = NodeRef<T>> {
     bft::Bft::new(initial, |node| node.write().unwrap().parents().into_iter())
+}
+
+pub trait Affiliated: crypto::Hash {
+    fn parents(&self) -> Vec<<Self as crypto::Hash>::TypedDigest>;
+    fn compressible(&self) -> bool;
+}
+
+pub struct NodeDag<T: Affiliated> {
+    node_table: BTreeMap<T::TypedDigest, WeakNodeRef<T>>,
+    headers: BTreeMap<T::TypedDigest, NodeRef<T>>,
+}
+
+// To insert NodeRef in a BTreeSet we need an Ord type
+
+#[derive(Debug, Error)]
+pub enum DagError<T: crypto::Hash> {
+    #[error("No node known by this digest: {0}")]
+    UnknownDigest(T::TypedDigest),
+    #[error("The node known by this digest was dropped: {0}")]
+    DroppedDigest(T::TypedDigest),
+}
+
+impl<T: Affiliated> NodeDag<T> {
+    pub(crate) fn get_weak(&self, digest: T::TypedDigest) -> Result<WeakNodeRef<T>, DagError<T>> {
+        let weak_node = self
+            .node_table
+            .get(&digest).ok_or(DagError::UnknownDigest(digest))?;
+        Ok(weak_node.clone())
+    }
+
+    pub fn get(&self, digest: T::TypedDigest) -> Result<NodeRef<T>, DagError<T>> {
+        let weak_node = self.get_weak(digest)?;
+        let node = weak_node
+            .upgrade().ok_or(DagError::DroppedDigest(digest))?;
+        Ok(node)
+    }
+
+    // Note: the dag currently does not do any causal completion, and assumes that the node is a head
+    pub fn try_insert(&mut self, value: T) -> Result<(), DagError<T>> {
+        let digest = value.digest();
+        // Do we have this node already?
+        if self.get_weak(digest).is_ok() {
+            // idempotence (beware: re-adding removed nodes under the same hash won't bump the Rc)
+            return Ok(());
+        }
+        let parent_digests = value.parents();
+        let parents = parent_digests
+            .iter()
+            .map(|hash| self.get(*hash))
+            .flat_map(|res| {
+                match res {
+                    Err(DagError::DroppedDigest(_)) => {
+                        // TODO : log this properly! The parent is known, but was pruned in the past.
+                        None
+                    }
+                    v => Some(v),
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let compressible = value.compressible();
+
+        let node = Node {
+            parents,
+            value,
+            compressible,
+        };
+        let strong_node_ref = Arc::new(RwLock::new(node));
+        let weak_node_ref = Arc::downgrade(&strong_node_ref);
+        self.node_table.insert(digest, weak_node_ref);
+        self.headers.insert(digest, strong_node_ref);
+        // maintain the header invariant
+        for ancestor in parent_digests.iter() {
+            self.headers.remove(ancestor);
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

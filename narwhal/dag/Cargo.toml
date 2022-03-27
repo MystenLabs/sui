@@ -9,6 +9,8 @@ edition = "2021"
 [dependencies]
 itertools = "0.10.3"
 rayon = "1.5.1"
+crypto  = { path = "../crypto" }
+thiserror = "1.0.30"
 
 [dev-dependencies]
 proptest = "1.0.0"

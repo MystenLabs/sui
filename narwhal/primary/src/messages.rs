@@ -273,7 +273,7 @@ impl<PublicKey: VerifyingKey> Vote<PublicKey> {
             .map_err(DagError::from)
     }
 }
-#[derive(Clone, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
 pub struct VoteDigest([u8; DIGEST_LEN]);
 
 impl From<VoteDigest> for Digest {
