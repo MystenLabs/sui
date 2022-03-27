@@ -129,3 +129,149 @@ impl<T: Affiliated> Default for NodeDag<T> {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fmt;
+
+    use crypto::{Digest, Hash};
+    use proptest::prelude::*;
+
+    use super::*;
+
+    #[derive(Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
+    pub struct TestDigest([u8; crypto::DIGEST_LEN]);
+
+    impl From<TestDigest> for Digest {
+        fn from(hd: TestDigest) -> Self {
+            Digest::new(hd.0)
+        }
+    }
+
+    impl fmt::Debug for TestDigest {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+            write!(f, "{}", hex::encode(&self.0).get(0..16).unwrap())
+        }
+    }
+
+    impl fmt::Display for TestDigest {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+            write!(f, "{}", hex::encode(&self.0).get(0..16).unwrap())
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct TestNode {
+        parents: Vec<TestDigest>,
+        compressible: bool,
+        digest: TestDigest,
+    }
+
+    impl crypto::Hash for TestNode {
+        type TypedDigest = TestDigest;
+
+        fn digest(&self) -> Self::TypedDigest {
+            self.digest
+        }
+    }
+
+    impl Affiliated for TestNode {
+        fn parents(&self) -> Vec<<Self as crypto::Hash>::TypedDigest> {
+            self.parents.clone()
+        }
+
+        fn compressible(&self) -> bool {
+            self.compressible
+        }
+    }
+
+    prop_compose! {
+        pub fn arb_test_digest()(
+            hash in prop::collection::vec(any::<u8>(), crypto::DIGEST_LEN..=crypto::DIGEST_LEN),
+        ) -> TestDigest {
+            TestDigest(hash.try_into().unwrap())
+        }
+    }
+
+    prop_compose! {
+        pub fn arb_leaf_node()(
+            digest in arb_test_digest(),
+            compressible in any::<bool>(),
+        ) -> TestNode {
+            TestNode {
+                parents: Vec::new(),
+                digest,
+                compressible
+            }
+        }
+    }
+
+    prop_compose! {
+        pub fn arb_inner_node(pot_parents: Vec<TestDigest>)(
+            // this is a 50% inclusion rate, in production we'd shoot for > 67%
+            picks in prop::collection::vec(any::<bool>(), pot_parents.len()..=pot_parents.len()),
+            digest in arb_test_digest(),
+            compressible in any::<bool>(),
+        ) -> TestNode {
+            let parents = pot_parents.iter().zip(picks).flat_map(|(parent, pick)| if pick { Some(*parent) } else { None }).collect();
+            TestNode{
+                parents,
+                compressible,
+                digest
+            }
+        }
+    }
+
+    prop_compose! {
+        pub fn next_round(prior_round: Vec<TestNode>)(
+            nodes in {
+                let n = prior_round.len();
+                let digests: Vec<_> = prior_round.iter().map(|n| n.digest()).collect();
+                prop::collection::vec(arb_inner_node(digests), n..=n)
+            }
+        ) -> Vec<TestNode> {
+            let mut res = prior_round.clone();
+            res.extend(nodes);
+            res
+        }
+    }
+
+    pub fn arb_dag_complete(breadth: usize, rounds: usize) -> impl Strategy<Value = Vec<TestNode>> {
+        let initial_round = prop::collection::vec(arb_leaf_node().no_shrink(), breadth..=breadth);
+
+        initial_round.prop_recursive(
+            rounds as u32,             // max rounds level deep
+            (breadth * rounds) as u32, // max branching total
+            breadth as u32,            // branches  per round
+            move |inner| inner.prop_flat_map(next_round),
+        )
+    }
+
+    proptest! {
+        #[test]
+        fn test_dag_sanity_check(
+            dag in arb_dag_complete(10, 10)
+        ) {
+            assert!(dag.len() <= 100);
+        }
+
+        #[test]
+        fn test_dag_insert_sanity_check(
+            dag in arb_dag_complete(10, 10)
+        ) {
+            let mut node_dag = NodeDag::new();
+            for node in dag.into_iter() {
+                // the elements are generated in order & with no missing parents => no suprises
+                assert!(node_dag.try_insert(node).is_ok());
+            }
+            for ref_multi in node_dag.node_table.iter() {
+                // no dangling reference (we haven't removed anything yet, and the parenthood coverage is exhaustive)
+                match ref_multi.value() {
+                    Either::Right(_) => (),
+                    Either::Left(ref node) => assert!(node.upgrade().is_some()),
+                }
+            }
+        }
+
+    }
+}
