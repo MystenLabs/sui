@@ -1,11 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use dashmap::DashMap;
+use either::Either;
 use itertools::Itertools;
 use rayon::prelude::*;
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, RwLock, Weak},
-};
+use std::sync::{Arc, RwLock, Weak};
 use thiserror::Error;
 
 pub mod bft;
@@ -153,13 +152,12 @@ pub trait Affiliated: crypto::Hash {
     fn parents(&self) -> Vec<<Self as crypto::Hash>::TypedDigest>;
     fn compressible(&self) -> bool;
 }
-
 pub struct NodeDag<T: Affiliated> {
-    node_table: BTreeMap<T::TypedDigest, WeakNodeRef<T>>,
-    headers: BTreeMap<T::TypedDigest, NodeRef<T>>,
+    // Not that we should need to ever serialize this (we'd rather rebuild the Dag from a persistent store)
+    // but the way to serialize this in key order is using serde_with and an annotation of:
+    // as = "FromInto<std::collections::BTreeMap<T::TypedDigest, Either<WeakNodeRef<T>, NodeRef<T>>>"
+    node_table: DashMap<T::TypedDigest, Either<WeakNodeRef<T>, NodeRef<T>>>,
 }
-
-// To insert NodeRef in a BTreeSet we need an Ord type
 
 #[derive(Debug, Error)]
 pub enum DagError<T: crypto::Hash> {
@@ -171,17 +169,26 @@ pub enum DagError<T: crypto::Hash> {
 
 impl<T: Affiliated> NodeDag<T> {
     pub(crate) fn get_weak(&self, digest: T::TypedDigest) -> Result<WeakNodeRef<T>, DagError<T>> {
-        let weak_node = self
+        let node_ref = self
             .node_table
-            .get(&digest).ok_or(DagError::UnknownDigest(digest))?;
-        Ok(weak_node.clone())
+            .get(&digest)
+            .ok_or(DagError::UnknownDigest(digest))?;
+        match *node_ref {
+            Either::Left(ref node) => Ok(node.clone()),
+            Either::Right(ref node) => Ok(Arc::downgrade(node)),
+        }
     }
 
     pub fn get(&self, digest: T::TypedDigest) -> Result<NodeRef<T>, DagError<T>> {
-        let weak_node = self.get_weak(digest)?;
-        let node = weak_node
-            .upgrade().ok_or(DagError::DroppedDigest(digest))?;
-        Ok(node)
+        let node_ref = self
+            .node_table
+            .get(&digest)
+            .ok_or(DagError::UnknownDigest(digest))?;
+        match *node_ref {
+            Either::Left(ref node) => Ok(node.upgrade().ok_or(DagError::DroppedDigest(digest))?),
+            // the node is a head of the graph, just return
+            Either::Right(ref node) => Ok(node.clone()),
+        }
     }
 
     // Note: the dag currently does not do any causal completion, and assumes that the node is a head
@@ -214,12 +221,16 @@ impl<T: Affiliated> NodeDag<T> {
             compressible,
         };
         let strong_node_ref = Arc::new(RwLock::new(node));
-        let weak_node_ref = Arc::downgrade(&strong_node_ref);
-        self.node_table.insert(digest, weak_node_ref);
-        self.headers.insert(digest, strong_node_ref);
+        self.node_table
+            .insert(digest, Either::Right(strong_node_ref));
         // maintain the header invariant
-        for ancestor in parent_digests.iter() {
-            self.headers.remove(ancestor);
+        for mut parent in parent_digests
+            .into_iter()
+            .flat_map(|digest| self.node_table.get_mut(&digest))
+        {
+            if let Either::Right(strong_noderef) = &*parent {
+                *parent = Either::Left(Arc::downgrade(strong_noderef));
+            }
         }
         Ok(())
     }

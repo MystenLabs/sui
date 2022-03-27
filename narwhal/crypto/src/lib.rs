@@ -80,7 +80,7 @@ impl AsRef<[u8]> for Digest {
 
 /// This trait is implemented by all messages that can be hashed.
 pub trait Hash {
-    type TypedDigest: Into<Digest> + std::fmt::Display + Eq + Ord + Copy;
+    type TypedDigest: Into<Digest> + std::fmt::Display + std::hash::Hash + Eq + Ord + Copy;
     fn digest(&self) -> Self::TypedDigest;
 }
 
