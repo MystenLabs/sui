@@ -3,10 +3,11 @@
 use super::*;
 
 use rocksdb::{ColumnFamilyDescriptor, Options};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::path::Path;
-use sui_types::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, EmptyAuthoritySignInfo};
+use sui_types::crypto::{AuthoritySignInfo, EmptyAuthoritySignInfo};
 
 use rocksdb::MultiThreaded;
 
@@ -33,10 +34,7 @@ const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 /// S is a template on Authority signature state. This allows SuiDataStore to be used on either
 /// authorities or non-authorities. Specifically, when storing transactions and effects,
 /// S allows SuiDataStore to either store the authority signed version or unsigned version.
-pub struct SuiDataStore<const ALL_OBJ_VER: bool, S>
-where
-    TransactionEnvelope<S>: PartialEq,
-{
+pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     /// This is a map between the object ID and the latest state of the object, namely the
     /// state that is needed to process new transactions. If an object is deleted its entry is
     /// removed from this map.
@@ -149,9 +147,8 @@ pub fn open_cf_opts<P: AsRef<Path>>(
     Ok(rocksdb)
 }
 
-impl<const ALL_OBJ_VER: bool, S: AuthoritySignInfoTrait> SuiDataStore<ALL_OBJ_VER, S>
-where
-    TransactionEnvelope<S>: PartialEq,
+impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
+    SuiDataStore<ALL_OBJ_VER, S>
 {
     /// Open an authority store by directory path
     pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Self {
@@ -986,9 +983,8 @@ impl<const A: bool> SuiDataStore<A, AuthoritySignInfo> {
     }
 }
 
-impl<const A: bool, S: AuthoritySignInfoTrait> BackingPackageStore for SuiDataStore<A, S>
-where
-    TransactionEnvelope<S>: PartialEq,
+impl<const A: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> BackingPackageStore
+    for SuiDataStore<A, S>
 {
     fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         let package = self.get_object(package_id)?;
@@ -1004,9 +1000,8 @@ where
     }
 }
 
-impl<const A: bool, S: AuthoritySignInfoTrait> ModuleResolver for SuiDataStore<A, S>
-where
-    TransactionEnvelope<S>: PartialEq,
+impl<const A: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> ModuleResolver
+    for SuiDataStore<A, S>
 {
     type Error = SuiError;
 

@@ -21,8 +21,8 @@ use serde::{Deserialize, Serialize};
 use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
 
 use crate::crypto::{
-    sha3_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature, BcsSignable,
-    EmptyAuthoritySignInfo, Signable, Signature, VerificationObligation,
+    sha3_hash, AuthoritySignInfo, AuthoritySignature, BcsSignable, EmptyAuthoritySignInfo,
+    Signable, Signature, VerificationObligation,
 };
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 
@@ -315,14 +315,13 @@ where
 
 /// A transaction signed by a client, optionally signed by an authority (depending on `S`).
 /// `S` indicates the authority signing state. It can be either empty or signed.
-/// TODO: Fill comment.
-/// Any extension to Transaction should add fields to TransactionData, not Transaction.
-#[derive(Debug, Clone, Eq, Serialize, Deserialize)]
+/// We make the authority signature templated so that `TransactionEnvelope<S>` can be used
+/// universally in the transactions storage in `SuiDataStore`, shared by both authorities
+/// and non-authorities: authorities store signed transactions, while non-authorities
+/// store unsigned transactions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(remote = "TransactionEnvelope")]
-pub struct TransactionEnvelope<S>
-where
-    TransactionEnvelope<S>: PartialEq,
-{
+pub struct TransactionEnvelope<S> {
     // Deserialization sets this to "false"
     #[serde(skip)]
     pub is_checked: bool,
@@ -337,10 +336,7 @@ where
     // does not participate in the hash and comparison).
 }
 
-impl<S: AuthoritySignInfoTrait> TransactionEnvelope<S>
-where
-    TransactionEnvelope<S>: PartialEq,
-{
+impl<S> TransactionEnvelope<S> {
     pub fn check_signature(&self) -> Result<(), SuiError> {
         // We use this flag to see if someone has checked this before
         // and therefore we can skip the check. Note that the flag has
@@ -462,10 +458,12 @@ where
     }
 }
 
+// In combination with #[serde(remote = "TransactionEnvelope")].
+// Generic types instantiated multiple times in the same tracing session requires a work around.
+// https://novifinancial.github.io/serde-reflection/serde_reflection/index.html#features-and-limitations
 impl<'de, T> Deserialize<'de> for TransactionEnvelope<T>
 where
     T: Deserialize<'de>,
-    TransactionEnvelope<T>: PartialEq,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -473,7 +471,7 @@ where
     {
         TransactionEnvelope::deserialize(DeserializeNameAdapter::new(
             deserializer,
-            std::any::type_name::<Self>(),
+            std::any::type_name::<TransactionEnvelope<T>>(),
         ))
     }
 }
@@ -481,7 +479,6 @@ where
 impl<T> Serialize for TransactionEnvelope<T>
 where
     T: Serialize,
-    TransactionEnvelope<T>: PartialEq,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -489,7 +486,7 @@ where
     {
         TransactionEnvelope::serialize(
             self,
-            SerializeNameAdapter::new(serializer, std::any::type_name::<Self>()),
+            SerializeNameAdapter::new(serializer, std::any::type_name::<TransactionEnvelope<T>>()),
         )
     }
 }
@@ -526,6 +523,7 @@ impl PartialEq for Transaction {
         self.data == other.data
     }
 }
+impl Eq for Transaction {}
 
 /// A transaction that is signed by a sender and also by an authority.
 pub type SignedTransaction = TransactionEnvelope<AuthoritySignInfo>;
