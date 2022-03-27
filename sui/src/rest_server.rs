@@ -702,6 +702,8 @@ struct TransferTransactionRequest {
     to_address: String,
     /** Required; Hex code as string representing the gas object id to be used as payment */
     gas_object_id: String,
+    /** Required; Gas budget required as a cap for gas usage */
+    gas_budget: u64,
 }
 
 /**
@@ -765,11 +767,12 @@ async fn transfer_object(
             format!("Could not decode address from hex {error}"),
         )
     })?;
+    let gas_budget = transfer_order_params.gas_budget;
 
     let response: Result<_, anyhow::Error> = async {
         let data = state
             .gateway
-            .transfer_coin(owner, object_id, gas_object_id, to_address)
+            .transfer_coin(owner, object_id, gas_object_id, gas_budget, to_address)
             .await?;
         let signature = state
             .keystore

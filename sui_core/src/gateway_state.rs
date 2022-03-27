@@ -92,6 +92,7 @@ pub trait GatewayAPI {
         signer: SuiAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
+        gas_budget: u64,
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -534,6 +535,7 @@ where
         signer: SuiAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
+        gas_budget: u64,
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error> {
         // TODO: We should be passing in object_ref directly instead of object_id.
@@ -542,7 +544,13 @@ where
         let gas_payment = self.get_object(&gas_payment).await?;
         let gas_payment_ref = gas_payment.compute_object_reference();
 
-        let data = TransactionData::new_transfer(recipient, object_ref, signer, gas_payment_ref);
+        let data = TransactionData::new_transfer(
+            recipient,
+            object_ref,
+            signer,
+            gas_payment_ref,
+            gas_budget,
+        );
 
         Ok(data)
     }

@@ -490,6 +490,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
         to: recipient,
         object_id: object_to_send,
         gas: object_id,
+        gas_budget: 50000,
     }
     .execute(&mut context)
     .await?;
@@ -953,6 +954,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         gas: gas_obj_id,
         to: recipient,
         object_id: obj_id,
+        gas_budget: 50000,
     }
     .execute(&mut context)
     .await?;
