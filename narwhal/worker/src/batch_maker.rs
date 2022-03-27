@@ -125,7 +125,7 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
         {
             // NOTE: This is one extra hash that is only needed to print the following log entries.
             let digest = BatchDigest::new(
-                Sha512::digest(&serialized).as_slice()[..32]
+                Sha512::digest(&serialized).as_slice()[..crypto::DIGEST_LEN]
                     .try_into()
                     .unwrap(),
             );

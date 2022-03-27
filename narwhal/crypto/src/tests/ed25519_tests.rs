@@ -16,7 +16,11 @@ impl Hash for &[u8] {
     type TypedDigest = Digest;
 
     fn digest(&self) -> Digest {
-        Digest(Sha512::digest(self).as_slice()[..32].try_into().unwrap())
+        Digest(
+            Sha512::digest(self).as_slice()[..crate::DIGEST_LEN]
+                .try_into()
+                .unwrap(),
+        )
     }
 }
 

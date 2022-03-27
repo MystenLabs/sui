@@ -142,7 +142,7 @@ pub fn batch_digest() -> BatchDigest {
 // Fixture
 pub fn resolve_batch_digest(batch_serialised: Vec<u8>) -> BatchDigest {
     BatchDigest::new(
-        Sha512::digest(&batch_serialised).as_slice()[..32]
+        Sha512::digest(&batch_serialised).as_slice()[..crypto::DIGEST_LEN]
             .try_into()
             .unwrap(),
     )

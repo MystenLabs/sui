@@ -36,8 +36,11 @@ impl Processor {
         tokio::spawn(async move {
             while let Some(batch) = rx_batch.recv().await {
                 // Hash the batch.
-                let digest =
-                    BatchDigest::new(Sha512::digest(&batch).as_slice()[..32].try_into().unwrap());
+                let digest = BatchDigest::new(
+                    Sha512::digest(&batch).as_slice()[..crypto::DIGEST_LEN]
+                        .try_into()
+                        .unwrap(),
+                );
 
                 // Store the batch.
                 store.write(digest, batch).await;

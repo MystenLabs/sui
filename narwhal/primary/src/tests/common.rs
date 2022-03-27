@@ -215,7 +215,8 @@ pub fn fixture_header_with_payload(number_of_batches: u8) -> Header<Ed25519Publi
 
     for i in 0..number_of_batches {
         let batch_digest = BatchDigest(
-            Sha512::digest(vec![10u8, 5u8, 8u8, 20u8, i].as_slice()).as_slice()[..32]
+            Sha512::digest(vec![10u8, 5u8, 8u8, 20u8, i].as_slice()).as_slice()
+                [..crypto::DIGEST_LEN]
                 .try_into()
                 .unwrap(),
         );
