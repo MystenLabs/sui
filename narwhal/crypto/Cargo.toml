@@ -44,4 +44,5 @@ default = ["celo"]
 celo = ["ark-ec", "ark-ff", "ark-serialize", "ark-bls12-377", "ark-std", "serde_with", "celo-bls"]
 
 [dev-dependencies]
+bincode = "1.3.3"
 criterion = "0.3.5"

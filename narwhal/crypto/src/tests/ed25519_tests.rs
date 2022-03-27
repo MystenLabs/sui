@@ -30,6 +30,22 @@ pub fn keys() -> Vec<Ed25519KeyPair> {
 }
 
 #[test]
+fn serialize_deserialize() {
+    let kpref = keys().pop().unwrap();
+    let public_key = kpref.public();
+
+    let bytes = bincode::serialize(&public_key).unwrap();
+    let pk2 = bincode::deserialize::<Ed25519PublicKey>(&bytes).unwrap();
+    assert_eq!(*public_key, pk2);
+
+    let private_key = kpref.private();
+    let bytes = bincode::serialize(&private_key).unwrap();
+    let privkey = bincode::deserialize::<Ed25519PublicKey>(&bytes).unwrap();
+    let bytes2 = bincode::serialize(&privkey).unwrap();
+    assert_eq!(bytes, bytes2);
+}
+
+#[test]
 fn import_export_public_key() {
     let kpref = keys().pop().unwrap();
     let public_key = kpref.public();

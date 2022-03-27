@@ -71,7 +71,8 @@ impl Serialize for Ed25519PublicKey {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(&self.encode_base64())
+        let str = self.encode_base64();
+        serializer.serialize_newtype_struct("Ed25519PublicKey", &str)
     }
 }
 
@@ -105,7 +106,8 @@ impl Serialize for Ed25519PrivateKey {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(&self.encode_base64())
+        let str = self.encode_base64();
+        serializer.serialize_newtype_struct("Ed25519PublicKey", &str)
     }
 }
 

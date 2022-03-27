@@ -26,6 +26,14 @@ worker = { path = "../worker" }
 consensus = { path = "../consensus" }
 cfg-if = "1.0.0"
 
+[dev-dependencies]
+structopt = "0.3.26"
+pretty_assertions = "1.2.0"
+serde_yaml = "0.8.23"
+ed25519-dalek = "1.0.1"
+hex = "0.4.3"
+serde-reflection = "0.3.5"
+
 [features]
 benchmark = ["worker/benchmark", "primary/benchmark", "consensus/benchmark"]
 
@@ -33,3 +41,9 @@ benchmark = ["worker/benchmark", "primary/benchmark", "consensus/benchmark"]
 name = "benchmark_client"   
 path = "src/benchmark_client.rs" 
 required-features = ["benchmark"] 
+
+
+[[example]]
+name = "generate-format"
+path = "src/generate_format.rs"
+test = false

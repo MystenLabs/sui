@@ -23,7 +23,7 @@ pub type Transaction = Vec<u8>;
 pub struct Batch(pub Vec<Transaction>);
 
 #[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct BatchDigest(pub(crate) [u8; crypto::DIGEST_LEN]);
+pub struct BatchDigest(pub [u8; crypto::DIGEST_LEN]);
 
 impl fmt::Debug for BatchDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {

@@ -1,0 +1,111 @@
+---
+Batch:
+  NEWTYPESTRUCT:
+    SEQ:
+      SEQ: U8
+BatchDigest:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+Certificate:
+  STRUCT:
+    - header:
+        TYPENAME: Header
+    - votes:
+        SEQ:
+          TUPLE:
+            - TYPENAME: Ed25519PublicKey
+            - TYPENAME: Ed25519Signature
+CertificateDigest:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+Ed25519PublicKey:
+  NEWTYPESTRUCT: STR
+Ed25519Signature:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 64
+Header:
+  STRUCT:
+    - author:
+        TYPENAME: Ed25519PublicKey
+    - round: U64
+    - payload:
+        MAP:
+          KEY:
+            TYPENAME: BatchDigest
+          VALUE: U32
+    - parents:
+        SEQ:
+          TYPENAME: CertificateDigest
+    - id:
+        TYPENAME: HeaderDigest
+    - signature:
+        TYPENAME: Ed25519Signature
+HeaderDigest:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+PrimaryWorkerMessage:
+  ENUM:
+    0:
+      Synchronize:
+        TUPLE:
+          - SEQ:
+              TYPENAME: BatchDigest
+          - TYPENAME: Ed25519PublicKey
+    1:
+      Cleanup:
+        NEWTYPE: U64
+    2:
+      RequestBatch:
+        NEWTYPE:
+          TYPENAME: BatchDigest
+    3:
+      DeleteBatches:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: BatchDigest
+WorkerPrimaryError:
+  ENUM:
+    0:
+      RequestedBatchNotFound:
+        NEWTYPE:
+          TYPENAME: BatchDigest
+    1:
+      ErrorWhileDeletingBatches:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: BatchDigest
+WorkerPrimaryMessage:
+  ENUM:
+    0:
+      OurBatch:
+        TUPLE:
+          - TYPENAME: BatchDigest
+          - U32
+    1:
+      OthersBatch:
+        TUPLE:
+          - TYPENAME: BatchDigest
+          - U32
+    2:
+      RequestedBatch:
+        TUPLE:
+          - TYPENAME: BatchDigest
+          - TYPENAME: Batch
+    3:
+      DeletedBatches:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: BatchDigest
+    4:
+      Error:
+        NEWTYPE:
+          TYPENAME: WorkerPrimaryError
+
