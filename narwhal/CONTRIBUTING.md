@@ -31,6 +31,14 @@ see the formatter recommendations, just run with the `--check` property:
 ```
 cargo +nightly fmt --all -- --check
 ```
+
+## Generating builders
+The [derive_builder](https://crates.io/crates/derive_builder) crate has been used to
+auto-generate builders (following the [builder design pattern](https://en.wikipedia.org/wiki/Builder_pattern)) for structs. Instead of having to write (lots) of boilerplate
+code to create a builder, this is offered by the derive_builder and is the recommended
+way to create builders for this repo. Examples can be found within the repo and on the
+crate docs as well. 
+
 ## Issues
 We use GitHub issues to track public bugs. Please ensure your description is
 clear and has sufficient instructions to be able to reproduce the issue.

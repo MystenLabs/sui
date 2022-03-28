@@ -65,7 +65,8 @@ impl Hash for Batch {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Default)]
+#[derive(Clone, Serialize, Deserialize, Default, Builder)]
+#[builder(pattern = "owned", build_fn(skip))]
 #[serde(bound(deserialize = "PublicKey: VerifyingKey"))] // bump the bound to VerifyingKey as soon as you include a sig
 pub struct Header<PublicKey: VerifyingKey> {
     pub author: PublicKey,
@@ -74,6 +75,42 @@ pub struct Header<PublicKey: VerifyingKey> {
     pub parents: BTreeSet<CertificateDigest>,
     pub id: HeaderDigest,
     pub signature: <PublicKey as VerifyingKey>::Sig,
+}
+
+impl<PublicKey: VerifyingKey> HeaderBuilder<PublicKey> {
+    #[allow(dead_code)]
+    pub fn build<F>(self, signer: F) -> Header<PublicKey>
+    where
+        F: FnOnce(&[u8]) -> PublicKey::Sig,
+    {
+        let h = Header {
+            author: self.author.unwrap(),
+            round: self.round.unwrap(),
+            payload: self.payload.unwrap(),
+            parents: self.parents.unwrap(),
+            id: HeaderDigest::default(),
+            signature: PublicKey::Sig::default(),
+        };
+
+        Header {
+            id: h.digest(),
+            signature: signer(Digest::from(h.digest()).as_ref()),
+            ..h
+        }
+    }
+
+    // helper method to set directly values to the payload
+    #[allow(dead_code)]
+    pub fn with_payload_batch(mut self, batch: Batch, worker_id: WorkerId) -> Self {
+        if self.payload.is_none() {
+            self.payload = Some(BTreeMap::new());
+        }
+        let payload = self.payload.as_mut().unwrap();
+
+        payload.insert(batch.digest(), worker_id);
+
+        self
+    }
 }
 
 impl<PublicKey: VerifyingKey> Header<PublicKey> {

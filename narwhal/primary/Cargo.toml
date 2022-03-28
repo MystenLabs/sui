@@ -24,6 +24,7 @@ crypto = { path = "../crypto" }
 config = { path = "../config" }
 network = { path = "../network" }
 base64 = "0.13.0"
+derive_builder = "0.11.1"
 
 [dev-dependencies]
 rand = "0.7.3"

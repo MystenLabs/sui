@@ -1,23 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    block_waiter::{
-        BatchMessage, BlockCommand, BlockErrorType, BlockResult, BlockWaiter, GetBlockResponse,
-    },
+    block_waiter::{BatchResult, BlockErrorType, BlockResult, GetBlockResponse},
     common,
-    common::{certificate, committee_with_base_port, create_db_stores, keys},
-    messages::BatchDigest,
-    Batch, Certificate, PrimaryWorkerMessage,
+    common::{certificate, create_db_stores, resolve_name_and_committee},
+    messages, BatchDigest, BatchMessage, BlockCommand, BlockWaiter, Certificate,
+    PrimaryWorkerMessage,
 };
 use bincode::deserialize;
-use config::Committee;
-use crypto::{
-    ed25519::Ed25519PublicKey,
-    traits::{KeyPair, VerifyingKey},
-    Hash,
-};
-
-use crate::block_waiter::BatchResult;
+use crypto::{ed25519::Ed25519PublicKey, traits::VerifyingKey, Hash};
 use futures::StreamExt;
 use network::SimpleSender;
 use std::{collections::HashMap, net::SocketAddr};
@@ -35,7 +26,7 @@ async fn test_successfully_retrieve_block() {
     let (_, certificate_store, _) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee();
+    let (name, committee) = resolve_name_and_committee(13000);
 
     // AND store certificate
     let header = common::fixture_header_with_payload(2);
@@ -66,7 +57,7 @@ async fn test_successfully_retrieve_block() {
             batch_id,
             BatchMessage {
                 id: batch_id,
-                transactions: Batch(vec![vec![10u8, 5u8, 2u8], vec![8u8, 2u8, 3u8]]),
+                transactions: messages::Batch(vec![vec![10u8, 5u8, 2u8], vec![8u8, 2u8, 3u8]]),
             },
         );
     }
@@ -129,7 +120,7 @@ async fn test_one_pending_request_for_block_at_time() {
     let (_, certificate_store, _) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee();
+    let (name, committee) = resolve_name_and_committee(13000);
 
     // AND store certificate
     let header = common::fixture_header_with_payload(2);
@@ -202,7 +193,7 @@ async fn test_unlocking_pending_get_block_request_after_response() {
     let (_, certificate_store, _) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee();
+    let (name, committee) = resolve_name_and_committee(13000);
 
     // AND store certificate
     let header = common::fixture_header_with_payload(2);
@@ -263,7 +254,7 @@ async fn test_batch_timeout() {
     let (_, certificate_store, _) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee();
+    let (name, committee) = resolve_name_and_committee(13000);
 
     // AND store certificate
     let header = common::fixture_header_with_payload(2);
@@ -319,7 +310,7 @@ async fn test_batch_timeout() {
 async fn test_return_error_when_certificate_is_missing() {
     // GIVEN
     let (_, certificate_store, _) = create_db_stores();
-    let (name, committee) = resolve_name_and_committee();
+    let (name, committee) = resolve_name_and_committee(13000);
 
     // AND create a certificate but don't store it
     let certificate = Certificate::<Ed25519PublicKey>::default();
@@ -364,17 +355,6 @@ async fn test_return_error_when_certificate_is_missing() {
             panic!("Timeout, no result has been received in time")
         }
     }
-}
-
-// helper method to get a name and a committee
-fn resolve_name_and_committee() -> (Ed25519PublicKey, Committee<Ed25519PublicKey>) {
-    let mut keys = keys();
-    let _ = keys.pop().unwrap(); // Skip the header' author.
-    let kp = keys.pop().unwrap();
-    let name = kp.public().clone();
-    let committee = committee_with_base_port(13_000);
-
-    (name, committee)
 }
 
 // worker_listener listens to TCP requests. The worker responds to the

@@ -2,8 +2,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    messages::{BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Vote},
+    messages::{
+        BatchDigest, Certificate, CertificateDigest, Header, HeaderBuilder, HeaderDigest, Vote,
+    },
     primary::PayloadToken,
+    Batch, Transaction,
 };
 use bytes::Bytes;
 use config::{Authority, Committee, PrimaryAddresses, WorkerAddresses, WorkerId};
@@ -60,14 +63,46 @@ pub fn committee() -> Committee<Ed25519PublicKey> {
                     primary_to_primary: format!("127.0.0.1:{}", 100 + i).parse().unwrap(),
                     worker_to_primary: format!("127.0.0.1:{}", 200 + i).parse().unwrap(),
                 };
-                let workers = vec![(
-                    0,
-                    WorkerAddresses {
-                        primary_to_worker: format!("127.0.0.1:{}", 300 + i).parse().unwrap(),
-                        transactions: format!("127.0.0.1:{}", 400 + i).parse().unwrap(),
-                        worker_to_worker: format!("127.0.0.1:{}", 500 + i).parse().unwrap(),
-                    },
-                )]
+                let workers = vec![
+                    (
+                        0,
+                        WorkerAddresses {
+                            primary_to_worker: format!("127.0.0.1:{}", 300 + i).parse().unwrap(),
+                            transactions: format!("127.0.0.1:{}", 400 + i).parse().unwrap(),
+                            worker_to_worker: format!("127.0.0.1:{}", 500 + i).parse().unwrap(),
+                        },
+                    ),
+                    (
+                        1,
+                        WorkerAddresses {
+                            primary_to_worker: format!("127.0.0.1:{}", 300 + i + 1)
+                                .parse()
+                                .unwrap(),
+                            transactions: format!("127.0.0.1:{}", 400 + i + 1).parse().unwrap(),
+                            worker_to_worker: format!("127.0.0.1:{}", 500 + i + 1).parse().unwrap(),
+                        },
+                    ),
+                    (
+                        2,
+                        WorkerAddresses {
+                            primary_to_worker: format!("127.0.0.1:{}", 300 + i + 2)
+                                .parse()
+                                .unwrap(),
+                            transactions: format!("127.0.0.1:{}", 400 + i + 2).parse().unwrap(),
+                            worker_to_worker: format!("127.0.0.1:{}", 500 + i + 2).parse().unwrap(),
+                        },
+                    ),
+                    (
+                        3,
+                        WorkerAddresses {
+                            primary_to_worker: format!("127.0.0.1:{}", 300 + i + 3)
+                                .parse()
+                                .unwrap(),
+                            transactions: format!("127.0.0.1:{}", 400 + i + 3).parse().unwrap(),
+                            worker_to_worker: format!("127.0.0.1:{}", 500 + i + 3).parse().unwrap(),
+                        },
+                    ),
+                ]
                 .iter()
                 .cloned()
                 .collect();
@@ -155,6 +190,25 @@ pub fn headers() -> Vec<Header<Ed25519PublicKey>> {
         .collect()
 }
 
+#[allow(dead_code)]
+pub fn fixture_header() -> Header<Ed25519PublicKey> {
+    let kp = keys().pop().unwrap();
+
+    fixture_header_builder().build(|payload| kp.sign(payload))
+}
+
+pub fn fixture_header_builder() -> HeaderBuilder<Ed25519PublicKey> {
+    let kp = keys().pop().unwrap();
+
+    let builder = HeaderBuilder::<Ed25519PublicKey>::default();
+    builder.author(kp.public().clone()).round(1).parents(
+        Certificate::genesis(&committee())
+            .iter()
+            .map(|x| x.digest())
+            .collect(),
+    )
+}
+
 pub fn fixture_header_with_payload(number_of_batches: u8) -> Header<Ed25519PublicKey> {
     let kp = keys().pop().unwrap();
     let mut payload: BTreeMap<BatchDigest, WorkerId> = BTreeMap::new();
@@ -168,22 +222,24 @@ pub fn fixture_header_with_payload(number_of_batches: u8) -> Header<Ed25519Publi
         payload.insert(batch_digest, 0);
     }
 
-    let header = Header {
-        author: kp.public().clone(),
-        round: 1,
-        parents: Certificate::genesis(&committee())
-            .iter()
-            .map(|x| x.digest())
-            .collect(),
-        payload,
-        ..Header::default()
-    };
-    let header_digest = header.digest();
-    Header {
-        id: header_digest,
-        signature: kp.sign(Digest::from(header_digest).as_ref()),
-        ..header
-    }
+    let builder = fixture_header_builder();
+    builder.payload(payload).build(|payload| kp.sign(payload))
+}
+
+// will create a batch with randomly formed transactions
+// dictated by the parameter number_of_transactions
+pub fn fixture_batch_with_transactions(number_of_transactions: u32) -> Batch {
+    let transactions = (0..number_of_transactions)
+        .map(|_v| transaction())
+        .collect();
+
+    Batch(transactions)
+}
+
+// Fixture
+pub fn transaction() -> Transaction {
+    // generate random value transactions, but the length will be always 100 bytes
+    (0..100).map(|_v| rand::random::<u8>()).collect()
 }
 
 // Fixture
@@ -253,4 +309,17 @@ pub fn create_db_stores() -> (
         Store::new(certificate_map),
         Store::new(payload_map),
     )
+}
+
+// helper method to get a name and a committee
+pub fn resolve_name_and_committee(
+    base_port: u16,
+) -> (Ed25519PublicKey, Committee<Ed25519PublicKey>) {
+    let mut keys = keys();
+    let _ = keys.pop().unwrap(); // Skip the header' author.
+    let kp = keys.pop().unwrap();
+    let name = kp.public().clone();
+    let committee = committee_with_base_port(base_port);
+
+    (name, committee)
 }
