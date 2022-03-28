@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 export function asciiFromNumberBytes(bytes: number[]) {
     return bytes.map((n) => String.fromCharCode(n)).join('');
 }
