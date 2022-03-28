@@ -201,7 +201,7 @@ impl AuthorityState {
             let shared_ids: HashSet<_> = inputs
                 .iter()
                 .filter_map(|(kind, obj)| match kind {
-                    InputObjectKind::SharedMoveObject(..) if obj.owner.is_shared_mutable() => {
+                    InputObjectKind::MutSharedMoveObject(..) if obj.owner.is_shared_mutable() => {
                         Some((obj.id(), obj.version()))
                     }
                     _ => None,
