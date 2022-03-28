@@ -1,0 +1,27 @@
+.noobjects {
+    @apply font-sans tracking-tight font-semibold
+        bg-amber-300 rounded-l-md
+          h-[1.5rem] p-2 mt-2;
+}
+
+.objectbox {
+    @apply border-solid border-stone-300 rounded-lg my-2 mx-[1vw] p-[1vw] lg:w-[30vw] lg:inline-block
+                  hover:shadow-md cursor-pointer;
+}
+
+.objectbox > div > div {
+    @apply border-0 border-b border-solid border-gray-300
+                        mb-2;
+}
+
+.objectbox > div > div > span:first-child {
+    @apply mr-[1rem] uppercase font-sans font-semibold block xl:inline;
+}
+
+.objectbox > .previewimage > img {
+    @apply h-[20vh] w-[80vw] lg:w-[30vw] object-scale-down;
+}
+
+.previewimage {
+    @apply h-[20vh] w-[80vw] lg:w-[30vw] mx-auto;
+}

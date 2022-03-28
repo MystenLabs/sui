@@ -6,6 +6,7 @@ import { useLocation, useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
+import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/internetapi/SuiRpcClient';
 
@@ -43,16 +44,13 @@ function Loaded({ data }: { data: DataType }) {
             <div>
                 <div>Owned Objects</div>
                 <div>
-                    {data.objects.map(
-                        (objectID: { objectId: string }, index: any) => (
-                            <div key={`object-${index}`}>
-                                <Longtext
-                                    text={objectID.objectId}
-                                    category="objects"
-                                />
-                            </div>
-                        )
-                    )}
+                    {
+                        <OwnedObjects
+                            objects={data.objects.map(
+                                ({ objectId }) => objectId
+                            )}
+                        />
+                    }
                 </div>
             </div>
         </div>
