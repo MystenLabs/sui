@@ -58,7 +58,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
             let address = match self.committee.worker(&origin, &self.id) {
                 Ok(x) => x.worker_to_worker,
                 Err(e) => {
-                    warn!("Unexpected batch request: {}", e);
+                    warn!("Unexpected batch request: {e}");
                     continue;
                 }
             };
@@ -68,7 +68,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                 match self.store.read(digest).await {
                     Ok(Some(data)) => self.network.send(address, Bytes::from(data)).await,
                     Ok(None) => (),
-                    Err(e) => error!("{}", e),
+                    Err(e) => error!("{e}"),
                 }
             }
         }

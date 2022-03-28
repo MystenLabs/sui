@@ -107,7 +107,7 @@ impl Connection {
             Ok(stream) => Framed::new(stream, LengthDelimitedCodec::new()).split(),
             Err(e) => {
                 let err = NetworkError::FailedToConnect(self.address, /* retry */ 0, e);
-                warn!("{}", err);
+                warn!("{err}");
                 return;
             }
         };
@@ -120,7 +120,7 @@ impl Connection {
                 Some(data) = self.receiver.recv() => {
                     if let Err(e) = writer.send(data).await {
                         let err = NetworkError::FailedToSendMessage(self.address, e);
-                        warn!("{}", err);
+                        warn!("{err}");
                         return;
                     }
                 },

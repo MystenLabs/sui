@@ -161,7 +161,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         // no points in trying to synchronize them or vote for the header. We just need to gather the payload.
         if self.gc_round >= header.round {
             if self.synchronizer.missing_payload(header).await? {
-                debug!("Downloading the payload of {}", header);
+                debug!("Downloading the payload of {header}");
             }
             return Ok(());
         }
@@ -192,7 +192,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         // Ensure we have the payload. If we don't, the synchronizer will ask our workers to get it, and then
         // reschedule processing of this header once we have it.
         if self.synchronizer.missing_payload(header).await? {
-            debug!("Processing of {} suspended: missing payload", header);
+            debug!("Processing of {header} suspended: missing payload");
             return Ok(());
         }
 
@@ -411,11 +411,11 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
             match result {
                 Ok(()) => (),
                 Err(DagError::StoreError(e)) => {
-                    error!("{}", e);
+                    error!("{e}");
                     panic!("Storage failure: killing node.");
                 }
-                Err(e @ DagError::TooOld(..)) => debug!("{}", e),
-                Err(e) => warn!("{}", e),
+                Err(e @ DagError::TooOld(..)) => debug!("{e}"),
+                Err(e) => warn!("{e}"),
             }
 
             // Cleanup internal state.

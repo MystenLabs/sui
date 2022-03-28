@@ -48,7 +48,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
             let address = match self.committee.primary(&origin) {
                 Ok(x) => x.primary_to_primary,
                 Err(e) => {
-                    warn!("Unexpected certificate request: {}", e);
+                    warn!("Unexpected certificate request: {e}");
                     continue;
                 }
             };
@@ -63,7 +63,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                         self.network.send(address, Bytes::from(bytes)).await;
                     }
                     Ok(None) => (),
-                    Err(e) => error!("{}", e),
+                    Err(e) => error!("{e}"),
                 }
             }
         }

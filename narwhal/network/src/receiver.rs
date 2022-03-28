@@ -55,11 +55,11 @@ impl<Handler: MessageHandler> Receiver<Handler> {
                 Ok(value) => value,
                 Err(e) => {
                     let err = NetworkError::FailedToListen(e);
-                    warn!("{}", err);
+                    warn!("{err}");
                     continue;
                 }
             };
-            info!("Incoming connection established with {}", peer);
+            info!("Incoming connection established with {peer}");
             Self::spawn_runner(socket, peer, self.handler.clone()).await;
         }
     }
@@ -74,17 +74,17 @@ impl<Handler: MessageHandler> Receiver<Handler> {
                 match frame.map_err(|e| NetworkError::FailedToReceiveMessage(peer, e)) {
                     Ok(message) => {
                         if let Err(e) = handler.dispatch(&mut writer, message.freeze()).await {
-                            warn!("{}", e);
+                            warn!("{e}");
                             return;
                         }
                     }
                     Err(e) => {
-                        warn!("{}", e);
+                        warn!("{e}");
                         return;
                     }
                 }
             }
-            warn!("Connection closed by peer {}", peer);
+            warn!("Connection closed by peer {peer}");
         });
     }
 }

@@ -136,13 +136,13 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                             match self.store.read(digest).await {
                                 Ok(None) => {
                                     missing.push(digest);
-                                    debug!("Requesting sync for batch {}", digest);
+                                    debug!("Requesting sync for batch {digest}");
                                 },
                                 Ok(Some(_)) => {
                                     // The batch arrived in the meantime: no need to request it.
                                 },
                                 Err(e) => {
-                                    error!("{}", e);
+                                    error!("{e}");
                                     continue;
                                 }
                             }
@@ -160,7 +160,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                         let address = match self.committee.worker(&target, &self.id) {
                             Ok(address) => address.worker_to_worker,
                             Err(e) => {
-                                error!("The primary asked us to sync with an unknown node: {}", e);
+                                error!("The primary asked us to sync with an unknown node: {e}");
                                 continue;
                             }
                         };
@@ -202,7 +202,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                     Ok(None) => {
                         // The sync request for this batch has been canceled.
                     },
-                    Err(e) => error!("{}", e)
+                    Err(e) => error!("{e}")
                 },
 
                 // Triggers on timer's expiration.
@@ -218,7 +218,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                     let mut retry = Vec::new();
                     for (digest, (_, _, timestamp)) in &self.pending {
                         if timestamp + (self.sync_retry_delay as u128) < now {
-                            debug!("Requesting sync for batch {} (retry)", digest);
+                            debug!("Requesting sync for batch {digest} (retry)");
                             retry.push(*digest);
                         }
                     }
@@ -266,7 +266,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
         let message = match self.store.remove_all(digests.clone()).await {
             Ok(_) => WorkerPrimaryMessage::DeletedBatches(digests),
             Err(err) => {
-                error!("{}", err);
+                error!("{err}");
                 WorkerPrimaryMessage::Error(WorkerPrimaryError::ErrorWhileDeletingBatches(
                     digests.clone(),
                 ))

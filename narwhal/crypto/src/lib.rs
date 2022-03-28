@@ -124,7 +124,7 @@ impl<Signature: Authenticator> SignatureService<Signature> {
     pub async fn request_signature(&mut self, digest: Digest) -> Signature {
         let (sender, receiver): (oneshot::Sender<_>, oneshot::Receiver<_>) = oneshot::channel();
         if let Err(e) = self.channel.send((digest, sender)).await {
-            panic!("Failed to send message Signature Service: {}", e);
+            panic!("Failed to send message Signature Service: {e}");
         }
         receiver
             .await

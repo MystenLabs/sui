@@ -66,13 +66,13 @@ async fn main() -> Result<()> {
         .collect::<Result<Vec<_>, _>>()
         .context("Invalid socket address format")?;
 
-    info!("Node address: {}", target);
+    info!("Node address: {target}");
 
     // NOTE: This log entry is used to compute performance.
-    info!("Transactions size: {} B", size);
+    info!("Transactions size: {size} B");
 
     // NOTE: This log entry is used to compute performance.
-    info!("Transactions rate: {} tx/s", rate);
+    info!("Transactions rate: {rate} tx/s");
 
     let client = Client {
         target,
@@ -131,7 +131,7 @@ impl Client {
             for x in 0..burst {
                 if x == counter % burst {
                     // NOTE: This log entry is used to compute performance.
-                    info!("Sending sample transaction {}", counter);
+                    info!("Sending sample transaction {counter}");
 
                     tx.put_u8(0u8); // Sample txs start with 0.
                     tx.put_u64(counter); // This counter identifies the tx.
@@ -144,7 +144,7 @@ impl Client {
                 tx.resize(self.size, 0u8);
                 let bytes = tx.split().freeze();
                 if let Err(e) = transport.send(bytes).await {
-                    warn!("Failed to send transaction: {}", e);
+                    warn!("Failed to send transaction: {e}");
                     break 'main;
                 }
             }

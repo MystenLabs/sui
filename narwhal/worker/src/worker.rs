@@ -296,7 +296,7 @@ impl<PublicKey: VerifyingKey> MessageHandler for WorkerReceiverHandler<PublicKey
                 .send((missing, requestor))
                 .await
                 .expect("Failed to send batch request"),
-            Err(e) => warn!("Serialization error: {}", e),
+            Err(e) => warn!("Serialization error: {e}"),
         }
         Ok(())
     }
@@ -317,7 +317,7 @@ impl<PublicKey: VerifyingKey> MessageHandler for PrimaryReceiverHandler<PublicKe
     ) -> Result<(), Box<dyn Error>> {
         // Deserialize the message and send it to the synchronizer.
         match bincode::deserialize(&serialized) {
-            Err(e) => error!("Failed to deserialize primary message: {}", e),
+            Err(e) => error!("Failed to deserialize primary message: {e}"),
             Ok(message) => self
                 .tx_synchronizer
                 .send(message)
