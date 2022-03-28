@@ -205,7 +205,7 @@ impl SuiNetwork {
         for spawned_server in self.spawned_authorities {
             handles.push(async move {
                 if let Err(err) = spawned_server.join().await {
-                    error!("Server ended with an error: {}", err);
+                    error!("Server ended with an error: {err}");
                 }
             });
         }

@@ -42,7 +42,7 @@ where
                 Some(Ok(buffer)) => buffer,
                 Some(Err(err)) => {
                     // We expect some EOF or disconnect error at the end.
-                    error!("Error while reading TCP stream: {}", err);
+                    error!("Error while reading TCP stream: {err}");
                     break;
                 }
                 None => {
@@ -53,7 +53,7 @@ where
             if let Some(reply) = self.handle_one_message(&buffer[..]).await {
                 let status = channel.sink().send(reply.into()).await;
                 if let Err(error) = status {
-                    error!("Failed to send query response: {}", error);
+                    error!("Failed to send query response: {error}");
                 }
             };
         }

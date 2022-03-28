@@ -22,7 +22,7 @@ async fn test_concurrency() -> Result<(), anyhow::Error> {
 
     let log = log_config
         .to_logger("rest_server")
-        .map_err(|error| anyhow!("failed to create logger: {}", error))?;
+        .map_err(|error| anyhow!("failed to create logger: {error}"))?;
 
     let documentation = api.openapi("Sui API", "0.1").json()?;
 

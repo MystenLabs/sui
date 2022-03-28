@@ -78,7 +78,7 @@ impl Display for SplitCoinResponse {
         let mut new_coin_text = Vec::new();
         for coin in &self.new_coins {
             let coin = GasCoin::try_from(coin).map_err(fmt::Error::custom)?;
-            new_coin_text.push(format!("{}", coin))
+            new_coin_text.push(format!("{coin}"))
         }
         writeln!(
             writer,

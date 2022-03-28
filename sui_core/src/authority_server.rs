@@ -240,7 +240,7 @@ impl AuthorityServer {
         match reply {
             Ok(x) => x,
             Err(error) => {
-                warn!("User query failed: {}", error);
+                warn!("User query failed: {error}");
                 self.server.increment_user_errors();
                 Some(serialize_error(&error))
             }
@@ -342,7 +342,7 @@ where
                 if let Some(reply) = self.handle_one_message(_message, &mut channel).await {
                     let status = channel.sink().send(reply.into()).await;
                     if let Err(error) = status {
-                        error!("Failed to send query response: {}", error);
+                        error!("Failed to send query response: {error}");
                     }
                 };
             }

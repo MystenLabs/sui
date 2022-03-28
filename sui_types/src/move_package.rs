@@ -272,7 +272,7 @@ pub fn resolve_and_type_check(
             }
             Data::Package(_) => {
                 return Err(SuiError::TypeError {
-                    error: format!("Found module argument, but function expects {}", param_type),
+                    error: format!("Found module argument, but function expects {param_type}"),
                 })
             }
         }
@@ -287,7 +287,7 @@ pub fn resolve_and_type_check(
     {
         if !is_primitive(param_type) {
             return Err(SuiError::TypeError {
-                error: format!("Expected primitive type, but found {}", param_type),
+                error: format!("Expected primitive type, but found {param_type}"),
             });
         }
     }
