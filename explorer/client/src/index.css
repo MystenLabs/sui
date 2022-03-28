@@ -1,10 +1,37 @@
-@import url('https://fonts.googleapis.com/css2?family=Ubuntu+Mono&family=Zen+Dots&family=Zen+Kurenaido&display=swap');
+@font-face {
+    font-family: Inter;
+    src: url('./assets/Fonts/Inter-VariableFont_slnt,wght.ttf')
+        format('truetype-variations');
+    font-weight: 1 999;
+}
+
+@font-face {
+    font-family: 'Space Mono';
+    src: url('./assets/Fonts/SpaceMono-Regular.ttf') format('truetype');
+}
 
 body {
-    margin: 0;
+    @apply bg-offwhite m-0 text-offblack;
 }
 
-code {
-    font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-        monospace;
+/* TODO - The below CSS alters how smart contract code is displayed in the Ace Editor
+
+.ace_active-line {
+    background-color: rgb(203 213 225) !important;
 }
+
+.ace_gutter-layer {
+    color: black !important;
+}
+
+.ace_editor {
+    width: 80vw !important;
+    font-family: 'Ubuntu Mono', 'Courier New', monospace;
+}
+
+@media only screen and (min-width: 1024px) {
+    .ace_editor {
+        width: 35rem !important;
+    }
+}
+*/

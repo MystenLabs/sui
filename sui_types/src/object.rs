@@ -548,7 +548,7 @@ impl Display for Object {
         let type_string = self
             .data
             .type_()
-            .map_or("Move Package".to_owned(), |type_| format!("{}", type_));
+            .map_or("Move Package".to_owned(), |type_| format!("{type_}"));
 
         write!(
             f,

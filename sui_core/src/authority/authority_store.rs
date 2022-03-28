@@ -982,7 +982,7 @@ impl<const ALL_OBJ_VER: bool> BackingPackageStore for SuiDataStore<ALL_OBJ_VER> 
             fp_ensure!(
                 obj.is_package(),
                 SuiError::BadObjectType {
-                    error: format!("Package expected, Move object found: {}", package_id),
+                    error: format!("Package expected, Move object found: {package_id}"),
                 }
             );
         }

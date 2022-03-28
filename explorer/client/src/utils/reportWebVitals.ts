@@ -12,7 +12,8 @@ let onPerfEntry: ReportHandler;
 if (process.env.REACT_APP_REPORT_VITALS === 'true') {
     switch (process.env.REACT_APP_REPORT_VITALS_METHOD) {
         case ReportMethod.console:
-            onPerfEntry = console.log;
+            // uncomment to see web vitals logs
+            // onPerfEntry = console.log;
             break;
         case ReportMethod.request:
             // nothing for now

@@ -212,7 +212,7 @@ async fn test_subscription() {
             db2.executed_sequence
                 .insert(&ticket.seq(), &tx_zero)
                 .expect("Failed to write.");
-            println!("Send item {}", i);
+            println!("Send item {i}");
         }
     });
 
@@ -241,7 +241,7 @@ async fn test_subscription() {
                     }
                 }
                 BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
-                    println!("Received {}", seq);
+                    println!("Received {seq}");
                     num_transactions += 1;
                 }
             },
