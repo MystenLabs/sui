@@ -275,7 +275,7 @@ impl Signature {
         let received_addr = SuiAddress::from(&PublicKeyBytes(public_key_bytes));
         if received_addr != author {
             return Err(SuiError::IncorrectSigner {
-                error: format!("Signature get_verification_inputs() failure. Author is {}, received address is {}", author, received_addr)
+                error: format!("Signature get_verification_inputs() failure. Author is {author}, received address is {received_addr}")
             });
         }
 
@@ -387,7 +387,7 @@ impl AuthoritySignature {
         }
         dalek::verify_batch(&messages[..], &signatures[..], &public_keys[..]).map_err(|error| {
             SuiError::InvalidSignature {
-                error: format!("{}", error),
+                error: format!("{error}"),
             }
         })
     }
@@ -465,7 +465,7 @@ impl VerificationObligation {
             &self.public_keys[..],
         )
         .map_err(|error| SuiError::InvalidSignature {
-            error: format!("{}", error),
+            error: format!("{error}"),
         })?;
 
         Ok(self.lookup)

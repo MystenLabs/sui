@@ -147,7 +147,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 
     // Check log output contains all addresses
     for address in &context.config.accounts {
-        assert!(logs_contain(&*format!("{}", address)));
+        assert!(logs_contain(&*format!("{address}")));
     }
 
     Ok(())
@@ -297,7 +297,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
 
     // Check log output contains all object ids.
     for (object_id, _, _) in object_refs {
-        assert!(logs_contain(format!("{}", object_id).as_str()))
+        assert!(logs_contain(format!("{object_id}").as_str()))
     }
 
     network.kill().await?;
@@ -342,7 +342,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
 
     // confirm the object with custom object id.
     retry_assert!(
-        logs_contain(format!("{}", object_id).as_str()),
+        logs_contain(format!("{object_id}").as_str()),
         Duration::from_millis(5000)
     );
 
@@ -377,7 +377,7 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
 
     // Make sure we log out package id
     for (_, id) in &network_conf.loaded_move_packages {
-        assert!(logs_contain(&*format!("{}", id)));
+        assert!(logs_contain(&*format!("{id}")));
     }
 
     // Create Wallet context.
@@ -457,7 +457,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
         .execute(&mut context)
         .await?
         .print(true);
-    let object_id_str = format!("{}", object_id);
+    let object_id_str = format!("{object_id}");
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -603,7 +603,7 @@ async fn get_move_object(
             }
             _ => panic!("WalletCommands::Object returns wrong type"),
         },
-        _ => panic!("WalletCommands::Object returns wrong type {}", obj),
+        _ => panic!("WalletCommands::Object returns wrong type {obj}"),
     }
 }
 
@@ -701,7 +701,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     // Check log output contains all object ids.
     for (object_id, _, _) in &object_refs {
-        assert!(logs_contain(format!("{}", object_id).as_str()))
+        assert!(logs_contain(format!("{object_id}").as_str()))
     }
 
     // Create an object for address1 using Move call

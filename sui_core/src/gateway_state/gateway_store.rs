@@ -143,5 +143,5 @@ pub fn init_store(path: PathBuf, names: Vec<&str>) -> Arc<DBWithThreadMode<Multi
 }
 /// General helper function for (re-)opening a store
 fn reopen_db<K, V>(db: &Arc<DBWithThreadMode<MultiThreaded>>, name: &str) -> DBMap<K, V> {
-    DBMap::reopen(db, Some(name)).expect(&format!("Cannot open {} CF.", name)[..])
+    DBMap::reopen(db, Some(name)).expect(&format!("Cannot open {name} CF.")[..])
 }

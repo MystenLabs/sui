@@ -50,7 +50,7 @@ impl ConsensusHandler {
                     continue;
                 }
                 Err(e) => {
-                    log::debug!("Failed to deserialize certificate {}", e);
+                    log::debug!("Failed to deserialize certificate {e}");
                     continue;
                 }
             };
@@ -64,7 +64,7 @@ impl ConsensusHandler {
             match &result {
                 // Log the errors that are our faults (not the client's).
                 Err(SuiError::StorageError(e)) => {
-                    log::error!("{}", e);
+                    log::error!("{e}");
 
                     // If we have a store error we cannot continue processing other
                     // outputs from consensus. We may otherwise attribute locks to
@@ -74,7 +74,7 @@ impl ConsensusHandler {
                 // Log the errors that are the client's fault (not ours). This is
                 // only for debug purposes: all correct authorities will do the same.
                 Err(e) => {
-                    log::debug!("{}", e);
+                    log::debug!("{e}");
                     continue;
                 }
                 Ok(()) => (),
