@@ -132,8 +132,13 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
-      - name: license-check
-        run: scripts/license_check.sh
+
+  license-check:
+    name: license-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: scripts/license_check.sh
 
   cargo-deny:
     name: cargo-deny (advisories, licenses, bans, ...)
