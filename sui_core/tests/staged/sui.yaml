@@ -117,7 +117,7 @@ CallResult:
 CertifiedTransaction:
   STRUCT:
     - transaction:
-        TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::EmptyAuthoritySignInfo>"
+        TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::EmptySignInfo>"
     - signatures:
         SEQ:
           TUPLE:
@@ -142,7 +142,7 @@ Data:
       Package:
         NEWTYPE:
           TYPENAME: MovePackage
-EmptyAuthoritySignInfo:
+EmptySignInfo:
   STRUCT: []
 Event:
   STRUCT:
@@ -340,7 +340,7 @@ SerializedMessage:
     0:
       Transaction:
         NEWTYPE:
-          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::EmptyAuthoritySignInfo>"
+          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::EmptySignInfo>"
     1:
       Vote:
         NEWTYPE:
@@ -909,12 +909,12 @@ UpdateItem:
         TYPENAME: Signature
     - auth_signature:
         TYPENAME: AuthoritySignInfo
-"sui_types::messages::TransactionEnvelope<sui_types::crypto::EmptyAuthoritySignInfo>":
+"sui_types::messages::TransactionEnvelope<sui_types::crypto::EmptySignInfo>":
   STRUCT:
     - data:
         TYPENAME: TransactionData
     - tx_signature:
         TYPENAME: Signature
     - auth_signature:
-        TYPENAME: EmptyAuthoritySignInfo
+        TYPENAME: EmptySignInfo
 

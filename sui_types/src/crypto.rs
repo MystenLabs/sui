@@ -393,13 +393,28 @@ impl AuthoritySignature {
     }
 }
 
+/// AuthoritySignInfoTrait is a trait used specifically for a few structs in messages.rs
+/// to template on whether the struct is signed by an authority. We want to limit how
+/// those structs can be instanted on, hence the sealed trait.
+/// TODO: We could also add the aggregated signature as another impl of the trait.
+///       This will make CertifiedTransaction also an instance of the same struct.
+pub trait AuthoritySignInfoTrait: private::SealedAuthoritySignInfoTrait {}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct EmptyAuthoritySignInfo {}
+pub struct EmptySignInfo {}
+impl AuthoritySignInfoTrait for EmptySignInfo {}
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AuthoritySignInfo {
     pub authority: AuthorityName,
     pub signature: AuthoritySignature,
+}
+impl AuthoritySignInfoTrait for AuthoritySignInfo {}
+
+mod private {
+    pub trait SealedAuthoritySignInfoTrait {}
+    impl SealedAuthoritySignInfoTrait for super::EmptySignInfo {}
+    impl SealedAuthoritySignInfoTrait for super::AuthoritySignInfo {}
 }
 
 /// Something that we know how to hash and sign.

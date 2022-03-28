@@ -21,8 +21,8 @@ use serde::{Deserialize, Serialize};
 use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
 
 use crate::crypto::{
-    sha3_hash, AuthoritySignInfo, AuthoritySignature, BcsSignable, EmptyAuthoritySignInfo,
-    Signable, Signature, VerificationObligation,
+    sha3_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature, BcsSignable,
+    EmptySignInfo, Signable, Signature, VerificationObligation,
 };
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 
@@ -336,7 +336,7 @@ pub struct TransactionEnvelope<S> {
     // does not participate in the hash and comparison).
 }
 
-impl<S> TransactionEnvelope<S> {
+impl<S: AuthoritySignInfoTrait> TransactionEnvelope<S> {
     pub fn check_signature(&self) -> Result<(), SuiError> {
         // We use this flag to see if someone has checked this before
         // and therefore we can skip the check. Note that the flag has
@@ -471,6 +471,9 @@ where
     {
         TransactionEnvelope::deserialize(DeserializeNameAdapter::new(
             deserializer,
+            // TODO: This generates a very long name that includes the namespace and modules.
+            // Ideally we just want TransactionEnvelope<T> with T substituted as the name.
+            // https://github.com/MystenLabs/sui/issues/1119
             std::any::type_name::<TransactionEnvelope<T>>(),
         ))
     }
@@ -493,7 +496,7 @@ where
 
 // TODO: this should maybe be called ClientSignedTransaction + SignedTransaction -> AuthoritySignedTransaction
 /// A transaction that is signed by a sender but not yet by an authority.
-pub type Transaction = TransactionEnvelope<EmptyAuthoritySignInfo>;
+pub type Transaction = TransactionEnvelope<EmptySignInfo>;
 
 impl Transaction {
     #[cfg(test)]
@@ -507,7 +510,7 @@ impl Transaction {
             is_checked: false,
             data,
             tx_signature: signature,
-            auth_signature: EmptyAuthoritySignInfo {},
+            auth_signature: EmptySignInfo {},
         }
     }
 }

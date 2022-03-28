@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::path::Path;
-use sui_types::crypto::{AuthoritySignInfo, EmptyAuthoritySignInfo};
+use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 
 use rocksdb::MultiThreaded;
 
@@ -20,7 +20,7 @@ use typed_store::{reopen, traits::Map};
 
 pub type AuthorityStore = SuiDataStore<false, AuthoritySignInfo>;
 #[allow(dead_code)]
-pub type ReplicaStore = SuiDataStore<true, EmptyAuthoritySignInfo>;
+pub type ReplicaStore = SuiDataStore<true, EmptySignInfo>;
 
 const NUM_SHARDS: usize = 4096;
 
