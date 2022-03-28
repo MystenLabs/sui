@@ -175,8 +175,7 @@ fn main() {
         });
     });
 
-    let thr = bench_result_rx.blocking_recv().unwrap();
-    info!("{}", thr);
+    let _ = bench_result_rx.blocking_recv().unwrap();
 }
 
 impl ClientServerBenchmark {
