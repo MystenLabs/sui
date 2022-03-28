@@ -2,11 +2,13 @@
 title: How Sui Differs from Other Blockchains
 ---
 
-This page summarizes how Sui compares with existing blockchains and is intended for potential adopters of Sui to decide whether it fits their use cases. Here are Sui's key features:
+This page summarizes how Sui compares with existing blockchains and is intended for potential adopters of Sui to decide whether it fits their use cases. See [How Sui Works](how-sui-works.md) for an introduction to the Sui architecture.
 
-* Causal order vs total order (enables massively parallel execution)
-* [Sui's variant of Move](../build/move.md) and its object-centric data model (enables composable objects/NFTs)
-* Easier developer experience with the blockchain-oriented [Move programming language](https://github.com/MystenLabs/awesome-move)
+Here are Sui's key features:
+
+* [Causal order vs. total order](#causal-order-vs-total-order) enables massively parallel execution
+* [Sui's variant of Move](../build/move.md) and its object-centric data model make composable objects/NFTs possible
+* The blockchain-oriented [Move programming language](https://github.com/MystenLabs/awesome-move) eases the developer experience
 
 ## Traditional blockchains
 
@@ -20,7 +22,7 @@ Yet it is inherently sequential: increments to the chain are added one at a time
 
 A lot of transactions do not have complex interdependencies with other, arbitrary parts of the state of the blockchain. Often financial users just want to send an asset to a recipient, and the only data required to gauge whether this simple transaction is admissible is a fresh view of the sender's account. Hence Sui takes the approach of only taking a lock - or "stopping the world" - for the relevant piece of data rather than the whole chain -- in this case, the account of the sender, which can only send one transaction at a time.
 
-Sui further expands this approach to more involved transactions that may explicitly depend on multiple elements under their sender's control, using an [object model][Objects] and leveraging [Move][Move]'s strong ownership model. By requiring that dependencies be explicit, Sui applies a "multi-lane" approach to transaction validation, making sure those independent transaction flows can progress without impediment from the others.
+Sui further expands this approach to more involved transactions that may explicitly depend on multiple elements under their sender's control, using an [object model](../build/objects.md) and leveraging [Move](../build/move.md)'s strong ownership model. By requiring that dependencies be explicit, Sui applies a "multi-lane" approach to transaction validation, making sure those independent transaction flows can progress without impediment from the others.
 
 This doesn't mean that Sui as a platform never orders transactions with respect to each other, or that it we allows owners to only affect their owned microcosm of objects. Sui will also process transactions that have an effect on some shared state, in a rigorous, consensus-ordered manner. They're just not the default use case.
 
@@ -55,7 +57,7 @@ An authority plays a role similar to "validators" or "miners" in other blockchai
 
 * Authorities do nothing until they receive a transaction or certificate from a user. Upon receiving a transaction or certificate, an authority need not communicate with other authorities in order to take action and advance its internal state machine. It may wish to communicate with other authorities to share certificates but need not do so.
 
-## Causal order vs total order
+## Causal order vs. total order
 
 Unlike most existing blockchain systems (and as the reader may have guessed from the description of write requests above), Sui does not always impose a total order on the transactions submitted by clients, with shared objects being the exception. Instead, most transactions are *causally* ordered--if a transaction `T1` produces output objects `O1` that are used as input objects in a transaction `T2`, an authority must execute `T1` before it executes `T2`. Note that `T2` need not use these objects directly for a causal relationship to exist--e.g., `T1` might produce output objects which are then used by `T3`, and `T2` might use `T3`'s output objects. However, transactions with no causal relationship can be processed by Sui authorities in any order.
 
@@ -94,15 +96,15 @@ Sui provides these benefits to developers:
 * Asset-centric programming model
 * Easier developer experience
 
-## Drawbacks of Sui
+## Engineering trade-offs
 
-This section presents the main limitations and disadvantages of Sui with respect to traditional blockchains.
+This section presents the main disadvantages of Sui with respect to traditional blockchains.
 
 ### Design complexity
 
-One of the main drawbacks of the Sui design is its complexity. While traditional blockchains only require to implement a single consensus protocol, Sui requires two protocols: (i) a protocol based on Byzantine Consistent Broadcast to handle common transactions, and (ii) a consensus protocol to handle transactions with shared objects. This means the Sui team needs to maintain a much larger codebase.
+While traditional blockchains require implementing only a single consensus protocol, Sui requires two protocols: (i) a protocol based on Byzantine Consistent Broadcast to handle common transactions, and (ii) a consensus protocol to handle transactions with shared objects. This means the Sui team needs to maintain a much larger codebase.
 
-Transactions involving shared objects require a little overhead (two extra round trips) before submitting it to the consensus protocol. This overhead is required to security compose the two protocols described above. Other blockchains can instead directly submit the transaction to the consensus protocol.
+Transactions involving shared objects require a little overhead (adding two extra round trips - 200ms for well-connected clients using a Sui Gateway service) before submitting it to the consensus protocol. This overhead is required to securely compose the two protocols described above. Other blockchains can instead directly submit the transaction to the consensus protocol. Note the finality for shared object transactions is still in the 2-3 second range even with this overhead.
 
 Building an efficient synchronizer is harder in Sui than in traditional blockchains. The synchronizer sub-protocol allows authorities to update each other by sharing data, and it allows slow authorities to catch up. Building an efficient synchronizer for traditional blockchains is no easy task, but still simpler than in Sui.
 

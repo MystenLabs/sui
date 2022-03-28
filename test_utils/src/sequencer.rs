@@ -6,14 +6,22 @@ use bytes::Bytes;
 use futures::stream::futures_unordered::FuturesUnordered;
 use futures::stream::StreamExt;
 use futures::SinkExt;
+use rocksdb::{ColumnFamilyDescriptor, DBCompressionType, DBWithThreadMode, MultiThreaded};
+use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use sui_network::transport::{MessageHandler, RwChannel};
 use sui_types::base_types::SequenceNumber;
+use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::ConsensusOutput;
-use sui_types::serialize::serialize_consensus_output;
+use sui_types::serialize::{deserialize_message, serialize_consensus_output, SerializedMessage};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::time::sleep;
+use typed_store::rocks::{DBMap, TypedStoreError};
+use typed_store::traits::Map;
 
 /// A mock single-process sequencer. It is not crash-safe (it has no storage) and should
 /// only be used for testing.
@@ -32,15 +40,17 @@ pub struct Sequencer {
 impl Sequencer {
     /// Spawn a new sequencer. The sequencer is made of a number of component each running
     /// in their own tokio task.
-    pub async fn spawn(sequencer: Self) {
+    pub async fn spawn(sequencer: Self, store_path: &Path) -> SuiResult<()> {
         let (tx_input, rx_input) = channel(100);
         let (tx_subscriber, rx_subscriber) = channel(100);
 
+        // Load the persistent storage.
+        let store = Arc::new(SequencerStore::open(store_path, None));
+
         // Spawn the sequencer core.
+        let mut sequencer_core = SequencerCore::new(rx_input, rx_subscriber, store.clone())?;
         tokio::spawn(async move {
-            SequencerCore::new(rx_input, rx_subscriber)
-                .run(sequencer.consensus_delay)
-                .await;
+            sequencer_core.run(sequencer.consensus_delay).await;
         });
 
         // Spawn the server receiving input messages to order.
@@ -60,7 +70,7 @@ impl Sequencer {
 
         // Spawn the server receiving subscribers to the output of the sequencer.
         tokio::spawn(async move {
-            let subscriber_server = SubscriberServer { tx_subscriber };
+            let subscriber_server = SubscriberServer::new(tx_subscriber, store);
             sui_network::transport::spawn_server(
                 &sequencer.subscriber_address.to_string(),
                 subscriber_server,
@@ -72,37 +82,48 @@ impl Sequencer {
             .await
             .unwrap();
         });
+
+        Ok(())
     }
 }
 
 /// The core of the sequencer, totally ordering input bytes.
-pub struct SequencerCore<Message> {
+pub struct SequencerCore {
     /// Receive users' certificates to sequence
-    rx_input: Receiver<Message>,
-    /// Receive subscribers to update with the output of the sequence.
-    rx_subscriber: Receiver<Sender<(Message, SequenceNumber)>>,
+    rx_input: Receiver<Bytes>,
+    /// Communicate with subscribers to update with the output of the sequence.
+    rx_subscriber: Receiver<SubscriberMessage>,
+    /// Persistent storage to hold all consensus outputs. This task is the only one
+    /// that writes to the store.
+    store: Arc<SequencerStore>,
     /// The global consensus index.
     consensus_index: SequenceNumber,
+    /// The current number of subscribers.
+    subscribers_count: usize,
 }
 
-impl<Message> SequencerCore<Message>
-where
-    Message: Clone + Send + Sync + 'static,
-{
+impl SequencerCore {
+    /// The maximum number of subscribers.
+    pub const MAX_SUBSCRIBERS: usize = 1_000;
+
     /// Create a new sequencer core instance.
     pub fn new(
-        rx_input: Receiver<Message>,
-        rx_subscriber: Receiver<Sender<(Message, SequenceNumber)>>,
-    ) -> Self {
-        Self {
+        rx_input: Receiver<Bytes>,
+        rx_subscriber: Receiver<SubscriberMessage>,
+        store: Arc<SequencerStore>,
+    ) -> SuiResult<Self> {
+        let consensus_index = store.get_last_consensus_index()?;
+        Ok(Self {
             rx_input,
             rx_subscriber,
-            consensus_index: SequenceNumber::new(),
-        }
+            store,
+            consensus_index,
+            subscribers_count: 0,
+        })
     }
 
     /// Simply wait for a fixed delay and then returns the input.
-    async fn waiter(deliver: Message, delay: Duration) -> Message {
+    async fn waiter(deliver: Bytes, delay: Duration) -> Bytes {
         sleep(delay).await;
         deliver
     }
@@ -110,7 +131,7 @@ where
     /// Main loop ordering input bytes.
     pub async fn run(&mut self, consensus_delay: Duration) {
         let mut waiting = FuturesUnordered::new();
-        let mut subscribers = Vec::new();
+        let mut subscribers = HashMap::new();
         loop {
             tokio::select! {
                 // Receive bytes to order.
@@ -119,26 +140,49 @@ where
                 },
 
                 // Receive subscribers to update with the sequencer's output.
-                Some(sender) = self.rx_subscriber.recv() => {
-                    subscribers.push(sender);
+                Some(message) = self.rx_subscriber.recv() => {
+                    if self.subscribers_count < Self::MAX_SUBSCRIBERS {
+                        let SubscriberMessage(sender, id) = message;
+                        subscribers.insert(id, sender);
+                        self.subscribers_count +=1 ;
+                    }
                 },
 
                 // Bytes are ready to be delivered, notify the subscribers.
                 Some(message) = waiting.next() => {
-                    // Notify the subscribers of the new output.
-                    let mut to_drop = Vec::new();
-                    for (i, subscriber) in subscribers.iter().enumerate() {
-                        if subscriber.send((message.clone(), self.consensus_index)).await.is_err() {
-                            to_drop.push(i);
-                        }
+                    let output = ConsensusOutput {
+                        message: message.to_vec(),
+                        sequence_number: self.consensus_index,
+                    };
+
+                    // Store the sequenced message. If this fails, we do not notify and subscribers
+                    // and effectively throw away the message. Liveness may be lost.
+                    if let Err(e) = self.store.store_output(&output) {
+                        log::error!("Failed to store consensus output: {e}");
+                        continue;
                     }
 
                     // Increment the consensus index.
                     self.consensus_index = self.consensus_index.increment();
 
+                    // Notify the subscribers of the new output. If a subscriber's channel is full
+                    // (the subscriber is slow), we simply skip this output. The subscriber will
+                    // eventually sync to catch up.
+                    let mut to_drop = Vec::new();
+                    for (id, subscriber) in &subscribers {
+                        if subscriber.is_closed() {
+                            to_drop.push(*id);
+                            continue;
+                        }
+                        if subscriber.capacity() > 0 && subscriber.send(output.clone()).await.is_err() {
+                            to_drop.push(*id);
+                        }
+                    }
+
                     // Cleanup the list subscribers that dropped connection.
-                    for index in to_drop {
-                        subscribers.remove(index);
+                    for id in to_drop {
+                        subscribers.remove(&id);
+                        self.subscribers_count -= 1;
                     }
                 }
             }
@@ -165,7 +209,7 @@ where
             let buffer = match stream.stream().next().await {
                 Some(Ok(buffer)) => buffer,
                 Some(Err(e)) => {
-                    log::warn!("Error while reading TCP stream: {}", e);
+                    log::warn!("Error while reading TCP stream: {e}");
                     break;
                 }
                 None => {
@@ -188,13 +232,69 @@ where
     }
 }
 
+/// Represents the subscriber's unique id.
+pub type SubscriberId = usize;
+
+/// The messages sent by the subscriber server to the sequencer core to notify
+/// the core of a new subscriber.
+#[derive(Debug)]
+pub struct SubscriberMessage(Sender<ConsensusOutput>, SubscriberId);
+
 /// Define how the network server should handle incoming authorities sync requests.
 /// The authorities are basically light clients of the sequencer. A real consensus
 /// implementation would make sure to receive an ack from the authorities and retry
 /// sending until the message is delivered. This is safety-critical.
 struct SubscriberServer {
     /// Notify the sequencer's core of a new subscriber.
-    pub tx_subscriber: Sender<Sender<(Bytes, SequenceNumber)>>,
+    pub tx_subscriber: Sender<SubscriberMessage>,
+    /// Count the number of subscribers.
+    counter: AtomicUsize,
+    /// The persistent storage. It is only used to help subscribers to sync, this
+    /// task never writes to the store.
+    store: Arc<SequencerStore>,
+}
+
+impl SubscriberServer {
+    /// The number of pending updates that the subscriber can hold in memory.
+    pub const CHANNEL_SIZE: usize = 1_000;
+
+    /// Create a new subscriber server.
+    pub fn new(tx_subscriber: Sender<SubscriberMessage>, store: Arc<SequencerStore>) -> Self {
+        Self {
+            tx_subscriber,
+            counter: AtomicUsize::new(0),
+            store,
+        }
+    }
+
+    /// Helper function loading from store the outputs missed by the subscriber (in the right order).
+    async fn synchronize<'a, Stream>(
+        &self,
+        sequence_number: SequenceNumber,
+        stream: &mut Stream,
+    ) -> SuiResult<()>
+    where
+        Stream: 'static + RwChannel<'a> + Unpin + Send,
+    {
+        // TODO: Loading the missed outputs one by one may not be the most efficient. But we can't
+        // load them all in memory at once (there may be a lot of missed outputs). We could do
+        // this in chunks.
+        let consensus_index = self.store.get_last_consensus_index()?;
+        if sequence_number < consensus_index {
+            let start: u64 = sequence_number.into();
+            let stop: u64 = consensus_index.into();
+            for i in start..=stop {
+                let index = SequenceNumber::from(i);
+                let message = self.store.get_output(&index)?.unwrap();
+                let serialized = serialize_consensus_output(&message);
+                if stream.sink().send(Bytes::from(serialized)).await.is_err() {
+                    log::debug!("Connection dropped by subscriber");
+                    break;
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -203,25 +303,134 @@ where
     Stream: 'static + RwChannel<'a> + Unpin + Send,
 {
     async fn handle_messages(&self, mut stream: Stream) {
-        let (tx_output, mut rx_output) = channel(100);
+        let (tx_output, mut rx_output) = channel(Self::CHANNEL_SIZE);
+        let subscriber_id = self.counter.fetch_add(1, Ordering::SeqCst);
 
         // Notify the core of a new subscriber.
         self.tx_subscriber
-            .send(tx_output)
+            .send(SubscriberMessage(tx_output, subscriber_id))
             .await
             .expect("Failed to send new subscriber to core");
 
-        // Update the subscriber every time a certificate is sequenced.
-        while let Some((bytes, consensus_index)) = rx_output.recv().await {
-            let message = ConsensusOutput {
-                message: bytes.to_vec(),
-                sequencer_number: consensus_index,
-            };
-            let serialized = serialize_consensus_output(&message);
-            if stream.sink().send(Bytes::from(serialized)).await.is_err() {
-                log::debug!("Connection dropped by subscriber");
-                break;
+        // Interact with the subscriber.
+        loop {
+            tokio::select! {
+                // Update the subscriber every time a certificate is sequenced.
+                Some(message) = rx_output.recv() => {
+                    let serialized = serialize_consensus_output(&message);
+                    if stream.sink().send(Bytes::from(serialized)).await.is_err() {
+                        log::debug!("Connection dropped by subscriber");
+                        break;
+                    }
+                },
+
+                // Receive sync requests form the subscriber.
+                Some(buffer) = stream.stream().next() => match buffer {
+                    Ok(buffer) => match deserialize_message(&*buffer) {
+                        Ok(SerializedMessage::ConsensusSync(sync)) => {
+                            if let Err(e) = self.synchronize(sync.sequence_number, &mut stream).await {
+                                log::error!("{e}");
+                                break;
+                            }
+                        }
+                        Ok(_) => {
+                            log::warn!("{}", SuiError::UnexpectedMessage);
+                            break;
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to deserialize consensus sync request {e}");
+                            break;
+                        }
+                    },
+                    Err(e) => {
+                        log::warn!("Error while reading TCP stream: {e}");
+                        break;
+                    }
+                }
             }
         }
+    }
+}
+
+/// The persistent storage of the sequencer.
+pub struct SequencerStore {
+    /// All sequenced messages indexed by sequence number.
+    outputs: DBMap<SequenceNumber, ConsensusOutput>,
+}
+
+impl SequencerStore {
+    /// Open the consensus store.
+    pub fn open<P: AsRef<Path>>(path: P, db_options: Option<rocksdb::Options>) -> Self {
+        let row_cache = rocksdb::Cache::new_lru_cache(1_000_000).expect("Cache is ok");
+        let mut options = db_options.unwrap_or_default();
+        options.set_row_cache(&row_cache);
+        options.set_table_cache_num_shard_bits(10);
+        options.set_compression_type(DBCompressionType::None);
+
+        let db = Self::open_cf_opts(
+            &path,
+            Some(options.clone()),
+            &[("last_consensus_index", &options), ("outputs", &options)],
+        )
+        .expect("Cannot open DB.");
+
+        Self {
+            outputs: DBMap::reopen(&db, Some("outputs")).expect("Cannot open CF."),
+        }
+    }
+
+    /// Helper function to open the store.
+    fn open_cf_opts<P: AsRef<Path>>(
+        path: P,
+        db_options: Option<rocksdb::Options>,
+        opt_cfs: &[(&str, &rocksdb::Options)],
+    ) -> Result<Arc<DBWithThreadMode<MultiThreaded>>, TypedStoreError> {
+        let mut options = db_options.unwrap_or_default();
+        options.create_if_missing(true);
+        options.create_missing_column_families(true);
+
+        let mut cfs = DBWithThreadMode::<MultiThreaded>::list_cf(&options, &path)
+            .ok()
+            .unwrap_or_default();
+        for cf_key in opt_cfs.iter().map(|(name, _)| name) {
+            let key = (*cf_key).to_owned();
+            if !cfs.contains(&key) {
+                cfs.push(key);
+            }
+        }
+
+        Ok(Arc::new(
+            DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(
+                &options,
+                /* primary */ &path.as_ref(),
+                opt_cfs
+                    .iter()
+                    .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),
+            )?,
+        ))
+    }
+
+    /// Read the last consensus index from the store.
+    pub fn get_last_consensus_index(&self) -> SuiResult<SequenceNumber> {
+        self.outputs
+            .iter()
+            .skip_prior_to(&SequenceNumber::MAX)?
+            .next()
+            .map_or_else(|| Ok(SequenceNumber::default()), |(s, _)| Ok(s.increment()))
+    }
+
+    /// Stores a new consensus output.
+    pub fn store_output(&self, output: &ConsensusOutput) -> SuiResult<()> {
+        let mut write_batch = self.outputs.batch();
+        write_batch = write_batch.insert_batch(
+            &self.outputs,
+            std::iter::once((output.sequence_number, output)),
+        )?;
+        write_batch.write().map_err(SuiError::from)
+    }
+
+    /// Load a specific output from storage.
+    pub fn get_output(&self, index: &SequenceNumber) -> SuiResult<Option<ConsensusOutput>> {
+        self.outputs.get(index).map_err(SuiError::from)
     }
 }

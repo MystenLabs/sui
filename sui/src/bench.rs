@@ -139,7 +139,7 @@ fn main() {
         runtime.block_on(async move {
             let server = b.spawn_server(state).await;
             if let Err(err) = server.join().await {
-                error!("Server ended with an error: {}", err);
+                error!("Server ended with an error: {err}");
             }
         });
     });
@@ -243,7 +243,12 @@ impl ClientServerBenchmark {
                 let mut gas_object_id = [0; 20];
                 gas_object_id[8..16].clone_from_slice(&(offset + x).to_be_bytes()[..8]);
                 let gas_object_id = ObjectID::from(gas_object_id);
-                let gas_object = Object::with_id_owner_for_testing(gas_object_id, address);
+                let gas_object = Object::with_id_owner_gas_coin_object_for_testing(
+                    gas_object_id,
+                    SequenceNumber::new(),
+                    address,
+                    2000000,
+                );
                 assert!(gas_object.version() == SequenceNumber::from(0));
 
                 (objects, gas_object)
@@ -377,7 +382,7 @@ impl ClientServerBenchmark {
         let items_number = transactions.len() / transaction_len_factor;
         let mut elapsed_time: u128 = 0;
 
-        info!("Number of TCP connections: {}", connections);
+        info!("Number of TCP connections: {connections}");
         info!("Sending requests.");
         if !self.single_operation {
             let mass_client = NetworkClient::new(
@@ -440,7 +445,7 @@ impl ClientServerBenchmark {
                         debug!("Query response: {:?}", info);
                     }
                     Err(error) => {
-                        error!("Failed to execute transaction: {}", error);
+                        error!("Failed to execute transaction: {error}");
                     }
                 }
             }

@@ -11,26 +11,9 @@ interface, *Wallet CLI*.
 
 ## Set up
 
-1. Follow the instructions to [install Sui binaries](install.md).
-
-1. Create a `sui_instance` subdirectory in your desired Sui-specific
-directory. Assuming you followed recommended setup, run:
-   ```shell
-   cd "$SUI_ROOT"
-   mkdir sui_instance
-   ```
+Follow the instructions to [install Sui binaries](install.md).
 
 ## Genesis
-
-1. Navigate to that new directory:
-   ```shell
-   cd "$SUI_ROOT"/sui_instance
-   ```
-1. Optionally, set `RUST_LOG=debug` for verbose logging.
-1. Initiate `genesis`:
-   ```shell
-   sui genesis
-   ```
 
 The `genesis` command creates four authorities and five user accounts
 each with five gas objects. These are Sui [objects](objects.md) used
@@ -41,10 +24,27 @@ arbitrarily; the process of generating the genesis state can be
 customized with additional accounts, objects, code, etc. as described
 in [Genesis customization](#customize-genesis).
 
-The network configuration is stored in `network.conf` and
-can be used subsequently to start the network. The `wallet.conf` and `wallet.key` are
-also created to be used by the Sui wallet to manage the
-newly created accounts.
+1. Optionally, set `RUST_LOG=debug` for verbose logging.
+1. Initiate `genesis`:
+   ```shell
+   sui genesis
+   ```
+
+The network configuration is stored in `network.conf` and can be used
+subsequently to start the network. The `wallet.conf` and `wallet.key`
+are also created to be used by the Sui wallet to manage the newly
+created accounts. By default, these files will be stored in the
+`~/.sui/sui_config` directory, but you can override this location by
+providing an alternative path:
+
+```shell
+sui genesis --working-dir /path/to/sui/config/files
+```
+### Recreating Genesis
+
+To recreate Sui genesis state in the same location, which will remove
+existing configuration files, use the `--force` option to the `sui
+genesis` command.
 
 ## Wallet configuration
 The genesis process creates a configuration file `wallet.conf`, and a keystore file `wallet.key` for the
@@ -123,15 +123,16 @@ implement more secure key management and support hardware signing in a future re
 Run the following command to start the local Sui network:
 
 ```shell
-cd "$SUI_ROOT"/sui_instance
 sui start
 ```
 
-You can also run this command in any directory if you provide a path
-to the directory where Sui configuration files are stored:
+This command will by default look for Sui network coinfiguration file
+(`network.conf`) in the `~/.sui/sui_config` directory, but you can
+override this setting by providing a path to the directory where this
+file are stored:
 
 ```shell
-sui start --config "$SUI_ROOT"/sui_instance
+sui start --config /path/to/sui/network/config/file
 ```
 
 Executing any of these two commands in a terminal window will result
@@ -140,15 +141,9 @@ instance (it will not return the command prompt).
 
 NOTE: For logs, set `RUST_LOG=debug` before invoking `sui start`.
 
-The network config file path defaults to `./network.conf` if not
-specified.
-
-If you see errors when trying to start Sui network, particularly if
-you did not start with a fresh `"$SUI_ROOT"/sui_instance` (e.g, did
-[custom wallet configuration](#wallet-configuration) or
-started/restarted Sui instance multiple time), you should remove
-`"$SUI_ROOT"/sui_instance` directory containing configuration files
-and recreate [Sui genesis state](#genesis).
+If you see errors when trying to start Sui network, particularly if you made some custom changes
+ (e.g, 
+[customized wallet configuration](#wallet-configuration)), you should [recreate Sui genesis state](#recreating-genesis).
 
 ## Using the wallet
 The following commands are supported by the wallet:
@@ -174,19 +169,17 @@ The wallet can be started in two modes: interactive shell or command line interf
 To start the interactive shell, execute the following (in a different terminal window than one used to execute `sui start`):
 
 ```shell
-cd "$SUI_ROOT"/sui_instance
 wallet
 ```
 
-You can also run this command in any directory if you provide a path
-to the directory where Sui configuration files are stored:
+This command will by default look for wallet coinfiguration file
+(`wallet.conf`) in the `~/.sui/sui_config` directory, but you can
+override this setting by providing a path to the directory where this
+file are stored:
 
 ```shell
-wallet --config "$SUI_ROOT"/sui_instance
+wallet --config /path/to/wallet/config/file
 ```
-
-The wallet config file path defaults to `./wallet.conf` if not
-specified.
 
 The Sui interactive wallet supports the following shell functionality:
 * Command History
@@ -205,10 +198,6 @@ The Sui interactive wallet supports the following shell functionality:
 The wallet can also be used without the interactive shell, which can be useful if 
 you want to pipe the output of the wallet to another application or invoke wallet 
 commands using scripts.
-
-**For the remainder of this tutorial we will assume that you are
-executing the `wallet` command in a directory where the Sui
-configuration files are stored (`"$SUI_ROOT"/sui_instance`).**
 
 ```shell
 USAGE:

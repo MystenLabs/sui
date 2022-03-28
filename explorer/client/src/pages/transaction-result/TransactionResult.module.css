@@ -1,37 +1,32 @@
-.data > dt {
-    @apply font-bold text-lg mt-[0.5rem];
+div.status-success,
+div.status-fail,
+div.status-pending,
+div.action-create,
+div.action-mutate,
+div.action-delete {
+    @apply h-[1.5rem] p-2;
 }
 
-.data > dd {
-    @apply font-mono text-gray-900 overflow-hidden break-all 
-  text-sm h-[4rem] sm:h-[1.5rem] mb-[0.5rem]
-  border-solid border-gray-500 rounded-md p-1 align-middle;
+div.status-success {
+    @apply bg-green-300;
 }
 
-.data > dd:last-child {
-    @apply mb-[10vh];
+div.status-fail {
+    @apply bg-red-300;
 }
 
-.data {
-    @apply mx-[5vw];
+div.status-pending {
+    @apply bg-orange-300;
 }
 
-.data > dd.status-success {
-    @apply h-[1.5rem] border-none bg-green-300;
+div.action-create {
+    @apply bg-lime-300;
 }
 
-.data > dd.status-fail {
-    @apply h-[1.5rem] border-none bg-red-300;
+div.action-mutate {
+    @apply bg-blue-300;
 }
 
-.data > dd.action-create {
-    @apply h-[1.5rem] border-none bg-lime-300;
-}
-
-.data > dd.action-mutate {
-    @apply h-[1.5rem] border-none bg-blue-300;
-}
-
-.data > dd.action-delete {
-    @apply h-[1.5rem] border-none bg-orange-300;
+div.action-delete {
+    @apply bg-orange-300;
 }

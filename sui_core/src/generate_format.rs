@@ -103,7 +103,7 @@ fn main() {
     match options.action {
         Action::Print => {
             let content = serde_yaml::to_string(&registry).unwrap();
-            println!("{}", content);
+            println!("{content}");
         }
         Action::Record => {
             let content = serde_yaml::to_string(&registry).unwrap();

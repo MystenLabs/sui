@@ -1,0 +1,12 @@
+.copy {
+    @apply cursor-pointer;
+}
+
+.copied {
+    @apply text-green-600;
+}
+
+.longtext,
+.longtext > a {
+    @apply no-underline text-sky-600 hover:text-sky-900 cursor-pointer break-all;
+}

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::CompiledModule;
-use move_core_types::{account_address::AccountAddress, ident_str};
+use move_core_types::{account_address::AccountAddress, ident_str, language_storage::ModuleId};
 use move_package::BuildConfig;
 use move_unit_test::UnitTestingConfig;
 use num_enum::TryFromPrimitive;
@@ -116,21 +116,25 @@ pub fn build_move_package(
                     });
                 }
             }
-            // Collect all module names from the current package to be published.
+            // Collect all module IDs from the current package to be
+            // published (module names are not sufficient as we may
+            // have modules with the same names in user code and in
+            // Sui framework which would result in the latter being
+            // pulled into a set of modules to be published).
             // For each transitive dependent module, if they are not to be published,
             // they must have a non-zero address (meaning they are already published on-chain).
             // TODO: Shall we also check if they are really on-chain in the future?
-            let self_modules: HashSet<String> = compiled_modules
+            let self_modules: HashSet<ModuleId> = compiled_modules
                 .iter_modules()
                 .iter()
-                .map(|m| m.self_id().name().to_string())
+                .map(|m| m.self_id())
                 .collect();
             if let Some(m) = package
                 .transitive_compiled_modules()
                 .iter_modules()
                 .iter()
                 .find(|m| {
-                    !self_modules.contains(m.self_id().name().as_str())
+                    !self_modules.contains(&m.self_id())
                         && m.self_id().address() == &AccountAddress::ZERO
                 })
             {
@@ -141,7 +145,7 @@ pub fn build_move_package(
                 .compute_dependency_graph()
                 .compute_topological_order()
                 .unwrap()
-                .filter(|m| self_modules.contains(m.self_id().name().as_str()))
+                .filter(|m| self_modules.contains(&m.self_id()))
                 .cloned()
                 .collect())
         }

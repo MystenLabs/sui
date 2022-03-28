@@ -3,21 +3,34 @@
 
 use crate::authority::AuthorityState;
 use bytes::Bytes;
+use futures::{SinkExt, StreamExt};
+use std::cmp::min;
 use std::cmp::Ordering;
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering as AtomicOrdering;
 use std::sync::Arc;
+use std::time::Duration;
 use sui_network::transport;
+use sui_network::transport::{RwChannel, TcpDataStream};
 use sui_types::base_types::SequenceNumber;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::{ConfirmationTransaction, ConsensusOutput};
-use sui_types::serialize::{deserialize_message, SerializedMessage};
+use sui_types::messages::{ConfirmationTransaction, ConsensusOutput, ConsensusSync};
+use sui_types::serialize::{deserialize_message, serialize_consensus_sync, SerializedMessage};
 use sui_types::{fp_bail, fp_ensure};
 use tokio::task::JoinHandle;
+use tokio::time::sleep;
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
 pub mod consensus_tests;
+
+/// The possible successful outcome when processing a consensus message.
+enum ProcessingOutcome {
+    /// All went well (or at least there is nothing to do on our side).
+    Ok,
+    /// We missed some outputs and need to sync with the consensus node.
+    MissingOutputs,
+}
 
 /// The `ConsensusClient` receives certificates sequenced by the consensus and updates
 /// the authority's database. The client assumes that the messages it receives have
@@ -63,23 +76,29 @@ impl ConsensusClient {
         address: SocketAddr,
         buffer_size: usize,
     ) -> JoinHandle<SuiResult<()>> {
-        log::info!("Consensus client connecting to {}", address);
-        tokio::spawn(async move {
-            handler.synchronize().await?;
-            handler.run(address, buffer_size).await?;
-            Ok(())
-        })
+        log::info!("Consensus client connecting to {address}");
+        tokio::spawn(async move { handler.run(address, buffer_size).await })
     }
 
     /// Synchronize with the consensus in case we missed part of its output sequence.
-    /// It is safety-critical that we process the consensus outputs in the right order.
-    async fn synchronize(&mut self) -> SuiResult<()> {
-        // TODO [issue #932]: [liveness-critical] Implement the synchronizer.
-        Ok(())
+    /// It is safety-critical that we process the consensus' outputs in the complete
+    /// and right order.
+    async fn synchronize(&mut self, connection: &mut TcpDataStream) -> SuiResult<()> {
+        let request = ConsensusSync {
+            sequence_number: self.last_consensus_index,
+        };
+        let bytes = Bytes::from(serialize_consensus_sync(&request));
+        connection
+            .sink()
+            .send(bytes)
+            .await
+            .map_err(|e| SuiError::ClientIoError {
+                error: e.to_string(),
+            })
     }
 
     /// Process a single sequenced certificate.
-    async fn handle_consensus_message(&mut self, bytes: Bytes) -> SuiResult<()> {
+    async fn handle_consensus_message(&mut self, bytes: Bytes) -> SuiResult<ProcessingOutcome> {
         // We first deserialize the consensus output message. If deserialization fails
         // we may be have a liveness issue. We stop processing of this certificate to
         // ensure safety, and the synchronizer will try again to ask for that certificate.
@@ -87,16 +106,16 @@ impl ConsensusClient {
             Ok(SerializedMessage::ConsensusOutput(value)) => {
                 let ConsensusOutput {
                     message,
-                    sequencer_number,
+                    sequence_number,
                 } = *value;
-                (message, sequencer_number)
+                (message, sequence_number)
             }
             Ok(_) => {
                 log::error!("{}", SuiError::UnexpectedMessage);
                 return Err(SuiError::UnexpectedMessage);
             }
             Err(e) => {
-                log::error!("Failed to deserialize consensus output {}", e);
+                log::error!("Failed to deserialize consensus output {e}");
                 return Err(SuiError::InvalidDecoding);
             }
         };
@@ -106,12 +125,11 @@ impl ConsensusClient {
             Ordering::Greater => {
                 // Something is very wrong. Liveness may be lost (but not safety).
                 log::error!("Consensus index of authority bigger than expected");
-                return Ok(());
+                return Ok(ProcessingOutcome::Ok);
             }
             Ordering::Less => {
                 log::debug!("Authority is synchronizing missed sequenced certificates");
-                self.synchronize().await?;
-                return Ok(());
+                return Ok(ProcessingOutcome::MissingOutputs);
             }
             Ordering::Equal => (),
         }
@@ -136,7 +154,7 @@ impl ConsensusClient {
                 return Err(SuiError::UnexpectedMessage);
             }
             Err(e) => {
-                log::debug!("Failed to deserialize certificate {}", e);
+                log::debug!("Failed to deserialize certificate {e}");
                 return Err(SuiError::InvalidDecoding);
             }
         };
@@ -149,30 +167,42 @@ impl ConsensusClient {
         let certificate = confirmation.certificate;
         self.state
             .handle_consensus_certificate(certificate, self.last_consensus_index)
-            .await
+            .await?;
+        Ok(ProcessingOutcome::Ok)
     }
 
     /// Main loop connecting to the consensus. This mainly acts as a light client.
     async fn run(&mut self, address: SocketAddr, buffer_size: usize) -> SuiResult<()> {
-        // TODO [issue #931]: Do not try to reconnect immediately after the connection fails, use some
-        // sort of back off. We may also move this logic to `sui-network::transport` to
-        // expose a 'stream client' or something like that.
+        // TODO: We may also move this logic to `sui-network::transport` to expose a 'stream client'
+        // or something like that.
+
+        // The connection waiter ensures we do not attempt to reconnect immediately after failure.
+        let mut connection_waiter = ConnectionWaiter::default();
+
+        // Continuously connects to the consensus node.
         'main: loop {
+            // Wait a bit before re-attempting connections.
+            connection_waiter.wait().await;
+
             // Subscribe to the consensus' output.
             let mut connection = match transport::connect(address.to_string(), buffer_size).await {
                 Ok(connection) => connection,
                 Err(e) => {
-                    log::warn!("Failed to subscribe to consensus output: {}", e);
+                    log::warn!(
+                        "Failed to subscribe to consensus output (retry {}): {}",
+                        connection_waiter.status(),
+                        e
+                    );
                     continue 'main;
                 }
             };
 
             // Listen to sequenced certificates and process them.
             loop {
-                let bytes = match connection.read_data().await {
+                let bytes = match connection.stream().next().await {
                     Some(Ok(data)) => Bytes::from(data),
                     Some(Err(e)) => {
-                        log::warn!("Failed to receive data from consensus: {}", e);
+                        log::warn!("Failed to receive data from consensus: {e}");
                         continue 'main;
                     }
                     None => {
@@ -184,7 +214,7 @@ impl ConsensusClient {
                 match self.handle_consensus_message(bytes).await {
                     // Log the errors that are our faults (not the client's).
                     Err(SuiError::StorageError(e)) => {
-                        log::error!("{}", e);
+                        log::error!("{e}");
 
                         // If we have a store error we cannot continue processing other
                         // outputs from consensus. We may otherwise attribute locks to
@@ -195,10 +225,73 @@ impl ConsensusClient {
                     }
                     // Log the errors that are the client's fault (not ours). This is
                     // only for debug purposes: all correct authorities will do the same.
-                    Err(e) => log::debug!("{}", e),
-                    Ok(()) => (),
+                    Err(e) => log::debug!("{e}"),
+                    // The authority missed some consensus outputs and needs to sync.
+                    Ok(ProcessingOutcome::MissingOutputs) => {
+                        if let Err(e) = self.synchronize(&mut connection).await {
+                            log::warn!("Failed to send sync request to consensus: {e}");
+                            continue 'main;
+                        }
+                        connection_waiter.reset();
+                    }
+                    // Nothing to do.
+                    Ok(ProcessingOutcome::Ok) => connection_waiter.reset(),
                 }
             }
         }
+    }
+}
+
+/// Make the network client wait a bit before re-attempting network connections.
+pub struct ConnectionWaiter {
+    /// The minimum delay to wait before re-attempting a connection.
+    min_delay: u64,
+    /// The maximum delay to wait before re-attempting a connection.
+    max_delay: u64,
+    /// The actual delay we wait before re-attempting a connection.
+    delay: u64,
+    /// The number of times we attempted to make a connection.
+    retry: usize,
+}
+
+impl Default for ConnectionWaiter {
+    fn default() -> Self {
+        Self::new(/* min_delay */ 200, /* max_delay */ 60_000)
+    }
+}
+
+impl ConnectionWaiter {
+    /// Create a new connection waiter.
+    pub fn new(min_delay: u64, max_delay: u64) -> Self {
+        Self {
+            min_delay,
+            max_delay,
+            delay: 0,
+            retry: 0,
+        }
+    }
+
+    /// Return the number of failed attempts.
+    pub fn status(&self) -> &usize {
+        &self.retry
+    }
+
+    /// Wait for a bit (depending on the number of failed connections).
+    pub async fn wait(&mut self) {
+        if self.delay != 0 {
+            sleep(Duration::from_millis(self.delay)).await;
+        }
+
+        self.delay = match self.delay {
+            0 => self.min_delay,
+            _ => min(2 * self.delay, self.max_delay),
+        };
+        self.retry += 1;
+    }
+
+    /// Reset the waiter to its initial parameters.
+    pub fn reset(&mut self) {
+        self.delay = 0;
+        self.retry = 0;
     }
 }

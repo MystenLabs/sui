@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module.exports = {
     extends: ['react-app', 'react-app/jest', 'prettier'],
     rules: {
@@ -30,5 +33,6 @@ module.exports = {
                 disallowTypeAnnotations: true,
             },
         ],
+        'react/jsx-key': ['error', {}],
     },
 };

@@ -60,7 +60,7 @@ async fn main() -> Result<(), String> {
     };
     let log = config_logging
         .to_logger("rest_server")
-        .map_err(|error| format!("failed to create logger: {}", error))?;
+        .map_err(|error| format!("failed to create logger: {error}"))?;
 
     tracing_subscriber::fmt::init();
 
@@ -74,7 +74,7 @@ async fn main() -> Result<(), String> {
     let api_context = ServerContext::new(documentation);
 
     let server = HttpServerStarter::new(&config_dropshot, api, api_context, &log)
-        .map_err(|error| format!("failed to create server: {}", error))?
+        .map_err(|error| format!("failed to create server: {error}"))?
         .start();
 
     server.await
@@ -339,7 +339,7 @@ async fn sui_start(ctx: Arc<RequestContext<ServerContext>>) -> Result<Response<B
                 Err(err) => {
                     return Err(custom_http_error(
                         StatusCode::FAILED_DEPENDENCY,
-                        format!("Failed to start server: {}", err),
+                        format!("Failed to start server: {err}"),
                     ));
                 }
             }
@@ -347,12 +347,12 @@ async fn sui_start(ctx: Arc<RequestContext<ServerContext>>) -> Result<Response<B
     }
 
     let num_authorities = handles.len();
-    info!("Started {} authorities", num_authorities);
+    info!("Started {num_authorities} authorities");
 
     while let Some(spawned_server) = handles.next().await {
         state.authority_handles.push(task::spawn(async {
             if let Err(err) = spawned_server.unwrap().join().await {
-                error!("Server ended with an error: {}", err);
+                error!("Server ended with an error: {err}");
             }
         }));
     }
@@ -371,7 +371,7 @@ async fn sui_start(ctx: Arc<RequestContext<ServerContext>>) -> Result<Response<B
     }
     custom_http_response(
         StatusCode::OK,
-        format!("Started {} authorities", num_authorities),
+        format!("Started {num_authorities} authorities"),
     )
 }
 
@@ -444,7 +444,7 @@ async fn get_addresses(
         GetAddressResponse {
             addresses: addresses
                 .into_iter()
-                .map(|address| format!("{}", address))
+                .map(|address| format!("{address}"))
                 .collect(),
         },
     )
@@ -520,7 +520,7 @@ async fn get_objects(
         let obj_type = object
             .data
             .type_()
-            .map_or("Unknown Type".to_owned(), |type_| format!("{}", type_));
+            .map_or("Unknown Type".to_owned(), |type_| format!("{type_}"));
 
         objects.push(Object {
             object_id: object_id.to_string(),
@@ -679,7 +679,7 @@ async fn object_info(
             obj_type: object
                 .data
                 .type_()
-                .map_or("Unknown Type".to_owned(), |type_| format!("{}", type_)),
+                .map_or("Unknown Type".to_owned(), |type_| format!("{type_}")),
             data: object_data,
         },
     )
@@ -1072,7 +1072,7 @@ async fn get_effect(
         object
             .data
             .type_()
-            .map_or("Unknown Type".to_owned(), |type_| format!("{}", type_)),
+            .map_or("Unknown Type".to_owned(), |type_| format!("{type_}")),
     );
     effect.insert("id".to_string(), object_id.to_string());
     effect.insert(
