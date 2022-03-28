@@ -70,7 +70,7 @@ jobs:
     - name: run benchmark
       run: |
         set -o pipefail
-        cargo run --release --bin bench 2>&1 | huniq | tee -a artifacts/bench_results.txt
+        cargo run --release --bin microbench 2>&1 | huniq | tee -a artifacts/bench_results.txt
     - name: retrieve benchmark results
       id: get-comment-body
       run: |
