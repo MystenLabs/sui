@@ -139,7 +139,7 @@ fn main() {
         runtime.block_on(async move {
             let server = b.spawn_server(state).await;
             if let Err(err) = server.join().await {
-                error!("Server ended with an error: {}", err);
+                error!("Server ended with an error: {err}");
             }
         });
     });
@@ -382,7 +382,7 @@ impl ClientServerBenchmark {
         let items_number = transactions.len() / transaction_len_factor;
         let mut elapsed_time: u128 = 0;
 
-        info!("Number of TCP connections: {}", connections);
+        info!("Number of TCP connections: {connections}");
         info!("Sending requests.");
         if !self.single_operation {
             let mass_client = NetworkClient::new(
@@ -445,7 +445,7 @@ impl ClientServerBenchmark {
                         debug!("Query response: {:?}", info);
                     }
                     Err(error) => {
-                        error!("Failed to execute transaction: {}", error);
+                        error!("Failed to execute transaction: {error}");
                     }
                 }
             }

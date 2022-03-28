@@ -94,12 +94,12 @@ fn test_object_id_display() {
 
     let id = ObjectID::from_hex(hex).unwrap();
 
-    assert_eq!(format!("{}", id), upper_hex);
+    assert_eq!(format!("{id}"), upper_hex);
     assert_eq!(format!("{:?}", id), upper_hex);
     assert_eq!(format!("{:X}", id), upper_hex);
     assert_eq!(format!("{:x}", id), hex);
-    assert_eq!(format!("{:#x}", id), format!("0x{}", hex));
-    assert_eq!(format!("{:#X}", id), format!("0x{}", upper_hex));
+    assert_eq!(format!("{:#x}", id), format!("0x{hex}"));
+    assert_eq!(format!("{:#X}", id), format!("0x{upper_hex}"));
 }
 
 #[test]

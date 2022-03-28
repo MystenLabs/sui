@@ -141,8 +141,8 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
     fn split_and_unescape(line: &str) -> Result<Vec<String>, String> {
         let mut commands = Vec::new();
         for word in line.split_whitespace() {
-            let command = unescape(word)
-                .ok_or_else(|| format!("Error: Unhandled escape sequence {}", word))?;
+            let command =
+                unescape(word).ok_or_else(|| format!("Error: Unhandled escape sequence {word}"))?;
             commands.push(command);
         }
         Ok(commands)
@@ -158,7 +158,7 @@ fn substitute_env_variables(s: String) -> String {
     env.sort_by(|(k1, _), (k2, _)| Ord::cmp(&k2.len(), &k1.len()));
 
     for (key, value) in env {
-        let var = format!("${}", key);
+        let var = format!("${key}");
         if s.contains(&var) {
             let result = s.replace(var.as_str(), value.as_str());
             return if result.contains('$') {
@@ -205,7 +205,7 @@ impl Completer for ShellHelper {
         _pos: usize,
         _ctx: &Context<'_>,
     ) -> Result<(usize, Vec<Self::Candidate>), rustyline::error::ReadlineError> {
-        let line = format!("{}_", line);
+        let line = format!("{line}_");
         // split line
         let mut tokens = line.split_whitespace();
         let mut last_token = tokens.next_back().unwrap().to_string();

@@ -146,7 +146,7 @@ async fn handle_command(
             WalletCommandResult::Addresses(ref addresses) => {
                 let addresses = addresses
                     .iter()
-                    .map(|addr| format!("{}", addr))
+                    .map(|addr| format!("{addr}"))
                     .collect::<Vec<_>>();
                 cache.insert(CacheKey::flag("--address"), addresses.clone());
                 cache.insert(CacheKey::flag("--to"), addresses);
@@ -154,7 +154,7 @@ async fn handle_command(
             WalletCommandResult::Objects(ref objects) => {
                 let objects = objects
                     .iter()
-                    .map(|(object_id, _, _)| format!("{}", object_id))
+                    .map(|(object_id, _, _)| format!("{object_id}"))
                     .collect::<Vec<_>>();
                 cache.insert(CacheKey::new("object", "--id"), objects.clone());
                 cache.insert(CacheKey::flag("--gas"), objects.clone());
