@@ -29,9 +29,19 @@ const expectTransactionStatus = async (
     expect(el).toHaveTextContent(result);
 };
 
-const expectReadOnlyStatus = (result: 'True' | 'False') => {
-    const el = screen.getByTestId('read-only-text');
+const expectReadOnlyStatus = async (result: 'True' | 'False') => {
+    const el = await screen.findByTestId('read-only-text');
     expect(el).toHaveTextContent(result);
+};
+
+const checkObjectId = async (result: string) => {
+    const el1 = await screen.findByTestId('object-id');
+    expect(el1).toHaveTextContent(result);
+};
+
+const checkAddressId = (result: string) => {
+    const el1 = screen.getByTestId('address-id');
+    expect(el1).toHaveTextContent(result);
 };
 
 const successTransactionID = 'txCreateSuccess';
@@ -49,6 +59,7 @@ const readOnlyObject = 'ComponentObject';
 const notReadOnlyObject = 'CollectionObject';
 
 const addressID = 'receiverAddress';
+const addressNoObjectsID = 'senderAddress';
 
 const problemAddressID = 'problemAddress';
 
@@ -118,29 +129,31 @@ describe('End-to-end Tests', () => {
     });
 
     describe('Displays data on objects', () => {
-        it('when object was a success', () => {
+        it('when object was a success', async () => {
             render(<App />, { wrapper: MemoryRouter });
             searchText(successObjectID);
-            expect(screen.getByText('Object ID')).toBeInTheDocument();
+            await checkObjectId(successObjectID);
+            const el1 = screen.getByText('Object ID');
+            expect(el1).toBeInTheDocument();
         });
 
-        it('when object is read only', () => {
+        it('when object is read only', async () => {
             render(<App />, { wrapper: MemoryRouter });
             searchText(readOnlyObject);
-            expectReadOnlyStatus('True');
+            await expectReadOnlyStatus('True');
         });
 
-        it('when object is not read only', () => {
+        it('when object is not read only', async () => {
             render(<App />, { wrapper: MemoryRouter });
             searchText(notReadOnlyObject);
-            expectReadOnlyStatus('False');
+            await expectReadOnlyStatus('False');
         });
 
-        it('when object data has missing info', () => {
+        it('when object data has missing info', async () => {
             render(<App />, { wrapper: MemoryRouter });
             searchText(problemObjectID);
             expect(
-                screen.getByText(
+                await screen.findByText(
                     'There was an issue with the data on the following object'
                 )
             ).toBeInTheDocument();
@@ -151,17 +164,62 @@ describe('End-to-end Tests', () => {
         it('when address has required fields', () => {
             render(<App />, { wrapper: MemoryRouter });
             searchText(addressID);
-            expect(screen.getByText('Address ID')).toBeInTheDocument();
-            expect(screen.getByText('Owned Objects')).toBeInTheDocument();
+            checkAddressId(addressID);
+            const el1 = screen.getByText('Address ID');
+            const el2 = screen.getByText('Owned Objects');
+            expect(el1).toBeInTheDocument();
+            expect(el2).toBeInTheDocument();
         });
-        it('when address has missing fields', () => {
+        it('when address has missing fields', async () => {
             render(<App />, { wrapper: MemoryRouter });
             searchText(problemAddressID);
             expect(
-                screen.getByText(
+                await screen.findByText(
                     'There was an issue with the data on the following address'
                 )
             ).toBeInTheDocument();
+        });
+        it('when address has no objects', () => {
+            render(<App />, { wrapper: MemoryRouter });
+            searchText(addressNoObjectsID);
+
+            const el2 = screen.getByText(
+                'No Objects were found for this Address'
+            );
+
+            expect(el2).toBeInTheDocument();
+        });
+    });
+    describe('Enables clicking links to', () => {
+        it('go from address to object and back', async () => {
+            render(<App />, { wrapper: MemoryRouter });
+            searchText(addressID);
+            const el1 = await screen.findByText('playerOne');
+            fireEvent.click(el1);
+
+            await checkObjectId('playerOne');
+
+            const el2 = await screen.findByText(addressID);
+
+            fireEvent.click(el2);
+
+            await checkAddressId(addressID);
+        });
+        it('go from object to child object and back', async () => {
+            const parentObj = 'playerTwo';
+            const childObj = 'standaloneObject';
+
+            render(<App />, { wrapper: MemoryRouter });
+            searchText(parentObj);
+            await checkObjectId(parentObj);
+
+            const el1 = await screen.findByText(childObj);
+            fireEvent.click(el1);
+            await checkObjectId(childObj);
+
+            const el2 = await screen.findByText(parentObj);
+            fireEvent.click(el2);
+            await checkObjectId(parentObj);
         });
     });
 
