@@ -67,7 +67,7 @@ function Fail({ id }: { id: string | undefined }) {
     return (
         <ErrorResult
             id={id}
-            errorMsg="There was an issue with the data on the following address"
+            errorMsg="No objects were found for the queried address value"
         />
     );
 }
@@ -76,7 +76,7 @@ function AddressResultStatic({ addressID }: { addressID: string | undefined }) {
     const { findDataFromID } = require('../../utils/static/searchUtil');
     const data = findDataFromID(addressID, undefined);
 
-    if (instanceOfDataType(data)) {
+    if (instanceOfDataType(data) && instanceOfResponseType(data.objects)) {
         return <Loaded data={data} />;
     } else {
         return <Fail id={addressID} />;
@@ -112,7 +112,11 @@ function AddressResultInternetAPI({
             });
     }, [addressID]);
 
-    if (instanceOfDataType(data) && data.loadState === 'loaded') {
+    if (
+        instanceOfDataType(data) &&
+        instanceOfResponseType(data.objects) &&
+        data.loadState === 'loaded'
+    ) {
         return <Loaded data={data} />;
     }
 

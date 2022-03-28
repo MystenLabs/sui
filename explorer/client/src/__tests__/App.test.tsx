@@ -175,7 +175,7 @@ describe('End-to-end Tests', () => {
             searchText(problemAddressID);
             expect(
                 await screen.findByText(
-                    'There was an issue with the data on the following address'
+                    'No objects were found for the queried address value'
                 )
             ).toBeInTheDocument();
         });
@@ -184,7 +184,7 @@ describe('End-to-end Tests', () => {
             searchText(addressNoObjectsID);
 
             const el2 = screen.getByText(
-                'No Objects were found for this Address'
+                'No objects were found for the queried address value'
             );
 
             expect(el2).toBeInTheDocument();
