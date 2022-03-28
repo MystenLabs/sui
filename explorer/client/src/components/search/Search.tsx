@@ -12,11 +12,16 @@ function Search() {
     const [input, setInput] = useState('');
     const navigate = useNavigate();
 
+    const [pleaseWaitMode, setPleaseWaitMode] = useState(false);
+
     const handleSubmit = useCallback(
         (e: React.FormEvent<HTMLFormElement>) => {
             e.preventDefault();
-            navigateWithUnknown(input, navigate);
-            setInput('');
+            setPleaseWaitMode(true);
+            navigateWithUnknown(input, navigate).then(() => {
+                setInput('');
+                setPleaseWaitMode(false);
+            });
         },
         [input, navigate, setInput]
     );
@@ -41,7 +46,14 @@ function Search() {
                 onChange={handleTextChange}
                 type="text"
             />
-            <input type="submit" value="Search" className={styles.searchbtn} />
+            <input
+                type="submit"
+                value={pleaseWaitMode ? 'Please Wait' : 'Search'}
+                disabled={pleaseWaitMode}
+                className={`${styles.searchbtn} ${
+                    pleaseWaitMode && styles.disabled
+                }`}
+            />
         </form>
     );
 }

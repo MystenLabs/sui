@@ -165,10 +165,10 @@
             "version": "5",
             "readonly": "false",
             "objType": "0x2::Geniteam::Monster",
+            "name": "Brown Dog",
             "data": {
                 "contents": {
                     "id": {},
-                    "monster_name": "Brown Dog",
                     "breed": 89,
                     "monster_affinity": 2,
                     "monster_description": "surprisingly cute",
@@ -177,10 +177,7 @@
                     "hunger_level": 5,
                     "affection_level": 3,
                     "buddy_level": 7,
-                    "display": {
-                        "category": "imageURL",
-                        "data": "https://geniteam-video-images.s3.amazonaws.com/131074_0_Brown_Dog.png"
-                    }
+                    "display": "https://geniteam-video-images.s3.amazonaws.com/131074_0_Brown_Dog.png"
                 }
             }
         },
@@ -191,6 +188,7 @@
             "version": "6",
             "readonly": "false",
             "objType": "0x2::Geniteam::Monster",
+            "name": "Brown Water Dog",
             "data": {
                 "contents": {
                     "water_runes_count": 1,
@@ -202,7 +200,6 @@
                         ]
                     },
                     "id": {},
-                    "monster_name": "Brown Water Dog",
                     "breed": 89,
                     "monster_affinity": 2,
                     "monster_description": "surprisingly cute",
@@ -211,10 +208,7 @@
                     "hunger_level": 5,
                     "affection_level": 3,
                     "buddy_level": 9,
-                    "display": {
-                        "category": "imageURL",
-                        "data": "https://geniteam-video-images.s3.amazonaws.com/131842_0_Evolved_Water_Dog_Brown.png"
-                    }
+                    "display": "https://geniteam-video-images.s3.amazonaws.com/131842_0_Evolved_Water_Dog_Brown.png"
                 }
             }
         },
@@ -225,14 +219,11 @@
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Geniteam::MonsterCosmetic",
+            "name": "Water Rune",
             "data": {
                 "contents": {
                     "id": {},
-                    "monster_cosmetic_name": "Water Rune",
-                    "display": {
-                        "category": "imageURL",
-                        "data": "https://geniteam-video-images.s3.amazonaws.com/1125899906842624_Rune_Water.png"
-                    }
+                    "display": "https://geniteam-video-images.s3.amazonaws.com/1125899906842624_Rune_Water.png"
                 }
             }
         },
@@ -244,10 +235,10 @@
             "version": "4",
             "readonly": "false",
             "objType": "0x2::Geniteam::Monster",
+            "name": "White Cat",
             "data": {
                 "contents": {
                     "id": {},
-                    "monster_name": "White Cat",
                     "breed": 52,
                     "monster_affinity": 3,
                     "monster_description": "little angle feline",
@@ -256,10 +247,7 @@
                     "hunger_level": 2,
                     "affection_level": 8,
                     "buddy_level": 5,
-                    "display": {
-                        "category": "imageURL",
-                        "data": "https://geniteam-video-images.s3.amazonaws.com/65537_0_White_Cat.png"
-                    }
+                    "display": "https://geniteam-video-images.s3.amazonaws.com/65537_0_White_Cat.png"
                 }
             }
         },
@@ -270,10 +258,10 @@
             "version": "5",
             "readonly": "false",
             "objType": "0x2::Geniteam::Monster",
+            "name": "White Cat with Glasses",
             "data": {
                 "contents": {
                     "id": {},
-                    "monster_name": "White Cat with Glasses",
                     "breed": 52,
                     "monster_affinity": 3,
                     "monster_description": "a smart cat",
@@ -289,10 +277,7 @@
                             }
                         ]
                     },
-                    "display": {
-                        "category": "imageURL",
-                        "data": "https://geniteam-video-images.s3.amazonaws.com/4295032833_2_White_Cat_Goggles1.png"
-                    }
+                    "display": "https://geniteam-video-images.s3.amazonaws.com/4295032833_2_White_Cat_Goggles1.png"
                 }
             }
         },
@@ -303,14 +288,11 @@
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Geniteam::MonsterCosmetic",
+            "name": "Glasses",
             "data": {
                 "contents": {
                     "id": {},
-                    "monster_cosmetic_name": "Glasses",
-                    "display": {
-                        "category": "imageURL",
-                        "data": "https://geniteam-video-images.s3.amazonaws.com/4294967296_Goggles1.png"
-                    }
+                    "display": "https://geniteam-video-images.s3.amazonaws.com/4294967296_Goggles1.png"
                 }
             }
         },
@@ -322,10 +304,10 @@
             "version": "7",
             "readonly": "false",
             "objType": "0x2::Geniteam::Monster",
+            "name": "White Fire Cat",
             "data": {
                 "contents": {
                     "id": {},
-                    "monster_name": "White Fire Cat",
                     "applied_monster_cosmetic_0_id": {
                         "vec": [
                             {
@@ -342,10 +324,7 @@
                     "affection_level": 6,
                     "buddy_level": 9,
                     "fire_runes_count": 1,
-                    "display": {
-                        "category": "imageURL",
-                        "data": "https://geniteam-video-images.s3.amazonaws.com/66049_0_Evolved_Fire_Cat_White.png"
-                    }
+                    "display": "https://geniteam-video-images.s3.amazonaws.com/66049_0_Evolved_Fire_Cat_White.png"
                 }
             }
         },
@@ -356,14 +335,11 @@
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Geniteam::MonsterCosmetic",
+            "name": "Fire Rune",
             "data": {
                 "contents": {
                     "id": {},
-                    "monster_cosmetic_name": "Fire Rune",
-                    "display": {
-                        "category": "imageURL",
-                        "data": "https://geniteam-video-images.s3.amazonaws.com/562949953421312_Rune_Fire.png"
-                    }
+                    "display": "https://geniteam-video-images.s3.amazonaws.com/562949953421312_Rune_Fire.png"
                 }
             }
         },
@@ -420,10 +396,7 @@
             "contract_id": { "bytes": "smartContract" },
             "data": {
                 "contents": {
-                    "display": {
-                        "category": "imageURL",
-                        "data": "https://sui-explorer-test-image.s3.amazonaws.com/testImage.png"
-                    },
+                    "display": "https://sui-explorer-test-image.s3.amazonaws.com/testImage.png",
                     "cosmetic_type": 1,
                     "lore": "This is a species of orchid only found in Brazil",
                     "Humidity": "High",
@@ -444,10 +417,7 @@
             "ethTokenId": "8937",
             "data": {
                 "contents": {
-                    "display": {
-                        "category": "imageURL",
-                        "data": "https://lh3.googleusercontent.com/xcPvABPQX6sG4Wwg1FsD-ztMUZwp6NeZQLTWX1PfiWvti9cFfDXw5gxvBhg6S4B5Q4CFiZV4nWGRQnzfL0YJpL_yWVgHVZ_DOFSM=w600"
-                    },
+                    "display": "https://lh3.googleusercontent.com/xcPvABPQX6sG4Wwg1FsD-ztMUZwp6NeZQLTWX1PfiWvti9cFfDXw5gxvBhg6S4B5Q4CFiZV4nWGRQnzfL0YJpL_yWVgHVZ_DOFSM=w600",
                     "background": "Orange",
                     "clothes": "Tanktop",
                     "eyes": "Holographic",

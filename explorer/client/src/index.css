@@ -14,21 +14,24 @@ body {
     @apply bg-offwhite m-0 text-offblack;
 }
 
-.ace-active-line {
+/* TODO - The below CSS alters how smart contract code is displayed in the Ace Editor
+
+.ace_active-line {
     background-color: rgb(203 213 225) !important;
 }
 
-.ace-gutter-layer {
+.ace_gutter-layer {
     color: black !important;
 }
 
-.ace-editor {
+.ace_editor {
     width: 80vw !important;
     font-family: 'Ubuntu Mono', 'Courier New', monospace;
 }
 
 @media only screen and (min-width: 1024px) {
-    .ace-editor {
+    .ace_editor {
         width: 35rem !important;
     }
 }
+*/
