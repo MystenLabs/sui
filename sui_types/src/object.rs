@@ -1,16 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::coin::Coin;
-use crate::crypto::{sha3_hash, BcsSignable};
-use crate::error::{SuiError, SuiResult};
-use crate::move_package::MovePackage;
-use crate::{
-    base_types::{
-        ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
-    },
-    gas_coin::GasCoin,
-};
+use std::convert::{TryFrom, TryInto};
+use std::fmt::{Debug, Display, Formatter};
+
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::layout::TypeLayoutBuilder;
@@ -22,9 +15,19 @@ use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use serde_with::{serde_as, Bytes};
-use std::convert::{TryFrom, TryInto};
-use std::fmt::{Debug, Display, Formatter};
+use serde_with::base64::Base64;
+use serde_with::serde_as;
+
+use crate::coin::Coin;
+use crate::crypto::{sha3_hash, BcsSignable};
+use crate::error::{SuiError, SuiResult};
+use crate::move_package::MovePackage;
+use crate::{
+    base_types::{
+        ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
+    },
+    gas_coin::GasCoin,
+};
 
 pub const GAS_VALUE_FOR_TESTING: u64 = 100000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
@@ -33,7 +36,7 @@ pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MoveObject {
     pub type_: StructTag,
-    #[serde_as(as = "Bytes")]
+    #[serde_as(as = "Base64")]
     contents: Vec<u8>,
 }
 
