@@ -301,6 +301,8 @@ impl Signature {
 
 pub struct AuthoritySignature(pub dalek::Signature);
 
+impl BcsSignable for AuthoritySignature {}
+
 impl AsRef<[u8]> for AuthoritySignature {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()

@@ -11,7 +11,7 @@ use sui_types::batch::UpdateItem;
 use sui_types::{error::SuiError, messages::*, serialize::*};
 
 static MAX_ERRORS: i32 = 10;
-static BUFFER_SIZE: usize = 100;
+pub(crate) static BUFFER_SIZE: usize = 100;
 
 #[async_trait]
 pub trait AuthorityAPI {
