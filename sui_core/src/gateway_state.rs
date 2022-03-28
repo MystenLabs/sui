@@ -11,6 +11,7 @@ use std::time::Duration;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::future;
+use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::value::MoveStructLayout;
@@ -363,10 +364,17 @@ impl AccountState {
     /// The caller has to explicitly find which objects are locked
     /// TODO: always return true for immutable objects https://github.com/MystenLabs/sui/issues/305
     fn can_lock_or_unlock(&self, transaction: &Transaction) -> Result<bool, SuiError> {
-        let iter_matches = self
-            .store
-            .pending_transactions
-            .multi_get(transaction.input_objects()?.iter().map(|q| q.object_id()))?;
+        let iter_matches = self.store.pending_transactions.multi_get(
+            &transaction
+                .input_objects()?
+                .iter()
+                .filter_map(|q| match q {
+                    InputObjectKind::MovePackage(_) => None,
+                    InputObjectKind::OwnedMoveObject(w) => Some(w.0),
+                    InputObjectKind::SharedMoveObject(w) => Some(*w),
+                })
+                .collect_vec(),
+        )?;
         if iter_matches.into_iter().any(|match_for_transaction| {
             matches!(match_for_transaction,
                 // If we find any transaction that isn't the given transaction, we cannot proceed
@@ -397,7 +405,12 @@ impl AccountState {
                 transaction
                     .input_objects()?
                     .iter()
-                    .map(|e| (e.object_id(), transaction.clone())),
+                    .filter_map(|q| match q {
+                        InputObjectKind::MovePackage(_) => None,
+                        InputObjectKind::OwnedMoveObject(w) => Some(w.0),
+                        InputObjectKind::SharedMoveObject(w) => Some(*w),
+                    })
+                    .map(|e| (e, transaction.clone())),
             )
             .map_err(|e| e.into())
     }
@@ -413,7 +426,11 @@ impl AccountState {
         }
         self.store
             .pending_transactions
-            .multi_remove(transaction.input_objects()?.iter().map(|e| e.object_id()))
+            .multi_remove(transaction.input_objects()?.iter().filter_map(|q| match q {
+                InputObjectKind::MovePackage(_) => None,
+                InputObjectKind::OwnedMoveObject(w) => Some(w.0),
+                InputObjectKind::SharedMoveObject(w) => Some(*w),
+            }))
             .map_err(|e| e.into())
     }
 }
