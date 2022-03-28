@@ -129,7 +129,7 @@ fn test_basic_args_linter_pure_args() {
         ),
         // U128 value encoded as str
         (
-            Value::from(format!("{}", u128_val)),
+            Value::from(format!("{u128_val}")),
             Type::U128,
             Some(bcs::to_bytes(&u128_val).unwrap()),
         ),

@@ -170,7 +170,7 @@ fn main() {
                 .expect("Unable to notify that server started");
 
             if let Err(err) = server.join().await {
-                error!("Server ended with an error: {}", err);
+                error!("Server ended with an error: {err}");
             }
         });
     });
@@ -307,7 +307,7 @@ impl ClientServerBenchmark {
                 check_transaction_response(resp.map_err(|e| e.into()));
             }
         } else {
-            info!("Number of TCP connections: {}", connections);
+            info!("Number of TCP connections: {connections}");
 
             // Send all batches at once
             let time_start = Instant::now();

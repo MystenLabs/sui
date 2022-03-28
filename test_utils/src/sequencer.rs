@@ -158,7 +158,7 @@ impl SequencerCore {
                     // Store the sequenced message. If this fails, we do not notify and subscribers
                     // and effectively throw away the message. Liveness may be lost.
                     if let Err(e) = self.store.store_output(&output) {
-                        log::error!("Failed to store consensus output: {}", e);
+                        log::error!("Failed to store consensus output: {e}");
                         continue;
                     }
 
@@ -209,7 +209,7 @@ where
             let buffer = match stream.stream().next().await {
                 Some(Ok(buffer)) => buffer,
                 Some(Err(e)) => {
-                    log::warn!("Error while reading TCP stream: {}", e);
+                    log::warn!("Error while reading TCP stream: {e}");
                     break;
                 }
                 None => {
@@ -329,7 +329,7 @@ where
                     Ok(buffer) => match deserialize_message(&*buffer) {
                         Ok(SerializedMessage::ConsensusSync(sync)) => {
                             if let Err(e) = self.synchronize(sync.sequence_number, &mut stream).await {
-                                log::error!("{}", e);
+                                log::error!("{e}");
                                 break;
                             }
                         }
@@ -338,12 +338,12 @@ where
                             break;
                         }
                         Err(e) => {
-                            log::warn!("Failed to deserialize consensus sync request {}", e);
+                            log::warn!("Failed to deserialize consensus sync request {e}");
                             break;
                         }
                     },
                     Err(e) => {
-                        log::warn!("Error while reading TCP stream: {}", e);
+                        log::warn!("Error while reading TCP stream: {e}");
                         break;
                     }
                 }

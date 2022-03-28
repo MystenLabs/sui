@@ -68,7 +68,7 @@ impl NetworkClient {
     pub async fn send_recv_bytes(&self, buf: Vec<u8>) -> Result<SerializedMessage, SuiError> {
         match self.send_recv_bytes_internal(buf).await {
             Err(error) => Err(SuiError::ClientIoError {
-                error: format!("{}", error),
+                error: format!("{error}"),
             }),
             Ok(Some(response)) => {
                 // Parse reply
@@ -106,7 +106,7 @@ impl NetworkClient {
             .take_while(|_buf| {
                 received += 1;
                 if received % 5000 == 0 && received > 0 {
-                    debug!("Received {}", received);
+                    debug!("Received {received}");
                 }
                 let xcontinue = received <= total;
                 futures::future::ready(xcontinue)
@@ -215,7 +215,7 @@ pub fn parse_recv_bytes(
 ) -> Result<SerializedMessage, SuiError> {
     match response {
         Err(error) => Err(SuiError::ClientIoError {
-            error: format!("{}", error),
+            error: format!("{error}"),
         }),
         Ok(Some(response)) => {
             // Parse reply

@@ -38,7 +38,7 @@
         "start": "react-scripts start",
         "start:dev": "concurrently \"npm:start\" \"npm:prettier:fix:watch\"",
         "build": "react-scripts build",
-        "test": "react-scripts test",
+        "test": "REACT_APP_DATA=static react-scripts test",
         "eslint:check": "eslint --max-warnings=0 .eslintrc.js \"./src/**/*.{js,jsx,ts,tsx}\"",
         "eslint:fix": "npm run eslint:check -- --fix",
         "prettier:check": "prettier -c --ignore-unknown .",

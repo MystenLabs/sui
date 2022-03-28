@@ -563,21 +563,21 @@ impl Debug for WalletCommandResult {
 
 fn unwrap_err_to_string<T: Display, F: FnOnce() -> Result<T, anyhow::Error>>(func: F) -> String {
     match func() {
-        Ok(s) => format!("{}", s),
-        Err(err) => format!("{}", err).red().to_string(),
+        Ok(s) => format!("{s}"),
+        Err(err) => format!("{err}").red().to_string(),
     }
 }
 
 impl WalletCommandResult {
     pub fn print(&self, pretty: bool) {
         let line = if pretty {
-            format!("{}", self)
+            format!("{self}")
         } else {
             format!("{:?}", self)
         };
         // Log line by line
         for line in line.lines() {
-            info!("{}", line)
+            info!("{line}")
         }
     }
 }

@@ -6,7 +6,7 @@ import { useLocation, useParams } from 'react-router-dom';
 import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
-import { findDataFromID } from '../../utils/mockUtil';
+import { findDataFromID } from '../../utils/static/searchUtil';
 
 import styles from './TransactionResult.module.css';
 
@@ -30,6 +30,14 @@ function instanceOfDataType(object: any): object is DataType {
 function TransactionResult() {
     const { state } = useLocation();
     const { id: txID } = useParams();
+
+    if (process.env.REACT_APP_DATA !== 'static') {
+        return (
+            <div className={theme.textresults}>
+                <div>This page is in Development</div>
+            </div>
+        );
+    }
 
     const data = findDataFromID(txID, state);
 

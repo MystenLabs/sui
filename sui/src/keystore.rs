@@ -61,7 +61,7 @@ impl Keystore for SuiKeystore {
             .keys
             .get(address)
             .ok_or_else(|| {
-                signature::Error::from_source(format!("Cannot find key for address: [{}]", address))
+                signature::Error::from_source(format!("Cannot find key for address: [{address}]"))
             })?
             .sign(msg))
     }
