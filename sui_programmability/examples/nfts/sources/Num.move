@@ -17,7 +17,7 @@ module NFTs::Num {
         /// Number of NFT<Num>'s in circulation. Fluctuates with minting and burning.
         /// A maximum of `MAX_SUPPLY` NFT<Num>'s can exist at a given time.
         supply: u64,
-        /// Total number of NFT<Num>'s that have been issued. Always >= `supply`.
+        /// Total number of NFT<Num>'s that have been issued. Always <= `supply`.
         /// The next NFT<Num> to be issued will have the value of the counter.
         issued_counter: u64,
     }

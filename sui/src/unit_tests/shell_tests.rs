@@ -36,7 +36,7 @@ fn test_substitute_env_variables() {
 
     let test_string_2 = "$OBJECT_ID/SOME_DIRECTORY".to_string();
     assert_eq!(
-        format!("{}/SOME_DIRECTORY", random_id),
+        format!("{random_id}/SOME_DIRECTORY"),
         substitute_env_variables(test_string_2)
     );
     // Make sure variable with the same beginnings won't get substituted incorrectly

@@ -2,16 +2,21 @@
 title: Learning Sui
 ---
 
-Welcome to the documentation for the Sui platform. Since Sui is built upon the core [Move](https://github.com/MystenLabs/awesome-move) programming language,
-you should familiarize yourself with it and use this content to apply the differences. For a summary of these differences, see
+*Sui: pronounced "sweet" without the "T" - with Transactions (loads of them), things are SWEET indeed. :-)*
+
+Welcome to the documentation for the Sui platform. Since Sui is built upon the core [Move](https://github.com/MystenLabs/awesome-move)
+programming language, you should familiarize yourself with it and use this content to apply the differences. For a summary of these differences, see
 [Sui compared to other blockchains](../learn/sui-move-diffs.md).
 
 For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](../../../paper/sui.pdf) white paper.
 
 ## Kickstart development
 
+### End-to-end tutorial
+Start with the [Sui Tutorial](../explore/tutorials.md) for a summary view of setting up your environment, starting a Sui network, gathering accounts and gas, and publishing and playing a game in Sui.
+
 ### Move quick start
-See the [Move Quick Start](../build/move.md) for installation, defining custom objects, object operations (create/destroy/update/transfer/freeze), publishing, and invoking your published code.
+Go to the [Move Quick Start](../build/move.md) for installation, defining custom objects, object operations (create/destroy/update/transfer/freeze), publishing, and invoking your published code.
 
 ### Wallet quick start
 See the [Wallet Quick Start](../build/wallet.md) for installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
