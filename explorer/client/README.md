@@ -23,7 +23,7 @@ If the environment variable `REACT_APP_DATA` is set to `static`, then the SuiExp
 For example, suppose we wish to locally run the website using the static JSON dataset and not the API, then we would run the following:
 
 ```bash
-$ REACT_APP_DATA=static npm start
+REACT_APP_DATA=static npm start
 ```
 
 Note that the command `npm run test` is the exception. Here the SuiExplorer will instead use the static JSON dataset. The tests have been written to specifically check the UI and not the API connection.
