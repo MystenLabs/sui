@@ -12,7 +12,11 @@ use structopt::StructOpt;
 pub enum MoveCommands {
     /// Build and verify Move project
     #[structopt(name = "build")]
-    Build,
+    Build {
+        /// Whether we are printing in hex.
+        #[structopt(long)]
+        hex: bool,
+    },
 
     /// Run all Move unit tests
     #[structopt(name = "test")]
@@ -20,16 +24,12 @@ pub enum MoveCommands {
 }
 
 impl MoveCommands {
-    pub fn execute(
-        &self,
-        path: &Path,
-        is_std_framework: bool,
-        output_hex: bool,
-    ) -> Result<(), anyhow::Error> {
+    pub fn execute(&self, path: &Path, is_std_framework: bool) -> Result<(), anyhow::Error> {
         match self {
-            Self::Build => {
-                if output_hex {
-                    let compiled_modules = Self::print_hex(path, is_std_framework)?;
+            Self::Build { hex } => {
+                if *hex {
+                    let compiled_modules =
+                        sui_framework::build_move_package_to_hex(path, is_std_framework)?;
                     println!("{:?}", compiled_modules);
                 } else {
                     Self::build(path, is_std_framework)?;
@@ -43,13 +43,6 @@ impl MoveCommands {
             }
         }
         Ok(())
-    }
-
-    fn print_hex(path: &Path, is_std_framework: bool) -> Result<Vec<String>, anyhow::Error> {
-        Ok(sui_framework::build_move_package_to_hex(
-            path,
-            is_std_framework,
-        )?)
     }
 
     fn build(path: &Path, is_std_framework: bool) -> Result<(), anyhow::Error> {
@@ -75,9 +68,6 @@ struct MoveOpt {
     /// Whether we are building/testing the std/framework code.
     #[structopt(long)]
     std: bool,
-    /// Whether we are printing in hex.
-    #[structopt(long)]
-    hex: bool,
     /// Subcommands.
     #[structopt(subcommand)]
     cmd: MoveCommands,
@@ -87,5 +77,5 @@ fn main() -> Result<(), anyhow::Error> {
     let app: App = MoveOpt::clap();
     let options = MoveOpt::from_clap(&app.get_matches());
     let path = options.path;
-    options.cmd.execute(path.as_ref(), options.std, options.hex)
+    options.cmd.execute(path.as_ref(), options.std)
 }
