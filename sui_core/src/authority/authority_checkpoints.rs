@@ -4,14 +4,12 @@
 use std::path::Path;
 
 use rocksdb::Options;
-use sui_types::{base_types::TransactionDigest, batch::TxSequenceNumber};
+use sui_types::{base_types::TransactionDigest, batch::TxSequenceNumber, error::SuiError};
 use typed_store::{
     reopen,
-    rocks::{DBMap, TypedStoreError},
+    rocks::{DBMap, TypedStoreError, open_cf_opts},
     Map,
 };
-
-use crate::authority::authority_store::open_cf_opts;
 
 pub type CheckpointSequenceNumber = u64;
 
@@ -90,15 +88,43 @@ impl CheckpointStore {
         }
     }
 
+    /// Return the seq number of the last checkpoint we have recorded.
+    pub fn last_checkpoint_sequence(&self) -> Option<CheckpointSequenceNumber> {
+        self.checkpoint_contents
+            .iter()
+            .last()
+            .map(|((seq, _), _)| seq)
+    }
+
+    /// Returns the lowest checkpoint sequence number with unprocessed transactions
+    /// if any, otherwise None.
+    pub fn lowest_unprocessed_sequence(&self) -> Option<CheckpointSequenceNumber> {
+        self.unprocessed_transactions
+            .iter()
+            .map(|(_, chk_seq)| chk_seq)
+            .min()
+    }
+
     /// Add transactions associated with a new checkpoint in the structure, and
     /// updates all tables including unprocessed and extra transactions.
     pub fn update_new_checkpoint(
         &mut self,
         seq: CheckpointSequenceNumber,
         transactions: &[TransactionDigest],
-    ) -> Result<(), TypedStoreError> {
-        // TODO: check that this checkpoint seq is new, and directly follows the last
-        //       highest checkpoint seen.
+    ) -> Result<(), SuiError> {
+        // Check that this checkpoint seq is new, and directly follows the last
+        // highest checkpoint seen. First checkpoint is always zero.
+        let expected_seq = if let Some(chk_seq) = self.last_checkpoint_sequence() {
+            chk_seq + 1
+        } else {
+            0
+        };
+
+        if seq != expected_seq {
+            return Err(SuiError::CheckpointingError {
+                error: "Unexpected checkpoint sequence number.".to_string(),
+            });
+        }
 
         // Process transactions not already in a checkpoint
         let new_transactions = self
@@ -323,19 +349,25 @@ mod tests {
         assert!(cps.extra_transactions.iter().count() == 3);
         assert!(cps.unprocessed_transactions.iter().count() == 0);
 
-        cps.update_new_checkpoint(1, &[t1, t2, t4, t5]).unwrap();
+        cps.update_new_checkpoint(0, &[t1, t2, t4, t5]).unwrap();
         assert!(cps.checkpoint_contents.iter().count() == 4);
         assert_eq!(cps.extra_transactions.iter().count(), 1);
         assert!(cps.unprocessed_transactions.iter().count() == 2);
 
+        assert_eq!(cps.lowest_unprocessed_sequence(), Some(0));
+
         let (_cp_seq, tx_seq) = cps.transactions_to_checkpoint.get(&t4).unwrap().unwrap();
         assert!(tx_seq >= u64::MAX / 2);
+
+        assert!(cps.last_checkpoint_sequence() == Some(0));
 
         cps.update_processed_transactions(&[(4, t4), (5, t5), (6, t6)])
             .unwrap();
         assert!(cps.checkpoint_contents.iter().count() == 4);
         assert_eq!(cps.extra_transactions.iter().count(), 2); // t3 & t6
         assert!(cps.unprocessed_transactions.iter().count() == 0);
+
+        assert_eq!(cps.lowest_unprocessed_sequence(), None);
 
         let (_cp_seq, tx_seq) = cps.transactions_to_checkpoint.get(&t4).unwrap().unwrap();
         assert_eq!(tx_seq, 4);

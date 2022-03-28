@@ -190,8 +190,12 @@ pub struct ObjectDigest(
 ); // We use SHA3-256 hence 32 bytes here
 
 #[serde_as]
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct TransactionEffectsDigest(#[serde_as(as = "Bytes")] pub [u8; TRANSACTION_DIGEST_LENGTH]);
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
+pub struct TransactionEffectsDigest(    
+    #[schemars(with = "Base64")]
+    #[serde_as(as = "Readable<Base64, Bytes>")] 
+    pub [u8; TRANSACTION_DIGEST_LENGTH]
+);
 
 
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
