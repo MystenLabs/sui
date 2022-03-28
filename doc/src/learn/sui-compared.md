@@ -96,15 +96,15 @@ Sui provides these benefits to developers:
 * Asset-centric programming model
 * Easier developer experience
 
-## Drawbacks of Sui
+## Engineering trade-offs
 
-This section presents the main limitations and disadvantages of Sui with respect to traditional blockchains.
+This section presents the main disadvantages of Sui with respect to traditional blockchains.
 
 ### Design complexity
 
-One of the main drawbacks of the Sui design is its complexity. While traditional blockchains only require to implement a single consensus protocol, Sui requires two protocols: (i) a protocol based on Byzantine Consistent Broadcast to handle common transactions, and (ii) a consensus protocol to handle transactions with shared objects. This means the Sui team needs to maintain a much larger codebase.
+While traditional blockchains require implementing only a single consensus protocol, Sui requires two protocols: (i) a protocol based on Byzantine Consistent Broadcast to handle common transactions, and (ii) a consensus protocol to handle transactions with shared objects. This means the Sui team needs to maintain a much larger codebase.
 
-Transactions involving shared objects require a little overhead (two extra round trips) before submitting it to the consensus protocol. This overhead is required to securely compose the two protocols described above. Other blockchains can instead directly submit the transaction to the consensus protocol.
+Transactions involving shared objects require a little overhead (adding two extra round trips - 200ms for well-connected clients using a Sui Gateway service) before submitting it to the consensus protocol. This overhead is required to securely compose the two protocols described above. Other blockchains can instead directly submit the transaction to the consensus protocol. Note the finality for shared object transactions is still in the 2-3 second range even with this overhead.
 
 Building an efficient synchronizer is harder in Sui than in traditional blockchains. The synchronizer sub-protocol allows authorities to update each other by sharing data, and it allows slow authorities to catch up. Building an efficient synchronizer for traditional blockchains is no easy task, but still simpler than in Sui.
 
