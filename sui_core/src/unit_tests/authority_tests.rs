@@ -84,7 +84,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
     );
     let (_unknown_address, unknown_key) = get_key_pair();
     let mut bad_signature_transfer_transaction = transfer_transaction.clone();
-    bad_signature_transfer_transaction.signature =
+    bad_signature_transfer_transaction.tx_signature =
         Signature::new(&transfer_transaction.data, &unknown_key);
     assert!(authority_state
         .handle_transaction(bad_signature_transfer_transaction)
@@ -264,7 +264,6 @@ async fn test_handle_transfer_transaction_ok() {
             .unwrap()
             .as_ref()
             .unwrap()
-            .transaction
             .data,
         transfer_transaction.data
     );
@@ -344,7 +343,7 @@ pub async fn send_and_confirm_transaction(
     // Collect signatures from a quorum of authorities
     let mut builder = SignatureAggregator::try_new(transaction, &authority.committee).unwrap();
     let certificate = builder
-        .append(vote.authority, vote.signature)
+        .append(vote.auth_signature.authority, vote.auth_signature.signature)
         .unwrap()
         .unwrap();
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
@@ -1446,7 +1445,7 @@ fn init_certified_transfer_transaction(
     let mut builder =
         SignatureAggregator::try_new(transfer_transaction, &authority_state.committee).unwrap();
     builder
-        .append(vote.authority, vote.signature)
+        .append(vote.auth_signature.authority, vote.auth_signature.signature)
         .unwrap()
         .unwrap()
 }
@@ -1630,7 +1629,7 @@ async fn shared_object() {
     let vote = response.signed_transaction.unwrap();
     let certificate = SignatureAggregator::try_new(transaction, &authority.committee)
         .unwrap()
-        .append(vote.authority, vote.signature)
+        .append(vote.auth_signature.authority, vote.auth_signature.signature)
         .unwrap()
         .unwrap();
     let confirmation_transaction = ConfirmationTransaction::new(certificate.clone());

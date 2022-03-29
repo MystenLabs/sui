@@ -88,20 +88,25 @@ fn test_certificates() {
 
     let mut builder = SignatureAggregator::try_new(transaction.clone(), &committee).unwrap();
     assert!(builder
-        .append(v1.authority, v1.signature)
+        .append(v1.auth_signature.authority, v1.auth_signature.signature)
         .unwrap()
         .is_none());
-    let mut c = builder.append(v2.authority, v2.signature).unwrap().unwrap();
+    let mut c = builder
+        .append(v2.auth_signature.authority, v2.auth_signature.signature)
+        .unwrap()
+        .unwrap();
     assert!(c.check(&committee).is_ok());
     c.signatures.pop();
     assert!(c.check(&committee).is_err());
 
     let mut builder = SignatureAggregator::try_new(transaction, &committee).unwrap();
     assert!(builder
-        .append(v1.authority, v1.signature)
+        .append(v1.auth_signature.authority, v1.auth_signature.signature)
         .unwrap()
         .is_none());
-    assert!(builder.append(v3.authority, v3.signature).is_err());
+    assert!(builder
+        .append(v3.auth_signature.authority, v3.auth_signature.signature)
+        .is_err());
 
     assert!(SignatureAggregator::try_new(bad_transaction, &committee).is_err());
 }

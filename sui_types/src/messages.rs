@@ -18,9 +18,11 @@ use move_core_types::{
 use name_variant::NamedVariant;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
+use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
 
 use crate::crypto::{
-    sha3_hash, AuthoritySignature, BcsSignable, Signable, Signature, VerificationObligation,
+    sha3_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature, BcsSignable,
+    EmptySignInfo, Signable, Signature, VerificationObligation,
 };
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 
@@ -311,35 +313,275 @@ where
     }
 }
 
-/// An transaction signed by a client. signature is applied on data.
-/// Any extension to Transaction should add fields to TransactionData, not Transaction.
-// TODO: this should maybe be called ClientSignedTransaction + SignedTransaction -> AuthoritySignedTransaction
-#[derive(Debug, Eq, Clone, Serialize, Deserialize)]
-pub struct Transaction {
+/// A transaction signed by a client, optionally signed by an authority (depending on `S`).
+/// `S` indicates the authority signing state. It can be either empty or signed.
+/// We make the authority signature templated so that `TransactionEnvelope<S>` can be used
+/// universally in the transactions storage in `SuiDataStore`, shared by both authorities
+/// and non-authorities: authorities store signed transactions, while non-authorities
+/// store unsigned transactions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(remote = "TransactionEnvelope")]
+pub struct TransactionEnvelope<S> {
     // Deserialization sets this to "false"
     #[serde(skip)]
     pub is_checked: bool,
 
     pub data: TransactionData,
-    pub signature: Signature,
+    /// tx_signature is signed by the transaction sender, applied on `data`.
+    pub tx_signature: Signature,
+    /// auth_signature, if available, is signed by an authority, applied on `data`.
+    pub auth_signature: S,
+    // Note: If any new field is added here, make sure the Hash and PartialEq
+    // implementation are adjusted to include that new field (unless the new field
+    // does not participate in the hash and comparison).
 }
-/* TODO: check this legacy static check is not needed as an invariant
-         elsewhere. The tests pass but invariant checks without docs
-         should not be removed without a note to check.
 
-const_assert_eq!(
-    size_of::<TransactionData>() + size_of::<Signature>(),
-    size_of::<Transaction>()
-);
+impl<S: AuthoritySignInfoTrait> TransactionEnvelope<S> {
+    pub fn check_signature(&self) -> Result<(), SuiError> {
+        // We use this flag to see if someone has checked this before
+        // and therefore we can skip the check. Note that the flag has
+        // to be set to true manually, and is not set by calling this
+        // "check" function.
+        if self.is_checked {
+            return Ok(());
+        }
 
-*/
+        let mut obligation = VerificationObligation::default();
+        self.add_to_verification_obligation(&mut obligation)?;
+        obligation.verify_all().map(|_| ())
+    }
 
-/// An transaction signed by a single authority
-#[derive(Debug, Eq, Clone, Serialize, Deserialize)]
-pub struct SignedTransaction {
-    pub transaction: Transaction,
-    pub authority: AuthorityName,
-    pub signature: AuthoritySignature,
+    pub fn add_to_verification_obligation(
+        &self,
+        obligation: &mut VerificationObligation,
+    ) -> SuiResult<()> {
+        let (message, signature, public_key) = self
+            .tx_signature
+            .get_verification_inputs(&self.data, self.data.sender)?;
+        let idx = obligation.messages.len();
+        obligation.messages.push(message);
+        let key = obligation.lookup_public_key(&public_key)?;
+        obligation.public_keys.push(key);
+        obligation.signatures.push(signature);
+        obligation.message_index.push(idx);
+        Ok(())
+    }
+
+    pub fn sender_address(&self) -> SuiAddress {
+        self.data.sender
+    }
+
+    pub fn gas_payment_object_ref(&self) -> &ObjectRef {
+        &self.data.gas_payment
+    }
+
+    pub fn contains_shared_object(&self) -> bool {
+        match &self.data.kind {
+            TransactionKind::Single(s) => s.contains_shared_object(),
+            TransactionKind::Batch(b) => b.iter().any(|kind| kind.contains_shared_object()),
+        }
+    }
+
+    pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
+        match &self.data.kind {
+            TransactionKind::Single(s) => Either::Left(s.shared_input_objects().iter()),
+            TransactionKind::Batch(b) => {
+                Either::Right(b.iter().flat_map(|kind| kind.shared_input_objects()))
+            }
+        }
+    }
+
+    pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
+        let mut inputs = match &self.data.kind {
+            TransactionKind::Single(s) => s.input_objects()?,
+            TransactionKind::Batch(b) => {
+                let mut result = vec![];
+                for kind in b {
+                    fp_ensure!(
+                        !matches!(kind, &SingleTransactionKind::Publish(..)),
+                        SuiError::InvalidBatchTransaction {
+                            error: "Publish transaction is now allowed in Batch Transaction"
+                                .to_owned(),
+                        }
+                    );
+                    let sub = kind.input_objects()?;
+                    debug_assert_eq!(sub.len(), kind.input_object_count());
+                    result.extend(sub);
+                }
+                result
+            }
+        };
+        inputs.push(InputObjectKind::OwnedMoveObject(
+            *self.gas_payment_object_ref(),
+        ));
+        Ok(inputs)
+    }
+
+    pub fn single_transactions(&self) -> impl Iterator<Item = &SingleTransactionKind> {
+        match &self.data.kind {
+            TransactionKind::Single(s) => Either::Left(std::iter::once(s)),
+            TransactionKind::Batch(b) => Either::Right(b.iter()),
+        }
+    }
+
+    pub fn into_single_transactions(self) -> impl Iterator<Item = SingleTransactionKind> {
+        match self.data.kind {
+            TransactionKind::Single(s) => Either::Left(std::iter::once(s)),
+            TransactionKind::Batch(b) => Either::Right(b.into_iter()),
+        }
+    }
+
+    // Derive a cryptographic hash of the transaction.
+    pub fn digest(&self) -> TransactionDigest {
+        TransactionDigest::new(sha3_hash(&self.data))
+    }
+
+    pub fn input_objects_in_compiled_modules(
+        compiled_modules: &[CompiledModule],
+    ) -> Vec<InputObjectKind> {
+        let mut dependent_packages = BTreeSet::new();
+        for module in compiled_modules.iter() {
+            for handle in module.module_handles.iter() {
+                let address = ObjectID::from(*module.address_identifier_at(handle.address));
+                if address != ObjectID::ZERO {
+                    dependent_packages.insert(address);
+                }
+            }
+        }
+
+        // We don't care about the digest of the dependent packages.
+        // They are all read-only on-chain and their digest never changes.
+        dependent_packages
+            .into_iter()
+            .map(InputObjectKind::MovePackage)
+            .collect::<Vec<_>>()
+    }
+}
+
+// In combination with #[serde(remote = "TransactionEnvelope")].
+// Generic types instantiated multiple times in the same tracing session requires a work around.
+// https://novifinancial.github.io/serde-reflection/serde_reflection/index.html#features-and-limitations
+impl<'de, T> Deserialize<'de> for TransactionEnvelope<T>
+where
+    T: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        TransactionEnvelope::deserialize(DeserializeNameAdapter::new(
+            deserializer,
+            // TODO: This generates a very long name that includes the namespace and modules.
+            // Ideally we just want TransactionEnvelope<T> with T substituted as the name.
+            // https://github.com/MystenLabs/sui/issues/1119
+            std::any::type_name::<TransactionEnvelope<T>>(),
+        ))
+    }
+}
+
+impl<T> Serialize for TransactionEnvelope<T>
+where
+    T: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        TransactionEnvelope::serialize(
+            self,
+            SerializeNameAdapter::new(serializer, std::any::type_name::<TransactionEnvelope<T>>()),
+        )
+    }
+}
+
+// TODO: this should maybe be called ClientSignedTransaction + SignedTransaction -> AuthoritySignedTransaction
+/// A transaction that is signed by a sender but not yet by an authority.
+pub type Transaction = TransactionEnvelope<EmptySignInfo>;
+
+impl Transaction {
+    #[cfg(test)]
+    pub fn from_data(data: TransactionData, signer: &dyn signature::Signer<Signature>) -> Self {
+        let signature = Signature::new(&data, signer);
+        Self::new(data, signature)
+    }
+
+    pub fn new(data: TransactionData, signature: Signature) -> Self {
+        Self {
+            is_checked: false,
+            data,
+            tx_signature: signature,
+            auth_signature: EmptySignInfo {},
+        }
+    }
+}
+
+impl Hash for Transaction {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.data.hash(state);
+    }
+}
+
+impl PartialEq for Transaction {
+    fn eq(&self, other: &Self) -> bool {
+        self.data == other.data
+    }
+}
+impl Eq for Transaction {}
+
+/// A transaction that is signed by a sender and also by an authority.
+pub type SignedTransaction = TransactionEnvelope<AuthoritySignInfo>;
+
+impl SignedTransaction {
+    /// Use signing key to create a signed object.
+    pub fn new(
+        transaction: Transaction,
+        authority: AuthorityName,
+        secret: &dyn signature::Signer<AuthoritySignature>,
+    ) -> Self {
+        let signature = AuthoritySignature::new(&transaction.data, secret);
+        Self {
+            is_checked: transaction.is_checked,
+            data: transaction.data,
+            tx_signature: transaction.tx_signature,
+            auth_signature: AuthoritySignInfo {
+                authority,
+                signature,
+            },
+        }
+    }
+
+    /// Verify the signature and return the non-zero voting right of the authority.
+    pub fn check(&self, committee: &Committee) -> Result<usize, SuiError> {
+        self.check_signature()?;
+        let weight = committee.weight(&self.auth_signature.authority);
+        fp_ensure!(weight > 0, SuiError::UnknownSigner);
+        self.auth_signature
+            .signature
+            .check(&self.data, self.auth_signature.authority)?;
+        Ok(weight)
+    }
+
+    // Turn a SignedTransaction into a Transaction. This is needed when we are
+    // forming a CertifiedTransaction, where each transaction's authority signature
+    // is taking out to form an aggregated signature.
+    pub fn to_transaction(self) -> Transaction {
+        Transaction::new(self.data, self.tx_signature)
+    }
+}
+
+impl Hash for SignedTransaction {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.data.hash(state);
+        self.auth_signature.authority.hash(state);
+    }
+}
+
+impl PartialEq for SignedTransaction {
+    fn eq(&self, other: &Self) -> bool {
+        // We do not compare the signatures, because there can be multiple
+        // valid signatures for the same data and signer.
+        self.data == other.data && self.auth_signature.authority == other.auth_signature.authority
+    }
 }
 
 /// An transaction signed by a quorum of authorities
@@ -697,31 +939,6 @@ pub struct SignedTransactionEffects {
     pub signature: AuthoritySignature,
 }
 
-impl Hash for Transaction {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.data.hash(state);
-    }
-}
-
-impl PartialEq for Transaction {
-    fn eq(&self, other: &Self) -> bool {
-        self.data == other.data
-    }
-}
-
-impl Hash for SignedTransaction {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.transaction.hash(state);
-        self.authority.hash(state);
-    }
-}
-
-impl PartialEq for SignedTransaction {
-    fn eq(&self, other: &Self) -> bool {
-        self.transaction == other.transaction && self.authority == other.authority
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InputObjectKind {
     MovePackage(ObjectID),
@@ -752,168 +969,6 @@ impl InputObjectKind {
             Self::OwnedMoveObject((object_id, _, _)) => SuiError::ObjectNotFound { object_id },
             Self::SharedMoveObject(object_id) => SuiError::ObjectNotFound { object_id },
         }
-    }
-}
-
-impl Transaction {
-    #[cfg(test)]
-    pub fn from_data(data: TransactionData, signer: &dyn signature::Signer<Signature>) -> Self {
-        let signature = Signature::new(&data, signer);
-        Self::new(data, signature)
-    }
-
-    pub fn new(data: TransactionData, signature: Signature) -> Self {
-        Transaction {
-            is_checked: false,
-            data,
-            signature,
-        }
-    }
-
-    pub fn check_signature(&self) -> Result<(), SuiError> {
-        // We use this flag to see if someone has checked this before
-        // and therefore we can skip the check. Note that the flag has
-        // to be set to true manually, and is not set by calling this
-        // "check" function.
-        if self.is_checked {
-            return Ok(());
-        }
-
-        let mut obligation = VerificationObligation::default();
-        self.add_to_verification_obligation(&mut obligation)?;
-        obligation.verify_all().map(|_| ())
-    }
-
-    pub fn add_to_verification_obligation(
-        &self,
-        obligation: &mut VerificationObligation,
-    ) -> SuiResult<()> {
-        let (message, signature, public_key) = self
-            .signature
-            .get_verification_inputs(&self.data, self.data.sender)?;
-        let idx = obligation.messages.len();
-        obligation.messages.push(message);
-        let key = obligation.lookup_public_key(&public_key)?;
-        obligation.public_keys.push(key);
-        obligation.signatures.push(signature);
-        obligation.message_index.push(idx);
-        Ok(())
-    }
-
-    pub fn sender_address(&self) -> SuiAddress {
-        self.data.sender
-    }
-
-    pub fn gas_payment_object_ref(&self) -> &ObjectRef {
-        &self.data.gas_payment
-    }
-
-    pub fn contains_shared_object(&self) -> bool {
-        match &self.data.kind {
-            TransactionKind::Single(s) => s.contains_shared_object(),
-            TransactionKind::Batch(b) => b.iter().any(|kind| kind.contains_shared_object()),
-        }
-    }
-
-    pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
-        match &self.data.kind {
-            TransactionKind::Single(s) => Either::Left(s.shared_input_objects().iter()),
-            TransactionKind::Batch(b) => {
-                Either::Right(b.iter().flat_map(|kind| kind.shared_input_objects()))
-            }
-        }
-    }
-
-    pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
-        let mut inputs = match &self.data.kind {
-            TransactionKind::Single(s) => s.input_objects()?,
-            TransactionKind::Batch(b) => {
-                let mut result = vec![];
-                for kind in b {
-                    fp_ensure!(
-                        !matches!(kind, &SingleTransactionKind::Publish(..)),
-                        SuiError::InvalidBatchTransaction {
-                            error: "Publish transaction is now allowed in Batch Transaction"
-                                .to_owned(),
-                        }
-                    );
-                    let sub = kind.input_objects()?;
-                    debug_assert_eq!(sub.len(), kind.input_object_count());
-                    result.extend(sub);
-                }
-                result
-            }
-        };
-        inputs.push(InputObjectKind::OwnedMoveObject(
-            *self.gas_payment_object_ref(),
-        ));
-        Ok(inputs)
-    }
-
-    pub fn single_transactions(&self) -> impl Iterator<Item = &SingleTransactionKind> {
-        match &self.data.kind {
-            TransactionKind::Single(s) => Either::Left(std::iter::once(s)),
-            TransactionKind::Batch(b) => Either::Right(b.iter()),
-        }
-    }
-
-    pub fn into_single_transactions(self) -> impl Iterator<Item = SingleTransactionKind> {
-        match self.data.kind {
-            TransactionKind::Single(s) => Either::Left(std::iter::once(s)),
-            TransactionKind::Batch(b) => Either::Right(b.into_iter()),
-        }
-    }
-
-    // Derive a cryptographic hash of the transaction.
-    pub fn digest(&self) -> TransactionDigest {
-        TransactionDigest::new(sha3_hash(&self.data))
-    }
-
-    pub fn input_objects_in_compiled_modules(
-        compiled_modules: &[CompiledModule],
-    ) -> Vec<InputObjectKind> {
-        let mut dependent_packages = BTreeSet::new();
-        for module in compiled_modules.iter() {
-            for handle in module.module_handles.iter() {
-                let address = ObjectID::from(*module.address_identifier_at(handle.address));
-                if address != ObjectID::ZERO {
-                    dependent_packages.insert(address);
-                }
-            }
-        }
-
-        // We don't care about the digest of the dependent packages.
-        // They are all read-only on-chain and their digest never changes.
-        dependent_packages
-            .into_iter()
-            .map(InputObjectKind::MovePackage)
-            .collect::<Vec<_>>()
-    }
-}
-
-impl SignedTransaction {
-    /// Use signing key to create a signed object.
-    pub fn new(
-        transaction: Transaction,
-        authority: AuthorityName,
-        secret: &dyn signature::Signer<AuthoritySignature>,
-    ) -> Self {
-        let signature = AuthoritySignature::new(&transaction.data, secret);
-        Self {
-            transaction,
-            authority,
-            signature,
-        }
-    }
-
-    /// Verify the signature and return the non-zero voting right of the authority.
-    pub fn check(&self, committee: &Committee) -> Result<usize, SuiError> {
-        self.transaction.check_signature()?;
-        let weight = committee.weight(&self.authority);
-        fp_ensure!(weight > 0, SuiError::UnknownSigner);
-        self.signature
-            .check(&self.transaction.data, self.authority)?;
-        Ok(weight)
     }
 }
 
