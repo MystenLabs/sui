@@ -23,8 +23,8 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     transaction: Transaction,
     transaction_digest: TransactionDigest,
     objects_by_kind: Vec<(InputObjectKind, Object)>,
-    move_vm: &Arc<adapter::MoveVM>,
-    native_functions: NativeFunctionTable,
+    move_vm: &Arc<adapter::SuiMoveVM>,
+    native_functions: &NativeFunctionTable,
 ) -> SuiResult<TransactionEffects> {
     let mut transaction_dependencies: BTreeSet<_> = objects_by_kind
         .iter()
@@ -64,8 +64,8 @@ fn execute_transaction<S: BackingPackageStore>(
     transaction: Transaction,
     mut objects_by_kind: Vec<(InputObjectKind, Object)>,
     tx_ctx: &mut TxContext,
-    move_vm: &Arc<adapter::MoveVM>,
-    native_functions: NativeFunctionTable,
+    move_vm: &Arc<adapter::SuiMoveVM>,
+    native_functions: &NativeFunctionTable,
 ) -> SuiResult<ExecutionStatus> {
     // unwraps here are safe because we built `inputs`
     let mut gas_object = objects_by_kind.pop().unwrap().1;
@@ -90,8 +90,8 @@ fn execute_transaction<S: BackingPackageStore>(
                 adapter::execute(
                     move_vm,
                     temporary_store,
-                    native_functions.clone(),
-                    package,
+                    native_functions,
+                    &package,
                     &c.module,
                     &c.function,
                     c.type_arguments.clone(),
