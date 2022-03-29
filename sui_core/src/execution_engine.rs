@@ -16,8 +16,9 @@ use sui_types::{
     object::Object,
     storage::{BackingPackageStore, Storage},
 };
-use tracing::debug;
+use tracing::{debug, instrument};
 
+#[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
 pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
     transaction: Transaction,
@@ -59,6 +60,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     Ok(effects)
 }
 
+#[instrument(name = "tx_execute", level = "debug", skip_all)]
 fn execute_transaction<S: BackingPackageStore>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
     transaction: Transaction,

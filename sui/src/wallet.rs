@@ -10,8 +10,6 @@ use async_trait::async_trait;
 use colored::Colorize;
 use structopt::clap::{App, AppSettings};
 use structopt::StructOpt;
-use tracing::error;
-use tracing_subscriber::EnvFilter;
 
 use sui::shell::{
     install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
@@ -48,19 +46,15 @@ struct ClientOpt {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let format = tracing_subscriber::fmt::format()
-        .with_level(false)
-        .with_target(false)
-        .with_thread_ids(false)
-        .with_thread_names(false)
-        .without_time()
-        .compact();
-
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    tracing_subscriber::fmt()
-        .event_format(format)
-        .with_env_filter(env_filter)
-        .init();
+    let config = telemetry_subscribers::TelemetryConfig {
+        service_name: "wallet".into(),
+        enable_tracing: std::env::var("SUI_TRACING_ENABLE").is_ok(),
+        json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
+        log_file: Some("wallet.log".into()),
+        ..Default::default()
+    };
+    #[allow(unused)]
+    let guard = telemetry_subscribers::init(config);
 
     let mut app: App = ClientOpt::clap();
     app = app.unset_setting(AppSettings::NoBinaryName);
@@ -120,7 +114,7 @@ impl AsyncHandler<WalletContext> for ClientCommandHandler {
         completion_cache: CompletionCache,
     ) -> bool {
         if let Err(e) = handle_command(get_command(args), context, completion_cache).await {
-            error!("{}", e.to_string().red());
+            let _err = writeln!(stderr(), "{}", e);
         }
         false
     }

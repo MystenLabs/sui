@@ -236,10 +236,16 @@ where
         //   explicitly wants to use the out-of-dated version, all objects will be locked on the Gateway, but
         //   authorities will fail due to LockError. We will not be able to unlock these objects.
         //   One solution is to reset the transaction locks upon LockError.
+        let tx_digest = transaction.digest();
+        let span = tracing::debug_span!(
+            "execute_transaction",
+            ?tx_digest,
+            tx_kind = transaction.data.kind_as_str()
+        );
         let exec_result = self
             .authorities
             .execute_transaction(&transaction)
-            .instrument(tracing::trace_span!("execute_transaction"))
+            .instrument(span)
             .await;
         if exec_result.is_err() {
             error!("{:?}", exec_result);
