@@ -1221,7 +1221,7 @@ async fn test_module_publish_and_call_good() {
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
     hero_path.push_str("/src/unit_tests/data/hero/");
 
-    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path)).unwrap();
+    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path), false).unwrap();
     let data = client
         .publish(
             addr1,
@@ -1336,7 +1336,7 @@ async fn test_module_publish_file_path() {
     // Use a path pointing to a different file
     hero_path.push_str("/src/unit_tests/data/hero/Hero.move");
 
-    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path)).unwrap();
+    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path), false).unwrap();
     let data = client
         .publish(
             addr1,
@@ -1566,7 +1566,7 @@ async fn test_object_store() {
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
     hero_path.push_str("/src/unit_tests/data/hero/");
 
-    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path)).unwrap();
+    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path), false).unwrap();
     let data = client
         .publish(
             addr1,

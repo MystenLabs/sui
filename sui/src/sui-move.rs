@@ -12,7 +12,11 @@ use structopt::StructOpt;
 pub enum MoveCommands {
     /// Build and verify Move project
     #[structopt(name = "build")]
-    Build,
+    Build {
+        /// Whether we are printing in hex.
+        #[structopt(long)]
+        dump_bytecode_as_hex: bool,
+    },
 
     /// Run all Move unit tests
     #[structopt(name = "test")]
@@ -22,10 +26,18 @@ pub enum MoveCommands {
 impl MoveCommands {
     pub fn execute(&self, path: &Path, is_std_framework: bool) -> Result<(), anyhow::Error> {
         match self {
-            Self::Build => {
-                Self::build(path, is_std_framework)?;
+            Self::Build {
+                dump_bytecode_as_hex,
+            } => {
+                if *dump_bytecode_as_hex {
+                    let compiled_modules =
+                        sui_framework::build_move_package_to_hex(path, is_std_framework)?;
+                    println!("{:?}", compiled_modules);
+                } else {
+                    Self::build(path, is_std_framework)?;
+                    println!("Artifacts path: {:?}", path.join("build"));
+                }
                 println!("{}", "Build Successful".bold().green());
-                println!("Artifacts path: {:?}", path.join("build"));
             }
             Self::Test(config) => {
                 Self::build(path, is_std_framework)?;
