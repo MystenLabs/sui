@@ -110,7 +110,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --all --tests -- -D clippy::all -D warnings -D clippy::disallowed_method
+          args: --all --tests -- -D clippy::all -D warnings -D clippy::disallowed_methods
 
   rustfmt:
     name: rustfmt
