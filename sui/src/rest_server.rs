@@ -1193,7 +1193,7 @@ async fn handle_move_call(
 
     // Pass in the objects for a deeper check
     resolve_and_type_check(
-        package_object.clone(),
+        &package_object,
         &module,
         &function,
         &type_args,

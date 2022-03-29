@@ -262,7 +262,7 @@ impl WalletCommands {
                 // Pass in the objects for a deeper check
                 // We can technically move this to impl MovePackage
                 resolve_and_type_check(
-                    package_obj.clone(),
+                    package_obj,
                     module,
                     function,
                     type_args,

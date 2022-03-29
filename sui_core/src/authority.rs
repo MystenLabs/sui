@@ -19,7 +19,7 @@ use std::{
     pin::Pin,
     sync::Arc,
 };
-use sui_adapter::adapter;
+use sui_adapter::adapter::{self, SuiMoveVM};
 use sui_types::{
     base_types::*,
     batch::UpdateItem,
@@ -77,7 +77,7 @@ pub struct AuthorityState {
 
     /// Move native functions that are available to invoke
     _native_functions: NativeFunctionTable,
-    move_vm: Arc<adapter::MoveVM>,
+    move_vm: Arc<adapter::SuiMoveVM>,
 
     /// The database
     pub(crate) _database: Arc<AuthorityStore>, // TODO: remove pub
@@ -284,7 +284,7 @@ impl AuthorityState {
             transaction_digest,
             objects_by_kind,
             &self.move_vm,
-            self._native_functions.clone(),
+            &self._native_functions,
         )?;
         let signed_effects = effects.to_sign_effects(&self.name, &*self.secret);
 
@@ -607,6 +607,8 @@ impl AuthorityState {
         let package_id = ObjectID::from(*modules[0].self_id().address());
         let natives = self._native_functions.clone();
         let vm = adapter::verify_and_link(&temporary_store, &modules, package_id, natives)?;
+        let vm = SuiMoveVM::new(vm);
+
         if let ExecutionStatus::Failure { error, .. } = adapter::store_package_and_init_modules(
             &mut temporary_store,
             &vm,
