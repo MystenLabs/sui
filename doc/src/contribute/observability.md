@@ -2,7 +2,7 @@
 title: Logging, Tracing, Metrics, and Observability
 ---
 
-Good observability facilities are key to the development and growth of Sui.  This is made
+Good observability facilities are key to the development and growth of Sui. This is made
 more challenging by the distributed and asynchronous nature of Sui, with multiple client and authority
 processes distributed over a potentially global network.
 
@@ -10,24 +10,24 @@ The observability stack in Sui is based on the [Tokio tracing](https://tokio.rs/
 The rest of this document highlights specific aspects of achieving good observability through structured logging
 and metrics in Sui.
 
-NOTE: The output here is largely for the consumption of Sui operators, administrators, and developers.  The
+NOTE: The output here is largely for the consumption of Sui operators, administrators, and developers. The
 content of logs and traces do not represent the authoritative, certified output of authorities and are subject
 to potentially byzantine behavior.
 
 ## Contexts, scopes, and tracing transaction flow
 
 In a distributed and asynchronous system like Sui, one cannot rely on looking at individual logs over time in a single thread.
-To solve this problem, we use the approach of structured logging.  Structured logging offers a way to tie together
+To solve this problem, we use the approach of structured logging. Structured logging offers a way to tie together
 logs, events, and blocks of functionality across threads and process boundaries.
 
 ### Spans and events
 
 In the [Tokio tracing](https://tokio.rs/blog/2019-08-tracing) library, structured logging is implemented using [spans and events](https://docs.rs/tracing/0.1.31/tracing/index.html#core-concepts).
-Spans cover a whole block of functionality - like one function call, a Future or async task, etc.  They can be
-nested and key-value pairs in spans give context to events or logs inside the function.
+Spans cover a whole block of functionality - like one function call, a future or asynchronous task, etc. They can be
+nested, and key-value pairs in spans give context to events or logs inside the function.
 
-* spans and their key-value pairs adds essential context to enclosed logs, such as a transaction ID.
-* spans also track time spent in different sections of code, enabling distributed tracing functionality
+* spans and their key-value pairs add essential context to enclosed logs, such as a transaction ID.
+* spans also track time spent in different sections of code, enabling distributed tracing functionality.
 * individual logs can also add key-value pairs to aid in parsing, filtering and aggregation.
 
 Here is a table/summary of context information that we will want:
@@ -83,8 +83,8 @@ and analyzed for tracing, performance analysis, etc.
 
 ### Tags - keys
 
-The idea is that every event and span would get tagged with key-value pairs.  Events that log within any context or nested contexts would also inherit the context-level tags.
-These tags represent *fields* that can be analyzed and filtered by.  For example, one could filter out broadcasts and see the errors for all instances where the bad stake exceeded a certain amount, but not enough for an error.
+The idea is that every event and span would get tagged with key-value pairs. Events that log within any context or nested contexts would also inherit the context-level tags.
+These tags represent *fields* that can be analyzed and filtered by. For example, one could filter out broadcasts and see the errors for all instances where the bad stake exceeded a certain amount, but not enough for an error.
 
 |         Key         |      Place(s)      |                                  Meaning                                   |
 | ------------------- | ------------------ | -------------------------------------------------------------------------- |
@@ -124,7 +124,7 @@ For more details, please see the [EnvFilter](https://docs.rs/tracing-subscriber/
 ## Viewing logs, traces, metrics
 
 The tracing architecture is based on the idea of [subscribers](https://github.com/tokio-rs/tracing#project-layout) which
-can be plugged into the tracing library to process and forward output to different sinks for viewing.  Multiple
+can be plugged into the tracing library to process and forward output to different sinks for viewing. Multiple
 subscribers can be active at the same time.
 
 ```mermaid
@@ -142,7 +142,7 @@ SG3 --> Vector2
 Vector2 --> ElasticSearch
 ```
 
-In the graph above, there are multiple subscribers,  JSON logs can be for example fed via a local sidecar log forwarder such as
+In the graph above, there are multiple subscribers, JSON logs can be for example fed via a local sidecar log forwarder such as
 [Vector](https://vector.dev), and then onwards to destinations such as ElasticSearch.
 
 The use of a log and metrics aggregator such as Vector allows for easy reconfiguration without interrupting the authority server,
@@ -155,7 +155,7 @@ By default, logs (but not spans) are formatted for human readability and output 
 
 ### Tracing and span output
 
-Detailed span start and end logs can be generated by defining the `SUI_JSON_SPAN_LOGS` environment variable.  Note that this causes all output to be in JSON format, which is not as human-readable, so it is not enabled by default.
+Detailed span start and end logs can be generated by defining the `SUI_JSON_SPAN_LOGS` environment variable. Note that this causes all output to be in JSON format, which is not as human-readable, so it is not enabled by default.
 This output can easily be fed to backends such as ElasticSearch for indexing, alerts, aggregation, and analysis.
 
 The example output below shows certificate processing in the authority with span logging. Note the START and END annotations,
@@ -175,19 +175,19 @@ Also notice `elapsed_milliseconds` which logs the duration of each span.
 
 To see nested spans visualized with [Jaeger](https://www.jaegertracing.io), do the following:
 
-1. Run this to get a local Jaeger container: `docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest`
-2. Run sui like this (trace enables the most detailed spans): `SUI_TRACING_ENABLE=1 RUST_LOG="info,sui_core=trace" ./sui start`
-3. Run some transfers with wallet, or run the benchmarking tool.
-4. Browse to `http://localhost:16686/` and select "Sui" as the Service
+1. Run this to get a local Jaeger container: `docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest`.
+1. Run Sui like this (trace enables the most detailed spans): `SUI_TRACING_ENABLE=1 RUST_LOG="info,sui_core=trace" ./sui start`.
+1. Run some transfers with wallet, or run the benchmarking tool.
+1. Browse to `http://localhost:16686/` and select Sui as the Service.
 
 NOTE: separate spans (which are not nested) are not connected as a single trace for now.
 
 ### Live async inspection / Tokio Console
 
-[Tokio-console](https://github.com/tokio-rs/console) is an awesome CLI tool designed to analyze and help debug Rust apps using Tokio, in real time!  It relies on a special subscriber.
+[Tokio-console](https://github.com/tokio-rs/console) is an awesome CLI tool designed to analyze and help debug Rust apps using Tokio, in real time! It relies on a special subscriber.
 
-1. Build Sui using a special flag: `RUSTFLAGS="--cfg tokio_unstable" cargo build`
-2. Start Sui with `SUI_TOKIO_CONSOLE` set to 1
-3. Clone the console repo and `cargo run` to alunch the console
+1. Build Sui using a special flag: `RUSTFLAGS="--cfg tokio_unstable" cargo build`.
+2. Start Sui with `SUI_TOKIO_CONSOLE` set to 1.
+3. Clone the console repo and `cargo run` to launch the console.
 
 NOTE: Adding Tokio-console support may significantly slow down Sui authorities/gateways.
