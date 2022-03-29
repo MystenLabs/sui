@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
@@ -174,7 +174,7 @@ impl GatewayAPI for RestGatewayClient {
         Ok(tx.to_data()?)
     }
 
-    async fn sync_account_state(&mut self, account_addr: SuiAddress) -> Result<(), Error> {
+    async fn sync_account_state(&self, account_addr: SuiAddress) -> Result<(), Error> {
         let url = format!("{}/api/sync_account_state", self.url);
         let client = reqwest::Client::new();
         let address = account_addr.to_string();
@@ -285,15 +285,8 @@ impl GatewayAPI for RestGatewayClient {
             .objects
             .into_iter()
             .map(NamedObjectRef::to_object_ref)
-            .collect();
+            .collect::<Result<Vec<_>, anyhow::Error>>()?;
         Ok(objects)
-    }
-
-    async fn download_owned_objects_not_in_db(
-        &mut self,
-        account_addr: SuiAddress,
-    ) -> Result<BTreeSet<ObjectRef>, anyhow::Error> {
-        todo!()
     }
 }
 

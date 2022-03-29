@@ -161,7 +161,10 @@ pub trait GatewayAPI {
     async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error>;
 
     /// Get refs of all objects we own from local cache.
-    fn get_owned_objects(&mut self, account_addr: SuiAddress) -> Vec<ObjectRef>;
+    fn get_owned_objects(
+        &mut self,
+        account_addr: SuiAddress,
+    ) -> Result<Vec<ObjectRef>, anyhow::Error>;
 }
 
 impl<A> GatewayState<A>
@@ -678,9 +681,13 @@ where
         Ok(result)
     }
 
-    fn get_owned_objects(&mut self, account_addr: SuiAddress) -> Vec<ObjectRef> {
-        self.store
+    fn get_owned_objects(
+        &mut self,
+        account_addr: SuiAddress,
+    ) -> Result<Vec<ObjectRef>, anyhow::Error> {
+        Ok(self
+            .store
             .get_account_objects(account_addr)
-            .unwrap_or_default()
+            .unwrap_or_default())
     }
 }

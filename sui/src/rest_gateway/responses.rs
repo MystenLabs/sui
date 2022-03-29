@@ -12,37 +12,42 @@ use serde::Serialize;
 use serde_with::base64::Base64;
 use serde_with::serde_as;
 
-use sui_types::base_types::bytes_as_hex;
-use sui_types::base_types::bytes_from_hex;
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
 use sui_types::crypto::SignableBytes;
 use sui_types::messages::TransactionData;
 
-#[derive(Serialize, Deserialize)]
+#[serde_as]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ObjectResponse {
     pub objects: Vec<NamedObjectRef>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct NamedObjectRef {
-    object_id: ObjectID,
-    version: SequenceNumber,
-    #[serde(serialize_with = "bytes_as_hex", deserialize_with = "bytes_from_hex")]
-    digest: ObjectDigest,
+    /** Object id Hex.*/
+    object_id: String,
+    /** Object version.*/
+    version: u64,
+    /** Object digest, Base64 encoded.*/
+    digest: String,
 }
 
 impl NamedObjectRef {
     pub fn from((object_id, version, digest): ObjectRef) -> Self {
         Self {
-            object_id,
-            version,
-            digest,
+            object_id: object_id.to_hex(),
+            version: version.value(),
+            digest: base64::encode(digest),
         }
     }
 
-    pub fn to_object_ref(self) -> ObjectRef {
-        (self.object_id, self.version, self.digest)
+    pub fn to_object_ref(self) -> Result<ObjectRef, anyhow::Error> {
+        Ok((
+            ObjectID::try_from(self.object_id)?,
+            SequenceNumber::from(self.version),
+            ObjectDigest::try_from(&*base64::decode(self.digest)?)?,
+        ))
     }
 }
 
@@ -99,7 +104,7 @@ impl TransactionBytes {
 
 impl JsonSchema for TransactionBytes {
     fn schema_name() -> String {
-        "transaction_bytes".to_string()
+        "TransactionBytes".to_string()
     }
 
     fn json_schema(_: &mut SchemaGenerator) -> Schema {

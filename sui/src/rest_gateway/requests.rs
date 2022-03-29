@@ -81,7 +81,7 @@ pub struct GetObjectsRequest {
 }
 
 /**
-    Request containing the object schema for which info is to be retrieved.
+Request containing the object schema for which info is to be retrieved.
 
 If owner is specified we look for this object in that address's account store,
 otherwise we look for it in the shared object store.
@@ -120,4 +120,31 @@ pub struct PublishRequest {
     pub gas_object_id: String,
     /** Required; Gas budget required because of the need to execute module initializers */
     pub gas_budget: u64,
+}
+
+/**
+Request containing the information needed to execute a transfer transaction.
+ */
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TransferTransactionRequest {
+    /** Required; Hex code as string representing the address to be sent from */
+    pub from_address: String,
+    /** Required; Hex code as string representing the object id */
+    pub object_id: String,
+    /** Required; Hex code as string representing the address to be sent to */
+    pub to_address: String,
+    /** Required; Hex code as string representing the gas object id to be used as payment */
+    pub gas_object_id: String,
+}
+
+/**
+Request containing the address that requires a sync.
+ */
+// TODO: This call may not be required. Sync should not need to be triggered by user.
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncRequest {
+    /** Required; Hex code as string representing the address */
+    pub address: String,
 }

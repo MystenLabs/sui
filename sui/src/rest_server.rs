@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use dropshot::{endpoint, Query, TypedBody};
+use dropshot::{endpoint, HttpResponseOk, Query, TypedBody};
 #[allow(unused_imports)]
 use dropshot::{
     ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError,
@@ -25,7 +25,7 @@ use sui::config::PersistedConfig;
 use sui::gateway::GatewayConfig;
 use sui::rest_gateway::requests::{
     CallRequest, GetObjectInfoRequest, GetObjectSchemaRequest, GetObjectsRequest, MergeCoinRequest,
-    PublishRequest, SignedTransaction, SplitCoinRequest,
+    PublishRequest, SignedTransaction, SplitCoinRequest, SyncRequest, TransferTransactionRequest,
 };
 use sui::rest_gateway::responses::{
     custom_http_error, JsonResponse, NamedObjectRef, ObjectResponse, ObjectSchemaResponse,
@@ -145,17 +145,15 @@ Generate OpenAPI documentation.
     path = "/docs",
     tags = [ "docs" ],
 }]
-async fn docs(rqctx: Arc<RequestContext<ServerContext>>) -> Result<Response<Body>, HttpError> {
+async fn docs(
+    rqctx: Arc<RequestContext<ServerContext>>,
+) -> Result<HttpResponseOk<DocumentationResponse>, HttpError> {
     let server_context = rqctx.context();
     let documentation = &server_context.documentation;
 
-    custom_http_response(
-        StatusCode::OK,
-        DocumentationResponse {
-            documentation: documentation.clone(),
-        },
-    )
-    .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")))
+    Ok(HttpResponseOk(DocumentationResponse {
+        documentation: documentation.clone(),
+    }))
 }
 
 /**
@@ -194,7 +192,7 @@ Returns list of objects owned by an address.
 async fn get_objects(
     ctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectsRequest>,
-) -> Result<HttpResponseOk<JsonResponse<ObjectResponse>>, HttpError> {
+) -> Result<HttpResponseOk<ObjectResponse>, HttpError> {
     let mut gateway = ctx.context().gateway.lock().await;
     let get_objects_params = query.into_inner();
     let address = get_objects_params.address;
@@ -212,9 +210,7 @@ async fn get_objects(
         .map(NamedObjectRef::from)
         .collect();
 
-    let response = ObjectResponse { objects };
-
-    Ok(HttpResponseOk(JsonResponse(response)))
+    Ok(HttpResponseOk(ObjectResponse { objects }))
 }
 
 /**
@@ -300,7 +296,7 @@ Returns the object information for a specified object.
 #[endpoint {
     method = GET,
     path = "/api/object_info",
-    tags = [ "wallet" ],
+    tags = [ "API" ],
 }]
 async fn object_info(
     ctx: Arc<RequestContext<ServerContext>>,
@@ -319,24 +315,6 @@ async fn object_info(
         )
     })?;
     Ok(HttpResponseOk(JsonResponse(object_read)))
-}
-
-/**
-Request containing the information needed to execute a transfer transaction.
-*/
-#[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct TransferTransactionRequest {
-    /** Required; Hex code as string representing the address to be sent from */
-    from_address: String,
-    /** Required; Hex code as string representing the object id */
-    object_id: String,
-    /** Required; Hex code as string representing the address to be sent to */
-    to_address: String,
-    /** Required; Hex code as string representing the gas object id to be used as payment */
-    gas_object_id: String,
-    /** Required; Gas budget required as a cap for gas usage */
-    gas_budget: u64,
 }
 
 /**
@@ -359,7 +337,7 @@ Example TransferTransactionRequest
 #[endpoint {
     method = POST,
     path = "/api/new_transfer",
-    tags = [ "api" ],
+    tags = [ "API" ],
 }]
 async fn new_transfer(
     ctx: Arc<RequestContext<ServerContext>>,
@@ -386,7 +364,7 @@ async fn new_transfer(
 #[endpoint {
 method = POST,
 path = "/api/split_coin",
-tags = [ "api" ],
+tags = [ "API" ],
 }]
 async fn split_coin(
     ctx: Arc<RequestContext<ServerContext>>,
@@ -417,7 +395,7 @@ async fn split_coin(
 #[endpoint {
 method = POST,
 path = "/api/merge_coin",
-tags = [ "api" ],
+tags = [ "API" ],
 }]
 async fn merge_coin(
     ctx: Arc<RequestContext<ServerContext>>,
@@ -510,17 +488,6 @@ async fn move_call(
 }
 
 /**
-Request containing the address that requires a sync.
-*/
-// TODO: This call may not be required. Sync should not need to be triggered by user.
-#[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct SyncRequest {
-    /** Required; Hex code as string representing the address */
-    address: String,
-}
-
-/**
 Synchronize client state with authorities. This will fetch the latest information
 on all objects owned by each address that is managed by this client state.
  */
@@ -534,7 +501,7 @@ async fn sync_account_state(
     request: TypedBody<SyncRequest>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     let sync_params = request.into_inner();
-    let mut gateway = ctx.context().gateway.lock().await;
+    let gateway = ctx.context().gateway.lock().await;
 
     let address = decode_bytes_hex(sync_params.address.as_str()).map_err(|error| {
         custom_http_error(
