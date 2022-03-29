@@ -3,13 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::same_item_push)] // get_key_pair returns random elements
 
-use super::*;
+use std::time::Instant;
+
+use crate::crypto::SignableBytes;
 use crate::{
     base_types::*,
     crypto::{get_key_pair, AuthoritySignature},
     object::Object,
 };
-use std::time::Instant;
+
+use super::*;
 
 // Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
 fn compare_certified_transactions(o1: &CertifiedTransaction, o2: &CertifiedTransaction) {
@@ -383,4 +386,24 @@ fn test_time_cert() {
         "Read & Quickcheck Cert: {} microsec",
         now.elapsed().as_micros() / count
     );
+}
+
+#[test]
+fn test_signable_serde() -> Result<(), anyhow::Error> {
+    let owner = SuiAddress::random_for_testing_only();
+    let o1 = Object::with_id_owner_for_testing(ObjectID::random(), owner);
+    let o2 = Object::with_id_owner_for_testing(ObjectID::random(), owner);
+    let data = TransactionData::new_transfer(
+        owner,
+        o1.compute_object_reference(),
+        owner,
+        o2.compute_object_reference(),
+    );
+
+    // Serialize
+    let bytes = data.to_bytes();
+    // Deserialize
+    let deserialized_data = TransactionData::from_signable_bytes(bytes)?;
+    assert_eq!(data, deserialized_data);
+    Ok(())
 }

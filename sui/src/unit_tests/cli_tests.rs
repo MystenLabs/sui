@@ -17,7 +17,7 @@ use sui::config::{
     AccountConfig, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, ObjectConfig,
     PersistedConfig, WalletConfig, AUTHORITIES_DB_NAME,
 };
-use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
+use sui::gateway::{GatewayConfig, GatewayType};
 use sui::keystore::KeystoreType;
 use sui::sui_commands::{genesis, SuiNetwork, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use sui::sui_json::SuiJsonValue;
@@ -121,7 +121,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     let wallet_config = WalletConfig {
         accounts: vec![],
         keystore: KeystoreType::File(working_dir.join("wallet.key")),
-        gateway: GatewayType::Embedded(EmbeddedGatewayConfig {
+        gateway: GatewayType::Embedded(GatewayConfig {
             db_folder_path: working_dir.join("client_db"),
             ..Default::default()
         }),
@@ -655,7 +655,7 @@ async fn start_test_network(
     WalletConfig {
         accounts,
         keystore: KeystoreType::File(keystore_path),
-        gateway: GatewayType::Embedded(EmbeddedGatewayConfig {
+        gateway: GatewayType::Embedded(GatewayConfig {
             db_folder_path,
             authorities,
             ..Default::default()

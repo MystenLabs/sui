@@ -27,7 +27,7 @@ use sui_types::object::Object;
 use crate::config::{
     AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
 };
-use crate::gateway::{EmbeddedGatewayConfig, GatewayType};
+use crate::gateway::{GatewayConfig, GatewayType};
 use crate::keystore::{Keystore, KeystoreType, SuiKeystore};
 
 const SUI_DIR: &str = ".sui";
@@ -141,7 +141,7 @@ impl SuiCommand {
                 let wallet_config = WalletConfig {
                     accounts,
                     keystore: KeystoreType::File(keystore_path),
-                    gateway: GatewayType::Embedded(EmbeddedGatewayConfig {
+                    gateway: GatewayType::Embedded(GatewayConfig {
                         db_folder_path,
                         authorities: network_config.get_authority_infos(),
                         ..Default::default()

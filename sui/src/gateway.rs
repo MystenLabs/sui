@@ -7,10 +7,11 @@ use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use std::time::Duration;
 
-use anyhow::{anyhow, Error};
+use anyhow::Error;
 use async_trait::async_trait;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -20,19 +21,19 @@ use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::{GatewayAPI, GatewayClient, GatewayState};
 use sui_network::network::NetworkClient;
 use sui_network::transport;
-use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
+use sui_types::base_types::{encode_bytes_hex, AuthorityName, ObjectID, ObjectRef, SuiAddress};
 use sui_types::committee::Committee;
-use sui_types::crypto::SignableBytes;
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 
 use crate::config::{AuthorityInfo, Config};
-use crate::rest_server_response::{NamedObjectRef, ObjectResponse};
+use crate::rest_gateway::requests::SplitCoinRequest;
+use crate::rest_gateway::responses::{NamedObjectRef, ObjectResponse, TransactionBytes};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum GatewayType {
-    Embedded(EmbeddedGatewayConfig),
+    Embedded(GatewayConfig),
     Rest(String),
 }
 
@@ -82,7 +83,7 @@ impl GatewayType {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct EmbeddedGatewayConfig {
+pub struct GatewayConfig {
     pub authorities: Vec<AuthorityInfo>,
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
@@ -90,9 +91,9 @@ pub struct EmbeddedGatewayConfig {
     pub db_folder_path: PathBuf,
 }
 
-impl Config for EmbeddedGatewayConfig {}
+impl Config for GatewayConfig {}
 
-impl EmbeddedGatewayConfig {
+impl GatewayConfig {
     pub fn make_committee(&self) -> Committee {
         let voting_rights = self
             .authorities
@@ -118,7 +119,7 @@ impl EmbeddedGatewayConfig {
     }
 }
 
-impl Default for EmbeddedGatewayConfig {
+impl Default for GatewayConfig {
     fn default() -> Self {
         Self {
             authorities: vec![],
@@ -133,16 +134,13 @@ impl Default for EmbeddedGatewayConfig {
 struct RestGatewayClient {
     url: String,
 }
-
 #[async_trait]
 #[allow(unused_variables)]
 impl GatewayAPI for RestGatewayClient {
     async fn execute_transaction(&mut self, tx: Transaction) -> Result<TransactionResponse, Error> {
         let url = format!("{}/api/execute_transaction", self.url);
-        let client = reqwest::Client::new();
-
         let data = tx.data.to_base64();
-        let sig_and_pub_key = format!("{:?}", tx.signature);
+        let sig_and_pub_key = format!("{:?}", tx.tx_signature);
         let split = sig_and_pub_key.split('@').collect::<Vec<_>>();
         let signature = split[0];
         let pub_key = split[1];
@@ -152,9 +150,7 @@ impl GatewayAPI for RestGatewayClient {
             "signature" : signature,
             "pub_key" : pub_key
         });
-        let res = client.post(url).body(body.to_string()).send().await?;
-
-        Ok(res.json().await?)
+        Ok(Self::post(url, body).await?)
     }
 
     async fn transfer_coin(
@@ -165,24 +161,17 @@ impl GatewayAPI for RestGatewayClient {
         recipient: SuiAddress,
     ) -> Result<TransactionData, Error> {
         let url = format!("{}/api/new_transfer", self.url);
-        let client = reqwest::Client::new();
 
         let object_id = object_id.to_hex();
         let gas_payment = gas_payment.to_hex();
-
         let value = json!({
             "toAddress" : recipient.to_string(),
             "fromAddress" : signer.to_string(),
             "objectId" : object_id,
             "gasObjectId" : gas_payment
         });
-        let res = client.post(url).body(value.to_string()).send().await?;
-        let res: Value = res.json().await?;
-        let tx = res["unsigned_tx_base64"]
-            .as_str()
-            .ok_or_else(|| anyhow!("Error encountered while retrieving transaction data."))?;
-        let tx = base64::decode(tx)?;
-        Ok(TransactionData::from_signable_bytes(tx)?)
+        let tx: TransactionBytes = Self::post(url, value).await?;
+        Ok(tx.to_data()?)
     }
 
     async fn sync_account_state(&mut self, account_addr: SuiAddress) -> Result<(), Error> {
@@ -208,7 +197,18 @@ impl GatewayAPI for RestGatewayClient {
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
     ) -> Result<TransactionData, Error> {
-        todo!()
+        let url = format!("{}/api/move_call", self.url);
+
+        let body = json! ({
+            "sender" : signer.to_string(),
+            "packageObjectId" : package_object_ref.0,
+            "module" : module,
+            "function" : function,
+            "typeArgs" : type_arguments,
+            "gasObjectId": gas_object_ref.0,
+        });
+
+        Ok(Self::post(url, body).await?)
     }
 
     async fn publish(
@@ -229,7 +229,16 @@ impl GatewayAPI for RestGatewayClient {
         gas_payment: ObjectID,
         gas_budget: u64,
     ) -> Result<TransactionData, Error> {
-        todo!()
+        let url = format!("{}/api/split_coin", self.url);
+        let request = SplitCoinRequest {
+            signer: encode_bytes_hex(&signer),
+            coin_object_id: coin_object_id.to_hex(),
+            split_amounts,
+            gas_payment: gas_payment.to_hex(),
+            gas_budget,
+        };
+        let tx: TransactionBytes = Self::post(url, serde_json::to_value(request)?).await?;
+        Ok(tx.to_data()?)
     }
 
     async fn merge_coins(
@@ -245,8 +254,7 @@ impl GatewayAPI for RestGatewayClient {
 
     async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, Error> {
         let url = format!("{}/api/object_info?objectId={}", self.url, object_id);
-        let response = reqwest::get(url).await?;
-        Ok(response.json().await?)
+        Ok(Self::get(url).await?)
     }
 
     fn get_owned_objects(
@@ -269,5 +277,18 @@ impl GatewayAPI for RestGatewayClient {
         account_addr: SuiAddress,
     ) -> Result<BTreeSet<ObjectRef>, anyhow::Error> {
         todo!()
+    }
+}
+
+impl RestGatewayClient {
+    async fn post<T: DeserializeOwned>(url: String, body: Value) -> Result<T, anyhow::Error> {
+        let client = reqwest::Client::new();
+        let response = client.post(url).body(body.to_string()).send().await?;
+        Ok(response.error_for_status()?.json().await?)
+    }
+
+    async fn get<T: DeserializeOwned>(url: String) -> Result<T, anyhow::Error> {
+        let response = reqwest::get(url).await?;
+        Ok(response.error_for_status()?.json().await?)
     }
 }

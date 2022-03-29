@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use dropshot::{endpoint, Query, TypedBody, CONTENT_TYPE_JSON};
+use dropshot::{endpoint, Query, TypedBody};
 #[allow(unused_imports)]
 use dropshot::{
     ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError,
@@ -14,8 +14,7 @@ use dropshot::{
 };
 use ed25519_dalek::ed25519::signature::Signature;
 use futures::lock::Mutex;
-use http::Response;
-use hyper::{Body, StatusCode};
+use hyper::StatusCode;
 use move_core_types::identifier::Identifier;
 use move_core_types::parser::parse_type_tag;
 use move_core_types::value::MoveStructLayout;
@@ -28,6 +27,7 @@ use sui::config::{GenesisConfig, NetworkConfig, PersistedConfig};
 use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
 use sui::sui_commands;
 use sui::sui_json::{resolve_move_function_args, SuiJsonValue};
+use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::{GatewayClient, GatewayState};
 use sui_types::base_types::*;
 use sui_types::crypto;
@@ -67,8 +67,7 @@ async fn main() -> Result<(), String> {
         .json()
         .map_err(|e| e.to_string())?;
 
-    let config: EmbeddedGatewayConfig =
-        PersistedConfig::read(&PathBuf::from("./gateway.conf")).unwrap();
+    let config: GatewayConfig = PersistedConfig::read(&PathBuf::from("./gateway.conf")).unwrap();
     let committee = config.make_committee();
     let authority_clients = config.make_authority_clients();
     let gateway = Box::new(GatewayState::new(
@@ -92,23 +91,16 @@ fn create_api() -> ApiDescription<ServerContext> {
     // [DOCS]
     api.register(docs).unwrap();
 
-    // [DEBUG]
-    // api.register(genesis).unwrap();
-    /*    api.register(sui_start).unwrap();
-    api.register(sui_stop).unwrap();*/
-
-    // [WALLET]
-    //api.register(get_addresses).unwrap();
+    // [API]
     api.register(get_objects).unwrap();
     api.register(object_schema).unwrap();
     api.register(object_info).unwrap();
     api.register(new_transfer).unwrap();
+    api.register(split_coin).unwrap();
     api.register(publish).unwrap();
-    api.register(call).unwrap();
+    api.register(move_call).unwrap();
     api.register(sync_account_state).unwrap();
     api.register(execute_transaction).unwrap();
-
-    // [GATEWAY_API]
 
     api
 }
@@ -161,287 +153,15 @@ async fn docs(rqctx: Arc<RequestContext<ServerContext>>) -> Result<Response<Body
     )
     .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")))
 }
-
-/**
-Request for genesis type.
-*/
-#[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct GenesisRequest {
-    /** Set to read genesis & keystore state from file. */
-    custom: bool,
-}
-
-/**
-Response containing the resulting wallet & network config of the
-provided genesis configuration.
- */
-#[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct GenesisResponse {
-    /** List of managed addresses and the list of authorities */
-    addresses: serde_json::Value,
-    /** Information about authorities and the list of loaded move packages. */
-    network_config: serde_json::Value,
-}
-
-/**
-Specify the genesis state of the network.
-
-You can specify a genesis file to start network with custom genesis state.
-
-Note: This is a temporary endpoint that will no longer be needed once the
-network has been started on testnet or mainnet.
- */
-/*#[endpoint {
-    method = POST,
-    path = "/sui/genesis",
-    tags = [ "debug" ],
-}]
-async fn genesis(
-    rqctx: Arc<RequestContext<ServerContext>>,
-    request: TypedBody<GenesisRequest>,
-) -> Result<Response<Body>, HttpError> {
-    let context = rqctx.context();
-    let genesis_params = request.into_inner();
-    // Using a new working dir for genesis, this directory will be deleted when stop end point is called.
-    let working_dir = PathBuf::from(".").join(format!("{}", ObjectID::random()));
-
-    if context.server_state.lock().await.is_some() {
-        return Err(custom_http_error(
-            StatusCode::CONFLICT,
-            String::from("Cannot run genesis on a existing network, please make a POST request to the `sui/stop` endpoint to reset."),
-        ));
-    }
-
-    let genesis_conf = if genesis_params.custom {
-        PersistedConfig::read(&PathBuf::from("genesis.conf")).map_err(|error| {
-            custom_http_error(
-                StatusCode::BAD_REQUEST,
-                format!("Could not load custom genesis configuration: {error}"),
-            )
-        })?
-    } else {
-        GenesisConfig::default_genesis(&working_dir).map_err(|error| {
-            custom_http_error(
-                StatusCode::BAD_REQUEST,
-                format!("Unable to create default genesis configuration: {error}"),
-            )
-        })?
-    };
-
-    let (network_config, accounts, mut keystore) =
-        sui_commands::genesis(genesis_conf).await.map_err(|err| {
-            custom_http_error(StatusCode::BAD_REQUEST, format!("Genesis error: {:?}", err))
-        })?;
-
-    if genesis_params.custom {
-        keystore = SuiKeystore::load_or_create(&PathBuf::from("wallet.key")).map_err(|err| {
-            custom_http_error(
-                StatusCode::BAD_REQUEST,
-                format!("Could not load keystore: {:?}", err),
-            )
-        })?;
-    }
-
-    let authorities = network_config.get_authority_infos();
-    let gateway = GatewayType::Embedded(EmbeddedGatewayConfig {
-        authorities,
-        db_folder_path: working_dir.join("client_db"),
-        ..Default::default()
-    });
-
-    let addresses = accounts.iter().map(encode_bytes_hex).collect::<Vec<_>>();
-    let addresses_json = json!(addresses);
-    let network_config_json = json!(network_config);
-
-    let state = ServerState {
-        config: network_config,
-        gateway: gateway.init(),
-        addresses: accounts,
-        working_dir: working_dir.to_path_buf(),
-        authority_handles: vec![],
-    };
-
-    *context.server_state.lock().await = Some(state);
-
-    custom_http_response(
-        StatusCode::OK,
-        GenesisResponse {
-            addresses: addresses_json,
-            network_config: network_config_json,
-        },
-    )
-}*/
-
-/**
-Start servers with the specified configurations from the genesis endpoint.
-
-Note: This is a temporary endpoint that will no longer be needed once the
-network has been started on testnet or main-net.
- */
-/*#[endpoint {
-    method = POST,
-    path = "/sui/start",
-    tags = [ "debug" ],
-}]
-async fn sui_start(ctx: Arc<RequestContext<ServerContext>>) -> Result<Response<Body>, HttpError> {
-    let mut state = ctx.context().server_state.lock().await;
-    let state = state.as_mut().ok_or_else(server_state_error)?;
-
-    if !state.authority_handles.is_empty() {
-        return Err(custom_http_error(
-            StatusCode::FORBIDDEN,
-            String::from("Sui network is already running."),
-        ));
-    }
-
-    let committee = Committee::new(
-        state
-            .config
-            .authorities
-            .iter()
-            .map(|info| (*info.key_pair.public_key_bytes(), info.stake))
-            .collect(),
-    );
-    let mut handles = FuturesUnordered::new();
-
-    for authority in &state.config.authorities {
-        let server = sui_commands::make_server(authority, &committee, state.config.buffer_size)
-            .await
-            .map_err(|error| {
-                custom_http_error(
-                    StatusCode::CONFLICT,
-                    format!("Unable to make server: {error}"),
-                )
-            })?;
-        handles.push(async move {
-            match server.spawn().await {
-                Ok(server) => Ok(server),
-                Err(err) => {
-                    return Err(custom_http_error(
-                        StatusCode::FAILED_DEPENDENCY,
-                        format!("Failed to start server: {err}"),
-                    ));
-                }
-            }
-        })
-    }
-
-    let num_authorities = handles.len();
-    info!("Started {num_authorities} authorities");
-
-    while let Some(spawned_server) = handles.next().await {
-        state.authority_handles.push(task::spawn(async {
-            if let Err(err) = spawned_server.unwrap().join().await {
-                error!("Server ended with an error: {err}");
-            }
-        }));
-    }
-
-    for address in state.addresses.clone() {
-        state
-            .gateway
-            .sync_account_state(address)
-            .await
-            .map_err(|err| {
-                custom_http_error(
-                    StatusCode::FAILED_DEPENDENCY,
-                    format!("Sync error: {:?}", err),
-                )
-            })?;
-    }
-    custom_http_response(
-        StatusCode::OK,
-        format!("Started {num_authorities} authorities"),
-    )
-}*/
-
-/**
-Stop sui network and delete generated configs & storage.
-
-Note: This is a temporary endpoint that will no longer be needed once the
-network has been started on testnet or mainnet.
- */
-/*#[endpoint {
-    method = POST,
-    path = "/sui/stop",
-    tags = [ "debug" ],
-}]
-async fn sui_stop(
-    rqctx: Arc<RequestContext<ServerContext>>,
-) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-    let server_context = rqctx.context();
-    // Taking state object without returning ownership
-    let mut state = server_context.server_state.lock().await;
-    let state = state.take().ok_or_else(server_state_error)?;
-
-    for authority_handle in &state.authority_handles {
-        authority_handle.abort();
-    }
-
-    // Delete everything from working dir
-    fs::remove_dir_all(&state.working_dir).ok();
-
-    Ok(HttpResponseUpdatedNoContent())
-}
-*/
-/**
-Response containing the managed addresses for this client.
- */
-#[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct GetAddressResponse {
-    /** Vector of hex codes as strings representing the managed addresses */
-    addresses: Vec<String>,
-}
-
-/**
-Retrieve all managed addresses for this client.
- */
-/*#[endpoint {
-    method = GET,
-    path = "/addresses",
-    tags = [ "wallet" ],
-}]
-async fn get_addresses(
-    ctx: Arc<RequestContext<ServerContext>>,
-) -> Result<Response<Body>, HttpError> {
-    let mut state = ctx.context().server_state.lock().await;
-    let state = state.as_mut().ok_or_else(server_state_error)?;
-
-    // TODO: Speed up sync operations by kicking them off concurrently.
-    // Also need to investigate if this should be an automatic sync or manually triggered.
-    let addresses = state.addresses.clone();
-    for address in &addresses {
-        if let Err(err) = state.gateway.sync_account_state(*address).await {
-            return Err(custom_http_error(
-                StatusCode::NOT_FOUND,
-                format!("Can't create client state: {err}"),
-            ));
-        }
-    }
-    custom_http_response(
-        StatusCode::OK,
-        GetAddressResponse {
-            addresses: addresses
-                .into_iter()
-                .map(|address| format!("{address}"))
-                .collect(),
-        },
-    )
-}*/
-
 /**
 Request containing the address of which objecst are to be retrieved.
-*/
+ */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct GetObjectsRequest {
     /** Required; Hex code as string representing the address */
     address: String,
 }
-
 /**
 JSON representation of an object in the Sui network.
  */
@@ -478,7 +198,7 @@ Returns list of objects owned by an address.
 async fn get_objects(
     ctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectsRequest>,
-) -> Result<Response<Body>, HttpError> {
+) -> Result<HttpResponseOk<JsonResponse<ObjectResponse>>, HttpError> {
     let mut gateway = ctx.context().gateway.lock().await;
     let get_objects_params = query.into_inner();
     let address = get_objects_params.address;
@@ -498,8 +218,7 @@ async fn get_objects(
 
     let response = ObjectResponse { objects };
 
-    let value = serde_json::to_value(response).unwrap();
-    custom_http_response(StatusCode::OK, value)
+    Ok(HttpResponseOk(JsonResponse(response)))
 }
 
 /**
@@ -537,7 +256,7 @@ Returns the schema for a specified object.
 async fn object_schema(
     ctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectSchemaRequest>,
-) -> Result<Response<Body>, HttpError> {
+) -> Result<HttpResponseOk<ObjectSchemaResponse>, HttpError> {
     let gateway = ctx.context().gateway.lock().await;
     let object_info_params = query.into_inner();
 
@@ -579,7 +298,7 @@ async fn object_schema(
         )
     })?;
 
-    custom_http_response(StatusCode::OK, ObjectSchemaResponse { schema })
+    Ok(HttpResponseOk(ObjectSchemaResponse { schema }))
 }
 
 /**
@@ -627,7 +346,7 @@ Returns the object information for a specified object.
 async fn object_info(
     ctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectInfoRequest>,
-) -> Result<Response<Body>, HttpError> {
+) -> Result<HttpResponseOk<JsonResponse<ObjectRead>>, HttpError> {
     let gateway = ctx.context().gateway.lock().await;
 
     let object_info_params = query.into_inner();
@@ -640,7 +359,7 @@ async fn object_info(
             format!("Error while getting object info: {:?}", error),
         )
     })?;
-    custom_http_response(StatusCode::OK, JsonResponse::from(object_read)?)
+    Ok(HttpResponseOk(JsonResponse(object_read)))
 }
 
 /**
@@ -686,7 +405,7 @@ Example TransferTransactionRequest
 async fn new_transfer(
     ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<TransferTransactionRequest>,
-) -> Result<Response<Body>, HttpError> {
+) -> Result<HttpResponseOk<TransactionBytes>, HttpError> {
     let mut gateway = ctx.context().gateway.lock().await;
     let request = request.into_inner();
 
@@ -702,11 +421,38 @@ async fn new_transfer(
     .await
     .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, error.to_string()))?;
 
-    let body = json!({
-        "unsigned_tx_base64" : tx_data.to_base64()
-    });
+    Ok(HttpResponseOk(TransactionBytes::new(tx_data)))
+}
 
-    custom_http_response(StatusCode::OK, body)
+#[endpoint {
+method = POST,
+path = "/api/split_coin",
+tags = [ "api" ],
+}]
+async fn split_coin(
+    ctx: Arc<RequestContext<ServerContext>>,
+    request: TypedBody<SplitCoinRequest>,
+) -> Result<HttpResponseOk<TransactionBytes>, HttpError> {
+    let mut gateway = ctx.context().gateway.lock().await;
+    let request = request.into_inner();
+
+    let tx_data = async {
+        let signer = decode_bytes_hex(request.signer.as_str())?;
+        let object_id = ObjectID::try_from(request.coin_object_id)?;
+        let gas_object_id = ObjectID::try_from(request.gas_payment)?;
+        gateway
+            .split_coin(
+                signer,
+                object_id,
+                request.split_amounts,
+                gas_object_id,
+                request.gas_budget,
+            )
+            .await
+    }
+    .await
+    .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, error.to_string()))?;
+    Ok(HttpResponseOk(TransactionBytes::new(tx_data)))
 }
 
 /**
@@ -741,16 +487,14 @@ need to execute module initializers.
 async fn publish(
     ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<PublishRequest>,
-) -> Result<Response<Body>, HttpError> {
-    let mut state = ctx.context().server_state.lock().await;
-    let state = state.as_mut().ok_or_else(server_state_error)?;
-
+) -> Result<HttpResponseOk<TransactionBytes>, HttpError> {
+    let mut gateway = ctx.context().gateway.lock().await;
     let publish_params = request.into_inner();
 
-    let publish_response = handle_publish(publish_params, state)
+    let data = handle_publish(publish_params, &mut gateway)
         .await
         .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{:#}", err)))?;
-    custom_http_response(StatusCode::OK, publish_response_to_json(publish_response)?)
+    Ok(HttpResponseOk(TransactionBytes::new(data)))
 }
 
 /**
@@ -798,20 +542,24 @@ Example CallRequest
  */
 #[endpoint {
     method = POST,
-    path = "/call",
-    tags = [ "wallet" ],
+    path = "/api/move_call",
+    tags = [ "api" ],
 }]
-async fn call(
+async fn move_call(
     ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<CallRequest>,
-) -> Result<Response<Body>, HttpError> {
+) -> Result<HttpResponseOk<Value>, HttpError> {
     let mut gateway = ctx.context().gateway.lock().await;
 
     let call_params = request.into_inner();
     let data = handle_move_call(call_params, &mut gateway)
         .await
         .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{:#}", err)))?;
-    custom_http_response(StatusCode::OK, JsonResponse::from(data)?)
+
+    let body = json!({
+        "unsigned_tx_base64" : data.to_base64()
+    });
+    Ok(HttpResponseOk(body))
 }
 
 /**
@@ -869,7 +617,7 @@ tags = [ "api" ],
 async fn execute_transaction(
     ctx: Arc<RequestContext<ServerContext>>,
     response: TypedBody<SignedTransaction>,
-) -> Result<HttpResponseOk<JsonResponse>, HttpError> {
+) -> Result<HttpResponseOk<JsonResponse<TransactionResponse>>, HttpError> {
     let response = response.into_inner();
     let mut gateway = ctx.context().gateway.lock().await;
 
@@ -888,128 +636,8 @@ async fn execute_transaction(
     .await;
     let response = response
         .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, err.to_string()))?;
-    Ok(HttpResponseOk(JsonResponse(
-        serde_json::to_value(response)
-            .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, err.to_string()))?,
-    )))
+    Ok(HttpResponseOk(JsonResponse(response)))
 }
-
-#[derive(Deserialize, Serialize, JsonSchema)]
-struct SignedTransaction {
-    unsigned_tx_base64: String,
-    signature: String,
-    pub_key: String,
-}
-
-/*async fn get_object_effects(
-    state: &ServerState,
-    transaction_effects: TransactionEffects,
-) -> Result<HashMap<String, Vec<HashMap<String, String>>>, HttpError> {
-    let mut object_effects_summary = HashMap::new();
-    object_effects_summary.insert(
-        String::from("created_objects"),
-        get_obj_ref_effects(
-            state,
-            transaction_effects
-                .created
-                .into_iter()
-                .map(|(oref, _)| oref)
-                .collect::<Vec<_>>(),
-        )
-        .await?,
-    );
-    object_effects_summary.insert(
-        String::from("mutated_objects"),
-        get_obj_ref_effects(
-            state,
-            transaction_effects
-                .mutated
-                .into_iter()
-                .map(|(oref, _)| oref)
-                .collect::<Vec<_>>(),
-        )
-        .await?,
-    );
-    object_effects_summary.insert(
-        String::from("unwrapped_objects"),
-        get_obj_ref_effects(
-            state,
-            transaction_effects
-                .unwrapped
-                .into_iter()
-                .map(|(oref, _)| oref)
-                .collect::<Vec<_>>(),
-        )
-        .await?,
-    );
-    object_effects_summary.insert(
-        String::from("deleted_objects"),
-        get_obj_ref_effects(state, transaction_effects.deleted).await?,
-    );
-    object_effects_summary.insert(
-        String::from("wrapped_objects"),
-        get_obj_ref_effects(state, transaction_effects.wrapped).await?,
-    );
-    object_effects_summary.insert(
-        String::from("events"),
-        get_events(transaction_effects.events)?,
-    );
-    Ok(object_effects_summary)
-}*/
-
-/*fn get_events(events: Vec<Event>) -> Result<Vec<HashMap<String, String>>, HttpError> {
-    let mut effects = Vec::new();
-    for event in events {
-        let mut effect: HashMap<String, String> = HashMap::new();
-        effect.insert("type".to_string(), format!("{}", event.type_));
-        effect.insert("contents".to_string(), format!("{:?}", event.contents));
-        effects.push(effect);
-    }
-    Ok(effects)
-}*/
-
-/*async fn get_obj_ref_effects(
-    state: &ServerState,
-    object_refs: Vec<ObjectRef>,
-) -> Result<Vec<HashMap<String, String>>, HttpError> {
-    let mut effects = Vec::new();
-    for (object_id, sequence_number, object_digest) in object_refs {
-        let effect = get_effect(state, object_id, sequence_number, object_digest)
-            .await
-            .map_err(|error| error)?;
-        effects.push(effect);
-    }
-    Ok(effects)
-}*/
-
-/*async fn get_effect(
-    state: &ServerState,
-    object_id: ObjectID,
-    sequence_number: SequenceNumber,
-    object_digest: ObjectDigest,
-) -> Result<HashMap<String, String>, HttpError> {
-    let mut effect = HashMap::new();
-    let object = match get_object_info(state, object_id).await {
-        Ok((_, object, _)) => object,
-        Err(error) => {
-            return Err(error);
-        }
-    };
-    effect.insert(
-        "type".to_string(),
-        object
-            .data
-            .type_()
-            .map_or("Unknown Type".to_owned(), |type_| format!("{type_}")),
-    );
-    effect.insert("id".to_string(), object_id.to_string());
-    effect.insert(
-        "version".to_string(),
-        format!("{}", sequence_number.value()),
-    );
-    effect.insert("object_digest".to_string(), format!("{:?}", object_digest));
-    Ok(effect)
-}*/
 
 async fn get_object_info(
     gateway: &GatewayClient,
@@ -1041,8 +669,8 @@ async fn get_object_info(
 
 async fn handle_publish(
     publish_params: PublishRequest,
-    state: &mut ServerState,
-) -> Result<PublishResponse, anyhow::Error> {
+    gateway: &mut GatewayClient,
+) -> Result<TransactionData, anyhow::Error> {
     let compiled_modules = publish_params
         .compiled_modules
         .iter()
@@ -1052,34 +680,11 @@ async fn handle_publish(
     let gas_budget = publish_params.gas_budget;
     let gas_object_id = ObjectID::try_from(publish_params.gas_object_id)?;
     let sender: SuiAddress = decode_bytes_hex(publish_params.sender.as_str())?;
-    let (gas_obj_ref, _, _) = get_object_info(state, gas_object_id).await?;
+    let (gas_obj_ref, _, _) = get_object_info(gateway, gas_object_id).await?;
 
-    let response: Result<_, anyhow::Error> = async {
-        let data = state
-            .gateway
-            .publish(sender, compiled_modules, gas_obj_ref, gas_budget)
-            .await?;
-        let signature = state
-            .keystore
-            .read()
-            .unwrap()
-            .sign(&sender, &data.to_bytes())?;
-        Ok(state
-            .gateway
-            .execute_transaction(Transaction::new(data, signature))
-            .await?
-            .to_publish_response()?)
-    }
-    .await;
-
-    let publish_response = match response {
-        Ok(publish_response) => publish_response,
-        Err(err) => {
-            return Err(err);
-        }
-    };
-
-    Ok(publish_response)
+    gateway
+        .publish(sender, compiled_modules, gas_obj_ref, gas_budget)
+        .await
 }
 
 async fn handle_move_call(
@@ -1154,7 +759,7 @@ async fn handle_move_call(
         .await
 }
 
-fn publish_response_to_json(
+/*fn publish_response_to_json(
     publish_response: PublishResponse,
 ) -> Result<serde_json::Value, HttpError> {
     // TODO: impl JSON Schema for Gateway Responses
@@ -1193,39 +798,4 @@ fn publish_response_to_json(
                 .collect::<Vec<_>>(),
         }
     }))
-}
-
-fn custom_http_response<T: Serialize + JsonSchema>(
-    status_code: StatusCode,
-    response_body: T,
-) -> Result<Response<Body>, HttpError> {
-    let body: Body = serde_json::to_string(&response_body)
-        .map_err(|err| custom_http_error(StatusCode::INTERNAL_SERVER_ERROR, format!("{err}")))?
-        .into();
-    let res = Response::builder()
-        .status(status_code)
-        .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
-        .header(http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-        .body(body)?;
-    Ok(res)
-}
-
-fn custom_http_error(status_code: http::StatusCode, message: String) -> HttpError {
-    HttpError::for_client_error(None, status_code, message)
-}
-
-#[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase", transparent)]
-struct JsonResponse(Value);
-
-impl JsonResponse {
-    pub fn from<T>(data: T) -> Result<Self, HttpError>
-    where
-        T: Serialize,
-    {
-        let json = serde_json::to_value(&data)
-            .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, err.to_string()))?;
-
-        Ok(Self(json))
-    }
-}
+}*/

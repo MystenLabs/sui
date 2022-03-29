@@ -5,6 +5,8 @@ use std::collections::HashSet;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 
+use crate::crypto::PublicKeyBytes;
+use crate::error::SuiError;
 use ed25519_dalek::Digest;
 use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
@@ -16,9 +18,6 @@ use serde_with::base64::Base64;
 use serde_with::hex::Hex;
 use serde_with::serde_as;
 use sha3::Sha3_256;
-
-use crate::crypto::PublicKeyBytes;
-use crate::error::SuiError;
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
