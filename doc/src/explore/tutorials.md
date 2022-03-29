@@ -79,7 +79,8 @@ export O_GAS=2110ADFB7BAF889A05EA6F5889AF7724299F9BED
 ## Publish the TicTacToe game on Sui
 To keep this tutorial simple, use the TicTacToe game we implemented in [TicTacToe.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToe.move).
 
-Of course, you are welcome to [write your own package](../build/move#writing-a-package).
+Find even more [examples](examples.md) in the Sui repository. Of course, you are welcome to
+[write your own package](../build/move#writing-a-package).
 
 In order to obtain source code for the game, let us clone the Sui
 repository to the current directory:
