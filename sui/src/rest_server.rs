@@ -7,7 +7,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use dropshot::{endpoint, HttpResponseOk, Query, TypedBody};
-#[allow(unused_imports)]
 use dropshot::{
     ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError,
     HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext,
@@ -588,7 +587,7 @@ async fn handle_publish(
     let compiled_modules = publish_params
         .compiled_modules
         .iter()
-        .map(|module| decode_bytes_hex(module))
+        .map(base64::decode)
         .collect::<Result<Vec<_>, _>>()?;
 
     let gas_budget = publish_params.gas_budget;
@@ -652,44 +651,3 @@ async fn handle_move_call(
         )
         .await
 }
-
-/*fn publish_response_to_json(
-    publish_response: PublishResponse,
-) -> Result<serde_json::Value, HttpError> {
-    // TODO: impl JSON Schema for Gateway Responses
-    Ok(json!({
-        "publishResults": {
-            "package": {
-                    "object_id": publish_response.package.0.to_string(),
-                    "version": u64::from(publish_response.package.1),
-                    "object_digest": format!("{:?}", publish_response.package.2),
-                },
-            "createdObjects": json!(publish_response
-                .created_objects
-                .iter()
-                .map(|obj| {
-                    json!({
-                        "owner": format!("{:?}", obj.owner),
-                        "version": format!("{:?}", obj.version().value()),
-                        "id": format!("{:?}", obj.id()),
-                        "readonly": format!("{:?}", obj.is_read_only()),
-                        "obj_type": obj
-                            .data
-                            .type_()
-                            .map_or("Unknown Type".to_owned(), |type_| format!("{}", type_)),
-                    })
-                })
-                .collect::<Vec<_>>()),
-            "updatedGas": GasCoin::try_from(&publish_response.updated_gas)
-                .map_err(|err| custom_http_error(StatusCode::INTERNAL_SERVER_ERROR, format!("{err}")))?
-        },
-        "certificate": {
-            "signedAuthorities": publish_response
-                .certificate
-                .signatures
-                .iter()
-                .map(|(bytes, _)| encode_bytes_hex(bytes))
-                .collect::<Vec<_>>(),
-        }
-    }))
-}*/

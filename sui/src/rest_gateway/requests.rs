@@ -114,7 +114,7 @@ Request representing the contents of the Move module to be published.
 pub struct PublishRequest {
     /** Required; Hex code as string representing the sender's address */
     pub sender: String,
-    /** Required; Move modules serialized as hex */
+    /** Required; Move modules serialized as Base64 */
     pub compiled_modules: Vec<String>,
     /** Required; Hex code as string representing the gas object id */
     pub gas_object_id: String,
