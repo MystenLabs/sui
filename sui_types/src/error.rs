@@ -258,8 +258,8 @@ pub enum SuiError {
     QuorumNotReached { errors: Vec<SuiError> },
 
     // Errors returned by authority and client read API's
-    #[error("Failure serializing object in the requested format")]
-    ObjectSerializationError,
+    #[error("Failure serializing object in the requested format: {:?}", error)]
+    ObjectSerializationError { error: String },
 
     // Client side error
     #[error("Client state has a different pending transaction.")]

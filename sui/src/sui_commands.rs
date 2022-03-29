@@ -364,7 +364,7 @@ async fn make_server_with_genesis_ctx(
     .await;
 
     for object in preload_objects {
-        state.insert_object(object.clone()).await;
+        state.insert_genesis_object(object.clone()).await;
     }
 
     Ok(AuthorityServer::new(
