@@ -584,6 +584,8 @@ impl WalletCommandResult {
         };
         // Log line by line
         for line in line.lines() {
+            // Logs write to a file on the side.  Print to stdout and also log to file, for tests to pass.
+            println!("{line}");
             info!("{line}")
         }
     }

@@ -318,7 +318,14 @@ where
             .iter()
             .map(|(name, client)| {
                 let execute = map_each_authority.clone();
-                async move { (*name, execute(*name, client).await) }
+                async move {
+                    (
+                        *name,
+                        execute(*name, client)
+                            .instrument(tracing::trace_span!("quorum_map_auth", authority =? name))
+                            .await,
+                    )
+                }
             })
             .collect();
 
@@ -1103,22 +1110,13 @@ where
         &self,
         transaction: &Transaction,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        let tx_digest = transaction.digest();
         let new_certificate = self
             .process_transaction(transaction.clone(), Duration::from_secs(60))
-            .instrument(tracing::debug_span!(
-                "process_tx",
-                ?tx_digest,
-                tx_kind = transaction.data.kind_as_str()
-            ))
+            .instrument(tracing::debug_span!("process_tx"))
             .await?;
         let response = self
             .process_certificate(new_certificate.clone(), Duration::from_secs(60))
-            .instrument(tracing::debug_span!(
-                "process_cert",
-                ?tx_digest,
-                tx_kind = transaction.data.kind_as_str()
-            ))
+            .instrument(tracing::debug_span!("process_cert"))
             .await?;
 
         Ok((new_certificate, response))

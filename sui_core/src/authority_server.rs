@@ -176,11 +176,16 @@ impl AuthorityServer {
         let reply = match message {
             SerializedMessage::Transaction(message) => {
                 let tx_digest = message.digest();
+                // Enable Trace Propagation across spans/processes using tx_digest
+                let span = tracing::debug_span!(
+                    "process_tx",
+                    ?tx_digest,
+                    tx_kind = message.data.kind_as_str()
+                );
                 // No allocations: it's a 'static str!
-                let tx_kind = message.data.kind_as_str();
                 self.state
                     .handle_transaction(*message)
-                    .instrument(tracing::debug_span!("process_tx", ?tx_digest, tx_kind))
+                    .instrument(span)
                     .await
                     .map(|info| Some(serialize_transaction_info(&info)))
             }
@@ -188,12 +193,16 @@ impl AuthorityServer {
                 let confirmation_transaction = ConfirmationTransaction {
                     certificate: message.as_ref().clone(),
                 };
-                let tx_kind = message.transaction.data.kind_as_str();
                 let tx_digest = *message.digest();
+                let span = tracing::debug_span!(
+                    "process_cert",
+                    ?tx_digest,
+                    tx_kind = message.transaction.data.kind_as_str()
+                );
                 match self
                     .state
                     .handle_confirmation_transaction(confirmation_transaction)
-                    .instrument(tracing::debug_span!("process_cert", ?tx_digest, tx_kind))
+                    .instrument(span)
                     .await
                 {
                     Ok(info) => {
