@@ -31,7 +31,6 @@ use sui_types::object::{Data, Object, Owner, GAS_VALUE_FOR_TESTING};
 
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::authority_client::BUFFER_SIZE;
-use crate::gateway_state::gateway_store::AccountStore;
 use crate::gateway_state::{GatewayAPI, GatewayState};
 
 use super::*;
@@ -124,11 +123,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         let state = self.0.clone();
         let (mut tx_output, tr_output) = channel(BUFFER_SIZE);
 
-        let update_items = state
-            .lock()
-            .await
-            .handle_batch_info_request(request)
-            .await;
+        let update_items = state.lock().await.handle_batch_info_request(request).await;
 
         match update_items {
             Ok(t) => {
@@ -137,11 +132,11 @@ impl AuthorityAPI for LocalAuthorityClient {
                     let batch_info_response_item = BatchInfoResponseItem(update_item.clone());
                     let _ = tx_output.send(Ok(batch_info_response_item)).await;
                 }
-            },
+            }
             Err(e) => {
                 let err = std::io::Error::new(std::io::ErrorKind::Other, e);
                 return Err(err);
-            },
+            }
         }
         Ok(tr_output)
     }

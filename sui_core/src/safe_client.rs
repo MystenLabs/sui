@@ -5,8 +5,9 @@
 use crate::authority_client::{AuthorityAPI, BUFFER_SIZE};
 use async_trait::async_trait;
 use futures::channel::mpsc::{channel, Receiver};
-use std::io;
 use futures::{SinkExt, StreamExt};
+use std::io;
+use std::io::Error;
 use sui_types::crypto::PublicKeyBytes;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 
@@ -275,43 +276,49 @@ where
             .handle_batch_streaming(request)
             .await?;
 
-        for next_data in batch_info_items.next().await {
+        if let Some(next_data) = batch_info_items.next().await {
             match next_data {
                 Ok(batch_info_response_item) => {
                     // do security checks
                     match batch_info_response_item.clone() {
                         BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
                             // check signature of batch
-                            let result = signed_batch.signature.check(&signed_batch, signed_batch.authority);
+                            let result = signed_batch
+                                .signature
+                                .check(&signed_batch, signed_batch.authority);
                             // todo: ensure signature valid over the set of transactions in the batch
                             // todo: ensure signature valid over the hash of the previous batch
-                            // todo: sequence numbers of the transactions enclosed need to be correct and size matches
+                            // todo: sequence numbers of the transactions enclosed need to match requested
                             match result {
                                 Ok(_) => {
                                     let _ = tx_output.send(Ok(batch_info_response_item)).await;
-                                },
+                                }
                                 Err(e) => {
                                     let _ = tx_output.send(Err(e)).await;
-                                },
+                                }
                             }
                         }
                         BatchInfoResponseItem(UpdateItem::Transaction((_seq, digest))) => {
                             // make transaction info request which checks transaction certificate
-                            let transaction_info_request = TransactionInfoRequest{ transaction_digest: digest };
-                            let transaction_info_response = self.handle_transaction_info_request(transaction_info_request).await;
+                            let transaction_info_request = TransactionInfoRequest {
+                                transaction_digest: digest,
+                            };
+                            let transaction_info_response = self
+                                .handle_transaction_info_request(transaction_info_request)
+                                .await;
                             match transaction_info_response {
                                 Ok(_) => {
                                     let _ = tx_output.send(Ok(batch_info_response_item)).await;
-                                },
+                                }
                                 Err(e) => {
                                     let _ = tx_output.send(Err(e)).await;
-                                },
+                                }
                             }
                         }
                     }
                 }
-                Err(_) => {
-                    continue;
+                Err(e) => {
+                    return Err(Error::new(std::io::ErrorKind::Other, e));
                 }
             }
         }
