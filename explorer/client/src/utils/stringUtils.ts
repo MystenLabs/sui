@@ -19,6 +19,11 @@ export function hexToAscii(hex: string) {
 export const trimStdLibPrefix = (str: string): string =>
     str.replace(/^0x2::/, '');
 
+export const processDisplayValue = (display: { bytes: number[] } | string) =>
+    typeof display === 'object' && 'bytes' in display
+        ? asciiFromNumberBytes(display.bytes)
+        : display;
+
 /* Currently unused but potentially useful:
  *
  * export const isValidHttpUrl = (url: string) => {

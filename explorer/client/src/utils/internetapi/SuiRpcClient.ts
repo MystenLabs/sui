@@ -24,17 +24,9 @@ export class SuiRpcClient {
         return this.fetchJson(url);
     };
 
-    public async getObjectInfo(
-        id: string
-    ): Promise<ObjectInfoResponse<object>> {
+    public async getObjectInfo(id: string): Promise<ObjectInfoResponse> {
         const url = `${this.host}/object_info?objectId=${id}`;
         return this.fetchJson(url);
-    }
-
-    public async getObjectInfoT<T extends object>(
-        id: string
-    ): Promise<ObjectInfoResponse<T>> {
-        return (await this.getObjectInfo(id)) as ObjectInfoResponse<T>;
     }
 
     // TODO - more detailed type for input
@@ -92,17 +84,19 @@ type BoolString = 'true' | 'false';
 export type JsonBytes = { bytes: number[] };
 export type MoveVec<T extends object | string> = { vec: T[] };
 
-export interface ObjectInfoResponse<T> {
+export interface ObjectInfoResponse {
     owner: string;
     version: string;
     id: string;
     readonly: BoolString;
     objType: string;
-    data: SuiObject<T>;
+    data: SuiObject;
 }
 
-export interface SuiObject<T> {
-    contents: T;
+export interface SuiObject {
+    contents: {
+        [key: string]: any;
+    };
     owner: ObjectOwner | AddressOwner;
     tx_digest: number[];
 }

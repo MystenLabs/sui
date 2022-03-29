@@ -3,16 +3,19 @@
 
 import { useState, useCallback } from 'react';
 
-import { asciiFromNumberBytes } from '../../utils/stringUtils';
-import { type DataType } from './ObjectResultType';
+import { processDisplayValue } from '../../utils/stringUtils';
 
-import styles from './ObjectResult.module.css';
+import styles from './DisplayBox.module.css';
 
 //TO DO - display smart contract info; see mock_data.json for example smart contract data
 //import 'ace-builds/src-noconflict/theme-github';
 //import AceEditor from 'react-ace';
 
-function SmartContractBox({ data }: { data: DataType }) {
+function SmartContractBox({
+    display,
+}: {
+    display: string | { bytes: number[] };
+}) {
     return (
         <div className={styles.imagebox}>
             Displaying Smart Contracts Not yet Supported
@@ -34,11 +37,15 @@ function SmartContractBox({ data }: { data: DataType }) {
                      */
 }
 
-function DisplayBox({ data }: { data: DataType }) {
+function DisplayBox({
+    display,
+    tag,
+}: {
+    display: string | { bytes: number[] };
+    tag: 'imageURL' | 'moveScript';
+}) {
     const [hasDisplayLoaded, setHasDisplayLoaded] = useState(false);
     const [hasFailedToLoad, setHasFailedToLoad] = useState(false);
-
-    const contents = data.data.contents;
 
     const imageStyle = hasDisplayLoaded ? {} : { display: 'none' };
     const handleImageLoad = useCallback(
@@ -55,17 +62,11 @@ function DisplayBox({ data }: { data: DataType }) {
         [setHasFailedToLoad]
     );
 
-    const IS_SMART_CONTRACT = (data: any) =>
-        data?.data?.contents?.display?.category === 'moveScript';
-
-    if (IS_SMART_CONTRACT(data)) {
-        return <SmartContractBox data={data} />;
+    if (tag === 'moveScript') {
+        return <SmartContractBox display={display} />;
     }
 
-    if (contents.display) {
-        if (typeof contents.display === 'object' && 'bytes' in contents.display)
-            contents.display = asciiFromNumberBytes(contents.display.bytes);
-
+    if (tag === 'imageURL') {
         return (
             <div className={styles['display-container']}>
                 {!hasDisplayLoaded && (
@@ -81,7 +82,7 @@ function DisplayBox({ data }: { data: DataType }) {
                         className={styles.imagebox}
                         style={imageStyle}
                         alt="NFT"
-                        src={contents.display}
+                        src={processDisplayValue(display)}
                         onLoad={handleImageLoad}
                         onError={handleImageFail}
                     />

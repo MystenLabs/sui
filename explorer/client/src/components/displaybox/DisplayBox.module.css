@@ -1,0 +1,9 @@
+img.imagebox {
+    @apply object-scale-down w-[100%];
+}
+
+.codebox {
+    @apply overflow-hidden 
+    border-solid border-stone-300 rounded-lg mt-[1vh] w-[88vw]
+    w-[88vw] h-[88vw] lg:w-[35vw] lg:h-[35vw] mb-[10vh];
+}
