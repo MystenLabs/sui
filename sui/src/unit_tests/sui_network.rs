@@ -3,7 +3,8 @@ use std::path::Path;
 use sui::config::{AuthorityPrivateInfo, Config, GenesisConfig, WalletConfig};
 use sui::gateway::{GatewayConfig, GatewayType};
 use sui::keystore::KeystoreType;
-use sui::sui_commands::{genesis, SuiNetwork, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
+use sui::sui_commands::{genesis, SuiNetwork};
+use sui::{SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 
 pub async fn start_test_network(
     working_dir: &Path,

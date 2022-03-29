@@ -20,9 +20,10 @@ use sui::config::{
 };
 use sui::gateway::{GatewayConfig, GatewayType};
 use sui::keystore::KeystoreType;
-use sui::sui_commands::{SuiCommand, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
+use sui::sui_commands::SuiCommand;
 use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
+use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::{get_key_pair, get_key_pair_from_bytes, Signature};
 use sui_types::messages::TransactionEffects;
@@ -77,8 +78,9 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         .flat_map(|r| r.map(|file| file.file_name().to_str().unwrap().to_owned()))
         .collect::<Vec<_>>();
 
-    assert_eq!(4, files.len());
+    assert_eq!(5, files.len());
     assert!(files.contains(&SUI_WALLET_CONFIG.to_string()));
+    assert!(files.contains(&SUI_GATEWAY_CONFIG.to_string()));
     assert!(files.contains(&AUTHORITIES_DB_NAME.to_string()));
     assert!(files.contains(&SUI_NETWORK_CONFIG.to_string()));
     assert!(files.contains(&"wallet.key".to_string()));

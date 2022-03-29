@@ -5,8 +5,8 @@ use dropshot::test_util::{LogContext, TestContext};
 use dropshot::{ConfigDropshot, ConfigLogging, ConfigLoggingLevel};
 use futures::future::try_join_all;
 use http::{Method, StatusCode};
+use sui::SUI_WALLET_CONFIG;
 
-use sui::sui_commands::SUI_WALLET_CONFIG;
 use sui::wallet_commands::WalletContext;
 
 use crate::rest_server_tests::sui_network::start_test_network;

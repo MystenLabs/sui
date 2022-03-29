@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -19,6 +20,7 @@ use move_core_types::parser::parse_type_tag;
 use move_core_types::value::MoveStructLayout;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use structopt::StructOpt;
 
 use sui::config::PersistedConfig;
 use sui::gateway::GatewayConfig;
@@ -30,6 +32,7 @@ use sui::rest_gateway::responses::{
     custom_http_error, JsonResponse, NamedObjectRef, ObjectResponse, ObjectSchemaResponse,
     TransactionBytes,
 };
+use sui::{sui_config_dir, SUI_GATEWAY_CONFIG};
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::{GatewayClient, GatewayState};
 use sui_types::base_types::*;
@@ -39,37 +42,54 @@ use sui_types::messages::{Transaction, TransactionData};
 use sui_types::object::Object as SuiObject;
 use sui_types::object::ObjectRead;
 
-const REST_SERVER_PORT: u16 = 5001;
-const REST_SERVER_ADDR_IPV4: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
+const DEFAULT_REST_SERVER_PORT: &str = "5001";
+const DEFAULT_REST_SERVER_ADDR_IPV4: &str = "127.0.0.1";
 
 #[path = "unit_tests/rest_server_tests.rs"]
 #[cfg(test)]
 mod rest_server_tests;
 
+#[derive(StructOpt)]
+#[structopt(
+    name = "Sui Rest Gateway",
+    about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
+    rename_all = "kebab-case"
+)]
+struct RestGatewayOpt {
+    #[structopt(long)]
+    config: Option<PathBuf>,
+
+    #[structopt(long, default_value = DEFAULT_REST_SERVER_PORT)]
+    port: u16,
+
+    #[structopt(long, default_value = DEFAULT_REST_SERVER_ADDR_IPV4)]
+    host: Ipv4Addr,
+}
+
 #[tokio::main]
-async fn main() -> Result<(), String> {
+async fn main() -> Result<(), anyhow::Error> {
+    let options: RestGatewayOpt = RestGatewayOpt::from_args();
+
     let config_dropshot: ConfigDropshot = ConfigDropshot {
-        bind_address: SocketAddr::from((REST_SERVER_ADDR_IPV4, REST_SERVER_PORT)),
+        bind_address: SocketAddr::from((options.host, options.port)),
         request_body_max_bytes: usize::pow(10, 6), // 1mb limit, but may need to increase.
     };
 
     let config_logging = ConfigLogging::StderrTerminal {
         level: ConfigLoggingLevel::Info,
     };
-    let log = config_logging
-        .to_logger("rest_server")
-        .map_err(|error| format!("failed to create logger: {error}"))?;
+    let log = config_logging.to_logger("rest_server")?;
 
     tracing_subscriber::fmt::init();
 
     let api = create_api();
 
-    let documentation = api
-        .openapi("Sui API", "0.1")
-        .json()
-        .map_err(|e| e.to_string())?;
+    let documentation = api.openapi("Sui Gateway API", "0.1").json()?;
 
-    let config: GatewayConfig = PersistedConfig::read(&PathBuf::from("./gateway.conf")).unwrap();
+    let config_path = options
+        .config
+        .unwrap_or(sui_config_dir()?.join(SUI_GATEWAY_CONFIG));
+    let config: GatewayConfig = PersistedConfig::read(&config_path)?;
     let committee = config.make_committee();
     let authority_clients = config.make_authority_clients();
     let gateway = Box::new(GatewayState::new(
@@ -79,12 +99,8 @@ async fn main() -> Result<(), String> {
     ));
 
     let api_context = ServerContext::new(documentation, gateway);
-
-    let server = HttpServerStarter::new(&config_dropshot, api, api_context, &log)
-        .map_err(|error| format!("failed to create server: {error}"))?
-        .start();
-
-    server.await
+    let server = HttpServerStarter::new(&config_dropshot, api, api_context, &log)?.start();
+    server.await.map_err(|err| anyhow!(err))
 }
 
 fn create_api() -> ApiDescription<ServerContext> {

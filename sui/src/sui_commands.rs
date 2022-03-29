@@ -29,11 +29,7 @@ use crate::config::{
 };
 use crate::gateway::{GatewayConfig, GatewayType};
 use crate::keystore::{Keystore, KeystoreType, SuiKeystore};
-
-const SUI_DIR: &str = ".sui";
-const SUI_CONFIG_DIR: &str = "sui_config";
-pub const SUI_NETWORK_CONFIG: &str = "network.conf";
-pub const SUI_WALLET_CONFIG: &str = "wallet.conf";
+use crate::{sui_config_dir, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
@@ -51,13 +47,6 @@ pub enum SuiCommand {
         #[structopt(short, long, help = "Forces overwriting existing configuration")]
         force: bool,
     },
-}
-
-pub fn sui_config_dir() -> Result<PathBuf, anyhow::Error> {
-    match dirs::home_dir() {
-        Some(v) => Ok(v.join(SUI_DIR).join(SUI_CONFIG_DIR)),
-        None => bail!("Cannot obtain home directory path"),
-    }
 }
 
 impl SuiCommand {
@@ -125,6 +114,7 @@ impl SuiCommand {
 
                 let network_path = sui_config_dir.join(SUI_NETWORK_CONFIG);
                 let wallet_path = sui_config_dir.join(SUI_WALLET_CONFIG);
+                let gateway_path = sui_config_dir.join(SUI_GATEWAY_CONFIG);
                 let keystore_path = sui_config_dir.join("wallet.key");
                 let db_folder_path = sui_config_dir.join("client_db");
 
@@ -138,19 +128,26 @@ impl SuiCommand {
                 keystore.save(&keystore_path)?;
                 info!("Wallet keystore is stored in {:?}.", keystore_path);
 
+                let gateway_config = GatewayConfig {
+                    db_folder_path,
+                    authorities: network_config.get_authority_infos(),
+                    ..Default::default()
+                };
+
+                let gateway_config = gateway_config.persisted(&gateway_path);
+                gateway_config.save()?;
+                info!("Gateway config file is stored in {:?}.", gateway_path);
+
                 let wallet_config = WalletConfig {
                     accounts,
                     keystore: KeystoreType::File(keystore_path),
-                    gateway: GatewayType::Embedded(GatewayConfig {
-                        db_folder_path,
-                        authorities: network_config.get_authority_infos(),
-                        ..Default::default()
-                    }),
+                    gateway: GatewayType::Embedded(PersistedConfig::read(&gateway_path)?),
                 };
 
                 let wallet_config = wallet_config.persisted(&wallet_path);
                 wallet_config.save()?;
                 info!("Wallet config file is stored in {:?}.", wallet_path);
+
                 Ok(())
             }
         }
