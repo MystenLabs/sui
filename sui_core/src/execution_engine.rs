@@ -40,7 +40,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
         objects_by_kind,
         &mut tx_ctx,
         move_vm,
-        &native_functions,
+        native_functions,
     )?;
     debug!(
         gas_used = status.gas_used(),
