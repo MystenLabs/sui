@@ -242,10 +242,10 @@ describe('End-to-end Tests', () => {
             await page.goto(`${BASE_URL}/addresses/receiverAddress`);
 
             //Click on text saying playerOne:
-            const playerOneLink = await page.$(
-                'div#textResults > div:nth-child(2) > div:nth-child(2) > div > div:nth-child(1)'
+            const objectLink = await page.$(
+                'div#ownedObjects > div:nth-child(1)'
             );
-            await playerOneLink.click();
+            await objectLink.click();
 
             //Now on Object Page:
             const objectIDEl = await page.$('#objectID');
@@ -276,23 +276,38 @@ describe('End-to-end Tests', () => {
             );
             expect(addressValue.trim()).toBe('receiverAddress');
         });
-        /*
         it('go from object to child object and back', async () => {
             const parentObj = 'playerTwo';
             const childObj = 'standaloneObject';
+            await page.goto(`${BASE_URL}/objects/${parentObj}`);
 
-            render(<App />, { wrapper: MemoryRouter });
-            searchText(parentObj);
-            await checkObjectId(parentObj);
+            const objectLink = await page.$(
+                'div#ownedObjects > div:nth-child(1)'
+            );
+            await objectLink.click();
+            const objectIDEl = await page.$('#objectID');
+            expect(objectIDEl).not.toBeNull();
 
-            const el1 = await screen.findByText(childObj);
-            fireEvent.click(el1);
-            await checkObjectId(childObj);
+            const objectValue = await page.evaluate(
+                (el: any) => el.textContent,
+                objectIDEl
+            );
+            expect(objectValue.trim()).toBe(childObj);
 
-            const el2 = await screen.findByText(parentObj);
-            fireEvent.click(el2);
-            await checkObjectId(parentObj);
+            const ownerLink = await page.$(
+                'div#descriptionResults > div:nth-child(5) > span'
+            );
+
+            await ownerLink.click();
+
+            const objectIDEl2 = await page.$('#objectID');
+            expect(objectIDEl2).not.toBeNull();
+
+            const objectValue2 = await page.evaluate(
+                (el: any) => el.textContent,
+                objectIDEl
+            );
+            expect(objectValue2.trim()).toBe(parentObj);
         });
-        */
     });
 });
