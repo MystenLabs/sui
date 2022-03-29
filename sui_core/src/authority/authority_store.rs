@@ -21,6 +21,7 @@ use typed_store::{reopen, traits::Map};
 pub type AuthorityStore = SuiDataStore<false, AuthoritySignInfo>;
 #[allow(dead_code)]
 pub type ReplicaStore = SuiDataStore<true, EmptySignInfo>;
+pub type GatewayStore = SuiDataStore<false, EmptySignInfo>;
 
 const NUM_SHARDS: usize = 4096;
 
@@ -176,9 +177,9 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             &[
                 ("objects", &point_lookup),
                 ("all_object_versions", &options),
+                ("transactions", &point_lookup),
                 ("owner_index", &options),
                 ("transaction_lock", &point_lookup),
-                ("transactions", &point_lookup),
                 ("certificates", &point_lookup),
                 ("parent_sync", &options),
                 ("effects", &point_lookup),
@@ -419,14 +420,20 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
 
     // Methods to mutate the store
 
-    /// Insert an object
-    pub fn insert_object(&self, object: Object) -> Result<(), SuiError> {
+    /// Insert a genesis object.
+    pub fn insert_genesis_object(&self, object: Object) -> SuiResult {
         // We only side load objects with a genesis parent transaction.
         debug_assert!(object.previous_transaction == TransactionDigest::genesis());
-
-        // Insert object
         let object_ref = object.compute_object_reference();
-        self.objects.insert(&object_ref.0, &object)?;
+        self.insert_object_direct(object_ref, &object)
+    }
+
+    /// Insert an object directly into the store, and also update relevant tables, including
+    /// initiating the transaction lock. This is used by the gateway to insert object directly.
+    /// TODO: We need this today because we don't have another way to sync an account.
+    pub fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
+        // Insert object
+        self.objects.insert(&object_ref.0, object)?;
 
         self.transaction_lock.get_or_insert(&object_ref, || None)?;
 
@@ -438,9 +445,6 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         // Update the parent
         self.parent_sync
             .insert(&object_ref, &object.previous_transaction)?;
-
-        // We only side load objects with a genesis parent transaction.
-        debug_assert!(object.previous_transaction == TransactionDigest::genesis());
 
         Ok(())
     }
@@ -600,6 +604,38 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
         let write_batch = self.transaction_lock.batch();
         self.batch_update_objects(write_batch, temporary_store, transaction_digest, None)
+    }
+
+    /// This is used by the Gateway to update its local store after a transaction succeeded
+    /// on the authorities. Since we don't yet have local execution on the gateway, we will
+    /// need to recreate the temporary store based on the inputs and effects to update it properly.
+    pub fn update_gateway_state(
+        &self,
+        active_inputs: &[(InputObjectKind, Object)],
+        mutated_objects: HashMap<ObjectRef, Object>,
+        certificate: CertifiedTransaction,
+        effects: TransactionEffects,
+    ) -> SuiResult {
+        let transaction_digest = certificate.digest();
+        let mut temporary_store =
+            AuthorityTemporaryStore::new(Arc::new(&self), active_inputs, *transaction_digest);
+        for (_, object) in mutated_objects {
+            temporary_store.write_object(object);
+        }
+        for obj_ref in &effects.deleted {
+            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Normal);
+        }
+        for obj_ref in &effects.wrapped {
+            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Wrap);
+        }
+
+        let mut write_batch = self.transaction_lock.batch();
+        // Once a transaction is done processing and effects committed, we no longer
+        // need it in the transactions table. This also allows us to track pending
+        // transactions.
+        write_batch =
+            write_batch.delete_batch(&self.transactions, std::iter::once(certificate.digest()))?;
+        self.batch_update_objects(write_batch, temporary_store, *transaction_digest, None)
     }
 
     /// Helper function for updating the objects in the state
@@ -980,6 +1016,12 @@ impl<const A: bool> SuiDataStore<A, AuthoritySignInfo> {
             certified_transaction: self.certificates.get(transaction_digest)?,
             signed_effects: self.effects.get(transaction_digest)?,
         })
+    }
+}
+
+impl<const A: bool> SuiDataStore<A, EmptySignInfo> {
+    pub fn pending_transactions(&self) -> &DBMap<TransactionDigest, Transaction> {
+        &self.transactions
     }
 }
 

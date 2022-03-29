@@ -15,7 +15,7 @@ use move_core_types::{
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use std::sync::atomic::AtomicUsize;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     pin::Pin,
     sync::Arc,
 };
@@ -26,7 +26,7 @@ use sui_types::{
     committee::Committee,
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
-    fp_bail, fp_ensure,
+    fp_bail, fp_ensure, gas,
     messages::*,
     object::{Data, Object},
     storage::{BackingPackageStore, DeleteKind, Storage},
@@ -50,12 +50,10 @@ mod temporary_store;
 pub use temporary_store::AuthorityTemporaryStore;
 
 mod authority_store;
-pub use authority_store::AuthorityStore;
+pub use authority_store::{AuthorityStore, GatewayStore};
 
 pub mod authority_notifier;
 
-// based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
-const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
 const MAX_ITEMS_LIMIT: u64 = 10_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
@@ -117,7 +115,7 @@ impl AuthorityState {
         // These IDs act as authenticators that can own other objects.
         let objects = self.fetch_objects(&input_objects).await?;
         let all_objects =
-            transaction_input_checker::check_locks(transaction, input_objects, objects)?;
+            transaction_input_checker::check_locks(transaction, input_objects, objects).await?;
         Ok(all_objects)
     }
 
@@ -149,7 +147,7 @@ impl AuthorityState {
             .check_locks_and_gas(&transaction)
             .instrument(tracing::trace_span!("tx_check_locks"))
             .await?;
-        let owned_objects = transaction_input_checker::filter_owned_objects(all_objects);
+        let owned_objects = transaction_input_checker::filter_owned_objects(&all_objects);
 
         let signed_transaction = SignedTransaction::new(transaction, self.name, &*self.secret);
 
@@ -275,42 +273,22 @@ impl AuthorityState {
             "Read inputs for transaction from DB"
         );
 
-        let mut transaction_dependencies: BTreeSet<_> = objects_by_kind
-            .iter()
-            .map(|(_, object)| object.previous_transaction)
-            .collect();
-
-        // Insert into the certificates map
-        let mut tx_ctx = TxContext::new(&transaction.sender_address(), &transaction_digest);
-
-        let gas_object_id = transaction.gas_payment_object_ref().0;
-        let mut temporary_store =
-            AuthorityTemporaryStore::new(self._database.clone(), &objects_by_kind, tx_ctx.digest());
-        let status = execution_engine::execute_transaction(
+        let mut temporary_store = AuthorityTemporaryStore::new(
+            self._database.clone(),
+            &objects_by_kind,
+            transaction_digest,
+        );
+        let effects = execution_engine::execute_transaction_to_effects(
             &mut temporary_store,
             transaction.clone(),
+            transaction_digest,
             objects_by_kind,
-            &mut tx_ctx,
             &self.move_vm,
             self._native_functions.clone(),
         )?;
-        debug!(
-            gas_used = status.gas_used(),
-            "Finished execution of transaction with status {:?}", status
-        );
+        let signed_effects = effects.to_sign_effects(&self.name, &*self.secret);
 
-        // Remove from dependencies the generic hash
-        transaction_dependencies.remove(&TransactionDigest::genesis());
-
-        let effects = temporary_store.to_effects(
-            &transaction_digest,
-            transaction_dependencies.into_iter().collect(),
-            status,
-            &gas_object_id,
-        );
-        let signed_effects = effects.sign(&self.name, &*self.secret);
         // Update the database in an atomic manner
-
         self.update_state(temporary_store, &certificate, &signed_effects)
             .instrument(tracing::debug_span!("db_update_state"))
             .await?;
@@ -584,9 +562,9 @@ impl AuthorityState {
         self._database.get_object(object_id)
     }
 
-    pub async fn insert_object(&self, object: Object) {
+    pub async fn insert_genesis_object(&self, object: Object) {
         self._database
-            .insert_object(object)
+            .insert_genesis_object(object)
             .expect("TODO: propagate the error")
     }
 
@@ -634,7 +612,7 @@ impl AuthorityState {
             &vm,
             modules,
             ctx,
-            MAX_GAS_BUDGET,
+            gas::MAX_GAS_BUDGET,
         ) {
             return Err(*error);
         };

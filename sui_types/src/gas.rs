@@ -22,6 +22,9 @@ macro_rules! ok_or_gas_error {
 pub const MIN_MOVE: u64 = 10;
 pub const MIN_OBJ_TRANSFER_GAS: u64 = 8;
 
+// based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
+pub const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
+
 pub fn check_transfer_gas_requirement(gas_object: &Object, transfer_object: &Object) -> SuiResult {
     let balance = get_gas_balance(gas_object)?;
     let cost = calculate_object_transfer_cost(transfer_object);

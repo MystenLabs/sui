@@ -137,7 +137,9 @@ impl MoveObject {
         } else {
             TypeLayoutBuilder::build_with_fields(&type_, resolver)
         }
-        .map_err(|_e| SuiError::ObjectSerializationError)?;
+        .map_err(|e| SuiError::ObjectSerializationError {
+            error: e.to_string(),
+        })?;
         match layout {
             MoveTypeLayout::Struct(l) => Ok(l),
             _ => unreachable!(
@@ -148,9 +150,14 @@ impl MoveObject {
 
     /// Convert `self` to the JSON representation dictated by `layout`.
     pub fn to_json(&self, layout: &MoveStructLayout) -> Result<Value, SuiError> {
-        let move_value = MoveStruct::simple_deserialize(&self.contents, layout)
-            .map_err(|_e| SuiError::ObjectSerializationError)?;
-        serde_json::to_value(&move_value).map_err(|_e| SuiError::ObjectSerializationError)
+        let move_value = MoveStruct::simple_deserialize(&self.contents, layout).map_err(|e| {
+            SuiError::ObjectSerializationError {
+                error: e.to_string(),
+            }
+        })?;
+        serde_json::to_value(&move_value).map_err(|e| SuiError::ObjectSerializationError {
+            error: e.to_string(),
+        })
     }
 }
 
@@ -220,7 +227,9 @@ impl Data {
         match self {
             Move(m) => match layout {
                 Some(l) => m.to_json(l),
-                None => Err(SuiError::ObjectSerializationError),
+                None => Err(SuiError::ObjectSerializationError {
+                    error: "Layout is required to convert Move object to json".to_owned(),
+                }),
             },
             Package(p) => {
                 let mut disassembled = serde_json::Map::new();
@@ -228,11 +237,16 @@ impl Data {
                     let module = CompiledModule::deserialize(bytecode)
                         .expect("Adapter publish flow ensures that this bytecode deserializes");
                     let view = BinaryIndexedView::Module(&module);
-                    let d = Disassembler::from_view(view, Spanned::unsafe_no_loc(()).loc)
-                        .map_err(|_e| SuiError::ObjectSerializationError)?;
-                    let bytecode_str = d
-                        .disassemble()
-                        .map_err(|_e| SuiError::ObjectSerializationError)?;
+                    let d = Disassembler::from_view(view, Spanned::unsafe_no_loc(()).loc).map_err(
+                        |e| SuiError::ObjectSerializationError {
+                            error: e.to_string(),
+                        },
+                    )?;
+                    let bytecode_str =
+                        d.disassemble()
+                            .map_err(|e| SuiError::ObjectSerializationError {
+                                error: e.to_string(),
+                            })?;
                     disassembled.insert(name.to_string(), Value::String(bytecode_str));
                 }
                 Ok(Value::Object(disassembled))
@@ -470,9 +484,15 @@ impl Object {
     pub fn to_json(&self, layout: &Option<MoveStructLayout>) -> Result<Value, SuiError> {
         let contents = self.data.to_json(layout)?;
         let owner =
-            serde_json::to_value(&self.owner).map_err(|_e| SuiError::ObjectSerializationError)?;
-        let previous_transaction = serde_json::to_value(&self.previous_transaction)
-            .map_err(|_e| SuiError::ObjectSerializationError)?;
+            serde_json::to_value(&self.owner).map_err(|e| SuiError::ObjectSerializationError {
+                error: e.to_string(),
+            })?;
+        let previous_transaction =
+            serde_json::to_value(&self.previous_transaction).map_err(|e| {
+                SuiError::ObjectSerializationError {
+                    error: e.to_string(),
+                }
+            })?;
         Ok(json!({ "contents": contents, "owner": owner, "tx_digest": previous_transaction }))
     }
 

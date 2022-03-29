@@ -188,7 +188,9 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
         sender,
         49999, // We need 50000
     );
-    authority_state.insert_object(gas_object.clone()).await;
+    authority_state
+        .insert_genesis_object(gas_object.clone())
+        .await;
 
     let genesis_package_objects = genesis::clone_genesis_packages();
     let package_object_ref =
