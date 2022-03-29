@@ -52,7 +52,7 @@ pub fn try_deduct_gas(gas_object: &mut Object, amount: u64) -> SuiResult {
     let balance = gas_coin.value();
     ok_or_gas_error!(
         balance >= amount,
-        format!("Gas balance is {}, not enough to pay {}", balance, amount)
+        format!("Gas balance is {balance}, not enough to pay {amount}")
     )?;
     let new_gas_coin = GasCoin::new(*gas_coin.id(), gas_object.version(), balance - amount);
     let move_object = gas_object.data.try_as_move_mut().unwrap();
@@ -64,7 +64,7 @@ pub fn check_gas_balance(gas_object: &Object, amount: u64) -> SuiResult {
     let balance = get_gas_balance(gas_object)?;
     ok_or_gas_error!(
         balance >= amount,
-        format!("Gas balance is {}, not enough to pay {}", balance, amount)
+        format!("Gas balance is {balance}, not enough to pay {amount}")
     )
 }
 

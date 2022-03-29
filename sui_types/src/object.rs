@@ -396,6 +396,18 @@ impl Object {
         Ok(())
     }
 
+    pub fn immutable_with_id_for_testing(id: ObjectID) -> Self {
+        let data = Data::Move(MoveObject {
+            type_: GasCoin::type_(),
+            contents: GasCoin::new(id, SequenceNumber::new(), GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
+        });
+        Self {
+            owner: Owner::SharedImmutable,
+            data,
+            previous_transaction: TransactionDigest::genesis(),
+        }
+    }
+
     pub fn with_id_owner_gas_for_testing(
         id: ObjectID,
         version: SequenceNumber,
@@ -548,7 +560,7 @@ impl Display for Object {
         let type_string = self
             .data
             .type_()
-            .map_or("Move Package".to_owned(), |type_| format!("{}", type_));
+            .map_or("Move Package".to_owned(), |type_| format!("{type_}"));
 
         write!(
             f,

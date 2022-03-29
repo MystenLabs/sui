@@ -11,7 +11,6 @@ use colored::Colorize;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::parser::parse_type_tag;
-use serde::ser::Error;
 use serde::Serialize;
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
@@ -187,7 +186,7 @@ impl WalletCommands {
         &mut self,
         context: &mut WalletContext,
     ) -> Result<WalletCommandResult, anyhow::Error> {
-        Ok(match self {
+        let ret = Ok(match self {
             WalletCommands::Publish {
                 path,
                 gas,
@@ -198,7 +197,7 @@ impl WalletCommands {
                 let sender = gas_object.owner.get_owner_address()?;
                 let gas_obj_ref = gas_object.compute_object_reference();
 
-                let compiled_modules = build_move_package_to_bytes(Path::new(path))?;
+                let compiled_modules = build_move_package_to_bytes(Path::new(path), false)?;
                 let data = context
                     .gateway
                     .publish(sender, compiled_modules, gas_obj_ref, *gas_budget)
@@ -438,7 +437,14 @@ impl WalletCommands {
 
                 WalletCommandResult::MergeCoin(response)
             }
-        })
+        });
+        // Sync all managed addresses
+        // This is wasteful because not all addresses might be modified
+        // but will be removed as part of https://github.com/MystenLabs/sui/issues/1045
+        for address in context.config.accounts.clone() {
+            context.gateway.sync_account_state(address).await?;
+        }
+        ret
     }
 }
 
@@ -450,7 +456,12 @@ pub struct WalletContext {
 
 impl WalletContext {
     pub fn new(config_path: &Path) -> Result<Self, anyhow::Error> {
-        let config: WalletConfig = PersistedConfig::read(config_path)?;
+        let config: WalletConfig = PersistedConfig::read(config_path).map_err(|err| {
+            err.context(format!(
+                "Cannot open wallet config file at {:?}",
+                config_path
+            ))
+        })?;
         let config = config.persisted(config_path);
         let keystore = Arc::new(RwLock::new(config.keystore.init()?));
         let gateway = config.gateway.init();
@@ -471,7 +482,7 @@ impl Display for WalletCommandResult {
                 write!(writer, "{}", response)?;
             }
             WalletCommandResult::Object(object_read) => {
-                let object = object_read.object().map_err(fmt::Error::custom)?;
+                let object = unwrap_err_to_string(|| Ok(object_read.object()?));
                 writeln!(writer, "{}", object)?;
             }
             WalletCommandResult::Call(cert, effects) => {
@@ -545,31 +556,35 @@ fn write_cert_and_effects(
 
 impl Debug for WalletCommandResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
+        let s = unwrap_err_to_string(|| match self {
             WalletCommandResult::Object(object_read) => {
-                let object = object_read.object().map_err(fmt::Error::custom)?;
-                let layout = object_read.layout().map_err(fmt::Error::custom)?;
-                object
-                    .to_json(layout)
-                    .map_err(fmt::Error::custom)?
-                    .to_string()
+                let object = object_read.object()?;
+                let layout = object_read.layout()?;
+                Ok(object.to_json(layout)?.to_string())
             }
-            _ => serde_json::to_string(self).map_err(fmt::Error::custom)?,
-        };
+            _ => Ok(serde_json::to_string(self)?),
+        });
         write!(f, "{}", s)
+    }
+}
+
+fn unwrap_err_to_string<T: Display, F: FnOnce() -> Result<T, anyhow::Error>>(func: F) -> String {
+    match func() {
+        Ok(s) => format!("{s}"),
+        Err(err) => format!("{err}").red().to_string(),
     }
 }
 
 impl WalletCommandResult {
     pub fn print(&self, pretty: bool) {
         let line = if pretty {
-            format!("{}", self)
+            format!("{self}")
         } else {
             format!("{:?}", self)
         };
         // Log line by line
         for line in line.lines() {
-            info!("{}", line)
+            info!("{line}")
         }
     }
 }

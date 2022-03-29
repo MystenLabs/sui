@@ -3,16 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::same_item_push)] // get_key_pair returns random elements
 
-use std::env;
 use std::fs;
 use std::path::Path;
 use std::{
     collections::{BTreeMap, HashMap},
     convert::TryInto,
+    env, io,
     sync::Arc,
 };
 
 use async_trait::async_trait;
+use futures::channel::mpsc::Receiver;
 use futures::lock::Mutex;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
 use signature::Signer;
@@ -112,6 +113,14 @@ impl AuthorityAPI for LocalAuthorityClient {
             .await;
         result
     }
+
+    /// Handle Batch information requests for this authority.
+    async fn handle_batch_streaming(
+        &self,
+        _request: BatchInfoRequest,
+    ) -> Result<Receiver<Result<BatchInfoResponseItem, SuiError>>, io::Error> {
+        todo!()
+    }
 }
 
 impl LocalAuthorityClient {
@@ -127,7 +136,7 @@ async fn extract_cert(
     transaction_digest: TransactionDigest,
 ) -> CertifiedTransaction {
     let mut votes = vec![];
-    let mut transaction = None;
+    let mut transaction: Option<SignedTransaction> = None;
     for authority in authorities {
         if let Ok(TransactionInfoResponse {
             signed_transaction: Some(signed),
@@ -136,18 +145,21 @@ async fn extract_cert(
             .handle_transaction_info_request(TransactionInfoRequest::from(transaction_digest))
             .await
         {
-            votes.push((signed.authority, signed.signature));
+            votes.push((
+                signed.auth_signature.authority,
+                signed.auth_signature.signature,
+            ));
             if let Some(inner_transaction) = transaction {
-                assert!(inner_transaction == signed.transaction);
+                assert!(inner_transaction.data == signed.data);
             }
-            transaction = Some(signed.transaction);
+            transaction = Some(signed);
         }
     }
 
     let stake: usize = votes.iter().map(|(name, _)| committee.weight(name)).sum();
     assert!(stake >= committee.quorum_threshold());
 
-    CertifiedTransaction::new_with_signatures(transaction.unwrap(), votes)
+    CertifiedTransaction::new_with_signatures(transaction.unwrap().to_transaction(), votes)
 }
 
 #[cfg(test)]
@@ -1209,7 +1221,7 @@ async fn test_module_publish_and_call_good() {
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
     hero_path.push_str("/src/unit_tests/data/hero/");
 
-    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path)).unwrap();
+    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path), false).unwrap();
     let data = client
         .publish(
             addr1,
@@ -1324,7 +1336,7 @@ async fn test_module_publish_file_path() {
     // Use a path pointing to a different file
     hero_path.push_str("/src/unit_tests/data/hero/Hero.move");
 
-    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path)).unwrap();
+    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path), false).unwrap();
     let data = client
         .publish(
             addr1,
@@ -1554,7 +1566,7 @@ async fn test_object_store() {
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
     hero_path.push_str("/src/unit_tests/data/hero/");
 
-    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path)).unwrap();
+    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path), false).unwrap();
     let data = client
         .publish(
             addr1,

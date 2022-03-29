@@ -12,11 +12,12 @@ use sui_types::{error::*, serialize::*};
 use tracing::*;
 
 use std::io;
-use tokio::{task::JoinError, time};
 
 use futures::stream;
 use futures::SinkExt;
 use futures::StreamExt;
+use tokio::task::JoinError;
+use tokio::time;
 
 #[derive(Clone)]
 pub struct NetworkClient {
@@ -44,6 +45,14 @@ impl NetworkClient {
         }
     }
 
+    pub async fn connect_for_stream(&self, buf: Vec<u8>) -> Result<TcpDataStream, io::Error> {
+        let address = format!("{}:{}", self.base_address, self.base_port);
+        let mut tcp_stream = connect(address, self.buffer_size).await?;
+        // Send message
+        time::timeout(self.send_timeout, tcp_stream.write_data(&buf)).await??;
+        Ok(tcp_stream)
+    }
+
     async fn send_recv_bytes_internal(&self, buf: Vec<u8>) -> Result<Option<Vec<u8>>, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port);
         let mut stream = connect(address, self.buffer_size).await?;
@@ -59,7 +68,7 @@ impl NetworkClient {
     pub async fn send_recv_bytes(&self, buf: Vec<u8>) -> Result<SerializedMessage, SuiError> {
         match self.send_recv_bytes_internal(buf).await {
             Err(error) => Err(SuiError::ClientIoError {
-                error: format!("{}", error),
+                error: format!("{error}"),
             }),
             Ok(Some(response)) => {
                 // Parse reply
@@ -97,7 +106,7 @@ impl NetworkClient {
             .take_while(|_buf| {
                 received += 1;
                 if received % 5000 == 0 && received > 0 {
-                    debug!("Received {}", received);
+                    debug!("Received {received}");
                 }
                 let xcontinue = received <= total;
                 futures::future::ready(xcontinue)
@@ -198,5 +207,26 @@ impl PortAllocator {
             }
         }
         None
+    }
+}
+
+pub fn parse_recv_bytes(
+    response: Result<Option<Vec<u8>>, io::Error>,
+) -> Result<SerializedMessage, SuiError> {
+    match response {
+        Err(error) => Err(SuiError::ClientIoError {
+            error: format!("{error}"),
+        }),
+        Ok(Some(response)) => {
+            // Parse reply
+            match deserialize_message(&response[..]) {
+                Ok(SerializedMessage::Error(error)) => Err(*error),
+                Ok(message) => Ok(message),
+                Err(_) => Err(SuiError::InvalidDecoding),
+            }
+        }
+        Ok(None) => Err(SuiError::ClientIoError {
+            error: "Empty response from authority.".to_string(),
+        }),
     }
 }

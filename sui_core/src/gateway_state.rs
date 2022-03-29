@@ -441,7 +441,7 @@ where
         let (new_certificate, effects) = self.authorities.execute_transaction(transaction).await?;
 
         // Update local data using new transaction response.
-        self.update_objects_from_transaction_info(new_certificate.clone(), effects.clone())
+        self.update_objects_from_transaction_info(&new_certificate, &effects)
             .await?;
 
         Ok((new_certificate, effects))
@@ -506,15 +506,15 @@ where
 
     async fn update_objects_from_transaction_info(
         &mut self,
-        cert: CertifiedTransaction,
-        effects: TransactionEffects,
-    ) -> Result<(CertifiedTransaction, TransactionEffects), SuiError> {
+        cert: &CertifiedTransaction,
+        effects: &TransactionEffects,
+    ) -> SuiResult {
         let address = cert.transaction.sender_address();
         let account = self.get_or_create_account(address)?;
         // The cert should be included in the response
         let parent_tx_digest = cert.transaction.digest();
         // TODO: certificates should ideally be inserted to the shared store.
-        account.insert_certificate(&parent_tx_digest, &cert)?;
+        account.insert_certificate(&parent_tx_digest, cert)?;
 
         let mut objs_to_download = Vec::new();
 
@@ -551,7 +551,8 @@ where
         let _failed = self
             .download_objects_not_in_db(address, objs_to_download)
             .await?;
-        Ok((cert, effects))
+
+        Ok(())
     }
 
     /// Fetch the objects for the given list of ObjectRefs, which do not already exist in the db.

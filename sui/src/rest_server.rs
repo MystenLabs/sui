@@ -24,6 +24,8 @@ use move_core_types::value::MoveStructLayout;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sui_core::gateway_state::gateway_responses::PublishResponse;
+use sui_types::gas_coin::GasCoin;
 use tokio::task::{self, JoinHandle};
 use tracing::{error, info};
 
@@ -52,7 +54,7 @@ mod rest_server_tests;
 async fn main() -> Result<(), String> {
     let config_dropshot: ConfigDropshot = ConfigDropshot {
         bind_address: SocketAddr::from((REST_SERVER_ADDR_IPV4, REST_SERVER_PORT)),
-        ..Default::default()
+        request_body_max_bytes: usize::pow(10, 6), // 1mb limit, but may need to increase.
     };
 
     let config_logging = ConfigLogging::StderrTerminal {
@@ -60,7 +62,7 @@ async fn main() -> Result<(), String> {
     };
     let log = config_logging
         .to_logger("rest_server")
-        .map_err(|error| format!("failed to create logger: {}", error))?;
+        .map_err(|error| format!("failed to create logger: {error}"))?;
 
     tracing_subscriber::fmt::init();
 
@@ -74,7 +76,7 @@ async fn main() -> Result<(), String> {
     let api_context = ServerContext::new(documentation);
 
     let server = HttpServerStarter::new(&config_dropshot, api, api_context, &log)
-        .map_err(|error| format!("failed to create server: {}", error))?
+        .map_err(|error| format!("failed to create server: {error}"))?
         .start();
 
     server.await
@@ -326,7 +328,7 @@ async fn sui_start(ctx: Arc<RequestContext<ServerContext>>) -> Result<Response<B
                 Err(err) => {
                     return Err(custom_http_error(
                         StatusCode::FAILED_DEPENDENCY,
-                        format!("Failed to start server: {}", err),
+                        format!("Failed to start server: {err}"),
                     ));
                 }
             }
@@ -334,12 +336,12 @@ async fn sui_start(ctx: Arc<RequestContext<ServerContext>>) -> Result<Response<B
     }
 
     let num_authorities = handles.len();
-    info!("Started {} authorities", num_authorities);
+    info!("Started {num_authorities} authorities");
 
     while let Some(spawned_server) = handles.next().await {
         state.authority_handles.push(task::spawn(async {
             if let Err(err) = spawned_server.unwrap().join().await {
-                error!("Server ended with an error: {}", err);
+                error!("Server ended with an error: {err}");
             }
         }));
     }
@@ -358,7 +360,7 @@ async fn sui_start(ctx: Arc<RequestContext<ServerContext>>) -> Result<Response<B
     }
     custom_http_response(
         StatusCode::OK,
-        format!("Started {} authorities", num_authorities),
+        format!("Started {num_authorities} authorities"),
     )
 }
 
@@ -431,7 +433,7 @@ async fn get_addresses(
         GetAddressResponse {
             addresses: addresses
                 .into_iter()
-                .map(|address| format!("{}", address))
+                .map(|address| format!("{address}"))
                 .collect(),
         },
     )
@@ -507,7 +509,7 @@ async fn get_objects(
         let obj_type = object
             .data
             .type_()
-            .map_or("Unknown Type".to_owned(), |type_| format!("{}", type_));
+            .map_or("Unknown Type".to_owned(), |type_| format!("{type_}"));
 
         objects.push(Object {
             object_id: object_id.to_string(),
@@ -666,7 +668,7 @@ async fn object_info(
             obj_type: object
                 .data
                 .type_()
-                .map_or("Unknown Type".to_owned(), |type_| format!("{}", type_)),
+                .map_or("Unknown Type".to_owned(), |type_| format!("{type_}")),
             data: object_data,
         },
     )
@@ -814,8 +816,8 @@ Request representing the contents of the Move module to be published.
 struct PublishRequest {
     /** Required; Hex code as string representing the sender's address */
     sender: String,
-    /** Required; Move module serialized as bytes? */
-    module: String,
+    /** Required; Move modules serialized as hex */
+    compiled_modules: Vec<String>,
     /** Required; Hex code as string representing the gas object id */
     gas_object_id: String,
     /** Required; Gas budget required because of the need to execute module initializers */
@@ -833,21 +835,21 @@ need to execute module initializers.
     method = POST,
     path = "/publish",
     tags = [ "wallet" ],
-    // TODO: Figure out how to pass modules over the network before publishing this.
-    unpublished = true
 }]
 #[allow(unused_variables)]
 async fn publish(
-    rqctx: Arc<RequestContext<ServerContext>>,
+    ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<PublishRequest>,
-) -> Result<HttpResponseOk<TransactionResponse>, HttpError> {
-    let transaction_response = TransactionResponse {
-        gas_used: 0,
-        object_effects_summary: json!(""),
-        certificate: json!(""),
-    };
+) -> Result<Response<Body>, HttpError> {
+    let mut state = ctx.context().server_state.lock().await;
+    let state = state.as_mut().ok_or_else(server_state_error)?;
 
-    Ok(HttpResponseOk(transaction_response))
+    let publish_params = request.into_inner();
+
+    let publish_response = handle_publish(publish_params, state)
+        .await
+        .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{:#}", err)))?;
+    custom_http_response(StatusCode::OK, publish_response_to_json(publish_response)?)
 }
 
 /**
@@ -1059,7 +1061,7 @@ async fn get_effect(
         object
             .data
             .type_()
-            .map_or("Unknown Type".to_owned(), |type_| format!("{}", type_)),
+            .map_or("Unknown Type".to_owned(), |type_| format!("{type_}")),
     );
     effect.insert("id".to_string(), object_id.to_string());
     effect.insert(
@@ -1096,6 +1098,49 @@ async fn get_object_info(
         }
     };
     Ok((object_ref, object, layout))
+}
+
+async fn handle_publish(
+    publish_params: PublishRequest,
+    state: &mut ServerState,
+) -> Result<PublishResponse, anyhow::Error> {
+    let compiled_modules = publish_params
+        .compiled_modules
+        .iter()
+        .map(|module| decode_bytes_hex(module))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let gas_budget = publish_params.gas_budget;
+    let gas_object_id = ObjectID::try_from(publish_params.gas_object_id)?;
+    let sender: SuiAddress = decode_bytes_hex(publish_params.sender.as_str())?;
+    let (gas_obj_ref, _, _) = get_object_info(state, gas_object_id).await?;
+
+    let response: Result<_, anyhow::Error> = async {
+        let data = state
+            .gateway
+            .publish(sender, compiled_modules, gas_obj_ref, gas_budget)
+            .await?;
+        let signature = state
+            .keystore
+            .read()
+            .unwrap()
+            .sign(&sender, &data.to_bytes())?;
+        Ok(state
+            .gateway
+            .execute_transaction(Transaction::new(data, signature))
+            .await?
+            .to_publish_response()?)
+    }
+    .await;
+
+    let publish_response = match response {
+        Ok(publish_response) => publish_response,
+        Err(err) => {
+            return Err(err);
+        }
+    };
+
+    Ok(publish_response)
 }
 
 async fn handle_move_call(
@@ -1207,6 +1252,47 @@ async fn handle_move_call(
         object_effects_summary: json!(object_effects_summary),
         certificate: json!(cert),
     })
+}
+
+fn publish_response_to_json(
+    publish_response: PublishResponse,
+) -> Result<serde_json::Value, HttpError> {
+    // TODO: impl JSON Schema for Gateway Responses
+    Ok(json!({
+        "publishResults": {
+            "package": {
+                    "object_id": publish_response.package.0.to_string(),
+                    "version": u64::from(publish_response.package.1),
+                    "object_digest": format!("{:?}", publish_response.package.2),
+                },
+            "createdObjects": json!(publish_response
+                .created_objects
+                .iter()
+                .map(|obj| {
+                    json!({
+                        "owner": format!("{:?}", obj.owner),
+                        "version": format!("{:?}", obj.version().value()),
+                        "id": format!("{:?}", obj.id()),
+                        "readonly": format!("{:?}", obj.is_read_only()),
+                        "obj_type": obj
+                            .data
+                            .type_()
+                            .map_or("Unknown Type".to_owned(), |type_| format!("{}", type_)),
+                    })
+                })
+                .collect::<Vec<_>>()),
+            "updatedGas": GasCoin::try_from(&publish_response.updated_gas)
+                .map_err(|err| custom_http_error(StatusCode::INTERNAL_SERVER_ERROR, format!("{err}")))?
+        },
+        "certificate": {
+            "signedAuthorities": publish_response
+                .certificate
+                .signatures
+                .iter()
+                .map(|(bytes, _)| encode_bytes_hex(bytes))
+                .collect::<Vec<_>>(),
+        }
+    }))
 }
 
 fn custom_http_response<T: Serialize + JsonSchema>(

@@ -1,2 +1,3 @@
 sui_core/src/crypto.rs @huitseeker
 sui/src/keystore.rs @huitseeker @patrickkuo
+*.md @Clay-Mysten

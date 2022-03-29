@@ -54,10 +54,10 @@ jobs:
         toolchain: stable
         override: true
     - uses: Swatinem/rust-cache@v1
-    - uses: actions-rs/install@v0.1
+    - name: Install huniq, and cache the binary
+      uses: baptiste0928/cargo-install@v1
       with:
         crate: huniq
-        version: latest
     - name: prepare artifact directory
       run: |
         mkdir -p artifacts
@@ -70,7 +70,7 @@ jobs:
     - name: run benchmark
       run: |
         set -o pipefail
-        cargo run --release --bin bench 2>&1 | huniq | tee -a artifacts/bench_results.txt
+        cargo run --release --bin microbench 2>&1 | huniq | tee -a artifacts/bench_results.txt
     - name: retrieve benchmark results
       id: get-comment-body
       run: |

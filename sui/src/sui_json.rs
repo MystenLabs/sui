@@ -152,7 +152,7 @@ impl SuiJsonValue {
             // Other times we need vec of hex bytes for address. Issue is both Address and Strings are represented as Vec<u8> in Move call
             (JsonValue::String(s), NormalizedMoveType::Vector(t)) => {
                 if *t != NormalizedMoveType::U8 {
-                    return Err(anyhow!("Cannot convert string arg {} to {}", s, typ));
+                    return Err(anyhow!("Cannot convert string arg {s} to {typ}"));
                 }
                 let vec = if s.starts_with(HEX_PREFIX) {
                     // If starts with 0x, treat as hex vector
@@ -182,7 +182,7 @@ impl SuiJsonValue {
                 let r: SuiAddress = decode_bytes_hex(s.trim_start_matches(HEX_PREFIX))?;
                 IntermediateValue::Address(r)
             }
-            _ => return Err(anyhow!("Unexpected arg {} for expected type {}", val, typ)),
+            _ => return Err(anyhow!("Unexpected arg {val} for expected type {typ}")),
         };
 
         Ok(new_serde_value)

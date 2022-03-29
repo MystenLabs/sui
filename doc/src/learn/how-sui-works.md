@@ -4,7 +4,7 @@ title: How Sui Works
 
 This document has two main goals: It first provides a high-level overview of Sui, presenting its main functionalities and design choices. It then compares Sui with existing blockchains allowing potential adopters to decide whether Sui fits their use cases.
 
-This document is written for engineers, developers, and technical readers knowledgeable about the crypto space. It does not assume deep programming language or distributed systems expertise. See the [Sui white paper](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) for a much deeper explanation.
+This document is written for engineers, developers, and technical readers knowledgeable about the crypto space. It does not assume deep programming language or distributed systems expertise. See the [Sui white paper](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) for a much deeper explanation of how Sui works. See [How Sui Differs from Other Blockchains](sui-compared.md) for a high-level overview of the differences in approach between Sui and other blockchain systems.
 
 ## tl;dr
 
@@ -50,20 +50,20 @@ Sui mitigates a major hindrance to blockchain growth: [head-of-line blocking](ht
 
 In Sui, this consensus protocol is required only when the transaction involves shared objects. When shared objects are involved, the Sui authorities play the role of more active validators in other blockchains to totally order the transaction with respect to other transactions accessing shared objects.
 
-Because Sui focuses on managing specific objects rather than a single aggregation of state, it also reports on them in a unique way: (i) every object in Sui has a unique version number, and (ii) every new version is created from a transaction that may involve several dependencies, themselves versioned objects. 
+Because Sui focuses on managing specific objects rather than a single aggregation of state, it also reports on them in a unique way: (i) every object in Sui has a unique version number, and (ii) every new version is created from a transaction that may involve several dependencies, themselves versioned objects.
 
 As a consequence, a Sui authority – or any other entity with a copy of the state – can exhibit a causal history of an object, showing its history since genesis. Sui explicitly makes the bet that in most cases, the ordering of that causal history with the causal history of another object is irrelevant; and in the few cases where this information is relevant, Sui makes this relationship explicit in the data.
 
 Sui guarantees transaction processing obeys *[eventual consistency](https://en.wikipedia.org/wiki/Eventual_consistency)* in the [classical sense](https://hal.inria.fr/inria-00609399/document). This breaks down in two parts:
 
-* Eventual delivery - if one honest authority processes a transactions, all other honest authorities will eventually do the same.
+* Eventual delivery - if one honest authority processes a transaction, all other honest authorities will eventually do the same.
 * Convergence - two authorities that have seen the same set of transactions share the same view of the system (reach the same state).
 
 But contrary to a blockchain, Sui does not stop the flow of transactions in order to witness the convergence.
 
 ## Common transactions
 
-[Many transactions](https://eprint.iacr.org/2019/611.pdf) do not have complex interdependencies with other, arbitrary parts of the blockchain state. Often financial users just want to send an asset to a recipient, and the only data required to gauge whether this simple transaction is admissible is a fresh view of the sender's account. This observation allows Sui to forgo [consensus](https://pmg.csail.mit.edu/papers/osdi99.pdf) and instead use simpler algorithms based on [Byzantine Consistent Broadcast](https://link.springer.com/book/10.1007/978-3-642-15260-3). These protocols are based on the [FastPay](https://arxiv.org/abs/2003.11506) design that comes with peer-reviewed security guarantees. In a nutshell, Sui takes the approach of taking a lock (or "stopping the world") only for the relevant piece of data rather than the whole chain. In this case, the only information needed is the sender account, which can then send only one transaction at a time. 
+[Many transactions](https://eprint.iacr.org/2019/611.pdf) do not have complex interdependencies with other, arbitrary parts of the blockchain state. Often financial users just want to send an asset to a recipient, and the only data required to gauge whether this simple transaction is admissible is a fresh view of the sender's account. This observation allows Sui to forgo [consensus](https://pmg.csail.mit.edu/papers/osdi99.pdf) and instead use simpler algorithms based on [Byzantine Consistent Broadcast](https://link.springer.com/book/10.1007/978-3-642-15260-3). These protocols are based on the [FastPay](https://arxiv.org/abs/2003.11506) design that comes with peer-reviewed security guarantees. In a nutshell, Sui takes the approach of taking a lock (or "stopping the world") only for the relevant piece of data rather than the whole chain. In this case, the only information needed is the sender account, which can then send only one transaction at a time.
 
 Sui further expands this approach to more involved transactions that may explicitly depend on multiple elements under their sender's control, using Move’s object model and leveraging Move's strong ownership model. By requiring that dependencies be explicit, Sui applies a _multi-lane_ approach to transaction validation, making sure those independent transaction flows can progress without impediment from the others.
 
@@ -76,7 +76,7 @@ The process of submitting a Sui transaction is thus a bit more involved than in 
 3. The sender collects a Byzantine-resistant-majority of these votes into a _certificate_ and broadcasts that back to all Sui authorities. This settles the transaction, ensuring _finality_ that the transaction will not be dropped (revoked).
 4. Optionally, the sender collects a certificate detailing the effects of the transaction.
 
-While those steps demand more of the sender, performing them efficiently can still yield a cryptographic proof of finality with minimum latency. Aside from crafting the original transaction itself, the session management for a transaction does not require access to any private keys and can be delegated to a third party. Sui takes advantage of this observation to provide Sui Gateway Services.
+While those steps demand more of the sender, performing them efficiently can still yield a cryptographic proof of finality with minimum latency. Aside from crafting the original transaction itself, the session management for a transaction does not require access to any private keys and can be delegated to a third party. Sui takes advantage of this observation to provide [Sui Gateway services](#sui-gateway-services).
 
 
 ## Support for complex contracts
@@ -98,7 +98,7 @@ Sui employs the [state-of-the-art Narwhal consensus protocol](https://arxiv.org/
 
 ## Sui Gateway services
 
-The Sui model encourages third parties to assist with transaction submissions. For example, if an app developer (e.g., a game developer) has many users, they can manage votes aggregation and certificate submission on behalf of their users. The app developer may use their own servers (e.g., where they store the state of the game) to run a _Sui Gateway service_. We provide a reference implementation of such a service. 
+The Sui model encourages third parties to assist with transaction submissions. For example, if an app developer (e.g., a game developer) has many users, they can manage votes aggregation and certificate submission on behalf of their users. The app developer may use their own servers (e.g., where they store the state of the game) to run a _Sui Gateway service_. We provide a reference implementation of such a service.
 
 Instead of the app users attempting to send transactions to multiple authorities from their mobile device, which may degrade user experience, users may submit their transactions to the app, which forwards it to the Sui Gateway service run by the app developer. The Sui Gateway service conducts the entire transaction session and returns the results to the users. Security is assured since the app doesn’t need to know the users’ private keys; the app owner merely provides the bandwidth.
 
