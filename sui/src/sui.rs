@@ -22,14 +22,14 @@ struct SuiOpt {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let config = telemetry::TelemetryConfig {
+    let config = telemetry_subscribers::TelemetryConfig {
         service_name: "sui".into(),
         enable_tracing: std::env::var("SUI_TRACING_ENABLE").is_ok(),
         json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
         ..Default::default()
     };
     #[allow(unused)]
-    let guard = telemetry::init(config);
+    let guard = telemetry_subscribers::init(config);
 
     let options: SuiOpt = SuiOpt::from_args();
     options.command.execute().await

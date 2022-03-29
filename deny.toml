@@ -55,10 +55,6 @@ ignore = [
     # no safe upgrade is available, but once one is, we should upgrade Move
     # and remove this
     "RUSTSEC-2022-0002",
-    # telemetry component in mysten-infra clashes with crates.io telemetry package
-    # The below advisory is from crates.io telemetry package which we dont actually use
-    # TODO: remove this when the mysten-infra telemetry package is renamed
-    "RUSTSEC-2021-0046",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
