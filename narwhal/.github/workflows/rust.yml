@@ -53,6 +53,11 @@ jobs:
         with:
           command: test
           args: --all-features
+      - name: Compile micro-benchmarks
+        uses: actions-rs/cargo@v1
+        with:
+          command: bench
+          args: --all-features --no-run
 
   clippy:
     name: Clippy
