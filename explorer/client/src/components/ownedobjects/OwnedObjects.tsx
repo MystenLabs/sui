@@ -9,10 +9,7 @@ import styles from './OwnedObjects.module.css';
 
 type resultType = {
     id: string;
-    display?: {
-        category: string;
-        data: string;
-    };
+    display?: string;
 }[];
 
 function OwnedObjectStatic({ objects }: { objects: string[] }) {
@@ -36,20 +33,19 @@ function OwnedObjectView({ results }: { results: resultType }) {
     );
     const navigate = useNavigate();
     return (
-        <div>
+        <div id="ownedObjects">
             {results.map((entryObj, index1) => (
                 <div
                     className={styles.objectbox}
                     key={`object-${index1}`}
                     onClick={handlePreviewClick(entryObj.id, navigate)}
                 >
-                    {'display' in entryObj &&
-                    entryObj?.display?.category === 'imageURL' ? (
+                    {typeof entryObj.display === 'string' ? (
                         <div className={styles.previewimage}>
                             <img
                                 className={styles.imagebox}
                                 alt="NFT preview"
-                                src={entryObj.display.data}
+                                src={entryObj.display}
                             />
                         </div>
                     ) : (
