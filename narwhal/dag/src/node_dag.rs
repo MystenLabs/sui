@@ -40,9 +40,9 @@ pub struct NodeDag<T: Affiliated> {
 
 #[derive(Debug, Error)]
 pub enum DagError<T: crypto::Hash> {
-    #[error("No node known by this digest: {0}")]
+    #[error("No vertex known by this digest: {0}")]
     UnknownDigest(T::TypedDigest),
-    #[error("The node known by this digest was dropped: {0}")]
+    #[error("The vertex known by this digest was dropped: {0}")]
     DroppedDigest(T::TypedDigest),
 }
 
@@ -53,7 +53,9 @@ impl<T: Affiliated> NodeDag<T> {
         }
     }
 
-    pub(crate) fn get_weak(&self, digest: T::TypedDigest) -> Result<WeakNodeRef<T>, DagError<T>> {
+    // Returns a weak reference to the requested vertex.
+    // This does not prevent the vertex from being dropped off the graph.
+    pub fn get_weak(&self, digest: T::TypedDigest) -> Result<WeakNodeRef<T>, DagError<T>> {
         let node_ref = self
             .node_table
             .get(&digest)
@@ -64,7 +66,9 @@ impl<T: Affiliated> NodeDag<T> {
         }
     }
 
-    pub fn get(&self, digest: T::TypedDigest) -> Result<NodeRef<T>, DagError<T>> {
+    // Returns a strong (`Arc`) reference to the graph node.
+    // This bumps the reference count to the vertex and may prevent it from being GC-ed off the graph.
+    pub(crate) fn get(&self, digest: T::TypedDigest) -> Result<NodeRef<T>, DagError<T>> {
         let node_ref = self
             .node_table
             .get(&digest)
