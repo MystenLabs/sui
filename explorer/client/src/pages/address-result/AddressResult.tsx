@@ -30,10 +30,10 @@ function instanceOfResponseType(input: any): input is ResponseType {
 
 function Loaded({ data }: { data: DataType }) {
     return (
-        <div className={theme.textresults}>
+        <div className={theme.textresults} id="textResults">
             <div>
                 <div>Address ID</div>
-                <div data-testid="address-id">
+                <div id="addressID">
                     <Longtext
                         text={data.id}
                         category="addresses"

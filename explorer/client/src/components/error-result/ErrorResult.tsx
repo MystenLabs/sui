@@ -13,7 +13,7 @@ const ErrorResult = ({
     errorMsg: string;
 }) => {
     return (
-        <div className={theme.textresults}>
+        <div id="errorResult" className={theme.textresults}>
             <div className={styles.problemrow}>
                 <div>{errorMsg}</div>
                 <div>{id}</div>

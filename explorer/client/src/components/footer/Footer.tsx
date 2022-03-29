@@ -11,7 +11,7 @@ function Footer() {
     return (
         <footer className={styles.footer}>
             <nav className={styles.links}>
-                <Link to="/" aria-label="home button">
+                <Link to="/" id="homeBtn">
                     Home
                 </Link>
                 <ExternalLink

@@ -47,7 +47,7 @@
             "recipients": []
         },
         {
-            "id": "txProblem",
+            "id": "txMissingData",
             "category": "transaction"
         },
         {
