@@ -6,7 +6,7 @@ use bytes::Bytes;
 use crypto::traits::VerifyingKey;
 
 #[cfg(feature = "benchmark")]
-use ed25519_dalek::{Digest as _, Sha512};
+use blake2::digest::Update;
 use network::ReliableSender;
 #[cfg(feature = "benchmark")]
 use primary::BatchDigest;
@@ -124,12 +124,7 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
         #[cfg(feature = "benchmark")]
         {
             // NOTE: This is one extra hash that is only needed to print the following log entries.
-            let digest = BatchDigest::new(
-                Sha512::digest(&serialized).as_slice()[..crypto::DIGEST_LEN]
-                    .try_into()
-                    .unwrap(),
-            );
-
+            let digest = BatchDigest::new(crypto::blake2b_256(|hasher| hasher.update(&serialized)));
             for id in tx_ids {
                 // NOTE: This log entry is used to compute performance.
                 info!(

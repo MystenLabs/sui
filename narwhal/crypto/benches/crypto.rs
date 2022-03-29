@@ -7,6 +7,7 @@ extern crate rand;
 
 mod ed25519_benches {
     use super::*;
+    use blake2::digest::Update;
     use criterion::*;
     use crypto::{
         bls12377::{BLS12377KeyPair, BLS12377Signature},
@@ -15,7 +16,6 @@ mod ed25519_benches {
         traits::{KeyPair, VerifyingKey},
         Verifier,
     };
-    use ed25519_dalek::Digest as _;
     use rand::{prelude::ThreadRng, thread_rng};
     use signature::Signer;
 
@@ -78,9 +78,10 @@ mod ed25519_benches {
                 .collect();
 
             let msg: Vec<u8> = {
-                let mut h = ed25519_dalek::Sha512::new();
-                h.update(b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-                h.finalize().to_vec()
+                crypto::blake2b_256(|hasher| {
+                    hasher.update(b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                })
+                .to_vec()
             };
 
             let ed_signatures: Vec<_> = ed_keypairs.iter().map(|key| key.sign(&msg)).collect();

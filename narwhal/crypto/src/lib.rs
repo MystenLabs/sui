@@ -8,6 +8,8 @@
     rust_2021_compatibility
 )]
 
+use blake2::{digest::VariableOutput, VarBlake2b};
+
 use rand::{rngs::OsRng, CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 
@@ -41,6 +43,14 @@ pub mod traits;
 pub type CryptoError = ed25519_dalek::ed25519::Error;
 
 pub const DIGEST_LEN: usize = 32;
+
+pub fn blake2b_256<F: Fn(&mut blake2::VarBlake2b)>(closure: F) -> [u8; DIGEST_LEN] {
+    let mut hasher = VarBlake2b::new(DIGEST_LEN).unwrap();
+    closure(&mut hasher);
+    let mut res = [0u8; DIGEST_LEN];
+    hasher.finalize_variable(|output| res.copy_from_slice(output));
+    res
+}
 
 /// Represents a hash digest (32 bytes).
 #[derive(Hash, PartialEq, Default, Eq, Clone, Deserialize, Serialize, Ord, PartialOrd, Copy)]

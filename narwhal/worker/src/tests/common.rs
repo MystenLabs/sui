@@ -2,14 +2,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{processor::SerializedBatchMessage, worker::WorkerMessage};
+use blake2::digest::Update;
 use bytes::Bytes;
 use config::{Authority, Committee, PrimaryAddresses, WorkerAddresses};
 use crypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
-use ed25519_dalek::{Digest as _, Sha512};
 use futures::{sink::SinkExt as _, stream::StreamExt as _};
 use primary::{Batch, BatchDigest, Transaction};
 use rand::{rngs::StdRng, SeedableRng as _};
-use std::{convert::TryInto as _, net::SocketAddr};
+use std::net::SocketAddr;
 use store::{rocks, Store};
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
@@ -141,11 +141,9 @@ pub fn batch_digest() -> BatchDigest {
 
 // Fixture
 pub fn resolve_batch_digest(batch_serialised: Vec<u8>) -> BatchDigest {
-    BatchDigest::new(
-        Sha512::digest(&batch_serialised).as_slice()[..crypto::DIGEST_LEN]
-            .try_into()
-            .unwrap(),
-    )
+    BatchDigest::new(crypto::blake2b_256(|hasher| {
+        hasher.update(&batch_serialised)
+    }))
 }
 
 // Fixture

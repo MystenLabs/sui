@@ -1,14 +1,14 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::convert::TryInto;
 
 use super::*;
 use crate::{
     ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature},
     traits::{EncodeDecodeBase64, VerifyingKey},
 };
-use ed25519_dalek::{Digest as _, Sha512};
+
+use blake2::digest::Update;
 use rand::{rngs::StdRng, SeedableRng as _};
 use signature::{Signature, Signer, Verifier};
 
@@ -16,11 +16,7 @@ impl Hash for &[u8] {
     type TypedDigest = Digest;
 
     fn digest(&self) -> Digest {
-        Digest(
-            Sha512::digest(self).as_slice()[..crate::DIGEST_LEN]
-                .try_into()
-                .unwrap(),
-        )
+        Digest(blake2b_256(|hasher| hasher.update(self)))
     }
 }
 

@@ -21,6 +21,7 @@ crypto = { path = "../crypto" }
 config = { path = "../config" }
 network = { path = "../network" }
 primary = { path = "../primary" }
+blake2 = "0.9"
 
 [dev-dependencies]
 rand = "0.7.3"

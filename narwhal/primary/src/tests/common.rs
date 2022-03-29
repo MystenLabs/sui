@@ -8,6 +8,7 @@ use crate::{
     primary::PayloadToken,
     Batch, Transaction,
 };
+use blake2::digest::Update;
 use bytes::Bytes;
 use config::{Authority, Committee, PrimaryAddresses, WorkerAddresses, WorkerId};
 use crypto::{
@@ -15,7 +16,6 @@ use crypto::{
     traits::{KeyPair, Signer, VerifyingKey},
     Digest, Hash as _,
 };
-use ed25519_dalek::{Digest as _, Sha512};
 use futures::{sink::SinkExt as _, stream::StreamExt as _};
 use rand::{rngs::StdRng, SeedableRng as _};
 use std::{collections::BTreeMap, net::SocketAddr};
@@ -214,12 +214,9 @@ pub fn fixture_header_with_payload(number_of_batches: u8) -> Header<Ed25519Publi
     let mut payload: BTreeMap<BatchDigest, WorkerId> = BTreeMap::new();
 
     for i in 0..number_of_batches {
-        let batch_digest = BatchDigest(
-            Sha512::digest(vec![10u8, 5u8, 8u8, 20u8, i].as_slice()).as_slice()
-                [..crypto::DIGEST_LEN]
-                .try_into()
-                .unwrap(),
-        );
+        let batch_digest = BatchDigest(crypto::blake2b_256(|hasher| {
+            hasher.update(vec![10u8, 5u8, 8u8, 20u8, i])
+        }));
         payload.insert(batch_digest, 0);
     }
 

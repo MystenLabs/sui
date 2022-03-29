@@ -6,6 +6,7 @@ use crate::{
     common::{batch, temp_dir},
     worker::WorkerMessage,
 };
+use blake2::digest::Update;
 use crypto::ed25519::Ed25519PublicKey;
 use store::rocks;
 use tokio::sync::mpsc::channel;
@@ -41,11 +42,7 @@ async fn hash_and_store() {
 
     // Ensure the `Processor` outputs the batch's digest.
     let output = rx_digest.recv().await.unwrap();
-    let digest = BatchDigest::new(
-        Sha512::digest(&serialized).as_slice()[..crypto::DIGEST_LEN]
-            .try_into()
-            .unwrap(),
-    );
+    let digest = BatchDigest::new(crypto::blake2b_256(|hasher| hasher.update(&serialized)));
     let expected = bincode::serialize(&WorkerPrimaryMessage::OurBatch(digest, id)).unwrap();
     assert_eq!(output, expected);
 

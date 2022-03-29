@@ -2,11 +2,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::worker::SerializedWorkerPrimaryMessage;
+use blake2::digest::Update;
 use config::WorkerId;
 
-use ed25519_dalek::{Digest as _, Sha512};
 use primary::{BatchDigest, WorkerPrimaryMessage};
-use std::convert::TryInto;
 use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -36,11 +35,7 @@ impl Processor {
         tokio::spawn(async move {
             while let Some(batch) = rx_batch.recv().await {
                 // Hash the batch.
-                let digest = BatchDigest::new(
-                    Sha512::digest(&batch).as_slice()[..crypto::DIGEST_LEN]
-                        .try_into()
-                        .unwrap(),
-                );
+                let digest = BatchDigest::new(crypto::blake2b_256(|hasher| hasher.update(&batch)));
 
                 // Store the batch.
                 store.write(digest, batch).await;
