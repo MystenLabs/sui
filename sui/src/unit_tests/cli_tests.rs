@@ -810,7 +810,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     assert!(resp.is_err());
 
     let err_string = format!("{} ", resp.err().unwrap());
-    assert!(err_string.contains("Expected argument of type 0x2::ObjectBasics::Object, but found type 0x2::Coin::Coin<0x2::GAS::GAS>"));
+    assert!(err_string.contains("Expected argument of type 0x2::ObjectBasics::Object, but found type 0x2::Coin::Coin<0x2::SUI::SUI>"));
 
     // Try a proper transfer
     let obj_str = format!("0x{:02x}", created_obj);

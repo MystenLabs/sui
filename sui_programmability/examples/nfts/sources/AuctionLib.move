@@ -9,7 +9,7 @@ module NFTs::AuctionLib {
     use Std::Option::{Self, Option};
 
     use Sui::Coin::{Self, Coin};
-    use Sui::GAS::GAS;
+    use Sui::SUI::SUI;
     use Sui::ID::{Self, ID, VersionedID};
     use Sui::Transfer;
     use Sui::TxContext::{Self,TxContext};
@@ -20,7 +20,7 @@ module NFTs::AuctionLib {
     /// Stores information about an auction bid.
     struct BidData has store {
         /// Coin representing the current (highest) bid.
-        funds: Coin<GAS>,
+        funds: Coin<SUI>,
         /// Address of the highest bidder.
         highest_bidder: address,
     }
@@ -64,7 +64,7 @@ module NFTs::AuctionLib {
     /// Updates the auction based on the information in the bid
     /// (update auction if higher bid received and send coin back for
     /// bids that are too low).
-    public fun update_auction<T: key + store>(auction: &mut Auction<T>, bidder: address, coin: Coin<GAS>) {
+    public fun update_auction<T: key + store>(auction: &mut Auction<T>, bidder: address, coin: Coin<SUI>) {
         if (Option::is_none(&auction.bid_data)) {
             // first bid
             let bid_data = BidData {
