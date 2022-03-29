@@ -27,7 +27,7 @@ use sui_types::messages::{Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 
 use crate::config::{AuthorityInfo, Config};
-use crate::rest_gateway::requests::SplitCoinRequest;
+use crate::rest_gateway::requests::{MergeCoinRequest, SplitCoinRequest};
 use crate::rest_gateway::responses::{NamedObjectRef, ObjectResponse, TransactionBytes};
 
 #[derive(Serialize, Deserialize)]
@@ -249,7 +249,16 @@ impl GatewayAPI for RestGatewayClient {
         gas_payment: ObjectID,
         gas_budget: u64,
     ) -> Result<TransactionData, Error> {
-        todo!()
+        let url = format!("{}/api/merge_coin", self.url);
+        let request = MergeCoinRequest {
+            signer: encode_bytes_hex(&signer),
+            primary_coin: primary_coin.to_hex(),
+            coin_to_merge: coin_to_merge.to_hex(),
+            gas_payment: gas_payment.to_hex(),
+            gas_budget,
+        };
+        let tx: TransactionBytes = Self::post(url, serde_json::to_value(request)?).await?;
+        Ok(tx.to_data()?)
     }
 
     async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, Error> {

@@ -20,13 +20,17 @@ use move_core_types::parser::parse_type_tag;
 use move_core_types::value::MoveStructLayout;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
 use tracing::info;
 
-use sui::config::{GenesisConfig, NetworkConfig, PersistedConfig};
-use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
-use sui::sui_commands;
-use sui::sui_json::{resolve_move_function_args, SuiJsonValue};
+use sui::config::PersistedConfig;
+use sui::gateway::GatewayConfig;
+use sui::rest_gateway::requests::{
+    CallRequest, MergeCoinRequest, SignedTransaction, SplitCoinRequest,
+};
+use sui::rest_gateway::responses::{
+    custom_http_error, JsonResponse, NamedObjectRef, ObjectResponse, TransactionBytes,
+};
+use sui::sui_json::resolve_move_function_args;
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::{GatewayClient, GatewayState};
 use sui_types::base_types::*;
@@ -97,6 +101,7 @@ fn create_api() -> ApiDescription<ServerContext> {
     api.register(object_info).unwrap();
     api.register(new_transfer).unwrap();
     api.register(split_coin).unwrap();
+    api.register(merge_coin).unwrap();
     api.register(publish).unwrap();
     api.register(move_call).unwrap();
     api.register(sync_account_state).unwrap();
@@ -455,6 +460,38 @@ async fn split_coin(
     Ok(HttpResponseOk(TransactionBytes::new(tx_data)))
 }
 
+#[endpoint {
+method = POST,
+path = "/api/merge_coin",
+tags = [ "api" ],
+}]
+async fn merge_coin(
+    ctx: Arc<RequestContext<ServerContext>>,
+    request: TypedBody<MergeCoinRequest>,
+) -> Result<HttpResponseOk<TransactionBytes>, HttpError> {
+    let mut gateway = ctx.context().gateway.lock().await;
+    let request = request.into_inner();
+
+    let tx_data = async {
+        let signer = decode_bytes_hex(request.signer.as_str())?;
+        let primary_coin = ObjectID::try_from(request.primary_coin)?;
+        let coin_to_merge = ObjectID::try_from(request.coin_to_merge)?;
+        let gas_payment = ObjectID::try_from(request.gas_payment)?;
+        gateway
+            .merge_coins(
+                signer,
+                primary_coin,
+                coin_to_merge,
+                gas_payment,
+                request.gas_budget,
+            )
+            .await
+    }
+    .await
+    .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, error.to_string()))?;
+    Ok(HttpResponseOk(TransactionBytes::new(tx_data)))
+}
+
 /**
 Request representing the contents of the Move module to be published.
 */
@@ -480,8 +517,8 @@ need to execute module initializers.
  */
 #[endpoint {
     method = POST,
-    path = "/publish",
-    tags = [ "wallet" ],
+    path = "/api/publish",
+    tags = [ "API" ],
 }]
 #[allow(unused_variables)]
 async fn publish(
@@ -495,30 +532,6 @@ async fn publish(
         .await
         .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{:#}", err)))?;
     Ok(HttpResponseOk(TransactionBytes::new(data)))
-}
-
-/**
-Request containing the information required to execute a move module.
-*/
-#[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct CallRequest {
-    /** Required; Hex code as string representing the sender's address */
-    sender: String,
-    /** Required; Hex code as string representing Move module location */
-    package_object_id: String,
-    /** Required; Name of the move module */
-    module: String,
-    /** Required; Name of the function to be called in the move module */
-    function: String,
-    /** Optional; The argument types to be parsed */
-    type_args: Option<Vec<String>>,
-    /** Required; JSON representation of the arguments */
-    args: Vec<SuiJsonValue>,
-    /** Required; Hex code as string representing the gas object id */
-    gas_object_id: String,
-    /** Required; Gas budget required as a cap for gas usage */
-    gas_budget: u64,
 }
 
 /**
@@ -548,7 +561,7 @@ Example CallRequest
 async fn move_call(
     ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<CallRequest>,
-) -> Result<HttpResponseOk<Value>, HttpError> {
+) -> Result<HttpResponseOk<TransactionBytes>, HttpError> {
     let mut gateway = ctx.context().gateway.lock().await;
 
     let call_params = request.into_inner();
@@ -556,10 +569,7 @@ async fn move_call(
         .await
         .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{:#}", err)))?;
 
-    let body = json!({
-        "unsigned_tx_base64" : data.to_base64()
-    });
-    Ok(HttpResponseOk(body))
+    Ok(HttpResponseOk(TransactionBytes::new(data)))
 }
 
 /**
@@ -660,7 +670,7 @@ async fn get_object_info(
         Err(error) => {
             return Err(custom_http_error(
                 StatusCode::NOT_FOUND,
-                format!("Error while getting object info: {:?}", error),
+                format!("Error while getting object info: {error:?}"),
             ));
         }
     };
