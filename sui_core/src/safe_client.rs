@@ -282,7 +282,10 @@ where
                     match batch_info_response_item.clone() {
                         BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
                             // check signature of batch
-                            let result = signed_batch.signature.check(&signed_batch.signature, signed_batch.authority);
+                            let result = signed_batch.signature.check(&signed_batch, signed_batch.authority);
+                            // todo: ensure signature valid over the set of transactions in the batch
+                            // todo: ensure signature valid over the hash of the previous batch
+                            // todo: sequence numbers of the transactions enclosed need to be correct and size matches
                             match result {
                                 Ok(_) => {
                                     let _ = tx_output.send(Ok(batch_info_response_item)).await;
