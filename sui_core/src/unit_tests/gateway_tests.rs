@@ -129,7 +129,7 @@ impl AuthorityAPI for LocalAuthorityClient {
             .await
             .handle_batch_info_request(request)
             .await;
-        
+
         match update_items {
             Ok(t) => {
                 let mut deq = t.0;
