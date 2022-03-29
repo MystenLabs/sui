@@ -50,14 +50,16 @@ impl<S> AuthorityTemporaryStore<S> {
                 .iter()
                 .filter_map(|(kind, object)| match kind {
                     InputObjectKind::MovePackage(_) => None,
-                    InputObjectKind::OwnedMoveObject(object_ref) => {
+                    InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
                         if object.is_read_only() {
                             None
                         } else {
                             Some(*object_ref)
                         }
                     }
-                    InputObjectKind::SharedMoveObject(_) => Some(object.compute_object_reference()),
+                    InputObjectKind::MutSharedMoveObject(_) => {
+                        Some(object.compute_object_reference())
+                    }
                 })
                 .collect(),
             written: BTreeMap::new(),

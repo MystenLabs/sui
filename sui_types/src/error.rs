@@ -40,6 +40,8 @@ pub enum SuiError {
     TransferNonCoinError,
     #[error("A move package is expected, instead a move object is passed: {object_id}")]
     MoveObjectAsPackage { object_id: ObjectID },
+    #[error("A move object is expected, instead a move package is passed: {object_id}")]
+    MovePackageAsObject { object_id: ObjectID },
     #[error("Expecting a singler owner, shared ownership found")]
     UnexpectedOwnerType,
     #[error("Shared mutable object not yet supported")]
