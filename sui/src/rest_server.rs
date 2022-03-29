@@ -29,9 +29,9 @@ use sui_types::gas_coin::GasCoin;
 use tokio::task::{self, JoinHandle};
 use tracing::{error, info};
 
-use sui::config::{GenesisConfig, NetworkConfig};
+use sui::config::{GenesisConfig, NetworkConfig, PersistedConfig};
 use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
-use sui::keystore::Keystore;
+use sui::keystore::{Keystore, SuiKeystore};
 use sui::sui_commands;
 use sui::sui_json::{resolve_move_function_args, SuiJsonValue};
 use sui_core::gateway_state::GatewayClient;
@@ -168,32 +168,27 @@ Generate OpenAPI documentation.
     path = "/docs",
     tags = [ "docs" ],
 }]
-async fn docs(
-    rqctx: Arc<RequestContext<ServerContext>>,
-) -> Result<HttpResponseOk<DocumentationResponse>, HttpError> {
+async fn docs(rqctx: Arc<RequestContext<ServerContext>>) -> Result<Response<Body>, HttpError> {
     let server_context = rqctx.context();
     let documentation = &server_context.documentation;
 
-    Ok(HttpResponseOk(DocumentationResponse {
-        documentation: documentation.clone(),
-    }))
+    custom_http_response(
+        StatusCode::OK,
+        DocumentationResponse {
+            documentation: documentation.clone(),
+        },
+    )
+    .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")))
 }
 
 /**
-Request containing the server configuration.
-
-All attributes in GenesisRequest are optional, a default value will be used if
-the fields are not set.
+Request for genesis type.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct GenesisRequest {
-    /** Optional; Number of authorities to be started in the network */
-    num_authorities: Option<u16>,
-    /** Optional; Number of managed addresses to be created at genesis */
-    num_addresses: Option<u16>,
-    /** Optional; Number of gas objects to be created for each address */
-    num_gas_objects: Option<u16>,
+    /** Set to read genesis & keystore state from file. */
+    custom: bool,
 }
 
 /**
@@ -212,8 +207,7 @@ struct GenesisResponse {
 /**
 Specify the genesis state of the network.
 
-You can specify the number of authorities, an initial number of addresses
-and the number of gas objects to be assigned to those addresses.
+You can specify a genesis file to start network with custom genesis state.
 
 Note: This is a temporary endpoint that will no longer be needed once the
 network has been started on testnet or mainnet.
@@ -223,8 +217,12 @@ network has been started on testnet or mainnet.
     path = "/sui/genesis",
     tags = [ "debug" ],
 }]
-async fn genesis(rqctx: Arc<RequestContext<ServerContext>>) -> Result<Response<Body>, HttpError> {
+async fn genesis(
+    rqctx: Arc<RequestContext<ServerContext>>,
+    request: TypedBody<GenesisRequest>,
+) -> Result<Response<Body>, HttpError> {
     let context = rqctx.context();
+    let genesis_params = request.into_inner();
     // Using a new working dir for genesis, this directory will be deleted when stop end point is called.
     let working_dir = PathBuf::from(".").join(format!("{}", ObjectID::random()));
 
@@ -235,20 +233,35 @@ async fn genesis(rqctx: Arc<RequestContext<ServerContext>>) -> Result<Response<B
         ));
     }
 
-    let genesis_conf = GenesisConfig::default_genesis(&working_dir).map_err(|error| {
-        custom_http_error(
-            StatusCode::CONFLICT,
-            format!("Unable to create default genesis configuration: {error}"),
-        )
-    })?;
-
-    let (network_config, accounts, keystore) =
-        sui_commands::genesis(genesis_conf).await.map_err(|err| {
+    let genesis_conf = if genesis_params.custom {
+        PersistedConfig::read(&PathBuf::from("genesis.conf")).map_err(|error| {
             custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Genesis error: {:?}", err),
+                StatusCode::BAD_REQUEST,
+                format!("Could not load custom genesis configuration: {error}"),
+            )
+        })?
+    } else {
+        GenesisConfig::default_genesis(&working_dir).map_err(|error| {
+            custom_http_error(
+                StatusCode::BAD_REQUEST,
+                format!("Unable to create default genesis configuration: {error}"),
+            )
+        })?
+    };
+
+    let (network_config, accounts, mut keystore) =
+        sui_commands::genesis(genesis_conf).await.map_err(|err| {
+            custom_http_error(StatusCode::BAD_REQUEST, format!("Genesis error: {:?}", err))
+        })?;
+
+    if genesis_params.custom {
+        keystore = SuiKeystore::load_or_create(&PathBuf::from("wallet.key")).map_err(|err| {
+            custom_http_error(
+                StatusCode::BAD_REQUEST,
+                format!("Could not load keystore: {:?}", err),
             )
         })?;
+    }
 
     let authorities = network_config.get_authority_infos();
     let gateway = GatewayType::Embedded(EmbeddedGatewayConfig {
