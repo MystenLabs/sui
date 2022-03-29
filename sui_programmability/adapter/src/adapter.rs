@@ -50,10 +50,46 @@ macro_rules! exec_failure {
 #[path = "unit_tests/adapter_tests.rs"]
 mod adapter_tests;
 
-pub fn new_move_vm(natives: NativeFunctionTable) -> Result<Arc<MoveVM>, SuiError> {
-    Ok(Arc::new(
-        MoveVM::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)?,
-    ))
+// This structure holds a VM and a cache of packages that contain
+// in turn caches of their Function entry points,
+// that involve re-computation / deserialization to otherwise get.
+pub struct SuiMoveVM {
+    movevm: MoveVM,
+
+    // TODO: change this to an LRU cache, to avoid running out of
+    //       memory.
+    package_cache: parking_lot::RwLock<HashMap<ObjectID, Arc<Object>>>,
+}
+
+impl SuiMoveVM {
+    /// Make a new struct from a VM
+    pub fn new(vm: MoveVM) -> SuiMoveVM {
+        SuiMoveVM {
+            movevm: vm,
+            package_cache: parking_lot::RwLock::new(HashMap::new()),
+        }
+    }
+
+    /// Returns an object from the cache if one is available
+    /// and otherwise caches a copy of this object.
+    pub fn get_package(&self, object: &Object) -> Arc<Object> {
+        let id = object.id();
+
+        if let Some(cached_object) = self.package_cache.read().get(&id) {
+            return cached_object.clone();
+        }
+
+        let arc_object = Arc::new(object.clone());
+        self.package_cache.write().insert(id, arc_object.clone());
+        arc_object
+    }
+}
+
+pub fn new_move_vm(natives: NativeFunctionTable) -> Result<Arc<SuiMoveVM>, SuiError> {
+    Ok(Arc::new(SuiMoveVM {
+        movevm: MoveVM::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)?,
+        package_cache: parking_lot::RwLock::new(HashMap::new()),
+    }))
 }
 
 /// Execute `module::function<type_args>(object_args ++ pure_args)` as a call from `sender` with the given `gas_budget`.
@@ -65,10 +101,10 @@ pub fn new_move_vm(natives: NativeFunctionTable) -> Result<Arc<MoveVM>, SuiError
 /// into ExecutionStatus::Failure.
 #[allow(clippy::too_many_arguments)]
 pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
-    vm: &MoveVM,
+    vm: &SuiMoveVM,
     state_view: &mut S,
-    _natives: NativeFunctionTable,
-    package_object: Object,
+    _natives: &NativeFunctionTable,
+    package_object: &Object,
     module: &Identifier,
     function: &Identifier,
     type_args: Vec<TypeTag>,
@@ -87,6 +123,8 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             object_owner_map.insert(obj.id().into(), owner);
         }
     }
+    let cached_package = vm.get_package(package_object);
+
     let TypeCheckSuccess {
         module_id,
         args,
@@ -94,7 +132,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         by_value_objects,
         return_types,
     } = match resolve_and_type_check(
-        package_object,
+        &cached_package,
         module,
         function,
         &type_args,
@@ -133,7 +171,7 @@ fn execute_internal<
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
 >(
-    vm: &MoveVM,
+    vm: &SuiMoveVM,
     state_view: &mut S,
     module_id: &ModuleId,
     function: &Identifier,
@@ -155,7 +193,7 @@ fn execute_internal<
             Ok(ok) => ok,
             Err(err) => return ExecutionStatus::new_failure(gas::MIN_MOVE, err),
         };
-    let session = vm.new_session(state_view);
+    let session = vm.movevm.new_session(state_view);
     match session.execute_function_for_effects(
         module_id,
         function,
@@ -364,6 +402,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         Err(err) => exec_failure!(gas::MIN_MOVE, err),
     };
 
+    let vm = SuiMoveVM::new(vm);
     let gas_used_for_init = match store_package_and_init_modules(
         state_view,
         &vm,
@@ -393,7 +432,7 @@ pub fn store_package_and_init_modules<
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
 >(
     state_view: &mut S,
-    vm: &MoveVM,
+    vm: &SuiMoveVM,
     modules: Vec<CompiledModule>,
     ctx: &mut TxContext,
     gas_budget: u64,
@@ -417,7 +456,7 @@ pub fn store_package_and_init_modules<
 /// Modules in module_ids_to_init must have the init method defined
 fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
     state_view: &mut S,
-    vm: &MoveVM,
+    vm: &SuiMoveVM,
     module_ids_to_init: Vec<ModuleId>,
     ctx: &mut TxContext,
     gas_budget: u64,

@@ -198,8 +198,8 @@ fn call(
     adapter::execute(
         &vm,
         storage,
-        native_functions.clone(),
-        package,
+        native_functions,
+        &package,
         &Identifier::new(module_name).unwrap(),
         &Identifier::new(fun_name).unwrap(),
         type_args,
@@ -705,8 +705,8 @@ fn test_move_call_incorrect_function() {
     let status = adapter::execute(
         &vm,
         &mut storage,
-        native_functions.clone(),
-        gas_object,
+        &native_functions,
+        &gas_object,
         &Identifier::new("ObjectBasics").unwrap(),
         &Identifier::new("create").unwrap(),
         vec![],
