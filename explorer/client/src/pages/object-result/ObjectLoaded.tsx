@@ -3,6 +3,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 
+import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
@@ -11,7 +12,6 @@ import {
     asciiFromNumberBytes,
     trimStdLibPrefix,
 } from '../../utils/stringUtils';
-import DisplayBox from './DisplayBox';
 import { type DataType } from './ObjectResultType';
 
 import styles from './ObjectResult.module.css';
@@ -213,7 +213,12 @@ function ObjectLoaded({ data }: { data: DataType }) {
         <>
             <div className={styles.resultbox}>
                 {viewedData.data?.contents?.display && (
-                    <DisplayBox data={data} />
+                    <div className={styles.display}>
+                        <DisplayBox
+                            display={viewedData.data.contents.display}
+                            tag="imageURL"
+                        />
+                    </div>
                 )}
                 <div
                     className={`${styles.textbox} ${

@@ -1,16 +1,30 @@
-import React, { useCallback } from 'react';
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { DefaultRpcClient as rpc } from '../../utils/internetapi/SuiRpcClient';
 import { navigateWithUnknown } from '../../utils/searchUtil';
 import { findDataFromID } from '../../utils/static/searchUtil';
-import { trimStdLibPrefix } from '../../utils/stringUtils';
+import { trimStdLibPrefix, processDisplayValue } from '../../utils/stringUtils';
+import DisplayBox from '../displaybox/DisplayBox';
 
 import styles from './OwnedObjects.module.css';
 
 type resultType = {
     id: string;
+    Type: string;
     display?: string;
 }[];
+
+const DATATYPE_DEFAULT: resultType = [
+    {
+        id: '',
+        Type: '',
+        display: '',
+    },
+];
 
 function OwnedObjectStatic({ objects }: { objects: string[] }) {
     const results = objects.map((objectId) => {
@@ -23,6 +37,32 @@ function OwnedObjectStatic({ objects }: { objects: string[] }) {
     });
 
     return <OwnedObjectView results={results} />;
+}
+
+function OwnecObjectInternetAPI({ objects }: { objects: string[] }) {
+    const [results, setResults] = useState(DATATYPE_DEFAULT);
+    const [isLoaded, setIsLoaded] = useState(false);
+
+    useEffect(() => {
+        Promise.all(objects.map((objID) => rpc.getObjectInfo(objID))).then(
+            (results) => {
+                setResults(
+                    results.map(({ id, objType, data }) => ({
+                        id: id,
+                        Type: objType,
+                        display: processDisplayValue(data.contents?.display),
+                    }))
+                );
+                setIsLoaded(true);
+            }
+        );
+    }, [objects]);
+
+    if (isLoaded) {
+        return <OwnedObjectView results={results} />;
+    } else {
+        return <div />;
+    }
 }
 
 function OwnedObjectView({ results }: { results: resultType }) {
@@ -40,12 +80,11 @@ function OwnedObjectView({ results }: { results: resultType }) {
                     key={`object-${index1}`}
                     onClick={handlePreviewClick(entryObj.id, navigate)}
                 >
-                    {typeof entryObj.display === 'string' ? (
+                    {entryObj.display !== undefined ? (
                         <div className={styles.previewimage}>
-                            <img
-                                className={styles.imagebox}
-                                alt="NFT preview"
-                                src={entryObj.display}
+                            <DisplayBox
+                                display={entryObj.display}
+                                tag="imageURL"
                             />
                         </div>
                     ) : (
@@ -91,7 +130,7 @@ function OwnedObject({ objects }: { objects: string[] }) {
     if (process.env.REACT_APP_DATA === 'static') {
         return <OwnedObjectStatic objects={objects} />;
     } else {
-        return <div>Not Supported Yet</div>;
+        return <OwnecObjectInternetAPI objects={objects} />;
     }
 }
 

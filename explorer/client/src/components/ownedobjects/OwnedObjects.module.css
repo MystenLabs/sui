@@ -18,10 +18,10 @@
     @apply mr-[1rem] uppercase font-sans font-semibold block xl:inline;
 }
 
-.objectbox > .previewimage > img {
-    @apply h-[20vh] w-[80vw] lg:w-[30vw] object-scale-down;
+.previewimage > div > img {
+    @apply h-[20vh];
 }
 
 .previewimage {
-    @apply h-[20vh] w-[80vw] lg:w-[30vw] mx-auto;
+    @apply h-[20vh];
 }
