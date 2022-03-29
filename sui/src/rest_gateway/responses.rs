@@ -108,3 +108,14 @@ impl JsonSchema for TransactionBytes {
             .into()
     }
 }
+
+/**
+Response containing the information of an object schema if found, otherwise an error
+is returned.
+ */
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectSchemaResponse {
+    /** JSON representation of the object schema */
+    pub schema: serde_json::Value,
+}

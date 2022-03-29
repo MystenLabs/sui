@@ -27,7 +27,7 @@ use sui_types::messages::{Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 
 use crate::config::{AuthorityInfo, Config};
-use crate::rest_gateway::requests::{MergeCoinRequest, SplitCoinRequest};
+use crate::rest_gateway::requests::{CallRequest, MergeCoinRequest, SplitCoinRequest};
 use crate::rest_gateway::responses::{NamedObjectRef, ObjectResponse, TransactionBytes};
 
 #[derive(Serialize, Deserialize)]
@@ -198,17 +198,25 @@ impl GatewayAPI for RestGatewayClient {
         gas_budget: u64,
     ) -> Result<TransactionData, Error> {
         let url = format!("{}/api/move_call", self.url);
+        let type_arg = type_arguments
+            .iter()
+            .map(|arg| arg.to_string())
+            .collect::<Vec<_>>();
 
-        let body = json! ({
-            "sender" : signer.to_string(),
-            "packageObjectId" : package_object_ref.0,
-            "module" : module,
-            "function" : function,
-            "typeArgs" : type_arguments,
-            "gasObjectId": gas_object_ref.0,
-        });
-
-        Ok(Self::post(url, body).await?)
+        let request = CallRequest {
+            signer: encode_bytes_hex(&signer),
+            package_object_id: package_object_ref.0.to_hex(),
+            module: module.into_string(),
+            function: function.into_string(),
+            type_arguments: Some(type_arg),
+            pure_arguments,
+            gas_object_id: gas_object_ref.0.to_hex(),
+            gas_budget,
+            object_arguments: vec![],
+            shared_object_arguments: vec![],
+        };
+        let tx: TransactionBytes = Self::post(url, serde_json::to_value(request)?).await?;
+        Ok(tx.to_data()?)
     }
 
     async fn publish(

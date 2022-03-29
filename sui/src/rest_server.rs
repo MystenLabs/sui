@@ -20,24 +20,23 @@ use move_core_types::parser::parse_type_tag;
 use move_core_types::value::MoveStructLayout;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use tracing::info;
 
 use sui::config::PersistedConfig;
 use sui::gateway::GatewayConfig;
 use sui::rest_gateway::requests::{
-    CallRequest, MergeCoinRequest, SignedTransaction, SplitCoinRequest,
+    CallRequest, GetObjectInfoRequest, GetObjectSchemaRequest, GetObjectsRequest, MergeCoinRequest,
+    PublishRequest, SignedTransaction, SplitCoinRequest,
 };
 use sui::rest_gateway::responses::{
-    custom_http_error, JsonResponse, NamedObjectRef, ObjectResponse, TransactionBytes,
+    custom_http_error, JsonResponse, NamedObjectRef, ObjectResponse, ObjectSchemaResponse,
+    TransactionBytes,
 };
-use sui::sui_json::resolve_move_function_args;
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::{GatewayClient, GatewayState};
 use sui_types::base_types::*;
 use sui_types::crypto;
 use sui_types::crypto::SignableBytes;
 use sui_types::messages::{Transaction, TransactionData};
-use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::Object as SuiObject;
 use sui_types::object::ObjectRead;
 
@@ -158,15 +157,7 @@ async fn docs(rqctx: Arc<RequestContext<ServerContext>>) -> Result<Response<Body
     )
     .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")))
 }
-/**
-Request containing the address of which objecst are to be retrieved.
- */
-#[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct GetObjectsRequest {
-    /** Required; Hex code as string representing the address */
-    address: String,
-}
+
 /**
 JSON representation of an object in the Sui network.
  */
@@ -227,30 +218,6 @@ async fn get_objects(
 }
 
 /**
-    Request containing the object schema for which info is to be retrieved.
-
-If owner is specified we look for this object in that address's account store,
-otherwise we look for it in the shared object store.
-*/
-#[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct GetObjectSchemaRequest {
-    /** Required; Hex code as string representing the object id */
-    object_id: String,
-}
-
-/**
-Response containing the information of an object schema if found, otherwise an error
-is returned.
-*/
-#[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct ObjectSchemaResponse {
-    /** JSON representation of the object schema */
-    schema: serde_json::Value,
-}
-
-/**
 Returns the schema for a specified object.
  */
 #[endpoint {
@@ -304,19 +271,6 @@ async fn object_schema(
     })?;
 
     Ok(HttpResponseOk(ObjectSchemaResponse { schema }))
-}
-
-/**
-Request containing the object for which info is to be retrieved.
-
-If owner is specified we look for this object in that address's account store,
-otherwise we look for it in the shared object store.
-*/
-#[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct GetObjectInfoRequest {
-    /** Required; Hex code as string representing the object id */
-    object_id: String,
 }
 
 /**
@@ -493,22 +447,6 @@ async fn merge_coin(
 }
 
 /**
-Request representing the contents of the Move module to be published.
-*/
-#[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct PublishRequest {
-    /** Required; Hex code as string representing the sender's address */
-    sender: String,
-    /** Required; Move modules serialized as hex */
-    compiled_modules: Vec<String>,
-    /** Required; Hex code as string representing the gas object id */
-    gas_object_id: String,
-    /** Required; Gas budget required because of the need to execute module initializers */
-    gas_budget: u64,
-}
-
-/**
 Publish move module. It will perform proper verification and linking to make
 sure the package is valid. If some modules have initializers, these initializers
 will also be executed in Move (which means new Move objects can be created in
@@ -527,7 +465,6 @@ async fn publish(
 ) -> Result<HttpResponseOk<TransactionBytes>, HttpError> {
     let mut gateway = ctx.context().gateway.lock().await;
     let publish_params = request.into_inner();
-
     let data = handle_publish(publish_params, &mut gateway)
         .await
         .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{:#}", err)))?;
@@ -560,11 +497,11 @@ Example CallRequest
 }]
 async fn move_call(
     ctx: Arc<RequestContext<ServerContext>>,
-    request: TypedBody<CallRequest>,
+    request: TypedBody<JsonResponse<CallRequest>>,
 ) -> Result<HttpResponseOk<TransactionBytes>, HttpError> {
     let mut gateway = ctx.context().gateway.lock().await;
 
-    let call_params = request.into_inner();
+    let call_params = request.into_inner().0;
     let data = handle_move_call(call_params, &mut gateway)
         .await
         .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{:#}", err)))?;
@@ -701,54 +638,34 @@ async fn handle_move_call(
     call_params: CallRequest,
     gateway: &mut GatewayClient,
 ) -> Result<TransactionData, anyhow::Error> {
+    println!("here1");
     let module = Identifier::from_str(&call_params.module.to_owned())?;
     let function = Identifier::from_str(&call_params.function.to_owned())?;
-    let args = call_params.args;
     let type_args = call_params
-        .type_args
+        .type_arguments
         .unwrap_or_default()
         .iter()
         .map(|type_arg| parse_type_tag(type_arg))
         .collect::<Result<Vec<_>, _>>()?;
     let gas_budget = call_params.gas_budget;
+    println!("here2");
+    println!("gas id {}", call_params.gas_object_id);
+    println!("package_object_id {}", call_params.package_object_id);
     let gas_object_id = ObjectID::try_from(call_params.gas_object_id)?;
-    let package_object_id = ObjectID::from_hex_literal(&call_params.package_object_id)?;
+    let package_object_id = ObjectID::try_from(call_params.package_object_id)?;
+    println!("here3");
 
-    let sender: SuiAddress = decode_bytes_hex(call_params.sender.as_str())?;
+    let sender: SuiAddress = decode_bytes_hex(call_params.signer.as_str())?;
 
-    let (package_object_ref, package_object, _) =
-        get_object_info(gateway, package_object_id).await?;
-
-    // Extract the input args
-    let (object_ids, pure_args) =
-        resolve_move_function_args(&package_object, module.clone(), function.clone(), args)?;
-
-    info!("Resolved fn to: \n {:?} & {:?}", object_ids, pure_args);
-
-    // Fetch all the objects needed for this call
-    let mut input_objs = vec![];
-    for obj_id in object_ids.clone() {
-        let (_, object, _) = get_object_info(gateway, obj_id).await?;
-        input_objs.push(object);
-    }
-
-    // Pass in the objects for a deeper check
-    resolve_and_type_check(
-        &package_object,
-        &module,
-        &function,
-        &type_args,
-        input_objs,
-        pure_args.clone(),
-    )?;
+    let (package_object_ref, _, _) = get_object_info(gateway, package_object_id).await?;
 
     // Fetch the object info for the gas obj
     let (gas_obj_ref, _, _) = get_object_info(gateway, gas_object_id).await?;
 
     // Fetch the objects for the object args
     let mut object_args_refs = Vec::new();
-    for obj_id in object_ids {
-        let (object_ref, _, _) = get_object_info(gateway, obj_id).await?;
+    for obj_id in call_params.object_arguments {
+        let (object_ref, _, _) = get_object_info(gateway, ObjectID::try_from(obj_id)?).await?;
         object_args_refs.push(object_ref);
     }
 
@@ -763,7 +680,7 @@ async fn handle_move_call(
             object_args_refs,
             // TODO: Populate shared object args. sui/issue#719
             vec![],
-            pure_args,
+            call_params.pure_arguments,
             gas_budget,
         )
         .await

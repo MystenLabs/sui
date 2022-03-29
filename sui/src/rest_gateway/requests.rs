@@ -4,8 +4,8 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-
-use crate::sui_json::SuiJsonValue;
+use serde_with::base64::Base64;
+use serde_with::serde_as;
 
 /**
 Request containing the information needed to execute a split coin transaction.
@@ -43,11 +43,12 @@ pub struct SignedTransaction {
 /**
 Request containing the information required to execute a move module.
  */
-#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde_as]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CallRequest {
     /** Required; Hex code as string representing the sender's address */
-    pub sender: String,
+    pub signer: String,
     /** Required; Hex code as string representing Move module location */
     pub package_object_id: String,
     /** Required; Name of the move module */
@@ -55,11 +56,68 @@ pub struct CallRequest {
     /** Required; Name of the function to be called in the move module */
     pub function: String,
     /** Optional; The argument types to be parsed */
-    pub type_args: Option<Vec<String>>,
-    /** Required; JSON representation of the arguments */
-    pub args: Vec<SuiJsonValue>,
+    pub type_arguments: Option<Vec<String>>,
+    /** Required; Byte representation of the arguments */
+    #[serde_as(as = "Vec<Base64>")]
+    pub pure_arguments: Vec<Vec<u8>>,
     /** Required; Hex code as string representing the gas object id */
     pub gas_object_id: String,
     /** Required; Gas budget required as a cap for gas usage */
+    pub gas_budget: u64,
+    /** Required; Object arguments */
+    pub object_arguments: Vec<String>,
+    /** Required; Share object arguments */
+    pub shared_object_arguments: Vec<String>,
+}
+
+/**
+Request containing the address of which objecst are to be retrieved.
+ */
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GetObjectsRequest {
+    /** Required; Hex code as string representing the address */
+    pub address: String,
+}
+
+/**
+    Request containing the object schema for which info is to be retrieved.
+
+If owner is specified we look for this object in that address's account store,
+otherwise we look for it in the shared object store.
+ */
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GetObjectSchemaRequest {
+    /** Required; Hex code as string representing the object id */
+    pub object_id: String,
+}
+
+/**
+Request containing the object for which info is to be retrieved.
+
+If owner is specified we look for this object in that address's account store,
+otherwise we look for it in the shared object store.
+ */
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GetObjectInfoRequest {
+    /** Required; Hex code as string representing the object id */
+    pub object_id: String,
+}
+
+/**
+Request representing the contents of the Move module to be published.
+ */
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishRequest {
+    /** Required; Hex code as string representing the sender's address */
+    pub sender: String,
+    /** Required; Move modules serialized as hex */
+    pub compiled_modules: Vec<String>,
+    /** Required; Hex code as string representing the gas object id */
+    pub gas_object_id: String,
+    /** Required; Gas budget required because of the need to execute module initializers */
     pub gas_budget: u64,
 }
