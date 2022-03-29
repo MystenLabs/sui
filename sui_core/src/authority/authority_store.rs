@@ -2,23 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
-use rocksdb::{ColumnFamilyDescriptor, Options};
+use rocksdb::Options;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::path::Path;
-
-use rocksdb::MultiThreaded;
+use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use tracing::warn;
-use typed_store::rocks::{DBBatch, DBMap, TypedStoreError};
+use typed_store::rocks::{DBBatch, DBMap};
 
 use typed_store::{reopen, traits::Map};
 
-pub type AuthorityStore = SuiDataStore<false>;
+pub type AuthorityStore = SuiDataStore<false, AuthoritySignInfo>;
 #[allow(dead_code)]
-pub type ReplicaStore = SuiDataStore<true>;
+pub type ReplicaStore = SuiDataStore<true, EmptySignInfo>;
+pub type GatewayStore = SuiDataStore<false, EmptySignInfo>;
 
 const NUM_SHARDS: usize = 4096;
 
@@ -29,7 +30,10 @@ const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 /// ALL_OBJ_VER determines whether we want to store all past
 /// versions of every object in the store. Authority doesn't store
 /// them, but other entities such as replicas will.
-pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
+/// S is a template on Authority signature state. This allows SuiDataStore to be used on either
+/// authorities or non-authorities. Specifically, when storing transactions and effects,
+/// S allows SuiDataStore to either store the authority signed version or unsigned version.
+pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     /// This is a map between the object ID and the latest state of the object, namely the
     /// state that is needed to process new transactions. If an object is deleted its entry is
     /// removed from this map.
@@ -54,11 +58,11 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
     /// by a specific user, and their object reference.
     owner_index: DBMap<(SuiAddress, ObjectID), ObjectRef>,
 
-    /// This is map between the transaction digest and signed transactions found in the `transaction_lock`.
+    /// This is map between the transaction digest and transactions found in the `transaction_lock`.
     /// NOTE: after a lock is deleted the corresponding entry here could be deleted, but right
-    /// now this is not done. If a certificate is processed (see `certificates`) the signed
+    /// now this is not done. If a certificate is processed (see `certificates`) the
     /// transaction can also be deleted from this structure.
-    signed_transactions: DBMap<TransactionDigest, SignedTransaction>,
+    transactions: DBMap<TransactionDigest, TransactionEnvelope<S>>,
 
     /// This is a map between the transaction digest and the corresponding certificate for all
     /// certificates that have been successfully processed by this authority. This set of certificates
@@ -77,7 +81,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
     /// (ie in `certificates`) and the effects its execution has on the authority state. This
     /// structure is used to ensure we do not double process a certificate, and that we can return
     /// the same response for any call after the first (ie. make certificate processing idempotent).
-    signed_effects: DBMap<TransactionDigest, SignedTransactionEffects>,
+    effects: DBMap<TransactionDigest, TransactionEffectsEnvelope<S>>,
 
     /// Hold the lock for shared objects. These locks are written by a single task: upon receiving a valid
     /// certified transaction from consensus, the authority assigns a lock to each shared objects of the
@@ -103,48 +107,11 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
     last_consensus_index: DBMap<u64, SequenceNumber>,
 }
 
-/// Opens a database with options, and a number of column families that are created if they do not exist.
-pub fn open_cf_opts<P: AsRef<Path>>(
-    path: P,
-    db_options: Option<rocksdb::Options>,
-    opt_cfs: &[(&str, &rocksdb::Options)],
-) -> Result<Arc<rocksdb::DBWithThreadMode<MultiThreaded>>, TypedStoreError> {
-    // Customize database options
-    let mut options = db_options.unwrap_or_default();
-    let mut cfs = rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&options, &path)
-        .ok()
-        .unwrap_or_default();
-
-    // Customize CFs
-
-    for cf_key in opt_cfs.iter().map(|(name, _)| name) {
-        let key = (*cf_key).to_owned();
-        if !cfs.contains(&key) {
-            cfs.push(key);
-        }
-    }
-
-    let primary = path.as_ref().to_path_buf();
-
-    let rocksdb = {
-        options.create_if_missing(true);
-        options.create_missing_column_families(true);
-        Arc::new(
-            rocksdb::DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(
-                &options,
-                &primary,
-                opt_cfs
-                    .iter()
-                    .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),
-            )?,
-        )
-    };
-    Ok(rocksdb)
-}
-
-impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
+impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
+    SuiDataStore<ALL_OBJ_VER, S>
+{
     /// Open an authority store by directory path
-    pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> AuthorityStore {
+    pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Self {
         let mut options = db_options.unwrap_or_default();
 
         /* The table cache is locked for updates and this determines the number
@@ -163,25 +130,26 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         point_lookup.set_prefix_extractor(transform);
         point_lookup.set_memtable_prefix_bloom_ratio(0.2);
 
-        let db = open_cf_opts(
-            &path,
-            Some(options.clone()),
-            &[
+        let db = {
+            let path = &path;
+            let db_options = Some(options.clone());
+            let opt_cfs: &[(&str, &rocksdb::Options)] = &[
                 ("objects", &point_lookup),
                 ("all_object_versions", &options),
+                ("transactions", &point_lookup),
                 ("owner_index", &options),
                 ("transaction_lock", &point_lookup),
-                ("signed_transactions", &point_lookup),
                 ("certificates", &point_lookup),
                 ("parent_sync", &options),
-                ("signed_effects", &point_lookup),
+                ("effects", &point_lookup),
                 ("sequenced", &options),
                 ("schedule", &options),
                 ("executed_sequence", &options),
                 ("batches", &options),
                 ("last_consensus_index", &options),
-            ],
-        )
+            ];
+            typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
+        }
         .expect("Cannot open DB.");
 
         let executed_sequence =
@@ -192,10 +160,10 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             all_object_versions,
             owner_index,
             transaction_lock,
-            signed_transactions,
+            transactions,
             certificates,
             parent_sync,
-            signed_effects,
+            effects,
             sequenced,
             schedule,
             batches,
@@ -206,24 +174,24 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             "all_object_versions";<(ObjectID, SequenceNumber), Object>,
             "owner_index";<(SuiAddress, ObjectID), ObjectRef>,
             "transaction_lock";<ObjectRef, Option<TransactionDigest>>,
-            "signed_transactions";<TransactionDigest, SignedTransaction>,
+            "transactions";<TransactionDigest, TransactionEnvelope<S>>,
             "certificates";<TransactionDigest, CertifiedTransaction>,
             "parent_sync";<ObjectRef, TransactionDigest>,
-            "signed_effects";<TransactionDigest, SignedTransactionEffects>,
+            "effects";<TransactionDigest, TransactionEffectsEnvelope<S>>,
             "sequenced";<(TransactionDigest, ObjectID), SequenceNumber>,
             "schedule";<ObjectID, SequenceNumber>,
             "batches";<TxSequenceNumber, SignedBatch>,
             "last_consensus_index";<u64, SequenceNumber>
         );
-        AuthorityStore {
+        Self {
             objects,
             all_object_versions,
             owner_index,
             transaction_lock,
-            signed_transactions,
+            transactions,
             certificates,
             parent_sync,
-            signed_effects,
+            effects,
             sequenced,
             schedule,
             lock_table: (0..NUM_SHARDS)
@@ -237,18 +205,15 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     }
 
     /// Returns true if we have a signed_effects structure for this transaction digest
-    pub fn signed_effects_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
-        self.signed_effects
+    pub fn effects_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
+        self.effects
             .contains_key(transaction_digest)
             .map_err(|e| e.into())
     }
 
     /// Returns true if we have a signed_effects structure for this transaction digest
-    pub fn signed_transaction_exists(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> SuiResult<bool> {
-        self.signed_transactions
+    pub fn transaction_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
+        self.transactions
             .contains_key(transaction_digest)
             .map_err(|e| e.into())
     }
@@ -309,17 +274,6 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             .collect())
     }
 
-    pub fn get_transaction_info(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        Ok(TransactionInfoResponse {
-            signed_transaction: self.signed_transactions.get(transaction_digest)?,
-            certified_transaction: self.certificates.get(transaction_digest)?,
-            signed_effects: self.signed_effects.get(transaction_digest)?,
-        })
-    }
-
     /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
     pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         self.objects.get(object_id).map_err(|e| e.into())
@@ -334,7 +288,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     pub fn get_transaction_lock(
         &self,
         object_ref: &ObjectRef,
-    ) -> Result<Option<SignedTransaction>, SuiError> {
+    ) -> Result<Option<TransactionEnvelope<S>>, SuiError> {
         let transaction_option = self
             .transaction_lock
             .get(object_ref)?
@@ -342,7 +296,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
 
         match transaction_option {
             Some(tx_digest) => Ok(Some(
-                self.signed_transactions
+                self.transactions
                     .get(&tx_digest)?
                     .expect("Stored a lock without storing transaction?"),
             )),
@@ -426,14 +380,20 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
 
     // Methods to mutate the store
 
-    /// Insert an object
-    pub fn insert_object(&self, object: Object) -> Result<(), SuiError> {
+    /// Insert a genesis object.
+    pub fn insert_genesis_object(&self, object: Object) -> SuiResult {
         // We only side load objects with a genesis parent transaction.
         debug_assert!(object.previous_transaction == TransactionDigest::genesis());
-
-        // Insert object
         let object_ref = object.compute_object_reference();
-        self.objects.insert(&object_ref.0, &object)?;
+        self.insert_object_direct(object_ref, &object)
+    }
+
+    /// Insert an object directly into the store, and also update relevant tables, including
+    /// initiating the transaction lock. This is used by the gateway to insert object directly.
+    /// TODO: We need this today because we don't have another way to sync an account.
+    pub fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
+        // Insert object
+        self.objects.insert(&object_ref.0, object)?;
 
         self.transaction_lock.get_or_insert(&object_ref, || None)?;
 
@@ -445,9 +405,6 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         // Update the parent
         self.parent_sync
             .insert(&object_ref, &object.previous_transaction)?;
-
-        // We only side load objects with a genesis parent transaction.
-        debug_assert!(object.previous_transaction == TransactionDigest::genesis());
 
         Ok(())
     }
@@ -499,7 +456,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         &self,
         owned_input_objects: &[ObjectRef],
         tx_digest: TransactionDigest,
-        signed_transaction: SignedTransaction,
+        transaction: TransactionEnvelope<S>,
     ) -> Result<(), SuiError> {
         let lock_batch = self
             .transaction_lock
@@ -511,8 +468,8 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
                     .map(|obj_ref| (obj_ref, Some(tx_digest))),
             )?
             .insert_batch(
-                &self.signed_transactions,
-                std::iter::once((tx_digest, signed_transaction)),
+                &self.transactions,
+                std::iter::once((tx_digest, transaction)),
             )?;
 
         // This is the critical region: testing the locks and writing the
@@ -558,13 +515,13 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     ///
     /// Internally it checks that all locks for active inputs are at the correct
     /// version, and then writes locks, objects, certificates, parents atomically.
-    pub fn update_state<S>(
+    pub fn update_state<BackingPackageStore>(
         &self,
-        temporary_store: AuthorityTemporaryStore<S>,
-        certificate: CertifiedTransaction,
-        signed_effects: SignedTransactionEffects,
+        temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
+        certificate: &CertifiedTransaction,
+        effects: &TransactionEffectsEnvelope<S>,
         sequence_number: Option<TxSequenceNumber>,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+    ) -> SuiResult {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
         let mut write_batch = self.transaction_lock.batch();
@@ -573,13 +530,13 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         let transaction_digest: &TransactionDigest = certificate.digest();
         write_batch = write_batch.insert_batch(
             &self.certificates,
-            std::iter::once((transaction_digest, &certificate)),
+            std::iter::once((transaction_digest, certificate)),
         )?;
 
         // Store the signed effects of the transaction
         write_batch = write_batch.insert_batch(
-            &self.signed_effects,
-            std::iter::once((transaction_digest, &signed_effects)),
+            &self.effects,
+            std::iter::once((transaction_digest, effects)),
         )?;
 
         // Cleanup the lock of the shared objects.
@@ -595,19 +552,13 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             temporary_store,
             *transaction_digest,
             sequence_number,
-        )?;
-
-        Ok(TransactionInfoResponse {
-            signed_transaction: self.signed_transactions.get(transaction_digest)?,
-            certified_transaction: Some(certificate),
-            signed_effects: Some(signed_effects),
-        })
+        )
     }
 
     /// Persist temporary storage to DB for genesis modules
-    pub fn update_objects_state_for_genesis<S>(
+    pub fn update_objects_state_for_genesis<BackingPackageStore>(
         &self,
-        temporary_store: AuthorityTemporaryStore<S>,
+        temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
         transaction_digest: TransactionDigest,
     ) -> Result<(), SuiError> {
         debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
@@ -615,11 +566,43 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         self.batch_update_objects(write_batch, temporary_store, transaction_digest, None)
     }
 
+    /// This is used by the Gateway to update its local store after a transaction succeeded
+    /// on the authorities. Since we don't yet have local execution on the gateway, we will
+    /// need to recreate the temporary store based on the inputs and effects to update it properly.
+    pub fn update_gateway_state(
+        &self,
+        active_inputs: &[(InputObjectKind, Object)],
+        mutated_objects: HashMap<ObjectRef, Object>,
+        certificate: CertifiedTransaction,
+        effects: TransactionEffects,
+    ) -> SuiResult {
+        let transaction_digest = certificate.digest();
+        let mut temporary_store =
+            AuthorityTemporaryStore::new(Arc::new(&self), active_inputs, *transaction_digest);
+        for (_, object) in mutated_objects {
+            temporary_store.write_object(object);
+        }
+        for obj_ref in &effects.deleted {
+            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Normal);
+        }
+        for obj_ref in &effects.wrapped {
+            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Wrap);
+        }
+
+        let mut write_batch = self.transaction_lock.batch();
+        // Once a transaction is done processing and effects committed, we no longer
+        // need it in the transactions table. This also allows us to track pending
+        // transactions.
+        write_batch =
+            write_batch.delete_batch(&self.transactions, std::iter::once(certificate.digest()))?;
+        self.batch_update_objects(write_batch, temporary_store, *transaction_digest, None)
+    }
+
     /// Helper function for updating the objects in the state
-    fn batch_update_objects<S>(
+    fn batch_update_objects<BackingPackageStore>(
         &self,
         mut write_batch: DBBatch,
-        temporary_store: AuthorityTemporaryStore<S>,
+        temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
         transaction_digest: TransactionDigest,
         seq_opt: Option<TxSequenceNumber>,
     ) -> Result<(), SuiError> {
@@ -968,6 +951,14 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             .map_err(SuiError::from)
     }
 
+    pub fn get_transaction(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<TransactionEnvelope<S>>> {
+        let transaction = self.transactions.get(transaction_digest)?;
+        Ok(transaction)
+    }
+
     #[cfg(test)]
     /// Provide read access to the `schedule` table (useful for testing).
     pub fn get_schedule(&self, object_id: &ObjectID) -> SuiResult<Option<SequenceNumber>> {
@@ -975,14 +966,35 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     }
 }
 
-impl<const ALL_OBJ_VER: bool> BackingPackageStore for SuiDataStore<ALL_OBJ_VER> {
+impl<const A: bool> SuiDataStore<A, AuthoritySignInfo> {
+    pub fn get_signed_transaction_info(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        Ok(TransactionInfoResponse {
+            signed_transaction: self.transactions.get(transaction_digest)?,
+            certified_transaction: self.certificates.get(transaction_digest)?,
+            signed_effects: self.effects.get(transaction_digest)?,
+        })
+    }
+}
+
+impl<const A: bool> SuiDataStore<A, EmptySignInfo> {
+    pub fn pending_transactions(&self) -> &DBMap<TransactionDigest, Transaction> {
+        &self.transactions
+    }
+}
+
+impl<const A: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> BackingPackageStore
+    for SuiDataStore<A, S>
+{
     fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         let package = self.get_object(package_id)?;
         if let Some(obj) = &package {
             fp_ensure!(
                 obj.is_package(),
                 SuiError::BadObjectType {
-                    error: format!("Package expected, Move object found: {}", package_id),
+                    error: format!("Package expected, Move object found: {package_id}"),
                 }
             );
         }
@@ -990,7 +1002,9 @@ impl<const ALL_OBJ_VER: bool> BackingPackageStore for SuiDataStore<ALL_OBJ_VER> 
     }
 }
 
-impl<const ALL_OBJ_VER: bool> ModuleResolver for SuiDataStore<ALL_OBJ_VER> {
+impl<const A: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> ModuleResolver
+    for SuiDataStore<A, S>
+{
     type Error = SuiError;
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {

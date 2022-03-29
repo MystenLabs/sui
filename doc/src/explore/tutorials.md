@@ -4,13 +4,13 @@ title: End-to-End Tutorial to Set Up and Play TicTacToe on Sui
 
 In this tutorial, we demonstrate the end-to-end process for starting a
 Sui network locally, connecting to it through our [wallet](../build/wallet.md)
-app, publishing a TicTacToe game on Sui, and playing it to the end.
+app, publishing a TicTacToe game written in [Move](../build/move.md) on Sui,
+and playing it to the end.
 
 ## Set up
 
-1. [Install Sui binaries](../build/install.md) and clone the repository
-   as described in the installation instructions as this tutorial assumes
-   that you have a clone of Sui's repository.
+1. [Install Sui binaries](../build/install.md) as described in the installation
+   instructions as this tutorial assumes that you have them in your `PATH`.
 1. [Create Sui genesis](../build/wallet.md#genesis) by running the
    `sui genesis` command.
 1. [Start the Sui network](../build/wallet.md#starting-the-network) by
@@ -23,7 +23,8 @@ remainder of this tutorial.
 
 ## Gather accounts and gas objects
 
-Let us take a look at the account addresses we own in our wallet:
+In that new terminal, let us take a look at the account addresses we own in 
+our wallet:
 ```
 $ wallet --no-shell addresses
 Showing 5 results.
@@ -76,7 +77,10 @@ export O_GAS=2110ADFB7BAF889A05EA6F5889AF7724299F9BED
 ```
 
 ## Publish the TicTacToe game on Sui
-We implemented a TicTacToe game in [TicTacToe.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToe.move).
+To keep this tutorial simple, use the TicTacToe game we implemented in [TicTacToe.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToe.move).
+
+Find even more [examples](examples.md) in the Sui repository. Of course, you are welcome to
+[write your own package](../build/move#writing-a-package).
 
 In order to obtain source code for the game, let us clone the Sui
 repository to the current directory:

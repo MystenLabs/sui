@@ -65,8 +65,8 @@ once_cell = "1.9.0"
 tracing-test = "0.2.1"
 
 [[bin]]
-name = "bench"
-path = "src/bench.rs"
+name = "microbench"
+path = "src/microbench.rs"
 
 [[bin]]
 name = "wallet"

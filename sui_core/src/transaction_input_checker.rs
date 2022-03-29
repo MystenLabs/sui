@@ -14,7 +14,7 @@ use tracing::debug;
 
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
-pub fn check_locks(
+pub async fn check_locks(
     transaction: &Transaction,
     input_objects: Vec<InputObjectKind>,
     objects: Vec<Option<Object>>,
@@ -75,23 +75,23 @@ pub fn check_locks(
         return Err(SuiError::LockErrors { errors });
     }
     fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
-    check_gas_requirement(transaction, &all_objects)?;
+    check_tx_requirement(transaction, &all_objects)?;
     Ok(all_objects)
 }
 
-pub fn filter_owned_objects(all_objects: Vec<(InputObjectKind, Object)>) -> Vec<ObjectRef> {
+pub fn filter_owned_objects(all_objects: &[(InputObjectKind, Object)]) -> Vec<ObjectRef> {
     let owned_objects: Vec<_> = all_objects
-        .into_iter()
+        .iter()
         .filter_map(|(object_kind, object)| match object_kind {
             InputObjectKind::MovePackage(_) => None,
-            InputObjectKind::OwnedMoveObject(object_ref) => {
+            InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
                 if object.is_read_only() {
                     None
                 } else {
-                    Some(object_ref)
+                    Some(*object_ref)
                 }
             }
-            InputObjectKind::SharedMoveObject(..) => None,
+            InputObjectKind::MutSharedMoveObject(..) => None,
         })
         .collect();
 
@@ -120,7 +120,11 @@ fn check_one_lock(
                 }
             );
         }
-        InputObjectKind::OwnedMoveObject((object_id, sequence_number, object_digest)) => {
+        InputObjectKind::ImmOrOwnedMoveObject((object_id, sequence_number, object_digest)) => {
+            fp_ensure!(
+                !object.is_package(),
+                SuiError::MovePackageAsObject { object_id }
+            );
             fp_ensure!(
                 sequence_number <= SequenceNumber::MAX,
                 SuiError::InvalidSequenceNumber
@@ -154,7 +158,7 @@ fn check_one_lock(
                     fp_ensure!(
                         transaction.sender_address() == owner,
                         SuiError::IncorrectSigner {
-                            error: format!("Object {:?} is owned by account address {:?}, but signer address is {:?}", object.id(), owner, transaction.sender_address()),
+                            error: format!("Object {:?} is owned by account address {:?}, but signer address is {:?}", object_id, owner, transaction.sender_address()),
                         }
                     );
                 }
@@ -178,7 +182,7 @@ fn check_one_lock(
                 }
             };
         }
-        InputObjectKind::SharedMoveObject(..) => {
+        InputObjectKind::MutSharedMoveObject(..) => {
             // When someone locks an object as shared it must be shared already.
             fp_ensure!(object.is_shared(), SuiError::NotSharedObjectError);
         }
@@ -196,7 +200,7 @@ fn check_one_lock(
 ///   This can help reduce DDos attacks.
 /// 3. Check that the objects used in transfers are mutable. We put the check here
 ///   because this is the most convenient spot to check.
-fn check_gas_requirement(
+fn check_tx_requirement(
     transaction: &Transaction,
     input_objects: &[(InputObjectKind, Object)],
 ) -> SuiResult {
@@ -207,10 +211,7 @@ fn check_gas_requirement(
             SingleTransactionKind::Transfer(_) => {
                 // Index access safe because the inputs were constructed in order.
                 let transfer_object = &input_objects[idx].1;
-                fp_ensure!(
-                    !transfer_object.is_read_only(),
-                    SuiError::TransferImmutableError
-                );
+                transfer_object.is_transfer_eligible()?;
                 // TODO: Make Transfer transaction to also contain gas_budget.
                 // By @gdanezis: Now his is the only part of this function that requires
                 // an input object besides the gas object. It would be a major win if we
@@ -237,5 +238,11 @@ fn check_gas_requirement(
     }
     // The last element in the inputs is always gas object.
     let gas_object = &input_objects.last().unwrap().1;
+    fp_ensure!(
+        !gas_object.is_shared(),
+        SuiError::InsufficientGas {
+            error: format!("Gas object cannot be shared: {:?}", gas_object.id())
+        }
+    );
     gas::check_gas_balance(gas_object, total_cost)
 }

@@ -84,7 +84,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
     );
     let (_unknown_address, unknown_key) = get_key_pair();
     let mut bad_signature_transfer_transaction = transfer_transaction.clone();
-    bad_signature_transfer_transaction.signature =
+    bad_signature_transfer_transaction.tx_signature =
         Signature::new(&transfer_transaction.data, &unknown_key);
     assert!(authority_state
         .handle_transaction(bad_signature_transfer_transaction)
@@ -264,14 +264,13 @@ async fn test_handle_transfer_transaction_ok() {
             .unwrap()
             .as_ref()
             .unwrap()
-            .transaction
             .data,
         transfer_transaction.data
     );
 }
 
 #[tokio::test]
-async fn test_transfer_immutable() {
+async fn test_transfer_package() {
     let (sender, sender_key) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
@@ -294,7 +293,41 @@ async fn test_transfer_immutable() {
     let result = authority_state
         .handle_transaction(transfer_transaction.clone())
         .await;
-    assert_eq!(result.unwrap_err(), SuiError::TransferImmutableError);
+    assert!(matches!(result.unwrap_err(), SuiError::LockErrors { .. }));
+}
+
+// This test attempts to use an immutable gas object to pay for gas.
+// We expect it to fail early during transaction handle phase.
+#[tokio::test]
+async fn test_immutable_gas() {
+    let (sender, sender_key) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let mut_object_id = ObjectID::random();
+    let authority_state = init_state_with_ids(vec![(sender, mut_object_id)]).await;
+    let imm_object_id = ObjectID::random();
+    let imm_object = Object::immutable_with_id_for_testing(imm_object_id);
+    authority_state
+        .insert_genesis_object(imm_object.clone())
+        .await;
+    let mut_object = authority_state
+        .get_object(&mut_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let transfer_transaction = init_transfer_transaction(
+        sender,
+        &sender_key,
+        recipient,
+        mut_object.compute_object_reference(),
+        imm_object.compute_object_reference(),
+    );
+    let result = authority_state
+        .handle_transaction(transfer_transaction.clone())
+        .await;
+    assert!(matches!(
+        result.unwrap_err(),
+        SuiError::InsufficientGas { .. }
+    ));
 }
 
 #[tokio::test]
@@ -314,7 +347,7 @@ async fn test_handle_transfer_zero_balance() {
     let gas_object =
         Object::with_id_owner_gas_for_testing(gas_object_id, SequenceNumber::new(), sender, 0);
     let gas_object_ref = gas_object.compute_object_reference();
-    authority_state.insert_object(gas_object).await;
+    authority_state.insert_genesis_object(gas_object).await;
 
     let transfer_transaction = init_transfer_transaction(
         sender,
@@ -344,7 +377,7 @@ pub async fn send_and_confirm_transaction(
     // Collect signatures from a quorum of authorities
     let mut builder = SignatureAggregator::try_new(transaction, &authority.committee).unwrap();
     let certificate = builder
-        .append(vote.authority, vote.signature)
+        .append(vote.auth_signature.authority, vote.auth_signature.signature)
         .unwrap()
         .unwrap();
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
@@ -778,7 +811,7 @@ async fn test_handle_confirmation_transaction_bad_sequence_number() {
         let old_contents = o.contents().to_vec();
         // update object contents, which will increment the sequence number
         o.update_contents(old_contents);
-        authority_state.insert_object(sender_object).await;
+        authority_state.insert_genesis_object(sender_object).await;
     }
 
     // Explanation: providing an old cert that has already need applied
@@ -872,7 +905,7 @@ async fn test_handle_confirmation_transaction_gas() {
         );
 
         let gas_object_ref = gas_object.compute_object_reference();
-        authority_state.insert_object(gas_object).await;
+        authority_state.insert_genesis_object(gas_object).await;
 
         let certified_transfer_transaction = init_certified_transfer_transaction(
             sender,
@@ -1326,7 +1359,7 @@ async fn test_authority_persist() {
     let obj = Object::with_id_owner_for_testing(object_id, recipient);
 
     // Store an object
-    authority.insert_object(obj).await;
+    authority.insert_genesis_object(obj).await;
 
     // Close the authority
     drop(authority);
@@ -1396,7 +1429,7 @@ pub async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>
     let state = init_state().await;
     for (address, object_id) in objects {
         let obj = Object::with_id_owner_for_testing(object_id, address);
-        state.insert_object(obj).await;
+        state.insert_genesis_object(obj).await;
     }
     state
 }
@@ -1404,7 +1437,7 @@ pub async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>
 pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
     let state = init_state().await;
     for o in objects {
-        state.insert_object(o).await;
+        state.insert_genesis_object(o).await;
     }
     state
 }
@@ -1446,7 +1479,7 @@ fn init_certified_transfer_transaction(
     let mut builder =
         SignatureAggregator::try_new(transfer_transaction, &authority_state.committee).unwrap();
     builder
-        .append(vote.authority, vote.signature)
+        .append(vote.auth_signature.authority, vote.auth_signature.signature)
         .unwrap()
         .unwrap()
 }
@@ -1630,7 +1663,7 @@ async fn shared_object() {
     let vote = response.signed_transaction.unwrap();
     let certificate = SignatureAggregator::try_new(transaction, &authority.committee)
         .unwrap()
-        .append(vote.authority, vote.signature)
+        .append(vote.auth_signature.authority, vote.auth_signature.signature)
         .unwrap()
         .unwrap();
     let confirmation_transaction = ConfirmationTransaction::new(certificate.clone());

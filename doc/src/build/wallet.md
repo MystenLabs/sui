@@ -15,12 +15,6 @@ Follow the instructions to [install Sui binaries](install.md).
 
 ## Genesis
 
-1. Optionally, set `RUST_LOG=debug` for verbose logging.
-1. Initiate `genesis`:
-   ```shell
-   sui genesis
-   ```
-
 The `genesis` command creates four authorities and five user accounts
 each with five gas objects. These are Sui [objects](objects.md) used
 to pay for Sui [transactions](transactions.md#transaction-metadata),
@@ -29,6 +23,12 @@ numbers represent a sample configuration and have been chosen somewhat
 arbitrarily; the process of generating the genesis state can be
 customized with additional accounts, objects, code, etc. as described
 in [Genesis customization](#customize-genesis).
+
+1. Optionally, set `RUST_LOG=debug` for verbose logging.
+1. Initiate `genesis`:
+   ```shell
+   sui genesis
+   ```
 
 The network configuration is stored in `network.conf` and can be used
 subsequently to start the network. The `wallet.conf` and `wallet.key`

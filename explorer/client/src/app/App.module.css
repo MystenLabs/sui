@@ -2,10 +2,14 @@
     @apply font-sans w-screen;
 }
 
-.search > h2 {
-    @apply ml-[5vw] mb-[1vh];
+h2.suititle {
+    @apply m-0 p-0 ml-[5vw] py-[1vh] text-lg;
 }
 
 .search {
-    @apply bg-black text-white pb-4 w-[100vw];
+    @apply bg-offblack text-offwhite pb-4 w-[100vw];
+}
+
+main {
+    @apply relative;
 }

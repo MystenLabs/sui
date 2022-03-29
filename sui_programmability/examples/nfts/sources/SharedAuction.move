@@ -27,7 +27,7 @@
 
 module NFTs::SharedAuction {
     use Sui::Coin::Coin;
-    use Sui::GAS::GAS;
+    use Sui::SUI::SUI;
     use Sui::Transfer;
     use Sui::TxContext::{Self,TxContext};
 
@@ -51,7 +51,7 @@ module NFTs::SharedAuction {
     /// change of the auction state (if bid was high enough) or return
     /// of the funds (if the bid was too low). This is executed by a
     /// bidder.
-    public fun bid<T: key + store>(coin: Coin<GAS>, auction: &mut Auction<T>, ctx: &mut TxContext) {
+    public fun bid<T: key + store>(coin: Coin<SUI>, auction: &mut Auction<T>, ctx: &mut TxContext) {
         let bidder = TxContext::sender(ctx);
         AuctionLib::update_auction(auction, bidder, coin);
     }

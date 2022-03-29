@@ -40,6 +40,8 @@ pub enum SuiError {
     TransferNonCoinError,
     #[error("A move package is expected, instead a move object is passed: {object_id}")]
     MoveObjectAsPackage { object_id: ObjectID },
+    #[error("A move object is expected, instead a move package is passed: {object_id}")]
+    MovePackageAsObject { object_id: ObjectID },
     #[error("Expecting a singler owner, shared ownership found")]
     UnexpectedOwnerType,
     #[error("Shared mutable object not yet supported")]
@@ -256,8 +258,8 @@ pub enum SuiError {
     QuorumNotReached { errors: Vec<SuiError> },
 
     // Errors returned by authority and client read API's
-    #[error("Failure serializing object in the requested format")]
-    ObjectSerializationError,
+    #[error("Failure serializing object in the requested format: {:?}", error)]
+    ObjectSerializationError { error: String },
 
     // Client side error
     #[error("Client state has a different pending transaction.")]

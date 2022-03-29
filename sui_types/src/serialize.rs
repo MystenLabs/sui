@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 #[path = "unit_tests/serialize_tests.rs"]
 mod serialize_tests;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum SerializedMessage {
     Transaction(Box<Transaction>),
     Vote(Box<SignedTransaction>),
@@ -57,7 +57,7 @@ where
     W: std::io::Write,
     T: Serialize,
 {
-    bincode::serialize_into(writer, msg).map_err(|err| format_err!("{}", err))
+    bincode::serialize_into(writer, msg).map_err(|err| format_err!("{err}"))
 }
 
 fn serialize<T>(msg: &T) -> Vec<u8>
@@ -168,7 +168,7 @@ pub fn deserialize_message<R>(reader: R) -> Result<SerializedMessage, anyhow::Er
 where
     R: std::io::Read,
 {
-    bincode::deserialize_from(reader).map_err(|err| format_err!("{}", err))
+    bincode::deserialize_from(reader).map_err(|err| format_err!("{err}"))
 }
 
 pub fn deserialize_object_info(message: SerializedMessage) -> Result<ObjectInfoResponse, SuiError> {

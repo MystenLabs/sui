@@ -205,7 +205,7 @@ impl SuiNetwork {
         for spawned_server in self.spawned_authorities {
             handles.push(async move {
                 if let Err(err) = spawned_server.join().await {
-                    error!("Server ended with an error: {}", err);
+                    error!("Server ended with an error: {err}");
                 }
             });
         }
@@ -364,7 +364,7 @@ async fn make_server_with_genesis_ctx(
     .await;
 
     for object in preload_objects {
-        state.insert_object(object.clone()).await;
+        state.insert_genesis_object(object.clone()).await;
     }
 
     Ok(AuthorityServer::new(

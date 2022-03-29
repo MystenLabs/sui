@@ -7,7 +7,7 @@ use crate::safe_client::SafeClient;
 
 use futures::{future, StreamExt};
 use move_core_types::value::MoveStructLayout;
-use sui_types::crypto::{sha3_hash, AuthoritySignature, PublicKeyBytes};
+use sui_types::crypto::{AuthoritySignature, PublicKeyBytes};
 use sui_types::object::{Object, ObjectFormatOptions, ObjectRead};
 use sui_types::{
     base_types::*,
@@ -834,9 +834,10 @@ where
                                 signed_transaction: Some(inner_signed_transaction),
                                 ..
                             }) => {
-                                state
-                                    .signatures
-                                    .push((name, inner_signed_transaction.signature));
+                                state.signatures.push((
+                                    name,
+                                    inner_signed_transaction.auth_signature.signature,
+                                ));
                                 state.good_stake += weight;
                                 if state.good_stake >= threshold {
                                     state.certificate =
@@ -1012,7 +1013,7 @@ where
                             // Note: here we aggregate votes by the hash of the effects structure
                             let entry = state
                                 .effects_map
-                                .entry(sha3_hash(&inner_effects.effects))
+                                .entry(inner_effects.digest())
                                 .or_insert((0usize, inner_effects.effects));
                             entry.0 += weight;
 
@@ -1121,10 +1122,7 @@ where
         Ok((new_certificate, response))
     }
 
-    pub async fn get_object_info_execute(
-        &self,
-        object_id: ObjectID,
-    ) -> Result<ObjectRead, anyhow::Error> {
+    pub async fn get_object_info_execute(&self, object_id: ObjectID) -> SuiResult<ObjectRead> {
         let (object_map, cert_map) = self
             .get_object_by_id(object_id, AUTHORITY_REQUEST_TIMEOUT)
             .await?;
@@ -1163,6 +1161,7 @@ where
                         return Ok(ObjectRead::Exists(obj_ref, obj, layout_option));
                     }
                     None => {
+                        // TODO: Figure out how to find out object being wrapped instead of deleted.
                         return Ok(ObjectRead::Deleted(obj_ref));
                     }
                 };

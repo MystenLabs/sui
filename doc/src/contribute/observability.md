@@ -73,7 +73,8 @@ and analyzed for tracing, performance analysis, etc.
 | cert_check_signature    | Authority          | Check certificate signatures                                                   |
 | process_cert_inner      | Authority          | Inner function to process certificates in authority                            |
 | fetch_objects           | Authority          | Read objects from database                                                     |
-| tx_execute              | Authority          | Actual execution of transfer/MOVE call etc.                                    |
+| tx_execute_to_effects   | Authority          | Execute Move call and create effects                                           |
+| tx_execute              | Authority          | Actual execution of transfer/Move call etc.                                    |
 | handle_cert             | Gateway            | Send to one authority for certificate processing                               |
 | quorum_map_auth         | Gateway            | Handle one network component with one authority                                |
 | sync_cert               | Gateway, Authority | Gateway-initiated sync of data to authority                                    |

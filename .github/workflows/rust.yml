@@ -110,7 +110,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --all --tests -- -D clippy::all -D warnings -D clippy::disallowed_method
+          args: --all --tests -- -D clippy::all -D warnings -D clippy::disallowed_methods
 
   rustfmt:
     name: rustfmt
@@ -132,8 +132,13 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
-      - name: license-check
-        run: scripts/license_check.sh
+
+  license-check:
+    name: license-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: scripts/license_check.sh
 
   cargo-deny:
     name: cargo-deny (advisories, licenses, bans, ...)
@@ -158,9 +163,9 @@ jobs:
           toolchain: nightly
           override: true
       - uses: Swatinem/rust-cache@v1
-      - uses: actions-rs/install@v0.1
+      - name: Install cargo-udeps, and cache the binary
+        uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-udeps
-          version: latest
       - name: run cargo-udeps
         run: cargo +nightly udeps

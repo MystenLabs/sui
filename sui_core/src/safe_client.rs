@@ -41,14 +41,14 @@ impl<C> SafeClient<C> {
             signed_transaction.check(&self.committee)?;
             // Check it has the right signer
             fp_ensure!(
-                signed_transaction.authority == self.address,
+                signed_transaction.auth_signature.authority == self.address,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
             );
             // Check it's the right transaction
             fp_ensure!(
-                signed_transaction.transaction.digest() == digest,
+                signed_transaction.digest() == digest,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
@@ -70,6 +70,7 @@ impl<C> SafeClient<C> {
         if let Some(signed_effects) = &response.signed_effects {
             // Check signature
             signed_effects
+                .auth_signature
                 .signature
                 .check(&signed_effects.effects, self.address)?;
             // Checks it concerns the right tx
@@ -81,7 +82,7 @@ impl<C> SafeClient<C> {
             );
             // Check it has the right signer
             fp_ensure!(
-                signed_effects.authority == self.address,
+                signed_effects.auth_signature.authority == self.address,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
@@ -157,7 +158,7 @@ impl<C> SafeClient<C> {
                 signed_transaction.check(&self.committee)?;
                 // Check it has the right signer
                 fp_ensure!(
-                    signed_transaction.authority == self.address,
+                    signed_transaction.auth_signature.authority == self.address,
                     SuiError::ByzantineAuthoritySuspicion {
                         authority: self.address
                     }
@@ -171,7 +172,7 @@ impl<C> SafeClient<C> {
     /// This function is used by the higher level authority logic to report an
     /// error that could be due to this authority.
     pub fn report_client_error(&self, _error: SuiError) {
-        // TODO: At a minumum we log this error along the authority name, and potentially
+        // TODO: At a minimum we log this error along the authority name, and potentially
         // in case of strong evidence of byzantine behaviour we could share this error
         // with the rest of the network, or de-prioritize requests to this authority given
         // weaker evidence.

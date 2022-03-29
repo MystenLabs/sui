@@ -50,14 +50,16 @@ impl<S> AuthorityTemporaryStore<S> {
                 .iter()
                 .filter_map(|(kind, object)| match kind {
                     InputObjectKind::MovePackage(_) => None,
-                    InputObjectKind::OwnedMoveObject(object_ref) => {
+                    InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
                         if object.is_read_only() {
                             None
                         } else {
                             Some(*object_ref)
                         }
                     }
-                    InputObjectKind::SharedMoveObject(_) => Some(object.compute_object_reference()),
+                    InputObjectKind::MutSharedMoveObject(_) => {
+                        Some(object.compute_object_reference())
+                    }
                 })
                 .collect(),
             written: BTreeMap::new(),
@@ -110,17 +112,15 @@ impl<S> AuthorityTemporaryStore<S> {
         }
     }
 
-    pub fn to_signed_effects(
+    pub fn to_effects(
         &self,
-        authority_name: &AuthorityName,
-        secret: &dyn signature::Signer<AuthoritySignature>,
         transaction_digest: &TransactionDigest,
         transaction_dependencies: Vec<TransactionDigest>,
         status: ExecutionStatus,
         gas_object_id: &ObjectID,
-    ) -> SignedTransactionEffects {
+    ) -> TransactionEffects {
         let (gas_reference, gas_object) = &self.written[gas_object_id];
-        let effects = TransactionEffects {
+        TransactionEffects {
             status,
             transaction_digest: *transaction_digest,
             created: self
@@ -168,13 +168,6 @@ impl<S> AuthorityTemporaryStore<S> {
             gas_object: (*gas_reference, gas_object.owner),
             events: self.events.clone(),
             dependencies: transaction_dependencies,
-        };
-        let signature = AuthoritySignature::new(&effects, secret);
-
-        SignedTransactionEffects {
-            effects,
-            authority: *authority_name,
-            signature,
         }
     }
 

@@ -19,7 +19,11 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
-use std::{collections::BTreeMap, u32};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+    u32,
+};
 
 // TODO: robust MovePackage tests
 // #[cfg(test)]
@@ -36,11 +40,36 @@ pub struct TypeCheckSuccess {
     pub return_types: Vec<Type>, // to validate return types after the call
 }
 
+/// An inner structure used to cache expensive calls that
+/// otherwise involve repeated deserialization.
+#[derive(Debug, Clone, Default)]
+pub struct PackageCache {
+    pub function_signature_cache:
+        Arc<parking_lot::RwLock<HashMap<(Identifier, Identifier), Function>>>,
+}
+
+impl PartialEq for PackageCache {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+impl Eq for PackageCache {}
+
+use std::hash::Hash;
+use std::hash::Hasher;
+
+impl Hash for PackageCache {
+    fn hash<H: Hasher>(&self, _state: &mut H) {}
+}
+
 // serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MovePackage {
     id: ObjectID,
     module_map: BTreeMap<String, ByteBuf>,
+
+    #[serde(skip)]
+    cache: PackageCache,
 }
 
 impl MovePackage {
@@ -52,6 +81,7 @@ impl MovePackage {
         Self {
             id,
             module_map: module_map.clone(),
+            cache: PackageCache::default(),
         }
     }
 
@@ -60,13 +90,7 @@ impl MovePackage {
     }
 
     pub fn module_id(&self, module: &Identifier) -> Result<ModuleId, SuiError> {
-        let ser = self
-            .serialized_module_map()
-            .get(module.as_str())
-            .ok_or_else(|| SuiError::ModuleNotFound {
-                module_name: module.to_string(),
-            })?;
-        Ok(CompiledModule::deserialize(ser)?.self_id())
+        Ok(ModuleId::new(*self.id, module.clone()))
     }
 
     /// Get the function signature for the specified function
@@ -75,6 +99,15 @@ impl MovePackage {
         module: &Identifier,
         function: &Identifier,
     ) -> Result<Function, SuiError> {
+        if let Some(func) = self
+            .cache
+            .function_signature_cache
+            .read()
+            .get(&(module.clone(), function.clone()))
+        {
+            return Ok(func.clone());
+        }
+
         let bytes = self
             .serialized_module_map()
             .get(module.as_str())
@@ -84,14 +117,22 @@ impl MovePackage {
         let m = CompiledModule::deserialize(bytes)
             .expect("Unwrap safe because Sui serializes/verifies modules before publishing them");
 
-        Function::new_from_name(&m, function).ok_or_else(|| SuiError::FunctionNotFound {
-            error: format!(
-                "Could not resolve function '{}' in module {}::{}",
-                function,
-                self.id(),
-                module
-            ),
-        })
+        let func =
+            Function::new_from_name(&m, function).ok_or_else(|| SuiError::FunctionNotFound {
+                error: format!(
+                    "Could not resolve function '{}' in module {}::{}",
+                    function,
+                    self.id(),
+                    module
+                ),
+            })?;
+
+        self.cache
+            .function_signature_cache
+            .write()
+            .insert((module.clone(), function.clone()), func.clone());
+
+        Ok(func)
     }
 
     /// Checks if the specified function is an entry function and returns the function if so
@@ -161,7 +202,7 @@ impl From<&Vec<CompiledModule>> for MovePackage {
 /// - Return the ID of the resolved module, a vector of BCS encoded arguments to pass to the VM, and a partitioning
 /// of the input objects into objects passed by value vs by mutable reference
 pub fn resolve_and_type_check(
-    package_object: Object,
+    package_object: &Object,
     module: &Identifier,
     function: &Identifier,
     type_args: &[TypeTag],
@@ -169,7 +210,7 @@ pub fn resolve_and_type_check(
     mut pure_args: Vec<Vec<u8>>,
 ) -> Result<TypeCheckSuccess, SuiError> {
     // Resolve the function we are calling
-    let (function_signature, module_id) = match package_object.data {
+    let (function_signature, module_id) = match &package_object.data {
         Data::Package(package) => (
             package.check_and_get_entry_function(module, function)?,
             package.module_id(module)?,
@@ -272,7 +313,7 @@ pub fn resolve_and_type_check(
             }
             Data::Package(_) => {
                 return Err(SuiError::TypeError {
-                    error: format!("Found module argument, but function expects {}", param_type),
+                    error: format!("Found module argument, but function expects {param_type}"),
                 })
             }
         }
@@ -287,7 +328,7 @@ pub fn resolve_and_type_check(
     {
         if !is_primitive(param_type) {
             return Err(SuiError::TypeError {
-                error: format!("Expected primitive type, but found {}", param_type),
+                error: format!("Expected primitive type, but found {param_type}"),
             });
         }
     }
