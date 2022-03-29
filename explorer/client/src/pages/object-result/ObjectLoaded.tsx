@@ -218,10 +218,13 @@ function ObjectLoaded({ data }: { data: DataType }) {
                         Description {showDescription ? '' : '+'}
                     </h2>
                     {showDescription && (
-                        <div className={theme.textresults}>
+                        <div
+                            className={theme.textresults}
+                            id="descriptionResults"
+                        >
                             <div>
                                 <div>Object ID</div>
-                                <div data-testid="object-id">
+                                <div id="objectID">
                                     <Longtext
                                         text={data.id}
                                         category="objects"
@@ -240,14 +243,14 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     <div>Read Only?</div>
                                     {data.readonly === 'true' ? (
                                         <div
-                                            data-testid="read-only-text"
+                                            id="readOnlyStatus"
                                             className={styles.immutable}
                                         >
                                             True
                                         </div>
                                     ) : (
                                         <div
-                                            data-testid="read-only-text"
+                                            id="readOnlyStatus"
                                             className={styles.mutable}
                                         >
                                             False

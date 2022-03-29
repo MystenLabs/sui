@@ -40,7 +40,7 @@ function Search() {
         >
             <input
                 className={styles.searchtext}
-                id="search"
+                id="searchText"
                 placeholder="Search by ID"
                 value={input}
                 onChange={handleTextChange}
@@ -48,6 +48,7 @@ function Search() {
             />
             <input
                 type="submit"
+                id="searchBtn"
                 value={pleaseWaitMode ? 'Please Wait' : 'Search'}
                 disabled={pleaseWaitMode}
                 className={`${styles.searchbtn} ${

@@ -83,10 +83,10 @@ function TransactionResult() {
         }
 
         return (
-            <div className={theme.textresults}>
+            <div className={theme.textresults} id="textResults">
                 <div>
                     <div>Transaction ID</div>
-                    <div>
+                    <div id="transactionID">
                         <Longtext
                             text={data.id}
                             category="transactions"
@@ -97,10 +97,7 @@ function TransactionResult() {
 
                 <div>
                     <div>Status</div>
-                    <div
-                        data-testid="transaction-status"
-                        className={statusClass}
-                    >
+                    <div id="transactionStatus" className={statusClass}>
                         {data.status}
                     </div>
                 </div>
