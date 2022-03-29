@@ -1,5 +1,5 @@
 [workspace]
-members = ["typed-store", "rccheck", "name_variant", "component", "telemetry"]
+members = ["typed-store", "rccheck", "name_variant", "component", "telemetry_subscribers"]
 
 [profile.release]
 codegen-units = 1
