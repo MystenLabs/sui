@@ -270,7 +270,7 @@ async fn test_handle_transfer_transaction_ok() {
 }
 
 #[tokio::test]
-async fn test_transfer_immutable() {
+async fn test_transfer_package() {
     let (sender, sender_key) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
@@ -293,7 +293,39 @@ async fn test_transfer_immutable() {
     let result = authority_state
         .handle_transaction(transfer_transaction.clone())
         .await;
-    assert_eq!(result.unwrap_err(), SuiError::TransferImmutableError);
+    assert!(matches!(result.unwrap_err(), SuiError::LockErrors { .. }));
+}
+
+// This test attempts to use an immutable gas object to pay for gas.
+// We expect it to fail early during transaction handle phase.
+#[tokio::test]
+async fn test_immutable_gas() {
+    let (sender, sender_key) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let mut_object_id = ObjectID::random();
+    let authority_state = init_state_with_ids(vec![(sender, mut_object_id)]).await;
+    let imm_object_id = ObjectID::random();
+    let imm_object = Object::immutable_with_id_for_testing(imm_object_id);
+    authority_state.insert_object(imm_object.clone()).await;
+    let mut_object = authority_state
+        .get_object(&mut_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let transfer_transaction = init_transfer_transaction(
+        sender,
+        &sender_key,
+        recipient,
+        mut_object.compute_object_reference(),
+        imm_object.compute_object_reference(),
+    );
+    let result = authority_state
+        .handle_transaction(transfer_transaction.clone())
+        .await;
+    assert!(matches!(
+        result.unwrap_err(),
+        SuiError::InsufficientGas { .. }
+    ));
 }
 
 #[tokio::test]
