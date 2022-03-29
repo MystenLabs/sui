@@ -8,6 +8,7 @@ use move_unit_test::UnitTestingConfig;
 use num_enum::TryFromPrimitive;
 use std::collections::HashSet;
 use std::path::Path;
+use sui_types::base_types::encode_bytes_hex;
 use sui_types::error::{SuiError, SuiResult};
 use sui_verifier::verifier as sui_bytecode_verifier;
 
@@ -65,17 +66,29 @@ pub fn get_move_stdlib_modules(lib_dir: &Path) -> SuiResult<Vec<CompiledModule>>
     Ok(modules)
 }
 
+/// Given a `path` and a `build_config`, build the package in that path and return the compiled modules as Hex.
+/// This is useful for when publishing via JSON
+/// If we are building the Sui framework, `is_framework` will be true;
+/// Otherwise `is_framework` should be false (e.g. calling from client).
+pub fn build_move_package_to_hex(path: &Path, is_framework: bool) -> Result<Vec<String>, SuiError> {
+    build_move_package_to_bytes(path, is_framework)
+        .map(|mods| mods.iter().map(encode_bytes_hex).collect::<Vec<_>>())
+}
+
 /// Given a `path` and a `build_config`, build the package in that path and return the compiled modules as Vec<Vec<u8>>.
 /// This is useful for when publishing
 /// If we are building the Sui framework, `is_framework` will be true;
 /// Otherwise `is_framework` should be false (e.g. calling from client).
-pub fn build_move_package_to_bytes(path: &Path) -> Result<Vec<Vec<u8>>, SuiError> {
+pub fn build_move_package_to_bytes(
+    path: &Path,
+    is_framework: bool,
+) -> Result<Vec<Vec<u8>>, SuiError> {
     build_move_package(
         path,
         BuildConfig {
             ..Default::default()
         },
-        false,
+        is_framework,
     )
     .map(|mods| {
         mods.iter()
