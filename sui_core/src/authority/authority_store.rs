@@ -2,19 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
-use rocksdb::{ColumnFamilyDescriptor, Options};
+use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::path::Path;
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 
-use rocksdb::MultiThreaded;
-
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use tracing::warn;
-use typed_store::rocks::{DBBatch, DBMap, TypedStoreError};
+use typed_store::rocks::{DBBatch, DBMap};
 
 use typed_store::{reopen, traits::Map};
 
@@ -109,45 +107,6 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     last_consensus_index: DBMap<u64, SequenceNumber>,
 }
 
-/// Opens a database with options, and a number of column families that are created if they do not exist.
-pub fn open_cf_opts<P: AsRef<Path>>(
-    path: P,
-    db_options: Option<rocksdb::Options>,
-    opt_cfs: &[(&str, &rocksdb::Options)],
-) -> Result<Arc<rocksdb::DBWithThreadMode<MultiThreaded>>, TypedStoreError> {
-    // Customize database options
-    let mut options = db_options.unwrap_or_default();
-    let mut cfs = rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&options, &path)
-        .ok()
-        .unwrap_or_default();
-
-    // Customize CFs
-
-    for cf_key in opt_cfs.iter().map(|(name, _)| name) {
-        let key = (*cf_key).to_owned();
-        if !cfs.contains(&key) {
-            cfs.push(key);
-        }
-    }
-
-    let primary = path.as_ref().to_path_buf();
-
-    let rocksdb = {
-        options.create_if_missing(true);
-        options.create_missing_column_families(true);
-        Arc::new(
-            rocksdb::DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(
-                &options,
-                &primary,
-                opt_cfs
-                    .iter()
-                    .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),
-            )?,
-        )
-    };
-    Ok(rocksdb)
-}
-
 impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     SuiDataStore<ALL_OBJ_VER, S>
 {
@@ -171,10 +130,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         point_lookup.set_prefix_extractor(transform);
         point_lookup.set_memtable_prefix_bloom_ratio(0.2);
 
-        let db = open_cf_opts(
-            &path,
-            Some(options.clone()),
-            &[
+        let db = {
+            let path = &path;
+            let db_options = Some(options.clone());
+            let opt_cfs: &[(&str, &rocksdb::Options)] = &[
                 ("objects", &point_lookup),
                 ("all_object_versions", &options),
                 ("transactions", &point_lookup),
@@ -188,8 +147,9 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                 ("executed_sequence", &options),
                 ("batches", &options),
                 ("last_consensus_index", &options),
-            ],
-        )
+            ];
+            typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
+        }
         .expect("Cannot open DB.");
 
         let executed_sequence =

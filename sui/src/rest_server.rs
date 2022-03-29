@@ -11,7 +11,7 @@ use std::sync::{Arc, RwLock};
 
 use dropshot::{endpoint, Query, TypedBody, CONTENT_TYPE_JSON};
 use dropshot::{
-    ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError, HttpResponseOk,
+    ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError,
     HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext,
 };
 use futures::lock::Mutex;
