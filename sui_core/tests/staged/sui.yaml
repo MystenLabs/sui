@@ -32,6 +32,12 @@ AuthorityBatch:
         TUPLEARRAY:
           CONTENT: U8
           SIZE: 32
+AuthoritySignInfo:
+  STRUCT:
+    - authority:
+        TYPENAME: PublicKeyBytes
+    - signature:
+        TYPENAME: AuthoritySignature
 AuthoritySignature:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -111,7 +117,7 @@ CallResult:
 CertifiedTransaction:
   STRUCT:
     - transaction:
-        TYPENAME: Transaction
+        TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::EmptySignInfo>"
     - signatures:
         SEQ:
           TUPLE:
@@ -136,6 +142,8 @@ Data:
       Package:
         NEWTYPE:
           TYPENAME: MovePackage
+EmptySignInfo:
+  STRUCT: []
 Event:
   STRUCT:
     - type_:
@@ -305,7 +313,7 @@ ObjectResponse:
         TYPENAME: Object
     - lock:
         OPTION:
-          TYPENAME: SignedTransaction
+          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthoritySignInfo>"
     - layout:
         OPTION:
           TYPENAME: MoveStructLayout
@@ -332,11 +340,11 @@ SerializedMessage:
     0:
       Transaction:
         NEWTYPE:
-          TYPENAME: Transaction
+          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::EmptySignInfo>"
     1:
       Vote:
         NEWTYPE:
-          TYPENAME: SignedTransaction
+          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthoritySignInfo>"
     2:
       Cert:
         NEWTYPE:
@@ -391,14 +399,6 @@ SignedBatch:
   STRUCT:
     - batch:
         TYPENAME: AuthorityBatch
-    - authority:
-        TYPENAME: PublicKeyBytes
-    - signature:
-        TYPENAME: AuthoritySignature
-SignedTransaction:
-  STRUCT:
-    - transaction:
-        TYPENAME: Transaction
     - authority:
         TYPENAME: PublicKeyBytes
     - signature:
@@ -751,12 +751,6 @@ SuiError:
           - error: STR
     91:
       OnlyOneConsensusClientPermitted: UNIT
-Transaction:
-  STRUCT:
-    - data:
-        TYPENAME: TransactionData
-    - signature:
-        TYPENAME: Signature
 TransactionData:
   STRUCT:
     - kind:
@@ -833,7 +827,7 @@ TransactionInfoResponse:
   STRUCT:
     - signed_transaction:
         OPTION:
-          TYPENAME: SignedTransaction
+          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthoritySignInfo>"
     - certified_transaction:
         OPTION:
           TYPENAME: CertifiedTransaction
@@ -907,4 +901,20 @@ UpdateItem:
       Batch:
         NEWTYPE:
           TYPENAME: SignedBatch
+"sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthoritySignInfo>":
+  STRUCT:
+    - data:
+        TYPENAME: TransactionData
+    - tx_signature:
+        TYPENAME: Signature
+    - auth_signature:
+        TYPENAME: AuthoritySignInfo
+"sui_types::messages::TransactionEnvelope<sui_types::crypto::EmptySignInfo>":
+  STRUCT:
+    - data:
+        TYPENAME: TransactionData
+    - tx_signature:
+        TYPENAME: Signature
+    - auth_signature:
+        TYPENAME: EmptySignInfo
 

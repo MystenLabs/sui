@@ -827,9 +827,10 @@ where
                                 signed_transaction: Some(inner_signed_transaction),
                                 ..
                             }) => {
-                                state
-                                    .signatures
-                                    .push((name, inner_signed_transaction.signature));
+                                state.signatures.push((
+                                    name,
+                                    inner_signed_transaction.auth_signature.signature,
+                                ));
                                 state.good_stake += weight;
                                 if state.good_stake >= threshold {
                                     state.certificate =
