@@ -10,6 +10,7 @@ use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
 use dropshot::{endpoint, Query, TypedBody, CONTENT_TYPE_JSON};
+#[allow(unused_imports)]
 use dropshot::{
     ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError,
     HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext,
