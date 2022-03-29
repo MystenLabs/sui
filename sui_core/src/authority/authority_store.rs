@@ -82,7 +82,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     /// (ie in `certificates`) and the effects its execution has on the authority state. This
     /// structure is used to ensure we do not double process a certificate, and that we can return
     /// the same response for any call after the first (ie. make certificate processing idempotent).
-    signed_effects: DBMap<TransactionDigest, SignedTransactionEffects>,
+    effects: DBMap<TransactionDigest, TransactionEffectsEnvelope<S>>,
 
     /// Hold the lock for shared objects. These locks are written by a single task: upon receiving a valid
     /// certified transaction from consensus, the authority assigns a lock to each shared objects of the
@@ -181,7 +181,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                 ("transactions", &point_lookup),
                 ("certificates", &point_lookup),
                 ("parent_sync", &options),
-                ("signed_effects", &point_lookup),
+                ("effects", &point_lookup),
                 ("sequenced", &options),
                 ("schedule", &options),
                 ("executed_sequence", &options),
@@ -202,7 +202,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             transactions,
             certificates,
             parent_sync,
-            signed_effects,
+            effects,
             sequenced,
             schedule,
             batches,
@@ -216,7 +216,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             "transactions";<TransactionDigest, TransactionEnvelope<S>>,
             "certificates";<TransactionDigest, CertifiedTransaction>,
             "parent_sync";<ObjectRef, TransactionDigest>,
-            "signed_effects";<TransactionDigest, SignedTransactionEffects>,
+            "effects";<TransactionDigest, TransactionEffectsEnvelope<S>>,
             "sequenced";<(TransactionDigest, ObjectID), SequenceNumber>,
             "schedule";<ObjectID, SequenceNumber>,
             "batches";<TxSequenceNumber, SignedBatch>,
@@ -230,7 +230,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             transactions,
             certificates,
             parent_sync,
-            signed_effects,
+            effects,
             sequenced,
             schedule,
             lock_table: (0..NUM_SHARDS)
@@ -244,8 +244,8 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     }
 
     /// Returns true if we have a signed_effects structure for this transaction digest
-    pub fn signed_effects_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
-        self.signed_effects
+    pub fn effects_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
+        self.effects
             .contains_key(transaction_digest)
             .map_err(|e| e.into())
     }
@@ -555,7 +555,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         &self,
         temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
         certificate: &CertifiedTransaction,
-        signed_effects: &SignedTransactionEffects,
+        effects: &TransactionEffectsEnvelope<S>,
         sequence_number: Option<TxSequenceNumber>,
     ) -> SuiResult {
         // Extract the new state from the execution
@@ -571,8 +571,8 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
 
         // Store the signed effects of the transaction
         write_batch = write_batch.insert_batch(
-            &self.signed_effects,
-            std::iter::once((transaction_digest, signed_effects)),
+            &self.effects,
+            std::iter::once((transaction_digest, effects)),
         )?;
 
         // Cleanup the lock of the shared objects.
@@ -978,7 +978,7 @@ impl<const A: bool> SuiDataStore<A, AuthoritySignInfo> {
         Ok(TransactionInfoResponse {
             signed_transaction: self.transactions.get(transaction_digest)?,
             certified_transaction: self.certificates.get(transaction_digest)?,
-            signed_effects: self.signed_effects.get(transaction_digest)?,
+            signed_effects: self.effects.get(transaction_digest)?,
         })
     }
 }

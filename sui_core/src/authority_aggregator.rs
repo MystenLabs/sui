@@ -7,7 +7,7 @@ use crate::safe_client::SafeClient;
 
 use futures::{future, StreamExt};
 use move_core_types::value::MoveStructLayout;
-use sui_types::crypto::{sha3_hash, AuthoritySignature, PublicKeyBytes};
+use sui_types::crypto::{AuthoritySignature, PublicKeyBytes};
 use sui_types::object::{Object, ObjectFormatOptions, ObjectRead};
 use sui_types::{
     base_types::*,
@@ -1006,7 +1006,7 @@ where
                             // Note: here we aggregate votes by the hash of the effects structure
                             let entry = state
                                 .effects_map
-                                .entry(sha3_hash(&inner_effects.effects))
+                                .entry(inner_effects.digest())
                                 .or_insert((0usize, inner_effects.effects));
                             entry.0 += weight;
 

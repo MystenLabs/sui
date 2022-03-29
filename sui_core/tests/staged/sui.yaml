@@ -403,14 +403,6 @@ SignedBatch:
         TYPENAME: PublicKeyBytes
     - signature:
         TYPENAME: AuthoritySignature
-SignedTransactionEffects:
-  STRUCT:
-    - effects:
-        TYPENAME: TransactionEffects
-    - authority:
-        TYPENAME: PublicKeyBytes
-    - signature:
-        TYPENAME: AuthoritySignature
 SingleTransactionKind:
   ENUM:
     0:
@@ -819,6 +811,12 @@ TransactionEffects:
     - dependencies:
         SEQ:
           TYPENAME: TransactionDigest
+TransactionEffectsEnvelope:
+  STRUCT:
+    - effects:
+        TYPENAME: TransactionEffects
+    - auth_signature:
+        TYPENAME: AuthoritySignInfo
 TransactionInfoRequest:
   STRUCT:
     - transaction_digest:
@@ -833,7 +831,7 @@ TransactionInfoResponse:
           TYPENAME: CertifiedTransaction
     - signed_effects:
         OPTION:
-          TYPENAME: SignedTransactionEffects
+          TYPENAME: TransactionEffectsEnvelope
 TransactionKind:
   ENUM:
     0:
