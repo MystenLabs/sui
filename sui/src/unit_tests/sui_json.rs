@@ -306,6 +306,7 @@ fn test_basic_args_linter_top_level() {
                 breed: u8,
                 monster_affinity: u8,
                 monster_description: vector<u8>,
+                display: vector<u8>,
                 ctx: &mut TxContext
             )
     */
@@ -315,6 +316,7 @@ fn test_basic_args_linter_top_level() {
     let breed_raw = 89;
     let monster_affinity_raw = 200;
     let monster_description_raw = "MonsterDescription";
+    let display_raw = "DisplayUrl";
 
     let player_id = json!(format!("0x{:02x}", ObjectID::random()));
     let farm_id = json!(format!("0x{:02x}", ObjectID::random()));
@@ -329,6 +331,8 @@ fn test_basic_args_linter_top_level() {
     let monster_affinity = json!(monster_affinity_raw);
     // This is okay since not starting with 0x
     let monster_description = json!(monster_description_raw);
+    // This is okay since not starting with 0x
+    let display = json!(display_raw);
 
     // They have to be ordered
     let args = vec![
@@ -340,6 +344,7 @@ fn test_basic_args_linter_top_level() {
         breed,
         monster_affinity.clone(),
         monster_description.clone(),
+        display.clone(),
     ]
     .iter()
     .map(|q| SuiJsonValue::new(q.clone()).unwrap())
@@ -375,6 +380,7 @@ fn test_basic_args_linter_top_level() {
         json!(10000u64),
         monster_affinity,
         monster_description,
+        display,
     ]
     .iter()
     .map(|q| SuiJsonValue::new(q.clone()).unwrap())
