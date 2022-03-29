@@ -901,6 +901,22 @@ impl TransactionEffects {
         }
         false
     }
+
+    pub fn sign(
+        self,
+        authority_name: &AuthorityName,
+        secret: &dyn signature::Signer<AuthoritySignature>,
+    ) -> SignedTransactionEffects {
+        let signature = AuthoritySignature::new(&self, secret);
+
+        SignedTransactionEffects {
+            effects: self,
+            auth_signature: AuthoritySignInfo {
+                authority: *authority_name,
+                signature,
+            },
+        }
+    }
 }
 
 impl BcsSignable for TransactionEffects {}
@@ -931,12 +947,27 @@ impl Display for TransactionEffects {
     }
 }
 
-/// An transaction signed by a single authority
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct SignedTransactionEffects {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TransactionEffectsEnvelope<S> {
     pub effects: TransactionEffects,
-    pub authority: AuthorityName,
-    pub signature: AuthoritySignature,
+    pub auth_signature: S,
+}
+
+pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo>;
+
+impl SignedTransactionEffects {
+    pub fn digest(&self) -> [u8; 32] {
+        sha3_hash(&self.effects)
+    }
+}
+
+impl PartialEq for SignedTransactionEffects {
+    fn eq(&self, other: &Self) -> bool {
+        // We do not compare the authority signatures, because there can be multiple
+        // valid signatures for the same data and signer.
+        self.effects == other.effects
+            && self.auth_signature.authority == other.auth_signature.authority
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
