@@ -14,7 +14,7 @@ use std::collections::{HashSet, VecDeque};
 use std::time::{Duration, Instant};
 use structopt::StructOpt;
 use sui_adapter::genesis;
-use sui_core::authority_client::{AuthorityClient};
+use sui_core::authority_client::AuthorityClient;
 use sui_core::{authority::*, authority_server::AuthorityServer};
 use sui_network::{network::NetworkClient, transport};
 use sui_types::batch::UpdateItem;
@@ -336,7 +336,10 @@ impl ClientServerBenchmark {
                             start = _tx_seq + 1;
                         }
                         Ok(BatchInfoResponseItem(UpdateItem::Batch(_signed_batch))) => {
-                            info!("Client received batch up to sequence {}", _signed_batch.batch.next_sequence_number);
+                            info!(
+                                "Client received batch up to sequence {}",
+                                _signed_batch.batch.next_sequence_number
+                            );
                         }
                         Err(err) => {
                             error!("{:?}", err);
