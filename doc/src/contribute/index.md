@@ -32,7 +32,7 @@ The primary directories are:
 * [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui's Move language integration also including games and other Move code examples for testing and reuse
 * [sui_core](https://github.com/MystenLabs/sui/tree/main/sui_core) - authority server and Sui Gateway
 * [sui_types](https://github.com/MystenLabs/sui/tree/main/sui_types) - coins, gas, and other object types
-* [explorer](https://github.com/MystenLabs/sui/tree/main/explorer) - chain explorer for the Sui network
+* [explorer](https://github.com/MystenLabs/sui/tree/main/explorer) - object explorer for the Sui network
 * [network_utils](https://github.com/MystenLabs/sui/tree/main/network_utils) - networking utilities and related unit tests
 
 ## Send pull requests
