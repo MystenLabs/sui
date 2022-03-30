@@ -129,7 +129,6 @@ fn create_api() -> ApiDescription<ServerContext> {
  */
 struct ServerContext {
     documentation: serde_json::Value,
-    // ServerState is created after genesis.
     gateway: Arc<Mutex<GatewayClient>>,
 }
 
@@ -163,11 +162,8 @@ Generate OpenAPI documentation.
 async fn docs(
     rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseOk<DocumentationResponse>, HttpError> {
-    let server_context = rqctx.context();
-    let documentation = &server_context.documentation;
-
     Ok(HttpResponseOk(DocumentationResponse {
-        documentation: documentation.clone(),
+        documentation: rqctx.context().documentation.clone(),
     }))
 }
 
@@ -257,27 +253,6 @@ async fn object_schema(
     })?;
 
     Ok(CORSHttpResponseOk(ObjectSchemaResponse { schema }))
-}
-
-/**
-Response containing the information of an object if found, otherwise an error
-is returned.
-*/
-#[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct ObjectInfoResponse {
-    /** Hex code as string representing the owner's address */
-    owner: String,
-    /** Sequence number of the object */
-    version: String,
-    /** Hex code as string representing the object id */
-    id: String,
-    /** Boolean representing if the object is mutable */
-    readonly: String,
-    /** Type of object, i.e. Coin */
-    obj_type: String,
-    /** JSON representation of the object data */
-    data: serde_json::Value,
 }
 
 /**

@@ -9,7 +9,8 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use reqwest::Response;
 use serde::de::DeserializeOwned;
-use serde_json::{json, Value};
+use serde::Serialize;
+use serde_json::json;
 
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::GatewayAPI;
@@ -18,7 +19,8 @@ use sui_types::messages::{Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 
 use crate::rest_gateway::requests::{
-    CallRequest, MergeCoinRequest, PublishRequest, SplitCoinRequest,
+    CallRequest, MergeCoinRequest, PublishRequest, SignedTransaction, SplitCoinRequest,
+    TransferTransactionRequest,
 };
 use crate::rest_gateway::responses::{NamedObjectRef, ObjectResponse, TransactionBytes};
 
@@ -35,19 +37,20 @@ impl GatewayAPI for RestGatewayClient {
         &mut self,
         tx: Transaction,
     ) -> Result<TransactionResponse, anyhow::Error> {
-        let url = format!("{}/api/execute_transaction", self.url);
+        let url = format!("{}/api/", self.url);
         let data = tx.data.to_base64();
         let sig_and_pub_key = format!("{:?}", tx.tx_signature);
         let split = sig_and_pub_key.split('@').collect::<Vec<_>>();
         let signature = split[0];
         let pub_key = split[1];
 
-        let body = json!({
-            "unsigned_tx_base64" : data,
-            "signature" : signature,
-            "pub_key" : pub_key
-        });
-        Ok(Self::post(url, body).await?)
+        let data = SignedTransaction {
+            unsigned_tx_base64: data,
+            signature: signature.to_string(),
+            pub_key: pub_key.to_string(),
+        };
+
+        Ok(self.post("execute_transaction", data).await?)
     }
 
     async fn transfer_coin(
@@ -57,17 +60,17 @@ impl GatewayAPI for RestGatewayClient {
         gas_payment: ObjectID,
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error> {
-        let url = format!("{}/api/new_transfer", self.url);
-
         let object_id = object_id.to_hex();
         let gas_payment = gas_payment.to_hex();
-        let value = json!({
-            "toAddress" : recipient.to_string(),
-            "fromAddress" : signer.to_string(),
-            "objectId" : object_id,
-            "gasObjectId" : gas_payment
-        });
-        let tx: TransactionBytes = Self::post(url, value).await?;
+
+        let request = TransferTransactionRequest {
+            from_address: signer.to_string(),
+            object_id,
+            to_address: recipient.to_string(),
+            gas_object_id: gas_payment,
+        };
+
+        let tx: TransactionBytes = self.post("new_transfer", request).await?;
         Ok(tx.to_data()?)
     }
 
@@ -94,7 +97,6 @@ impl GatewayAPI for RestGatewayClient {
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        let url = format!("{}/api/move_call", self.url);
         let type_arg = type_arguments
             .iter()
             .map(|arg| arg.to_string())
@@ -122,7 +124,7 @@ impl GatewayAPI for RestGatewayClient {
             object_arguments,
             shared_object_arguments,
         };
-        let tx: TransactionBytes = Self::post(url, serde_json::to_value(request)?).await?;
+        let tx: TransactionBytes = self.post("move_call", request).await?;
         Ok(tx.to_data()?)
     }
 
@@ -133,7 +135,6 @@ impl GatewayAPI for RestGatewayClient {
         gas_object_ref: ObjectRef,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        let url = format!("{}/api/publish", self.url);
         let package_bytes = package_bytes.iter().map(base64::encode).collect::<Vec<_>>();
         let request = PublishRequest {
             sender: encode_bytes_hex(&signer),
@@ -141,7 +142,7 @@ impl GatewayAPI for RestGatewayClient {
             gas_object_id: gas_object_ref.0.to_hex(),
             gas_budget,
         };
-        let tx: TransactionBytes = Self::post(url, serde_json::to_value(request)?).await?;
+        let tx: TransactionBytes = self.post("publish", request).await?;
         Ok(tx.to_data()?)
     }
 
@@ -153,7 +154,6 @@ impl GatewayAPI for RestGatewayClient {
         gas_payment: ObjectID,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        let url = format!("{}/api/split_coin", self.url);
         let request = SplitCoinRequest {
             signer: encode_bytes_hex(&signer),
             coin_object_id: coin_object_id.to_hex(),
@@ -161,7 +161,7 @@ impl GatewayAPI for RestGatewayClient {
             gas_payment: gas_payment.to_hex(),
             gas_budget,
         };
-        let tx: TransactionBytes = Self::post(url, serde_json::to_value(request)?).await?;
+        let tx: TransactionBytes = self.post("split_coin", request).await?;
         Ok(tx.to_data()?)
     }
 
@@ -173,7 +173,6 @@ impl GatewayAPI for RestGatewayClient {
         gas_payment: ObjectID,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        let url = format!("{}/api/merge_coin", self.url);
         let request = MergeCoinRequest {
             signer: encode_bytes_hex(&signer),
             primary_coin: primary_coin.to_hex(),
@@ -181,13 +180,14 @@ impl GatewayAPI for RestGatewayClient {
             gas_payment: gas_payment.to_hex(),
             gas_budget,
         };
-        let tx: TransactionBytes = Self::post(url, serde_json::to_value(request)?).await?;
+        let tx: TransactionBytes = self.post("merge_coin", request).await?;
         Ok(tx.to_data()?)
     }
 
     async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error> {
-        let url = format!("{}/api/object_info?objectId={}", self.url, object_id);
-        Ok(Self::get(url).await?)
+        Ok(self
+            .get("object_info", "objectId", &object_id.to_hex())
+            .await?)
     }
 
     fn get_owned_objects(
@@ -207,13 +207,25 @@ impl GatewayAPI for RestGatewayClient {
 }
 
 impl RestGatewayClient {
-    async fn post<T: DeserializeOwned>(url: String, body: Value) -> Result<T, anyhow::Error> {
+    async fn post<T: DeserializeOwned, V: Serialize>(
+        &self,
+        endpoint: &str,
+        data: V,
+    ) -> Result<T, anyhow::Error> {
+        let url = format!("{}/api/{endpoint}", self.url);
         let client = reqwest::Client::new();
-        let response = client.post(url).body(body.to_string()).send().await?;
+        let value = serde_json::to_value(data)?;
+        let response = client.post(url).body(value.to_string()).send().await?;
         Ok(Self::handle_response_error(response).await?.json().await?)
     }
 
-    async fn get<T: DeserializeOwned>(url: String) -> Result<T, anyhow::Error> {
+    async fn get<T: DeserializeOwned>(
+        &self,
+        endpoint: &str,
+        key: &str,
+        value: &str,
+    ) -> Result<T, anyhow::Error> {
+        let url = format!("{}/api/{endpoint}?{key}={value}", self.url);
         let response = reqwest::get(url).await?;
         Ok(Self::handle_response_error(response).await?.json().await?)
     }

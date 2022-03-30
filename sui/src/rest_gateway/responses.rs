@@ -6,10 +6,11 @@ use http::{Response, StatusCode};
 use hyper::Body;
 use schemars::gen::SchemaGenerator;
 use schemars::schema::Schema;
-use schemars::{schema_for_value, JsonSchema};
+use schemars::{schema_for, JsonSchema};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Value;
 use serde_with::serde_as;
 
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
@@ -63,7 +64,8 @@ impl<T: DeserializeOwned + Serialize> JsonSchema for JsonResponse<T> {
     }
 
     fn json_schema(_: &mut SchemaGenerator) -> Schema {
-        schema_for_value!("").schema.into()
+        // TODO: Investigate how to extract schema from serde automatically.
+        schema_for!(Value).schema.into()
     }
 }
 
