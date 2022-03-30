@@ -13,19 +13,19 @@
     // pageState.walletAdress = data.detail.walletAdress;
   };
 
-  let changeWalletAddres;
-  const changeWalletAdress = (data: any) => {
-    return changeWalletAddres.changeWallet();
+  let changeWalletAddress;
+  const changeWalletAddressFn = (data: any) => {
+    return changeWalletAddress.changeWallet();
   };
 </script>
 
 <main class="_sui_main main-wrapper">
-  <Header on:changeWallet={changeWalletAdress} />
+  <Header on:changeWallet={changeWalletAddressFn} />
 
   {#if pageState.page === "landing"}
     <LandingPage
       on:pageFn={changePageState}
-      bind:changeWalleFn={changeWalletAddres}
+      bind:changeWalleFn={changeWalletAddress}
     />
   {/if}
 

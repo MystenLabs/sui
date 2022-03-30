@@ -5,6 +5,6 @@ import { writable } from 'svelte/store';
 /// Mock API response for NFTs mirror will return succeess or error at random
 export const config = {
     url: 'http://localhost:8000/',
-    demo: false
-}
-export const walletAddress:any = writable(false);
+    demo: false,
+};
+export const walletAddress: any = writable(false);

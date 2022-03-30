@@ -136,11 +136,11 @@
         />
         <div class="row row-35 _cta">
           <button
-            class="axil-btn btn-fill-white btn-large"
+            class="sui-btn btn-fill-white btn-large"
             on:click={changeSelectedNFT}>Change NFT</button
           >
           <button
-            class="axil-btn btn-fill-white btn-large"
+            class="sui-btn btn-fill-white btn-large"
             on:click={signSignatureAndMint}>Mint NFT</button
           >
         </div>
@@ -163,10 +163,10 @@
                 <a
                   href={response.sui_explorer_link}
                   target="_blank"
-                  class="axil-btn btn-large btn-fill-white">View in Explorer</a
+                  class="sui-btn btn-large btn-fill-white">View in Explorer</a
                 >
                 <button
-                  class="axil-btn btn-fill-white btn-large err-btn"
+                  class="sui-btn btn-fill-white btn-large err-btn"
                   on:click={changeSelectedNFT}>Mint another NFT</button
                 >
               </div>
@@ -177,7 +177,7 @@
               errmessage={`${err.message} - ${err.details.requestBody.message}`}
             />
             <button
-              class="axil-btn btn-fill-white btn-large err-btn"
+              class="sui-btn btn-fill-white btn-large err-btn"
               on:click={changeSelectedNFT}>Select another NFT</button
             >
           {/await}
@@ -186,7 +186,7 @@
             <ResponseCheckMark responsetype="error" />
             <Error errmessage={err.message} />
             <button
-              class="axil-btn btn-fill-white btn-large"
+              class="sui-btn btn-fill-white btn-large"
               on:click={changeWalletAddress}
               >Change Address
             </button>
@@ -243,12 +243,12 @@
     ._cta {
       margin: 0 auto;
       margin-top: 20px;
-      .axil-btn {
+      .sui-btn {
         width: 300px;
       }
     }
   }
-  .axil-btn {
+  .sui-btn {
     padding: 12px 45px;
     margin: 5px;
     color: $sui__blue;
