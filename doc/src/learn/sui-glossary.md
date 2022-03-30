@@ -105,7 +105,7 @@ Single-writer objects are owned by one account. In Sui, transactions affecting o
 
 ### Sui/SUI
 
-Sui refers to the blockchain, its currency (SUI), and the [open source project](https://github.com/MystenLabs/sui/) as a whole.
+Sui refers to the Sui blockchain, the SUI currency, and the [Sui open source project](https://github.com/MystenLabs/sui/) as a whole.
 
 
 ### Total order
