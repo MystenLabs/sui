@@ -403,6 +403,20 @@ impl Object {
         ObjectDigest::new(sha3_hash(self))
     }
 
+    // Size of the object in bytes.
+    // TODO: For now we just look at the size of the data.
+    // Do we need to be accurate and look at the serialized size?
+    pub fn object_data_size(&self) -> usize {
+        match &self.data {
+            Data::Move(m) => m.contents.len(),
+            Data::Package(p) => p
+                .serialized_module_map()
+                .values()
+                .map(|module| module.len())
+                .sum(),
+        }
+    }
+
     /// Change the owner of `self` to `new_owner`
     pub fn transfer(&mut self, new_owner: SuiAddress) -> SuiResult {
         self.is_transfer_eligible()?;
