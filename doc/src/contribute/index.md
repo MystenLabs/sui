@@ -26,7 +26,7 @@ In order to obtain the Sui source code, clone the Sui repository:
 git clone https://github.com/MystenLabs/sui.git
 ```
 
-The primary directories are:
+You can start exploring Sui's source code by looking into the following primary directories:
 
 * [sui](https://github.com/MystenLabs/sui/tree/main/sui) - the Sui binaries (`wallet`, `sui-move`, and more)
 * [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui's Move language integration also including games and other Move code examples for testing and reuse
