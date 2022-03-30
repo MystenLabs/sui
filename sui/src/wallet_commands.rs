@@ -133,7 +133,7 @@ pub enum WalletCommands {
     #[structopt(name = "sync")]
     SyncClientState {
         #[structopt(long, parse(try_from_str = decode_bytes_hex))]
-        address: SuiAddress,
+        address: Option<SuiAddress>,
     },
 
     /// Obtain the Addresses managed by the wallet.
@@ -377,7 +377,11 @@ impl WalletCommands {
             }
 
             WalletCommands::SyncClientState { address } => {
-                context.gateway.sync_account_state(*address).await?;
+                let address = match address {
+                    Some(a) => *a,
+                    None => context.active_address()?,
+                };
+                context.gateway.sync_account_state(address).await?;
                 WalletCommandResult::SyncClientState
             }
             WalletCommands::NewAddress => {
@@ -652,16 +656,8 @@ async fn choose_gas_for_wallet(
             let gas_object_read = context.gateway.get_object_info(g).await?;
             // You could technically try to pay with a gas not owned by user.
             // Especially if one forgets to switch account
-            let gas_object = gas_object_read.object()?;
-            let owner = gas_object.owner.get_owner_address()?;
-            if owner != context.active_address()? {
-                return Err(anyhow!(
-                    "Switch address to use gas {} with owner {}",
-                    g,
-                    owner
-                ));
-            }
-            gas_object.clone()
+            // Allow it still
+            gas_object_read.object()?.clone()
         }
     })
 }
