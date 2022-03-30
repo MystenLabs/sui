@@ -171,10 +171,15 @@ function OwnedObject({ objects }: { objects: string[] }) {
                     <span>
                         {pageIndex > 0 && (
                             <>
-                                <button onClick={handleFirstClick}>
+                                <button
+                                    id="firstBtn"
+                                    onClick={handleFirstClick}
+                                >
                                     First
                                 </button>
-                                <button onClick={handleBackClick}>Back</button>
+                                <button id="backBtn" onClick={handleBackClick}>
+                                    Back
+                                </button>
                             </>
                         )}
                     </span>
@@ -186,8 +191,12 @@ function OwnedObject({ objects }: { objects: string[] }) {
                     <span>
                         {pageIndex < FINAL_PAGE_NO - 1 && (
                             <>
-                                <button onClick={handleNextClick}>Next</button>
-                                <button onClick={handleLastClick}>Last</button>
+                                <button id="nextBtn" onClick={handleNextClick}>
+                                    Next
+                                </button>
+                                <button id="lastBtn" onClick={handleLastClick}>
+                                    Last
+                                </button>
                             </>
                         )}
                     </span>
