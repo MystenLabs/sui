@@ -150,13 +150,11 @@ async fn handle_consensus_output() {
         .await
         .unwrap();
 
-    // Wait for the certificate to be processed and ensure the last consensus index
-    // has been updated.
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    assert_eq!(
-        state.db().last_consensus_index().unwrap(),
-        SequenceNumber::from(1)
-    );
+    // Wait for the certificate to be processed and ensure the last consensus index is correctly updated. 
+    // (We need to wait on storage for that.)
+    while state.db().last_consensus_index().unwrap() != SequenceNumber::from(1) {
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
 
     // Cleanup the storage.
     let _ = std::fs::remove_dir_all(store_path);
@@ -229,14 +227,11 @@ async fn sync_with_consensus() {
         .await
         .unwrap();
 
-    // Wait for the certificate to be processed.
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-    // Ensure the last consensus index is correctly updated.
-    assert_eq!(
-        state.db().last_consensus_index().unwrap(),
-        SequenceNumber::from(2)
-    );
+    // Wait for the certificate to be processed and ensure the last consensus index is correctly updated. 
+    // (We need to wait on storage for that.)
+    while state.db().last_consensus_index().unwrap() != SequenceNumber::from(2) {
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
 
     // Ensure the version number of the shared object is correctly updated.
     let shared_object_id = test_shared_object().id();
