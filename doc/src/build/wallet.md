@@ -707,7 +707,7 @@ command just like we used `0x2` for built-in packages in the
 Another object created as a result of package publishing is a
 user-defined object (of type `Forge`) crated inside initializer
 function of the (only) module included in the published package - see
-the parrt of Move developer documentation concerning [module
+the part of Move developer documentation concerning [module
 initializers](move.md#module-initializers) for more details on module
 initializers.
 
