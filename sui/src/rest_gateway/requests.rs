@@ -4,8 +4,6 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_with::base64::Base64;
-use serde_with::serde_as;
 
 /**
 Request containing the information needed to execute a split coin transaction.
@@ -43,8 +41,7 @@ pub struct SignedTransaction {
 /**
 Request containing the information required to execute a move module.
  */
-#[serde_as]
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CallRequest {
     /** Required; Hex code as string representing the sender's address */
@@ -57,9 +54,8 @@ pub struct CallRequest {
     pub function: String,
     /** Optional; The argument types to be parsed */
     pub type_arguments: Option<Vec<String>>,
-    /** Required; Byte representation of the arguments */
-    #[serde_as(as = "Vec<Base64>")]
-    pub pure_arguments: Vec<Vec<u8>>,
+    /** Required; Byte representation of the arguments, Base64 encoded */
+    pub pure_arguments: Vec<String>,
     /** Required; Hex code as string representing the gas object id */
     pub gas_object_id: String,
     /** Required; Gas budget required as a cap for gas usage */

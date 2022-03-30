@@ -440,11 +440,11 @@ Example CallRequest
 }]
 async fn move_call(
     ctx: Arc<RequestContext<ServerContext>>,
-    request: TypedBody<JsonResponse<CallRequest>>,
+    request: TypedBody<CallRequest>,
 ) -> Result<HttpResponseOk<TransactionBytes>, HttpError> {
     let mut gateway = ctx.context().gateway.lock().await;
 
-    let call_params = request.into_inner().0;
+    let call_params = request.into_inner();
     let data = handle_move_call(call_params, &mut gateway)
         .await
         .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{:#}", err)))?;
@@ -570,7 +570,6 @@ async fn handle_move_call(
     call_params: CallRequest,
     gateway: &mut GatewayClient,
 ) -> Result<TransactionData, anyhow::Error> {
-    println!("here1");
     let module = Identifier::from_str(&call_params.module.to_owned())?;
     let function = Identifier::from_str(&call_params.function.to_owned())?;
     let type_args = call_params
@@ -580,12 +579,8 @@ async fn handle_move_call(
         .map(|type_arg| parse_type_tag(type_arg))
         .collect::<Result<Vec<_>, _>>()?;
     let gas_budget = call_params.gas_budget;
-    println!("here2");
-    println!("gas id {}", call_params.gas_object_id);
-    println!("package_object_id {}", call_params.package_object_id);
     let gas_object_id = ObjectID::try_from(call_params.gas_object_id)?;
     let package_object_id = ObjectID::try_from(call_params.package_object_id)?;
-    println!("here3");
 
     let sender: SuiAddress = decode_bytes_hex(call_params.signer.as_str())?;
 
@@ -600,6 +595,17 @@ async fn handle_move_call(
         let (object_ref, _, _) = get_object_info(gateway, ObjectID::try_from(obj_id)?).await?;
         object_args_refs.push(object_ref);
     }
+    let pure_arguments = call_params
+        .pure_arguments
+        .iter()
+        .map(base64::decode)
+        .collect::<Result<_, _>>()?;
+
+    let shared_object_arguments = call_params
+        .shared_object_arguments
+        .into_iter()
+        .map(ObjectID::try_from)
+        .collect::<Result<_, _>>()?;
 
     gateway
         .move_call(
@@ -610,9 +616,8 @@ async fn handle_move_call(
             type_args.clone(),
             gas_obj_ref,
             object_args_refs,
-            // TODO: Populate shared object args. sui/issue#719
-            vec![],
-            call_params.pure_arguments,
+            shared_object_arguments,
+            pure_arguments,
             gas_budget,
         )
         .await

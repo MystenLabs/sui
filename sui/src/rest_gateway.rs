@@ -112,6 +112,8 @@ impl GatewayAPI for RestGatewayClient {
             .map(|object_id| object_id.to_hex())
             .collect();
 
+        let pure_arguments = pure_arguments.iter().map(base64::encode).collect();
+
         let request = CallRequest {
             signer: encode_bytes_hex(&signer),
             package_object_id: package_object_ref.0.to_hex(),

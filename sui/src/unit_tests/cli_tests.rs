@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use ed25519_dalek::Signer;
 use std::fs::read_dir;
 use std::ops::Add;
 use std::path::PathBuf;
@@ -25,7 +24,7 @@ use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
-use sui_types::crypto::{get_key_pair, get_key_pair_from_bytes, Signature};
+use sui_types::crypto::get_key_pair;
 use sui_types::messages::TransactionEffects;
 use sui_types::object::{Object, ObjectRead, GAS_VALUE_FOR_TESTING};
 
@@ -984,20 +983,4 @@ fn test_bug_1078() {
     // fmt ObjectRead should not fail.
     write!(writer, "{}", read).unwrap();
     write!(writer, "{:?}", read).unwrap();
-}
-
-#[test]
-fn test() -> Result<(), anyhow::Error> {
-    let key_str =
-        "yepWW8/js1AJtjlr8djyKC4nERkMznE0pB6D/jeb56mIy5JKFapdhkvBTJQf/ipfO+LiXczLUFoQHG/0p946ww==";
-    let value = base64::decode(key_str)?;
-    let (_, kp) = get_key_pair_from_bytes(&value);
-
-    let content_to_sign = "VHJhbnNhY3Rpb25EYXRhOjoAABQz/qZSvIyr2J47fWy5Fn3FrAfCqBY1u/MXMOLWcYtvlyxLjpMcY/XRAQAAAAAAAAAgBNO01Pak/TDfP6UN2kOxqC9oMv/g+VdwKrSyqDQfQYYUM/6mUryMq9ieO31suRZ9xawHwqg2Lti1zncsbI3xy3zp0g5JEArhIQEAAAAAAAAAICJu1MgKDJJi/pNABBuOr+04GZVsecdY/hIgUMlkk0zJ";
-    let value = base64::decode(content_to_sign)?;
-    let signature: Signature = kp.sign(&value);
-
-    println!("{:?}", signature);
-
-    Ok(())
 }
