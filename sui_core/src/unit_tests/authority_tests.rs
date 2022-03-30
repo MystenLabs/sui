@@ -15,9 +15,8 @@ use sui_types::{
     base_types::dbg_addr,
     crypto::KeyPair,
     crypto::{get_key_pair, Signature},
-    gas::{calculate_module_publish_cost, get_gas_balance},
     messages::Transaction,
-    object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
+    object::{Owner, OBJECT_START_VERSION},
 };
 
 use std::fs;
@@ -293,7 +292,7 @@ async fn test_transfer_package() {
     let result = authority_state
         .handle_transaction(transfer_transaction.clone())
         .await;
-    assert!(matches!(result.unwrap_err(), SuiError::LockErrors { .. }));
+    assert_eq!(result.unwrap_err(), SuiError::TransferSharedError);
 }
 
 // This test attempts to use an immutable gas object to pay for gas.
@@ -403,17 +402,6 @@ fn make_dependent_module(m: &CompiledModule) -> CompiledModule {
     dependent_module
 }
 
-#[cfg(test)]
-pub fn check_gas_object(
-    gas_object: &Object,
-    expected_balance: u64,
-    expected_sequence_number: SequenceNumber,
-) {
-    assert_eq!(gas_object.version(), expected_sequence_number);
-    let new_balance = get_gas_balance(gas_object).unwrap();
-    assert_eq!(new_balance, expected_balance);
-}
-
 // Test that publishing a module that depends on an existing one works
 #[tokio::test]
 async fn test_publish_dependent_module_ok() {
@@ -480,7 +468,6 @@ async fn test_publish_module_no_dependencies_ok() {
     let mut module_bytes = Vec::new();
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
-    let gas_cost = calculate_module_publish_cost(&module_bytes);
     let data = TransactionData::new_module(sender, gas_payment_object_ref, module_bytes, MAX_GAS);
     let signature = Signature::new(&data, &sender_key);
     let transaction = Transaction::new(data, signature);
@@ -492,18 +479,6 @@ async fn test_publish_module_no_dependencies_ok() {
 
     // check that the module actually got published
     assert!(response.certified_transaction.is_some());
-
-    // Check that gas is properly deducted.
-    let gas_payment_object = authority
-        .get_object(&gas_payment_object_id)
-        .await
-        .unwrap()
-        .unwrap();
-    check_gas_object(
-        &gas_payment_object,
-        gas_balance - gas_cost,
-        gas_seq.increment(),
-    )
 }
 
 #[tokio::test]
@@ -599,7 +574,6 @@ async fn test_handle_move_transaction() {
     let (sender, sender_key) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
-    let gas_seq = gas_payment_object.version();
     let authority_state = init_state_with_objects(vec![gas_payment_object]).await;
 
     let effects = create_move_object(
@@ -625,20 +599,6 @@ async fn test_handle_move_transaction() {
     assert_eq!(created_obj.owner, sender);
     assert_eq!(created_obj.id(), created_object_id);
     assert_eq!(created_obj.version(), OBJECT_START_VERSION);
-
-    // Check that gas is properly deducted.
-    // If the number changes, we want to verify that the change is intended.
-    let gas_cost = 54;
-    let gas_payment_object = authority_state
-        .get_object(&gas_payment_object_id)
-        .await
-        .unwrap()
-        .unwrap();
-    check_gas_object(
-        &gas_payment_object,
-        GAS_VALUE_FOR_TESTING - gas_cost,
-        gas_seq.increment(),
-    )
 }
 
 // Test the case when the gas budget provided is less than minimum requirement during move call.
@@ -671,7 +631,7 @@ async fn test_handle_move_transaction_insufficient_budget() {
             16u64.to_le_bytes().to_vec(),
             bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
         ],
-        9,
+        4,
     );
     let signature = Signature::new(&data, &sender_key);
     let transaction = Transaction::new(data, signature);

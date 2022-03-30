@@ -36,4 +36,6 @@ move-bytecode-utils = { git = "https://github.com/diem/move", rev = "2ef516919d5
 move-core-types = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a", features = ["address20"] }
 move-disassembler = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
 move-ir-types = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
+move-vm-types = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
+
 sha2 = "0.10.2"
