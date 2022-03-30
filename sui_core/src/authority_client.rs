@@ -8,7 +8,7 @@ use futures::Stream;
 use futures::{SinkExt, StreamExt};
 use std::io;
 use sui_network::network::{parse_recv_bytes, NetworkClient};
-use sui_network::transport::{TcpDataStream};
+use sui_network::transport::TcpDataStream;
 use sui_types::batch::UpdateItem;
 use sui_types::{error::SuiError, messages::*, serialize::*};
 
@@ -175,7 +175,7 @@ impl AuthorityAPI for AuthorityClient {
     }
 }
 
-impl AuthorityClient{
+impl AuthorityClient {
     /// Handle Batch information requests for this authority.
     pub async fn handle_batch_streaming_as_stream(
         &self,
@@ -205,7 +205,7 @@ impl AuthorityClient{
                         Err(_) => Err(SuiError::InvalidDecoding),
                     })
                     // If deserialized try to parse as Batch Item
-                    .and_then(|message| deserialize_batch_info(message))
+                    .and_then(deserialize_batch_info)
             })
             // Establish conditions to stop taking from the stream
             .take_while(move |item| {
