@@ -73,7 +73,7 @@ function OwnedObjectView({ results }: { results: resultType }) {
     );
     const navigate = useNavigate();
     return (
-        <div id="ownedObjects">
+        <div id="ownedObjects" className={styles.ownedobjects}>
             {results.map((entryObj, index1) => (
                 <div
                     className={styles.objectbox}
@@ -168,57 +168,68 @@ function OwnedObject({ objects }: { objects: string[] }) {
         <>
             {FINAL_PAGE_NO !== 1 && (
                 <>
-                    <span>
-                        {pageIndex > 0 && (
-                            <>
-                                <button
-                                    id="firstBtn"
-                                    onClick={handleFirstClick}
-                                >
-                                    First
-                                </button>
-                                <button id="backBtn" onClick={handleBackClick}>
-                                    <svg
-                                        width="12"
-                                        height="12"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <path
-                                            d="M 12 12 L 0 6 L 12 0"
-                                            stroke="black"
-                                            fill="transparent"
-                                        />
-                                    </svg>
-                                </button>
-                            </>
-                        )}
+                    <span className={pageIndex === 0 ? styles.gone : ''}>
+                        <button
+                            className={styles.btncontainer}
+                            id="firstBtn"
+                            onClick={handleFirstClick}
+                            disabled={pageIndex === 0}
+                        >
+                            First
+                        </button>
+                        <button
+                            className={styles.btncontainer}
+                            id="backBtn"
+                            onClick={handleBackClick}
+                            disabled={pageIndex === 0}
+                        >
+                            <svg
+                                width="12"
+                                height="12"
+                                xmlns="http://www.w3.org/2000/svg"
+                            >
+                                <path
+                                    d="M 12 12 L 0 6 L 12 0"
+                                    fill="transparent"
+                                />
+                            </svg>
+                        </button>
                     </span>
 
-                    <span>
+                    <span className={styles.pagenumber}>
                         Page {pageIndex + 1} of {FINAL_PAGE_NO}
                     </span>
 
-                    <span>
-                        {pageIndex < FINAL_PAGE_NO - 1 && (
-                            <>
-                                <button id="nextBtn" onClick={handleNextClick}>
-                                    <svg
-                                        width="12"
-                                        height="12"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <path
-                                            d="M 0 12 L 12 6 L 0 0"
-                                            stroke="black"
-                                            fill="transparent"
-                                        />
-                                    </svg>
-                                </button>
-                                <button id="lastBtn" onClick={handleLastClick}>
-                                    Last
-                                </button>
-                            </>
-                        )}
+                    <span
+                        className={
+                            pageIndex === FINAL_PAGE_NO - 1 ? styles.gone : ''
+                        }
+                    >
+                        <button
+                            id="nextBtn"
+                            className={styles.btncontainer}
+                            disabled={pageIndex === FINAL_PAGE_NO - 1}
+                            onClick={handleNextClick}
+                        >
+                            <svg
+                                width="12"
+                                height="12"
+                                xmlns="http://www.w3.org/2000/svg"
+                            >
+                                <path
+                                    d="M 0 12 L 12 6 L 0 0"
+                                    fill="transparent"
+                                />
+                            </svg>
+                        </button>
+                        <button
+                            id="lastBtn"
+                            disabled={pageIndex === FINAL_PAGE_NO - 1}
+                            onClick={handleLastClick}
+                            className={styles.btncontainer}
+                        >
+                            Last
+                        </button>
                     </span>
                 </>
             )}
