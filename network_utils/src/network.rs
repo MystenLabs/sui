@@ -133,13 +133,13 @@ impl NetworkClient {
             let client = self.clone();
             handles.push(
                 tokio::spawn(async move {
-                    info!(
+                    debug!(
                         "Sending TCP requests to {}:{}",
                         client.base_address, client.base_port,
                     );
                     let responses = client.batch_send_one_chunk(requests, max_in_flight).await;
                     // .unwrap_or_else(|_| Vec::new());
-                    info!(
+                    debug!(
                         "Done sending TCP requests to {}:{}",
                         client.base_address, client.base_port,
                     );
