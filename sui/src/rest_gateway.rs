@@ -1,8 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
+use async_trait::async_trait;
+use dropshot::HttpErrorResponseBody;
+use http::StatusCode;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
+use reqwest::Response;
 use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
 
@@ -16,7 +21,7 @@ use crate::rest_gateway::requests::{
     CallRequest, MergeCoinRequest, PublishRequest, SplitCoinRequest,
 };
 use crate::rest_gateway::responses::{NamedObjectRef, ObjectResponse, TransactionBytes};
-use async_trait::async_trait;
+
 pub mod requests;
 pub mod responses;
 
@@ -72,7 +77,7 @@ impl GatewayAPI for RestGatewayClient {
         let address = account_addr.to_string();
         let body = json!({ "address": address });
 
-        client.post(url).body(body.to_string()).send().await?;
+        Self::handle_response_error(client.post(url).body(body.to_string()).send().await?).await?;
         Ok(())
     }
 
@@ -195,11 +200,20 @@ impl RestGatewayClient {
     async fn post<T: DeserializeOwned>(url: String, body: Value) -> Result<T, anyhow::Error> {
         let client = reqwest::Client::new();
         let response = client.post(url).body(body.to_string()).send().await?;
-        Ok(response.error_for_status()?.json().await?)
+        Ok(Self::handle_response_error(response).await?.json().await?)
     }
 
     async fn get<T: DeserializeOwned>(url: String) -> Result<T, anyhow::Error> {
         let response = reqwest::get(url).await?;
-        Ok(response.error_for_status()?.json().await?)
+        Ok(Self::handle_response_error(response).await?.json().await?)
+    }
+
+    async fn handle_response_error(response: Response) -> Result<Response, anyhow::Error> {
+        if response.status() < StatusCode::BAD_REQUEST {
+            Ok(response)
+        } else {
+            let error: HttpErrorResponseBody = response.json().await?;
+            Err(anyhow!("Gateway error response: {}", error.message))
+        }
     }
 }

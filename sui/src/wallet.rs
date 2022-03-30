@@ -114,7 +114,7 @@ impl AsyncHandler<WalletContext> for ClientCommandHandler {
         completion_cache: CompletionCache,
     ) -> bool {
         if let Err(e) = handle_command(get_command(args), context, completion_cache).await {
-            let _err = writeln!(stderr(), "{}", e);
+            let _err = writeln!(stderr(), "{}", e.to_string().red());
         }
         false
     }
