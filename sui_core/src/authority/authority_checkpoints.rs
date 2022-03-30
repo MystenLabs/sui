@@ -98,7 +98,7 @@ impl CheckpointStore {
     }
 
     /// Returns the lowest checkpoint sequence number with unprocessed transactions
-    /// if any, otherwise None.
+    /// if any, otherwise the next checkpoint (not seen).
     pub fn lowest_unprocessed_sequence(&self) -> CheckpointSequenceNumber {
         self.unprocessed_transactions
             .iter()
@@ -201,11 +201,12 @@ impl CheckpointStore {
     }
 
     /// Updates the store on the basis of transactions that have been processed. This is idempotent
-    /// and nothing unsafe happens if it is called twice.
+    /// and nothing unsafe happens if it is called twice. Returns the lowest checkpoint number with
+    /// unprocessed transactions (this is the low watermark).
     pub fn update_processed_transactions(
         &mut self, // We take by &mut to prevent concurrent access.
         transactions: &[(TxSequenceNumber, TransactionDigest)],
-    ) -> Result<(), TypedStoreError> {
+    ) -> Result<CheckpointSequenceNumber, TypedStoreError> {
         let in_checkpoint = self
             .transactions_to_checkpoint
             .multi_get(transactions.iter().map(|(_, tx)| tx))?;
@@ -311,7 +312,7 @@ impl CheckpointStore {
         // Write to the database.
         batch.write()?;
 
-        Ok(())
+        Ok(self.lowest_unprocessed_sequence())
     }
 }
 
