@@ -4,9 +4,11 @@
 
 use async_trait::async_trait;
 use futures::channel::mpsc::{channel, Receiver};
-use futures::SinkExt;
+use futures::Stream;
+use futures::{SinkExt, StreamExt};
 use std::io;
 use sui_network::network::{parse_recv_bytes, NetworkClient};
+use sui_network::transport::{TcpDataStream};
 use sui_types::batch::UpdateItem;
 use sui_types::{error::SuiError, messages::*, serialize::*};
 
@@ -141,7 +143,7 @@ impl AuthorityAPI for AuthorityClient {
         loop {
             let next_data = tcp_stream.read_data().await.transpose();
             let data_result = parse_recv_bytes(next_data);
-            match deserialize_batch_info(data_result) {
+            match data_result.and_then(deserialize_batch_info) {
                 Ok(batch_info_response_item) => {
                     // send to the caller via the channel
                     let _ = tx_output.send(Ok(batch_info_response_item.clone())).await;
@@ -170,5 +172,58 @@ impl AuthorityAPI for AuthorityClient {
             }
         }
         Ok(tr_output)
+    }
+}
+
+impl AuthorityClient{
+    /// Handle Batch information requests for this authority.
+    pub async fn handle_batch_streaming_as_stream(
+        &self,
+        request: BatchInfoRequest,
+    ) -> Result<impl Stream<Item = Result<BatchInfoResponseItem, SuiError>>, io::Error> {
+        let tcp_stream = self
+            .0
+            .connect_for_stream(serialize_batch_request(&request))
+            .await?;
+
+        let mut error_count = 0;
+        let TcpDataStream { framed_read, .. } = tcp_stream;
+
+        let stream = framed_read
+            .map(|item| {
+                item
+                    // Convert io error to SuiCLient error
+                    .map_err(|err| SuiError::ClientIoError {
+                        error: format!("io error: {:?}", err),
+                    })
+                    // If no error try to deserialize
+                    .and_then(|bytes| match deserialize_message(&bytes[..]) {
+                        Ok(SerializedMessage::Error(error)) => Err(SuiError::ClientIoError {
+                            error: format!("io error: {:?}", error),
+                        }),
+                        Ok(message) => Ok(message),
+                        Err(_) => Err(SuiError::InvalidDecoding),
+                    })
+                    // If deserialized try to parse as Batch Item
+                    .and_then(|message| deserialize_batch_info(message))
+            })
+            // Establish conditions to stop taking from the stream
+            .take_while(move |item| {
+                let flag = match item {
+                    Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
+                        signed_batch.batch.next_sequence_number < request.end
+                    }
+                    Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest)))) => {
+                        *seq < request.end
+                    }
+                    Err(_e) => {
+                        // TODO: record e
+                        error_count += 1;
+                        error_count < MAX_ERRORS
+                    }
+                };
+                futures::future::ready(flag)
+            });
+        Ok(stream)
     }
 }

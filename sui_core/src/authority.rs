@@ -54,7 +54,7 @@ pub use authority_store::{AuthorityStore, GatewayStore};
 
 pub mod authority_notifier;
 
-const MAX_ITEMS_LIMIT: u64 = 10_000;
+const MAX_ITEMS_LIMIT: u64 = 100_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
 /// a Trait object for `signature::Signer` that is:
