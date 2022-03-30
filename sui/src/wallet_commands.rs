@@ -470,6 +470,7 @@ impl WalletCommands {
                     return Err(anyhow!("Address {} not managed by wallet", address));
                 }
                 context.config.active_address = Some(*address);
+                context.config.save()?;
                 WalletCommandResult::Switch(SwitchResponse { address: *address })
             }
             WalletCommands::ActiveAddress {} => {
