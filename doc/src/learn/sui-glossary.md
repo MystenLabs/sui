@@ -67,7 +67,7 @@ stage is considered closure for an exchange or other blockchain transaction.
 
 ### Gas
 
-As with other blockchains, [gas](https://www.investopedia.com/terms/g/gas-ethereum.asp) refers to the currency for the cost of conducting a transaction. In Sui, the currency is eponymous: SUI
+As with other blockchains, [gas](https://www.investopedia.com/terms/g/gas-ethereum.asp) refers to the cost of a transaction but not the currency. Transaction fees are calculated as gas * gas_price. In Sui, the currency is eponymous: SUI
 
 
 ### Genesis
@@ -103,7 +103,7 @@ A [smart contract](https://en.wikipedia.org/wiki/Smart_contract) is an agreement
 
 Single-writer objects are owned by one account. In Sui, transactions affecting only single-writer objects owned by the same account may proceed with only a check of the sender’s account, greatly speeding transaction times.
 
-### Sui
+### Sui/SUI
 
 Sui refers to the blockchain, its currency (SUI), and the [open source project](https://github.com/MystenLabs/sui/) as a whole.
 
@@ -122,4 +122,3 @@ A transfer is switching the owner address of a token to a new one via command in
 available in the wallet.
 
 For more information, see [Transferring objects](../build/wallet.md#transferring-objects).
-
