@@ -1,7 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use dropshot::{ApiEndpointResponse, HttpError, HttpResponse, HttpResponseOk, CONTENT_TYPE_JSON};
+use std::env;
+
+use dropshot::{ApiEndpointResponse, HttpError, HttpResponse, CONTENT_TYPE_JSON};
 use http::{Response, StatusCode};
 use hyper::Body;
 use schemars::gen::SchemaGenerator;
@@ -102,23 +104,29 @@ pub struct ObjectSchemaResponse {
     pub schema: serde_json::Value,
 }
 
-/// Custom Http Ok response with CORS set to *
-pub struct CORSHttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(pub T);
+/// Custom Http Ok response with option to set CORS using env variable
+pub struct HttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(pub T);
 
-impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpResponse for CORSHttpResponseOk<T> {
+impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpResponse for HttpResponseOk<T> {
     fn to_result(self) -> Result<Response<Body>, HttpError> {
         let body = serde_json::to_string(&self.0)
             .map_err(|err| HttpError::for_internal_error(format!("{err}")))?
             .into();
-        let res = Response::builder()
+        let builder = Response::builder()
             .status(StatusCode::OK)
-            .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
-            .header(http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-            .body(body)?;
+            .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON);
+
+        let res = if let Ok(cors) = env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
+            builder.header(http::header::ACCESS_CONTROL_ALLOW_ORIGIN, cors)
+        } else {
+            builder
+        }
+        .body(body)?;
+
         Ok(res)
     }
 
     fn metadata() -> ApiEndpointResponse {
-        HttpResponseOk::<T>::metadata()
+        dropshot::HttpResponseOk::<T>::metadata()
     }
 }

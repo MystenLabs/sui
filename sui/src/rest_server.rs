@@ -7,7 +7,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use dropshot::{endpoint, HttpResponseOk, Query, TypedBody};
+use dropshot::{endpoint, Query, TypedBody};
 use dropshot::{
     ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError,
     HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext,
@@ -29,7 +29,7 @@ use sui::rest_gateway::requests::{
     PublishRequest, SignedTransaction, SplitCoinRequest, SyncRequest, TransferTransactionRequest,
 };
 use sui::rest_gateway::responses::{
-    custom_http_error, CORSHttpResponseOk, JsonResponse, NamedObjectRef, ObjectResponse,
+    custom_http_error, HttpResponseOk, JsonResponse, NamedObjectRef, ObjectResponse,
     ObjectSchemaResponse, TransactionBytes,
 };
 use sui::{sui_config_dir, SUI_GATEWAY_CONFIG};
@@ -178,7 +178,7 @@ Returns list of objects owned by an address.
 async fn get_objects(
     ctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectsRequest>,
-) -> Result<CORSHttpResponseOk<ObjectResponse>, HttpError> {
+) -> Result<HttpResponseOk<ObjectResponse>, HttpError> {
     let mut gateway = ctx.context().gateway.lock().await;
     let get_objects_params = query.into_inner();
     let address = get_objects_params.address;
@@ -196,7 +196,7 @@ async fn get_objects(
         .map(NamedObjectRef::from)
         .collect();
 
-    Ok(CORSHttpResponseOk(ObjectResponse { objects }))
+    Ok(HttpResponseOk(ObjectResponse { objects }))
 }
 
 /**
@@ -210,7 +210,7 @@ Returns the schema for a specified object.
 async fn object_schema(
     ctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectSchemaRequest>,
-) -> Result<CORSHttpResponseOk<ObjectSchemaResponse>, HttpError> {
+) -> Result<HttpResponseOk<ObjectSchemaResponse>, HttpError> {
     let gateway = ctx.context().gateway.lock().await;
     let object_info_params = query.into_inner();
 
@@ -252,7 +252,7 @@ async fn object_schema(
         )
     })?;
 
-    Ok(CORSHttpResponseOk(ObjectSchemaResponse { schema }))
+    Ok(HttpResponseOk(ObjectSchemaResponse { schema }))
 }
 
 /**
@@ -266,7 +266,7 @@ Returns the object information for a specified object.
 async fn object_info(
     ctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectInfoRequest>,
-) -> Result<CORSHttpResponseOk<JsonResponse<ObjectRead>>, HttpError> {
+) -> Result<HttpResponseOk<JsonResponse<ObjectRead>>, HttpError> {
     let gateway = ctx.context().gateway.lock().await;
 
     let object_info_params = query.into_inner();
@@ -279,7 +279,7 @@ async fn object_info(
             format!("Error while getting object info: {:?}", error),
         )
     })?;
-    Ok(CORSHttpResponseOk(JsonResponse(object_read)))
+    Ok(HttpResponseOk(JsonResponse(object_read)))
 }
 
 /**
@@ -307,7 +307,7 @@ Example TransferTransactionRequest
 async fn new_transfer(
     ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<TransferTransactionRequest>,
-) -> Result<CORSHttpResponseOk<TransactionBytes>, HttpError> {
+) -> Result<HttpResponseOk<TransactionBytes>, HttpError> {
     let mut gateway = ctx.context().gateway.lock().await;
     let request = request.into_inner();
 
@@ -323,7 +323,7 @@ async fn new_transfer(
     .await
     .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, error.to_string()))?;
 
-    Ok(CORSHttpResponseOk(TransactionBytes::new(tx_data)))
+    Ok(HttpResponseOk(TransactionBytes::new(tx_data)))
 }
 
 #[endpoint {
@@ -334,7 +334,7 @@ tags = [ "API" ],
 async fn split_coin(
     ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<SplitCoinRequest>,
-) -> Result<CORSHttpResponseOk<TransactionBytes>, HttpError> {
+) -> Result<HttpResponseOk<TransactionBytes>, HttpError> {
     let mut gateway = ctx.context().gateway.lock().await;
     let request = request.into_inner();
 
@@ -354,7 +354,7 @@ async fn split_coin(
     }
     .await
     .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, error.to_string()))?;
-    Ok(CORSHttpResponseOk(TransactionBytes::new(tx_data)))
+    Ok(HttpResponseOk(TransactionBytes::new(tx_data)))
 }
 
 #[endpoint {
@@ -365,7 +365,7 @@ tags = [ "API" ],
 async fn merge_coin(
     ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<MergeCoinRequest>,
-) -> Result<CORSHttpResponseOk<TransactionBytes>, HttpError> {
+) -> Result<HttpResponseOk<TransactionBytes>, HttpError> {
     let mut gateway = ctx.context().gateway.lock().await;
     let request = request.into_inner();
 
@@ -386,7 +386,7 @@ async fn merge_coin(
     }
     .await
     .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, error.to_string()))?;
-    Ok(CORSHttpResponseOk(TransactionBytes::new(tx_data)))
+    Ok(HttpResponseOk(TransactionBytes::new(tx_data)))
 }
 
 /**
@@ -405,13 +405,13 @@ need to execute module initializers.
 async fn publish(
     ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<PublishRequest>,
-) -> Result<CORSHttpResponseOk<TransactionBytes>, HttpError> {
+) -> Result<HttpResponseOk<TransactionBytes>, HttpError> {
     let mut gateway = ctx.context().gateway.lock().await;
     let publish_params = request.into_inner();
     let data = handle_publish(publish_params, &mut gateway)
         .await
         .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{:#}", err)))?;
-    Ok(CORSHttpResponseOk(TransactionBytes::new(data)))
+    Ok(HttpResponseOk(TransactionBytes::new(data)))
 }
 
 /**
@@ -441,7 +441,7 @@ Example CallRequest
 async fn move_call(
     ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<JsonResponse<CallRequest>>,
-) -> Result<CORSHttpResponseOk<TransactionBytes>, HttpError> {
+) -> Result<HttpResponseOk<TransactionBytes>, HttpError> {
     let mut gateway = ctx.context().gateway.lock().await;
 
     let call_params = request.into_inner().0;
@@ -449,7 +449,7 @@ async fn move_call(
         .await
         .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{:#}", err)))?;
 
-    Ok(CORSHttpResponseOk(TransactionBytes::new(data)))
+    Ok(HttpResponseOk(TransactionBytes::new(data)))
 }
 
 /**
@@ -496,7 +496,7 @@ tags = [ "API" ],
 async fn execute_transaction(
     ctx: Arc<RequestContext<ServerContext>>,
     response: TypedBody<SignedTransaction>,
-) -> Result<CORSHttpResponseOk<JsonResponse<TransactionResponse>>, HttpError> {
+) -> Result<HttpResponseOk<JsonResponse<TransactionResponse>>, HttpError> {
     let response = response.into_inner();
     let mut gateway = ctx.context().gateway.lock().await;
 
@@ -515,7 +515,7 @@ async fn execute_transaction(
     .await;
     let response = response
         .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, err.to_string()))?;
-    Ok(CORSHttpResponseOk(JsonResponse(response)))
+    Ok(HttpResponseOk(JsonResponse(response)))
 }
 
 async fn get_object_info(
