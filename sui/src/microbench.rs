@@ -260,7 +260,10 @@ impl ClientServerBenchmark {
         (state, transactions)
     }
 
-    async fn spawn_server(&self, state: AuthorityState) -> transport::SpawnedServer {
+    async fn spawn_server(
+        &self,
+        state: AuthorityState,
+    ) -> transport::SpawnedServer<AuthorityServer> {
         let server = AuthorityServer::new(self.host.clone(), self.port, self.buffer_size, state);
         server.spawn().await.unwrap()
     }
@@ -354,7 +357,7 @@ fn make_transfer_transaction(
 
         SingleTransactionKind::Call(MoveCall {
             package: framework_obj_ref,
-            module: ident_str!("GAS").to_owned(),
+            module: ident_str!("SUI").to_owned(),
             function: ident_str!("transfer").to_owned(),
             type_arguments: Vec::new(),
             object_arguments: vec![object_ref],

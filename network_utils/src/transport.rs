@@ -50,13 +50,18 @@ pub trait RwChannel<'a> {
 }
 
 /// The result of spawning a server is oneshot channel to kill it and a handle to track completion.
-pub struct SpawnedServer {
+pub struct SpawnedServer<S> {
+    state: Arc<S>,
     tx_cancellation: futures::channel::oneshot::Sender<()>,
     handle: tokio::task::JoinHandle<Result<(), std::io::Error>>,
     local_addr: SocketAddr,
 }
 
-impl SpawnedServer {
+impl<S> SpawnedServer<S> {
+    pub fn state(&self) -> &Arc<S> {
+        &self.state
+    }
+
     pub async fn join(self) -> Result<(), std::io::Error> {
         // Note that dropping `self.complete` would terminate the server.
         self.handle.await??;
@@ -85,9 +90,9 @@ pub async fn connect(
 /// Run a server for this protocol and the given message handler.
 pub async fn spawn_server<S>(
     address: &str,
-    state: S,
+    state: Arc<S>,
     buffer_size: usize,
-) -> Result<SpawnedServer, std::io::Error>
+) -> Result<SpawnedServer<S>, std::io::Error>
 where
     S: MessageHandler<TcpDataStream> + Send + Sync + 'static,
 {
@@ -104,11 +109,12 @@ where
 
     let handle = tokio::spawn(run_tcp_server(
         listener,
-        state,
+        state.clone(),
         rx_cancellation,
         buffer_size,
     ));
     Ok(SpawnedServer {
+        state,
         tx_cancellation,
         handle,
         local_addr,
@@ -187,14 +193,13 @@ impl<'a> RwChannel<'a> for TcpDataStream {
 // Server implementation for TCP.
 async fn run_tcp_server<S>(
     listener: TcpListener,
-    state: S,
+    state: Arc<S>,
     mut exit_future: futures::channel::oneshot::Receiver<()>,
     _buffer_size: usize,
 ) -> Result<(), std::io::Error>
 where
     S: MessageHandler<TcpDataStream> + Send + Sync + 'static,
 {
-    let guarded_state = Arc::new(state);
     loop {
         let stream;
 
@@ -206,7 +211,7 @@ where
             }
         }
 
-        let guarded_state = guarded_state.clone();
+        let guarded_state = state.clone();
         tokio::spawn(async move {
             let framed = TcpDataStream::from_tcp_stream(stream, _buffer_size);
             guarded_state.handle_messages(framed).await
