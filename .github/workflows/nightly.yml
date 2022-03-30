@@ -1,8 +1,8 @@
-name: Rust
+name: nightly
 
 on:
   schedule:
-      - cron: '0 0 * * *'  # every day at midnight
+    - cron: '0 0 * * *'  # every day at midnight
 
 env:
   CARGO_TERM_COLOR: always
@@ -27,26 +27,36 @@ env:
   RUST_BACKTRACE: short
 
 jobs:
-  
-  test:
-    name: Test Rust ${{matrix.toolchain}} on ${{matrix.os}}
-    runs-on: ${{matrix.os}}-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        toolchain: [stable, nightly]
-        os: [ubuntu]
+  beta:
+    name: Run test on the beta channel
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Install rust
+      - name: Install beta toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{matrix.toolchain}}
-          profile: minimal
+          toolchain: beta
+          components: clippy
           override: true
-      - uses: Swatinem/rust-cache@v1
-      - name: Test
+      - name: cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --all-targets -- -D clippy::all -D warnings -D clippy::disallowed_methods
+      - name: cargo test
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all-features --release --profile=release
+          args: --all-features
+
+  release:
+    name: build release binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+      - name: cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --all-targets --all-features --release --profile=release
