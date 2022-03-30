@@ -355,10 +355,15 @@ describe('End-to-end Tests', () => {
             const btn = await page.$('#lastBtn');
             await btn.click();
 
-            expect(await page.$('#nextBtn')).toBeNull();
-            expect(await page.$('#lastBtn')).toBeNull();
+            //Back and First buttons are present and not disabled:
             expect(await page.$('#backBtn')).not.toBeNull();
             expect(await page.$('#firstBtn')).not.toBeNull();
+            expect(await page.$('#backBtn[disabled]')).toBeNull();
+            expect(await page.$('#firstBtn[disabled]')).toBeNull();
+
+            //Next and Last buttons are disabled:
+            expect(await page.$('button#nextBtn[disabled]')).not.toBeNull();
+            expect(await page.$('button#lastBtn[disabled]')).not.toBeNull();
         });
 
         it('to go back a page', async () => {
@@ -410,10 +415,15 @@ describe('End-to-end Tests', () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
 
+            //Next and Last buttons are present and not disabled:
             expect(await page.$('#nextBtn')).not.toBeNull();
             expect(await page.$('#lastBtn')).not.toBeNull();
-            expect(await page.$('#backBtn')).toBeNull();
-            expect(await page.$('#firstBtn')).toBeNull();
+            expect(await page.$('#nextBtn[disabled]')).toBeNull();
+            expect(await page.$('#lastBtn[disabled]')).toBeNull();
+
+            //Back and First buttons are disabled:
+            expect(await page.$('button#backBtn[disabled]')).not.toBeNull();
+            expect(await page.$('button#firstBtn[disabled]')).not.toBeNull();
         });
     });
 });
