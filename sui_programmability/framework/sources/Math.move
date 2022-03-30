@@ -21,4 +21,22 @@ module Sui::Math {
             y
         }
     }
+
+    /// Get Square Root for `x`
+    public fun sqrt(x: u64): u64 {
+        let bit = 1 << 32;
+        let res = 0;
+
+        while (bit != 0) {
+            if (x >= res + bit) {
+                x = x - (res + bit);
+                res = (res >> 1) + bit;
+            } else {
+                res = res >> 1;
+            };
+            bit = bit >> 2;
+        };
+
+        res
+    }
 }
