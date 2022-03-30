@@ -309,7 +309,7 @@ described earlier:
 
 ``` shell
 mkdir -p my_move_package/sources
-mkdir -p my_move_package/sources/M1.move
+touch my_move_package/sources/M1.move
 touch my_move_package/Move.toml
 ```
 
