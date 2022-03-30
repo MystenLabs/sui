@@ -1,27 +1,73 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use crate::authority::AuthorityTemporaryStore;
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use sui_adapter::adapter;
 use sui_types::{
-    base_types::{SuiAddress, TxContext},
+    base_types::{SuiAddress, TransactionDigest, TxContext},
     error::{SuiError, SuiResult},
     gas,
-    messages::{ExecutionStatus, InputObjectKind, SingleTransactionKind, Transaction},
+    messages::{
+        ExecutionStatus, InputObjectKind, SingleTransactionKind, Transaction, TransactionEffects,
+    },
     object::Object,
     storage::{BackingPackageStore, Storage},
 };
+use tracing::{debug, instrument};
 
-pub fn execute_transaction<S: BackingPackageStore>(
+#[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
+pub fn execute_transaction_to_effects<S: BackingPackageStore>(
+    temporary_store: &mut AuthorityTemporaryStore<S>,
+    transaction: Transaction,
+    transaction_digest: TransactionDigest,
+    objects_by_kind: Vec<(InputObjectKind, Object)>,
+    move_vm: &Arc<adapter::SuiMoveVM>,
+    native_functions: &NativeFunctionTable,
+) -> SuiResult<TransactionEffects> {
+    let mut transaction_dependencies: BTreeSet<_> = objects_by_kind
+        .iter()
+        .map(|(_, object)| object.previous_transaction)
+        .collect();
+
+    let mut tx_ctx = TxContext::new(&transaction.sender_address(), &transaction_digest);
+
+    let gas_object_id = transaction.gas_payment_object_ref().0;
+    let status = execute_transaction(
+        temporary_store,
+        transaction,
+        objects_by_kind,
+        &mut tx_ctx,
+        move_vm,
+        native_functions,
+    )?;
+    debug!(
+        gas_used = status.gas_used(),
+        "Finished execution of transaction with status {:?}", status
+    );
+
+    // Remove from dependencies the generic hash
+    transaction_dependencies.remove(&TransactionDigest::genesis());
+
+    let effects = temporary_store.to_effects(
+        &transaction_digest,
+        transaction_dependencies.into_iter().collect(),
+        status,
+        &gas_object_id,
+    );
+    Ok(effects)
+}
+
+#[instrument(name = "tx_execute", level = "debug", skip_all)]
+fn execute_transaction<S: BackingPackageStore>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
     transaction: Transaction,
     mut objects_by_kind: Vec<(InputObjectKind, Object)>,
     tx_ctx: &mut TxContext,
-    move_vm: &Arc<adapter::MoveVM>,
-    native_functions: NativeFunctionTable,
+    move_vm: &Arc<adapter::SuiMoveVM>,
+    native_functions: &NativeFunctionTable,
 ) -> SuiResult<ExecutionStatus> {
     // unwraps here are safe because we built `inputs`
     let mut gas_object = objects_by_kind.pop().unwrap().1;
@@ -46,8 +92,8 @@ pub fn execute_transaction<S: BackingPackageStore>(
                 adapter::execute(
                     move_vm,
                     temporary_store,
-                    native_functions.clone(),
-                    package,
+                    native_functions,
+                    &package,
                     &c.module,
                     &c.function,
                     c.type_arguments.clone(),

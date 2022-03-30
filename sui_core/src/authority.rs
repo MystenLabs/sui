@@ -15,18 +15,18 @@ use move_core_types::{
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use std::sync::atomic::AtomicUsize;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     pin::Pin,
     sync::Arc,
 };
-use sui_adapter::adapter;
+use sui_adapter::adapter::{self, SuiMoveVM};
 use sui_types::{
     base_types::*,
     batch::UpdateItem,
     committee::Committee,
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
-    fp_bail, fp_ensure,
+    fp_bail, fp_ensure, gas,
     messages::*,
     object::{Data, Object},
     storage::{BackingPackageStore, DeleteKind, Storage},
@@ -50,12 +50,10 @@ mod temporary_store;
 pub use temporary_store::AuthorityTemporaryStore;
 
 mod authority_store;
-pub use authority_store::AuthorityStore;
+pub use authority_store::{AuthorityStore, GatewayStore};
 
 pub mod authority_notifier;
 
-// based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
-const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
 const MAX_ITEMS_LIMIT: u64 = 10_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
@@ -79,7 +77,7 @@ pub struct AuthorityState {
 
     /// Move native functions that are available to invoke
     _native_functions: NativeFunctionTable,
-    move_vm: Arc<adapter::MoveVM>,
+    move_vm: Arc<adapter::SuiMoveVM>,
 
     /// The database
     pub(crate) _database: Arc<AuthorityStore>, // TODO: remove pub
@@ -109,6 +107,7 @@ impl AuthorityState {
         self.batch_channels.subscribe()
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn check_locks_and_gas(
         &self,
         transaction: &Transaction,
@@ -117,10 +116,11 @@ impl AuthorityState {
         // These IDs act as authenticators that can own other objects.
         let objects = self.fetch_objects(&input_objects).await?;
         let all_objects =
-            transaction_input_checker::check_locks(transaction, input_objects, objects)?;
+            transaction_input_checker::check_locks(transaction, input_objects, objects).await?;
         Ok(all_objects)
     }
 
+    #[instrument(level = "trace", skip_all, fields(num_objects = input_objects.len()))]
     async fn fetch_objects(
         &self,
         input_objects: &[InputObjectKind],
@@ -145,11 +145,8 @@ impl AuthorityState {
             return Ok(transaction_info);
         }
 
-        let all_objects: Vec<_> = self
-            .check_locks_and_gas(&transaction)
-            .instrument(tracing::trace_span!("tx_check_locks"))
-            .await?;
-        let owned_objects = transaction_input_checker::filter_owned_objects(all_objects);
+        let all_objects: Vec<_> = self.check_locks_and_gas(&transaction).await?;
+        let owned_objects = transaction_input_checker::filter_owned_objects(&all_objects);
 
         let signed_transaction = SignedTransaction::new(transaction, self.name, &*self.secret);
 
@@ -158,7 +155,6 @@ impl AuthorityState {
         // and returns ConflictingTransaction error in case there is a lock on a different
         // existing transaction.
         self.set_transaction_lock(&owned_objects, transaction_digest, signed_transaction)
-            .instrument(tracing::trace_span!("db_set_transaction_lock"))
             .await?;
 
         // Return the signed Transaction or maybe a cert.
@@ -179,13 +175,13 @@ impl AuthorityState {
         }
 
         // Check the certificate and retrieve the transfer data.
-        confirmation_transaction
-            .certificate
-            .check(&self.committee)?;
+        tracing::trace_span!("cert_check_signature")
+            .in_scope(|| confirmation_transaction.certificate.check(&self.committee))?;
 
         self.process_certificate(confirmation_transaction).await
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn check_shared_locks(
         &self,
         transaction_digest: &TransactionDigest,
@@ -253,6 +249,7 @@ impl AuthorityState {
         Ok(())
     }
 
+    #[instrument(level = "debug", name = "process_cert_inner", skip_all)]
     async fn process_certificate(
         &self,
         confirmation_transaction: ConfirmationTransaction,
@@ -275,44 +272,23 @@ impl AuthorityState {
             "Read inputs for transaction from DB"
         );
 
-        let mut transaction_dependencies: BTreeSet<_> = objects_by_kind
-            .iter()
-            .map(|(_, object)| object.previous_transaction)
-            .collect();
-
-        // Insert into the certificates map
-        let mut tx_ctx = TxContext::new(&transaction.sender_address(), &transaction_digest);
-
-        let gas_object_id = transaction.gas_payment_object_ref().0;
-        let mut temporary_store =
-            AuthorityTemporaryStore::new(self._database.clone(), &objects_by_kind, tx_ctx.digest());
-        let status = execution_engine::execute_transaction(
+        let mut temporary_store = AuthorityTemporaryStore::new(
+            self._database.clone(),
+            &objects_by_kind,
+            transaction_digest,
+        );
+        let effects = execution_engine::execute_transaction_to_effects(
             &mut temporary_store,
             transaction.clone(),
+            transaction_digest,
             objects_by_kind,
-            &mut tx_ctx,
             &self.move_vm,
-            self._native_functions.clone(),
+            &self._native_functions,
         )?;
-        debug!(
-            gas_used = status.gas_used(),
-            "Finished execution of transaction with status {:?}", status
-        );
+        let signed_effects = effects.to_sign_effects(&self.name, &*self.secret);
 
-        // Remove from dependencies the generic hash
-        transaction_dependencies.remove(&TransactionDigest::genesis());
-
-        let effects = temporary_store.to_effects(
-            &transaction_digest,
-            transaction_dependencies.into_iter().collect(),
-            status,
-            &gas_object_id,
-        );
-        let signed_effects = effects.sign(&self.name, &*self.secret);
         // Update the database in an atomic manner
-
         self.update_state(temporary_store, &certificate, &signed_effects)
-            .instrument(tracing::debug_span!("db_update_state"))
             .await?;
 
         Ok(TransactionInfoResponse {
@@ -584,9 +560,9 @@ impl AuthorityState {
         self._database.get_object(object_id)
     }
 
-    pub async fn insert_object(&self, object: Object) {
+    pub async fn insert_genesis_object(&self, object: Object) {
         self._database
-            .insert_object(object)
+            .insert_genesis_object(object)
             .expect("TODO: propagate the error")
     }
 
@@ -629,12 +605,14 @@ impl AuthorityState {
         let package_id = ObjectID::from(*modules[0].self_id().address());
         let natives = self._native_functions.clone();
         let vm = adapter::verify_and_link(&temporary_store, &modules, package_id, natives)?;
+        let vm = SuiMoveVM::new(vm);
+
         if let ExecutionStatus::Failure { error, .. } = adapter::store_package_and_init_modules(
             &mut temporary_store,
             &vm,
             modules,
             ctx,
-            MAX_GAS_BUDGET,
+            gas::MAX_GAS_BUDGET,
         ) {
             return Err(*error);
         };
@@ -663,6 +641,7 @@ impl AuthorityState {
     // Helper function to manage transaction_locks
 
     /// Set the transaction lock to a specific transaction
+    #[instrument(name = "db_set_transaction_lock", level = "trace", skip_all)]
     pub async fn set_transaction_lock(
         &self,
         mutable_input_objects: &[ObjectRef],
@@ -675,6 +654,7 @@ impl AuthorityState {
 
     /// Update state and signals that a new transactions has been processed
     /// to the batch maker service.
+    #[instrument(name = "db_update_state", level = "debug", skip_all)]
     async fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore<AuthorityStore>,

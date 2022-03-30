@@ -318,7 +318,14 @@ where
             .iter()
             .map(|(name, client)| {
                 let execute = map_each_authority.clone();
-                async move { (*name, execute(*name, client).await) }
+                async move {
+                    (
+                        *name,
+                        execute(*name, client)
+                            .instrument(tracing::trace_span!("quorum_map_auth", authority =? name))
+                            .await,
+                    )
+                }
             })
             .collect();
 
@@ -1103,31 +1110,19 @@ where
         &self,
         transaction: &Transaction,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        let tx_digest = transaction.digest();
         let new_certificate = self
             .process_transaction(transaction.clone(), Duration::from_secs(60))
-            .instrument(tracing::debug_span!(
-                "process_tx",
-                ?tx_digest,
-                tx_kind = transaction.data.kind_as_str()
-            ))
+            .instrument(tracing::debug_span!("process_tx"))
             .await?;
         let response = self
             .process_certificate(new_certificate.clone(), Duration::from_secs(60))
-            .instrument(tracing::debug_span!(
-                "process_cert",
-                ?tx_digest,
-                tx_kind = transaction.data.kind_as_str()
-            ))
+            .instrument(tracing::debug_span!("process_cert"))
             .await?;
 
         Ok((new_certificate, response))
     }
 
-    pub async fn get_object_info_execute(
-        &self,
-        object_id: ObjectID,
-    ) -> Result<ObjectRead, anyhow::Error> {
+    pub async fn get_object_info_execute(&self, object_id: ObjectID) -> SuiResult<ObjectRead> {
         let (object_map, cert_map) = self
             .get_object_by_id(object_id, AUTHORITY_REQUEST_TIMEOUT)
             .await?;
@@ -1166,6 +1161,7 @@ where
                         return Ok(ObjectRead::Exists(obj_ref, obj, layout_option));
                     }
                     None => {
+                        // TODO: Figure out how to find out object being wrapped instead of deleted.
                         return Ok(ObjectRead::Deleted(obj_ref));
                     }
                 };

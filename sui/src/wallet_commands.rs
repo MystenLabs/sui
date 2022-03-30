@@ -262,7 +262,7 @@ impl WalletCommands {
                 // Pass in the objects for a deeper check
                 // We can technically move this to impl MovePackage
                 resolve_and_type_check(
-                    package_obj.clone(),
+                    package_obj,
                     module,
                     function,
                     type_args,
@@ -584,6 +584,8 @@ impl WalletCommandResult {
         };
         // Log line by line
         for line in line.lines() {
+            // Logs write to a file on the side.  Print to stdout and also log to file, for tests to pass.
+            println!("{line}");
             info!("{line}")
         }
     }

@@ -10,8 +10,9 @@ use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
 use dropshot::{endpoint, Query, TypedBody, CONTENT_TYPE_JSON};
+#[allow(unused_imports)]
 use dropshot::{
-    ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError, HttpResponseOk,
+    ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError,
     HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext,
 };
 use futures::lock::Mutex;
@@ -1192,7 +1193,7 @@ async fn handle_move_call(
 
     // Pass in the objects for a deeper check
     resolve_and_type_check(
-        package_object.clone(),
+        &package_object,
         &module,
         &function,
         &type_args,

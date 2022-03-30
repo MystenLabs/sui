@@ -2,25 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
-use rocksdb::{ColumnFamilyDescriptor, Options};
+use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::path::Path;
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 
-use rocksdb::MultiThreaded;
-
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use tracing::warn;
-use typed_store::rocks::{DBBatch, DBMap, TypedStoreError};
+use typed_store::rocks::{DBBatch, DBMap};
 
 use typed_store::{reopen, traits::Map};
 
 pub type AuthorityStore = SuiDataStore<false, AuthoritySignInfo>;
 #[allow(dead_code)]
 pub type ReplicaStore = SuiDataStore<true, EmptySignInfo>;
+pub type GatewayStore = SuiDataStore<false, EmptySignInfo>;
 
 const NUM_SHARDS: usize = 4096;
 
@@ -108,45 +107,6 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     last_consensus_index: DBMap<u64, SequenceNumber>,
 }
 
-/// Opens a database with options, and a number of column families that are created if they do not exist.
-pub fn open_cf_opts<P: AsRef<Path>>(
-    path: P,
-    db_options: Option<rocksdb::Options>,
-    opt_cfs: &[(&str, &rocksdb::Options)],
-) -> Result<Arc<rocksdb::DBWithThreadMode<MultiThreaded>>, TypedStoreError> {
-    // Customize database options
-    let mut options = db_options.unwrap_or_default();
-    let mut cfs = rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&options, &path)
-        .ok()
-        .unwrap_or_default();
-
-    // Customize CFs
-
-    for cf_key in opt_cfs.iter().map(|(name, _)| name) {
-        let key = (*cf_key).to_owned();
-        if !cfs.contains(&key) {
-            cfs.push(key);
-        }
-    }
-
-    let primary = path.as_ref().to_path_buf();
-
-    let rocksdb = {
-        options.create_if_missing(true);
-        options.create_missing_column_families(true);
-        Arc::new(
-            rocksdb::DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(
-                &options,
-                &primary,
-                opt_cfs
-                    .iter()
-                    .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),
-            )?,
-        )
-    };
-    Ok(rocksdb)
-}
-
 impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     SuiDataStore<ALL_OBJ_VER, S>
 {
@@ -170,15 +130,15 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         point_lookup.set_prefix_extractor(transform);
         point_lookup.set_memtable_prefix_bloom_ratio(0.2);
 
-        let db = open_cf_opts(
-            &path,
-            Some(options.clone()),
-            &[
+        let db = {
+            let path = &path;
+            let db_options = Some(options.clone());
+            let opt_cfs: &[(&str, &rocksdb::Options)] = &[
                 ("objects", &point_lookup),
                 ("all_object_versions", &options),
+                ("transactions", &point_lookup),
                 ("owner_index", &options),
                 ("transaction_lock", &point_lookup),
-                ("transactions", &point_lookup),
                 ("certificates", &point_lookup),
                 ("parent_sync", &options),
                 ("effects", &point_lookup),
@@ -187,8 +147,9 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                 ("executed_sequence", &options),
                 ("batches", &options),
                 ("last_consensus_index", &options),
-            ],
-        )
+            ];
+            typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
+        }
         .expect("Cannot open DB.");
 
         let executed_sequence =
@@ -419,14 +380,20 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
 
     // Methods to mutate the store
 
-    /// Insert an object
-    pub fn insert_object(&self, object: Object) -> Result<(), SuiError> {
+    /// Insert a genesis object.
+    pub fn insert_genesis_object(&self, object: Object) -> SuiResult {
         // We only side load objects with a genesis parent transaction.
         debug_assert!(object.previous_transaction == TransactionDigest::genesis());
-
-        // Insert object
         let object_ref = object.compute_object_reference();
-        self.objects.insert(&object_ref.0, &object)?;
+        self.insert_object_direct(object_ref, &object)
+    }
+
+    /// Insert an object directly into the store, and also update relevant tables, including
+    /// initiating the transaction lock. This is used by the gateway to insert object directly.
+    /// TODO: We need this today because we don't have another way to sync an account.
+    pub fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
+        // Insert object
+        self.objects.insert(&object_ref.0, object)?;
 
         self.transaction_lock.get_or_insert(&object_ref, || None)?;
 
@@ -438,9 +405,6 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         // Update the parent
         self.parent_sync
             .insert(&object_ref, &object.previous_transaction)?;
-
-        // We only side load objects with a genesis parent transaction.
-        debug_assert!(object.previous_transaction == TransactionDigest::genesis());
 
         Ok(())
     }
@@ -600,6 +564,38 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
         let write_batch = self.transaction_lock.batch();
         self.batch_update_objects(write_batch, temporary_store, transaction_digest, None)
+    }
+
+    /// This is used by the Gateway to update its local store after a transaction succeeded
+    /// on the authorities. Since we don't yet have local execution on the gateway, we will
+    /// need to recreate the temporary store based on the inputs and effects to update it properly.
+    pub fn update_gateway_state(
+        &self,
+        active_inputs: &[(InputObjectKind, Object)],
+        mutated_objects: HashMap<ObjectRef, Object>,
+        certificate: CertifiedTransaction,
+        effects: TransactionEffects,
+    ) -> SuiResult {
+        let transaction_digest = certificate.digest();
+        let mut temporary_store =
+            AuthorityTemporaryStore::new(Arc::new(&self), active_inputs, *transaction_digest);
+        for (_, object) in mutated_objects {
+            temporary_store.write_object(object);
+        }
+        for obj_ref in &effects.deleted {
+            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Normal);
+        }
+        for obj_ref in &effects.wrapped {
+            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Wrap);
+        }
+
+        let mut write_batch = self.transaction_lock.batch();
+        // Once a transaction is done processing and effects committed, we no longer
+        // need it in the transactions table. This also allows us to track pending
+        // transactions.
+        write_batch =
+            write_batch.delete_batch(&self.transactions, std::iter::once(certificate.digest()))?;
+        self.batch_update_objects(write_batch, temporary_store, *transaction_digest, None)
     }
 
     /// Helper function for updating the objects in the state
@@ -980,6 +976,12 @@ impl<const A: bool> SuiDataStore<A, AuthoritySignInfo> {
             certified_transaction: self.certificates.get(transaction_digest)?,
             signed_effects: self.effects.get(transaction_digest)?,
         })
+    }
+}
+
+impl<const A: bool> SuiDataStore<A, EmptySignInfo> {
+    pub fn pending_transactions(&self) -> &DBMap<TransactionDigest, Transaction> {
+        &self.transactions
     }
 }
 

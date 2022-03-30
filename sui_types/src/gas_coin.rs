@@ -20,7 +20,7 @@ use crate::{
     SUI_FRAMEWORK_ADDRESS,
 };
 
-pub const GAS_MODULE_NAME: &IdentStr = ident_str!("GAS");
+pub const GAS_MODULE_NAME: &IdentStr = ident_str!("SUI");
 pub const GAS_STRUCT_NAME: &IdentStr = GAS_MODULE_NAME;
 
 pub struct GAS {}
@@ -39,7 +39,7 @@ impl GAS {
     }
 }
 
-/// Rust version of the Move Sui::Coin::Coin<Sui::GAS::GAS> type
+/// Rust version of the Move Sui::Coin::Coin<Sui::SUI::SUI> type
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GasCoin(Coin);
 
