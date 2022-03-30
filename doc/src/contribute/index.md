@@ -29,7 +29,7 @@ git clone https://github.com/MystenLabs/sui.git
 The primary directories are:
 
 * [sui](https://github.com/MystenLabs/sui/tree/main/sui) - the Sui binaries (`wallet`, `sui-move`, and more)
-* [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - games and other examples for testing and reuse
+* [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui's Move language integration also including games and other Move code examples for testing and reuse
 * [sui_core](https://github.com/MystenLabs/sui/tree/main/sui_core) - authority server and Sui Gateway
 * [sui_types](https://github.com/MystenLabs/sui/tree/main/sui_types) - coins, gas, and other object types
 * [explorer](https://github.com/MystenLabs/sui/tree/main/explorer) - chain explorer for the Sui network
