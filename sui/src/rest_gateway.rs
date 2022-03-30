@@ -100,6 +100,16 @@ impl GatewayAPI for RestGatewayClient {
             .map(|arg| arg.to_string())
             .collect::<Vec<_>>();
 
+        let object_arguments = object_arguments
+            .iter()
+            .map(|(object_id, _, _)| object_id.to_hex())
+            .collect();
+
+        let shared_object_arguments = shared_object_arguments
+            .iter()
+            .map(|object_id| object_id.to_hex())
+            .collect();
+
         let request = CallRequest {
             signer: encode_bytes_hex(&signer),
             package_object_id: package_object_ref.0.to_hex(),
@@ -109,8 +119,8 @@ impl GatewayAPI for RestGatewayClient {
             pure_arguments,
             gas_object_id: gas_object_ref.0.to_hex(),
             gas_budget,
-            object_arguments: vec![],
-            shared_object_arguments: vec![],
+            object_arguments,
+            shared_object_arguments,
         };
         let tx: TransactionBytes = Self::post(url, serde_json::to_value(request)?).await?;
         Ok(tx.to_data()?)

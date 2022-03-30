@@ -1,15 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use dropshot::{HttpError, CONTENT_TYPE_JSON};
+use dropshot::{ApiEndpointResponse, HttpError, HttpResponse, HttpResponseOk, CONTENT_TYPE_JSON};
 use http::{Response, StatusCode};
+use hyper::Body;
 use schemars::gen::SchemaGenerator;
 use schemars::schema::Schema;
 use schemars::{schema_for_value, JsonSchema};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_with::base64::Base64;
 use serde_with::serde_as;
 
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
@@ -67,50 +67,25 @@ impl<T: DeserializeOwned + Serialize> JsonSchema for JsonResponse<T> {
     }
 }
 
-pub fn custom_http_response<T: Serialize + JsonSchema>(
-    status_code: StatusCode,
-    response_body: T,
-) -> Result<Response<T>, HttpError> {
-    let res = Response::builder()
-        .status(status_code)
-        .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
-        .header(http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-        .body(response_body)?;
-    Ok(res)
-}
-
 pub fn custom_http_error(status_code: http::StatusCode, message: String) -> HttpError {
     HttpError::for_client_error(None, status_code, message)
 }
 
-#[serde_as]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct TransactionBytes {
-    #[serde_as(as = "Base64")]
-    tx_bytes: Vec<u8>,
+    /** BCS encoded TransactionData bytes Base64 encoded.*/
+    tx_bytes: String,
 }
 
 impl TransactionBytes {
     pub fn new(data: TransactionData) -> Self {
         Self {
-            tx_bytes: data.to_bytes(),
+            tx_bytes: base64::encode(data.to_bytes()),
         }
     }
 
     pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
-        TransactionData::from_signable_bytes(self.tx_bytes)
-    }
-}
-
-impl JsonSchema for TransactionBytes {
-    fn schema_name() -> String {
-        "TransactionBytes".to_string()
-    }
-
-    fn json_schema(_: &mut SchemaGenerator) -> Schema {
-        schema_for_value!(TransactionBytes { tx_bytes: vec![] })
-            .schema
-            .into()
+        TransactionData::from_signable_bytes(base64::decode(self.tx_bytes)?)
     }
 }
 
@@ -123,4 +98,25 @@ is returned.
 pub struct ObjectSchemaResponse {
     /** JSON representation of the object schema */
     pub schema: serde_json::Value,
+}
+
+/// Custom Http Ok response with CORS set to *
+pub struct CORSHttpResponseOk<T: JsonSchema + Serialize + Send + Sync + 'static>(pub T);
+
+impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpResponse for CORSHttpResponseOk<T> {
+    fn to_result(self) -> Result<Response<Body>, HttpError> {
+        let body = serde_json::to_string(&self.0)
+            .map_err(|err| HttpError::for_internal_error(format!("{err}")))?
+            .into();
+        let res = Response::builder()
+            .status(StatusCode::OK)
+            .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
+            .header(http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+            .body(body)?;
+        Ok(res)
+    }
+
+    fn metadata() -> ApiEndpointResponse {
+        HttpResponseOk::<T>::metadata()
+    }
 }
