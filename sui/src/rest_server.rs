@@ -124,9 +124,7 @@ fn create_api() -> ApiDescription<ServerContext> {
     api
 }
 
-/**
- * Server context (state shared by handler functions)
- */
+/// Server context (state shared by handler functions)
 struct ServerContext {
     documentation: serde_json::Value,
     gateway: Arc<Mutex<GatewayClient>>,
@@ -141,19 +139,15 @@ impl ServerContext {
     }
 }
 
-/**
-Response containing the API documentation.
- */
+/// Response containing the API documentation.
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct DocumentationResponse {
-    /** A JSON object containing the OpenAPI definition for this API. */
+    /// A JSON object containing the OpenAPI definition for this API.
     documentation: serde_json::Value,
 }
 
-/**
-Generate OpenAPI documentation.
- */
+/// Generate OpenAPI documentation.
 #[endpoint {
     method = GET,
     path = "/docs",
@@ -167,9 +161,7 @@ async fn docs(
     }))
 }
 
-/**
-Returns list of objects owned by an address.
- */
+/// Returns list of objects owned by an address.
 #[endpoint {
     method = GET,
     path = "/api/objects",
@@ -199,9 +191,7 @@ async fn get_objects(
     Ok(HttpResponseOk(ObjectResponse { objects }))
 }
 
-/**
-Returns the schema for a specified object.
- */
+/// Returns the schema for a specified object.
 #[endpoint {
     method = GET,
     path = "/object_schema",
@@ -255,9 +245,7 @@ async fn object_schema(
     Ok(HttpResponseOk(ObjectSchemaResponse { schema }))
 }
 
-/**
-Returns the object information for a specified object.
- */
+/// Returns the object information for a specified object.
 #[endpoint {
     method = GET,
     path = "/api/object_info",
@@ -282,23 +270,20 @@ async fn object_info(
     Ok(HttpResponseOk(JsonResponse(object_read)))
 }
 
-/**
-Transfer object from one address to another. Gas will be paid using the gas
-provided in the request. This will be done through a native transfer
-transaction that does not require Move VM executions, hence is much cheaper.
-
-Notes:
-- Non-coin objects cannot be transferred natively and will require a Move call
-
-Example TransferTransactionRequest
-{
-    "from_address": "1DA89C9279E5199DDC9BC183EB523CF478AB7168",
-    "object_id": "4EED236612B000B9BEBB99BA7A317EFF27556A0C",
-    "to_address": "5C20B3F832F2A36ED19F792106EC73811CB5F62C",
-    "gas_object_id": "96ABE602707B343B571AAAA23E3A4594934159A5"
-}
- */
-
+/// Transfer object from one address to another. Gas will be paid using the gas
+/// provided in the request. This will be done through a native transfer
+/// transaction that does not require Move VM executions, hence is much cheaper.
+///
+/// Notes:
+/// - Non-coin objects cannot be transferred natively and will require a Move call
+///
+/// Example TransferTransactionRequest
+/// {
+///     "from_address": "1DA89C9279E5199DDC9BC183EB523CF478AB7168",
+///     "object_id": "4EED236612B000B9BEBB99BA7A317EFF27556A0C",
+///     "to_address": "5C20B3F832F2A36ED19F792106EC73811CB5F62C",
+///     "gas_object_id": "96ABE602707B343B571AAAA23E3A4594934159A5"
+/// }
 #[endpoint {
     method = POST,
     path = "/api/new_transfer",
@@ -389,13 +374,11 @@ async fn merge_coin(
     Ok(HttpResponseOk(TransactionBytes::new(tx_data)))
 }
 
-/**
-Publish move module. It will perform proper verification and linking to make
-sure the package is valid. If some modules have initializers, these initializers
-will also be executed in Move (which means new Move objects can be created in
-the process of publishing a Move package). Gas budget is required because of the
-need to execute module initializers.
- */
+/// Publish move module. It will perform proper verification and linking to make
+/// sure the package is valid. If some modules have initializers, these initializers
+/// will also be executed in Move (which means new Move objects can be created in
+/// the process of publishing a Move package). Gas budget is required because of the
+/// need to execute module initializers.
 #[endpoint {
     method = POST,
     path = "/api/publish",
@@ -414,25 +397,23 @@ async fn publish(
     Ok(HttpResponseOk(TransactionBytes::new(data)))
 }
 
-/**
-Execute a Move call transaction by calling the specified function in the
-module of the given package. Arguments are passed in and type will be
-inferred from function signature. Gas usage is capped by the gas_budget.
-
-Example CallRequest
-{
-    "sender": "b378b8d26c4daa95c5f6a2e2295e6e5f34371c1659e95f572788ffa55c265363",
-    "package_object_id": "0x2",
-    "module": "ObjectBasics",
-    "function": "create",
-    "args": [
-        200,
-        "b378b8d26c4daa95c5f6a2e2295e6e5f34371c1659e95f572788ffa55c265363"
-    ],
-    "gas_object_id": "1AC945CA31E77991654C0A0FCA8B0FD9C469B5C6",
-    "gas_budget": 2000
-}
- */
+/// Execute a Move call transaction by calling the specified function in the
+/// module of the given package. Arguments are passed in and type will be
+/// inferred from function signature. Gas usage is capped by the gas_budget.
+///
+/// Example CallRequest
+/// {
+/// "sender": "b378b8d26c4daa95c5f6a2e2295e6e5f34371c1659e95f572788ffa55c265363",
+/// "package_object_id": "0x2",
+/// "module": "ObjectBasics",
+/// "function": "create",
+/// "args": [
+///     200,
+///     "b378b8d26c4daa95c5f6a2e2295e6e5f34371c1659e95f572788ffa55c265363"
+/// ],
+/// "gas_object_id": "1AC945CA31E77991654C0A0FCA8B0FD9C469B5C6",
+/// "gas_budget": 2000
+/// }
 #[endpoint {
     method = POST,
     path = "/api/move_call",
@@ -452,10 +433,8 @@ async fn move_call(
     Ok(HttpResponseOk(TransactionBytes::new(data)))
 }
 
-/**
-Synchronize client state with authorities. This will fetch the latest information
-on all objects owned by each address that is managed by this client state.
- */
+/// Synchronize client state with authorities. This will fetch the latest information
+/// on all objects owned by each address that is managed by this client state.
 #[endpoint {
     method = POST,
     path = "/api/sync_account_state",
@@ -484,10 +463,8 @@ async fn sync_account_state(
     Ok(HttpResponseUpdatedNoContent())
 }
 
-/**
-Synchronize client state with authorities. This will fetch the latest information
-on all objects owned by each address that is managed by this client state.
- */
+/// Synchronize client state with authorities. This will fetch the latest information
+/// on all objects owned by each address that is managed by this client state.
 #[endpoint {
 method = POST,
 path = "/api/execute_transaction",

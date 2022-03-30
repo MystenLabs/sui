@@ -685,9 +685,6 @@ where
         &mut self,
         account_addr: SuiAddress,
     ) -> Result<Vec<ObjectRef>, anyhow::Error> {
-        Ok(self
-            .store
-            .get_account_objects(account_addr)
-            .unwrap_or_default())
+        Ok(self.store.get_account_objects(account_addr)?)
     }
 }

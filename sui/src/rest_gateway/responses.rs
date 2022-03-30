@@ -28,11 +28,11 @@ pub struct ObjectResponse {
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct NamedObjectRef {
-    /** Object id Hex.*/
+    /// Object id Hex.
     object_id: String,
-    /** Object version.*/
+    /// Object version.
     version: u64,
-    /** Object digest, Base64 encoded.*/
+    /// Object digest, Base64 encoded.
     digest: String,
 }
 
@@ -77,7 +77,7 @@ pub fn custom_http_error(status_code: http::StatusCode, message: String) -> Http
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct TransactionBytes {
-    /** BCS encoded TransactionData bytes Base64 encoded.*/
+    /// BCS encoded TransactionData bytes Base64 encoded.
     tx_bytes: String,
 }
 
@@ -93,14 +93,12 @@ impl TransactionBytes {
     }
 }
 
-/**
-Response containing the information of an object schema if found, otherwise an error
-is returned.
- */
+/// Response containing the information of an object schema if found, otherwise an error
+/// is returned.
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ObjectSchemaResponse {
-    /** JSON representation of the object schema */
+    /// JSON representation of the object schema
     pub schema: serde_json::Value,
 }
 
