@@ -20,7 +20,7 @@ use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
 use sui::keystore::KeystoreType;
 use sui::sui_commands::{genesis, SuiNetwork, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use sui::sui_json::SuiJsonValue;
-use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
+use sui::wallet_commands::{get_gas_object, WalletCommandResult, WalletCommands, WalletContext};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::get_key_pair;
 use sui_types::messages::TransactionEffects;
@@ -124,6 +124,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
             db_folder_path: working_dir.join("client_db"),
             ..Default::default()
         }),
+        active_address: None,
     };
     let wallet_conf_path = working_dir.join(SUI_WALLET_CONFIG);
     let mut wallet_config = wallet_config.persisted(&wallet_conf_path);
@@ -186,7 +187,10 @@ async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
         args.push(SuiJsonValue::new(a.clone()).unwrap());
     }
 
-    let gas_object_id = get_gas_object(oracle_address, &mut context).await?;
+    // Pick some large enough budget
+    let gas_object_id = get_gas_object(oracle_address, &mut context, 10000)
+        .await?
+        .id();
     // Claim the airdrop
     let token = airdrop_call_move_and_get_created_object(args, gas_object_id, &mut context).await?;
 
@@ -254,20 +258,6 @@ async fn airdrop_call_move_and_get_created_object(
     };
 
     get_move_object(context, minted_token_id).await
-}
-
-async fn get_gas_object(
-    address: SuiAddress,
-    context: &mut WalletContext,
-) -> Result<ObjectID, anyhow::Error> {
-    let gas_objects_result = WalletCommands::Gas { address }.execute(context).await?;
-
-    let gas_objects = match gas_objects_result {
-        WalletCommandResult::Gas(objs) => objs,
-        _ => panic!("unexpected WalletCommandResult"),
-    };
-
-    Ok(*gas_objects[0].id())
 }
 
 #[traced_test]
@@ -658,6 +648,7 @@ async fn start_test_network(
             authorities,
             ..Default::default()
         }),
+        active_address: None,
     }
     .persisted(&wallet_path)
     .save()?;

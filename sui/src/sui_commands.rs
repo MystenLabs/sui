@@ -137,6 +137,7 @@ impl SuiCommand {
 
                 keystore.save(&keystore_path)?;
                 info!("Wallet keystore is stored in {:?}.", keystore_path);
+                let active_address = accounts.get(0).copied();
 
                 let wallet_config = WalletConfig {
                     accounts,
@@ -146,6 +147,7 @@ impl SuiCommand {
                         authorities: network_config.get_authority_infos(),
                         ..Default::default()
                     }),
+                    active_address,
                 };
 
                 let wallet_config = wallet_config.persisted(&wallet_path);

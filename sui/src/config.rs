@@ -109,6 +109,7 @@ pub struct WalletConfig {
     pub accounts: Vec<SuiAddress>,
     pub keystore: KeystoreType,
     pub gateway: GatewayType,
+    pub active_address: Option<SuiAddress>,
 }
 
 impl Config for WalletConfig {}

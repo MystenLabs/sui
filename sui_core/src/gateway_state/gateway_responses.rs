@@ -8,7 +8,7 @@ use std::fmt::{Display, Formatter};
 use serde::ser::Error;
 use serde::Serialize;
 
-use sui_types::base_types::ObjectRef;
+use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::error::SuiError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{CertifiedTransaction, TransactionEffects};
@@ -126,6 +126,20 @@ pub struct PublishResponse {
     pub created_objects: Vec<Object>,
     /// The updated gas payment object after deducting payment
     pub updated_gas: Object,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct SwitchResponse {
+    /// Active address
+    pub address: SuiAddress,
+}
+
+impl Display for SwitchResponse {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+        writeln!(writer, "Active address switched to {}", self.address)?;
+        write!(f, "{}", writer)
+    }
 }
 
 impl Display for PublishResponse {
