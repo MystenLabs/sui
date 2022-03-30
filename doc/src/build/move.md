@@ -387,7 +387,13 @@ name = "MyFirstPackage"
 version = "0.0.1"
 
 [dependencies]
-Sui = { local = "https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/" }
+# Using a local dep for the Move stdlib instead of a git dep to avoid the overhead of fetching the git dep in
+# CI. The local dep is an unmodified version of the upstream stdlib
+# Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="sui_programmability/framework", rev="44b5702712c15df365989a3b3f80038b7bf6c2ef"}
+
+# Assuming `sui` repo is at the same level of parent directory
+Sui = { local = "../sui/sui_programmability/framework/" }
+
 
 [addresses]
 MyFirstPackage = "0x0"
