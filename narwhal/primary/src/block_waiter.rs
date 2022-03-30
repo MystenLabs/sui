@@ -1,9 +1,8 @@
-use crate::Batch;
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     messages::{BatchDigest, CertificateDigest, Header},
-    Certificate, PrimaryWorkerMessage,
+    Batch, Certificate, PrimaryWorkerMessage,
 };
 use bytes::Bytes;
 use config::Committee;
@@ -55,7 +54,7 @@ pub enum BlockCommand {
 pub struct GetBlockResponse {
     id: CertificateDigest,
     #[allow(dead_code)]
-    batches: Vec<BatchMessage>,
+    pub batches: Vec<BatchMessage>,
 }
 
 pub type BatchResult = Result<BatchMessage, BatchMessageError>;
@@ -73,7 +72,7 @@ pub struct BatchMessageError {
     pub id: BatchDigest,
 }
 
-type BlockResult<T> = Result<T, BlockError>;
+pub type BlockResult<T> = Result<T, BlockError>;
 
 #[derive(Debug, Clone)]
 pub struct BlockError {

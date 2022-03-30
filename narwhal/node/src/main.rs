@@ -11,15 +11,16 @@
 use anyhow::{Context, Result};
 use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
 use config::{Committee, Import, Parameters, WorkerId};
-use consensus::{dag::Dag, Consensus};
+use consensus::{dag::Dag, Consensus, ConsensusOutput, ConsensusStore, SequenceNumber};
 use crypto::{
     ed25519::{Ed25519KeyPair, Ed25519PublicKey},
     generate_production_keypair,
     traits::{KeyPair, VerifyingKey},
 };
 use primary::{
-    BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, PayloadToken, Primary,
+    BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, PayloadToken, Primary, Round,
 };
+use std::sync::Arc;
 use store::{reopen, rocks, rocks::DBMap, Store};
 use tokio::sync::mpsc::{channel, Receiver};
 use tracing::{debug, subscriber::set_global_default};
@@ -29,11 +30,13 @@ use worker::Worker;
 /// The default channel capacity.
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
-// The datastore column family names
+// The datastore column family names.
 const HEADERS_CF: &str = "headers";
 const CERTIFICATES_CF: &str = "certificates";
 const PAYLOAD_CF: &str = "payload";
 const BATCHES_CF: &str = "batches";
+const LAST_COMMITTED_CF: &str = "last_committed";
+const SEQUENCE_CF: &str = "sequence";
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -128,15 +131,28 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
     let rocksdb = rocks::open_cf(
         store_path,
         None,
-        &[HEADERS_CF, CERTIFICATES_CF, PAYLOAD_CF, BATCHES_CF],
+        &[
+            HEADERS_CF,
+            CERTIFICATES_CF,
+            PAYLOAD_CF,
+            BATCHES_CF,
+            LAST_COMMITTED_CF,
+            SEQUENCE_CF,
+        ],
     )
     .expect("Failed creating database");
 
-    let (header_map, certificate_map, payload_map, batch_map) = reopen!(&rocksdb,
+    let (header_map, certificate_map, payload_map, batch_map, last_committed_map, sequence_map) = reopen!(&rocksdb,
         HEADERS_CF;<HeaderDigest, Header<Ed25519PublicKey>>,
         CERTIFICATES_CF;<CertificateDigest, Certificate<Ed25519PublicKey>>,
         PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>,
-        BATCHES_CF;<BatchDigest, Vec<u8>>);
+        BATCHES_CF;<BatchDigest, Vec<u8>>,
+        LAST_COMMITTED_CF;<Ed25519PublicKey, Round>,
+        SEQUENCE_CF;<SequenceNumber, CertificateDigest>
+    );
+
+    let consensus_store = Arc::new(ConsensusStore::new(last_committed_map, sequence_map));
+    let certificate_store = Store::new(certificate_map);
 
     // Channels the sequence of certificates.
     let (tx_output, rx_output) = channel(CHANNEL_CAPACITY);
@@ -153,7 +169,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
                 committee.clone(),
                 parameters.clone(),
                 Store::new(header_map),
-                Store::new(certificate_map),
+                certificate_store.clone(),
                 Store::new(payload_map),
                 /* tx_consensus */ tx_new_certificates,
                 /* rx_consensus */ rx_feedback,
@@ -165,6 +181,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
             } else {
                 Consensus::spawn(
                     committee,
+                    consensus_store,
                     parameters.gc_depth,
                     /* rx_primary */ rx_new_certificates,
                     /* tx_primary */ tx_feedback,
@@ -199,8 +216,8 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
 }
 
 /// Receives an ordered list of certificates and apply any application-specific logic.
-async fn analyze<PublicKey: VerifyingKey>(mut rx_output: Receiver<Certificate<PublicKey>>) {
-    while let Some(_certificate) = rx_output.recv().await {
+async fn analyze<PublicKey: VerifyingKey>(mut rx_output: Receiver<ConsensusOutput<PublicKey>>) {
+    while let Some(_message) = rx_output.recv().await {
         // NOTE: Here goes the application logic.
     }
 }

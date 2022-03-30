@@ -10,6 +10,7 @@ use crypto::{
 use primary::{CertificateDigest, Header};
 use rand::{rngs::StdRng, Rng, SeedableRng as _};
 use std::collections::{BTreeSet, VecDeque};
+use store::{reopen, rocks, rocks::DBMap};
 #[allow(unused_imports)] // WT*?
 use tokio::sync::mpsc::channel;
 
@@ -128,6 +129,36 @@ pub fn make_certificates(
     (certificates, next_parents)
 }
 
+pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore<Ed25519PublicKey>> {
+    const LAST_COMMITTED_CF: &str = "last_committed";
+    const SEQUENCE_CF: &str = "sequence";
+
+    let rocksdb = rocks::open_cf(store_path, None, &[LAST_COMMITTED_CF, SEQUENCE_CF])
+        .expect("Failed creating database");
+
+    let (last_committed_map, sequence_map) = reopen!(&rocksdb,
+        LAST_COMMITTED_CF;<Ed25519PublicKey, Round>,
+        SEQUENCE_CF;<SequenceNumber, CertificateDigest>
+    );
+
+    Arc::new(ConsensusStore::new(last_committed_map, sequence_map))
+}
+
+pub fn make_certificate_store(
+    store_path: &std::path::Path,
+) -> store::Store<CertificateDigest, Certificate<Ed25519PublicKey>> {
+    const CERTIFICATES_CF: &str = "certificates";
+
+    let rocksdb =
+        rocks::open_cf(store_path, None, &[CERTIFICATES_CF]).expect("Failed creating database");
+
+    let certificate_map = reopen!(&rocksdb,
+        CERTIFICATES_CF;<CertificateDigest, Certificate<Ed25519PublicKey>>
+    );
+
+    store::Store::new(certificate_map)
+}
+
 // Run for 4 dag rounds in ideal conditions (all nodes reference all other nodes). We should commit
 // the leader of round 2.
 #[tokio::test]
@@ -148,8 +179,10 @@ async fn commit_one() {
     let (tx_waiter, rx_waiter) = channel(1);
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
+    let store_path = temp_testdir::TempDir::default();
     Consensus::spawn(
         mock_committee(&keys[..]),
+        make_consensus_store(&store_path),
         /* gc_depth */ 50,
         rx_waiter,
         tx_primary,
@@ -166,11 +199,11 @@ async fn commit_one() {
     // Ensure the first 4 ordered certificates are from round 1 (they are the parents of the committed
     // leader); then the leader's certificate should be committed.
     for _ in 1..=4 {
-        let certificate = rx_output.recv().await.unwrap();
-        assert_eq!(certificate.round(), 1);
+        let output = rx_output.recv().await.unwrap();
+        assert_eq!(output.certificate.round(), 1);
     }
-    let certificate = rx_output.recv().await.unwrap();
-    assert_eq!(certificate.round(), 2);
+    let output = rx_output.recv().await.unwrap();
+    assert_eq!(output.certificate.round(), 2);
 }
 
 // Run for 8 dag rounds with one dead node node (that is not a leader). We should commit the leaders of
@@ -193,8 +226,10 @@ async fn dead_node() {
     let (tx_waiter, rx_waiter) = channel(1);
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
+    let store_path = temp_testdir::TempDir::default();
     Consensus::spawn(
         mock_committee(&keys[..]),
+        make_consensus_store(&store_path),
         /* gc_depth */ 50,
         rx_waiter,
         tx_primary,
@@ -211,12 +246,12 @@ async fn dead_node() {
 
     // We should commit 3 leaders (rounds 2, 4, and 6).
     for i in 1..=15 {
-        let certificate = rx_output.recv().await.unwrap();
+        let output = rx_output.recv().await.unwrap();
         let expected = ((i - 1) / keys.len() as u64) + 1;
-        assert_eq!(certificate.round(), expected);
+        assert_eq!(output.certificate.round(), expected);
     }
-    let certificate = rx_output.recv().await.unwrap();
-    assert_eq!(certificate.round(), 6);
+    let output = rx_output.recv().await.unwrap();
+    assert_eq!(output.certificate.round(), 6);
 }
 
 // Run for 6 dag rounds. The leaders of round 2 does not have enough support, but the leader of
@@ -281,8 +316,10 @@ async fn not_enough_support() {
     let (tx_waiter, rx_waiter) = channel(1);
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
+    let store_path = temp_testdir::TempDir::default();
     Consensus::spawn(
         mock_committee(&keys[..]),
+        make_consensus_store(&store_path),
         /* gc_depth */ 50,
         rx_waiter,
         tx_primary,
@@ -298,19 +335,19 @@ async fn not_enough_support() {
 
     // We should commit 2 leaders (rounds 2 and 4).
     for _ in 1..=3 {
-        let certificate = rx_output.recv().await.unwrap();
-        assert_eq!(certificate.round(), 1);
+        let output = rx_output.recv().await.unwrap();
+        assert_eq!(output.certificate.round(), 1);
     }
     for _ in 1..=4 {
-        let certificate = rx_output.recv().await.unwrap();
-        assert_eq!(certificate.round(), 2);
+        let output = rx_output.recv().await.unwrap();
+        assert_eq!(output.certificate.round(), 2);
     }
     for _ in 1..=3 {
-        let certificate = rx_output.recv().await.unwrap();
-        assert_eq!(certificate.round(), 3);
+        let output = rx_output.recv().await.unwrap();
+        assert_eq!(output.certificate.round(), 3);
     }
-    let certificate = rx_output.recv().await.unwrap();
-    assert_eq!(certificate.round(), 4);
+    let output = rx_output.recv().await.unwrap();
+    assert_eq!(output.certificate.round(), 4);
 }
 
 // Run for 6 dag rounds. Node 0 (the leader of round 2) is missing for rounds 1 and 2,
@@ -344,8 +381,10 @@ async fn missing_leader() {
     let (tx_waiter, rx_waiter) = channel(1);
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
+    let store_path = temp_testdir::TempDir::default();
     Consensus::spawn(
         mock_committee(&keys[..]),
+        make_consensus_store(&store_path),
         /* gc_depth */ 50,
         rx_waiter,
         tx_primary,
@@ -361,17 +400,17 @@ async fn missing_leader() {
 
     // Ensure the commit sequence is as expected.
     for _ in 1..=3 {
-        let certificate = rx_output.recv().await.unwrap();
-        assert_eq!(certificate.round(), 1);
+        let output = rx_output.recv().await.unwrap();
+        assert_eq!(output.certificate.round(), 1);
     }
     for _ in 1..=3 {
-        let certificate = rx_output.recv().await.unwrap();
-        assert_eq!(certificate.round(), 2);
+        let output = rx_output.recv().await.unwrap();
+        assert_eq!(output.certificate.round(), 2);
     }
     for _ in 1..=4 {
-        let certificate = rx_output.recv().await.unwrap();
-        assert_eq!(certificate.round(), 3);
+        let output = rx_output.recv().await.unwrap();
+        assert_eq!(output.certificate.round(), 3);
     }
-    let certificate = rx_output.recv().await.unwrap();
-    assert_eq!(certificate.round(), 4);
+    let output = rx_output.recv().await.unwrap();
+    assert_eq!(output.certificate.round(), 4);
 }

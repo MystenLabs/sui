@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use consensus::{
-    consensus_tests::{keys, make_optimal_certificates, mock_committee},
+use consensus::tusk::{
+    consensus_tests::{keys, make_consensus_store, make_optimal_certificates, mock_committee},
     *,
 };
 use criterion::{
@@ -31,7 +31,11 @@ pub fn process_certificates(c: &mut Criterion) {
         let (certificates, _next_parents) = make_optimal_certificates(1, rounds, &genesis, &keys);
         let committee = mock_committee(&keys);
 
-        let mut state = consensus::State::new(Certificate::genesis(&mock_committee(&keys[..])));
+        let store_path = temp_testdir::TempDir::default();
+        let store = make_consensus_store(&store_path);
+
+        let mut state =
+            consensus::tusk::State::new(Certificate::genesis(&mock_committee(&keys[..])));
 
         let data_size: usize = certificates
             .iter()
@@ -47,8 +51,10 @@ pub fn process_certificates(c: &mut Criterion) {
                     for cert in i {
                         let _ = Consensus::process_certificate(
                             &committee,
+                            &store,
                             gc_depth,
                             &mut state,
+                            /* consensus_index */ 0,
                             cert.clone(),
                         );
                     }

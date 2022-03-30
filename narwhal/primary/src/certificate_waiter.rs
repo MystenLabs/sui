@@ -109,6 +109,10 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
                 }
                 Some(result) = waiting.next() => match result {
                     Ok(certificate) => {
+                        // TODO [issue #115]: To ensure crash-recovery of consensus, it is not enough to send every
+                        // certificate for which their ancestors are in the storage. After recovery, we may also
+                        // need to send a all parents certificates with rounds greater then `last_committed`.
+
                         self.tx_core.send(certificate).await.expect("Failed to send certificate");
                     },
                     Err(e) => {
