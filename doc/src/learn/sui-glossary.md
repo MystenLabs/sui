@@ -67,7 +67,7 @@ stage is considered closure for an exchange or other blockchain transaction.
 
 ### Gas
 
-As with other blockchains, [gas](https://www.investopedia.com/terms/g/gas-ethereum.asp) refers to the currency for the cost of conducting a transaction. In Sui, the currency is eponymous: Sui
+As with other blockchains, [gas](https://www.investopedia.com/terms/g/gas-ethereum.asp) refers to the currency for the cost of conducting a transaction. In Sui, the currency is eponymous: SUI
 
 
 ### Genesis
@@ -105,7 +105,7 @@ Single-writer objects are owned by one account. In Sui, transactions affecting o
 
 ### Sui
 
-Sui refers to the blockchain, its currency, and the [open source project](https://github.com/MystenLabs/sui/) as a whole.
+Sui refers to the blockchain, its currency (SUI), and the [open source project](https://github.com/MystenLabs/sui/) as a whole.
 
 
 ### Total order
