@@ -178,7 +178,17 @@ function OwnedObject({ objects }: { objects: string[] }) {
                                     First
                                 </button>
                                 <button id="backBtn" onClick={handleBackClick}>
-                                    Back
+                                    <svg
+                                        width="12"
+                                        height="12"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                    >
+                                        <path
+                                            d="M 12 12 L 0 6 L 12 0"
+                                            stroke="black"
+                                            fill="transparent"
+                                        />
+                                    </svg>
                                 </button>
                             </>
                         )}
@@ -192,7 +202,17 @@ function OwnedObject({ objects }: { objects: string[] }) {
                         {pageIndex < FINAL_PAGE_NO - 1 && (
                             <>
                                 <button id="nextBtn" onClick={handleNextClick}>
-                                    Next
+                                    <svg
+                                        width="12"
+                                        height="12"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                    >
+                                        <path
+                                            d="M 0 12 L 12 6 L 0 0"
+                                            stroke="black"
+                                            fill="transparent"
+                                        />
+                                    </svg>
                                 </button>
                                 <button id="lastBtn" onClick={handleLastClick}>
                                     Last
