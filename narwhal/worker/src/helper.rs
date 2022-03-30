@@ -7,7 +7,7 @@ use crypto::traits::VerifyingKey;
 use network::SimpleSender;
 use primary::BatchDigest;
 use store::Store;
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{error, warn};
 
 use crate::processor::SerializedBatchMessage;
@@ -24,8 +24,10 @@ pub struct Helper<PublicKey: VerifyingKey> {
     committee: Committee<PublicKey>,
     /// The persistent storage.
     store: Store<BatchDigest, SerializedBatchMessage>,
-    /// Input channel to receive batch requests.
-    rx_request: Receiver<(Vec<BatchDigest>, PublicKey)>,
+    /// Input channel to receive batch requests from workers.
+    rx_worker_request: Receiver<(Vec<BatchDigest>, PublicKey)>,
+    /// Input channel to receive batch requests from workers.
+    rx_client_request: Receiver<(Vec<BatchDigest>, Sender<SerializedBatchMessage>)>,
     /// A network sender to send the batches to the other workers.
     network: SimpleSender,
 }
@@ -35,14 +37,16 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
         id: WorkerId,
         committee: Committee<PublicKey>,
         store: Store<BatchDigest, SerializedBatchMessage>,
-        rx_request: Receiver<(Vec<BatchDigest>, PublicKey)>,
+        rx_worker_request: Receiver<(Vec<BatchDigest>, PublicKey)>,
+        rx_client_request: Receiver<(Vec<BatchDigest>, Sender<SerializedBatchMessage>)>,
     ) {
         tokio::spawn(async move {
             Self {
                 id,
                 committee,
                 store,
-                rx_request,
+                rx_worker_request,
+                rx_client_request,
                 network: SimpleSender::new(),
             }
             .run()
@@ -51,24 +55,43 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
     }
 
     async fn run(&mut self) {
-        while let Some((digests, origin)) = self.rx_request.recv().await {
-            // TODO [issue #7]: Do some accounting to prevent bad nodes from monopolizing our resources.
+        // TODO [issue #7]: Do some accounting to prevent bad actors from monopolizing our resources.
+        loop {
+            tokio::select! {
+                // Handle requests from other workers.
+                Some((digests, origin)) = self.rx_worker_request.recv() => {
+                    // get the requestors address.
+                    let address = match self.committee.worker(&origin, &self.id) {
+                        Ok(x) => x.worker_to_worker,
+                        Err(e) => {
+                            warn!("Unexpected batch request: {e}");
+                            continue;
+                        }
+                    };
 
-            // get the requestors address.
-            let address = match self.committee.worker(&origin, &self.id) {
-                Ok(x) => x.worker_to_worker,
-                Err(e) => {
-                    warn!("Unexpected batch request: {e}");
-                    continue;
-                }
-            };
+                    // Reply to the request (the best we can).
+                    for digest in digests {
+                        match self.store.read(digest).await {
+                            Ok(Some(data)) => self.network.send(address, Bytes::from(data)).await,
+                            Ok(None) => (),
+                            Err(e) => error!("{e}"),
+                        }
+                    }
+                },
 
-            // Reply to the request (the best we can).
-            for digest in digests {
-                match self.store.read(digest).await {
-                    Ok(Some(data)) => self.network.send(address, Bytes::from(data)).await,
-                    Ok(None) => (),
-                    Err(e) => error!("{e}"),
+                // Handle requests from clients.
+                Some((digests, replier)) = self.rx_client_request.recv() => {
+                    // Reply to the request (the best we can).
+                    for digest in digests {
+                        match self.store.read(digest).await {
+                            Ok(Some(data)) => replier
+                                .send(data)
+                                .await
+                                .expect("Failed to reply to network"),
+                            Ok(None) => (),
+                            Err(e) => error!("{e}"),
+                        }
+                    }
                 }
             }
         }

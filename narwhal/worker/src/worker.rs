@@ -43,8 +43,12 @@ pub type SerializedWorkerPrimaryMessage = Vec<u8>;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
 pub enum WorkerMessage<PublicKey: VerifyingKey> {
+    /// Used by workers to send a new batch or to reply to a batch request.
     Batch(Batch),
+    /// Used by workers to request batches.
     BatchRequest(Vec<BatchDigest>, /* origin */ PublicKey),
+    /// Used by clients to request batches.
+    ClientBatchRequest(Vec<BatchDigest>),
 }
 
 pub struct Worker<PublicKey: VerifyingKey> {
@@ -206,7 +210,8 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
 
     /// Spawn all tasks responsible to handle messages from other workers.
     fn handle_workers_messages(&self, tx_primary: Sender<SerializedWorkerPrimaryMessage>) {
-        let (tx_helper, rx_helper) = channel(CHANNEL_CAPACITY);
+        let (tx_worker_helper, rx_worker_helper) = channel(CHANNEL_CAPACITY);
+        let (tx_client_helper, rx_client_helper) = channel(CHANNEL_CAPACITY);
         let (tx_processor, rx_processor) = channel(CHANNEL_CAPACITY);
 
         // Receive incoming messages from other workers.
@@ -220,7 +225,8 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             address,
             /* handler */
             WorkerReceiverHandler {
-                tx_helper,
+                tx_worker_helper,
+                tx_client_helper,
                 tx_processor,
             },
         );
@@ -230,7 +236,8 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             self.id,
             self.committee.clone(),
             self.store.clone(),
-            /* rx_request */ rx_helper,
+            /* rx_worker_request */ rx_worker_helper,
+            /* rx_client_request */ rx_client_helper,
         );
 
         // This `Processor` hashes and stores the batches we receive from the other workers. It then forwards the
@@ -274,28 +281,46 @@ impl MessageHandler for TxReceiverHandler {
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
 struct WorkerReceiverHandler<PublicKey: VerifyingKey> {
-    tx_helper: Sender<(Vec<BatchDigest>, PublicKey)>,
+    tx_worker_helper: Sender<(Vec<BatchDigest>, PublicKey)>,
+    tx_client_helper: Sender<(Vec<BatchDigest>, Sender<SerializedBatchMessage>)>,
     tx_processor: Sender<SerializedBatchMessage>,
 }
 
 #[async_trait]
 impl<PublicKey: VerifyingKey> MessageHandler for WorkerReceiverHandler<PublicKey> {
     async fn dispatch(&self, writer: &mut Writer, serialized: Bytes) -> Result<(), Box<dyn Error>> {
-        // Reply with an ACK.
-        let _ = writer.send(Bytes::from("Ack")).await;
-
         // Deserialize and parse the message.
         match bincode::deserialize(&serialized) {
-            Ok(WorkerMessage::Batch(..)) => self
-                .tx_processor
-                .send(serialized.to_vec())
-                .await
-                .expect("Failed to send batch"),
-            Ok(WorkerMessage::BatchRequest(missing, requestor)) => self
-                .tx_helper
-                .send((missing, requestor))
-                .await
-                .expect("Failed to send batch request"),
+            Ok(WorkerMessage::Batch(..)) => {
+                self.tx_processor
+                    .send(serialized.to_vec())
+                    .await
+                    .expect("Failed to send batch");
+
+                let _ = writer.send(Bytes::from("Ack")).await;
+            }
+            Ok(WorkerMessage::BatchRequest(missing, requestor)) => {
+                self.tx_worker_helper
+                    .send((missing, requestor))
+                    .await
+                    .expect("Failed to send batch request");
+
+                let _ = writer.send(Bytes::from("Ack")).await;
+            }
+            Ok(WorkerMessage::ClientBatchRequest(missing)) => {
+                // TODO [issue #7]: Do some accounting to prevent bad actors from use all our
+                // resources (in this case allocate a gigantic channel).
+                let (sender, mut receiver) = channel(missing.len());
+
+                self.tx_client_helper
+                    .send((missing, sender))
+                    .await
+                    .expect("Failed to send batch request");
+
+                while let Some(batch) = receiver.recv().await {
+                    writer.send(Bytes::from(batch)).await?;
+                }
+            }
             Err(e) => warn!("Serialization error: {e}"),
         }
         Ok(())
