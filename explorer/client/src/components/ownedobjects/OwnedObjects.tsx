@@ -127,11 +127,76 @@ function OwnedObjectView({ results }: { results: resultType }) {
 }
 
 function OwnedObject({ objects }: { objects: string[] }) {
-    if (process.env.REACT_APP_DATA === 'static') {
-        return <OwnedObjectStatic objects={objects} />;
-    } else {
-        return <OwnecObjectInternetAPI objects={objects} />;
-    }
+    const [pageIndex, setPageIndex] = useState(0);
+
+    const ITEMS_PER_PAGE = 4;
+
+    const FINAL_PAGE_NO = Math.floor(objects.length / ITEMS_PER_PAGE) + 1;
+
+    const objectSample = objects.slice(
+        pageIndex * ITEMS_PER_PAGE,
+        (pageIndex + 1) * ITEMS_PER_PAGE
+    );
+
+    const OwnedObjectsRetrieved = (retrieved: string[]) => {
+        if (process.env.REACT_APP_DATA === 'static') {
+            return <OwnedObjectStatic objects={objectSample} />;
+        }
+        return <OwnecObjectInternetAPI objects={objectSample} />;
+    };
+
+    const handleFirstClick = useCallback(() => setPageIndex(0), []);
+
+    const handleBackClick = useCallback(
+        () => pageIndex - 1 >= 0 && setPageIndex(pageIndex - 1),
+        [pageIndex]
+    );
+
+    const handleNextClick = useCallback(
+        () =>
+            (pageIndex + 1) * ITEMS_PER_PAGE < objects.length &&
+            setPageIndex(pageIndex + 1),
+        [pageIndex, objects.length]
+    );
+
+    const handleLastClick = useCallback(
+        () => setPageIndex(FINAL_PAGE_NO - 1),
+        [FINAL_PAGE_NO]
+    );
+
+    return (
+        <>
+            {FINAL_PAGE_NO !== 1 && (
+                <>
+                    <span>
+                        {pageIndex > 0 && (
+                            <>
+                                <button onClick={handleFirstClick}>
+                                    First
+                                </button>
+                                <button onClick={handleBackClick}>Back</button>
+                            </>
+                        )}
+                    </span>
+
+                    <span>
+                        Page {pageIndex + 1} of {FINAL_PAGE_NO}
+                    </span>
+
+                    <span>
+                        {pageIndex < FINAL_PAGE_NO - 1 && (
+                            <>
+                                <button onClick={handleNextClick}>Next</button>
+                                <button onClick={handleLastClick}>Last</button>
+                            </>
+                        )}
+                    </span>
+                </>
+            )}
+
+            {OwnedObjectsRetrieved(objectSample)}
+        </>
+    );
 }
 
 export default OwnedObject;
