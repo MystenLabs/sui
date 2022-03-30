@@ -310,4 +310,110 @@ describe('End-to-end Tests', () => {
             expect(objectValue2.trim()).toBe(parentObj);
         });
     });
+    describe('Owned Objects have buttons', () => {
+        it('to go to the next page', async () => {
+            const address = 'ownsAllAddress';
+            await page.goto(`${BASE_URL}/addresses/${address}`);
+            const btn = await page.$('#nextBtn');
+            await btn.click();
+            const objectLink = await page.$(
+                'div#ownedObjects > div:nth-child(4)'
+            );
+            await objectLink.click();
+
+            const objectIDEl = await page.$('#objectID');
+
+            const objectValue = await page.evaluate(
+                (el: any) => el.textContent,
+                objectIDEl
+            );
+            expect(objectValue.trim()).toBe(
+                '0ef165hf64032961fg1g2656h23hgi665jii7690'
+            );
+        });
+        it('to go to the last page', async () => {
+            const address = 'ownsAllAddress';
+            await page.goto(`${BASE_URL}/addresses/${address}`);
+            const btn = await page.$('#lastBtn');
+            await btn.click();
+            const objectLink = await page.$(
+                'div#ownedObjects > div:nth-child(2)'
+            );
+            await objectLink.click();
+
+            const objectIDEl = await page.$('#objectID');
+
+            const objectValue = await page.evaluate(
+                (el: any) => el.textContent,
+                objectIDEl
+            );
+            expect(objectValue.trim()).toBe('standaloneObject');
+        });
+        it('where last and next disappear in final page', async () => {
+            const address = 'ownsAllAddress';
+            await page.goto(`${BASE_URL}/addresses/${address}`);
+            const btn = await page.$('#lastBtn');
+            await btn.click();
+
+            expect(await page.$('#nextBtn')).toBeNull();
+            expect(await page.$('#lastBtn')).toBeNull();
+            expect(await page.$('#backBtn')).not.toBeNull();
+            expect(await page.$('#firstBtn')).not.toBeNull();
+        });
+
+        it('to go back a page', async () => {
+            const address = 'ownsAllAddress';
+            await page.goto(`${BASE_URL}/addresses/${address}`);
+            await page.$('#lastBtn').then((btn: any) => btn.click());
+
+            await page.$('#backBtn').then((btn: any) => btn.click());
+
+            const objectLink = await page.$(
+                'div#ownedObjects > div:nth-child(4)'
+            );
+            await objectLink.click();
+
+            const objectIDEl = await page.$('#objectID');
+
+            const objectValue = await page.evaluate(
+                (el: any) => el.textContent,
+                objectIDEl
+            );
+            expect(objectValue.trim()).toBe('CollectionObject');
+        });
+
+        it('to go to first page', async () => {
+            const address = 'ownsAllAddress';
+            await page.goto(`${BASE_URL}/addresses/${address}`);
+            await page.$('#lastBtn').then((btn: any) => btn.click());
+
+            await page.$('#backBtn').then((btn: any) => btn.click());
+
+            await page.$('#firstBtn').then((btn: any) => btn.click());
+
+            const objectLink = await page.$(
+                'div#ownedObjects > div:nth-child(4)'
+            );
+            await objectLink.click();
+
+            const objectIDEl = await page.$('#objectID');
+
+            const objectValue = await page.evaluate(
+                (el: any) => el.textContent,
+                objectIDEl
+            );
+            expect(objectValue.trim()).toBe(
+                '8cd943fd42810749de9e0434f01feg443hgg54v1'
+            );
+        });
+        it('where first and back disappear in first page', async () => {
+            const address = 'ownsAllAddress';
+            await page.goto(`${BASE_URL}/addresses/${address}`);
+
+            expect(await page.$('#nextBtn')).not.toBeNull();
+            expect(await page.$('#lastBtn')).not.toBeNull();
+            expect(await page.$('#backBtn')).toBeNull();
+            expect(await page.$('#firstBtn')).toBeNull();
+        });
+    });
 });
