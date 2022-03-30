@@ -131,7 +131,9 @@ function OwnedObject({ objects }: { objects: string[] }) {
 
     const ITEMS_PER_PAGE = 4;
 
-    const FINAL_PAGE_NO = Math.floor(objects.length / ITEMS_PER_PAGE) + 1;
+    const FINAL_PAGE_NO =
+        Math.floor(objects.length / ITEMS_PER_PAGE) +
+        (objects.length % ITEMS_PER_PAGE !== 0 ? 1 : 0);
 
     const objectSample = objects.slice(
         pageIndex * ITEMS_PER_PAGE,
