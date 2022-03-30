@@ -15,7 +15,7 @@ serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
 structopt = "0.3.26"
 tempfile = "3.3.0"
-tokio = { version = "1.17.0", features = ["full", "tracing"] }
+tokio = { version = "1.17.0", features = ["full"] }
 rand = "0.8.4"
 toml = "0.5.8"
 strum = "0.24.0"
@@ -67,6 +67,10 @@ tracing-test = "0.2.1"
 [[bin]]
 name = "microbench"
 path = "src/microbench.rs"
+
+[[bin]]
+name = "microbench_latency"
+path = "src/microbench_latency.rs"
 
 [[bin]]
 name = "wallet"
