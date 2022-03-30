@@ -150,7 +150,7 @@ async fn handle_consensus_output() {
         .await
         .unwrap();
 
-    // Wait for the certificate to be processed and ensure the last consensus index is correctly updated. 
+    // Wait for the certificate to be processed and ensure the last consensus index is correctly updated.
     // (We need to wait on storage for that.)
     while state.db().last_consensus_index().unwrap() != SequenceNumber::from(1) {
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
@@ -227,7 +227,7 @@ async fn sync_with_consensus() {
         .await
         .unwrap();
 
-    // Wait for the certificate to be processed and ensure the last consensus index is correctly updated. 
+    // Wait for the certificate to be processed and ensure the last consensus index is correctly updated.
     // (We need to wait on storage for that.)
     while state.db().last_consensus_index().unwrap() != SequenceNumber::from(2) {
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
