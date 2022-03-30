@@ -9,9 +9,13 @@
                   hover:shadow-md cursor-pointer;
 }
 
-.objectbox > div > div {
+.objectbox > div > div{
     @apply border-0 border-b border-solid border-gray-300
                         mb-2;
+}
+
+.objectbox > div:first-child > div {
+  @apply border-none;
 }
 
 .objectbox > div > div > span:first-child {
