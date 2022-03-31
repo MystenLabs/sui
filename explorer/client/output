@@ -1,0 +1,13 @@
+
+> sui-explorer@0.1.0 test
+> npx start-server-and-test 'npm run start:static' 8080 'react-scripts test --detectOpenHandles --watchAll=false'
+
+1: starting server using command "npm run start:static"
+and when url "[ 'http://localhost:8080' ]" is responding with HTTP status code 200
+running tests using command "react-scripts test --detectOpenHandles --watchAll=false"
+
+
+> sui-explorer@0.1.0 start:static
+> REACT_APP_DATA=static PORT=8080 react-scripts start
+
+Something is already running on port 8080.
