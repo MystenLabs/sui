@@ -309,7 +309,7 @@ described earlier:
 
 ``` shell
 mkdir -p my_move_package/sources
-mkdir -p my_move_package/sources/M1.move
+touch my_move_package/sources/M1.move
 touch my_move_package/Move.toml
 ```
 
@@ -387,7 +387,13 @@ name = "MyFirstPackage"
 version = "0.0.1"
 
 [dependencies]
-Sui = { local = "https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/" }
+# Using a local dep for the Move stdlib instead of a git dep to avoid the overhead of fetching the git dep in
+# CI. The local dep is an unmodified version of the upstream stdlib
+# Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="sui_programmability/framework", rev="44b5702712c15df365989a3b3f80038b7bf6c2ef"}
+
+# Assuming `sui` repo is at the same level of parent directory
+Sui = { local = "../sui/sui_programmability/framework/" }
+
 
 [addresses]
 MyFirstPackage = "0x0"
@@ -903,7 +909,7 @@ Once an account address owns an object, for any future use (either read or write
 
 #### Transfer to object
 We can also transfer an object to be owned by another object. Note that the ownership is only tracked in Sui. From Move's perspective, these two objects are still more or less independent, in that the child object isn't part of the parent object in terms of data store.
-Once an object is owned by another object, it is required that for any such object referenced in the entry function, its owner must also be one of the argument objects. For instance, if we have a chain of ownership: account address `Addr` owns object `a`, object `a` owns object `b`, and `b` owns object `c`, in order to use object `c` in a Move call, the entry function must also include both `b` and `a`, and the signer of the transaction must be `Addr1`, like this:
+Once an object is owned by another object, it is required that for any such object referenced in the entry function, its owner must also be one of the argument objects. For instance, if we have a chain of ownership: account address `Addr1` owns object `a`, object `a` owns object `b`, and `b` owns object `c`, in order to use object `c` in a Move call, the entry function must also include both `b` and `a`, and the signer of the transaction must be `Addr1`, like this:
 ```
 // signer of ctx is Addr1.
 public fun entry_function(a: &A, b: &B, c: &mut C, ctx: &mut TxContext);
