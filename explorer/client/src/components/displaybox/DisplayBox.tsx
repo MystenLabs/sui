@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 import { processDisplayValue } from '../../utils/stringUtils';
 
@@ -52,6 +52,10 @@ function DisplayBox({
         () => setHasDisplayLoaded(true),
         [setHasDisplayLoaded]
     );
+
+    useEffect(() => {
+        setHasFailedToLoad(false);
+    }, [display]);
 
     const handleImageFail = useCallback(
         (error) => {
