@@ -21,14 +21,14 @@ rest_server
 ```
 You will see output resembling:
 ```
-INFO listening, local_addr: 127.0.0.1:5000
+INFO listening, local_addr: 127.0.0.1:5001
 ```
 
 NOTE: For additional logs, set `RUST_LOG=debug` before invoking `rest_server`
 
 Export a local user variable to store the hardcoded hostname + port that the local REST server starts with to be used when issuing the curl commands that follow.
 ```shell
-export SUI_GATEWAY_HOST=http://127.0.0.1:5000
+export SUI_GATEWAY_HOST=http://127.0.0.1:5001
 ```
 
 To initialize and start the network, you need to invoke the /sui/genesis and /sui/start endpoints as mentioned below.
@@ -48,12 +48,61 @@ The `genesis` command creates Sui's initial state including four authorities and
 each with five gas objects:
 
 ```shell
-curl --location --request POST $SUI_GATEWAY_HOST/sui/genesis | json_pp
+curl --location --request POST $SUI_GATEWAY_HOST/sui/genesis \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "custom": false
+}' | json_pp
 ```
 
 These are Sui [objects](objects.md) used
 to pay for Sui [transactions](transactions.md#transaction-metadata),
 such as object transfers or smart contract (Move) calls.
+
+If you want to use a custom genesis then you can do the following:
+
+Add `genesis.conf` to the working directory of the rest server i.e. 
+
+```
+{
+  "authorities": [
+    {},{},{},{}
+  ],
+  "accounts": [
+    {
+      "address": "09818AAC3EDF9CF9B006B70C36E7241768B26386",
+      "gas_objects": [
+        {
+          "object_id": "0000000000000000000000000000000000000003",
+          "gas_value": 10000000
+        }
+      ]
+    }
+  ]
+}
+```
+
+Next ensure any accounts provided in `gensis.conf` has a corresponding private key in
+`wallet.key`. Ensure wallet.key is in the working directory of the rest server. If you do not have the private key of the addresses specified you cannot use custom genesis. Never share your private keys, but for the `genesis.conf` example above you can use the following private key
+
+```
+[
+  "WKk4nT2oyPKbFrFAyepT5wEsummWsA6qdhsqzc6CVC9fvTt3J2u6yy5WuW9B6OU3mkcyPC/4Axstn0BpIhzZNg==",
+]
+```
+
+Once `genesis.conf` & `wallet.conf` have been added you can use the following to create a
+custom genesis. 
+
+```shell
+curl --location --request POST $SUI_GATEWAY_HOST/sui/genesis \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "custom": true
+}' | json_pp
+```
+
+To learn more about `gensis.conf` formatting refer to the wallet [docs](wallet.md#customize-genesis).
 
 ### POST /sui/stop
 
@@ -199,12 +248,12 @@ from [`GET /addresses`](#get-addresses). You should also replace
 an actual object ID, for example one obtained from [`GET
 /objects`](#get-objects) (from `objType` in the output of [`GET
 /objects`](#get-objects). You can see that all objects generated
-during genesis are of `Coin/GAS` type). For this call to work, objects
+during genesis are of `Coin/SUI` type). For this call to work, objects
 represented by both `{{coin_object_id}}` and `{{gas_object_id}}` must
 be owned by the address represented by `{{owner_address}}`.
 
 
-#### POST /call
+### POST /call
 
 Execute a Move call transaction by calling the specified function in
 the module of a given package (smart contracts in Sui are written in
@@ -246,7 +295,80 @@ NOTE: A Publish endpoint is in the works, but for now the only way to add a new 
 
 To learn more about what `args` are accepted in a Move call, refer to the [SuiJSON](sui-json.md) documentation.
 
-#### POST /sync
+### POST /publish
+
+Publish Move module. 
+
+```shell
+curl --location --request POST $SUI_GATEWAY_HOST/publish \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "sender": "{{owner_address}}",
+    "compiledModules": {{vector_of_compiled_modules}},
+    "gasObjectId": "{{gas_object_id}}",
+    "gasBudget": 10000
+}' | json_pp
+```
+
+This endpoint will perform proper verification and linking to make
+sure the package is valid. If some modules have initializers, these initializers
+will also be executed in Move (which means new Move objects can be created in
+the process of publishing a Move package). Gas budget is required because of the
+need to execute module initializers.
+
+You should replace `{{owner_address}}` in the
+command above with an actual address value, for example one obtained
+from [`GET /addresses`](#get-addresses). You should also replace `{{gas_object_id}}` in the command above with an actual object ID, for example one obtained from [`GET
+/objects`](#get-objects) (from `objType` in the output of [`GET
+/objects`](#get-objects). You can see that all objects generated
+during genesis are of `Coin/SUI` type). For this call to work, `{{gas_object_id}}` must
+be owned by the address represented by `{{owner_address}}`.
+
+To publish a Move module you also need `{{vector_of_compiled_modules}}`. To generate the value of this field you can use the `sui-move` command showcased in the [Move documentation](move.md#publishing-a-package). i.e. 
+
+You can copy the ouputting hex representation of the compiled Move module into the 
+REST publish endpoint and generate a pacakge object ID that can be used in subsequent Move calls.
+
+```
+{
+    "certificate": {
+        "signedAuthorities": [
+            "058ca10c6e8b0bd72a122e2519dcb9039b094fe576d4edf79b72778b6f199792",
+            "81696bc8c7926773cc8cde35be765649b5ae4a084aefe9ffe782cba2b38d3a69",
+            "4efce82bd5c51ba2ee680d05bf548ee27b26d8da9f8c30aa5b1bd8a89b61f88a"
+        ]
+    },
+    "publishResults": {
+        "createdObjects": [
+            {
+                "id": "725BD00D0EC86B434D9E88B248D58FA387B08AC9",
+                "obj_type": "0x2::Coin::TreasuryCap<0xf699a118fc809171a994bbfd4c125fb21d6d188b::MANAGED::MANAGED>",
+                "owner": "AddressOwner(k#09818aac3edf9cf9b006b70c36e7241768b26386)",
+                "readonly": "false",
+                "version": "1"
+            }
+        ],
+        "package": {
+            "object_digest": "o#6029610f83b9b73f7412441d9e44435d4c7eedd409c9ab51908270faa6c6df4c",
+            "object_id": "F699A118FC809171A994BBFD4C125FB21D6D188B",
+            "version": 1
+        },
+        "updatedGas": {
+            "id": {
+                "id": {
+                    "id": {
+                        "bytes": "0000000000000000000000000000000000000003"
+                    }
+                },
+                "version": 1
+            },
+            "value": 9999450
+        }
+    }
+}
+```
+
+### POST /sync
 
 Synchronize client state with authorities:
 
