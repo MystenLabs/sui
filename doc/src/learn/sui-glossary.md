@@ -67,7 +67,7 @@ stage is considered closure for an exchange or other blockchain transaction.
 
 ### Gas
 
-As with other blockchains, [gas](https://www.investopedia.com/terms/g/gas-ethereum.asp) refers to the cost of a transaction but not the currency. Transaction fees are calculated as gas * gas_price. In Sui, the currency is eponymous: SUI
+[Gas](https://ethereum.org/en/developers/docs/gas/) refers to the computational effort required for executing operations on the Sui network. In Sui, gas is paid with the network's native currency SUI. The cost of executing a transaction in SUI units is referred to as the transaction fee.
 
 
 ### Genesis
