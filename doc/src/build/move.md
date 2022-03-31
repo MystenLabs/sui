@@ -413,7 +413,7 @@ MyFirstPackage = "0x0"
 MyFirstPackage = "0x0"
 ```
 
-Ensure you are in the `my_move_package` directory containing our package and build it:
+Ensure you are in the `my_move_package` directory containing your package and build it:
 
 ``` shell
 sui-move build
