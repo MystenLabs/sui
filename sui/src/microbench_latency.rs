@@ -337,7 +337,6 @@ fn make_transfer_transaction(
             object_arguments: vec![object_ref],
             shared_object_arguments: vec![],
             pure_arguments: vec![bcs::to_bytes(&AccountAddress::from(recipient)).unwrap()],
-            gas_budget: 1000,
         })
     } else {
         SingleTransactionKind::Transfer(Transfer {
@@ -482,6 +481,7 @@ fn make_serialized_transactions(
                     TransactionKind::Single(single_kinds.into_iter().next().unwrap()),
                     address,
                     gas_object_ref,
+                    1000,
                 )
             } else {
                 assert!(single_kinds.len() == batch_size, "Inconsistent batch size");
@@ -489,6 +489,7 @@ fn make_serialized_transactions(
                     TransactionKind::Batch(single_kinds),
                     address,
                     gas_object_ref,
+                    2000000,
                 )
             };
 

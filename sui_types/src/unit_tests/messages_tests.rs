@@ -35,11 +35,11 @@ fn test_signed_values() {
     let committee = Committee::new(authorities);
 
     let transaction = Transaction::from_data(
-        TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref()),
+        TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
         &sec1,
     );
     let bad_transaction = Transaction::from_data(
-        TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref()),
+        TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
         &sec2,
     );
 
@@ -74,11 +74,11 @@ fn test_certificates() {
     let committee = Committee::new(authorities);
 
     let transaction = Transaction::from_data(
-        TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref()),
+        TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
         &sec1,
     );
     let bad_transaction = Transaction::from_data(
-        TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref()),
+        TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
         &sec2,
     );
 

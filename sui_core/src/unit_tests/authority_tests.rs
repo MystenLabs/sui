@@ -679,9 +679,7 @@ async fn test_handle_move_transaction_insufficient_budget() {
         .handle_transaction(transaction.clone())
         .await
         .unwrap_err();
-    assert!(response
-        .to_string()
-        .contains("Gas budget is 9, smaller than minimum requirement of 10 for move operation"));
+    assert!(matches!(response, SuiError::InsufficientGas { .. }));
 }
 
 #[tokio::test]
@@ -922,13 +920,13 @@ async fn test_handle_confirmation_transaction_gas() {
             ))
             .await
     };
-    let result = run_test_with_gas(10).await;
+    let result = run_test_with_gas(1000).await;
     assert!(matches!(
         result.unwrap_err(),
         SuiError::InsufficientGas { .. }
     ));
     // This will execute sufccessfully.
-    let result = run_test_with_gas(20).await;
+    let result = run_test_with_gas(10000).await;
     result.unwrap();
 }
 
@@ -1455,7 +1453,7 @@ fn init_transfer_transaction(
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
 ) -> Transaction {
-    let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object_ref);
+    let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object_ref, 10000);
     let signature = Signature::new(&data, secret);
     Transaction::new(data, signature)
 }

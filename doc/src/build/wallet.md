@@ -142,7 +142,7 @@ instance (it will not return the command prompt).
 NOTE: For logs, set `RUST_LOG=debug` before invoking `sui start`.
 
 If you see errors when trying to start Sui network, particularly if you made some custom changes
- (e.g, 
+ (e.g,
 [customized wallet configuration](#wallet-configuration)), you should [recreate Sui genesis state](#recreating-genesis).
 
 ## Using the wallet
@@ -183,20 +183,20 @@ wallet --config /path/to/wallet/config/file
 
 The Sui interactive wallet supports the following shell functionality:
 * Command History
-  The `history` command can be used to print the interactive shell's command history; 
-  you can also use Up, Down or Ctrl-P, Ctrl-N to navigate previous or next matches from history. 
+  The `history` command can be used to print the interactive shell's command history;
+  you can also use Up, Down or Ctrl-P, Ctrl-N to navigate previous or next matches from history.
   History search is also supported using Ctrl-R.
 * Tab completion
   Tab completion is supported for all commands using Tab and Ctrl-I keys.
 * Environment variable substitution
-  The wallet shell will substitute inputs prefixed with `$` with environment variables, 
-  you can use the `env` command to print out the entire list of variables and 
-  use `echo` to preview the substitution without invoking any commands.  
+  The wallet shell will substitute inputs prefixed with `$` with environment variables,
+  you can use the `env` command to print out the entire list of variables and
+  use `echo` to preview the substitution without invoking any commands.
 
 ### Command line mode
 
-The wallet can also be used without the interactive shell, which can be useful if 
-you want to pipe the output of the wallet to another application or invoke wallet 
+The wallet can also be used without the interactive shell, which can be useful if
+you want to pipe the output of the wallet to another application or invoke wallet
 commands using scripts.
 
 ```shell
@@ -351,7 +351,7 @@ We will explore how to transfer objects using the wallet in this section.
 `transfer` command usage:
 ```shell
 USAGE:
-    transfer [FLAGS] --gas <gas> --object-id <object-id> --to <to>
+    transfer [FLAGS] --gas <gas> --gas-budget <gas-budget> --object-id <object-id> --to <to>
 
 FLAGS:
     -h, --help       Prints help information
@@ -360,16 +360,18 @@ FLAGS:
 
 OPTIONS:
         --gas <gas>                ID of the gas object for gas payment, in 20 bytes Hex string
+        --gas-budget <gas-budget>    Gas budget for this transfer
         --object-id <object-id>    Object to transfer, in 20 bytes Hex string
         --to <to>                  Recipient address
 ```
 To transfer an object to a recipient, you will need the recipient's address,
 the object ID of the object that you want to transfer,
-and the gas object ID for the transaction fee payment.
+and the gas object ID for the transaction fee payment. Gas budget sets a cap for how much gas you want to spend.
+We are still finalizing our gas metering mechanisms. For now, just set something large enough.
 
 Here is an example transfer of an object to account `F456EBEF195E4A231488DF56B762AC90695BE2DD`.
 ```shell
-$ wallet --no-shell transfer --to C72CF3ADCC4D11C03079CEF2C8992AEA5268677A --object-id DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1 --gas 00A0A5211F6EDCF4BA09D23B8A7250072BE1EDB6
+$ wallet --no-shell transfer --to C72CF3ADCC4D11C03079CEF2C8992AEA5268677A --object-id DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1 --gas 00A0A5211F6EDCF4BA09D23B8A7250072BE1EDB6 --gas-budget 100
 Transfer confirmed after 4412 us
 ----- Certificate ----
 Signed Authorities : [k#21d89c3a12409b7aeadf36a9753417ead5fa9ea607ccb666e83b739b8a73c5e8, k#8d86bef2f8ae835d4763c9a697ad5c458130907996d59adc4ea5be37f2e0fab2, k#f9664056f3cc46b03e86beeb3febf99af1c9ec3f6aa709a1dbd101c9e9a79c3a]

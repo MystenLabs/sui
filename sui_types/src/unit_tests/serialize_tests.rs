@@ -95,6 +95,7 @@ fn test_transaction() {
             random_object_ref(),
             sender_name,
             random_object_ref(),
+            10000,
         ),
         &sender_key,
     );
@@ -115,6 +116,7 @@ fn test_transaction() {
             random_object_ref(),
             sender_name,
             random_object_ref(),
+            10000,
         ),
         &sender_key,
     );
@@ -138,6 +140,7 @@ fn test_vote() {
             random_object_ref(),
             sender_name,
             random_object_ref(),
+            50000,
         ),
         &sender_key,
     );
@@ -168,6 +171,7 @@ fn test_cert() {
             random_object_ref(),
             sender_name,
             random_object_ref(),
+            10000,
         ),
         &sender_key,
     );
@@ -200,6 +204,7 @@ fn test_info_response() {
             random_object_ref(),
             sender_name,
             random_object_ref(),
+            10000,
         ),
         &sender_key,
     );
@@ -256,6 +261,7 @@ fn test_time_transaction() {
                 random_object_ref(),
                 sender_name,
                 random_object_ref(),
+                50000,
             ),
             &sender_key,
         );
@@ -290,6 +296,7 @@ fn test_time_vote() {
             random_object_ref(),
             sender_name,
             random_object_ref(),
+            10000,
         ),
         &sender_key,
     );
@@ -335,6 +342,7 @@ fn test_time_cert() {
             random_object_ref(),
             sender_name,
             random_object_ref(),
+            10000,
         ),
         &sender_key,
     );

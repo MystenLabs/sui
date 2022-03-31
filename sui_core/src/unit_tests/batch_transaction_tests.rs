@@ -53,7 +53,6 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
                 16u64.to_le_bytes().to_vec(),
                 bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
             ],
-            gas_budget: 500,
         }));
     }
     let data = TransactionData::new(
@@ -64,6 +63,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
             .await?
             .unwrap()
             .compute_object_reference(),
+        100000,
     );
     let signature = Signature::new(&data, &sender_key);
     let tx = Transaction::new(data, signature);
@@ -121,7 +121,6 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
         object_arguments: vec![],
         shared_object_arguments: vec![],
         pure_arguments: vec![],
-        gas_budget: 500,
     }));
     let data = TransactionData::new(
         TransactionKind::Batch(transactions),
@@ -131,6 +130,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
             .await?
             .unwrap()
             .compute_object_reference(),
+        100000,
     );
     let signature = Signature::new(&data, &sender_key);
     let tx = Transaction::new(data, signature);
@@ -154,7 +154,6 @@ async fn test_batch_contains_publish() -> anyhow::Result<()> {
     let module_bytes = vec![module_bytes];
     let transactions = vec![SingleTransactionKind::Publish(MoveModulePublish {
         modules: module_bytes,
-        gas_budget: 10000,
     })];
     let data = TransactionData::new(
         TransactionKind::Batch(transactions),
@@ -164,6 +163,7 @@ async fn test_batch_contains_publish() -> anyhow::Result<()> {
             .await?
             .unwrap()
             .compute_object_reference(),
+        100000,
     );
     let signature = Signature::new(&data, &sender_key);
     let tx = Transaction::new(data, signature);
@@ -209,13 +209,13 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
                 16u64.to_le_bytes().to_vec(),
                 bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
             ],
-            gas_budget: 500,
         }));
     }
     let data = TransactionData::new(
         TransactionKind::Batch(transactions),
         sender,
         gas_object.compute_object_reference(),
+        100000,
     );
     let signature = Signature::new(&data, &sender_key);
     let tx = Transaction::new(data, signature);
