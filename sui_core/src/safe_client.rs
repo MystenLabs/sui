@@ -2,30 +2,31 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority_client::{AuthorityAPI, BUFFER_SIZE};
+use crate::authority_client::{AuthorityAPI, AuthorityClient, BUFFER_SIZE};
 use async_trait::async_trait;
 use futures::channel::mpsc::{channel, Receiver};
+use futures::Stream;
 use futures::{SinkExt, StreamExt};
 use std::io;
 use std::io::Error;
 use sui_types::crypto::PublicKeyBytes;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 
-use sui_types::batch::UpdateItem;
+use sui_types::batch::{SignedBatch, TxSequenceNumber, UpdateItem};
 use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };
 
 #[derive(Clone)]
-pub struct SafeClient<C> {
-    authority_client: C,
+pub struct SafeClient{
+    authority_client: AuthorityClient,
     committee: Committee,
     address: PublicKeyBytes,
 }
 
-impl<C> SafeClient<C> {
-    pub fn new(authority_client: C, committee: Committee, address: PublicKeyBytes) -> Self {
+impl SafeClient {
+    pub fn new(authority_client: AuthorityClient, committee: Committee, address: PublicKeyBytes) -> Self {
         Self {
             authority_client,
             committee,
@@ -172,6 +173,38 @@ impl<C> SafeClient<C> {
         Ok(())
     }
 
+    fn check_update_item_batch_response(
+        &self,
+        request: &BatchInfoRequest,
+        signed_batch: &SignedBatch,
+    ) -> SuiResult {
+        signed_batch
+            .signature
+            .check(&signed_batch, signed_batch.authority)?;
+
+        // ensure transactions enclosed match requested range
+        fp_ensure!(
+            signed_batch.batch.initial_sequence_number >= request.start &&
+            signed_batch.batch.next_sequence_number <= (request.end + signed_batch.batch.size),
+            SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address
+                    }
+        );
+        // todo: ensure signature valid over the set of transactions in the batch
+        // todo: ensure signature valid over the hash of the previous batch
+        Ok(())
+    }
+
+    fn check_update_item_transaction_response(
+        &self,
+        _request: &BatchInfoRequest,
+        _seq: &TxSequenceNumber,
+        _digest: &TransactionDigest,
+    ) -> SuiResult {
+
+        todo!();
+    }
+
     /// This function is used by the higher level authority logic to report an
     /// error that could be due to this authority.
     pub fn report_client_error(&self, _error: SuiError) {
@@ -180,13 +213,55 @@ impl<C> SafeClient<C> {
         // with the rest of the network, or de-prioritize requests to this authority given
         // weaker evidence.
     }
+
+
+    /// Handle Batch information requests for this authority.
+    async fn handle_batch_streaming(
+        &self,
+        request: BatchInfoRequest,
+    ) -> Result<impl Stream<Item = Result<BatchInfoResponseItem, SuiError>>, io::Error> {
+        let mut batch_info_items = self
+            .authority_client
+            .handle_batch_streaming(request.clone())
+            .await?;
+
+        let stream = batch_info_items
+            .for_each(|item| {
+                item
+                    .map_err(|err| SuiError::ClientIoError {
+                        error: format!("{err}"),
+                    })
+                    .and_then(|batch_info_item| match &batch_info_item {
+                        BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                            if let Err(err) = self.check_update_item_batch_response(
+                                &request,
+                                &signed_batch,
+                            ) {
+                                self.report_client_error(err.clone());
+                                return Err(err);
+                            }
+                            Ok(batch_info_item)
+                        }
+                        BatchInfoResponseItem(UpdateItem::Transaction((seq, digest))) => {
+                            if let Err(err) = self.check_update_item_transaction_response(
+                                &request,
+                                seq,
+                            digest,
+                            ) {
+                                self.report_client_error(err.clone());
+                                return Err(err);
+                            }
+                            Ok(batch_info_item)
+                        }
+                    });
+                item
+            });
+        Ok(stream)
+    }
 }
 
 #[async_trait]
-impl<C> AuthorityAPI for SafeClient<C>
-where
-    C: AuthorityAPI + Send + Sync + Clone + 'static,
-{
+impl AuthorityAPI for SafeClient {
     /// Initiate a new transfer to a Sui or Primary account.
     async fn handle_transaction(
         &self,
@@ -262,66 +337,5 @@ where
             return Err(err);
         }
         Ok(transaction_info)
-    }
-
-    /// Handle Batch information requests for this authority.
-    async fn handle_batch_streaming(
-        &self,
-        request: BatchInfoRequest,
-    ) -> Result<Receiver<Result<BatchInfoResponseItem, SuiError>>, io::Error> {
-        let (mut tx_output, tr_output) = channel(BUFFER_SIZE);
-
-        let mut batch_info_items = self
-            .authority_client
-            .handle_batch_streaming(request)
-            .await?;
-
-        if let Some(next_data) = batch_info_items.next().await {
-            match next_data {
-                Ok(batch_info_response_item) => {
-                    // do security checks
-                    match batch_info_response_item.clone() {
-                        BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
-                            // check signature of batch
-                            let result = signed_batch
-                                .signature
-                                .check(&signed_batch, signed_batch.authority);
-                            // todo: ensure signature valid over the set of transactions in the batch
-                            // todo: ensure signature valid over the hash of the previous batch
-                            // todo: sequence numbers of the transactions enclosed need to match requested
-                            match result {
-                                Ok(_) => {
-                                    let _ = tx_output.send(Ok(batch_info_response_item)).await;
-                                }
-                                Err(e) => {
-                                    let _ = tx_output.send(Err(e)).await;
-                                }
-                            }
-                        }
-                        BatchInfoResponseItem(UpdateItem::Transaction((_seq, digest))) => {
-                            // make transaction info request which checks transaction certificate
-                            let transaction_info_request = TransactionInfoRequest {
-                                transaction_digest: digest,
-                            };
-                            let transaction_info_response = self
-                                .handle_transaction_info_request(transaction_info_request)
-                                .await;
-                            match transaction_info_response {
-                                Ok(_) => {
-                                    let _ = tx_output.send(Ok(batch_info_response_item)).await;
-                                }
-                                Err(e) => {
-                                    let _ = tx_output.send(Err(e)).await;
-                                }
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    return Err(Error::new(std::io::ErrorKind::Other, e));
-                }
-            }
-        }
-        Ok(tr_output)
     }
 }

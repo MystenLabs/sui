@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority_client::AuthorityAPI;
+use crate::authority_client::{AuthorityAPI, AuthorityClient};
 use crate::safe_client::SafeClient;
 
 use futures::{future, StreamExt};
@@ -34,15 +34,15 @@ mod gateway_tests;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
-pub struct AuthorityAggregator<A> {
+pub struct AuthorityAggregator {
     /// Our Sui committee.
     pub committee: Committee,
     /// How to talk to this committee.
-    authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
+    authority_clients: BTreeMap<AuthorityName, SafeClient>,
 }
 
-impl<A> AuthorityAggregator<A> {
-    pub fn new(committee: Committee, authority_clients: BTreeMap<AuthorityName, A>) -> Self {
+impl AuthorityAggregator {
+    pub fn new(committee: Committee, authority_clients: BTreeMap<AuthorityName, AuthorityClient>) -> Self {
         Self {
             committee: committee.clone(),
             authority_clients: authority_clients
@@ -59,10 +59,7 @@ pub enum ReduceOutput<S> {
     End(S),
 }
 
-impl<A> AuthorityAggregator<A>
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
+impl AuthorityAggregator {
     /// Sync a certificate and all its dependencies to a destination authority, using a
     /// source authority to get information about parent certificates.
     ///
@@ -302,7 +299,7 @@ where
         initial_timeout: Duration,
     ) -> Result<S, SuiError>
     where
-        FMap: FnOnce(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, V, SuiError> + Clone,
+        FMap: FnOnce(AuthorityName, &'a SafeClient) -> AsyncResult<'a, V, SuiError> + Clone,
         FReduce: Fn(
             S,
             AuthorityName,
@@ -1195,7 +1192,7 @@ where
     /// The object ids are also returned so the caller can determine which fetches failed
     /// NOTE: This function assumes all authorities are honest
     async fn fetch_one_object(
-        authority_clients: BTreeMap<PublicKeyBytes, SafeClient<A>>,
+        authority_clients: BTreeMap<PublicKeyBytes, SafeClient>,
         object_ref: ObjectRef,
         timeout: Duration,
         sender: tokio::sync::mpsc::Sender<Result<Object, SuiError>>,
