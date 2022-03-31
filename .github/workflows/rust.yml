@@ -60,7 +60,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
-      - uses: Swatinem/rust-cache@v1
+      # Enable caching of the 'librocksdb-sys' crate by additionally caching the
+      # 'librocksdb-sys' src directory which is managed by cargo
+      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
+        with:
+          path: ~/.cargo/registry/src/**/librocksdb-sys-*
       - name: cargo test
         uses: actions-rs/cargo@v1
         with:
@@ -76,7 +80,11 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@v1
+      # Enable caching of the 'librocksdb-sys' crate by additionally caching the
+      # 'librocksdb-sys' src directory which is managed by cargo
+      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
+        with:
+          path: ~/.cargo/registry/src/**/librocksdb-sys-*
       - name: cargo clippy
         uses: actions-rs/cargo@v1
         with:
@@ -112,7 +120,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
-      - uses: Swatinem/rust-cache@v1
+      # Enable caching of the 'librocksdb-sys' crate by additionally caching the
+      # 'librocksdb-sys' src directory which is managed by cargo
+      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
+        with:
+          path: ~/.cargo/registry/src/**/librocksdb-sys-*
       - name: Install cargo-udeps, and cache the binary
         uses: baptiste0928/cargo-install@v1
         with:
