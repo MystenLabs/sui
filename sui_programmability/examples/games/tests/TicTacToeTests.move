@@ -174,7 +174,6 @@ module Games::TicTacToeTests {
 
         // Player1 places an X in (2, 2).
         status = place_mark(2, 2, &admin, &player_x, scenario);
-        assert!(status == DRAW, 2);
         /*
         Current game board:
         O|X|O
@@ -182,6 +181,13 @@ module Games::TicTacToeTests {
         X|O|X
         */
 
+        // We have a draw.
+        assert!(status == DRAW, 2);
+
+        // No one has the trophy
+        TestScenario::next_tx(scenario, &player_x);
+        assert!(!TestScenario::can_remove_object<Trophy>(scenario), 1);
+        TestScenario::next_tx(scenario, &player_o);
         assert!(!TestScenario::can_remove_object<Trophy>(scenario), 1);
     }
 
