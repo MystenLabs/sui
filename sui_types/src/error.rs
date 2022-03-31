@@ -209,8 +209,8 @@ pub enum SuiError {
     // Internal state errors
     #[error("Attempt to update state of TxContext from a different instance than original.")]
     InvalidTxUpdate,
-    #[error("Attempt to re-initialize a transaction lock.")]
-    TransactionLockExists,
+    #[error("Attempt to re-initialize a transaction lock for objects {:?}.", refs)]
+    TransactionLockExists { refs: Vec<ObjectRef> },
     #[error("Attempt to set an non-existing transaction lock.")]
     TransactionLockDoesNotExist,
     #[error("Attempt to reset a set transaction lock to a different value.")]

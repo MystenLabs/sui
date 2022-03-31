@@ -664,7 +664,11 @@ SuiError:
     69:
       InvalidTxUpdate: UNIT
     70:
-      TransactionLockExists: UNIT
+      TransactionLockExists:
+        STRUCT:
+          - refs:
+            SEQ:
+              TYPENAME: ObjectRef
     71:
       TransactionLockDoesNotExist: UNIT
     72:

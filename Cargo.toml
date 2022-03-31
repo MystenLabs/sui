@@ -5,6 +5,7 @@ members = [
         "sui_programmability/adapter",
         "sui_programmability/framework",
 	"sui_types",
+        "sui_storage",
         "test_utils"
 ]
 
