@@ -32,6 +32,8 @@ in [Genesis customization](#customize-genesis).
 
 All of this is contained in configuration and keystore files, as well
 as an `authorities_db` database file.
+TODO: Why do I no longer see a `client_db` file created, only `authorities_db` now?
+
 The network configuration is stored in `network.conf` and can be used
 subsequently to start the network. The `wallet.conf` and `wallet.key`
 are also created to be used by the Sui wallet to manage the newly
@@ -110,8 +112,6 @@ in the wallet configuration (with some values omitted):
   }
 }
 ```
-
-TODO: Why do I no longer see a `client_db` file created, only `authorities_db` now?
 
 The `accounts` variable contains the account's address that the wallet manages. The
 `gateway` variable contains the information of the Sui network that the wallet will
