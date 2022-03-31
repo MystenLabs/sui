@@ -15,6 +15,7 @@ import styles from './OwnedObjects.module.css';
 type resultType = {
     id: string;
     Type: string;
+    Version: string;
     display?: string;
 }[];
 
@@ -22,6 +23,7 @@ const DATATYPE_DEFAULT: resultType = [
     {
         id: '',
         Type: '',
+        Version: '',
         display: '',
     },
 ];
@@ -32,6 +34,7 @@ function OwnedObjectStatic({ objects }: { objects: string[] }) {
         return {
             id: entry?.id,
             Type: entry?.objType,
+            Version: entry?.version,
             display: entry?.data?.contents?.display,
         };
     });
@@ -47,9 +50,10 @@ function OwnecObjectInternetAPI({ objects }: { objects: string[] }) {
         Promise.all(objects.map((objID) => rpc.getObjectInfo(objID))).then(
             (results) => {
                 setResults(
-                    results.map(({ id, objType, data }) => ({
+                    results.map(({ id, objType, version, data }) => ({
                         id: id,
                         Type: objType,
+                        Version: version,
                         display: processDisplayValue(data.contents?.display),
                     }))
                 );
@@ -168,7 +172,7 @@ function OwnedObject({ objects }: { objects: string[] }) {
 
     return (
         <>
-            {FINAL_PAGE_NO !== 1 && (
+            {FINAL_PAGE_NO > 1 && (
                 <>
                     <span className={pageIndex === 0 ? styles.gone : ''}>
                         <button
