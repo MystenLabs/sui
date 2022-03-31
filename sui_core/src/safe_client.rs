@@ -2,6 +2,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::borrow::Borrow;
+use std::cell::RefCell;
 use crate::authority_client::{AuthorityAPI, AuthorityClient, BUFFER_SIZE};
 use async_trait::async_trait;
 use futures::channel::mpsc::{channel, Receiver};
@@ -9,6 +11,8 @@ use futures::Stream;
 use futures::{SinkExt, StreamExt};
 use std::io;
 use std::io::Error;
+use std::ops::Deref;
+use std::rc::Rc;
 use sui_types::crypto::PublicKeyBytes;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 
@@ -175,12 +179,12 @@ impl SafeClient {
 
     fn check_update_item_batch_response(
         &self,
-        request: &BatchInfoRequest,
+        request: BatchInfoRequest,
         signed_batch: &SignedBatch,
     ) -> SuiResult {
         signed_batch
             .signature
-            .check(&signed_batch, signed_batch.authority)?;
+            .check(signed_batch, signed_batch.authority)?;
 
         // ensure transactions enclosed match requested range
         fp_ensure!(
@@ -197,7 +201,7 @@ impl SafeClient {
 
     fn check_update_item_transaction_response(
         &self,
-        _request: &BatchInfoRequest,
+        _request: BatchInfoRequest,
         _seq: &TxSequenceNumber,
         _digest: &TransactionDigest,
     ) -> SuiResult {
@@ -219,42 +223,43 @@ impl SafeClient {
     async fn handle_batch_streaming(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<impl Stream<Item = Result<BatchInfoResponseItem, SuiError>>, io::Error> {
+    ) -> Result<impl Stream<Item = Result<BatchInfoResponseItem, SuiError>> + '_, io::Error> {
         let mut batch_info_items = self
             .authority_client
             .handle_batch_streaming(request.clone())
             .await?;
 
         let stream = batch_info_items
-            .for_each(|item| {
-                item
-                    .map_err(|err| SuiError::ClientIoError {
-                        error: format!("{err}"),
-                    })
-                    .and_then(|batch_info_item| match &batch_info_item {
-                        BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+            .then( move |batch_info_item| {
+                let req_clone = request.clone();
+                async move {
+                    match &batch_info_item {
+                        Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
                             if let Err(err) = self.check_update_item_batch_response(
-                                &request,
+                                req_clone,
                                 &signed_batch,
                             ) {
                                 self.report_client_error(err.clone());
                                 return Err(err);
                             }
-                            Ok(batch_info_item)
+                            batch_info_item
                         }
-                        BatchInfoResponseItem(UpdateItem::Transaction((seq, digest))) => {
+                        Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest)))) => {
                             if let Err(err) = self.check_update_item_transaction_response(
-                                &request,
+                                req_clone,
                                 seq,
-                            digest,
+                                digest,
                             ) {
                                 self.report_client_error(err.clone());
                                 return Err(err);
                             }
-                            Ok(batch_info_item)
+                            batch_info_item
                         }
-                    });
-                item
+                        Err(e) => {
+                            Err(e.clone())
+                        }
+                    }
+                }
             });
         Ok(stream)
     }
