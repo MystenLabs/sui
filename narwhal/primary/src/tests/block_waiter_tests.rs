@@ -1,20 +1,29 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    block_waiter::{BatchResult, BlockErrorType, BlockResult, GetBlockResponse},
+    block_waiter::{
+        BatchResult, BlockError, BlockErrorType, BlockResult, GetBlockResponse, GetBlocksResponse,
+    },
     common,
-    common::{certificate, create_db_stores, resolve_name_and_committee},
-    messages, BatchDigest, BatchMessage, BlockCommand, BlockWaiter, Certificate,
+    common::{
+        certificate, create_db_stores, fixture_batch_with_transactions, fixture_header_builder,
+        keys, resolve_name_and_committee,
+    },
+    messages, BatchDigest, BatchMessage, BlockCommand, BlockWaiter, Certificate, CertificateDigest,
     PrimaryWorkerMessage,
 };
 use bincode::deserialize;
 use crypto::{ed25519::Ed25519PublicKey, traits::VerifyingKey, Hash};
+use ed25519_dalek::Signer;
 use futures::StreamExt;
 use network::SimpleSender;
 use std::{collections::HashMap, net::SocketAddr};
 use tokio::{
     net::TcpListener,
-    sync::mpsc::{channel, Sender},
+    sync::{
+        mpsc::{channel, Sender},
+        oneshot,
+    },
     task::JoinHandle,
     time::{sleep, timeout, Duration},
 };
@@ -39,7 +48,7 @@ async fn test_successfully_retrieve_block() {
 
     // AND spawn a new blocks waiter
     let (tx_commands, rx_commands) = channel(1);
-    let (tx_get_block, mut rx_get_block) = channel(1);
+    let (tx_get_block, rx_get_block) = oneshot::channel();
     let (tx_batch_messages, rx_batch_messages) = channel(10);
 
     BlockWaiter::spawn(
@@ -96,7 +105,7 @@ async fn test_successfully_retrieve_block() {
     tokio::pin!(timer);
 
     tokio::select! {
-        Some(result) = rx_get_block.recv() => {
+        Ok(result) = rx_get_block => {
             assert!(result.is_ok(), "Expected to receive a successful result, instead got error: {}", result.err().unwrap());
 
             let block = result.unwrap();
@@ -107,6 +116,142 @@ async fn test_successfully_retrieve_block() {
             for (_, batch) in expected_batch_messages {
                 assert_eq!(batch.transactions.0.len(), 2);
             }
+        },
+        () = &mut timer => {
+            panic!("Timeout, no result has been received in time")
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_successfully_retrieve_multiple_blocks() {
+    // GIVEN
+    let (_, certificate_store, _) = create_db_stores();
+
+    // AND the necessary keys
+    let (name, committee) = resolve_name_and_committee(13000);
+
+    let key = keys().pop().unwrap();
+    let mut block_ids = Vec::new();
+    let mut expected_batch_messages = HashMap::new();
+    let worker_id = 0;
+    let mut expected_get_block_responses = Vec::new();
+
+    for _ in 0..2 {
+        let batch_1 = fixture_batch_with_transactions(10);
+        let batch_2 = fixture_batch_with_transactions(10);
+
+        let header = fixture_header_builder()
+            .with_payload_batch(batch_1.clone(), worker_id)
+            .with_payload_batch(batch_2.clone(), worker_id)
+            .build(|payload| key.sign(payload));
+
+        let certificate = certificate(&header);
+        certificate_store
+            .write(certificate.digest(), certificate.clone())
+            .await;
+
+        block_ids.push(certificate.digest());
+
+        expected_batch_messages.insert(
+            batch_1.digest(),
+            BatchMessage {
+                id: batch_1.digest(),
+                transactions: batch_1.clone(),
+            },
+        );
+
+        expected_batch_messages.insert(
+            batch_2.digest(),
+            BatchMessage {
+                id: batch_2.digest(),
+                transactions: batch_2.clone(),
+            },
+        );
+
+        let mut batches = vec![
+            BatchMessage {
+                id: batch_1.digest(),
+                transactions: batch_1.clone(),
+            },
+            BatchMessage {
+                id: batch_2.digest(),
+                transactions: batch_2.clone(),
+            },
+        ];
+
+        // sort the batches to make sure that the response is the expected one.
+        batches.sort_by(|a, b| a.id.cmp(&b.id));
+
+        expected_get_block_responses.push(Ok(GetBlockResponse {
+            id: certificate.digest(),
+            batches,
+        }));
+    }
+
+    // AND add a missing block as well
+    let missing_block_id = CertificateDigest::default();
+    expected_get_block_responses.push(Err(BlockError {
+        id: missing_block_id,
+        error: BlockErrorType::BlockNotFound,
+    }));
+
+    block_ids.push(missing_block_id);
+
+    // AND the expected get blocks response
+    let expected_get_blocks_response = GetBlocksResponse {
+        blocks: expected_get_block_responses,
+    };
+
+    // AND spawn a new blocks waiter
+    let (tx_commands, rx_commands) = channel(1);
+    let (tx_get_blocks, rx_get_blocks) = oneshot::channel();
+    let (tx_batch_messages, rx_batch_messages) = channel(10);
+
+    BlockWaiter::spawn(
+        name.clone(),
+        committee.clone(),
+        certificate_store.clone(),
+        rx_commands,
+        rx_batch_messages,
+    );
+
+    // AND spin up a worker node
+    let worker_address = committee
+        .worker(&name, &worker_id)
+        .unwrap()
+        .primary_to_worker;
+
+    let handle = worker_listener::<Ed25519PublicKey>(
+        worker_address,
+        expected_batch_messages.clone(),
+        tx_batch_messages,
+    );
+
+    // WHEN we send a request to get a block
+    tx_commands
+        .send(BlockCommand::GetBlocks {
+            ids: block_ids,
+            sender: tx_get_blocks,
+        })
+        .await
+        .unwrap();
+
+    // Wait for the worker server to complete before continue.
+    // Then we'll be confident that the expected batch responses
+    // have been sent (via the tx_batch_messages channel though)
+    if timeout(Duration::from_millis(4_000), handle).await.is_err() {
+        panic!("worker hasn't received expected batch requests")
+    }
+
+    // THEN we should expect to get back the result
+    let timer = sleep(Duration::from_millis(5_000));
+    tokio::pin!(timer);
+
+    tokio::select! {
+        Ok(result) = rx_get_blocks => {
+            assert!(result.is_ok(), "Expected to receive a successful get blocks result, instead got error: {:?}", result.err().unwrap());
+            assert_eq!(result.unwrap(), expected_get_blocks_response);
         },
         () = &mut timer => {
             panic!("Timeout, no result has been received in time")
@@ -145,19 +290,17 @@ async fn test_one_pending_request_for_block_at_time() {
         rx_batch_receiver: rx_batch_messages,
         tx_pending_batch: HashMap::new(),
         tx_get_block_map: HashMap::new(),
+        tx_get_blocks_map: HashMap::new(),
     };
 
     let get_mock_sender = || {
-        let (tx, _) = channel(1);
+        let (tx, _) = oneshot::channel();
         tx
     };
 
     // WHEN we send GetBlock command
     let result_some = waiter
-        .handle_command(BlockCommand::GetBlock {
-            id: block_id,
-            sender: get_mock_sender(),
-        })
+        .handle_get_block_command(block_id, get_mock_sender())
         .await;
 
     // AND we send more GetBlock commands
@@ -165,10 +308,7 @@ async fn test_one_pending_request_for_block_at_time() {
     for _ in 0..3 {
         results_none.push(
             waiter
-                .handle_command(BlockCommand::GetBlock {
-                    id: block_id,
-                    sender: get_mock_sender(),
-                })
+                .handle_get_block_command(block_id, get_mock_sender())
                 .await,
         );
     }
@@ -218,20 +358,18 @@ async fn test_unlocking_pending_get_block_request_after_response() {
         rx_batch_receiver: rx_batch_messages,
         tx_pending_batch: HashMap::new(),
         tx_get_block_map: HashMap::new(),
+        tx_get_blocks_map: HashMap::new(),
     };
 
     let get_mock_sender = || {
-        let (tx, _) = channel(1);
+        let (tx, _) = oneshot::channel();
         tx
     };
 
     // AND we send GetBlock commands
     for _ in 0..3 {
         waiter
-            .handle_command(BlockCommand::GetBlock {
-                id: block_id,
-                sender: get_mock_sender(),
-            })
+            .handle_get_block_command(block_id, get_mock_sender())
             .await;
     }
 
@@ -267,7 +405,7 @@ async fn test_batch_timeout() {
 
     // AND spawn a new blocks waiter
     let (tx_commands, rx_commands) = channel(1);
-    let (tx_get_block, mut rx_get_block) = channel(1);
+    let (tx_get_block, rx_get_block) = oneshot::channel();
     let (_, rx_batch_messages) = channel(10);
 
     BlockWaiter::spawn(
@@ -292,7 +430,7 @@ async fn test_batch_timeout() {
     tokio::pin!(timer);
 
     tokio::select! {
-        Some(result) = rx_get_block.recv() => {
+        Ok(result) = rx_get_block => {
             assert!(result.is_err(), "Expected to receive an error result");
 
             let block_error = result.err().unwrap();
@@ -318,7 +456,7 @@ async fn test_return_error_when_certificate_is_missing() {
 
     // AND spawn a new blocks waiter
     let (tx_commands, rx_commands) = channel(1);
-    let (tx_get_block, mut rx_get_block) = channel(1);
+    let (tx_get_block, rx_get_block) = oneshot::channel();
     let (_, rx_batch_messages) = channel(10);
 
     BlockWaiter::spawn(
@@ -343,7 +481,7 @@ async fn test_return_error_when_certificate_is_missing() {
     tokio::pin!(timer);
 
     tokio::select! {
-        Some(result) = rx_get_block.recv() => {
+        Ok(result) = rx_get_block => {
             assert!(result.is_err(), "Expected to receive an error result");
 
             let block_error = result.err().unwrap();
