@@ -58,7 +58,7 @@ impl Sequencer {
             let input_server = InputServer { tx_input };
             sui_network::transport::spawn_server(
                 &sequencer.input_address.to_string(),
-                input_server,
+                Arc::new(input_server),
                 sequencer.buffer_size,
             )
             .await
@@ -73,7 +73,7 @@ impl Sequencer {
             let subscriber_server = SubscriberServer::new(tx_subscriber, store);
             sui_network::transport::spawn_server(
                 &sequencer.subscriber_address.to_string(),
-                subscriber_server,
+                Arc::new(subscriber_server),
                 sequencer.buffer_size,
             )
             .await

@@ -158,7 +158,7 @@ impl SuiCommand {
 }
 
 pub struct SuiNetwork {
-    pub spawned_authorities: Vec<SpawnedServer>,
+    pub spawned_authorities: Vec<SpawnedServer<AuthorityServer>>,
 }
 
 impl SuiNetwork {
