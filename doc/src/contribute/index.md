@@ -4,6 +4,15 @@ title: Contributing to Sui
 
 This page describes how to add to Sui. If you merely need to get the Sui binaries, follow [Install Sui](../build/install.md).
 
+## See our roadmap
+
+Sui is evolving quickly. See our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md) for the
+overall status of Sui, including timelines for launching devnet, testnet, and mainnet.
+
+## Join the community
+
+To connect with the Sui community, join our [Discord](https://discord.gg/mysten).
+
 ## File issues
 
 Report bugs and make feature requests in the [Sui GitHub](https://github.com/MystenLabs/sui/issues) repository
