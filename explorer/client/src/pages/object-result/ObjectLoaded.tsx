@@ -285,11 +285,13 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             </div>
                             <div>
                                 <div>Owner</div>
-                                <Longtext
-                                    text={extractOwnerData(data.owner)}
-                                    category="unknown"
-                                    isLink={true}
-                                />
+                                <div id="owner">
+                                    <Longtext
+                                        text={extractOwnerData(data.owner)}
+                                        category="unknown"
+                                        isLink={true}
+                                    />
+                                </div>
                             </div>
                             {data.contract_id && (
                                 <div>

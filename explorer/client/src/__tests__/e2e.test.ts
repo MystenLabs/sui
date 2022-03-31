@@ -9,14 +9,43 @@ let page: any;
 const BASE_URL = 'http://localhost:8080';
 
 //Global functions:
+
+const checkID = async (page: any, element: string, expected: string) => {
+    const id = await page.$eval(element, (el: any) => el.getAttribute('id'));
+    expect(id).toBe(expected);
+};
+
+const checkDataTestID = async (
+    page: any,
+    element: string,
+    expected: string
+) => {
+    const id = await page.$eval(element, (el: any) =>
+        el.getAttribute('data-testid')
+    );
+    expect(id).toBe(expected);
+};
+
+const checkIsDisabled = async (page: any, element: string) => {
+    const id = await page.$eval(element, (el: any) =>
+        el.getAttribute('disabled')
+    );
+    expect(id).toBe('');
+};
+
+const checkIsNotDisabled = async (page: any, element: string) => {
+    const id = await page.$eval(element, (el: any) =>
+        el.getAttribute('disabled')
+    );
+    expect(id).toBeNull();
+};
+
 const expectHome = async (page: any) => {
-    const el = (await page.$('[data-testid="home-page"]')) || false;
-    expect(el).not.toBe(false);
+    await checkDataTestID(page, 'main > div', 'home-page');
 };
 
 const expectErrorResult = async (page: any) => {
-    const el = await page.$('#errorResult');
-    expect(el).not.toBeNull();
+    await checkID(page, 'main > div', 'errorResult');
 };
 
 const searchText = async (page: any, text: string) => {
@@ -82,15 +111,14 @@ describe('End-to-end Tests', () => {
             await page.goto(BASE_URL);
             await searchText(page, successTransactionID);
             const el = await page.$('#transactionID');
-            expect(el).not.toBeNull();
             const value = await page.evaluate((el: any) => el.textContent, el);
             expect(value.trim()).toBe(successTransactionID);
         });
 
         it('can be reached through URL', async () => {
+            await page.goto(BASE_URL);
             await page.goto(`${BASE_URL}/transactions/${successTransactionID}`);
             const el = await page.$('#transactionID');
-            expect(el).not.toBeNull();
             const value = await page.evaluate((el: any) => el.textContent, el);
             expect(value.trim()).toBe(successTransactionID);
         });
@@ -154,15 +182,14 @@ describe('End-to-end Tests', () => {
             await page.goto(BASE_URL);
             await searchText(page, successObjectID);
             const el = await page.$('#objectID');
-            expect(el).not.toBeNull();
             const value = await page.evaluate((el: any) => el.textContent, el);
             expect(value.trim()).toBe(successObjectID);
         });
 
         it('can be reached through URL', async () => {
+            await page.goto(BASE_URL);
             await page.goto(`${BASE_URL}/objects/${successObjectID}`);
             const el = await page.$('#objectID');
-            expect(el).not.toBeNull();
             const value = await page.evaluate((el: any) => el.textContent, el);
             expect(value.trim()).toBe(successObjectID);
         });
@@ -207,7 +234,6 @@ describe('End-to-end Tests', () => {
             await page.goto(BASE_URL);
             await searchText(page, successAddressID);
             const el = await page.$('#addressID');
-            expect(el).not.toBeNull();
             const value = await page.evaluate((el: any) => el.textContent, el);
             expect(value.trim()).toBe(successAddressID);
         });
@@ -215,7 +241,6 @@ describe('End-to-end Tests', () => {
         it('can be reached through URL', async () => {
             await page.goto(`${BASE_URL}/addresses/${successAddressID}`);
             const el = await page.$('#addressID');
-            expect(el).not.toBeNull();
             const value = await page.evaluate((el: any) => el.textContent, el);
             expect(value.trim()).toBe(successAddressID);
         });
@@ -238,76 +263,108 @@ describe('End-to-end Tests', () => {
         });
     });
     describe('Enables clicking links to', () => {
-        it('go from address to object and back', async () => {
-            await page.goto(`${BASE_URL}/addresses/receiverAddress`);
+        const navigationTemplate = async (
+            page: any,
+            parentValue: string,
+            parentIsA: 'addresses' | 'objects',
+            childValue: string,
+            parentToChildNo: number
+        ) => {
+            await page.goto(`${BASE_URL}/${parentIsA}/${parentValue}`);
 
-            //Click on text saying playerOne:
+            //Click on child in Owned Objects List:
             const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(1)'
+                `div#ownedObjects > div:nth-child(${parentToChildNo})`
             );
             await objectLink.click();
 
-            //Now on Object Page:
-            const objectIDEl = await page.$('#objectID');
-            expect(objectIDEl).not.toBeNull();
-
-            //This Object is playerOne:
-            const objectValue = await page.evaluate(
+            //Check ID of child object:
+            const childIDEl = await page.$('#objectID');
+            const childText = await page.evaluate(
                 (el: any) => el.textContent,
-                objectIDEl
+                childIDEl
             );
-            expect(objectValue.trim()).toBe('playerOne');
+            expect(childText.trim()).toBe(childValue);
 
-            //Click on text saying receiverAddress:
-            const receiverAddressLink = await page.$(
-                'div#descriptionResults > div:nth-child(5) > span'
-            );
-
-            await receiverAddressLink.click();
-
-            //Now on Address Page:
-            const addressIDEl = await page.$('#addressID');
-            expect(addressIDEl).not.toBeNull();
-
-            //This Address is receiverAddress:
-            const addressValue = await page.evaluate(
-                (el: any) => el.textContent,
-                addressIDEl
-            );
-            expect(addressValue.trim()).toBe('receiverAddress');
-        });
-        it('go from object to child object and back', async () => {
-            const parentObj = 'playerTwo';
-            const childObj = 'standaloneObject';
-            await page.goto(`${BASE_URL}/objects/${parentObj}`);
-
-            const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(1)'
-            );
-            await objectLink.click();
-            const objectIDEl = await page.$('#objectID');
-            expect(objectIDEl).not.toBeNull();
-
-            const objectValue = await page.evaluate(
-                (el: any) => el.textContent,
-                objectIDEl
-            );
-            expect(objectValue.trim()).toBe(childObj);
-
-            const ownerLink = await page.$(
-                'div#descriptionResults > div:nth-child(5) > span'
-            );
-
+            //Click on Owner text:
+            const ownerLink = await page.$('div#owner > span:first-child');
             await ownerLink.click();
 
-            const objectIDEl2 = await page.$('#objectID');
-            expect(objectIDEl2).not.toBeNull();
+            //Looking for object or address ID?
+            const lookingFor =
+                parentIsA === 'addresses' ? '#addressID' : '#objectID';
 
-            const objectValue2 = await page.evaluate(
+            //Check ID of parent:
+            const parentIDEl = await page.$(lookingFor);
+            const parentText = await page.evaluate(
                 (el: any) => el.textContent,
-                objectIDEl
+                parentIDEl
             );
-            expect(objectValue2.trim()).toBe(parentObj);
+            expect(parentText.trim()).toBe(parentValue);
+        };
+        it('go from address to object and back', async () => {
+            await navigationTemplate(
+                page,
+                'receiverAddress',
+                'addresses',
+                'playerOne',
+                1
+            );
+        });
+        it('go from object to child object and back', async () => {
+            await navigationTemplate(
+                page,
+                'playerTwo',
+                'objects',
+                'standaloneObject',
+                1
+            );
+        });
+        it('go from parent to broken image object and back', async () => {
+            const parentValue = 'ObjectThatOwns';
+            await page.goto(`${BASE_URL}/objects/${parentValue}`);
+
+            //Click on child in Owned Objects List:
+            const objectLink = await page.$(
+                `div#ownedObjects > div:nth-child(2)`
+            );
+            await objectLink.click();
+
+            // First see Please Wait Message:
+            await checkID(
+                page,
+                'main > div > div:first-child > div > div',
+                'pleaseWaitImage'
+            );
+            await page.waitForFunction(
+                () => !document.querySelector('#pleaseWaitImage')
+            );
+
+            //Then see No Image Warning:
+            await checkID(
+                page,
+                'main > div > div:first-child > div > div',
+                'noImage'
+            );
+
+            //Parent Object contains an image:
+            const ownerLink = await page.$('div#owner > span:first-child');
+            await ownerLink.click();
+            await page.waitForFunction(
+                () => !document.querySelector('#pleaseWaitImage')
+            );
+            await checkID(
+                page,
+                'main > div > div:first-child > div > img',
+                'loadedImage'
+            );
+
+            //And no No Image / Please Wait message:
+            await expect(
+                page.$eval('main > div > div:first-child > div > div')
+            ).rejects.toThrow(
+                'Error: failed to find element matching selector "main > div > div:first-child > div > div"'
+            );
         });
     });
     describe('Owned Objects have buttons', () => {
@@ -355,15 +412,12 @@ describe('End-to-end Tests', () => {
             const btn = await page.$('#lastBtn');
             await btn.click();
 
-            //Back and First buttons are present and not disabled:
-            expect(await page.$('#backBtn')).not.toBeNull();
-            expect(await page.$('#firstBtn')).not.toBeNull();
-            expect(await page.$('#backBtn[disabled]')).toBeNull();
-            expect(await page.$('#firstBtn[disabled]')).toBeNull();
-
+            //Back and First buttons are not disabled:
+            await checkIsNotDisabled(page, '#backBtn');
+            await checkIsNotDisabled(page, '#firstBtn');
             //Next and Last buttons are disabled:
-            expect(await page.$('button#nextBtn[disabled]')).not.toBeNull();
-            expect(await page.$('button#lastBtn[disabled]')).not.toBeNull();
+            await checkIsDisabled(page, '#nextBtn');
+            await checkIsDisabled(page, '#lastBtn');
         });
 
         it('to go back a page', async () => {
@@ -415,15 +469,12 @@ describe('End-to-end Tests', () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
 
-            //Next and Last buttons are present and not disabled:
-            expect(await page.$('#nextBtn')).not.toBeNull();
-            expect(await page.$('#lastBtn')).not.toBeNull();
-            expect(await page.$('#nextBtn[disabled]')).toBeNull();
-            expect(await page.$('#lastBtn[disabled]')).toBeNull();
-
-            //Back and First buttons are disabled:
-            expect(await page.$('button#backBtn[disabled]')).not.toBeNull();
-            expect(await page.$('button#firstBtn[disabled]')).not.toBeNull();
+            //Next and Last buttons are not disabled:
+            await checkIsNotDisabled(page, '#nextBtn');
+            await checkIsNotDisabled(page, '#lastBtn');
+            //First and Back buttons are disabled:
+            await checkIsDisabled(page, '#firstBtn');
+            await checkIsDisabled(page, '#backBtn');
         });
     });
 });

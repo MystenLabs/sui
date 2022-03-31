@@ -74,15 +74,17 @@ function DisplayBox({
         return (
             <div className={styles['display-container']}>
                 {!hasDisplayLoaded && (
-                    <div className={styles.imagebox}>
+                    <div className={styles.imagebox} id="pleaseWaitImage">
                         Please wait for display to load
                     </div>
                 )}
-                {hasFailedToLoad && (
-                    <div className={styles.imagebox}>No Image was Found</div>
-                )}
-                {!hasFailedToLoad && (
+                {hasFailedToLoad ? (
+                    <div className={styles.imagebox} id="noImage">
+                        No Image was Found
+                    </div>
+                ) : (
                     <img
+                        id="loadedImage"
                         className={styles.imagebox}
                         style={imageStyle}
                         alt="NFT"
