@@ -7,7 +7,7 @@
 // mutate the gameboard directly. In order for each plaer to place
 // a marker, they must first show their intention of placing a marker
 // by creating a marker object with the placement information and send
-// the marker to the admin. The admin needs to run a centralized cervice
+// the marker to the admin. The admin needs to run a centralized service
 // that monitors the marker placement events and respond do them.
 // Upon receiving an event, the admin will attempt the place the new
 // marker on the gameboard. This means that every marker placement operation
@@ -31,6 +31,7 @@ module Games::TicTacToe {
     const X_WIN: u8 = 1;
     const O_WIN: u8 = 2;
     const DRAW: u8 = 3;
+    const FINAL_TURN: u8 = 8;
 
     // Error codes
     const INVALID_LOCATION: u64 = 0;
@@ -96,7 +97,7 @@ module Games::TicTacToe {
         Transfer::transfer(game, TxContext::sender(ctx));
         let cap = MarkMintCap {
             id: TxContext::new_id(ctx),
-            game_id: copy game_id,
+            game_id,
             remaining_supply: 5,
         };
         Transfer::transfer(cap, x_address);
@@ -231,7 +232,7 @@ module Games::TicTacToe {
         check_for_winner(game, 2, 0, 1, 1, 0, 2);
 
         // Check if we have a draw
-        if (game.game_status != IN_PROGRESS && game.cur_turn == 9) {
+        if (game.game_status == IN_PROGRESS && game.cur_turn == FINAL_TURN) {
             game.game_status = DRAW;
         };
     }

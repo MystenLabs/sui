@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // This is a rewrite of TicTacToe using a completely different approach.
-// In TicTacToe, since the game object is owned by the admin, the players was not
+// In TicTacToe, since the game object is owned by the admin, the players are not
 // able to directly mutate the gameboard. Hence each marker placement takes
 // two transactions.
 // In this implementation, we make the game object a shared mutable object.
 // Both players have access and can mutate the game object, and hence they
 // can place markers directly in one transaction.
 // In general, using shared mutable object has an extra cost due to the fact
-// that Sui need to sequence the operations that mutate the shared object from
+// that Sui needs to sequence the operations that mutate the shared object from
 // different transactions. In this case however, since it is expected for players
 // to take turns to place the marker, there won't be a significant overhead in practice.
 // As we can see, by using shared mutable object, the implementation is much
@@ -27,11 +27,11 @@ module Games::SharedTicTacToe {
     const X_WIN: u8 = 1;
     const O_WIN: u8 = 2;
     const DRAW: u8 = 3;
+    const FINAL_TURN: u8 = 8;
+
 
     // Mark type
-    const MARK_EMPTY: u8 = 0;
-    const MARK_X: u8 = 1;
-    const MARK_O: u8 = 2;
+    const MARK_EMPTY: u8 = 2;
 
     // Error codes
     /// Trying to place a mark when it's not your turn.
@@ -74,8 +74,7 @@ module Games::SharedTicTacToe {
         let game = TicTacToe {
             id,
             gameboard,
-            // X always go first.
-            cur_turn: MARK_X,
+            cur_turn: 0,
             game_status: IN_PROGRESS,
             x_address: x_address,
             o_address: o_address,
@@ -93,9 +92,9 @@ module Games::SharedTicTacToe {
         let cell = Vector::borrow_mut(Vector::borrow_mut(&mut game.gameboard, (row as u64)), (col as u64));
         assert!(*cell == MARK_EMPTY, ECELL_OCCUPIED);
 
-        *cell = game.cur_turn;
+        *cell = game.cur_turn % 2;
         update_winner(game);
-        game.cur_turn = if (game.cur_turn == MARK_X) MARK_O else MARK_X;
+        game.cur_turn = game.cur_turn + 1;
 
         if (game.game_status != IN_PROGRESS) {
             // Notify the server that the game ended so that it can delete the game.
@@ -123,7 +122,7 @@ module Games::SharedTicTacToe {
     }
 
     fun get_cur_turn_address(game: &TicTacToe): address {
-        if (game.cur_turn == MARK_X) {
+        if (game.cur_turn % 2 == 0) {
             *&game.x_address
         } else {
             *&game.o_address
@@ -150,7 +149,7 @@ module Games::SharedTicTacToe {
         check_for_winner(game, 2, 0, 1, 1, 0, 2);
 
         // Check if we have a draw
-        if (game.game_status == IN_PROGRESS && game.cur_turn == 9) {
+        if (game.game_status == IN_PROGRESS && game.cur_turn == FINAL_TURN) {
             game.game_status = DRAW;
         };
     }
@@ -161,7 +160,7 @@ module Games::SharedTicTacToe {
         };
         let result = get_winner_if_all_equal(game, row1, col1, row2, col2, row3, col3);
         if (result != MARK_EMPTY) {
-            game.game_status = if (result == MARK_X) X_WIN else O_WIN;
+            game.game_status = if (result == 0) X_WIN else O_WIN;
         };
     }
 
