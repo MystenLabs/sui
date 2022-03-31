@@ -285,8 +285,8 @@ wallet in [Calling Move code](wallet.md#calling-move-code).
 In order to build a Move package and run code defined in
 this package, first [install Sui binaries](install.md).
 
-Then clone the repository as
-described in [Contributing to Sui](../contribute/index.md#download-and-learn-sui)
+Then clone the repository as described in
+[Contributing to Sui](../contribute/index.md#download-and-learn-sui)
 as this tutorial assumes you have a clone of Sui's repository in your current directory.
 
 Refer to the code example developed for this tutorial in the
