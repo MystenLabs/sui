@@ -21,6 +21,11 @@ the `wallet` command used in the remainder of this tutorial in your path.
 Simply leave the terminal with Sui running and start a new terminal for the
 remainder of this tutorial.
 
+This tutorial models gas fees under a simplified schema. In practice, the Sui
+network will charge for gas using its native currency SUI. This transaction fee
+equals the computational effort of executing operations on the Sui network (i.e.
+gas units) times the price of gas in the SUI currency (i.e. the gas price).
+
 ## Gather accounts and gas objects
 
 In that new terminal, let us take a look at the account addresses we own in 
