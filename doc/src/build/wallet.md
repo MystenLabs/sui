@@ -20,7 +20,7 @@ each with five gas objects. These are Sui [objects](objects.md) used
 to pay for Sui [transactions](transactions.md#transaction-metadata),
 such other object transfers or smart contract (Move) calls. These
 numbers represent a sample configuration and have been chosen somewhat
-arbitrarily; the process of generating the genesis state can be
+arbitrarily; the genesis state can be
 customized with additional accounts, objects, code, etc. as described
 in [Genesis customization](#customize-genesis).
 
@@ -30,26 +30,46 @@ in [Genesis customization](#customize-genesis).
    sui genesis
    ```
 
+All of this is contained in configuration and keystore files, as well
+as an `authorities_db` database file.
 The network configuration is stored in `network.conf` and can be used
 subsequently to start the network. The `wallet.conf` and `wallet.key`
 are also created to be used by the Sui wallet to manage the newly
-created accounts. By default, these files will be stored in the
-`~/.sui/sui_config` directory, but you can override this location by
-providing an alternative path:
+created accounts.
+
+By default, these files are placed in your home directory at
+`~/.sui/sui_config` directory. But you can override this location by
+providing an alternative path to the `--working-dir` argument. Run
+the command like so to place the files in the `dir` directory:
 
 ```shell
-sui genesis --working-dir /path/to/sui/config/files
+sui genesis --working-dir /path/to/sui/config/dir
 ```
+
+:note: That path and directory must already exist and will not be
+created with the `--working-dir` argument.
+
 ### Recreating Genesis
 
 To recreate Sui genesis state in the same location, which will remove
-existing configuration files, use the `--force` option to the `sui
-genesis` command.
+existing configuration files, pass the `--force` option to the `sui
+genesis` command and either run it in the same directory or specify
+it once again, using the `--working-dir` argument:
+
+```shell
+sui genesis --force --working-dir /path/to/sui/config/dir
+```
+
+For example:
+
+```shell
+sui genesis --force --working-dir /Users/name/tmp
+```
 
 ## Wallet configuration
 The genesis process creates a configuration file `wallet.conf`, and a keystore file `wallet.key` for the
 Sui wallet.  The config file contains information of the accounts and
-the Sui Network Gateway. The keystore file contains all the public-private key pair of the created accounts.
+the Sui Network Gateway. The keystore file contains all the public-private key pairs of the created accounts.
 Sui wallet uses the network information in `wallet.conf` to communicate
 with the Sui network authorities  and create transactions using the key
 pairs residing in the keystore file.
@@ -90,15 +110,19 @@ in the wallet configuration (with some values omitted):
   }
 }
 ```
-The `accounts` variable contains the account's address that the wallet manages.
-`gateway` contains the information of the Sui network that the wallet will be connecting to,
-currently only `embedded` gateway type is supported.
 
-The `authorities` variable is part of the embedded gateway configuration, it contains Sui network
-authorities' name, host and port information. It is used to establish connections to the Sui network.
+TODO: Why do I no longer see a `client_db` file created, only `authorities_db` now?
+
+The `accounts` variable contains the account's address that the wallet manages. The
+`gateway` variable contains the information of the Sui network that the wallet will
+be connecting to. Currently, only the `embedded` gateway type is supported.
+
+The `authorities` variable is part of the embedded gateway configuration. It contains
+the Sui network authority's name, host and port information. It is used to establish connections
+to the Sui network.
 
 Note `send_timeout`, `recv_timeout` and `buffer_size` are the network
-parameters and `db_folder_path` is the path to the account's client state
+parameters, and `db_folder_path` is the path to the account's client state
 database. This database stores all the transaction data, certificates
 and object data belonging to the account.
 
@@ -120,24 +144,48 @@ implement more secure key management and support hardware signing in a future re
 :warning: **Do not use in production**: Keys are stored in file!
 
 ## Starting the network
-Run the following command to start the local Sui network:
+Run the following command to start the local Sui network, assuming you
+accepted the default location for configuration:
 
 ```shell
 sui start
 ```
 
-This command will by default look for Sui network coinfiguration file
-(`network.conf`) in the `~/.sui/sui_config` directory, but you can
-override this setting by providing a path to the directory where this
-file are stored:
+This command will look for the Sui network configuration file
+`network.conf` in the `~/.sui/sui_config` directory. But you can
+override this setting by providing a path to the directory where
+this file is stored:
 
 ```shell
 sui start --config /path/to/sui/network/config/file
 ```
 
+For example:
+
+```shell
+$ sui start --config /Users/name/tmp/network.conf
+```
+
+TODO: Find out why I get this error:
+
+```
+claymurphy@Clays-MacBook-Pro tmp % sui start --config /Users/claymurphy/tmp/network.conf
+Error: Address already in use (os error 48)
+```
+
+I see no Sui-specific processes running:
+
+```
+claymurphy@Clays-MacBook-Pro tmp % ps -ef | grep -i sui
+  501   442     1   0 12:02PM ??         0:00.22 /System/Library/CoreServices/CoreServicesUIAgent.app/Contents/MacOS/CoreServicesUIAgent
+  501   623     1   0 12:03PM ??         0:01.10 /System/Library/PrivateFrameworks/AppleMediaServicesUI.framework/amsengagementd
+  501  1433     1   0  1:01PM ??         0:00.21 /System/Library/PrivateFrameworks/PaperKit.framework/Contents/LinkedNotesUIService.app/Contents/MacOS/LinkedNotesUIService
+```
+
 Executing any of these two commands in a terminal window will result
 in no output but the terminal will be "blocked" by the running Sui
-instance (it will not return the command prompt).
+instance (it will not return the command prompt). The command can
+also be run in background.
 
 NOTE: For logs, set `RUST_LOG=debug` before invoking `sui start`.
 
@@ -146,6 +194,8 @@ If you see errors when trying to start Sui network, particularly if you made som
 [customized wallet configuration](#wallet-configuration)), you should [recreate Sui genesis state](#recreating-genesis).
 
 ## Using the wallet
+Now start a new terminal since you have Sui running in the first terminal.
+
 The following commands are supported by the wallet:
 
     `addresses`      Obtain the Addresses managed by the wallet
@@ -162,7 +212,7 @@ The following commands are supported by the wallet:
     `transfer`       Transfer an object
 Use `help <command>` to see more information on each command.
 
-The wallet can be started in two modes: interactive shell or command line interface.
+You can start the wallet in two modes: interactive shell or command line interface.
 
 ### Interactive shell
 
@@ -172,23 +222,23 @@ To start the interactive shell, execute the following (in a different terminal w
 wallet
 ```
 
-This command will by default look for wallet coinfiguration file
-(`wallet.conf`) in the `~/.sui/sui_config` directory, but you can
+This command will by default look for the wallet configuration file
+`wallet.conf` in the `~/.sui/sui_config` directory. But you can
 override this setting by providing a path to the directory where this
-file are stored:
+file is stored:
 
 ```shell
 wallet --config /path/to/wallet/config/file
 ```
 
 The Sui interactive wallet supports the following shell functionality:
-* Command History
+* *Command history* -
   The `history` command can be used to print the interactive shell's command history; 
   you can also use Up, Down or Ctrl-P, Ctrl-N to navigate previous or next matches from history. 
   History search is also supported using Ctrl-R.
-* Tab completion
+* *Tab completion* -
   Tab completion is supported for all commands using Tab and Ctrl-I keys.
-* Environment variable substitution
+* *Environment variable substitution* -
   The wallet shell will substitute inputs prefixed with `$` with environment variables, 
   you can use the `env` command to print out the entire list of variables and 
   use `echo` to preview the substitution without invoking any commands.  
