@@ -17,6 +17,10 @@ h1.title {
     @apply border-solid border-stone-300 rounded-lg p-[1vw];
 }
 
+.display > div > div {
+    @apply p-1 pt-10;
+}
+
 /* Text Box CSS */
 
 div.textbox {

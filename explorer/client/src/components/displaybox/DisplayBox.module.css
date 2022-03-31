@@ -1,3 +1,7 @@
+div.imagebox {
+    @apply border-0 border-b-2 border-solid border-gray-300;
+}
+
 img.imagebox {
     @apply object-scale-down w-[100%];
 }
