@@ -172,7 +172,7 @@ module Games::TicTacToeTests {
         X|O|
         */
 
-        // Player1 places an O in (2, 2).
+        // Player1 places an X in (2, 2).
         status = place_mark(2, 2, &admin, &player_x, scenario);
         assert!(status == DRAW, 2);
         /*

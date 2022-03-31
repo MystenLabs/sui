@@ -168,7 +168,7 @@ module Games::SharedTicTacToeTests {
         X|O|
         */
 
-        // Player1 places an O in (2, 2).
+        // Player1 places an X in (2, 2).
         status = place_mark(2, 2, &player_x, scenario);
         /*
         Current game board:
