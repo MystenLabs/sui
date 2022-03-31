@@ -34,6 +34,8 @@ mod server_tests;
     set it, or a dynamic mechanism to adapt it according to observed workload.
 */
 const CHUNK_SIZE: usize = 36;
+const MIN_BATCH_SIZE: u64 = 1000;
+const MAX_DELAY_MILLIS: u64 = 5_000; // 5 sec
 
 pub struct AuthorityServer {
     server: NetworkServer,
@@ -61,7 +63,6 @@ impl AuthorityServer {
         max_delay: Duration,
     ) -> SuiResult<tokio::task::JoinHandle<SuiResult<()>>> {
         // Start the batching subsystem, and register the handles with the authority.
-        // let last_batch = self.state.init_batches_from_database()?;
         let local_server = self.clone();
 
         let _batch_join_handle = tokio::task::spawn(async move {
@@ -74,12 +75,17 @@ impl AuthorityServer {
         Ok(_batch_join_handle)
     }
 
-    pub async fn spawn(self) -> Result<SpawnedServer, io::Error> {
+    pub async fn spawn(self) -> Result<SpawnedServer<AuthorityServer>, io::Error> {
         let address = format!("{}:{}", self.server.base_address, self.server.base_port);
         let buffer_size = self.server.buffer_size;
+        let guarded_state = Arc::new(self);
 
-        // Launch server for the appropriate protocol.
-        spawn_server(&address, self, buffer_size).await
+        // Start the batching subsystem
+        let _join_handle = guarded_state
+            .spawn_batch_subsystem(MIN_BATCH_SIZE, Duration::from_millis(MAX_DELAY_MILLIS))
+            .await;
+
+        spawn_server(&address, guarded_state, buffer_size).await
     }
 
     async fn handle_batch_streaming<'a, 'b, A>(

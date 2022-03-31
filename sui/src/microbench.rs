@@ -14,8 +14,10 @@ use std::collections::{HashSet, VecDeque};
 use std::time::{Duration, Instant};
 use structopt::StructOpt;
 use sui_adapter::genesis;
+use sui_core::authority_client::AuthorityClient;
 use sui_core::{authority::*, authority_server::AuthorityServer};
 use sui_network::{network::NetworkClient, transport};
+use sui_types::batch::UpdateItem;
 use sui_types::crypto::{get_key_pair, AuthoritySignature, KeyPair, PublicKeyBytes, Signature};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
@@ -260,7 +262,10 @@ impl ClientServerBenchmark {
         (state, transactions)
     }
 
-    async fn spawn_server(&self, state: AuthorityState) -> transport::SpawnedServer {
+    async fn spawn_server(
+        &self,
+        state: AuthorityState,
+    ) -> transport::SpawnedServer<AuthorityServer> {
         let server = AuthorityServer::new(self.host.clone(), self.port, self.buffer_size, state);
         server.spawn().await.unwrap()
     }
@@ -292,6 +297,59 @@ impl ClientServerBenchmark {
             Duration::from_micros(self.send_timeout_us),
             Duration::from_micros(self.recv_timeout_us),
         );
+
+        // We spawn a second client that listens to the batch interface
+        let client_batch = NetworkClient::new(
+            self.host.clone(),
+            self.port,
+            self.buffer_size,
+            Duration::from_micros(self.send_timeout_us),
+            Duration::from_micros(self.recv_timeout_us),
+        );
+
+        let _batch_client_handle = tokio::task::spawn(async move {
+            let authority_client = AuthorityClient::new(client_batch);
+
+            let mut start = 0;
+
+            loop {
+                let receiver = authority_client
+                    .handle_batch_streaming_as_stream(BatchInfoRequest {
+                        start,
+                        end: start + 10_000,
+                    })
+                    .await;
+
+                if let Err(e) = &receiver {
+                    error!("Listener error: {:?}", e);
+                    break;
+                }
+                let mut receiver = receiver.unwrap();
+
+                info!("Start batch listener at sequence: {}.", start);
+                while let Some(item) = receiver.next().await {
+                    match item {
+                        Ok(BatchInfoResponseItem(UpdateItem::Transaction((
+                            _tx_seq,
+                            _tx_digest,
+                        )))) => {
+                            start = _tx_seq + 1;
+                        }
+                        Ok(BatchInfoResponseItem(UpdateItem::Batch(_signed_batch))) => {
+                            info!(
+                                "Client received batch up to sequence {}",
+                                _signed_batch.batch.next_sequence_number
+                            );
+                        }
+                        Err(err) => {
+                            error!("{:?}", err);
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+
         info!("Sending requests.");
         if self.single_operation {
             // Send batches one by one
@@ -354,7 +412,7 @@ fn make_transfer_transaction(
 
         SingleTransactionKind::Call(MoveCall {
             package: framework_obj_ref,
-            module: ident_str!("GAS").to_owned(),
+            module: ident_str!("SUI").to_owned(),
             function: ident_str!("transfer").to_owned(),
             type_arguments: Vec::new(),
             object_arguments: vec![object_ref],
