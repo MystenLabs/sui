@@ -15,10 +15,18 @@ After installing `cargo`, run:
 cargo install --git https://github.com/MystenLabs/sui.git
 ```
 
-This will put three binaries in your `PATH`:
+This will put three binaries in your `PATH` (ex. under `~/.cargo/bin`):
 * [`sui-move`](move.md): Build and test Move packages.
 * [`wallet`](wallet.md): Run a local Sui network and gateway service accessible via the wallet CLI. The wallet CLI manage keypairs to sign/send transactions.
 * [`rest_server`](rest-api.md): Run a local Sui network and gateway service accessible via a REST interface.
+
+Confirm the install with:
+
+```
+$ echo $PATH
+```
+
+And ensure the `.cargo/bin` directory appears.
 
 ## Contribute
 
