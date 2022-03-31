@@ -306,7 +306,10 @@ impl FixedRateBenchmark {
         times
     }
 
-    async fn spawn_server(&self, state: AuthorityState) -> transport::SpawnedServer {
+    async fn spawn_server(
+        &self,
+        state: AuthorityState,
+    ) -> transport::SpawnedServer<AuthorityServer> {
         let server = AuthorityServer::new(self.host.clone(), self.port, self.buffer_size, state);
         server.spawn().await.unwrap()
     }
