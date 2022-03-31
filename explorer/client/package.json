@@ -41,8 +41,8 @@
     "scripts": {
         "start": "react-scripts start",
         "start:dev": "concurrently \"npm:start\" \"npm:prettier:fix:watch\"",
-        "start:test": "REACT_APP_DATA=static PORT=8080 npm start",
-        "test": "react-scripts test --detectOpenHandles --watchAll=false",
+        "start:static": "REACT_APP_DATA=static PORT=8080 react-scripts start",
+        "test": "npx start-server-and-test 'npm run start:static' 8080 'react-scripts test --detectOpenHandles --watchAll=false'",
         "build": "react-scripts build",
         "eslint:check": "eslint --max-warnings=0 .eslintrc.js \"./src/**/*.{js,jsx,ts,tsx}\"",
         "eslint:fix": "npm run eslint:check -- --fix",
