@@ -9,9 +9,12 @@ h1.title {
 /* Display Box CSS */
 
 .display {
-    @apply ml-[5vw] border-solid border-stone-300
-    rounded-lg p-[1vw] mx-auto mt-[1vh] 
-    w-[88vw] h-[88vw] lg:w-[35vw] lg:h-[35vw] mb-[10vh];
+    @apply ml-[5vw] mx-auto mt-[1vh] 
+    w-[88vw] lg:w-[35vw] min-h-[88vw] lg:min-h-[35vw];
+}
+
+.display > div > img {
+    @apply border-solid border-stone-300 rounded-lg p-[1vw];
 }
 
 /* Text Box CSS */
