@@ -314,7 +314,7 @@ impl ClientServerBenchmark {
 
             loop {
                 let receiver = authority_client
-                    .handle_batch_streaming_as_stream(BatchInfoRequest {
+                    .handle_batch_streaming(BatchInfoRequest {
                         start,
                         end: start + 10_000,
                     })

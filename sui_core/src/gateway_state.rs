@@ -29,6 +29,7 @@ use std::path::PathBuf;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
+use crate::authority_client::AuthorityClient;
 
 use self::gateway_responses::*;
 
@@ -38,17 +39,17 @@ pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
 pub type GatewayClient = Box<dyn GatewayAPI + Sync + Send>;
 
-pub struct GatewayState<A> {
-    authorities: AuthorityAggregator<A>,
+pub struct GatewayState {
+    authorities: AuthorityAggregator,
     store: Arc<GatewayStore>,
 }
 
-impl<A> GatewayState<A> {
+impl GatewayState {
     /// Create a new manager which stores its managed addresses at `path`
     pub fn new(
         path: PathBuf,
         committee: Committee,
-        authority_clients: BTreeMap<AuthorityName, A>,
+        authority_clients: BTreeMap<AuthorityName, AuthorityClient>,
     ) -> Self {
         Self {
             store: Arc::new(GatewayStore::open(path, None)),
@@ -163,10 +164,7 @@ pub trait GatewayAPI {
     fn get_owned_objects(&mut self, account_addr: SuiAddress) -> Vec<ObjectRef>;
 }
 
-impl<A> GatewayState<A>
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
+impl GatewayState {
     // TODO: This is expensive and unnecessary.
     // We should make sure that the framework package exists in the gateway store and read it.
     // Or even better, we should cache the reference in GatewayState struct.
@@ -494,10 +492,7 @@ where
 }
 
 #[async_trait]
-impl<A> GatewayAPI for GatewayState<A>
-where
-    A: AuthorityAPI + Send + Sync + Clone + 'static,
-{
+impl GatewayAPI for GatewayState {
     async fn execute_transaction(
         &mut self,
         tx: Transaction,
