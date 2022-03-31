@@ -366,13 +366,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                                 key={`ConnectedEntity-${index1}`}
                                             >
                                                 <div>{prepLabel(key)}</div>
-                                                <div>
-                                                    {
-                                                        <OwnedObjects
-                                                            objects={value}
-                                                        />
-                                                    }
-                                                </div>
+                                                <OwnedObjects objects={value} />
                                             </div>
                                         )
                                     )}
