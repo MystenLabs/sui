@@ -11,6 +11,7 @@ module Games::SharedTicTacToeTests {
     const MARK_PLACEMENT_FAILED: u64 = 2;
     const IN_PROGRESS: u8 = 0;
     const X_WIN: u8 = 1;
+    const DRAW: u8 = 3;
 
     #[test]
     fun play_tictactoe() {
@@ -68,12 +69,124 @@ module Games::SharedTicTacToeTests {
 
         // Check that X has won!
         assert!(status == X_WIN, 2);
+
+        // X has the Trophy
         TestScenario::next_tx(scenario, &player_x);
-        {
-            let trophy = TestScenario::remove_object<Trophy>(scenario);
-            TestScenario::return_object(scenario, trophy)
-        }
+        assert!(TestScenario::can_remove_object<Trophy>(scenario), 1);
+
+        TestScenario::next_tx(scenario, &player_o);
+        // O has no Trophy
+        assert!(!TestScenario::can_remove_object<Trophy>(scenario), 2);
     }
+
+
+    #[test]
+    fun play_tictactoe_draw() {
+        let player_x = @0x0;
+        let player_o = @0x1;
+
+        // Anyone can create a game, because the game object will be eventually shared.
+        let scenario = &mut TestScenario::begin(&player_x);
+        SharedTicTacToe::create_game(copy player_x, copy player_o, TestScenario::ctx(scenario));
+        // Player1 places an X in (0, 1).
+        let status = place_mark(0, 1, &player_x, scenario);
+        assert!(status == IN_PROGRESS, 1);
+        /*
+        Current game board:
+        _|X|_
+        _|_|_
+         | |
+        */
+
+        // Player2 places an O in (0, 0).
+        status = place_mark(0, 0, &player_o, scenario);
+        assert!(status == IN_PROGRESS, 1);
+        /*
+        Current game board:
+        O|X|_
+        _|_|_
+         | |
+        */
+
+        // Player1 places an X in (1, 1).
+        status = place_mark(1, 1, &player_x, scenario);
+        assert!(status == IN_PROGRESS, 1);
+        /*
+        Current game board:
+        O|X|_
+        _|X|_
+         | |
+        */
+
+        // Player2 places an O in (2, 1).
+        status = place_mark(2, 1, &player_o, scenario);
+        assert!(status == IN_PROGRESS, 1);
+        /*
+        Current game board:
+        O|X|_
+        _|X|_
+         |O|
+        */
+
+        // Player1 places an X in (2, 0).
+        status = place_mark(2, 0, &player_x, scenario);
+        assert!(status == IN_PROGRESS, 1);
+        /*
+        Current game board:
+        O|X|_
+        _|X|_
+        X|O|
+        */
+
+        // Player2 places an O in (0, 2).
+        status = place_mark(0, 2, &player_o, scenario);
+        assert!(status == IN_PROGRESS, 1);
+        /*
+        Current game board:
+        O|X|O
+        _|X|_
+        X|O|
+        */
+
+        // Player1 places an X in (1, 2).
+        status = place_mark(1, 2, &player_x, scenario);
+        assert!(status == IN_PROGRESS, 1);
+        /*
+        Current game board:
+        O|X|O
+        _|X|X
+        X|O|
+        */
+
+        // Player2 places an O in (1, 0).
+        status = place_mark(1, 0, &player_o, scenario);
+        assert!(status == IN_PROGRESS, 1);
+        /*
+        Current game board:
+        O|X|O
+        O|X|X
+        X|O|
+        */
+
+        // Player1 places an X in (2, 2).
+        status = place_mark(2, 2, &player_x, scenario);
+        /*
+        Current game board:
+        O|X|O
+        O|X|X
+        X|O|X
+        */
+
+        // We have a draw.
+        assert!(status == DRAW, 2);
+
+        // No one has the trophy
+        TestScenario::next_tx(scenario, &player_x);
+        assert!(!TestScenario::can_remove_object<Trophy>(scenario), 1);
+        TestScenario::next_tx(scenario, &player_o);
+        assert!(!TestScenario::can_remove_object<Trophy>(scenario), 1);
+    }
+
 
     fun place_mark(
         row: u8,
