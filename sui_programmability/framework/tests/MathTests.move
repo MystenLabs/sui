@@ -44,4 +44,10 @@ module Sui::MathTests {
             i = i + 1;
         }
     }
+
+    #[test]
+    fun test_sqrt_big_numbers() {
+        let u64_max = 18446744073709551615;
+        assert!(4294967295 == Math::sqrt(u64_max), 0)
+    }
 }

@@ -22,9 +22,9 @@ module Sui::Math {
         }
     }
 
-    /// Get a nearest lower Square Root for `x`. Given that this
+    /// Get a nearest lower integer Square Root for `x`. Given that this
     /// function can only operate with integers, it is impossible
-    /// to get perfect (or precise) square root for some numbers. 
+    /// to get perfect (or precise) integer square root for some numbers. 
     ///
     /// Example: 
     /// ```
@@ -48,8 +48,9 @@ module Sui::Math {
     /// Math::sqrt(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
     /// ```
     public fun sqrt(x: u64): u64 {
-        let bit = 1 << 32;
-        let res = 0;
+        let bit = 1u128 << 64;
+        let res = 0u128;
+        let x = (x as u128);
 
         while (bit != 0) {
             if (x >= res + bit) {
@@ -60,7 +61,7 @@ module Sui::Math {
             };
             bit = bit >> 2;
         };
-
-        res
+        
+        (res as u64)
     }
 }
