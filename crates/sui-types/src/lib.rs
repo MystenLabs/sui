@@ -21,6 +21,7 @@ pub mod crypto;
 pub mod event;
 pub mod gas;
 pub mod gas_coin;
+pub mod iblt;
 pub mod id;
 pub mod messages;
 pub mod move_package;
@@ -29,7 +30,6 @@ pub mod signature_seed;
 pub mod storage;
 pub mod sui_serde;
 pub mod waypoint;
-pub mod iblt;
 
 
 /// 0x1-- account address where Move stdlib modules are stored

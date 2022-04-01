@@ -185,7 +185,6 @@ pub enum SuiError {
     #[error("Checkpointing error: {}", error)]
     CheckpointingError { error: String },
 
-
     // Move module publishing related errors
     #[error("Failed to load the Move module, reason: {error:?}.")]
     ModuleLoadFailure { error: String },

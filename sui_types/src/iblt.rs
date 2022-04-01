@@ -3,22 +3,23 @@
 
 use rand::Rng;
 
-
 pub fn checksum(item: &[u32; 4]) -> u32 {
-    item[0].rotate_left(3) ^ item[1].rotate_left(7) ^ item[2].rotate_left(11) ^ item[3].rotate_left(17)
+    item[0].rotate_left(3)
+        ^ item[1].rotate_left(7)
+        ^ item[2].rotate_left(11)
+        ^ item[3].rotate_left(17)
 }
 
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub struct IbltEntry {
-    pub count : u32,
-    pub item  : [u32; 4],
+    pub count: u32,
+    pub item: [u32; 4],
     pub checksum: u32,
 }
 
 impl IbltEntry {
-
-    pub fn new(bytes : [u8; 16]) -> IbltEntry {
-        let item = [ 
+    pub fn new(bytes: [u8; 16]) -> IbltEntry {
+        let item = [
             u32::from_be_bytes(bytes[0..4].try_into().unwrap()),
             u32::from_be_bytes(bytes[4..8].try_into().unwrap()),
             u32::from_be_bytes(bytes[8..12].try_into().unwrap()),
@@ -36,12 +37,7 @@ impl IbltEntry {
     pub fn random() -> IbltEntry {
         let mut rng = rand::thread_rng();
 
-        let item: [u32; 4 ] = [ 
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-        ];
+        let item: [u32; 4] = [rng.gen(), rng.gen(), rng.gen(), rng.gen()];
         let checksum = checksum(&item);
 
         IbltEntry {
@@ -69,7 +65,7 @@ impl IbltEntry {
         ]
     }
 
-    pub fn add(&mut self, other : &IbltEntry) {
+    pub fn add(&mut self, other: &IbltEntry) {
         self.count = self.count.wrapping_add(other.count);
         self.item[0] = self.item[0].wrapping_add(other.item[0]);
         self.item[1] = self.item[1].wrapping_add(other.item[1]);
@@ -78,7 +74,7 @@ impl IbltEntry {
         self.checksum = self.checksum.wrapping_add(other.checksum);
     }
 
-    pub fn sub(&mut self, other : &IbltEntry) {
+    pub fn sub(&mut self, other: &IbltEntry) {
         self.count = self.count.wrapping_sub(other.count);
         self.item[0] = self.item[0].wrapping_sub(other.item[0]);
         self.item[1] = self.item[1].wrapping_sub(other.item[1]);
@@ -97,12 +93,11 @@ impl IbltEntry {
     }
 
     pub fn extract(&self) -> Option<(IbltEntry, bool)> {
-
         // Positive case
         if self.count == 1 && self.checksum_ok() {
             return Some((self.clone(), true));
         }
-        
+
         // Negative case
         if self.count == 1u32.wrapping_neg() {
             let mut c = self.clone();
@@ -113,7 +108,6 @@ impl IbltEntry {
         }
         None
     }
-
 }
 
 #[allow(dead_code)]
@@ -124,12 +118,12 @@ pub struct IbltFilter {
 }
 
 impl IbltFilter {
-    pub fn new(base_size : u64, level: u64) -> IbltFilter {
-        let size =  base_size * (2u64.pow(level as u32));
+    pub fn new(base_size: u64, level: u64) -> IbltFilter {
+        let size = base_size * (2u64.pow(level as u32));
         IbltFilter {
             base_size,
             level,
-            elements:vec![IbltEntry::default(); size as usize],
+            elements: vec![IbltEntry::default(); size as usize],
         }
     }
 
@@ -137,7 +131,7 @@ impl IbltFilter {
         self.elements.iter().all(IbltEntry::is_empty)
     }
 
-    pub fn add(&mut self, item : &IbltEntry) {
+    pub fn add(&mut self, item: &IbltEntry) {
         let size = self.elements.len();
         let [pos1, pos2, pos3, pos4] = item.positions();
         self.elements[pos1 as usize % size].add(item);
@@ -154,8 +148,7 @@ impl IbltFilter {
         }
     }
 
-    pub fn decode(&mut self)-> Vec<(IbltEntry, bool)> {
-
+    pub fn decode(&mut self) -> Vec<(IbltEntry, bool)> {
         let mut extracted_items = Vec::new();
         let size = self.elements.len();
 
@@ -171,8 +164,7 @@ impl IbltFilter {
                         self.elements[pos2 as usize % size].sub(&item);
                         self.elements[pos3 as usize % size].sub(&item);
                         self.elements[pos4 as usize % size].sub(&item);
-                    }
-                    else {
+                    } else {
                         // negative direction, need to add
                         self.elements[pos1 as usize % size].add(&item);
                         self.elements[pos2 as usize % size].add(&item);
@@ -189,17 +181,19 @@ impl IbltFilter {
         extracted_items
     }
 
-
-    pub fn compress(&self, new_level : u64) -> IbltFilter {
+    pub fn compress(&self, new_level: u64) -> IbltFilter {
         assert!(new_level < self.level);
         let mut new_filter = IbltFilter::new(self.base_size, new_level);
         for chunk in self.elements[..].chunks(new_filter.elements.len()) {
-            new_filter.elements.iter_mut().zip(chunk).for_each(|(newe, olde)| newe.add(olde));
+            new_filter
+                .elements
+                .iter_mut()
+                .zip(chunk)
+                .for_each(|(newe, olde)| newe.add(olde));
         }
         new_filter
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -255,13 +249,10 @@ mod tests {
         assert!(f1.is_empty());
     }
 
-
     #[test]
     fn test_iblt_filter_many() {
-
         let mut f1 = IbltFilter::new(128, 4);
         let mut f2 = IbltFilter::new(128, 4);
-        
 
         // Many in common
         for _ in 0..1000 {
@@ -287,10 +278,8 @@ mod tests {
 
     #[test]
     fn test_iblt_filter_many_compress() {
-
         let mut f1 = IbltFilter::new(128, 4);
         let mut f2 = IbltFilter::new(128, 4);
-        
 
         // Many in common
         for _ in 0..1000 {
@@ -316,5 +305,4 @@ mod tests {
         assert!(x.len() == 20);
         assert!(f1.is_empty());
     }
-
 }
