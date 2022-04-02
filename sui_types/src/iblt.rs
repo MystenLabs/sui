@@ -1,6 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::bail;
+
+#[cfg(test)]
 use rand::Rng;
 
 pub fn checksum(item: &[u32; 4]) -> u32 {
@@ -34,6 +37,7 @@ impl IbltEntry {
         }
     }
 
+    #[cfg(test)]
     pub fn random() -> IbltEntry {
         let mut rng = rand::thread_rng();
 
@@ -140,12 +144,24 @@ impl IbltFilter {
         self.elements[pos4 as usize % size].add(item);
     }
 
-    pub fn diff(&mut self, other: &IbltFilter) {
-        assert!(self.elements.len() == other.elements.len());
+    pub fn diff(&mut self, other: &IbltFilter) -> Result<(), anyhow::Error> {
+        if self.base_size != other.base_size {
+            bail!(
+                "Base size mismatch: {} vs {}",
+                self.base_size,
+                other.base_size
+            );
+        }
+
+        if self.level != other.level {
+            bail!("Level mismatch: {} vs {}", self.level, other.level);
+        }
 
         for (item, other_item) in (&mut self.elements).iter_mut().zip(&other.elements) {
             item.sub(other_item)
         }
+
+        Ok(())
     }
 
     pub fn decode(&mut self) -> Vec<(IbltEntry, bool)> {
@@ -181,8 +197,15 @@ impl IbltFilter {
         extracted_items
     }
 
-    pub fn compress(&self, new_level: u64) -> IbltFilter {
-        assert!(new_level < self.level);
+    pub fn compress(&self, new_level: u64) -> Result<IbltFilter, anyhow::Error> {
+        if new_level >= self.level {
+            bail!(
+                "New level ({}) must be lower than old level ({}).",
+                new_level,
+                self.level
+            );
+        }
+
         let mut new_filter = IbltFilter::new(self.base_size, new_level);
         for chunk in self.elements[..].chunks(new_filter.elements.len()) {
             new_filter
@@ -191,7 +214,7 @@ impl IbltFilter {
                 .zip(chunk)
                 .for_each(|(newe, olde)| newe.add(olde));
         }
-        new_filter
+        Ok(new_filter)
     }
 }
 
@@ -242,11 +265,27 @@ mod tests {
         let mut f2 = IbltFilter::new(128, 4);
         f2.add(&e2);
 
-        f1.diff(&f2);
+        f1.diff(&f2).unwrap();
 
         let x = f1.decode();
         assert!(x.len() == 2);
         assert!(f1.is_empty());
+    }
+
+    #[test]
+    fn test_iblt_error() {
+        let e1 = IbltEntry::new([1; 16]);
+        let e2 = IbltEntry::new([2; 16]);
+
+        let mut f1 = IbltFilter::new(128, 4);
+        f1.add(&e1);
+        let mut f2 = IbltFilter::new(128, 3);
+        f2.add(&e2);
+        assert!(f1.diff(&f2).is_err());
+
+        let mut f2 = IbltFilter::new(127, 4);
+        f2.add(&e2);
+        assert!(f1.diff(&f2).is_err());
     }
 
     #[test]
@@ -269,7 +308,7 @@ mod tests {
             f2.add(&e2);
         }
 
-        f1.diff(&f2);
+        f1.diff(&f2).unwrap();
 
         let x = f1.decode();
         assert!(x.len() == 20);
@@ -296,13 +335,14 @@ mod tests {
             f2.add(&e2);
         }
 
-        f1 = f1.compress(0);
-        f2 = f2.compress(0);
+        f1 = f1.compress(0).unwrap();
+        f2 = f2.compress(0).unwrap();
 
-        f1.diff(&f2);
+        f1.diff(&f2).unwrap();
 
         let x = f1.decode();
         assert!(x.len() == 20);
         assert!(f1.is_empty());
+        assert!(x.iter().filter(|(_, flag)| *flag).count() == 10);
     }
 }
