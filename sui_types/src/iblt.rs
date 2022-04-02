@@ -6,6 +6,7 @@ use anyhow::bail;
 #[cfg(test)]
 use rand::Rng;
 
+// TODO: define a proper checksum
 pub fn checksum(item: &[u32; 4]) -> u32 {
     item[0].rotate_left(3)
         ^ item[1].rotate_left(7)
@@ -15,9 +16,9 @@ pub fn checksum(item: &[u32; 4]) -> u32 {
 
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub struct IbltEntry {
-    pub count: u32,
-    pub item: [u32; 4],
-    pub checksum: u32,
+    count: u32,
+    item: [u32; 4],
+    checksum: u32,
 }
 
 impl IbltEntry {
@@ -40,15 +41,8 @@ impl IbltEntry {
     #[cfg(test)]
     pub fn random() -> IbltEntry {
         let mut rng = rand::thread_rng();
-
-        let item: [u32; 4] = [rng.gen(), rng.gen(), rng.gen(), rng.gen()];
-        let checksum = checksum(&item);
-
-        IbltEntry {
-            count: 1,
-            item,
-            checksum,
-        }
+        let item: [u8; 16] = rng.gen();
+        IbltEntry::new(item)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -59,16 +53,28 @@ impl IbltEntry {
         self.checksum == checksum(&self.item)
     }
 
-    pub fn positions(&self) -> [u32; 4] {
+    /// Returns the 4 positions to insert this entry in a filter.
+    /// TODO: define a proper set of hash functions.
+    pub fn positions(&self) -> [usize; 4] {
+        // positions can only be extracted for an entry with positive
+        // count of 1.
+        debug_assert!(self.count == 1);
         [
             // TODO: here we can afford to make sure they are different.
-            self.item[0].wrapping_add(self.checksum).wrapping_add(128),
-            self.item[1].wrapping_add(self.checksum).wrapping_add(32),
-            self.item[2].wrapping_add(self.checksum).wrapping_add(16),
-            self.item[3].wrapping_add(self.checksum).wrapping_add(8),
+            self.item[0].wrapping_add(self.checksum).wrapping_add(128) as usize,
+            self.item[1].wrapping_add(self.checksum).wrapping_add(32) as usize,
+            self.item[2].wrapping_add(self.checksum).wrapping_add(16) as usize,
+            self.item[3].wrapping_add(self.checksum).wrapping_add(8) as usize,
         ]
     }
 
+    /* Note: We do not want to provide an easy to use + / - overloaded
+       operation here, since this library should be the only place
+       anyone does arithmetic on entries. This is not a user facing
+       facility.
+    */
+
+    /// Add in plance another entry
     pub fn add(&mut self, other: &IbltEntry) {
         self.count = self.count.wrapping_add(other.count);
         self.item[0] = self.item[0].wrapping_add(other.item[0]);
@@ -78,6 +84,7 @@ impl IbltEntry {
         self.checksum = self.checksum.wrapping_add(other.checksum);
     }
 
+    /// Subtract in place another entry
     pub fn sub(&mut self, other: &IbltEntry) {
         self.count = self.count.wrapping_sub(other.count);
         self.item[0] = self.item[0].wrapping_sub(other.item[0]);
@@ -87,6 +94,7 @@ impl IbltEntry {
         self.checksum = self.checksum.wrapping_sub(other.checksum);
     }
 
+    /// Negate in place this entry.
     pub fn neg(&mut self) {
         self.count = self.count.wrapping_neg();
         self.item[0] = self.item[0].wrapping_neg();
@@ -96,6 +104,8 @@ impl IbltEntry {
         self.checksum = self.checksum.wrapping_neg();
     }
 
+    /// Extract the positive entry if the entry has a positive
+    /// or negative count of 1.
     pub fn extract(&self) -> Option<(IbltEntry, bool)> {
         // Positive case
         if self.count == 1 && self.checksum_ok() {
@@ -138,10 +148,10 @@ impl IbltFilter {
     pub fn add(&mut self, item: &IbltEntry) {
         let size = self.elements.len();
         let [pos1, pos2, pos3, pos4] = item.positions();
-        self.elements[pos1 as usize % size].add(item);
-        self.elements[pos2 as usize % size].add(item);
-        self.elements[pos3 as usize % size].add(item);
-        self.elements[pos4 as usize % size].add(item);
+        self.elements[pos1 % size].add(item);
+        self.elements[pos2 % size].add(item);
+        self.elements[pos3 % size].add(item);
+        self.elements[pos4 % size].add(item);
     }
 
     pub fn diff(&mut self, other: &IbltFilter) -> Result<(), anyhow::Error> {
@@ -176,16 +186,16 @@ impl IbltFilter {
                     let [pos1, pos2, pos3, pos4] = item.positions();
                     if direction {
                         // positive direction, need to subtract
-                        self.elements[pos1 as usize % size].sub(&item);
-                        self.elements[pos2 as usize % size].sub(&item);
-                        self.elements[pos3 as usize % size].sub(&item);
-                        self.elements[pos4 as usize % size].sub(&item);
+                        self.elements[pos1 % size].sub(&item);
+                        self.elements[pos2 % size].sub(&item);
+                        self.elements[pos3 % size].sub(&item);
+                        self.elements[pos4 % size].sub(&item);
                     } else {
                         // negative direction, need to add
-                        self.elements[pos1 as usize % size].add(&item);
-                        self.elements[pos2 as usize % size].add(&item);
-                        self.elements[pos3 as usize % size].add(&item);
-                        self.elements[pos4 as usize % size].add(&item);
+                        self.elements[pos1 % size].add(&item);
+                        self.elements[pos2 % size].add(&item);
+                        self.elements[pos3 % size].add(&item);
+                        self.elements[pos4 % size].add(&item);
                     }
                     extracted_items.push((item, direction));
                 }
