@@ -393,7 +393,7 @@ impl CheckpointStore {
 mod tests {
     use super::*;
     use crate::authority::authority_tests::max_files_authority_tests;
-    use std::{env, fs, path::PathBuf};
+    use std::{collections::HashSet, env, fs, path::PathBuf};
     use sui_types::base_types::ObjectID;
 
     fn random_ckpoint_store() -> (PathBuf, CheckpointStore) {
@@ -450,5 +450,58 @@ mod tests {
 
         let (_cp_seq, tx_seq) = cps.transactions_to_checkpoint.get(&t4).unwrap().unwrap();
         assert_eq!(tx_seq, 4);
+    }
+
+    #[test]
+    fn make_proposals() {
+        let (_, mut cps1) = random_ckpoint_store();
+        let (_, mut cps2) = random_ckpoint_store();
+        let (_, mut cps3) = random_ckpoint_store();
+        let (_, mut cps4) = random_ckpoint_store();
+
+        let t1 = TransactionDigest::random();
+        let t2 = TransactionDigest::random();
+        let t3 = TransactionDigest::random();
+        let t4 = TransactionDigest::random();
+        let t5 = TransactionDigest::random();
+        // let t6 = TransactionDigest::random();
+
+        cps1.update_processed_transactions(&[(1, t2), (2, t3)])
+            .unwrap();
+
+        cps2.update_processed_transactions(&[(1, t1), (2, t2)])
+            .unwrap();
+
+        cps3.update_processed_transactions(&[(1, t3), (2, t4)])
+            .unwrap();
+
+        cps4.update_processed_transactions(&[(1, t4), (2, t5)])
+            .unwrap();
+
+        let p1 = cps1.set_proposal().unwrap();
+        let p2 = cps2.set_proposal().unwrap();
+        let p3 = cps3.set_proposal().unwrap();
+
+        let ckp_items: Vec<_> = p1
+            .transactions
+            .into_iter()
+            .chain(p2.transactions.into_iter())
+            .chain(p3.transactions.into_iter())
+            .collect();
+
+        cps1.update_new_checkpoint(0, &ckp_items[..]).unwrap();
+        cps2.update_new_checkpoint(0, &ckp_items[..]).unwrap();
+        cps3.update_new_checkpoint(0, &ckp_items[..]).unwrap();
+        cps4.update_new_checkpoint(0, &ckp_items[..]).unwrap();
+
+        assert!(
+            cps4.unprocessed_transactions.keys().collect::<HashSet<_>>()
+                == [t1, t2, t3].into_iter().collect::<HashSet<_>>()
+        );
+
+        assert!(
+            cps4.extra_transactions.keys().collect::<HashSet<_>>()
+                == [t5].into_iter().collect::<HashSet<_>>()
+        );
     }
 }
