@@ -16,7 +16,7 @@ pub type CheckpointSequenceNumber = u64;
 #[derive(Clone)]
 pub struct CheckpointProposal {
     /// The sequence number of this proposal
-    pub sequence_number: u64,
+    pub sequence_number: CheckpointSequenceNumber,
     /// The transactions included in the proposal.
     /// TODO: only include a commitment by default.
     pub transactions: Vec<TransactionDigest>,
@@ -49,7 +49,7 @@ pub struct CheckpointStore {
     /// this sequence number. At this point the unprocessed_transactions sequence
     /// should be empty. It is none if there is no active proposal. We also include here
     /// the proposal, although we could re-create it from the database.
-    proposal_checkpoint: Option<(u64, CheckpointProposal)>,
+    proposal_checkpoint: Option<(TxSequenceNumber, CheckpointProposal)>,
 }
 
 impl CheckpointStore {
