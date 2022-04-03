@@ -7,11 +7,20 @@ use rocksdb::Options;
 use sui_types::{base_types::TransactionDigest, batch::TxSequenceNumber, error::SuiError};
 use typed_store::{
     reopen,
-    rocks::{DBMap, TypedStoreError, open_cf_opts},
+    rocks::{open_cf_opts, DBMap, TypedStoreError},
     Map,
 };
 
 pub type CheckpointSequenceNumber = u64;
+
+#[derive(Clone)]
+pub struct CheckpointProposal {
+    /// The sequence number of this proposal
+    pub sequence_number: u64,
+    /// The transactions included in the proposal.
+    /// TODO: only include a commitment by default.
+    pub transactions: Vec<TransactionDigest>,
+}
 
 pub struct CheckpointStore {
     /// The list of all transactions that are checkpointed mapping to the checkpoint
@@ -34,6 +43,13 @@ pub struct CheckpointStore {
     /// included in a checkpoint, and their sequence number in the local sequence
     /// of this authority.
     pub extra_transactions: DBMap<TransactionDigest, TxSequenceNumber>,
+
+    /// The local sequence at which the proposal for the next checkpoint is created
+    /// This is a sequence number containing all unprocessed trasnactions lower than
+    /// this sequence number. At this point the unprocessed_transactions sequence
+    /// should be empty. It is none if there is no active proposal. We also include here
+    /// the proposal, although we could re-create it from the database.
+    proposal_checkpoint: Option<(u64, CheckpointProposal)>,
 }
 
 impl CheckpointStore {
@@ -85,7 +101,60 @@ impl CheckpointStore {
             checkpoint_contents,
             unprocessed_transactions,
             extra_transactions,
+            proposal_checkpoint: None,
         }
+    }
+
+    /// Set the next checkpoint proposal.
+    pub fn set_proposal(&mut self) -> Result<CheckpointProposal, SuiError> {
+        // Check that:
+        // - there is no current proposal.
+        // - there are no unprocessed transactions.
+        // - there are some extra transactions to include.
+
+        if self.proposal_checkpoint.is_some() {
+            return Err(SuiError::GenericAuthorityError {
+                error: "Proposal already set.".to_string(),
+            });
+        }
+
+        if self.unprocessed_transactions.iter().count() > 0 {
+            return Err(SuiError::GenericAuthorityError {
+                error: "Cannot propose with unprocessed trasnactions from the previous checkpoint."
+                    .to_string(),
+            });
+        }
+
+        if self.extra_transactions.iter().count() == 0 {
+            return Err(SuiError::GenericAuthorityError {
+                error: "Cannot propose an empty set.".to_string(),
+            });
+        }
+
+        // Include the sequence number of all extra trasnactions not already in a
+        // checkpoint. And make a list of the transactions.
+        let sequence_number = self.next_checkpoint_sequence();
+        let next_local_tx_sequence = self.extra_transactions.values().max().unwrap() + 1;
+        let transactions: Vec<_> = self.extra_transactions.keys().collect();
+
+        let ckp = CheckpointProposal {
+            sequence_number,
+            transactions,
+        };
+
+        self.proposal_checkpoint = Some((next_local_tx_sequence, ckp.clone()));
+
+        Ok(ckp)
+    }
+
+    /// Get the current proposal or error if there is no current proposal
+    pub fn get_proposal(&self) -> Result<CheckpointProposal, SuiError> {
+        self.proposal_checkpoint
+            .as_ref()
+            .ok_or_else(|| SuiError::GenericAuthorityError {
+                error: "No checkpoint proposal found.".to_string(),
+            })
+            .map(|x| x.1.clone())
     }
 
     /// Return the seq number of the last checkpoint we have recorded.
@@ -123,6 +192,10 @@ impl CheckpointStore {
                 error: "Unexpected checkpoint sequence number.".to_string(),
             });
         }
+
+        // Reset the proposal, it should already have been used by this
+        // point or not included in the checkpoint. Either way it is stale.
+        self.proposal_checkpoint = None;
 
         // Process transactions not already in a checkpoint
         let new_transactions = self
@@ -320,11 +393,10 @@ impl CheckpointStore {
 mod tests {
     use super::*;
     use crate::authority::authority_tests::max_files_authority_tests;
-    use std::{env, fs};
+    use std::{env, fs, path::PathBuf};
     use sui_types::base_types::ObjectID;
 
-    #[test]
-    fn make_checkpoint_db() {
+    fn random_ckpoint_store() -> (PathBuf, CheckpointStore) {
         let dir = env::temp_dir();
         let path = dir.join(format!("SC_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
@@ -333,7 +405,13 @@ mod tests {
         let mut opts = rocksdb::Options::default();
         opts.set_max_open_files(max_files_authority_tests());
 
-        let mut cps = CheckpointStore::open(path, Some(opts));
+        let cps = CheckpointStore::open(path.clone(), Some(opts));
+        (path, cps)
+    }
+
+    #[test]
+    fn make_checkpoint_db() {
+        let (_, mut cps) = random_ckpoint_store();
 
         let t1 = TransactionDigest::random();
         let t2 = TransactionDigest::random();
