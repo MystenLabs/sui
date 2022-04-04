@@ -5,36 +5,50 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
-/// Request containing the information needed to execute a split coin transaction.
+/// Request containing the information needed to create a split coin transaction.
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SplitCoinRequest {
+    /// Required; Hex code as string representing the sender's address
     pub signer: String,
+    /// Required; Hex code as string representing the coin object id
     pub coin_object_id: String,
+    /// Required; Amount of each new coins
     pub split_amounts: Vec<u64>,
+    /// Required; Hex code as string representing the gas object id
     pub gas_payment: String,
+    /// Required; Gas budget required as a cap for gas usage
     pub gas_budget: u64,
 }
 
-/// Request containing the information needed to execute a split coin transaction.
+/// Request containing the information needed to create a split coin transaction.
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MergeCoinRequest {
+    /// Required; Hex code as string representing the sender's address
     pub signer: String,
+    /// Required; Hex code as string representing the coin object id
     pub primary_coin: String,
+    /// Required; Hex code as string representing the coin object id
     pub coin_to_merge: String,
+    /// Required; Hex code as string representing the gas object id
     pub gas_payment: String,
+    /// Required; Gas budget required as a cap for gas usage
     pub gas_budget: u64,
 }
 
+/// Request containing the information needed to execute a transaction.
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct SignedTransaction {
+    /// Required; Base64 encoded string representing the BCS serialised TransactionData object
     pub unsigned_tx_base64: String,
+    /// Required; Base64 encoded string representing the ed25519 signature bytes
     pub signature: String,
+    /// Required; Base64 encoded string representing the ed25519 public key
     pub pub_key: String,
 }
 
-/// Request containing the information required to execute a move module.
+/// Request containing the information required to create a move module call transaction.
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CallRequest {
@@ -60,7 +74,7 @@ pub struct CallRequest {
     pub shared_object_arguments: Vec<String>,
 }
 
-/// Request containing the address of which objecst are to be retrieved.
+/// Request containing the address of which object are to be retrieved.
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GetObjectsRequest {
@@ -105,7 +119,7 @@ pub struct PublishRequest {
     pub gas_budget: u64,
 }
 
-/// Request containing the information needed to execute a transfer transaction.
+/// Request containing the information needed to create a transfer transaction.
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TransferTransactionRequest {

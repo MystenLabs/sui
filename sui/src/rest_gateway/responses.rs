@@ -28,11 +28,11 @@ pub struct ObjectResponse {
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct NamedObjectRef {
-    /// Object id Hex.
+    /// Hex code as string representing the object id
     object_id: String,
     /// Object version.
     version: u64,
-    /// Object digest, Base64 encoded.
+    /// Base64 string representing the object digest
     digest: String,
 }
 
@@ -77,7 +77,7 @@ pub fn custom_http_error(status_code: http::StatusCode, message: String) -> Http
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct TransactionBytes {
-    /// BCS encoded TransactionData bytes Base64 encoded.
+    /// Base64 string representation of BCS serialised TransactionData bytes
     tx_bytes: String,
 }
 
