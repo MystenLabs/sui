@@ -25,26 +25,29 @@ For example, suppose we wish to locally run the website using the static JSON da
 ```bash
 REACT_APP_DATA=static yarn start
 ```
-
-Note that the command `yarn test` is the exception. Here the SuiExplorer will instead use the static JSON dataset. The tests have been written to specifically check the UI and not the API connection.
+Note that the commands `yarn test` and `yarn start:static` are the exceptions. Here the SuiExplorer will instead use the static JSON dataset. The tests have been written to specifically check the UI and not the API connection and so use the static JSON dataset.
 
 ## Yarn Commands and what they do
 
 ### `yarn start`
 
-Runs the app in the development mode.
+Runs the app as connected to the API at https://demo-rpc.sui.io.
 
 Open http://localhost:3000 to view it in the browser.
 
 The page will reload if you make edits. You will also see any lint errors in the console.
 
-### `yarn start:dev`
+### `yarn start:static`
 
-Same as `yarn start` but runs `prettier:fix:watch` to format the files.
+Runs the app as connected to the static JSON dataset with `REACT_APP_DATA` set to `static`.
+
+Open http://localhost:8080 to view it in the browser.
+
+The page will reload when edits are made. You can run `yarn start` and `yarn start:static` at the same time because they use different ports.
 
 ### `yarn test`
 
-Launches the test runner in the interactive watch mode.
+This runs a series of end-to-end, browser tests usng the website as connected to the static JSON dataset. This command is run by the GitHub checks. The tests must pass before merging a branch into main.
 
 ### `yarn build`
 
