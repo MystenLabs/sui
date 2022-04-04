@@ -12,24 +12,26 @@ We actively welcome your pull requests.
 5. Make sure your code lints
 
 ## Run the linter
-The codebase uses the [Clippy](https://github.com/rust-lang/rust-clippy) linter to ensure that common mistakes are caught.
-To install follow the instructions on the Clippy repository. To run the linter locally use with the following properties:
+The codebase uses the [Clippy](https://github.com/rust-lang/rust-clippy) linter
+to ensure that common mistakes are caught. To install follow the instructions
+on the Clippy repository. We make use of a cargo alias (defined in
+.cargo/config) which sets some project-wide lints. To run the linter locally
+you can use the following command:
 ```
-cargo clippy --tests --all -- -D clippy::all -D warnings -D clippy::disallowed_method
+cargo xclippy 
 ```
 
 ## Run the formatter
-To ensure that the codebase is following standard formatting properties, the 
-[Rustfmt](https://github.com/rust-lang/rustfmt) is being used on its `nightly` version
-(see instructions in Rustfmt repository to install the nightly version). To run the
-formatter locally you can use the follow command:
+To ensure that the codebase is following standard formatting properties, we use  
+[Rustfmt](https://github.com/rust-lang/rustfmt). To run the formatter locally
+you can use the follow command:
 ```
-cargo +nightly fmt --all
+cargo fmt --all
 ```
 The above command will format and apply the changes directly. If you want to just
 see the formatter recommendations, just run with the `--check` property:
 ```
-cargo +nightly fmt --all -- --check
+cargo fmt --all -- --check
 ```
 
 ## Generating builders

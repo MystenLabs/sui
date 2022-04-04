@@ -31,73 +31,59 @@ env:
   RUST_BACKTRACE: short
 
 jobs:
-  test:
-    name: Test Rust ${{matrix.toolchain}} on ${{matrix.os}}
-    runs-on: ${{matrix.os}}-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        toolchain: [stable, nightly]
-        os: [ubuntu]
+  license-check:
+    name: license-check
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Install rust
-        uses: actions-rs/toolchain@v1
+      - run: scripts/license_check.sh
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+      # Enable caching of the 'librocksdb-sys' crate by additionally caching the
+      # 'librocksdb-sys' src directory which is managed by cargo
+      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
         with:
-          toolchain: ${{matrix.toolchain}}
-          profile: minimal
-          override: true
-      - uses: Swatinem/rust-cache@v1
-      - name: Test
+          path: ~/.cargo/registry/src/**/librocksdb-sys-*
+      - name: cargo test
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --all-features
-      - name: Compile micro-benchmarks
-        uses: actions-rs/cargo@v1
-        with:
-          command: bench
-          args: --all-features --no-run
 
   clippy:
-    name: Clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Install minimal nightly with clippy
-        uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@v1
         with:
-          profile: minimal
-          toolchain: nightly
           components: clippy
-          override: true
-      - uses: Swatinem/rust-cache@v1
-      - name: Clippy
-        uses: actions-rs/cargo@v1
+      # Enable caching of the 'librocksdb-sys' crate by additionally caching the
+      # 'librocksdb-sys' src directory which is managed by cargo
+      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
         with:
-          command: clippy
-          args: --all --tests -- -D clippy::all -D warnings -D clippy::disallowed_method
+          path: ~/.cargo/registry/src/**/librocksdb-sys-*
+      # See '.cargo/config' for list of enabled/disappled clippy lints
+      - name: cargo clippy
+        run: cargo xclippy -D warnings
 
   rustfmt:
-    name: rustfmt
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Install minimal nightly with rustfmt
-        uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@v1
         with:
-          profile: minimal
-          toolchain: nightly
           components: rustfmt
-          override: true
-      - uses: Swatinem/rust-cache@v1
       - name: rustfmt
         uses: actions-rs/cargo@v1
         with:
           command: fmt
-          args: --all -- --check
-      - name: check license headers
-        run: scripts/license_check.sh
+          args: --all --check
 
   cargo-deny:
     name: cargo-deny (advisories, licenses, bans, ...)
@@ -106,21 +92,24 @@ jobs:
     - uses: actions/checkout@v2
     - uses: EmbarkStudios/cargo-deny-action@v1
 
-  udeps:
-    name: cargo-udeps
+  cargo-udeps:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Install minimal nightly
-        uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@v1
+      # Enable caching of the 'librocksdb-sys' crate by additionally caching the
+      # 'librocksdb-sys' src directory which is managed by cargo
+      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
         with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-      - uses: Swatinem/rust-cache@v1
+          path: ~/.cargo/registry/src/**/librocksdb-sys-*
       - name: Install cargo-udeps, and cache the binary
         uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-udeps
+          locked: true
+      # Normally running cargo-udeps requires use of a nightly compiler
+      # In order to have a more stable and less noisy experience, lets instead
+      # opt to use the stable toolchain specified via the 'rust-toolchain' file
+      # and instead enable nightly features via 'RUSTC_BOOTSTRAP'
       - name: run cargo-udeps
-        run: cargo +nightly udeps
+        run: RUSTC_BOOTSTRAP=1 cargo udeps
