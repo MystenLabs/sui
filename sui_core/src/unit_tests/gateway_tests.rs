@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::same_item_push)] // get_key_pair returns random elements
 
+use std::collections::VecDeque;
 use std::fs;
 use std::path::Path;
 use std::{
@@ -13,9 +14,8 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::channel::mpsc::{channel, Receiver};
 use futures::lock::Mutex;
-use futures::SinkExt;
+use futures::stream;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
 use signature::Signer;
 use typed_store::Map;
@@ -30,7 +30,7 @@ use sui_types::messages::Transaction;
 use sui_types::object::{Data, Object, Owner, GAS_VALUE_FOR_TESTING};
 
 use crate::authority::{AuthorityState, AuthorityStore};
-use crate::authority_client::BUFFER_SIZE;
+use crate::authority_client::BatchInfoResponseItemStream;
 use crate::gateway_state::{GatewayAPI, GatewayState};
 
 use super::*;
@@ -116,29 +116,23 @@ impl AuthorityAPI for LocalAuthorityClient {
     }
 
     /// Handle Batch information requests for this authority.
-    async fn handle_batch_streaming(
+    async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<Receiver<Result<BatchInfoResponseItem, SuiError>>, io::Error> {
+    ) -> Result<BatchInfoResponseItemStream, io::Error> {
         let state = self.0.clone();
-        let (mut tx_output, tr_output) = channel(BUFFER_SIZE);
 
         let update_items = state.lock().await.handle_batch_info_request(request).await;
 
-        match update_items {
-            Ok(t) => {
-                let mut deq = t.0;
-                while let Some(update_item) = deq.pop_front() {
-                    let batch_info_response_item = BatchInfoResponseItem(update_item.clone());
-                    let _ = tx_output.send(Ok(batch_info_response_item)).await;
-                }
+        let (items, _): (VecDeque<_>, VecDeque<_>) = update_items.into_iter().unzip();
+        let stream = stream::iter(items.into_iter()).then(|mut item| async move {
+            let i = item.pop_front();
+            match i {
+                Some(i) => Ok(BatchInfoResponseItem(i)),
+                None => Result::Err(SuiError::BatchErrorSender),
             }
-            Err(e) => {
-                let err = std::io::Error::new(std::io::ErrorKind::Other, e);
-                return Err(err);
-            }
-        }
-        Ok(tr_output)
+        });
+        Ok(Box::pin(stream))
     }
 }
 
