@@ -26,17 +26,25 @@ For example, suppose we wish to locally run the website using the static JSON da
 REACT_APP_DATA=static npm start
 ```
 
-Note that the command `npm run test` is the exception. Here the SuiExplorer will instead use the static JSON dataset. The tests have been written to specifically check the UI and not the API connection.
+Note that the commands `npm run test` and `npm run start:static` are the exceptions. Here the SuiExplorer will instead use the static JSON dataset. The tests have been written to specifically check the UI and not the API connection and so use the static JSON dataset.
 
 ## NPM Commands and what they do
 
 ### `npm start`
 
-Runs the app in the development mode.
+Runs the app as connected to the API at https://demo-rpc.sui.io.
 
 Open http://localhost:3000 to view it in the browser.
 
 The page will reload if you make edits. You will also see any lint errors in the console.
+
+### `npm run start:static`
+
+Runs the app as connected to the static JSON dataset with `REACT_APP_DATA` set to `static`.
+
+Open http://localhost:8080 to view it in the browser.
+
+The page will reload when edits are made. You can run `npm start` and `npm run start:static` at the same time because they use different ports.
 
 ### `npm run start:dev`
 
@@ -44,7 +52,7 @@ Same as `npm start` but runs `prettier:fix:watch` to format the files.
 
 ### `npm test`
 
-Launches the test runner in the interactive watch mode.
+This runs a series of end-to-end, browser tests usng the website as connected to the static JSON dataset. This command is run by the GitHub checks. The tests must pass before merging a branch into main.
 
 ### `npm run build`
 
