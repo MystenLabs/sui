@@ -191,50 +191,22 @@ fn check_one_lock(
 }
 
 /// This function does 3 things:
-/// 1. Check if the gas object has enough balance to pay for this transaction.
-///   Since the transaction may be a batch transaction, we need to walk through
-///   each single transaction in it and accumulate their gas cost. For Move call
-///   and publish we can simply use their budget, for transfer we will calculate
-///   the cost on the spot since it's deterministic (See comments inside the function).
-/// 2. Check if the gas budget for each single transction is above some minimum amount.
-///   This can help reduce DDos attacks.
+/// 1. Check if the gas object has enough balance to pay for the budget.
+/// 2. Check if the gas budget is enough to pay the minimum for a transaction.
 /// 3. Check that the objects used in transfers are mutable. We put the check here
 ///   because this is the most convenient spot to check.
 fn check_tx_requirement(
     transaction: &Transaction,
     input_objects: &[(InputObjectKind, Object)],
 ) -> SuiResult {
-    let mut total_cost = 0;
     let mut idx = 0;
     for tx in transaction.single_transactions() {
-        match tx {
-            SingleTransactionKind::Transfer(_) => {
-                // Index access safe because the inputs were constructed in order.
-                let transfer_object = &input_objects[idx].1;
-                transfer_object.is_transfer_eligible()?;
-                // TODO: Make Transfer transaction to also contain gas_budget.
-                // By @gdanezis: Now his is the only part of this function that requires
-                // an input object besides the gas object. It would be a major win if we
-                // can get rid of the requirement to have all objects to check the transfer
-                // requirement. If we can go this, then we could execute this check before
-                // we check for signatures.
-                // This would allow us to shore up out DoS defences: we only need to do a
-                // read on the gas object balance before we do anything expensive,
-                // such as checking signatures.
-                total_cost += gas::calculate_object_transfer_cost(transfer_object);
-                idx += tx.input_object_count();
-            }
-            SingleTransactionKind::Call(op) => {
-                gas::check_move_gas_requirement(op.gas_budget)?;
-                total_cost += op.gas_budget;
-                idx += tx.input_object_count();
-            }
-            SingleTransactionKind::Publish(op) => {
-                gas::check_move_gas_requirement(op.gas_budget)?;
-                total_cost += op.gas_budget;
-                // No need to update idx because Publish cannot show up in batch.
-            }
+        if matches!(tx, SingleTransactionKind::Transfer(_)) {
+            // Index access safe because the inputs were constructed in order.
+            let transfer_object = &input_objects[idx].1;
+            transfer_object.is_transfer_eligible()?;
         }
+        idx += tx.input_object_count();
     }
     // The last element in the inputs is always gas object.
     let gas_object = &input_objects.last().unwrap().1;
@@ -244,5 +216,5 @@ fn check_tx_requirement(
             error: format!("Gas object cannot be shared: {:?}", gas_object.id())
         }
     );
-    gas::check_gas_balance(gas_object, total_cost)
+    gas::check_gas_balance(gas_object, transaction.data.gas_budget)
 }

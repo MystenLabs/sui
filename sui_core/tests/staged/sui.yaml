@@ -192,7 +192,6 @@ MoveCall:
     - pure_arguments:
         SEQ:
           SEQ: U8
-    - gas_budget: U64
 MoveFieldLayout:
   STRUCT:
     - name:
@@ -204,7 +203,6 @@ MoveModulePublish:
     - modules:
         SEQ:
           SEQ: U8
-    - gas_budget: U64
 MoveObject:
   STRUCT:
     - type_:
@@ -761,6 +759,7 @@ TransactionData:
           - TYPENAME: ObjectID
           - TYPENAME: SequenceNumber
           - TYPENAME: ObjectDigest
+    - gas_budget: U64
 TransactionDigest:
   NEWTYPESTRUCT: BYTES
 TransactionEffects:

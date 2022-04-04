@@ -20,33 +20,9 @@ macro_rules! ok_or_gas_error {
 }
 
 pub const MIN_MOVE: u64 = 10;
-pub const MIN_OBJ_TRANSFER_GAS: u64 = 8;
 
 // based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
 pub const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
-
-pub fn check_transfer_gas_requirement(gas_object: &Object, transfer_object: &Object) -> SuiResult {
-    let balance = get_gas_balance(gas_object)?;
-    let cost = calculate_object_transfer_cost(transfer_object);
-    ok_or_gas_error!(
-        balance >= cost,
-        format!(
-            "Gas balance is {}, smaller than gas cost {} for object transfer.",
-            balance, cost
-        )
-    )
-}
-
-pub fn check_move_gas_requirement(gas_budget: u64) -> SuiResult {
-    ok_or_gas_error!(
-        gas_budget >= MIN_MOVE,
-        format!(
-            "Gas budget is {}, smaller than minimum requirement of {} for move operation.",
-            gas_budget, MIN_MOVE
-        )
-    )?;
-    Ok(())
-}
 
 /// Try subtract the gas balance of \p gas_object by \p amount.
 pub fn try_deduct_gas(gas_object: &mut Object, amount: u64) -> SuiResult {
@@ -63,11 +39,18 @@ pub fn try_deduct_gas(gas_object: &mut Object, amount: u64) -> SuiResult {
     Ok(())
 }
 
-pub fn check_gas_balance(gas_object: &Object, amount: u64) -> SuiResult {
+pub fn check_gas_balance(gas_object: &Object, gas_budget: u64) -> SuiResult {
     let balance = get_gas_balance(gas_object)?;
     ok_or_gas_error!(
-        balance >= amount,
-        format!("Gas balance is {balance}, not enough to pay {amount}")
+        balance >= gas_budget,
+        format!("Gas balance is {balance}, not enough to pay {gas_budget}")
+    )?;
+    ok_or_gas_error!(
+        gas_budget >= MIN_MOVE,
+        format!(
+            "Gas budget is {}, smaller than minimum requirement {}",
+            gas_budget, MIN_MOVE
+        )
     )
 }
 
@@ -84,8 +67,8 @@ pub fn get_gas_balance(gas_object: &Object) -> SuiResult<u64> {
 
 pub fn calculate_module_publish_cost(module_bytes: &[Vec<u8>]) -> u64 {
     // TODO: Figure out module publish gas formula.
-    // Currently just use the size in bytes of the modules plus a default minimum.
-    module_bytes.iter().map(|v| v.len() as u64).sum::<u64>() + MIN_MOVE
+    // Currently just use the size in bytes of the modules.
+    module_bytes.iter().map(|v| v.len() as u64).sum::<u64>()
 }
 
 pub fn calculate_object_transfer_cost(object: &Object) -> u64 {

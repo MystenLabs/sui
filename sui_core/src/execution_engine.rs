@@ -71,19 +71,17 @@ fn execute_transaction<S: BackingPackageStore>(
 ) -> SuiResult<ExecutionStatus> {
     // unwraps here are safe because we built `inputs`
     let mut gas_object = objects_by_kind.pop().unwrap().1;
-    let mut total_gas = 0;
-    // TODO: We only keep the last result for now.
-    // We should make the results a vector of results.
-    let mut last_results = vec![];
+    let mut gas_budget = transaction.data.gas_budget;
+    let mut object_input_iter = objects_by_kind.into_iter().map(|(_, object)| object);
+    let mut final_status: Option<ExecutionStatus> = None;
     // TODO: Since we require all mutable objects to not show up more than
     // once across single tx, we should be able to run them in parallel.
-    let mut object_input_iter = objects_by_kind.into_iter().map(|(_, object)| object);
     for single_tx in transaction.into_single_transactions() {
         let input_size = single_tx.input_object_count();
         let status = match single_tx {
             SingleTransactionKind::Transfer(t) => {
                 let inputs = object_input_iter.by_ref().take(input_size).collect();
-                transfer(temporary_store, inputs, t.recipient)
+                transfer(temporary_store, inputs, t.recipient, gas_budget)
             }
             SingleTransactionKind::Call(c) => {
                 let mut inputs: Vec<_> = object_input_iter.by_ref().take(input_size).collect();
@@ -99,7 +97,7 @@ fn execute_transaction<S: BackingPackageStore>(
                     c.type_arguments.clone(),
                     inputs,
                     c.pure_arguments.clone(),
-                    c.gas_budget,
+                    gas_budget,
                     tx_ctx,
                 )
             }
@@ -108,41 +106,52 @@ fn execute_transaction<S: BackingPackageStore>(
                 native_functions.clone(),
                 m.modules,
                 tx_ctx,
-                m.gas_budget,
+                gas_budget,
             ),
         }?;
         match status {
             ExecutionStatus::Failure { gas_used, error } => {
+                debug_assert!(gas_used <= gas_budget);
                 // Roll back the temporary store if execution failed.
                 temporary_store.reset();
-                temporary_store.ensure_active_inputs_mutated();
-                total_gas += gas_used;
-                return Ok(ExecutionStatus::new_failure(total_gas, *error));
+                let cur_gas = final_status.map(|s| s.gas_used()).unwrap_or_default();
+                final_status = Some(ExecutionStatus::new_failure(cur_gas + gas_used, *error));
+                break;
             }
             ExecutionStatus::Success { gas_used, results } => {
-                last_results = results;
-                total_gas += gas_used;
+                debug_assert!(gas_used <= gas_budget);
+                if let Some(ExecutionStatus::Success { gas_used: g, .. }) = final_status {
+                    // TODO: Keep all results instead of always the last one.
+                    final_status = Some(ExecutionStatus::Success {
+                        gas_used: gas_used + g,
+                        results,
+                    });
+                } else {
+                    debug_assert!(final_status.is_none());
+                    final_status = Some(ExecutionStatus::Success { gas_used, results });
+                }
+                gas_budget -= gas_used;
             }
         }
     }
-    gas::deduct_gas(&mut gas_object, total_gas);
+    // unwrap safe since there were at least one transactions executed.
+    let final_status = final_status.unwrap();
+    gas::deduct_gas(&mut gas_object, final_status.gas_used());
     temporary_store.write_object(gas_object);
 
     temporary_store.ensure_active_inputs_mutated();
-    Ok(ExecutionStatus::Success {
-        gas_used: total_gas,
-        results: last_results,
-    })
+    Ok(final_status)
 }
 
 fn transfer<S>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
     mut inputs: Vec<Object>,
     recipient: SuiAddress,
+    gas_budget: u64,
 ) -> SuiResult<ExecutionStatus> {
     if !inputs.len() == 1 {
         return Ok(ExecutionStatus::Failure {
-            gas_used: gas::MIN_OBJ_TRANSFER_GAS,
+            gas_used: gas::MIN_MOVE,
             error: Box::new(SuiError::ObjectInputArityViolation),
         });
     }
@@ -151,10 +160,21 @@ fn transfer<S>(
     let mut output_object = inputs.pop().unwrap();
 
     let gas_used = gas::calculate_object_transfer_cost(&output_object);
+    if gas_used > gas_budget {
+        return Ok(ExecutionStatus::Failure {
+            gas_used: gas_budget,
+            error: Box::new(SuiError::InsufficientGas {
+                error: format!(
+                    "Gas budget ({}) not enough to pay for the transfer cost {}",
+                    gas_budget, gas_used
+                ),
+            }),
+        });
+    }
 
     if let Err(err) = output_object.transfer(recipient) {
         return Ok(ExecutionStatus::Failure {
-            gas_used: gas::MIN_OBJ_TRANSFER_GAS,
+            gas_used: gas::MIN_MOVE,
             error: Box::new(err),
         });
     }
