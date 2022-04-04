@@ -14,7 +14,7 @@ use rayon::prelude::*;
 use std::collections::{HashSet, VecDeque};
 use std::time::{Duration, Instant};
 use sui_adapter::genesis;
-use sui_core::authority_client::AuthorityClient;
+use sui_core::authority_client::{AuthorityAPI, AuthorityClient};
 use sui_core::{authority::*, authority_server::AuthorityServer};
 use sui_network::{network::NetworkClient, transport};
 use sui_types::batch::UpdateItem;
@@ -314,7 +314,7 @@ impl ClientServerBenchmark {
 
             loop {
                 let receiver = authority_client
-                    .handle_batch_streaming_as_stream(BatchInfoRequest {
+                    .handle_batch_stream(BatchInfoRequest {
                         start,
                         end: start + 10_000,
                     })
