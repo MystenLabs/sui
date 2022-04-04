@@ -24,7 +24,6 @@ jobs:
             - '!(explorer|doc|.github)/**'
             - '.github/workflows/bench.yml'
 
-
   codecov-grcov:
     name: Generate code coverage
     needs: diff
@@ -33,20 +32,23 @@ jobs:
     strategy:
       fail-fast: true
     steps:
-      - name: install toolchain according to rust-toolchain
-        uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: beta # temporarily use beta till 'instrument-coverage' stabilizes in 1.60
           profile: default
           override: true
           components: llvm-tools-preview
-      - name: Checkout sources
-        uses: actions/checkout@v2
-      - uses: Swatinem/rust-cache@v1
+      # Enable caching of the 'librocksdb-sys' crate by additionally caching the
+      # 'librocksdb-sys' src directory which is managed by cargo
+      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
+        with:
+          path: ~/.cargo/registry/src/**/librocksdb-sys-*
       - name: Install grcov, and cache the binary
         uses: baptiste0928/cargo-install@v1
         with:
           crate: grcov
+          locked: true
       - name: Build
         uses: actions-rs/cargo@v1
         with:
@@ -59,8 +61,7 @@ jobs:
           RUSTFLAGS: '-Cinstrument-coverage'
           RUSTDOCFLAGS: '-Cinstrument-coverage'
           LLVM_PROFILE_FILE: 'codecov-instrumentation-%p-%m.profraw'
-        run: |
-          cargo test 
+        run: cargo test
       - name: Run grcov
         run: grcov . --binary-path target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore '../**' --ignore '/*' -o coverage.lcov
       - name: Upload to codecov.io
