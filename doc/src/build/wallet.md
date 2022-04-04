@@ -55,7 +55,7 @@ created with the `--working-dir` argument.
 
 To recreate Sui genesis state in the same location, which will remove
 existing configuration files, pass the `--force` option to the `sui
-genesis` command and either run it in the same directory or specify
+genesis` command and either run it in the default directory (`~/.sui/sui_config`) or specify
 it once again, using the `--working-dir` argument:
 
 ```shell
