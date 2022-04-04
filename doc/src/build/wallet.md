@@ -547,7 +547,7 @@ Let us examine objects owned by address `45CDA12E3BAFE3017B4B3CD62C493E5FBAAD7FB
 $ wallet --no-shell objects --address 45CDA12E3BAFE3017B4B3CD62C493E5FBAAD7FB0
 ```
 
-With output:
+With output resembling:
 
 ```
 Showing 5 results.
