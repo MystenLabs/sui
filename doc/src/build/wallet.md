@@ -62,12 +62,6 @@ it once again, using the `--working-dir` argument:
 $ sui genesis --force --working-dir /path/to/sui/config/dir
 ```
 
-For example:
-
-```shell
-$ sui genesis --force --working-dir /Users/name/tmp
-```
-
 ## Wallet configuration
 The genesis process creates a configuration file `wallet.conf`, and a keystore file `wallet.key` for the
 Sui wallet.  The config file contains information of the accounts and
