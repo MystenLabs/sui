@@ -309,12 +309,13 @@ this tutorial, is part of your system path:
 $ which sui-move
 ```
 
-Now proceed to creating a package directory structure (in the current directory) with an
+Now proceed to creating a package directory structure in the current
+directory, parallel to the `sui` repository. It will contain an
 empty manifest file and an empty module source file following the
 [Move code organization](#move-code-organization)
 described earlier.
 
-Navigate (`cd`) into the `sui` directory and run:
+So from the same directory containing the `sui` repository, run:
 
 ``` shell
 mkdir -p my_move_package/sources
@@ -403,8 +404,8 @@ version = "0.0.1"
 # CI. The local dep is an unmodified version of the upstream stdlib
 # Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="sui_programmability/framework", rev="44b5702712c15df365989a3b3f80038b7bf6c2ef"}
 
-# Assuming the `my_move_package` subdirectory was created in the `sui` repo parent directory as shown above:
-Sui = { local = "../sui_programmability/framework/" }
+# Assuming the `sui` repository is at the same level as the package parent directory
+Sui = { local = "../sui/sui_programmability/framework/" }
 
 [addresses]
 MyFirstPackage = "0x0"
