@@ -38,11 +38,9 @@ jobs:
           toolchain: beta
           components: clippy
           override: true
+      # See '.cargo/config' for list of enabled/disappled clippy lints
       - name: cargo clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --all-targets -- -D clippy::all -D warnings -D clippy::disallowed_methods
+        run: cargo xclippy -D warnings
       - name: cargo test
         uses: actions-rs/cargo@v1
         with:

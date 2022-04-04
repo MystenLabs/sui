@@ -85,11 +85,9 @@ jobs:
       - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
         with:
           path: ~/.cargo/registry/src/**/librocksdb-sys-*
+      # See '.cargo/config' for list of enabled/disappled clippy lints
       - name: cargo clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --all-targets -- -D clippy::all -D warnings -D clippy::disallowed_methods
+        run: cargo xclippy -D warnings
 
   rustfmt:
     needs: diff
