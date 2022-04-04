@@ -3,17 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use futures::channel::mpsc::{channel, Receiver};
-use futures::Stream;
-use futures::{SinkExt, StreamExt};
+use futures::stream::BoxStream;
+use futures::StreamExt;
 use std::io;
-use sui_network::network::{parse_recv_bytes, NetworkClient};
+use sui_network::network::NetworkClient;
 use sui_network::transport::TcpDataStream;
 use sui_types::batch::UpdateItem;
 use sui_types::{error::SuiError, messages::*, serialize::*};
 
 static MAX_ERRORS: i32 = 10;
-pub(crate) static BUFFER_SIZE: usize = 100;
 
 #[async_trait]
 pub trait AuthorityAPI {
@@ -47,12 +45,13 @@ pub trait AuthorityAPI {
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError>;
 
-    /// Handle Batch information requests for this authority.
-    async fn handle_batch_streaming(
+    async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<Receiver<Result<BatchInfoResponseItem, SuiError>>, io::Error>;
+    ) -> Result<BatchInfoResponseItemStream, io::Error>;
 }
+
+pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoResponseItem, SuiError>>;
 
 #[derive(Clone)]
 pub struct AuthorityClient(NetworkClient);
@@ -124,63 +123,10 @@ impl AuthorityAPI for AuthorityClient {
     }
 
     /// Handle Batch information requests for this authority.
-    async fn handle_batch_streaming(
+    async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<Receiver<Result<BatchInfoResponseItem, SuiError>>, io::Error> {
-        let (mut tx_output, tr_output) = channel(BUFFER_SIZE);
-        let mut tcp_stream = self
-            .0
-            .connect_for_stream(serialize_batch_request(&request))
-            .await?;
-
-        let mut error_count = 0;
-
-        // Check the messages from the inflight_stream receiver to ensure each message is a
-        // BatchInfoResponseItem, then send a Result<BatchInfoResponseItem, SuiError to the channel
-        // that was passed in. For each message, also check if we have reached the last batch in the
-        // request, and when we do, end the inflight stream task using tx_cancellation.
-        loop {
-            let next_data = tcp_stream.read_data().await.transpose();
-            let data_result = parse_recv_bytes(next_data);
-            match data_result.and_then(deserialize_batch_info) {
-                Ok(batch_info_response_item) => {
-                    // send to the caller via the channel
-                    let _ = tx_output.send(Ok(batch_info_response_item.clone())).await;
-
-                    // check for ending conditions
-                    match batch_info_response_item {
-                        BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
-                            if signed_batch.batch.next_sequence_number > request.end {
-                                break;
-                            }
-                        }
-                        BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
-                            if seq > request.end {
-                                break;
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    let _ = tx_output.send(Result::Err(e)).await;
-                    error_count += 1;
-                    if error_count >= MAX_ERRORS {
-                        break;
-                    }
-                }
-            }
-        }
-        Ok(tr_output)
-    }
-}
-
-impl AuthorityClient {
-    /// Handle Batch information requests for this authority.
-    pub async fn handle_batch_streaming_as_stream(
-        &self,
-        request: BatchInfoRequest,
-    ) -> Result<impl Stream<Item = Result<BatchInfoResponseItem, SuiError>>, io::Error> {
+    ) -> Result<BatchInfoResponseItemStream, io::Error> {
         let tcp_stream = self
             .0
             .connect_for_stream(serialize_batch_request(&request))
@@ -224,6 +170,6 @@ impl AuthorityClient {
                 };
                 futures::future::ready(flag)
             });
-        Ok(stream)
+        Ok(Box::pin(stream))
     }
 }
