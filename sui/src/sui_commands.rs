@@ -19,6 +19,7 @@ use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
 use sui_network::transport::SpawnedServer;
 use sui_network::transport::DEFAULT_MAX_DATAGRAM_SIZE;
+use sui_types::base_types::decode_bytes_hex;
 use sui_types::base_types::{SequenceNumber, SuiAddress, TxContext};
 use sui_types::committee::Committee;
 use sui_types::error::SuiResult;
@@ -46,6 +47,15 @@ pub enum SuiCommand {
         working_dir: Option<PathBuf>,
         #[structopt(short, long, help = "Forces overwriting existing configuration")]
         force: bool,
+    },
+    #[structopt(name = "signtool")]
+    SignTool {
+        #[structopt(long)]
+        keystore_path: Option<PathBuf>,
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        address: SuiAddress,
+        #[structopt(long)]
+        data: String,
     },
 }
 
@@ -148,6 +158,31 @@ impl SuiCommand {
                 wallet_config.save()?;
                 info!("Wallet config file is stored in {:?}.", wallet_path);
 
+                Ok(())
+            }
+            SuiCommand::SignTool {
+                keystore_path,
+                address,
+                data,
+            } => {
+                let keystore_path = keystore_path
+                    .clone()
+                    .unwrap_or(sui_config_dir()?.join("wallet.key"));
+                let keystore = SuiKeystore::load_or_create(&keystore_path)?;
+                info!("Data to sign : {}", data);
+                info!("Address : {}", address);
+                let signature = keystore.sign(address, &base64::decode(data)?)?;
+                // Separate pub key and signature string, signature and pub key are concatenated with an '@' symbol.
+                let signature_string = format!("{:?}", signature);
+                let sig_split = signature_string.split('@').collect::<Vec<_>>();
+                let signature = sig_split
+                    .first()
+                    .ok_or_else(|| anyhow!("Error creating signature."))?;
+                let pub_key = sig_split
+                    .last()
+                    .ok_or_else(|| anyhow!("Error creating signature."))?;
+                info!("Public Key Base64: {}", pub_key);
+                info!("Signature : {}", signature);
                 Ok(())
             }
         }

@@ -45,7 +45,7 @@ impl GatewayAPI for RestGatewayClient {
         let pub_key = split[1];
 
         let data = SignedTransaction {
-            unsigned_tx_base64: data,
+            tx_bytes: data,
             signature: signature.to_string(),
             pub_key: pub_key.to_string(),
         };

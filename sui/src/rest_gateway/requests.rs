@@ -41,7 +41,7 @@ pub struct MergeCoinRequest {
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct SignedTransaction {
     /// Required; Base64 encoded string representing the BCS serialised TransactionData object
-    pub unsigned_tx_base64: String,
+    pub tx_bytes: String,
     /// Required; Base64 encoded string representing the ed25519 signature bytes
     pub signature: String,
     /// Required; Base64 encoded string representing the ed25519 public key

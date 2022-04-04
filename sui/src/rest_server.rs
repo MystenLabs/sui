@@ -484,7 +484,7 @@ async fn execute_transaction(
     let mut gateway = ctx.context().gateway.lock().await;
 
     let response: Result<_, anyhow::Error> = async {
-        let data = base64::decode(response.unsigned_tx_base64)?;
+        let data = base64::decode(response.tx_bytes)?;
         let data = TransactionData::from_signable_bytes(data)?;
 
         let mut signature_bytes = base64::decode(response.signature)?;
