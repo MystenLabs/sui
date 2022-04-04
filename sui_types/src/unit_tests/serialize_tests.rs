@@ -398,6 +398,7 @@ fn test_signable_serde() -> Result<(), anyhow::Error> {
         o1.compute_object_reference(),
         owner,
         o2.compute_object_reference(),
+        10000,
     );
 
     // Serialize

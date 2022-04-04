@@ -302,7 +302,13 @@ async fn new_transfer(
         let gas_object_id = ObjectID::try_from(request.gas_object_id)?;
         let owner = decode_bytes_hex(request.from_address.as_str())?;
         gateway
-            .transfer_coin(owner, object_id, gas_object_id, to_address)
+            .transfer_coin(
+                owner,
+                object_id,
+                gas_object_id,
+                request.gas_budget,
+                to_address,
+            )
             .await
     }
     .await

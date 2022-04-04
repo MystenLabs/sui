@@ -117,6 +117,8 @@ pub struct TransferTransactionRequest {
     pub to_address: String,
     /// Required; Hex code as string representing the gas object id to be used as payment
     pub gas_object_id: String,
+    /** Required; Gas budget required as a cap for gas usage */
+    pub gas_budget: u64,
 }
 
 /// Request containing the address that requires a sync.

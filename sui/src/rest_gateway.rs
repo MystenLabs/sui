@@ -58,6 +58,7 @@ impl GatewayAPI for RestGatewayClient {
         signer: SuiAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
+        gas_budget: u64,
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error> {
         let object_id = object_id.to_hex();
@@ -68,6 +69,7 @@ impl GatewayAPI for RestGatewayClient {
             object_id,
             to_address: recipient.to_string(),
             gas_object_id: gas_payment,
+            gas_budget,
         };
 
         let tx: TransactionBytes = self.post("new_transfer", request).await?;
