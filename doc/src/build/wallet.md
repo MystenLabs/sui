@@ -40,7 +40,7 @@ are also created to be used by the Sui wallet to manage the newly
 created accounts.
 
 By default, these files are placed in your home directory at
-`~/.sui/sui_config` directory. But you can override this location by
+`~/.sui/sui_config` directory (created automatically if it does not yet exist). But you can override this location by
 providing an alternative path to the `--working-dir` argument. Run
 the command like so to place the files in the `dir` directory:
 
