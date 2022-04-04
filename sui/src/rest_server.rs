@@ -55,7 +55,7 @@ mod rest_server_tests;
     about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
     rename_all = "kebab-case"
 )]
-struct RestGatewayOpt {
+struct RestServerOpt {
     #[structopt(long)]
     config: Option<PathBuf>,
 
@@ -68,7 +68,7 @@ struct RestGatewayOpt {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let options: RestGatewayOpt = RestGatewayOpt::from_args();
+    let options: RestServerOpt = RestServerOpt::from_args();
 
     let config_dropshot: ConfigDropshot = ConfigDropshot {
         bind_address: SocketAddr::from((options.host, options.port)),
