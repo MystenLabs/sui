@@ -157,16 +157,17 @@ where
     K: Clone,
     I: Borrow<[u8]> + Ord,
 {
-    pub fn new<V>(
+    pub fn new<V1, V2>(
         first_key: K,
         first: Waypoint,
-        missing_from_first: V,
+        missing_from_first: V1,
         second_key: K,
         second: Waypoint,
-        missing_from_second: V,
+        missing_from_second: V2,
     ) -> WaypointDiff<K, I>
     where
-        V: Iterator<Item = I>,
+        V1: Iterator<Item = I>,
+        V2: Iterator<Item = I>,
     {
         let w1 = WaypointWithItems {
             key: first_key,
@@ -378,6 +379,41 @@ where
         });
 
         Ok(item_sum)
+    }
+
+    /// Provides the set of element that need to be added to the first party
+    /// to catch up with the checkpoint (and maybe surpass it).
+    pub fn checkpoint_items(
+        &self,
+        diff: WaypointDiff<K, I>,
+        mut own_proposal: BTreeSet<I>,
+    ) -> Result<BTreeSet<I>, WaypointError> {
+        // If the authority is one of the participants in the checkpoint
+        // just read the different.
+        if self.authority_waypoints.contains_key(&diff.first.key) {
+            let mut all_elements = self.authority_waypoints[&diff.first.key].items.clone();
+            all_elements.extend(own_proposal);
+            return Ok(all_elements);
+        }
+
+        // If not then we need to compute the difference.
+        if !self.authority_waypoints.contains_key(&diff.second.key) {
+            return Err(WaypointError::generic(
+                "Need the second key at least to link into the checkpoint.".to_string(),
+            ));
+        }
+
+        // Union of items, to catch up with second
+        own_proposal.extend(diff.first.items);
+        // Remove items not in second
+        let mut second_items: BTreeSet<I> = own_proposal
+            .difference(&diff.second.items)
+            .cloned()
+            .collect();
+        // Add items from second to global checkpoint
+        second_items.extend(self.authority_waypoints[&diff.second.key].items.clone());
+
+        Ok(second_items)
     }
 }
 
