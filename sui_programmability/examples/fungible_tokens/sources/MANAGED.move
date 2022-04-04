@@ -13,12 +13,11 @@ module FungibleTokens::MANAGED {
     /// and has no fields. The full type of the coin defined by this module will be `COIN<MANAGED>`.
     struct MANAGED has drop {}
 
-    /// Register the trusted currency to acquire its `TreasuryCap`. Because
+    /// Register the managed currency to acquire its `TreasuryCap`. Because
     /// this is a module initializer, it ensures the currency only gets
     /// registered once.
     fun init(ctx: &mut TxContext) {
-        // Get a treasury cap for the coin and give it to the transaction
-        // sender
+        // Get a treasury cap for the coin and give it to the transaction sender
         let treasury_cap = Coin::create_currency<MANAGED>(MANAGED{}, ctx);
         Transfer::transfer(treasury_cap, TxContext::sender(ctx))
     }
