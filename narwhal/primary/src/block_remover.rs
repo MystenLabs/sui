@@ -103,6 +103,7 @@ pub struct DeleteBatchMessage {
 /// # use std::collections::BTreeMap;
 /// # use primary::Certificate;
 /// # use config::WorkerId;
+/// # use tempfile::tempdir;
 /// # use primary::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage, Header, PayloadToken};
 /// # use primary::{BatchDigest, CertificateDigest, HeaderDigest};
 ///
@@ -112,8 +113,10 @@ pub struct DeleteBatchMessage {
 ///     const HEADERS_CF: &str = "headers";
 ///     const PAYLOAD_CF: &str = "payload";
 ///
+///     let temp_dir = tempdir().expect("Failed to open temporary directory").into_path();
+///
 ///     // Basic setup: datastore, channels & BlockWaiter
-///     let rocksdb = rocks::open_cf(temp_dir(), None, &[CERTIFICATES_CF, HEADERS_CF, PAYLOAD_CF])
+///     let rocksdb = rocks::open_cf(temp_dir, None, &[CERTIFICATES_CF, HEADERS_CF, PAYLOAD_CF])
 ///         .expect("Failed creating database");
 ///
 ///     let (certificate_map, headers_map, payload_map) = reopen!(&rocksdb,

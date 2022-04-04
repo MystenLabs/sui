@@ -160,14 +160,17 @@ type RequestKey = Vec<u8>;
 /// # use config::Committee;
 /// # use std::collections::BTreeMap;
 /// # use primary::Certificate;
+/// # use tempfile::tempdir;
 /// # use primary::{BatchMessage, BlockWaiter, BlockCommand,BatchDigest, CertificateDigest, Batch};
 ///
 /// #[tokio::main(flavor = "current_thread")]
 /// # async fn main() {
 ///     const CERTIFICATES_CF: &str = "certificates";
 ///
+///     let temp_dir = tempdir().expect("Failed to open temporary directory").into_path();
+///
 ///     // Basic setup: datastore, channels & BlockWaiter
-///     let rocksdb = rocks::open_cf(temp_dir(), None, &[CERTIFICATES_CF])
+///     let rocksdb = rocks::open_cf(temp_dir, None, &[CERTIFICATES_CF])
 ///         .expect("Failed creating database");
 ///
 ///     let (certificate_map) = reopen!(&rocksdb,
