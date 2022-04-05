@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 rayon = "1.5.1"
-anyhow = "1.0.55"
+anyhow = { version = "1.0.56", features = ["backtrace"] }
 bytes = "1.1.0"
 futures = "0.3.21"
 serde = { version = "1.0.136", features = ["derive"] }
