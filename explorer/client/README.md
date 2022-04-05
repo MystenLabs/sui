@@ -52,7 +52,7 @@ Same as `npm start` but runs `prettier:fix:watch` to format the files.
 
 ### `npm test`
 
-This runs a series of end-to-end, browser tests usng the website as connected to the static JSON dataset. This command is run by the GitHub checks. The tests must pass before merging a branch into main.
+This runs a series of end-to-end browser tests using the website as connected to the static JSON dataset. This command is run by the GitHub checks. The tests must pass before merging a branch into main.
 
 ### `npm run build`
 
