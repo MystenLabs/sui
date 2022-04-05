@@ -773,8 +773,8 @@ pre-populate two gas objects for four newly generated accounts:
 }
 ```
 
-If you use any custom accounts in `genesis.conf` ensure you have a corresponding private key in
-`wallet.key`. Ensure `wallet.key` is in the working directory of the wallet. If you do not have the private key of the addresses specified you cannot use custom genesis. Never share your private keys, but for the `genesis.conf` example below you can use the following private key
+If you use any custom accounts in `genesis.conf`, ensure you have a corresponding private key in
+`wallet.key`. Ensure `wallet.key` is in the working directory of the wallet. If you do not have the private key of the addresses specified, you cannot use custom genesis. *Never share your private keys.* For testing the `genesis.conf` example below, you can use the following private key:
 
 `genesis.conf`
 

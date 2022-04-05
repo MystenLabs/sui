@@ -177,10 +177,9 @@ You should replace `{{owner_address}}` and `{{to_address}}` in the
 command above with an actual address values, for example one obtained
 from `wallet.conf`. You should also replace
 `{{coin_object_id}}` and `{{gas_object_id}}` in the command above with
-an actual object ID, for example one obtained from [`GET
-/objects`](#get-apiobjects) (from `objectId` in the output of [`GET
-/objects`](#get-apiobjects). You can see that all gas objects generated
-during genesis are of `Coin/SUI` type). For this call to work, objects
+an actual object ID, for example one obtained from `objType` in the output
+of [`GET /objects`](#get-apiobjects). You can see that all gas objects generated
+during genesis are of `Coin/SUI` type. For this call to work, objects
 represented by both `{{coin_object_id}}` and `{{gas_object_id}}` must
 be owned by the address represented by `{{owner_address}}`.
 
@@ -229,7 +228,7 @@ objects). Consequently, you should fill out argument placeholders
 would for [`POST /api/transfer`](#post-apinew_transfer) - please not additional
 `0x` prepended to function arguments.
 
-NOTE: A Publish endpoint is in the works, but for now the only way to add a new module is to have it included as part of genesis. To do this, add your Move module to  `sui_programmability/framework/sources` before you hit the genesis endpoint. Once you have done this you will be able to use `"packageObjectId": "0x2"` in the call endpoint to find your Move module.
+NOTE: A Publish endpoint is in the works, but for now the only way to add a new module is to have it included as part of genesis. To do this, add your Move module to `sui_programmability/framework/sources` before you hit the genesis endpoint. Once you have done this you will be able to use `"packageObjectId": "0x2"` in the call endpoint to find your Move module.
 
 To learn more about what `args` are accepted in a Move call, refer to the [SuiJSON](sui-json.md) documentation.
 
@@ -262,7 +261,7 @@ from [`GET /addresses`](#get-addresses). You should also replace `{{gas_object_i
 during genesis are of `Coin/SUI` type). For this call to work, `{{gas_object_id}}` must
 be owned by the address represented by `{{owner_address}}`.
 
-To publish a Move module you also need `{{vector_of_compiled_modules}}`. To generate the value of this field you can use the `sui-move` command. The `sui-move` command supports printing the bytecodes as hex with the following option
+To publish a Move module, you also need `{{vector_of_compiled_modules}}`. To generate the value of this field, you can use the `sui-move` command. The `sui-move` command supports printing the bytecodes as hex with the following option
 
 ```
 sui-move --path <move-module-path> build --dump-bytecode-as-hex
