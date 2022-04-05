@@ -23,6 +23,8 @@ pub struct CheckpointProposal {
     /// The sequence number of this proposal
     sequence_number: CheckpointSequenceNumber,
 
+    /// A way point is a commitment to the set of transactions
+    /// included in this proposal.
     waypoint: Waypoint,
     /// The transactions included in the proposal.
     /// TODO: only include a commitment by default.
@@ -30,6 +32,11 @@ pub struct CheckpointProposal {
 }
 
 impl CheckpointProposal {
+    /// Create a proposal for a checkpoint at a partiular height
+    /// This contains a sequence number, waypoint and a list of
+    /// proposed trasnactions.
+    /// TOOD: Add an identifier for the proposer, probably
+    ///       an AuthorityName.
     pub fn new(
         sequence_number: CheckpointSequenceNumber,
         transactions: Vec<TransactionDigest>,
@@ -46,10 +53,20 @@ impl CheckpointProposal {
         }
     }
 
+    /// Returns the sequence number of this proposal
     pub fn sequence_number(&self) -> &CheckpointSequenceNumber {
         &self.sequence_number
     }
 
+    /// Construct a Diff structure between this proposal and another
+    /// proposal. A diff structure has to contain keys (TODO: down the
+    /// line include AuthorityName in the proposals). The diff represents
+    /// the elements that each proposal need to be augmented by to
+    /// contain the same elements.
+    ///
+    /// TODO: down the line we can include other methods to get diffs
+    /// line MerkleTrees or IBLT filters that do not require O(n) download
+    /// of both proposals.
     pub fn diff_with<K>(
         &self,
         me: K,
@@ -610,6 +627,7 @@ mod tests {
             .checkpoint_items(diff12, p1.transactions.iter().cloned().collect())
             .unwrap();
 
+        // All get the same set for the proposal
         assert_eq!(all_items1, all_items4);
     }
 }
