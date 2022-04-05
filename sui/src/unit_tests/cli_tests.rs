@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::fs::read_dir;
 use std::ops::Add;
 use std::path::{Path, PathBuf};
@@ -9,6 +10,7 @@ use std::time::Duration;
 
 use move_core_types::identifier::Identifier;
 use serde_json::{json, Value};
+use sui_core::gateway_state::gateway_responses::SwitchResponse;
 use tracing_test::traced_test;
 
 use std::fmt::Write;
@@ -21,7 +23,7 @@ use sui::keystore::KeystoreType;
 use sui::sui_commands::{genesis, SuiNetwork, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{
-    gas_object_for_budget, WalletCommandResult, WalletCommands, WalletContext,
+    gas_object_for_owner_budget, WalletCommandResult, WalletCommands, WalletContext,
 };
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::get_key_pair;
@@ -190,10 +192,11 @@ async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
     }
 
     // Pick some large enough budget
-    let gas_object_id = gas_object_for_budget(oracle_address, &mut context, 10000)
-        .await?
-        .1
-        .id();
+    let gas_object_id =
+        gas_object_for_owner_budget(oracle_address, &mut context, 10000, BTreeSet::new())
+            .await?
+            .1
+            .id();
     // Claim the airdrop
     let token = airdrop_call_move_and_get_created_object(args, gas_object_id, &mut context).await?;
 
@@ -1068,3 +1071,194 @@ fn test_bug_1078() {
     write!(writer, "{}", read).unwrap();
     write!(writer, "{:?}", read).unwrap();
 }
+
+#[allow(clippy::assertions_on_constants)]
+#[traced_test]
+#[tokio::test]
+async fn test_switch_command() -> Result<(), anyhow::Error> {
+    let working_dir = tempfile::tempdir()?;
+    let network = start_test_network(working_dir.path(), None).await?;
+
+    // Create Wallet context.
+    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
+
+    let mut context = WalletContext::new(&wallet_conf)?;
+
+    // Get the active address
+    let addr1 = context.active_address()?;
+
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState {
+        address: Some(addr1),
+    }
+    .execute(&mut context)
+    .await?;
+
+    // Run a command with address ommited
+    let os = WalletCommands::Objects { address: None }
+        .execute(&mut context)
+        .await?;
+
+    let mut cmd_objs = if let WalletCommandResult::Objects(v) = os {
+        v
+    } else {
+        panic!("Command failed")
+    };
+
+    // Check that we indeed fetched for addr1
+    let mut actual_objs = context.gateway.get_owned_objects(addr1);
+    cmd_objs.sort();
+    actual_objs.sort();
+    assert_eq!(cmd_objs, actual_objs);
+
+    // Switch the address
+    let addr2 = context.config.accounts.get(1).cloned().unwrap();
+    let resp = WalletCommands::Switch { address: addr2 }
+        .execute(&mut context)
+        .await?;
+    assert_eq!(addr2, context.active_address()?);
+    assert_ne!(addr1, context.active_address()?);
+    assert_eq!(
+        format!("{resp}"),
+        format!(
+            "{}",
+            WalletCommandResult::Switch(SwitchResponse { address: addr2 })
+        )
+    );
+
+    // Wipe all the address info
+    context.config.accounts.clear();
+    context.config.active_address = None;
+
+    // Create a new address
+    let os = WalletCommands::NewAddress {}.execute(&mut context).await?;
+    let new_addr = if let WalletCommandResult::NewAddress(a) = os {
+        a
+    } else {
+        panic!("Command failed")
+    };
+
+    // Check that we can switch to this address
+    // Switch the address
+    let resp = WalletCommands::Switch { address: new_addr }
+        .execute(&mut context)
+        .await?;
+    assert_eq!(new_addr, context.active_address()?);
+    assert_eq!(
+        format!("{resp}"),
+        format!(
+            "{}",
+            WalletCommandResult::Switch(SwitchResponse { address: new_addr })
+        )
+    );
+    network.kill().await?;
+    Ok(())
+}
+
+#[allow(clippy::assertions_on_constants)]
+#[traced_test]
+#[tokio::test]
+async fn test_active_address_command() -> Result<(), anyhow::Error> {
+    let working_dir = tempfile::tempdir()?;
+    let network = start_test_network(working_dir.path(), None).await?;
+
+    // Create Wallet context.
+    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
+
+    let mut context = WalletContext::new(&wallet_conf)?;
+
+    // Get the active address
+    let addr1 = context.active_address()?;
+
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState {
+        address: Some(addr1),
+    }
+    .execute(&mut context)
+    .await?;
+
+    // Run a command with address ommited
+    let os = WalletCommands::ActiveAddress {}
+        .execute(&mut context)
+        .await?;
+
+    let mut a = if let WalletCommandResult::ActiveAddress(Some(v)) = os {
+        v
+    } else {
+        panic!("Command failed")
+    };
+    assert_eq!(a, addr1);
+
+    let addr2 = context.config.accounts.get(1).cloned().unwrap();
+    let resp = WalletCommands::Switch { address: addr2 }
+        .execute(&mut context)
+        .await?;
+    assert_eq!(
+        format!("{resp}"),
+        format!(
+            "{}",
+            WalletCommandResult::Switch(SwitchResponse { address: addr2 })
+        )
+    );
+    network.kill().await?;
+    Ok(())
+}
+
+#[allow(clippy::assertions_on_constants)]
+#[traced_test]
+#[tokio::test]
+async fn test_gas_picker() -> Result<(), anyhow::Error> {
+    let working_dir = tempfile::tempdir()?;
+    let network = start_test_network(working_dir.path(), None).await?;
+
+    // Create Wallet context.
+    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
+
+    let mut context = WalletContext::new(&wallet_conf)?;
+
+    // Get the active address
+    let addr1 = context.active_address()?;
+
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState {
+        address: Some(addr1),
+    }
+    .execute(&mut context)
+    .await?;
+
+    // 1. Transfer case
+
+    // A: All good inputs
+    // B: Transfer same as gas
+    // C: Good gas specified
+    // D: Bad gas specified
+
+
+    // Run a command with address ommited
+    let os = WalletCommands::ActiveAddress {}
+        .execute(&mut context)
+        .await?;
+
+    let mut a = if let WalletCommandResult::ActiveAddress(Some(v)) = os {
+        v
+    } else {
+        panic!("Command failed")
+    };
+    assert_eq!(a, addr1);
+
+    let addr2 = context.config.accounts.get(1).cloned().unwrap();
+    let resp = WalletCommands::Switch { address: addr2 }
+        .execute(&mut context)
+        .await?;
+    assert_eq!(
+        format!("{resp}"),
+        format!(
+            "{}",
+            WalletCommandResult::Switch(SwitchResponse { address: addr2 })
+        )
+    );
+    network.kill().await?;
+    Ok(())
+}
+
+

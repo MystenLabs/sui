@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use core::fmt;
+use std::collections::BTreeSet;
 use std::fmt::{Debug, Display, Formatter, Write};
 use std::path::Path;
 use std::sync::{Arc, RwLock};
@@ -48,7 +49,7 @@ pub struct WalletOpts {
 #[structopt(rename_all = "kebab-case")]
 #[structopt(setting(AppSettings::NoBinaryName))]
 pub enum WalletCommands {
-    /// Switch address
+    /// Switch active address
     #[structopt(name = "switch")]
     Switch {
         /// Address to switch wallet commands to
@@ -56,7 +57,7 @@ pub enum WalletCommands {
         address: SuiAddress,
     },
 
-    /// Default address used
+    /// Default address used for commands when none specified
     #[structopt(name = "active-address")]
     ActiveAddress {},
 
@@ -210,7 +211,9 @@ impl WalletCommands {
                 gas,
                 gas_budget,
             } => {
-                let gas_object = choose_gas_for_wallet(*gas, context, *gas_budget).await?;
+                let gas_object = context
+                    .choose_gas_for_wallet(*gas, *gas_budget, BTreeSet::new())
+                    .await?;
                 let sender = gas_object.owner.get_owner_address()?;
                 let gas_obj_ref = gas_object.compute_object_reference();
 
@@ -247,9 +250,6 @@ impl WalletCommands {
                 gas_budget,
                 args,
             } => {
-                let gas_object = choose_gas_for_wallet(*gas, context, *gas_budget).await?;
-                let sender = gas_object.owner.get_owner_address()?;
-
                 let package_obj_info = context.gateway.get_object_info(*package).await?;
                 let package_obj = package_obj_info.object().clone()?;
                 let package_obj_ref = package_obj_info.reference().unwrap();
@@ -274,6 +274,12 @@ impl WalletCommands {
                             .into_object()?,
                     );
                 }
+
+                let forbidden_objects = BTreeSet::from_iter(object_ids.clone().into_iter());
+                let gas_object = context
+                    .choose_gas_for_wallet(*gas, *gas_budget, forbidden_objects)
+                    .await?;
+                let sender = gas_object.owner.get_owner_address()?;
 
                 // Pass in the objects for a deeper check
                 // We can technically move this to impl MovePackage
@@ -329,14 +335,32 @@ impl WalletCommands {
             }
 
             WalletCommands::Transfer { to, object_id, gas } => {
-                let budget = calculate_object_transfer_cost(
+                let obj = context
+                    .gateway
+                    .get_object_info(*object_id)
+                    .await?
+                    .object()?
+                    .clone();
+                let budget = calculate_object_transfer_cost(&obj);
+                let forbidden_objects = BTreeSet::from([*object_id]);
+
+                // If this isnt the active account, and no gas is specified, derive sender and gas from object to be sent
+                let gas_object = if context.active_address()? != obj.owner.get_owner_address()?
+                    && gas.is_none()
+                {
                     context
-                        .gateway
-                        .get_object_info(*object_id)
+                        .gas_for_owner_budget(
+                            obj.owner.get_owner_address()?,
+                            budget,
+                            forbidden_objects,
+                        )
                         .await?
-                        .object()?,
-                );
-                let gas_object = choose_gas_for_wallet(*gas, context, budget).await?;
+                        .1
+                } else {
+                    context
+                        .choose_gas_for_wallet(*gas, budget, forbidden_objects)
+                        .await?
+                };
                 let from = gas_object.owner.get_owner_address()?;
 
                 let time_start = Instant::now();
@@ -395,7 +419,8 @@ impl WalletCommands {
                     Some(a) => *a,
                     None => context.active_address()?,
                 };
-                let coins = gas_objects(address, context)
+                let coins = context
+                    .gas_objects(address)
                     .await?
                     .iter()
                     // Ok to unwrap() since `get_gas_objects` guarantees gas
@@ -409,7 +434,11 @@ impl WalletCommands {
                 gas,
                 gas_budget,
             } => {
-                let gas_object = choose_gas_for_wallet(*gas, context, *gas_budget).await?;
+                let mut forbidden_objects = BTreeSet::new();
+                forbidden_objects.insert(*coin_id);
+                let gas_object = context
+                    .choose_gas_for_wallet(*gas, *gas_budget, forbidden_objects)
+                    .await?;
                 let signer = gas_object.owner.get_owner_address()?;
 
                 let data = context
@@ -440,7 +469,10 @@ impl WalletCommands {
                 gas,
                 gas_budget,
             } => {
-                let gas_object = choose_gas_for_wallet(*gas, context, *gas_budget).await?;
+                let forbidden_objects = BTreeSet::from([*primary_coin, *coin_to_merge]);
+                let gas_object = context
+                    .choose_gas_for_wallet(*gas, *gas_budget, forbidden_objects)
+                    .await?;
                 let signer = gas_object.owner.get_owner_address()?;
                 let data = context
                     .gateway
@@ -528,6 +560,80 @@ impl WalletContext {
         );
 
         Ok(self.config.active_address.unwrap())
+    }
+
+    /// Get all the gas objects (and conveniently, gas amounts) for the address
+    pub async fn gas_objects(
+        &mut self,
+        address: SuiAddress,
+    ) -> Result<Vec<(u64, Object)>, anyhow::Error> {
+        let object_refs = self.gateway.get_owned_objects(address);
+
+        // TODO: We should ideally fetch the objects from local cache
+        let mut values_objects = Vec::new();
+        for (id, _, _) in object_refs {
+            match self.gateway.get_object_info(id).await? {
+                Exists(_, o, _) => {
+                    if matches!( o.type_(), Some(v)  if *v == GasCoin::type_()) {
+                        // Okay to unwrap() since we already checked type
+                        let gas_coin = GasCoin::try_from(o.data.try_as_move().unwrap())?;
+                        values_objects.push((gas_coin.value(), o));
+                    }
+                }
+                _ => continue,
+            }
+        }
+
+        Ok(values_objects)
+    }
+
+    /// Choose ideal gas object based on the budget and provided gas if any
+    async fn choose_gas_for_wallet(
+        &mut self,
+        specified_gas: Option<ObjectID>,
+        budget: u64,
+        forbidden_objects: BTreeSet<ObjectID>,
+    ) -> Result<Object, anyhow::Error> {
+        Ok(match specified_gas {
+            None => {
+                let addr = self.active_address()?;
+                self.gas_for_owner_budget(addr, budget, forbidden_objects)
+                    .await?
+                    .1
+            }
+            Some(g) => {
+                if !forbidden_objects.contains(&g) {
+                    return Err(anyhow!(
+                        "Gas {} cannot be used as payment and in transaction input",
+                        g
+                    ));
+                }
+
+                let gas_object_read = self.gateway.get_object_info(g).await?;
+                // You could technically try to pay with a gas not owned by user.
+                // Especially if one forgets to switch account
+                // Allow it still
+                gas_object_read.object()?.clone()
+            }
+        })
+    }
+
+    /// Find a gas object which fits the budget
+    pub async fn gas_for_owner_budget(
+        &mut self,
+        address: SuiAddress,
+        budget: u64,
+        forbidden_objects: BTreeSet<ObjectID>,
+    ) -> Result<(u64, Object), anyhow::Error> {
+        for o in self.gas_objects(address).await.unwrap() {
+            if o.0 >= budget && !forbidden_objects.contains(&o.1.id()) {
+                return Ok(o);
+            }
+        }
+        return Err(anyhow!(
+            "No non-argument gas objects found with value >= budget {}",
+            budget
+        ));
     }
 }
 
@@ -639,68 +745,6 @@ fn unwrap_err_to_string<T: Display, F: FnOnce() -> Result<T, anyhow::Error>>(fun
         Ok(s) => format!("{s}"),
         Err(err) => format!("{err}").red().to_string(),
     }
-}
-
-async fn choose_gas_for_wallet(
-    specified_gas: Option<ObjectID>,
-    context: &mut WalletContext,
-    budget: u64,
-) -> Result<Object, anyhow::Error> {
-    Ok(match specified_gas {
-        None => {
-            gas_object_for_budget(context.active_address()?, context, budget)
-                .await?
-                .1
-        }
-
-        Some(g) => {
-            let gas_object_read = context.gateway.get_object_info(g).await?;
-            // You could technically try to pay with a gas not owned by user.
-            // Especially if one forgets to switch account
-            // Allow it still
-            gas_object_read.object()?.clone()
-        }
-    })
-}
-
-pub async fn gas_object_for_budget(
-    address: SuiAddress,
-    context: &mut WalletContext,
-    budget: u64,
-) -> Result<(u64, Object), anyhow::Error> {
-    for o in gas_objects(address, context).await.unwrap() {
-        if o.0 >= budget {
-            return Ok(o);
-        }
-    }
-    return Err(anyhow!(
-        "No gas objects found with value >= budget {}",
-        budget
-    ));
-}
-
-pub async fn gas_objects(
-    address: SuiAddress,
-    context: &mut WalletContext,
-) -> Result<Vec<(u64, Object)>, anyhow::Error> {
-    let object_refs = context.gateway.get_owned_objects(address);
-
-    // TODO: We should ideally fetch the objects from local cache
-    let mut values_objects = Vec::new();
-    for (id, _, _) in object_refs {
-        match context.gateway.get_object_info(id).await? {
-            Exists(_, o, _) => {
-                if matches!( o.type_(), Some(v)  if *v == GasCoin::type_()) {
-                    // Okay to unwrap() since we already checked type
-                    let gas_coin = GasCoin::try_from(o.data.try_as_move().unwrap())?;
-                    values_objects.push((gas_coin.value(), o));
-                }
-            }
-            _ => continue,
-        }
-    }
-
-    Ok(values_objects)
 }
 
 impl WalletCommandResult {

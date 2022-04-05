@@ -148,18 +148,25 @@ If you see errors when trying to start Sui network, particularly if you made som
 ## Using the wallet
 The following commands are supported by the wallet:
 
-    `addresses`      Obtain the Addresses managed by the wallet
-    `call`           Call Move function
-    `gas`            Obtain all gas objects owned by the address
-    `help`           Prints this message or the help of the given subcommand(s)
-    `merge-coin`     Merge two coin objects into one coin
-    `new-address`    Generate new address and key-pair
-    `object`         Get object info
-    `objects`        Obtain all objects owned by the address
-    `publish`        Publish Move modules
-    `split-coin`     Split a coin object into multiple coins
-    `sync`           Synchronize client state with authorities
-    `transfer`       Transfer an object
+    active-address    Default address used for commands when none specified
+    addresses         Obtain the Addresses managed by the wallet
+    call              Call Move function
+    clear             Clear screen
+    echo              Write arguments to the console output
+    env               Print environment
+    exit              Exit the interactive shell
+    gas               Obtain all gas objects owned by the address
+    help              Prints this message or the help of the given subcommand(s)
+    history           Print history
+    merge-coin        Merge two coin objects into one coin
+    new-address       Generate new address and keypair
+    object            Get obj info
+    objects           Obtain all objects owned by the address
+    publish           Publish Move modules
+    split-coin        Split a coin object into multiple coins
+    switch            Switch active address
+    sync              Synchronize client state with authorities
+    transfer          Transfer an object
 Use `help <command>` to see more information on each command.
 
 The wallet can be started in two modes: interactive shell or command line interface.
