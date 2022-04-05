@@ -127,6 +127,7 @@ impl SuiCommand {
                 let gateway_path = sui_config_dir.join(SUI_GATEWAY_CONFIG);
                 let keystore_path = sui_config_dir.join("wallet.key");
                 let db_folder_path = sui_config_dir.join("client_db");
+                let gateway_db_folder_path = sui_config_dir.join("gateway_client_db");
 
                 let genesis_conf = GenesisConfig::default_genesis(sui_config_dir)?;
                 let (network_config, accounts, keystore) = genesis(genesis_conf).await?;
@@ -141,20 +142,25 @@ impl SuiCommand {
                 // Use the first address if any
                 let active_address = accounts.get(0).copied();
 
-                let gateway_config = GatewayConfig {
+                GatewayConfig {
+                    db_folder_path: gateway_db_folder_path,
+                    authorities: network_config.get_authority_infos(),
+                    ..Default::default()
+                }
+                .persisted(&gateway_path)
+                .save()?;
+                info!("Gateway config file is stored in {:?}.", gateway_path);
+
+                let wallet_gateway_config = GatewayConfig {
                     db_folder_path,
                     authorities: network_config.get_authority_infos(),
                     ..Default::default()
                 };
 
-                let gateway_config = gateway_config.persisted(&gateway_path);
-                gateway_config.save()?;
-                info!("Gateway config file is stored in {:?}.", gateway_path);
-
                 let wallet_config = WalletConfig {
                     accounts,
                     keystore: KeystoreType::File(keystore_path),
-                    gateway: GatewayType::Embedded(PersistedConfig::read(&gateway_path)?),
+                    gateway: GatewayType::Embedded(wallet_gateway_config),
                     active_address,
                 };
 
