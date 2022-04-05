@@ -156,7 +156,7 @@ If you see errors when trying to start Sui network, particularly if you made som
 
 The following commands are supported by the wallet:
 
-    active-address    Default address used for commands when none specified
+    active-address    Use this default address for commands when none is specified
     addresses         Obtain the Addresses managed by the wallet
     call              Call Move function
     clear             Clear screen
@@ -164,11 +164,11 @@ The following commands are supported by the wallet:
     env               Print environment
     exit              Exit the interactive shell
     gas               Obtain all gas objects owned by the address
-    help              Prints this message or the help of the given subcommand(s)
+    help              Print this message or the help of the given subcommand(s)
     history           Print history
     merge-coin        Merge two coin objects into one coin
     new-address       Generate new address and keypair
-    object            Get obj info
+    object            Get object information
     objects           Obtain all objects owned by the address
     publish           Publish Move modules
     split-coin        Split a coin object into multiple coins
@@ -247,12 +247,14 @@ and object IDs will be assigned randomly. Consequently, you cannot rely
 on copy-pasting commands that include these values, as they will be different
 between different users/configs.
 
-### Active Address
+### Active address
 
-Since a wallet manages multiple disjoint addresses, one might need to specify which address they want to call a command on.
+Since a wallet manages multiple disjointed addresses, one might need to specify
+which address they want to call a command on.
 
-For convenience, one can chose to set a default address which will be used for commands that require an address to operate on.
-A default address is picked at the start but this can be changed later.
+For convenience, one can choose to set a default, or active address that will be
+used for commands that require an address to operate on. A default address is picked
+at the start, but this can be changed later.
 
 In order to see what the current active address is, use the command `active-address`
 
@@ -269,8 +271,8 @@ wallet --no-shell switch --address 913CF36F370613ED131868AC6F9DA2420166062E
 Active address switched to 913CF36F370613ED131868AC6F9DA2420166062E
 ```
 
-One can call for example the `objects` command with or without an address specified.
-When not specified, the active address is used
+One can call, for example, the `objects` command with or without an address specified.
+When not specified, the active address is used.
 
 ```
 sui>-$ objects
@@ -282,19 +284,27 @@ Showing 5 results.
 (0B8A4620426E526FA42995CF26EB610BFE6BF063, SequenceNumber(0), o#6ea7e2d4bf47b3cc219fdc44bf15530244d3b3d1838d59586c0bb41d3db92221)
 ```
 
-All commands where `address` is omitted will now use the newly specified active address 913CF36F370613ED131868AC6F9DA2420166062E
+All commands where `address` is omitted will now use the newly specified active address:
+913CF36F370613ED131868AC6F9DA2420166062E
 
+Note that if one calls a command that uses a gas object not owned by the active address,
+the address owned by the gas object is temporarily used for the transaction.
 
+### Paying For transactions with gas objects
 
-Note that if one calls a command that uses a gas object not owned by the active address, the address owned by the gas object is temporarily used for the transaction.
+All Sui transactions require a gas object for payment, as well as a budget. However, specifying
+the gas object can be cumbersome; so in the CLI, one is allowed to omit the gas object and leave
+the wallet to pick an object that meets the specified budget. This gas selection logic is currently
+rudimentary as it does not combine/split gas as needed but currently picks the first object it finds
+that meets the budget. Note that one can always specify their own gas if they want to manage the gas
+themselves.
 
-### Paying For Transactions With Gas Objects
+:warning: A gas object cannot be part of the transaction while also being used to
+pay for the transaction. For example, one cannot try to transfer gas object X while paying for the
+transaction with gas object X. The gas selection logic checks for this and rejects such cases.
 
-All Sui transactions require a gas object for payment as well as a budget. Specifying the gas object however can be cumbersome, so in the CLI one is allowed to omit the gas object and leave the wallet to pick an object that meets the specified budget. This gas selection logic is currently rudimentary as it does not combine/split gas as needed but currently picks the first object it finds which meets the budget. Note that one can always specify their own gas if they want to manage the gas themselves.
-
-One important thing to note is that a gas object cannot be part of the transation while also being used to pay for the transaction. For example one cannot try to transfer a gas object X while paying for the transaction with gas object X. The gas selection logic checks for this and rejects such cases.
-
-To check how much gas one has, use the `gas` command. Note that this command uses the `active-address`, unless otherwise specified.
+To see how much gas is in an account, use the `gas` command. Note that this command uses the
+`active-address`, unless otherwise specified.
 
 ```
 wallet --no-shell gas
@@ -307,7 +317,7 @@ wallet --no-shell gas
  F2961464AC6860A05D21B48C020B7E121399965C |     0      |   100000   
 ```
 
-If one does not want to use the active address, thr addresses can be specified
+If one does not want to use the active address, the addresses can be specified:
 
 ```
 /wallet --no-shell gas --address 562F07CF6369E8D22DBF226A5BFEDC6300014837
@@ -463,10 +473,12 @@ OPTIONS:
 
 To transfer an object to a recipient, you will need the recipient's address,
 the object ID of the object that you want to transfer,
-and optionally the gas object ID for the transaction fee payment. If a gas object is not specified, one which meets the budget is picked. Gas budget sets a cap for how much gas you want to spend.
-We are still finalizing our gas metering mechanisms. For now, just set something large enough.
+and optionally the gas object ID for the transaction fee payment. If a gas
+object is not specified, one that meets the budget is picked. Gas budget sets a
+cap for how much gas you want to spend. We are still finalizing our gas metering
+mechanisms. For now, just set something large enough.
 
-Here is an example transfer of an object to account `F456EBEF195E4A231488DF56B762AC90695BE2DD`.
+Here is an example transfer of an object to account `F456EBEF195E4A231488DF56B762AC90695BE2DD`:
 
 ```shell
 $ wallet --no-shell transfer --to C72CF3ADCC4D11C03079CEF2C8992AEA5268677A --object-id DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1 --gas-budget 100
