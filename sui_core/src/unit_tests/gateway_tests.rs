@@ -505,7 +505,7 @@ async fn test_initiating_valid_transfer() {
         (sender, SequenceNumber::from(0))
     );
     let data = client
-        .transfer_coin(sender, object_id_1, gas_object, recipient)
+        .transfer_coin(sender, object_id_1, gas_object, 50000, recipient)
         .await
         .unwrap();
     let signature = sender_key.sign(&data.to_bytes());
@@ -554,7 +554,7 @@ async fn test_initiating_valid_transfer_despite_bad_authority() {
     let (sender, sender_key) = get_key_pair();
     let mut client = init_local_client_and_fund_account_bad(sender, authority_objects).await;
     let data = client
-        .transfer_coin(sender, object_id, gas_object, recipient)
+        .transfer_coin(sender, object_id, gas_object, 50000, recipient)
         .await
         .unwrap();
 
@@ -603,7 +603,7 @@ async fn test_initiating_transfer_low_funds() {
 
     let transfer = async {
         let data = client
-            .transfer_coin(sender, object_id_2, gas_object, recipient)
+            .transfer_coin(sender, object_id_2, gas_object, 50000, recipient)
             .await?;
         let signature = sender_key.sign(&data.to_bytes());
         client
@@ -659,7 +659,7 @@ async fn test_bidirectional_transfer() {
     );
     // Transfer object to client.
     let data = client
-        .transfer_coin(addr1, object_id, gas_object1, addr2)
+        .transfer_coin(addr1, object_id, gas_object1, 50000, addr2)
         .await
         .unwrap();
 
@@ -705,7 +705,7 @@ async fn test_bidirectional_transfer() {
 
     // Transfer the object back to Client1
     let data = client
-        .transfer_coin(addr2, object_id, gas_object2, addr1)
+        .transfer_coin(addr2, object_id, gas_object2, 50000, addr1)
         .await
         .unwrap();
     let signature = key2.sign(&data.to_bytes());
@@ -736,7 +736,7 @@ async fn test_bidirectional_transfer() {
 
     // Should fail if Client 2 double spend the object
     let data = client
-        .transfer_coin(addr2, object_id, gas_object2, addr1)
+        .transfer_coin(addr2, object_id, gas_object2, 50000, addr1)
         .await
         .unwrap();
 
@@ -762,7 +762,7 @@ async fn test_client_state_sync_with_transferred_object() {
 
     // Transfer object to client.
     let data = client
-        .transfer_coin(addr1, object_id, gas_object_id, addr2)
+        .transfer_coin(addr1, object_id, gas_object_id, 50000, addr2)
         .await
         .unwrap();
 
@@ -779,7 +779,7 @@ async fn test_client_state_sync_with_transferred_object() {
     );
 
     // Confirm client 2 received the new object id
-    assert_eq!(1, client.get_owned_objects(addr2).len());
+    assert_eq!(1, client.get_owned_objects(addr2).unwrap().len());
 }
 
 #[tokio::test]
@@ -1346,7 +1346,7 @@ async fn test_transfer_object_error() {
     // Test 1: Double spend
     let object_id = *objects.next().unwrap();
     let data = client
-        .transfer_coin(sender, object_id, gas_object, recipient)
+        .transfer_coin(sender, object_id, gas_object, 50000, recipient)
         .await
         .unwrap();
 
@@ -1357,7 +1357,7 @@ async fn test_transfer_object_error() {
         .unwrap();
 
     let data = client
-        .transfer_coin(sender, object_id, gas_object, recipient)
+        .transfer_coin(sender, object_id, gas_object, 50000, recipient)
         .await
         .unwrap();
 
@@ -1376,7 +1376,7 @@ async fn test_transfer_object_error() {
     let obj = Object::with_id_owner_for_testing(ObjectID::random(), sender);
 
     let result = client
-        .transfer_coin(sender, obj.id(), gas_object, recipient)
+        .transfer_coin(sender, obj.id(), gas_object, 50000, recipient)
         .await;
     assert!(result.is_err());
 }
@@ -1958,7 +1958,7 @@ async fn test_transfer_pending_transactions() {
     // Test 1: Normal transfer
     let object_id = *objects.next().unwrap();
     let data = client
-        .transfer_coin(sender, object_id, gas_object, recipient)
+        .transfer_coin(sender, object_id, gas_object, 50000, recipient)
         .await
         .unwrap();
 
@@ -1975,7 +1975,7 @@ async fn test_transfer_pending_transactions() {
     let obj = Object::with_id_owner_for_testing(ObjectID::random(), sender);
 
     let result = client
-        .transfer_coin(sender, obj.id(), gas_object, recipient)
+        .transfer_coin(sender, obj.id(), gas_object, 50000, recipient)
         .await;
     assert!(result.is_err());
     // assert!(matches!(result.unwrap_err().downcast_ref(),

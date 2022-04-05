@@ -3,7 +3,7 @@
 
 use std::fs::read_dir;
 use std::ops::Add;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str;
 use std::time::Duration;
 
@@ -11,28 +11,30 @@ use move_core_types::identifier::Identifier;
 use serde_json::{json, Value};
 use tracing_test::traced_test;
 
+use crate::cli_tests::sui_network::start_test_network;
 use std::fmt::Write;
 use sui::config::{
-    AccountConfig, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, ObjectConfig,
-    PersistedConfig, WalletConfig, AUTHORITIES_DB_NAME,
+    AccountConfig, Config, GenesisConfig, NetworkConfig, ObjectConfig, PersistedConfig,
+    WalletConfig, AUTHORITIES_DB_NAME,
 };
-use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
+use sui::gateway::{GatewayConfig, GatewayType};
 use sui::keystore::KeystoreType;
-use sui::sui_commands::{genesis, SuiNetwork, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
+use sui::sui_commands::SuiCommand;
 use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
+use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::get_key_pair;
 use sui_types::messages::TransactionEffects;
 use sui_types::object::{Object, ObjectRead, GAS_VALUE_FOR_TESTING};
-
-use super::*;
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
 const AIRDROP_SOURCE_CONTRACT_ADDRESS: &str = "bc4ca0eda7647a8ab7c2061c2e118a18a936f13d";
 const AIRDROP_SOURCE_TOKEN_ID: u64 = 101u64;
 const AIRDROP_TOKEN_NAME: &str = "BoredApeYachtClub";
 const AIRDROP_TOKEN_URI: &str = "ipfs://QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/101";
+
+mod sui_network;
 
 macro_rules! retry_assert {
     ($test:expr, $timeout:expr) => {{
@@ -75,8 +77,9 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         .flat_map(|r| r.map(|file| file.file_name().to_str().unwrap().to_owned()))
         .collect::<Vec<_>>();
 
-    assert_eq!(4, files.len());
+    assert_eq!(5, files.len());
     assert!(files.contains(&SUI_WALLET_CONFIG.to_string()));
+    assert!(files.contains(&SUI_GATEWAY_CONFIG.to_string()));
     assert!(files.contains(&AUTHORITIES_DB_NAME.to_string()));
     assert!(files.contains(&SUI_NETWORK_CONFIG.to_string()));
     assert!(files.contains(&"wallet.key".to_string()));
@@ -120,7 +123,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     let wallet_config = WalletConfig {
         accounts: vec![],
         keystore: KeystoreType::File(working_dir.join("wallet.key")),
-        gateway: GatewayType::Embedded(EmbeddedGatewayConfig {
+        gateway: GatewayType::Embedded(GatewayConfig {
             db_folder_path: working_dir.join("client_db"),
             ..Default::default()
         }),
@@ -293,7 +296,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
         .await?
         .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address);
+    let object_refs = context.gateway.get_owned_objects(address)?;
 
     // Check log output contains all object ids.
     for (object_id, _, _) in object_refs {
@@ -411,7 +414,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
         .await?
         .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address);
+    let object_refs = context.gateway.get_owned_objects(address)?;
 
     // Check log output contains all object ids.
     let object_id = object_refs.first().unwrap().0;
@@ -448,7 +451,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
         .execute(&mut context)
         .await?;
 
-    let object_refs = context.gateway.get_owned_objects(address);
+    let object_refs = context.gateway.get_owned_objects(address)?;
 
     let object_id = object_refs.first().unwrap().0;
     let object_to_send = object_refs.get(1).unwrap().0;
@@ -490,6 +493,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
         to: recipient,
         object_id: object_to_send,
         gas: object_id,
+        gas_budget: 50000,
     }
     .execute(&mut context)
     .await?;
@@ -607,65 +611,6 @@ async fn get_move_object(
     }
 }
 
-async fn start_test_network(
-    working_dir: &Path,
-    genesis_config: Option<GenesisConfig>,
-) -> Result<SuiNetwork, anyhow::Error> {
-    let working_dir = working_dir.to_path_buf();
-    let network_path = working_dir.join(SUI_NETWORK_CONFIG);
-    let wallet_path = working_dir.join(SUI_WALLET_CONFIG);
-    let keystore_path = working_dir.join("wallet.key");
-    let db_folder_path = working_dir.join("client_db");
-
-    let mut genesis_config =
-        genesis_config.unwrap_or(GenesisConfig::default_genesis(&working_dir)?);
-    let authorities = genesis_config
-        .authorities
-        .iter()
-        .map(|info| AuthorityPrivateInfo {
-            key_pair: info.key_pair.copy(),
-            host: info.host.clone(),
-            port: 0,
-            db_path: info.db_path.clone(),
-            stake: info.stake,
-        })
-        .collect();
-    genesis_config.authorities = authorities;
-
-    let (network_config, accounts, keystore) = genesis(genesis_config).await?;
-    let network = SuiNetwork::start(&network_config).await?;
-
-    let network_config = network_config.persisted(&network_path);
-    network_config.save()?;
-    keystore.save(&keystore_path)?;
-
-    let authorities = network_config.get_authority_infos();
-    let authorities = authorities
-        .into_iter()
-        .zip(&network.spawned_authorities)
-        .map(|(mut info, server)| {
-            info.base_port = server.get_port();
-            info
-        })
-        .collect();
-
-    // Create wallet config with stated authorities port
-    WalletConfig {
-        accounts,
-        keystore: KeystoreType::File(keystore_path),
-        gateway: GatewayType::Embedded(EmbeddedGatewayConfig {
-            db_folder_path,
-            authorities,
-            ..Default::default()
-        }),
-    }
-    .persisted(&wallet_path)
-    .save()?;
-
-    // Return network handle
-    Ok(network)
-}
-
 #[allow(clippy::assertions_on_constants)]
 #[traced_test]
 #[tokio::test]
@@ -697,7 +642,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         .print(true);
     tokio::time::sleep(Duration::from_millis(2000)).await;
 
-    let object_refs = context.gateway.get_owned_objects(address1);
+    let object_refs = context.gateway.get_owned_objects(address1)?;
 
     // Check log output contains all object ids.
     for (object_id, _, _) in &object_refs {
@@ -863,7 +808,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         .await?
         .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address);
+    let object_refs = context.gateway.get_owned_objects(address)?;
 
     // Check log output contains all object ids.
     let gas_obj_id = object_refs.first().unwrap().0;
@@ -889,7 +834,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
             resppnse.created_objects[0].compute_object_reference(),
         )
     } else {
-        unreachable!("Invaldi response");
+        unreachable!("Invalid response");
     };
 
     // One is the actual module, while the other is the object created at init
@@ -943,7 +888,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         .await?
         .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address);
+    let object_refs = context.gateway.get_owned_objects(address)?;
 
     // Check log output contains all object ids.
     let gas_obj_id = object_refs.first().unwrap().0;
@@ -953,6 +898,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         gas: gas_obj_id,
         to: recipient,
         object_id: obj_id,
+        gas_budget: 50000,
     }
     .execute(&mut context)
     .await?;

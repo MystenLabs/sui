@@ -112,6 +112,10 @@ pub enum WalletCommands {
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         #[structopt(long)]
         gas: ObjectID,
+
+        /// Gas budget for this transfer
+        #[structopt(long)]
+        gas_budget: u64,
     },
     /// Synchronize client state with authorities.
     #[structopt(name = "sync")]
@@ -317,7 +321,12 @@ impl WalletCommands {
                 WalletCommandResult::Call(cert, effects)
             }
 
-            WalletCommands::Transfer { to, object_id, gas } => {
+            WalletCommands::Transfer {
+                to,
+                object_id,
+                gas,
+                gas_budget,
+            } => {
                 let gas_object_info = context.gateway.get_object_info(*gas).await?;
                 let gas_object = gas_object_info.object()?;
                 let from = gas_object.owner.get_owner_address()?;
@@ -326,7 +335,7 @@ impl WalletCommands {
 
                 let data = context
                     .gateway
-                    .transfer_coin(from, *object_id, *gas, *to)
+                    .transfer_coin(from, *object_id, *gas, *gas_budget, *to)
                     .await?;
                 let signature = context
                     .keystore
@@ -352,7 +361,7 @@ impl WalletCommands {
             }
 
             WalletCommands::Objects { address } => {
-                WalletCommandResult::Objects(context.gateway.get_owned_objects(*address))
+                WalletCommandResult::Objects(context.gateway.get_owned_objects(*address)?)
             }
 
             WalletCommands::SyncClientState { address } => {
@@ -367,7 +376,7 @@ impl WalletCommands {
             }
             WalletCommands::Gas { address } => {
                 context.gateway.sync_account_state(*address).await?;
-                let object_refs = context.gateway.get_owned_objects(*address);
+                let object_refs = context.gateway.get_owned_objects(*address)?;
 
                 // TODO: We should ideally fetch the objects from local cache
                 let mut coins = Vec::new();
@@ -441,8 +450,17 @@ impl WalletCommands {
         // Sync all managed addresses
         // This is wasteful because not all addresses might be modified
         // but will be removed as part of https://github.com/MystenLabs/sui/issues/1045
-        for address in context.config.accounts.clone() {
-            context.gateway.sync_account_state(address).await?;
+        match self {
+            WalletCommands::Publish { .. }
+            | WalletCommands::Call { .. }
+            | WalletCommands::Transfer { .. }
+            | WalletCommands::SplitCoin { .. }
+            | WalletCommands::MergeCoin { .. } => {
+                for address in context.config.accounts.clone() {
+                    context.gateway.sync_account_state(address).await?;
+                }
+            }
+            _ => {}
         }
         ret
     }

@@ -17,12 +17,13 @@ use sui_network::transport;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::Committee;
 
-use crate::config::AuthorityInfo;
+use crate::config::{AuthorityInfo, Config};
+use crate::rest_gateway::RestGatewayClient;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum GatewayType {
-    Embedded(EmbeddedGatewayConfig),
+    Embedded(GatewayConfig),
     Rest(String),
 }
 
@@ -66,15 +67,13 @@ impl GatewayType {
                 let authority_clients = config.make_authority_clients();
                 Box::new(GatewayState::new(path, committee, authority_clients))
             }
-            _ => {
-                panic!("Unsupported gateway type")
-            }
+            GatewayType::Rest(url) => Box::new(RestGatewayClient { url: url.clone() }),
         }
     }
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct EmbeddedGatewayConfig {
+pub struct GatewayConfig {
     pub authorities: Vec<AuthorityInfo>,
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
@@ -82,7 +81,9 @@ pub struct EmbeddedGatewayConfig {
     pub db_folder_path: PathBuf,
 }
 
-impl EmbeddedGatewayConfig {
+impl Config for GatewayConfig {}
+
+impl GatewayConfig {
     pub fn make_committee(&self) -> Committee {
         let voting_rights = self
             .authorities
@@ -108,7 +109,7 @@ impl EmbeddedGatewayConfig {
     }
 }
 
-impl Default for EmbeddedGatewayConfig {
+impl Default for GatewayConfig {
     fn default() -> Self {
         Self {
             authorities: vec![],

@@ -92,6 +92,7 @@ pub trait GatewayAPI {
         signer: SuiAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
+        gas_budget: u64,
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -160,7 +161,10 @@ pub trait GatewayAPI {
     async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error>;
 
     /// Get refs of all objects we own from local cache.
-    fn get_owned_objects(&mut self, account_addr: SuiAddress) -> Vec<ObjectRef>;
+    fn get_owned_objects(
+        &mut self,
+        account_addr: SuiAddress,
+    ) -> Result<Vec<ObjectRef>, anyhow::Error>;
 }
 
 impl<A> GatewayState<A>
@@ -534,6 +538,7 @@ where
         signer: SuiAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
+        gas_budget: u64,
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error> {
         // TODO: We should be passing in object_ref directly instead of object_id.
@@ -542,7 +547,13 @@ where
         let gas_payment = self.get_object(&gas_payment).await?;
         let gas_payment_ref = gas_payment.compute_object_reference();
 
-        let data = TransactionData::new_transfer(recipient, object_ref, signer, gas_payment_ref);
+        let data = TransactionData::new_transfer(
+            recipient,
+            object_ref,
+            signer,
+            gas_payment_ref,
+            gas_budget,
+        );
 
         Ok(data)
     }
@@ -670,9 +681,10 @@ where
         Ok(result)
     }
 
-    fn get_owned_objects(&mut self, account_addr: SuiAddress) -> Vec<ObjectRef> {
-        self.store
-            .get_account_objects(account_addr)
-            .unwrap_or_default()
+    fn get_owned_objects(
+        &mut self,
+        account_addr: SuiAddress,
+    ) -> Result<Vec<ObjectRef>, anyhow::Error> {
+        Ok(self.store.get_account_objects(account_addr)?)
     }
 }

@@ -192,7 +192,6 @@ MoveCall:
     - pure_arguments:
         SEQ:
           SEQ: U8
-    - gas_budget: U64
 MoveFieldLayout:
   STRUCT:
     - name:
@@ -204,12 +203,11 @@ MoveModulePublish:
     - modules:
         SEQ:
           SEQ: U8
-    - gas_budget: U64
 MoveObject:
   STRUCT:
     - type_:
         TYPENAME: StructTag
-    - contents: BYTES
+    - contents: STR
 MovePackage:
   STRUCT:
     - id:
@@ -269,7 +267,7 @@ Object:
     - previous_transaction:
         TYPENAME: TransactionDigest
 ObjectDigest:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT: STR
 ObjectFormatOptions:
   STRUCT:
     - include_types: BOOL
@@ -429,7 +427,7 @@ StructTag:
         SEQ:
           TYPENAME: TypeTag
 SuiAddress:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT: STR
 SuiError:
   ENUM:
     0:
@@ -761,8 +759,9 @@ TransactionData:
           - TYPENAME: ObjectID
           - TYPENAME: SequenceNumber
           - TYPENAME: ObjectDigest
+    - gas_budget: U64
 TransactionDigest:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT: STR
 TransactionEffects:
   STRUCT:
     - status:
@@ -922,4 +921,3 @@ UpdateItem:
         TYPENAME: Signature
     - auth_signature:
         TYPENAME: EmptySignInfo
-

@@ -351,7 +351,7 @@ We will explore how to transfer objects using the wallet in this section.
 `transfer` command usage:
 ```shell
 USAGE:
-    transfer [FLAGS] --gas <gas> --object-id <object-id> --to <to>
+    transfer [FLAGS] --gas <gas> --gas-budget <gas-budget> --object-id <object-id> --to <to>
 
 FLAGS:
     -h, --help       Prints help information
@@ -360,16 +360,18 @@ FLAGS:
 
 OPTIONS:
         --gas <gas>                ID of the gas object for gas payment, in 20 bytes Hex string
+        --gas-budget <gas-budget>    Gas budget for this transfer
         --object-id <object-id>    Object to transfer, in 20 bytes Hex string
         --to <to>                  Recipient address
 ```
 To transfer an object to a recipient, you will need the recipient's address,
 the object ID of the object that you want to transfer,
-and the gas object ID for the transaction fee payment.
+and the gas object ID for the transaction fee payment. Gas budget sets a cap for how much gas you want to spend.
+We are still finalizing our gas metering mechanisms. For now, just set something large enough.
 
 Here is an example transfer of an object to account `F456EBEF195E4A231488DF56B762AC90695BE2DD`.
 ```shell
-$ wallet --no-shell transfer --to C72CF3ADCC4D11C03079CEF2C8992AEA5268677A --object-id DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1 --gas 00A0A5211F6EDCF4BA09D23B8A7250072BE1EDB6
+$ wallet --no-shell transfer --to C72CF3ADCC4D11C03079CEF2C8992AEA5268677A --object-id DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1 --gas 00A0A5211F6EDCF4BA09D23B8A7250072BE1EDB6 --gas-budget 100
 Transfer confirmed after 4412 us
 ----- Certificate ----
 Signed Authorities : [k#21d89c3a12409b7aeadf36a9753417ead5fa9ea607ccb666e83b739b8a73c5e8, k#8d86bef2f8ae835d4763c9a697ad5c458130907996d59adc4ea5be37f2e0fab2, k#f9664056f3cc46b03e86beeb3febf99af1c9ec3f6aa709a1dbd101c9e9a79c3a]

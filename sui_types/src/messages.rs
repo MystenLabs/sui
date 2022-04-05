@@ -52,13 +52,11 @@ pub struct MoveCall {
     pub object_arguments: Vec<ObjectRef>,
     pub shared_object_arguments: Vec<ObjectID>,
     pub pure_arguments: Vec<Vec<u8>>,
-    pub gas_budget: u64,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveModulePublish {
     pub modules: Vec<Vec<u8>>,
-    pub gas_budget: u64,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -174,13 +172,11 @@ impl Display for SingleTransactionKind {
                 writeln!(writer, "Sequence Number : {:?}", seq)?;
                 writeln!(writer, "Object Digest : {}", encode_bytes_hex(&digest.0))?;
             }
-            Self::Publish(p) => {
+            Self::Publish(_p) => {
                 writeln!(writer, "Transaction Kind : Publish")?;
-                writeln!(writer, "Gas Budget : {}", p.gas_budget)?;
             }
             Self::Call(c) => {
                 writeln!(writer, "Transaction Kind : Call")?;
-                writeln!(writer, "Gas Budget : {}", c.gas_budget)?;
                 writeln!(writer, "Package ID : {}", c.package.0.to_hex_literal())?;
                 writeln!(writer, "Module : {}", c.module)?;
                 writeln!(writer, "Function : {}", c.function)?;
@@ -228,17 +224,24 @@ pub struct TransactionData {
     pub kind: TransactionKind,
     sender: SuiAddress,
     gas_payment: ObjectRef,
+    pub gas_budget: u64,
 }
 
 impl TransactionData
 where
     Self: BcsSignable,
 {
-    pub fn new(kind: TransactionKind, sender: SuiAddress, gas_payment: ObjectRef) -> Self {
+    pub fn new(
+        kind: TransactionKind,
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Self {
         TransactionData {
             kind,
             sender,
             gas_payment,
+            gas_budget,
         }
     }
 
@@ -262,9 +265,8 @@ where
             object_arguments,
             shared_object_arguments,
             pure_arguments,
-            gas_budget,
         }));
-        Self::new(kind, sender, gas_payment)
+        Self::new(kind, sender, gas_payment, gas_budget)
     }
 
     pub fn new_transfer(
@@ -272,12 +274,13 @@ where
         object_ref: ObjectRef,
         sender: SuiAddress,
         gas_payment: ObjectRef,
+        gas_budget: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::Transfer(Transfer {
             recipient,
             object_ref,
         }));
-        Self::new(kind, sender, gas_payment)
+        Self::new(kind, sender, gas_payment, gas_budget)
     }
 
     pub fn new_module(
@@ -288,9 +291,8 @@ where
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::Publish(MoveModulePublish {
             modules,
-            gas_budget,
         }));
-        Self::new(kind, sender, gas_payment)
+        Self::new(kind, sender, gas_payment, gas_budget)
     }
 
     /// Returns the transaction kind as a &str (variant name, no fields)
@@ -310,6 +312,10 @@ where
         let mut writer = Vec::new();
         self.write(&mut writer);
         writer
+    }
+
+    pub fn to_base64(&self) -> String {
+        base64::encode(self.to_bytes())
     }
 }
 
