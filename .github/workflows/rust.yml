@@ -43,6 +43,7 @@ jobs:
           isRust:
             - '!(explorer|doc|.github)/**'
             - '.github/workflows/rust.yml'
+
   license-check:
     name: license-check
     runs-on: ubuntu-latest
