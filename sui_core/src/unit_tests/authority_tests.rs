@@ -810,6 +810,33 @@ async fn test_handle_confirmation_transaction_ok() {
         .expect("Exists")
         .is_none());
 
+    use typed_store::Map;
+    authority_state._database.parent_sync.iter().for_each(|x| {
+        println!("{:?}", x);
+    });
+    println!("OBJID {}", object_id);
+
+    if authority_state
+    .get_parent_iterator(object_id, None)
+    .await
+    .unwrap()
+    .len() != 2 {
+   authority_state
+            .get_parent_iterator(object_id, None)
+            .await
+            .unwrap().iter().for_each(|x| {
+                println!("{:?}", x);
+        });
+
+        println!("Added:");
+        authority_state._database.parent_sync.insert(&(object_id, SequenceNumber::from(0), ObjectDigest::new([0;32])), &TransactionDigest::random());
+        authority_state._database.parent_sync.iter().for_each(|x| {
+            println!("{:?}", x);
+        });
+
+        panic!("FAIL");
+    }
+
     // Check that all the parents are returned.
     assert_eq!(
         authority_state

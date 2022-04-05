@@ -75,7 +75,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     ///
     /// When an object is deleted we include an entry into this table for its next version and
     /// a digest of ObjectDigest::deleted(), along with a link to the transaction that deleted it.
-    parent_sync: DBMap<ObjectRef, TransactionDigest>,
+    pub parent_sync: DBMap<ObjectRef, TransactionDigest>,
 
     /// A map between the transaction digest of a certificate that was successfully processed
     /// (ie in `certificates`) and the effects its execution has on the authority state. This
