@@ -50,7 +50,7 @@ pub async fn start_test_network(
             info
         })
         .collect();
-
+    let active_address = accounts.get(0).copied();
     // Create wallet config with stated authorities port
     WalletConfig {
         accounts,
@@ -60,6 +60,7 @@ pub async fn start_test_network(
             authorities,
             ..Default::default()
         }),
+        active_address,
     }
     .persisted(&wallet_path)
     .save()?;

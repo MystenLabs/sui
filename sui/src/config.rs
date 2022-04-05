@@ -109,6 +109,7 @@ pub struct WalletConfig {
     pub accounts: Vec<SuiAddress>,
     pub keystore: KeystoreType,
     pub gateway: GatewayType,
+    pub active_address: Option<SuiAddress>,
 }
 
 impl Config for WalletConfig {}
@@ -118,6 +119,11 @@ impl Display for WalletConfig {
         let mut writer = String::new();
 
         writeln!(writer, "Managed addresses : {}", self.accounts.len())?;
+        write!(writer, "Active address: ")?;
+        match self.active_address {
+            Some(r) => writeln!(writer, "{}", r)?,
+            None => writeln!(writer, "None")?,
+        };
         writeln!(writer, "{}", self.keystore)?;
         write!(writer, "{}", self.gateway)?;
 
