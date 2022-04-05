@@ -47,7 +47,7 @@ The page will reload when edits are made. You can run `yarn start` and `yarn sta
 
 ### `yarn test`
 
-This runs a series of end-to-end, browser tests usng the website as connected to the static JSON dataset. This command is run by the GitHub checks. The tests must pass before merging a branch into main.
+This runs a series of end-to-end browser tests using the website as connected to the static JSON dataset. This command is run by the GitHub checks. The tests must pass before merging a branch into main.
 
 ### `yarn build`
 
