@@ -303,7 +303,6 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     gas_status: &mut SuiGasStatus,
 ) -> SuiResult {
     gas_status.charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
-
     let mut modules = module_bytes
         .iter()
         .map(|b| CompiledModule::deserialize(b))
@@ -402,7 +401,7 @@ pub fn verify_and_link<
         .expect("VM creation only fails if natives are invalid, and we created the natives");
     let mut session = vm.new_session(state_view);
     // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
-    let new_module_bytes = modules
+    let new_module_bytes: Vec<_> = modules
         .iter()
         .map(|m| {
             let mut bytes = Vec::new();
