@@ -7,6 +7,3 @@ Sui = { local = "../../../framework" }
 
 [addresses]
 HeroGame = "0x0"
-
-[dev-addresses]
-HeroGame = "0x0"

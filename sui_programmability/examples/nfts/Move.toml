@@ -7,6 +7,3 @@ Sui = { local = "../../framework" }
 
 [addresses]
 NFTs = "0x0"
-
-[dev-addresses]
-NFTs = "0x0"
