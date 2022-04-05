@@ -3,6 +3,7 @@
 
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{Debug, Display, Formatter};
+use std::mem::size_of;
 
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::CompiledModule;
@@ -161,6 +162,16 @@ impl MoveObject {
         serde_json::to_value(&move_value).map_err(|e| SuiError::ObjectSerializationError {
             error: e.to_string(),
         })
+    }
+
+    /// Approximate size of the object in bytes. This is used for gas metering.
+    /// For the type tag field, we serialize it on the spot to get the accurate size.
+    /// This should not be very expensive since the type tag is usually simple, and
+    /// we only do this once perf object being mutated.
+    pub fn object_size_for_gas_metering(&self) -> usize {
+        let seriealized_type_tag =
+            bcs::to_bytes(&self.type_).expect("Serializing type tag should not fail");
+        self.contents.len() + seriealized_type_tag.len()
     }
 }
 
@@ -403,18 +414,21 @@ impl Object {
         ObjectDigest::new(sha3_hash(self))
     }
 
-    // Size of the object in bytes.
-    // TODO: For now we just look at the size of the data.
-    // Do we need to be accurate and look at the serialized size?
-    pub fn object_data_size(&self) -> usize {
-        match &self.data {
-            Data::Move(m) => m.contents.len(),
+    /// Approximate size of the object in bytes. This is used for gas metering.
+    /// This will be slgihtly different from the serialized size, but
+    /// we also don't want to serialize the object just to get the size.
+    /// This approximation should be good enough for gas metering.
+    pub fn object_size_for_gas_metering(&self) -> usize {
+        let meta_data_size = size_of::<Owner>() + size_of::<TransactionDigest>();
+        let data_size = match &self.data {
+            Data::Move(m) => m.object_size_for_gas_metering(),
             Data::Package(p) => p
                 .serialized_module_map()
-                .values()
-                .map(|module| module.len())
+                .iter()
+                .map(|(name, module)| name.len() + module.len())
                 .sum(),
-        }
+        };
+        meta_data_size + data_size
     }
 
     /// Change the owner of `self` to `new_owner`

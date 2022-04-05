@@ -133,7 +133,7 @@ fn execute_transaction<S: BackingPackageStore>(
     }
     temporary_store.ensure_active_inputs_mutated();
     if let Err(err) = temporary_store
-        .charge_gas_for_storage_changes(&mut gas_status, gas_object.object_data_size())
+        .charge_gas_for_storage_changes(&mut gas_status, gas_object.object_size_for_gas_metering())
     {
         result = Err(err);
     }

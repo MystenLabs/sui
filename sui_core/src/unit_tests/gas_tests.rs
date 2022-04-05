@@ -106,10 +106,17 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
     let mut gas_status = SuiGasStatus::new_with_budget(*MAX_GAS_BUDGET);
     gas_status.charge_min_tx_gas()?;
 
-    gas_status.charge_storage_read(object.object_data_size() + gas_object.object_data_size())?;
-    gas_status.charge_storage_mutation(object.object_data_size(), object.object_data_size())?;
-    gas_status
-        .charge_storage_mutation(gas_object.object_data_size(), gas_object.object_data_size())?;
+    gas_status.charge_storage_read(
+        object.object_size_for_gas_metering() + gas_object.object_size_for_gas_metering(),
+    )?;
+    gas_status.charge_storage_mutation(
+        object.object_size_for_gas_metering(),
+        object.object_size_for_gas_metering(),
+    )?;
+    gas_status.charge_storage_mutation(
+        gas_object.object_size_for_gas_metering(),
+        gas_object.object_size_for_gas_metering(),
+    )?;
     assert_eq!(gas_cost, &gas_status.summary(true));
     Ok(())
 }
@@ -214,14 +221,21 @@ async fn test_publish_gas() -> SuiResult {
     // Mimic the gas charge behavior and cross check the result with above.
     let mut gas_status = SuiGasStatus::new_with_budget(*MAX_GAS_BUDGET);
     gas_status.charge_min_tx_gas()?;
-    gas_status.charge_storage_read(genesis_objects.iter().map(|o| o.object_data_size()).sum())?;
-    gas_status.charge_storage_read(gas_object.object_data_size())?;
+    gas_status.charge_storage_read(
+        genesis_objects
+            .iter()
+            .map(|o| o.object_size_for_gas_metering())
+            .sum(),
+    )?;
+    gas_status.charge_storage_read(gas_object.object_size_for_gas_metering())?;
     gas_status.charge_publish_package(publish_bytes.iter().map(|v| v.len()).sum())?;
-    gas_status.charge_storage_mutation(0, package.object_data_size())?;
+    gas_status.charge_storage_mutation(0, package.object_size_for_gas_metering())?;
     // Remember the gas used so far. We will use this to create another failure case latter.
     let gas_used_after_package_creation = gas_status.summary(true).gas_used();
-    gas_status
-        .charge_storage_mutation(gas_object.object_data_size(), gas_object.object_data_size())?;
+    gas_status.charge_storage_mutation(
+        gas_object.object_size_for_gas_metering(),
+        gas_object.object_size_for_gas_metering(),
+    )?;
     assert_eq!(gas_cost, &gas_status.summary(true));
 
     // Create a transaction with budget DELTA less than the gas cost required.
@@ -342,19 +356,21 @@ async fn test_move_call_gas() -> SuiResult {
         .get_object(&package_object_ref.0)
         .await?
         .unwrap();
-    gas_status.charge_storage_read(package_object.object_data_size())?;
-    gas_status.charge_storage_read(gas_object.object_data_size())?;
+    gas_status.charge_storage_read(package_object.object_size_for_gas_metering())?;
+    gas_status.charge_storage_read(gas_object.object_size_for_gas_metering())?;
     let gas_used_before_vm_exec = gas_status.summary(true).gas_used();
     // The gas cost to execute the function in Move VM.
     // Hard code it here since it's difficult to mock that in test.
     const MOVE_VM_EXEC_COST: u64 = 17;
-    gas_status
-        .charge_storage_mutation(gas_object.object_data_size(), gas_object.object_data_size())?;
+    gas_status.charge_storage_mutation(
+        gas_object.object_size_for_gas_metering(),
+        gas_object.object_size_for_gas_metering(),
+    )?;
     let created_object = authority_state
         .get_object(&effects.created[0].0 .0)
         .await?
         .unwrap();
-    gas_status.charge_storage_mutation(0, created_object.object_data_size())?;
+    gas_status.charge_storage_mutation(0, created_object.object_size_for_gas_metering())?;
 
     let new_cost = gas_status.summary(true);
     assert_eq!(

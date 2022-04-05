@@ -4,9 +4,12 @@
 
 #![allow(clippy::blacklisted_name)]
 
+use move_binary_format::file_format;
+
 use crate::{
     crypto::{get_key_pair, BcsSignable, Signature},
     gas_coin::GasCoin,
+    object::Object,
 };
 use std::str::FromStr;
 
@@ -170,4 +173,30 @@ fn test_object_id_serde_json() {
 fn test_object_id_from_empty_string() {
     assert!(ObjectID::try_from("".to_string()).is_err());
     assert!(ObjectID::from_str("").is_err());
+}
+
+#[test]
+fn test_move_object_size_for_gas_metering() {
+    let object = Object::with_id_owner_for_testing(
+        ObjectID::random(),
+        SuiAddress::random_for_testing_only(),
+    );
+    let size = object.object_size_for_gas_metering();
+    let serialized = bcs::to_bytes(&object).unwrap();
+    // The result of object_size_for_gas_metering() will be smaller due to not including
+    // all the metadata data needed for serializing various types.
+    // If the following assertion breaks, it's likely you have changed MoveObject's fields.
+    // Make sure to adjust `object_size_for_gas_metering()` to include those changes.
+    assert_eq!(size + 16, serialized.len());
+}
+
+#[test]
+fn test_move_package_size_for_gas_metering() {
+    let module = file_format::empty_module();
+    let package = Object::new_package(vec![module], TransactionDigest::genesis());
+    let size = package.object_size_for_gas_metering();
+    let serialized = bcs::to_bytes(&package).unwrap();
+    // If the following assertion breaks, it's likely you have changed MovePackage's fields.
+    // Make sure to adjust `object_size_for_gas_metering()` to include those changes.
+    assert_eq!(size + 5, serialized.len());
 }
