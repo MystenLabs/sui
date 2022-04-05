@@ -269,6 +269,23 @@ wallet --no-shell switch --address 913CF36F370613ED131868AC6F9DA2420166062E
 Active address switched to 913CF36F370613ED131868AC6F9DA2420166062E
 ```
 
+One can call for example the `objects` command with or without an address specified.
+When not specified, the active address is used
+
+```
+sui>-$ objects
+Showing 5 results.
+(0B8A4620426E526FA42995CF26EB610BFE6BF063, SequenceNumber(0), o#6ea7e2d4bf47b3cc219fdc44bf15530244d3b3d1838d59586c0bb41d3db92221)
+
+sui>-$ objects --address 913CF36F370613ED131868AC6F9DA2420166062E
+Showing 5 results.
+(0B8A4620426E526FA42995CF26EB610BFE6BF063, SequenceNumber(0), o#6ea7e2d4bf47b3cc219fdc44bf15530244d3b3d1838d59586c0bb41d3db92221)
+```
+
+All commands where `address` is omitted will now use the newly specified active address 913CF36F370613ED131868AC6F9DA2420166062E
+
+
+
 Note that if one calls a command that uses a gas object not owned by the active address, the address owned by the gas object is temporarily used for the transaction.
 
 ### Paying For Transactions With Gas Objects
