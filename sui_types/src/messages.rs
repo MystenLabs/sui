@@ -24,6 +24,7 @@ use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature, BcsSignable,
     EmptySignInfo, Signable, Signature, VerificationObligation,
 };
+use crate::gas::GasCostSummary;
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
@@ -786,20 +787,20 @@ pub enum CallResult {
 pub enum ExecutionStatus {
     // Gas used in the success case.
     Success {
-        gas_used: u64,
+        gas_cost: GasCostSummary,
         results: Vec<CallResult>,
     },
     // Gas used in the failed case, and the error.
     Failure {
-        gas_used: u64,
+        gas_cost: GasCostSummary,
         error: Box<SuiError>,
     },
 }
 
 impl ExecutionStatus {
-    pub fn new_failure(gas_used: u64, error: SuiError) -> ExecutionStatus {
+    pub fn new_failure(gas_used: GasCostSummary, error: SuiError) -> ExecutionStatus {
         ExecutionStatus::Failure {
-            gas_used,
+            gas_cost: gas_used,
             error: Box::new(error),
         }
     }
@@ -812,29 +813,39 @@ impl ExecutionStatus {
         matches!(self, ExecutionStatus::Failure { .. })
     }
 
-    pub fn unwrap(self) -> (u64, Vec<CallResult>) {
+    pub fn unwrap(self) -> (GasCostSummary, Vec<CallResult>) {
         match self {
-            ExecutionStatus::Success { gas_used, results } => (gas_used, results),
+            ExecutionStatus::Success {
+                gas_cost: gas_used,
+                results,
+            } => (gas_used, results),
             ExecutionStatus::Failure { .. } => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
         }
     }
 
-    pub fn unwrap_err(self) -> (u64, SuiError) {
+    pub fn unwrap_err(self) -> (GasCostSummary, SuiError) {
         match self {
             ExecutionStatus::Success { .. } => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
-            ExecutionStatus::Failure { gas_used, error } => (gas_used, *error),
+            ExecutionStatus::Failure {
+                gas_cost: gas_used,
+                error,
+            } => (gas_used, *error),
         }
     }
 
     /// Returns the gas used from the status
-    pub fn gas_used(&self) -> u64 {
+    pub fn gas_cost_summary(&self) -> &GasCostSummary {
         match &self {
-            ExecutionStatus::Success { gas_used, .. } => *gas_used,
-            ExecutionStatus::Failure { gas_used, .. } => *gas_used,
+            ExecutionStatus::Success {
+                gas_cost: gas_used, ..
+            } => gas_used,
+            ExecutionStatus::Failure {
+                gas_cost: gas_used, ..
+            } => gas_used,
         }
     }
 }
