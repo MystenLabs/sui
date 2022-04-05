@@ -27,29 +27,45 @@ in [Genesis customization](#customize-genesis).
 1. Optionally, set `RUST_LOG=debug` for verbose logging.
 1. Initiate `genesis`:
    ```shell
-   sui genesis
+   $ sui genesis
    ```
+
+All of this is contained in configuration and keystore files and an `authorities_db`
+database directory. A `client_db` directory is also created upon running the
+`wallet new-address` command covered later.
 
 The network configuration is stored in `network.conf` and can be used
 subsequently to start the network. The `wallet.conf` and `wallet.key`
 are also created to be used by the Sui wallet to manage the newly
-created accounts. By default, these files will be stored in the
-`~/.sui/sui_config` directory, but you can override this location by
-providing an alternative path:
+created accounts.
+
+By default, these files are placed in your home directory at
+`~/.sui/sui_config` (created automatically if it does not yet exist). But you
+can override this location by providing an alternative path to the `--working-dir`
+argument. Run the command like so to place the files in the `dir` directory:
 
 ```shell
-sui genesis --working-dir /path/to/sui/config/files
+$ sui genesis --working-dir /path/to/sui/config/dir
 ```
+
+:note: That path and directory must already exist and will not be
+created with the `--working-dir` argument.
+
 ### Recreating Genesis
 
 To recreate Sui genesis state in the same location, which will remove
-existing configuration files, use the `--force` option to the `sui
-genesis` command.
+existing configuration files, pass the `--force` option to the `sui
+genesis` command and either run it in the default directory (`~/.sui/sui_config`) or specify
+it once again, using the `--working-dir` argument:
+
+```shell
+$ sui genesis --force --working-dir /path/to/sui/config/dir
+```
 
 ## Wallet configuration
 The genesis process creates a configuration file `wallet.conf`, and a keystore file `wallet.key` for the
 Sui wallet.  The config file contains information of the accounts and
-the Sui Network Gateway. The keystore file contains all the public-private key pair of the created accounts.
+the Sui Network Gateway. The keystore file contains all the public-private key pairs of the created accounts.
 Sui wallet uses the network information in `wallet.conf` to communicate
 with the Sui network authorities  and create transactions using the key
 pairs residing in the keystore file.
@@ -90,15 +106,17 @@ in the wallet configuration (with some values omitted):
   }
 }
 ```
-The `accounts` variable contains the account's address that the wallet manages.
-`gateway` contains the information of the Sui network that the wallet will be connecting to,
-currently only `embedded` gateway type is supported.
 
-The `authorities` variable is part of the embedded gateway configuration, it contains Sui network
-authorities' name, host and port information. It is used to establish connections to the Sui network.
+The `accounts` variable contains the account's address that the wallet manages. The
+`gateway` variable contains the information of the Sui network that the wallet will
+be connecting to. Currently, only the `embedded` gateway type is supported.
+
+The `authorities` variable is part of the embedded gateway configuration. It contains
+the Sui network authority's name, host and port information. It is used to establish connections
+to the Sui network.
 
 Note `send_timeout`, `recv_timeout` and `buffer_size` are the network
-parameters and `db_folder_path` is the path to the account's client state
+parameters, and `db_folder_path` is the path to the account's client state
 database. This database stores all the transaction data, certificates
 and object data belonging to the account.
 
@@ -120,24 +138,32 @@ implement more secure key management and support hardware signing in a future re
 :warning: **Do not use in production**: Keys are stored in file!
 
 ## Starting the network
-Run the following command to start the local Sui network:
+Run the following command to start the local Sui network, assuming you
+accepted the default location for configuration:
 
 ```shell
-sui start
+$ sui start
 ```
 
-This command will by default look for Sui network coinfiguration file
-(`network.conf`) in the `~/.sui/sui_config` directory, but you can
-override this setting by providing a path to the directory where this
-file are stored:
+This command will look for the Sui network configuration file
+`network.conf` in the `~/.sui/sui_config` directory. But you can
+override this setting by providing a path to the directory where
+this file is stored:
 
 ```shell
-sui start --config /path/to/sui/network/config/file
+$ sui start --config /path/to/sui/network/config/file
+```
+
+For example:
+
+```shell
+$ sui start --config /Users/name/tmp/network.conf
 ```
 
 Executing any of these two commands in a terminal window will result
 in no output but the terminal will be "blocked" by the running Sui
-instance (it will not return the command prompt).
+instance (it will not return the command prompt). The command can
+also be run in background.
 
 NOTE: For logs, set `RUST_LOG=debug` before invoking `sui start`.
 
@@ -146,6 +172,8 @@ If you see errors when trying to start Sui network, particularly if you made som
 [customized wallet configuration](#wallet-configuration)), you should [recreate Sui genesis state](#recreating-genesis).
 
 ## Using the wallet
+Now start a new terminal since you have Sui running in the first terminal.
+
 The following commands are supported by the wallet:
 
     `addresses`      Obtain the Addresses managed by the wallet
@@ -162,36 +190,39 @@ The following commands are supported by the wallet:
     `transfer`       Transfer an object
 Use `help <command>` to see more information on each command.
 
-The wallet can be started in two modes: interactive shell or command line interface.
+You can start the wallet in two modes: interactive shell or command line interface.
 
 ### Interactive shell
 
-To start the interactive shell, execute the following (in a different terminal window than one used to execute `sui start`):
+To start the interactive shell, execute the following (in a different
+terminal window than one used to execute `sui start`). Assuming you
+accepted the default location for configuration:
 
 ```shell
-wallet
+$ wallet
 ```
 
-This command will by default look for wallet coinfiguration file
-(`wallet.conf`) in the `~/.sui/sui_config` directory, but you can
+This command will look for the wallet configuration file
+`wallet.conf` in the `~/.sui/sui_config` directory. But you can
 override this setting by providing a path to the directory where this
-file are stored:
+file is stored:
 
 ```shell
-wallet --config /path/to/wallet/config/file
+$ wallet --config /path/to/wallet/config/file
 ```
 
 The Sui interactive wallet supports the following shell functionality:
-* Command History
-  The `history` command can be used to print the interactive shell's command history;
-  you can also use Up, Down or Ctrl-P, Ctrl-N to navigate previous or next matches from history.
+
+* *Command history* -
+  The `history` command can be used to print the interactive shell's command history; 
+  you can also use Up, Down or Ctrl-P, Ctrl-N to navigate previous or next matches from history. 
   History search is also supported using Ctrl-R.
-* Tab completion
+* *Tab completion* -
   Tab completion is supported for all commands using Tab and Ctrl-I keys.
-* Environment variable substitution
-  The wallet shell will substitute inputs prefixed with `$` with environment variables,
-  you can use the `env` command to print out the entire list of variables and
-  use `echo` to preview the substitution without invoking any commands.
+* *Environment variable substitution* -
+  The wallet shell will substitute inputs prefixed with `$` with environment variables, 
+  you can use the `env` command to print out the entire list of variables and 
+  use `echo` to preview the substitution without invoking any commands.  
 
 ### Command line mode
 
@@ -208,7 +239,7 @@ For example, we can use the following command to see the list of
 accounts available on the platform:
 
 ```shell
-wallet --no-shell addresses
+$ wallet --no-shell addresses
 ```
 
 The result of running this command should resemble the following output:
@@ -241,7 +272,7 @@ not enough, there are two ways to add accounts to the Sui wallet if needed.
 To create a new account, execute the `new-address` command:
 
 ```shell
-wallet --no-shell new-address
+$ wallet --no-shell new-address
 ```
 
 The output shows a confirmation after the account has been created:
@@ -261,7 +292,7 @@ Restart the Sui wallet after the modification; the new accounts will appear in t
 ## View objects owned by the account
 You can use the `objects` command to view the objects owned by the address.
 
-`objects` command usage :
+`objects` command usage:
 
 ```shell
 USAGE:
@@ -279,7 +310,7 @@ OPTIONS:
 To view the objects owned by the accounts created in genesis, run the following command (substitute the address with one of the genesis addresses in your wallet):
 
 ```shell
-wallet --no-shell objects --address 66AF3898E7558B79E115AB61184A958497D1905A
+$ wallet --no-shell objects --address 66AF3898E7558B79E115AB61184A958497D1905A
 ```
 
 The result should resemble the following, which shows the object in the format of (`object_id`, `sequence_number`, `object_hash`).
@@ -312,7 +343,7 @@ OPTIONS:
 To view the object, use the following command:
 
 ```bash
-wallet --no-shell object --id EEA4167BE074537F4A2879C7781D8EF4FFD651CC
+$ wallet --no-shell object --id EEA4167BE074537F4A2879C7781D8EF4FFD651CC
 ```
 
 This should give you output similar to the following:
@@ -369,9 +400,15 @@ the object ID of the object that you want to transfer,
 and the gas object ID for the transaction fee payment. Gas budget sets a cap for how much gas you want to spend.
 We are still finalizing our gas metering mechanisms. For now, just set something large enough.
 
-Here is an example transfer of an object to account `F456EBEF195E4A231488DF56B762AC90695BE2DD`.
+Here is an example transfer of an object to account `F456EBEF195E4A231488DF56B762AC90695BE2DD`:
+
 ```shell
-$ wallet --no-shell transfer --to C72CF3ADCC4D11C03079CEF2C8992AEA5268677A --object-id DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1 --gas 00A0A5211F6EDCF4BA09D23B8A7250072BE1EDB6 --gas-budget 100
+$ wallet --no-shell transfer --to C72CF3ADCC4D11C03079CEF2C8992AEA5268677A --object-id DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1 --gas 00A0A5211F6EDCF4BA09D23B8A7250072BE1EDB6
+```
+
+With output like:
+
+```
 Transfer confirmed after 4412 us
 ----- Certificate ----
 Signed Authorities : [k#21d89c3a12409b7aeadf36a9753417ead5fa9ea607ccb666e83b739b8a73c5e8, k#8d86bef2f8ae835d4763c9a697ad5c458130907996d59adc4ea5be37f2e0fab2, k#f9664056f3cc46b03e86beeb3febf99af1c9ec3f6aa709a1dbd101c9e9a79c3a]
@@ -388,7 +425,7 @@ Mutated Objects:
 DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1 SequenceNumber(1) o#f77edd77f5c154a850078b81b320870890bbb4f06d18f80fd512b1cc26bc3297
 ```
 
-The account will now have 1 object
+The account will now have one object:
 
 ```shell
 $ wallet --no-shell objects --address C72CF3ADCC4D11C03079CEF2C8992AEA5268677A
@@ -428,14 +465,28 @@ and use the first coin (gas) object as the one to be the result of the merge, th
 
 ```shell
 $ wallet --no-shell objects --address EF999DBDB19CCCA504EEF5432CEC69EA8A1D4A1B
+```
+
+And its output:
+
+```
 Showing 5 results.
 (149A3493C97FAFC696526052FE08E77043D4BE0B, SequenceNumber(0), o#2d50f098c913e1863ece507dcdcd5a291252f6c1df89ec8f16c62b542ac723b5)
 (1B19F74AD77A95D7562432F6991AC9EC1EA2C57C, SequenceNumber(0), o#d390dc554759f892a714b2659046f3f47830cd789b3ec1df9d40bd876c3e1352)
 (4C21FCC8CA953162877FE740F78D9C109145CC73, SequenceNumber(0), o#18229401e7eb96bc23878e1f33d134e19ea5fd0a031bdb323c83baae4eab7097)
 (646902FA947ABF2E125131AF0F3A9D5697C8F884, SequenceNumber(0), o#f0bc58de072c0f028b02a0fe53644a74e5b490652c49471a99ffccb2fbb0e60e)
 (BEC3BF567A6E32508C96663A339635DC0FB0095C, SequenceNumber(0), o#cfafb0b086cb2df2e8dfb25d84948a45aa19578c45bbaef98d1d5fbcf266db40)
+```
 
+Then we merge:
+
+```shell
 $ wallet --no-shell merge-coin --primary-coin 149A3493C97FAFC696526052FE08E77043D4BE0B  --coin-to-merge 1B19F74AD77A95D7562432F6991AC9EC1EA2C57C --gas 4C21FCC8CA953162877FE740F78D9C109145CC73 --gas-budget 1000
+```
+
+With results resembling:
+
+```
 ----- Certificate ----
 Signed Authorities : [k#21d89c3a12409b7aeadf36a9753417ead5fa9ea607ccb666e83b739b8a73c5e8, k#8d86bef2f8ae835d4763c9a697ad5c458130907996d59adc4ea5be37f2e0fab2, k#f9664056f3cc46b03e86beeb3febf99af1c9ec3f6aa709a1dbd101c9e9a79c3a]
 Transaction Kind : Call
@@ -473,8 +524,14 @@ For splitting coins, you will need at lease two coins to execute the `split-coin
 one coin to split, one for the gas payment.
 
 Let us examine objects owned by address `45CDA12E3BAFE3017B4B3CD62C493E5FBAAD7FB0`:
+
 ```shell
 $ wallet --no-shell objects --address 45CDA12E3BAFE3017B4B3CD62C493E5FBAAD7FB0
+```
+
+With output resembling:
+
+```
 Showing 5 results.
 (13347BD461E8A2B9EE5DE7F6131063A3050A45C4, SequenceNumber(0), o#4ca351cbf507cac8162cb8278a38c1c9cdf4c6d2be05f2bee405da02ce8a4aa1)
 (B402F52BA6216A770939E6D4922AE6D6D05C2256, SequenceNumber(0), o#b95d120c36fab571c2389bccf507530a39e0055cdd9e9793aaf4ef691b1b8c96)
@@ -483,12 +540,17 @@ Showing 5 results.
 (FC4D67D8C7DB119901EF0A0D4BC9EC61584A0B2D, SequenceNumber(0), o#f1c1ca7cb3ef5f3e2a4fff5ec4ebc657388b1e2142432f66199886904eaf1669)
 ```
 
-Here is an example of splitting coins, we are splitting out three new coins from the original coin (first one on the list above),
-with values of 1000, 5000 and 3000 respectively; note that the `--amounts` argument accepts list of values.
+Here is an example of splitting coins. We are splitting out three new coins from the original coin (first one on the list above),
+with values of 1000, 5000 and 3000, respectively; note the `--amounts` argument accepts list of values.
 We use the second coin on the list to pay for this transaction.
 
 ```shell
 $ wallet --no-shell split-coin --coin-id 13347BD461E8A2B9EE5DE7F6131063A3050A45C4 --amounts 1000 5000 3000 --gas B402F52BA6216A770939E6D4922AE6D6D05C2256 --gas-budget 1000
+```
+
+You will see output resembling:
+
+```
 ----- Certificate ----
 Signed Authorities : [k#21d89c3a12409b7aeadf36a9753417ead5fa9ea607ccb666e83b739b8a73c5e8, k#22d43b47ab73dc69819d7f3c840c9c24344bbd6b2e3692400d1c083825362865, k#8d86bef2f8ae835d4763c9a697ad5c458130907996d59adc4ea5be37f2e0fab2]
 Transaction Kind : Call
@@ -519,7 +581,7 @@ Showing 8 results.
 (FC4D67D8C7DB119901EF0A0D4BC9EC61584A0B2D, SequenceNumber(0), o#f1c1ca7cb3ef5f3e2a4fff5ec4ebc657388b1e2142432f66199886904eaf1669)
 ```
 
-From the result we can see three new coins were created in the transaction.
+From the result, we can see three new coins were created in the transaction.
 
 ## Calling Move code
 
@@ -638,6 +700,11 @@ owner, different from the original one:
 
 ```shell
 $ wallet --no-shell object --id 5044DC15D3C71D500116EB026E8B70D0A180F3AC
+```
+
+Resulting in:
+
+```
 Owner: AddressOwner(k#f456ebef195e4a231488df56b762ac90695be2dd)
 Version: 1
 ID: 5044DC15D3C71D500116EB026E8B70D0A180F3AC
@@ -666,6 +733,11 @@ Let us use the same address for publishing that we used for calling Move code in
 
 ```shell
 $ wallet --no-shell objects --address AE6FB6036570FEC1DF71599740C132CDF5B45B9D
+```
+
+Outputting:
+
+```
 (749E3EE0E0AC93BFC06ED58972EFE87717A428DA, SequenceNumber(0), o#05efb7971ec89b78fd512913fb6f9bfbd0b5ffd2e99775493f9703ff153b3998)
 (98765D1CBC66BDFC443AA60B614427470B266B28, SequenceNumber(0), o#5f1696a263b9c97ba2e50175db0af1052a70943148b697fca98f98781482eba5)
 (A9E4FDA731FC888CC536DA62C887C63E9BECBE77, SequenceNumber(0), o#ed2945e8d8a8a6c2f3fdc75a84c6cea2a9d74e2fce90779d6d3955c9416a75a1)
@@ -725,6 +797,7 @@ file using the `--config` flag.
 sui genesis --config <Path to genesis config file>
 ```
 Example `genesis.conf`:
+
 ```json
 {
   "authorities": [
