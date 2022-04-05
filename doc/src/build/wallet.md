@@ -30,9 +30,9 @@ in [Genesis customization](#customize-genesis).
    $ sui genesis
    ```
 
-All of this is contained in configuration and keystore files, as well
-as an `authorities_db` database file.
-TODO: Why do I no longer see a `client_db` file created, only `authorities_db` now?
+All of this is contained in configuration and keystore files and an `authorities_db`
+database directory. A `client_db` directory is also created upon running the
+`wallet new-address` command covered later.
 
 The network configuration is stored in `network.conf` and can be used
 subsequently to start the network. The `wallet.conf` and `wallet.key`
@@ -158,22 +158,6 @@ For example:
 
 ```shell
 $ sui start --config /Users/name/tmp/network.conf
-```
-
-TODO: Find out why I get this error:
-
-```
-claymurphy@Clays-MacBook-Pro tmp % sui start --config /Users/claymurphy/tmp/network.conf
-Error: Address already in use (os error 48)
-```
-
-I see no Sui-specific processes running:
-
-```
-claymurphy@Clays-MacBook-Pro tmp % ps -ef | grep -i sui
-  501   442     1   0 12:02PM ??         0:00.22 /System/Library/CoreServices/CoreServicesUIAgent.app/Contents/MacOS/CoreServicesUIAgent
-  501   623     1   0 12:03PM ??         0:01.10 /System/Library/PrivateFrameworks/AppleMediaServicesUI.framework/amsengagementd
-  501  1433     1   0  1:01PM ??         0:00.21 /System/Library/PrivateFrameworks/PaperKit.framework/Contents/LinkedNotesUIService.app/Contents/MacOS/LinkedNotesUIService
 ```
 
 Executing any of these two commands in a terminal window will result
