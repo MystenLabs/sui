@@ -485,13 +485,14 @@ async fn test_object_owning_another_object() {
     assert_eq!(effects.deleted.len(), 2);
 }
 
-async fn build_and_publish_test_package(
+pub async fn build_and_try_publish_test_package(
     authority: &AuthorityState,
     sender: &SuiAddress,
     sender_key: &KeyPair,
     gas_object_id: &ObjectID,
     test_dir: &str,
-) -> ObjectRef {
+    gas_budget: u64,
+) -> TransactionInfoResponse {
     let build_config = BuildConfig::default();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/");
@@ -510,16 +511,33 @@ async fn build_and_publish_test_package(
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
 
-    let data = TransactionData::new_module(*sender, gas_object_ref, all_module_bytes, MAX_GAS);
+    let data = TransactionData::new_module(*sender, gas_object_ref, all_module_bytes, gas_budget);
     let signature = Signature::new(&data, &*sender_key);
     let transaction = Transaction::new(data, signature);
-    let effects = send_and_confirm_transaction(authority, transaction)
+    send_and_confirm_transaction(authority, transaction)
         .await
         .unwrap()
-        .signed_effects
-        .unwrap()
-        .effects;
+}
 
+async fn build_and_publish_test_package(
+    authority: &AuthorityState,
+    sender: &SuiAddress,
+    sender_key: &KeyPair,
+    gas_object_id: &ObjectID,
+    test_dir: &str,
+) -> ObjectRef {
+    let effects = build_and_try_publish_test_package(
+        authority,
+        sender,
+        sender_key,
+        gas_object_id,
+        test_dir,
+        MAX_GAS,
+    )
+    .await
+    .signed_effects
+    .unwrap()
+    .effects;
     assert!(
         matches!(effects.status, ExecutionStatus::Success { .. }),
         "{:?}",

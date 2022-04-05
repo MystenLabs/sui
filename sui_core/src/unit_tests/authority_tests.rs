@@ -329,42 +329,6 @@ async fn test_immutable_gas() {
     ));
 }
 
-#[tokio::test]
-async fn test_handle_transfer_zero_balance() {
-    let (sender, sender_key) = get_key_pair();
-    let recipient = dbg_addr(2);
-    let object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
-    let object = authority_state
-        .get_object(&object_id)
-        .await
-        .unwrap()
-        .unwrap();
-
-    // Create a gas object with 0 balance.
-    let gas_object_id = ObjectID::random();
-    let gas_object =
-        Object::with_id_owner_gas_for_testing(gas_object_id, SequenceNumber::new(), sender, 0);
-    let gas_object_ref = gas_object.compute_object_reference();
-    authority_state.insert_genesis_object(gas_object).await;
-
-    let transfer_transaction = init_transfer_transaction(
-        sender,
-        &sender_key,
-        recipient,
-        object.compute_object_reference(),
-        gas_object_ref,
-    );
-
-    let result = authority_state
-        .handle_transaction(transfer_transaction.clone())
-        .await;
-    assert!(matches!(
-        result.unwrap_err(),
-        SuiError::InsufficientGas { .. }
-    ));
-}
-
 pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
     transaction: Transaction,
@@ -538,37 +502,6 @@ async fn test_publish_non_existing_dependent_module() {
     );
 }
 
-// Test the case when the gas provided is less than minimum requirement during module publish.
-// Note that the case where gas is insufficient to publish the module is tested
-// separately in the adapter tests.
-#[tokio::test]
-async fn test_publish_module_insufficient_gas() {
-    let (sender, sender_key) = get_key_pair();
-    let gas_payment_object_id = ObjectID::random();
-    let gas_balance = 9;
-    let gas_payment_object = Object::with_id_owner_gas_for_testing(
-        gas_payment_object_id,
-        SequenceNumber::new(),
-        sender,
-        gas_balance,
-    );
-    let gas_payment_object_ref = gas_payment_object.compute_object_reference();
-    let authority = init_state_with_objects(vec![gas_payment_object]).await;
-
-    let module = file_format::empty_module();
-    let mut module_bytes = Vec::new();
-    module.serialize(&mut module_bytes).unwrap();
-    let module_bytes = vec![module_bytes];
-    let data = TransactionData::new_module(sender, gas_payment_object_ref, module_bytes, 10);
-    let signature = Signature::new(&data, &sender_key);
-    let transaction = Transaction::new(data, signature);
-    let response = authority
-        .handle_transaction(transaction.clone())
-        .await
-        .unwrap_err();
-    assert!(matches!(response, SuiError::InsufficientGas { .. }));
-}
-
 #[tokio::test]
 async fn test_handle_move_transaction() {
     let (sender, sender_key) = get_key_pair();
@@ -599,47 +532,6 @@ async fn test_handle_move_transaction() {
     assert_eq!(created_obj.owner, sender);
     assert_eq!(created_obj.id(), created_object_id);
     assert_eq!(created_obj.version(), OBJECT_START_VERSION);
-}
-
-// Test the case when the gas budget provided is less than minimum requirement during move call.
-// Note that the case where gas is insufficient to execute move bytecode is tested
-// separately in the adapter tests.
-#[tokio::test]
-async fn test_handle_move_transaction_insufficient_budget() {
-    let (sender, sender_key) = get_key_pair();
-    let gas_payment_object_id = ObjectID::random();
-    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
-    let gas_payment_object_ref = gas_payment_object.compute_object_reference();
-    // find the function Object::create and call it to create a new object
-    let genesis_package_objects = genesis::clone_genesis_packages();
-    let package_object_ref =
-        get_genesis_package_by_module(&genesis_package_objects, "ObjectBasics");
-
-    let authority_state = init_state_with_objects(vec![gas_payment_object]).await;
-
-    let function = ident_str!("create").to_owned();
-    let data = TransactionData::new_move_call(
-        sender,
-        package_object_ref,
-        ident_str!("ObjectBasics").to_owned(),
-        function,
-        Vec::new(),
-        gas_payment_object_ref,
-        Vec::new(),
-        vec![],
-        vec![
-            16u64.to_le_bytes().to_vec(),
-            bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
-        ],
-        4,
-    );
-    let signature = Signature::new(&data, &sender_key);
-    let transaction = Transaction::new(data, signature);
-    let response = authority_state
-        .handle_transaction(transaction.clone())
-        .await
-        .unwrap_err();
-    assert!(matches!(response, SuiError::InsufficientGas { .. }));
 }
 
 #[tokio::test]
@@ -838,56 +730,6 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         .parent(&(object_id, account.version(), account.digest()))
         .await
         .is_some());
-}
-
-#[tokio::test]
-async fn test_handle_confirmation_transaction_gas() {
-    let run_test_with_gas = |gas: u64| async move {
-        let (sender, sender_key) = get_key_pair();
-        let recipient = dbg_addr(2);
-        let object_id = ObjectID::random();
-        let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
-        let object = authority_state
-            .get_object(&object_id)
-            .await
-            .unwrap()
-            .unwrap();
-
-        // Create a gas object with balance.
-        let gas_object_id = ObjectID::random();
-        let gas_object = Object::with_id_owner_gas_for_testing(
-            gas_object_id,
-            SequenceNumber::new(),
-            sender,
-            gas,
-        );
-
-        let gas_object_ref = gas_object.compute_object_reference();
-        authority_state.insert_genesis_object(gas_object).await;
-
-        let certified_transfer_transaction = init_certified_transfer_transaction(
-            sender,
-            &sender_key,
-            recipient,
-            object.compute_object_reference(),
-            gas_object_ref,
-            &authority_state,
-        );
-
-        authority_state
-            .handle_confirmation_transaction(ConfirmationTransaction::new(
-                certified_transfer_transaction.clone(),
-            ))
-            .await
-    };
-    let result = run_test_with_gas(1000).await;
-    assert!(matches!(
-        result.unwrap_err(),
-        SuiError::InsufficientGas { .. }
-    ));
-    // This will execute sufccessfully.
-    let result = run_test_with_gas(10000).await;
-    result.unwrap();
 }
 
 #[tokio::test]
@@ -1406,7 +1248,7 @@ pub async fn init_state_with_object_id(address: SuiAddress, object: ObjectID) ->
 }
 
 #[cfg(test)]
-fn init_transfer_transaction(
+pub fn init_transfer_transaction(
     sender: SuiAddress,
     secret: &KeyPair,
     recipient: SuiAddress,

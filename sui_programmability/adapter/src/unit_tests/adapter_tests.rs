@@ -11,7 +11,6 @@ use move_package::BuildConfig;
 use std::{mem, path::PathBuf};
 use sui_types::{
     base_types::{self, SequenceNumber},
-    crypto::get_key_pair,
     error::SuiResult,
     gas_coin::GAS,
     object::{Data, Owner},
@@ -464,41 +463,6 @@ fn test_wrap_unwrap() {
             .type_specific_contents(),
         &obj1_contents
     );
-}
-
-#[test]
-fn test_move_call_insufficient_gas() {
-    let native_functions =
-        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_packages();
-    let mut storage = InMemoryStorage::new(genesis_objects);
-
-    // 0. Create a gas object for gas payment.
-    let gas_object_id = ObjectID::random();
-    let gas_object =
-        Object::with_id_owner_for_testing(gas_object_id, base_types::SuiAddress::default());
-    storage.write_object(gas_object);
-    storage.flush();
-
-    // 1. Create obj1 owned by addr1
-    // ObjectBasics::create expects integer value and recipient address
-    let addr1 = get_key_pair().0;
-    let pure_args = vec![
-        10u64.to_le_bytes().to_vec(),
-        bcs::to_bytes(&AccountAddress::from(addr1)).unwrap(),
-    ];
-    let response = call(
-        &mut storage,
-        &native_functions,
-        "ObjectBasics",
-        "create",
-        15, // This budget is not enough to execute all bytecode.
-        Vec::new(),
-        Vec::new(),
-        pure_args,
-    );
-    let err = response.unwrap_err();
-    assert!(err.to_string().contains("VMError with status OUT_OF_GAS"));
 }
 
 #[test]
