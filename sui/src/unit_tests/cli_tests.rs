@@ -1086,7 +1086,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     .execute(&mut context)
     .await?;
 
-    // Run a command with address omitted
+    // Run a command with address ommited
     let os = WalletCommands::Objects { address: None }
         .execute(&mut context)
         .await?;
@@ -1169,7 +1169,7 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
     .execute(&mut context)
     .await?;
 
-    // Run a command with address omitted
+    // Run a command with address ommited
     let os = WalletCommands::ActiveAddress {}
         .execute(&mut context)
         .await?;

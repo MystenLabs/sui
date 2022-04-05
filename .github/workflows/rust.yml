@@ -43,7 +43,6 @@ jobs:
           isRust:
             - '!(explorer|doc|.github)/**'
             - '.github/workflows/rust.yml'
-
   license-check:
     name: license-check
     runs-on: ubuntu-latest
@@ -134,3 +133,4 @@ jobs:
       # and instead enable nightly features via 'RUSTC_BOOTSTRAP'
       - name: run cargo-udeps
         run: RUSTC_BOOTSTRAP=1 cargo udeps
+

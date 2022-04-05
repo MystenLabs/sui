@@ -177,7 +177,7 @@ You should replace `{{owner_address}}` and `{{to_address}}` in the
 command above with an actual address values, for example one obtained
 from `wallet.conf`. You should also replace
 `{{coin_object_id}}` and `{{gas_object_id}}` in the command above with
-an actual object ID, for example one obtained from `objId` in the output
+an actual object ID, for example one obtained from `objectId` in the output
 of [`GET /objects`](#get-apiobjects). You can see that all gas objects generated
 during genesis are of `Coin/SUI` type). For this call to work, objects
 represented by both `{{coin_object_id}}` and `{{gas_object_id}}` must

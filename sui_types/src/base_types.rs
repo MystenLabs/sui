@@ -184,7 +184,7 @@ impl TxContext {
     /// Updates state of the context instance. It's intended to use
     /// when mutable context is passed over some boundary via
     /// serialize/deserialize and this is the reason why this method
-    /// consumes the other context..
+    /// consumes the other contex..
     pub fn update_state(&mut self, other: TxContext) -> Result<(), SuiError> {
         if self.sender != other.sender
             || self.digest != other.digest

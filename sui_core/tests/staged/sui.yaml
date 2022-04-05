@@ -928,3 +928,4 @@ UpdateItem:
         TYPENAME: Signature
     - auth_signature:
         TYPENAME: EmptySignInfo
+
