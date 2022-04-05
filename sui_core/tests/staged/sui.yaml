@@ -207,7 +207,7 @@ MoveObject:
   STRUCT:
     - type_:
         TYPENAME: StructTag
-    - contents: BYTES
+    - contents: STR
 MovePackage:
   STRUCT:
     - id:
@@ -267,7 +267,7 @@ Object:
     - previous_transaction:
         TYPENAME: TransactionDigest
 ObjectDigest:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT: STR
 ObjectFormatOptions:
   STRUCT:
     - include_types: BOOL
@@ -427,7 +427,7 @@ StructTag:
         SEQ:
           TYPENAME: TypeTag
 SuiAddress:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT: STR
 SuiError:
   ENUM:
     0:
@@ -761,7 +761,7 @@ TransactionData:
           - TYPENAME: ObjectDigest
     - gas_budget: U64
 TransactionDigest:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT: STR
 TransactionEffects:
   STRUCT:
     - status:

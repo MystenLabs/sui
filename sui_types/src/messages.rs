@@ -313,6 +313,10 @@ where
         self.write(&mut writer);
         writer
     }
+
+    pub fn to_base64(&self) -> String {
+        base64::encode(self.to_bytes())
+    }
 }
 
 /// A transaction signed by a client, optionally signed by an authority (depending on `S`).

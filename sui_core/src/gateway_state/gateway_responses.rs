@@ -8,13 +8,14 @@ use std::fmt::{Display, Formatter};
 use serde::ser::Error;
 use serde::Serialize;
 
+use serde::Deserialize;
 use sui_types::base_types::ObjectRef;
 use sui_types::error::SuiError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{CertifiedTransaction, TransactionEffects};
 use sui_types::object::Object;
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum TransactionResponse {
     EffectResponse(CertifiedTransaction, TransactionEffects),
     PublishResponse(PublishResponse),
@@ -54,7 +55,7 @@ impl TransactionResponse {
     }
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SplitCoinResponse {
     /// Certificate of the transaction
     pub certificate: CertifiedTransaction,
@@ -91,7 +92,7 @@ impl Display for SplitCoinResponse {
     }
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MergeCoinResponse {
     /// Certificate of the transaction
     pub certificate: CertifiedTransaction,
@@ -116,7 +117,7 @@ impl Display for MergeCoinResponse {
     }
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PublishResponse {
     /// Certificate of the transaction
     pub certificate: CertifiedTransaction,

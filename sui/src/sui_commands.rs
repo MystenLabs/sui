@@ -19,6 +19,7 @@ use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
 use sui_network::transport::SpawnedServer;
 use sui_network::transport::DEFAULT_MAX_DATAGRAM_SIZE;
+use sui_types::base_types::decode_bytes_hex;
 use sui_types::base_types::{SequenceNumber, SuiAddress, TxContext};
 use sui_types::committee::Committee;
 use sui_types::error::SuiResult;
@@ -27,13 +28,9 @@ use sui_types::object::Object;
 use crate::config::{
     AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
 };
-use crate::gateway::{EmbeddedGatewayConfig, GatewayType};
+use crate::gateway::{GatewayConfig, GatewayType};
 use crate::keystore::{Keystore, KeystoreType, SuiKeystore};
-
-const SUI_DIR: &str = ".sui";
-const SUI_CONFIG_DIR: &str = "sui_config";
-pub const SUI_NETWORK_CONFIG: &str = "network.conf";
-pub const SUI_WALLET_CONFIG: &str = "wallet.conf";
+use crate::{sui_config_dir, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
@@ -51,13 +48,15 @@ pub enum SuiCommand {
         #[structopt(short, long, help = "Forces overwriting existing configuration")]
         force: bool,
     },
-}
-
-pub fn sui_config_dir() -> Result<PathBuf, anyhow::Error> {
-    match dirs::home_dir() {
-        Some(v) => Ok(v.join(SUI_DIR).join(SUI_CONFIG_DIR)),
-        None => bail!("Cannot obtain home directory path"),
-    }
+    #[structopt(name = "signtool")]
+    SignTool {
+        #[structopt(long)]
+        keystore_path: Option<PathBuf>,
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        address: SuiAddress,
+        #[structopt(long)]
+        data: String,
+    },
 }
 
 impl SuiCommand {
@@ -125,6 +124,7 @@ impl SuiCommand {
 
                 let network_path = sui_config_dir.join(SUI_NETWORK_CONFIG);
                 let wallet_path = sui_config_dir.join(SUI_WALLET_CONFIG);
+                let gateway_path = sui_config_dir.join(SUI_GATEWAY_CONFIG);
                 let keystore_path = sui_config_dir.join("wallet.key");
                 let db_folder_path = sui_config_dir.join("client_db");
 
@@ -138,19 +138,51 @@ impl SuiCommand {
                 keystore.save(&keystore_path)?;
                 info!("Wallet keystore is stored in {:?}.", keystore_path);
 
+                let gateway_config = GatewayConfig {
+                    db_folder_path,
+                    authorities: network_config.get_authority_infos(),
+                    ..Default::default()
+                };
+
+                let gateway_config = gateway_config.persisted(&gateway_path);
+                gateway_config.save()?;
+                info!("Gateway config file is stored in {:?}.", gateway_path);
+
                 let wallet_config = WalletConfig {
                     accounts,
                     keystore: KeystoreType::File(keystore_path),
-                    gateway: GatewayType::Embedded(EmbeddedGatewayConfig {
-                        db_folder_path,
-                        authorities: network_config.get_authority_infos(),
-                        ..Default::default()
-                    }),
+                    gateway: GatewayType::Embedded(PersistedConfig::read(&gateway_path)?),
                 };
 
                 let wallet_config = wallet_config.persisted(&wallet_path);
                 wallet_config.save()?;
                 info!("Wallet config file is stored in {:?}.", wallet_path);
+
+                Ok(())
+            }
+            SuiCommand::SignTool {
+                keystore_path,
+                address,
+                data,
+            } => {
+                let keystore_path = keystore_path
+                    .clone()
+                    .unwrap_or(sui_config_dir()?.join("wallet.key"));
+                let keystore = SuiKeystore::load_or_create(&keystore_path)?;
+                info!("Data to sign : {}", data);
+                info!("Address : {}", address);
+                let signature = keystore.sign(address, &base64::decode(data)?)?;
+                // Separate pub key and signature string, signature and pub key are concatenated with an '@' symbol.
+                let signature_string = format!("{:?}", signature);
+                let sig_split = signature_string.split('@').collect::<Vec<_>>();
+                let signature = sig_split
+                    .first()
+                    .ok_or_else(|| anyhow!("Error creating signature."))?;
+                let pub_key = sig_split
+                    .last()
+                    .ok_or_else(|| anyhow!("Error creating signature."))?;
+                info!("Public Key Base64: {}", pub_key);
+                info!("Signature : {}", signature);
                 Ok(())
             }
         }

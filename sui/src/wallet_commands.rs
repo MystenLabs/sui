@@ -361,7 +361,7 @@ impl WalletCommands {
             }
 
             WalletCommands::Objects { address } => {
-                WalletCommandResult::Objects(context.gateway.get_owned_objects(*address))
+                WalletCommandResult::Objects(context.gateway.get_owned_objects(*address)?)
             }
 
             WalletCommands::SyncClientState { address } => {
@@ -376,7 +376,7 @@ impl WalletCommands {
             }
             WalletCommands::Gas { address } => {
                 context.gateway.sync_account_state(*address).await?;
-                let object_refs = context.gateway.get_owned_objects(*address);
+                let object_refs = context.gateway.get_owned_objects(*address)?;
 
                 // TODO: We should ideally fetch the objects from local cache
                 let mut coins = Vec::new();
@@ -450,8 +450,17 @@ impl WalletCommands {
         // Sync all managed addresses
         // This is wasteful because not all addresses might be modified
         // but will be removed as part of https://github.com/MystenLabs/sui/issues/1045
-        for address in context.config.accounts.clone() {
-            context.gateway.sync_account_state(address).await?;
+        match self {
+            WalletCommands::Publish { .. }
+            | WalletCommands::Call { .. }
+            | WalletCommands::Transfer { .. }
+            | WalletCommands::SplitCoin { .. }
+            | WalletCommands::MergeCoin { .. } => {
+                for address in context.config.accounts.clone() {
+                    context.gateway.sync_account_state(address).await?;
+                }
+            }
+            _ => {}
         }
         ret
     }
