@@ -173,14 +173,13 @@ fn execute_internal<
     ctx: &mut TxContext,
 ) -> SuiResult<Vec<CallResult>> {
     let mut session = vm.movevm.new_session(state_view);
-    let mut move_gas_status = gas_status.get_move_gas_status();
     let result = session
         .execute_function_bypass_visibility(
             module_id,
             function,
             type_args,
             args,
-            &mut move_gas_status,
+            gas_status.get_move_gas_status(),
         )
         .and_then(|ret| Ok((ret, session.finish()?)));
 
