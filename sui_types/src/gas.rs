@@ -223,11 +223,6 @@ impl<'a> SuiGasStatus<'a> {
     }
 
     fn deduct_computation_cost(&mut self, cost: &ComputationCost) -> SuiResult {
-        println!(
-            "Remaining: {}, charging computation: {}",
-            self.gas_status.remaining_gas().get(),
-            cost.0.get()
-        );
         if self.gas_status.deduct_gas(cost.0).is_err() {
             Err(SuiError::InsufficientGas {
                 error: "Ran out of gas while deducting computation cost".to_owned(),
@@ -239,11 +234,6 @@ impl<'a> SuiGasStatus<'a> {
 
     fn deduct_storage_cost(&mut self, cost: &StorageCost) -> SuiResult {
         let remaining_gas = self.gas_status.remaining_gas();
-        println!(
-            "Remaining: {}, charging storage: {}",
-            remaining_gas.get(),
-            cost.0.get()
-        );
         if self.gas_status.deduct_gas(cost.0).is_err() {
             debug_assert_eq!(self.gas_status.remaining_gas().get(), 0);
             self.storage_cost = self.storage_cost.add(
@@ -277,7 +267,7 @@ pub fn check_gas_balance(gas_object: &Object, gas_budget: u64) -> SuiResult {
         "Gas object must be owned Move object".to_owned()
     )?;
     ok_or_gas_error!(
-        gas_budget < *MAX_GAS_BUDGET,
+        gas_budget <= *MAX_GAS_BUDGET,
         format!("Gas budget set too high; maximum is {}", *MAX_GAS_BUDGET)
     )?;
     ok_or_gas_error!(
