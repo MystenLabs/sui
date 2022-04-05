@@ -68,9 +68,11 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Sync all accounts on start up.
     for address in context.config.accounts.clone() {
-        WalletCommands::SyncClientState { address }
-            .execute(&mut context)
-            .await?;
+        WalletCommands::SyncClientState {
+            address: Some(address),
+        }
+        .execute(&mut context)
+        .await?;
     }
 
     let mut out = stdout();

@@ -8,7 +8,6 @@ command line interface. In this document, we describe how to set up
 Sui wallet and execute wallet commands through its command line
 interface, *Wallet CLI*.
 
-
 ## Set up
 
 Follow the instructions to [install Sui binaries](install.md).
@@ -26,6 +25,7 @@ in [Genesis customization](#customize-genesis).
 
 1. Optionally, set `RUST_LOG=debug` for verbose logging.
 1. Initiate `genesis`:
+
    ```shell
    $ sui genesis
    ```
@@ -63,6 +63,7 @@ $ sui genesis --force --working-dir /path/to/sui/config/dir
 ```
 
 ## Wallet configuration
+
 The genesis process creates a configuration file `wallet.conf`, and a keystore file `wallet.key` for the
 Sui wallet.  The config file contains information of the accounts and
 the Sui Network Gateway. The keystore file contains all the public-private key pairs of the created accounts.
@@ -121,16 +122,19 @@ database. This database stores all the transaction data, certificates
 and object data belonging to the account.
 
 ### Sui Network Gateway
+
 The Sui Network Gateway (or simply, Sui Gateway) is an abstraction layer that acts as the entry
 point to the Sui network. Different gateway implementations can be used by the application layer
 based on their use cases.
 
 #### Embedded Gateway
+
 As the name suggests, embedded gateway embeds the gateway logic into the application;
 all data will be stored locally and the application will make direct
 connection to the authorities.
 
 ### Key management
+
 The key pairs are stored in `wallet.key`. However, this is not secure
 and shouldn't be used in a production environment. We have plans to
 implement more secure key management and support hardware signing in a future release.
@@ -138,6 +142,7 @@ implement more secure key management and support hardware signing in a future re
 :warning: **Do not use in production**: Keys are stored in file!
 
 ## Starting the network
+
 Run the following command to start the local Sui network, assuming you
 accepted the default location for configuration:
 
@@ -172,22 +177,30 @@ If you see errors when trying to start Sui network, particularly if you made som
 [customized wallet configuration](#wallet-configuration)), you should [recreate Sui genesis state](#recreating-genesis).
 
 ## Using the wallet
+
 Now start a new terminal since you have Sui running in the first terminal.
 
 The following commands are supported by the wallet:
 
-    `addresses`      Obtain the Addresses managed by the wallet
-    `call`           Call Move function
-    `gas`            Obtain all gas objects owned by the address
-    `help`           Prints this message or the help of the given subcommand(s)
-    `merge-coin`     Merge two coin objects into one coin
-    `new-address`    Generate new address and key-pair
-    `object`         Get object info
-    `objects`        Obtain all objects owned by the address
-    `publish`        Publish Move modules
-    `split-coin`     Split a coin object into multiple coins
-    `sync`           Synchronize client state with authorities
-    `transfer`       Transfer an object
+    active-address    Use this default address for commands when none is specified
+    addresses         Obtain the Addresses managed by the wallet
+    call              Call Move function
+    clear             Clear screen
+    echo              Write arguments to the console output
+    env               Print environment
+    exit              Exit the interactive shell
+    gas               Obtain all gas objects owned by the address
+    help              Print this message or the help of the given subcommand(s)
+    history           Print history
+    merge-coin        Merge two coin objects into one coin
+    new-address       Generate new address and keypair
+    object            Get object information
+    objects           Obtain all objects owned by the address
+    publish           Publish Move modules
+    split-coin        Split a coin object into multiple coins
+    switch            Switch active address
+    sync              Synchronize client state with authorities
+    transfer          Transfer an object
 Use `help <command>` to see more information on each command.
 
 You can start the wallet in two modes: interactive shell or command line interface.
@@ -262,6 +275,90 @@ and object IDs will be assigned randomly. Consequently, you cannot rely
 on copy-pasting commands that include these values, as they will be different
 between different users/configs.
 
+### Active address
+
+Since a wallet manages multiple disjointed addresses, one might need to specify
+which address they want to call a command on.
+
+For convenience, one can choose to set a default, or active address that will be
+used for commands that require an address to operate on. A default address is picked
+at the start, but this can be changed later.
+
+In order to see what the current active address is, use the command `active-address`
+
+```
+wallet --no-shell active-address
+562F07CF6369E8D22DBF226A5BFEDC6300014837
+```
+
+Changing the default address is as easy as calling the `switch` command
+
+```
+
+wallet --no-shell switch --address 913CF36F370613ED131868AC6F9DA2420166062E
+Active address switched to 913CF36F370613ED131868AC6F9DA2420166062E
+```
+
+One can call, for example, the `objects` command with or without an address specified.
+When not specified, the active address is used.
+
+```
+sui>-$ objects
+Showing 5 results.
+(0B8A4620426E526FA42995CF26EB610BFE6BF063, SequenceNumber(0), o#6ea7e2d4bf47b3cc219fdc44bf15530244d3b3d1838d59586c0bb41d3db92221)
+
+sui>-$ objects --address 913CF36F370613ED131868AC6F9DA2420166062E
+Showing 5 results.
+(0B8A4620426E526FA42995CF26EB610BFE6BF063, SequenceNumber(0), o#6ea7e2d4bf47b3cc219fdc44bf15530244d3b3d1838d59586c0bb41d3db92221)
+```
+
+All commands where `address` is omitted will now use the newly specified active address:
+913CF36F370613ED131868AC6F9DA2420166062E
+
+Note that if one calls a command that uses a gas object not owned by the active address,
+the address owned by the gas object is temporarily used for the transaction.
+
+### Paying For transactions with gas objects
+
+All Sui transactions require a gas object for payment, as well as a budget. However, specifying
+the gas object can be cumbersome; so in the CLI, one is allowed to omit the gas object and leave
+the wallet to pick an object that meets the specified budget. This gas selection logic is currently
+rudimentary as it does not combine/split gas as needed but currently picks the first object it finds
+that meets the budget. Note that one can always specify their own gas if they want to manage the gas
+themselves.
+
+:warning: A gas object cannot be part of the transaction while also being used to
+pay for the transaction. For example, one cannot try to transfer gas object X while paying for the
+transaction with gas object X. The gas selection logic checks for this and rejects such cases.
+
+To see how much gas is in an account, use the `gas` command. Note that this command uses the
+`active-address`, unless otherwise specified.
+
+```
+wallet --no-shell gas
+                Object ID                 |  Version   |  Gas Value 
+----------------------------------------------------------------------
+ 0B8A4620426E526FA42995CF26EB610BFE6BF063 |     0      |   100000   
+ 3C0763CCDEA4FF5A4557505A62AB5E1DAF91F4A2 |     0      |   100000   
+ 45A589A9E760D7F75D399327AC0FCBA21495C22E |     0      |   100000   
+ 4C377A3A9D4B1B9C92189DD12BB1DCD0302A954B |     0      |   100000   
+ F2961464AC6860A05D21B48C020B7E121399965C |     0      |   100000   
+```
+
+If one does not want to use the active address, the addresses can be specified:
+
+```
+/wallet --no-shell gas --address 562F07CF6369E8D22DBF226A5BFEDC6300014837
+                Object ID                 |  Version   |  Gas Value 
+----------------------------------------------------------------------
+ A8DDC2661A19010E5F85CBF6D905DDFBE4DD0320 |     0      |   100000   
+ B2683D0B592E5B002D110989A52943BC9DA19158 |     0      |   100000   
+ B41BF45B01C9BEFCE3A0A371E2B98E062691438D |     0      |   100000   
+ BA9E10F319182F3BD584EDB92C7899CC6D018723 |     0      |   100000   
+ F8BFE77A5B21E7ABFA3BC285991F9DA4E5CC2D7B |     0      |   100000  
+
+```
+
 ## Adding accounts to the wallet
 
 Sui's genesis process will create five accounts by default; if that's
@@ -290,6 +387,7 @@ you won't be able to mutate objects if the account key is missing from the keyst
 Restart the Sui wallet after the modification; the new accounts will appear in the wallet if you query the addresses.
 
 ## View objects owned by the account
+
 You can use the `objects` command to view the objects owned by the address.
 
 `objects` command usage:
@@ -327,6 +425,7 @@ Showing 5 results.
 If you want to view more information about the objects, you can use the `object` command.
 
 Usage of `object` command :
+
 ```shell
 USAGE:
     object [FLAGS] --id <id>
@@ -368,6 +467,7 @@ Here is an example:
 ```
 
 ## Transferring objects
+
 If you inspect a newly created account, you would expect the account does not own any object. Let us inspect the fresh account we create in the [Generating a new account](#generating-a-new-account) section (`C72CF3ADCC4D11C03079CEF2C8992AEA5268677A`):
 
 ```shell
@@ -375,14 +475,16 @@ $ wallet --no-shell objects --address C72CF3ADCC4D11C03079CEF2C8992AEA5268677A
 Showing 0 results.
 
 ```
+
 To add objects to the account, you can [invoke a Move function](#calling-move-code),
 or you can transfer one of the existing objects from the genesis account to the new account using a dedicated wallet command.
 We will explore how to transfer objects using the wallet in this section.
 
 `transfer` command usage:
+
 ```shell
 USAGE:
-    transfer [FLAGS] --gas <gas> --gas-budget <gas-budget> --object-id <object-id> --to <to>
+    transfer [FLAGS] [OPTIONS] --gas-budget <gas-budget> --object-id <object-id> --to <to>
 
 FLAGS:
     -h, --help       Prints help information
@@ -390,20 +492,24 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-        --gas <gas>                ID of the gas object for gas payment, in 20 bytes Hex string
+        --gas <gas>                  ID of the gas object for gas payment, in 20 bytes Hex string If not provided, a gas
+                                     object with at least gas_budget value will be selected
         --gas-budget <gas-budget>    Gas budget for this transfer
-        --object-id <object-id>    Object to transfer, in 20 bytes Hex string
-        --to <to>                  Recipient address
+        --object-id <object-id>      Object to transfer, in 20 bytes Hex string
+        --to <to>                    Recipient address
 ```
+
 To transfer an object to a recipient, you will need the recipient's address,
 the object ID of the object that you want to transfer,
-and the gas object ID for the transaction fee payment. Gas budget sets a cap for how much gas you want to spend.
-We are still finalizing our gas metering mechanisms. For now, just set something large enough.
+and optionally the gas object ID for the transaction fee payment. If a gas
+object is not specified, one that meets the budget is picked. Gas budget sets a
+cap for how much gas you want to spend. We are still finalizing our gas metering
+mechanisms. For now, just set something large enough.
 
 Here is an example transfer of an object to account `F456EBEF195E4A231488DF56B762AC90695BE2DD`:
 
 ```shell
-$ wallet --no-shell transfer --to C72CF3ADCC4D11C03079CEF2C8992AEA5268677A --object-id DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1 --gas 00A0A5211F6EDCF4BA09D23B8A7250072BE1EDB6
+$ wallet --no-shell transfer --to C72CF3ADCC4D11C03079CEF2C8992AEA5268677A --object-id DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1 --gas-budget 100
 ```
 
 With output like:
@@ -434,6 +540,7 @@ Showing 1 results.
 ```
 
 ## Merging and splitting coin objects
+
 Overtime, the account might receive coins from other accounts and will become unmanageable when
 the number of coins grows; contrarily, the account might need to split the coins for payment or
 for transfer to another account.
@@ -441,10 +548,12 @@ for transfer to another account.
 We can use the `merge-coin` command and `split-coin` command to consolidate or split coins, respectively.
 
 ### Merge coins
+
 Usage of `merge-coin`:
+
 ```shell
 USAGE:
-    merge-coin [FLAGS] --coin-to-merge <coin-to-merge> --gas <gas> --gas-budget <gas-budget> --primary-coin <primary-coin>
+    merge-coin [FLAGS] [OPTIONS] --coin-to-merge <coin-to-merge> --gas-budget <gas-budget> --primary-coin <primary-coin>
 
 FLAGS:
     -h, --help       Prints help information
@@ -453,10 +562,12 @@ FLAGS:
 
 OPTIONS:
         --coin-to-merge <coin-to-merge>    Coin to be merged, in 20 bytes Hex string
-        --gas <gas>                        ID of the gas object for gas payment, in 20 bytes Hex string
+        --gas <gas>                        ID of the gas object for gas payment, in 20 bytes Hex string If not provided,
+                                           a gas object with at least gas_budget value will be selected
         --gas-budget <gas-budget>          Gas budget for this call
         --primary-coin <primary-coin>      Coin to merge into, in 20 bytes Hex string
 ```
+
 Here is an example of how to merge coins. To merge coins, you will need at lease three coin objects -
 two coin objects for merging, and one for the gas payment.
 You also need to specify the maximum gas budget that should be expanded for the coin merge operations.
@@ -479,9 +590,8 @@ Showing 5 results.
 ```
 
 Then we merge:
-
 ```shell
-$ wallet --no-shell merge-coin --primary-coin 149A3493C97FAFC696526052FE08E77043D4BE0B  --coin-to-merge 1B19F74AD77A95D7562432F6991AC9EC1EA2C57C --gas 4C21FCC8CA953162877FE740F78D9C109145CC73 --gas-budget 1000
+$ wallet --no-shell merge-coin --primary-coin 149A3493C97FAFC696526052FE08E77043D4BE0B  --coin-to-merge 1B19F74AD77A95D7562432F6991AC9EC1EA2C57C --gas-budget 1000
 ```
 
 With results resembling:
@@ -504,10 +614,12 @@ Updated Gas : Coin { id: 4C21FCC8CA953162877FE740F78D9C109145CC73, value: 99995 
 ```
 
 ### Split coins
+
 Usage of `split-coin`:
+
 ```shell
 USAGE:
-    split-coin [FLAGS] [OPTIONS] --coin-id <coin-id> --gas <gas> --gas-budget <gas-budget>
+    split-coin [FLAGS] [OPTIONS] --coin-id <coin-id> --gas-budget <gas-budget>
 
 FLAGS:
     -h, --help       Prints help information
@@ -517,9 +629,11 @@ FLAGS:
 OPTIONS:
         --amounts <amounts>...       Amount to split out from the coin
         --coin-id <coin-id>          Coin to Split, in 20 bytes Hex string
-        --gas <gas>                  ID of the gas object for gas payment, in 20 bytes Hex string
+        --gas <gas>                  ID of the gas object for gas payment, in 20 bytes Hex string If not provided, a gas
+                                     object with at least gas_budget value will be selected
         --gas-budget <gas-budget>    Gas budget for this call
 ```
+
 For splitting coins, you will need at lease two coins to execute the `split-coin` command,
 one coin to split, one for the gas payment.
 
@@ -545,7 +659,7 @@ with values of 1000, 5000 and 3000, respectively; note the `--amounts` argument 
 We use the second coin on the list to pay for this transaction.
 
 ```shell
-$ wallet --no-shell split-coin --coin-id 13347BD461E8A2B9EE5DE7F6131063A3050A45C4 --amounts 1000 5000 3000 --gas B402F52BA6216A770939E6D4922AE6D6D05C2256 --gas-budget 1000
+$ wallet --no-shell split-coin --coin-id 13347BD461E8A2B9EE5DE7F6131063A3050A45C4 --amounts 1000 5000 3000 --gas-budget 1000
 ```
 
 You will see output resembling:
@@ -602,7 +716,6 @@ objects as this can be accomplish with a built-in wallet
 [command](#transferring-objects) - we chose this example due to its
 simplicity.
 
-
 Let us examine objects owned by address `AE6FB6036570FEC1DF71599740C132CDF5B45B9D`:
 
 ```shell
@@ -626,27 +739,27 @@ We will perform the transfer by calling the `transfer` function from
 the SUI module using the following Sui Wallet command:
 
 ```shell
-wallet --no-shell call --function transfer --module SUI --package 0x2 --args \"0x5044DC15D3C71D500116EB026E8B70D0A180F3AC\" \"0xF456EBEF195E4A231488DF56B762AC90695BE2DD\" --gas B6E55F0EB3B820CB848B3BBB6DB4BC34E54F2413 --gas-budget 1000
+wallet --no-shell call --function transfer --module SUI --package 0x2 --args \"0x5044DC15D3C71D500116EB026E8B70D0A180F3AC\" \"0xF456EBEF195E4A231488DF56B762AC90695BE2DD\" --gas-budget 1000
 ```
 
 This is a pretty complicated command so let's explain all of its
 parameters one-by-one:
 
-- `--function` - name of the function to be called
-- `--module` - name of the module containing the function
-- `--package` - ID of the package object where the module containing
+* `--function` - name of the function to be called
+* `--module` - name of the module containing the function
+* `--package` - ID of the package object where the module containing
   the function is located. (Remember
   that the ID of the genesis Sui package containing the GAS module is
   defined in its manifest file, and is equal to `0x2`.)
-- `args` - a list of function arguments formatted as
+* `args` - a list of function arguments formatted as
   [SuiJSON](sui-json.md) values (hence the preceding `0x` in address
   and object ID):
-  - ID of the gas object representing the `c` parameter of the `transfer`
+  * ID of the gas object representing the `c` parameter of the `transfer`
     function
-  - address of the new gas object owner
-- `--gas` - an object containing gas used to pay for this
+  * address of the new gas object owner
+* `--gas` - an optional object containing gas used to pay for this
   function call
-- `--gas-budget` - a decimal value expressing how much gas we are
+* `--gas-budget` - a decimal value expressing how much gas we are
   willing to pay for the `transfer` call to be completed to avoid
   accidental drain of all gas in the gas pay)
 
@@ -715,7 +828,7 @@ Type: 0x2::Coin::Coin<0x2::SUI::SUI>
 ## Publish packages
 
 In order for user-written code to be available in Sui, it must be
-_published_ to Sui's [distributed ledger](../learn/how-sui-works.md#architecture).
+*published* to Sui's [distributed ledger](../learn/how-sui-works.md#architecture).
 Please see the [Move developer documentation](move.md) for a
 description on how to [write a simple Move code package](move.md#writing-a-package),
 which we can publish using Sui wallet's `publish` command.
@@ -751,7 +864,7 @@ that the location of the package's sources is in the `PATH_TO_PACKAGE`
 environment variable):
 
 ```shell
-wallet --no-shell publish --path $PATH_TO_PACKAGE/my_move_package --gas 749E3EE0E0AC93BFC06ED58972EFE87717A428DA --gas-budget 30000
+wallet --no-shell publish --path $PATH_TO_PACKAGE/my_move_package --gas-budget 30000
 ```
 
 The result of running this command should look as follows:
@@ -786,7 +899,7 @@ initializers](move.md#module-initializers) for more details on module
 initializers.
 
 Finally, we  see that the the gas object that was used to pay for
-publishing was updated as well. 
+publishing was updated as well.
 
 ## Customize genesis
 
@@ -796,6 +909,7 @@ file using the `--config` flag.
 ```shell
 sui genesis --config <Path to genesis config file>
 ```
+
 Example `genesis.conf`:
 
 ```json
