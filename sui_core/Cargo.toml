@@ -53,3 +53,6 @@ test_utils = { path = "../test_utils" }
 name = "generate-format"
 path = "src/generate_format.rs"
 test = false
+
+[package.metadata.cargo-udeps.ignore]
+normal = ["structopt"]
