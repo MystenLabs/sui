@@ -1,25 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use clap::*;
 use colored::Colorize;
 use move_unit_test::UnitTestingConfig;
 use std::path::Path;
-use structopt::clap::App;
-use structopt::StructOpt;
 
-#[derive(StructOpt)]
-#[structopt(rename_all = "kebab-case")]
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
 pub enum MoveCommands {
     /// Build and verify Move project
-    #[structopt(name = "build")]
+    #[clap(name = "build")]
     Build {
         /// Whether we are printing in hex.
-        #[structopt(long)]
+        #[clap(long)]
         dump_bytecode_as_hex: bool,
     },
 
     /// Run all Move unit tests
-    #[structopt(name = "test")]
+    #[clap(name = "test")]
     Test(UnitTestingConfig),
 }
 
@@ -57,27 +56,26 @@ impl MoveCommands {
     }
 }
 
-#[derive(StructOpt)]
-#[structopt(
+#[derive(Parser)]
+#[clap(
     name = "Sui Move Development Tool",
     about = "Tool to build and test Move applications",
     rename_all = "kebab-case"
 )]
 struct MoveOpt {
     /// Path to the Move project root.
-    #[structopt(long, default_value = "./")]
+    #[clap(long, default_value = "./")]
     path: String,
     /// Whether we are building/testing the std/framework code.
-    #[structopt(long)]
+    #[clap(long)]
     std: bool,
     /// Subcommands.
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     cmd: MoveCommands,
 }
 
 fn main() -> Result<(), anyhow::Error> {
-    let app: App = MoveOpt::clap();
-    let options = MoveOpt::from_clap(&app.get_matches());
+    let options = MoveOpt::parse();
     let path = options.path;
     options.cmd.execute(path.as_ref(), options.std)
 }
