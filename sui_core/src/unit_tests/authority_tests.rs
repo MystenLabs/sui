@@ -733,6 +733,23 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
 }
 
 #[tokio::test]
+async fn test_authority_store_parenty_sync() {
+    let (sender, _sender_key) = get_key_pair();
+    for _ in 0..20 {
+        let object_id = ObjectID::random();
+        let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
+        assert_eq!(
+            authority_state
+                .get_parent_iterator(object_id, None)
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+}
+
+#[tokio::test]
 async fn test_handle_confirmation_transaction_ok() {
     let (sender, sender_key) = get_key_pair();
     let recipient = dbg_addr(2);
