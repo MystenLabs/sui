@@ -12,16 +12,16 @@ use sui_types::{
     base_types::*,
     error::{SuiError, SuiResult},
     event::Event,
-    gas,
+    fp_ensure,
+    gas::SuiGasStatus,
     id::VersionedID,
-    messages::{CallResult, ExecutionStatus},
+    messages::CallResult,
     move_package::*,
     object::{MoveObject, Object, Owner},
     storage::{DeleteKind, Storage},
 };
 use sui_verifier::verifier;
 
-use move_cli::sandbox::utils::get_gas_status;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
@@ -31,7 +31,6 @@ use move_core_types::{
 use move_vm_runtime::{native_functions::NativeFunctionTable, session::ExecutionResult};
 use std::{
     borrow::Borrow,
-    cmp,
     collections::{BTreeMap, HashMap, HashSet},
     convert::TryFrom,
     fmt::Debug,
@@ -39,12 +38,6 @@ use std::{
 };
 
 pub use move_vm_runtime::move_vm::MoveVM;
-
-macro_rules! exec_failure {
-    ($gas_used:expr, $err:expr) => {
-        return Ok(ExecutionStatus::new_failure($gas_used, $err))
-    };
-}
 
 #[cfg(test)]
 #[path = "unit_tests/adapter_tests.rs"]
@@ -95,10 +88,12 @@ pub fn new_move_vm(natives: NativeFunctionTable) -> Result<Arc<SuiMoveVM>, SuiEr
 /// Execute `module::function<type_args>(object_args ++ pure_args)` as a call from `sender` with the given `gas_budget`.
 /// Execution will read from/write to the store in `state_view`.
 /// IMPORTANT NOTES on the return value:
-/// The return value indicates whether a system error has occurred (i.e. issues with the sui system, not with user transaction).
-/// As long as there are no system issues we return Ok(ExecutionStatus).
-/// ExecutionStatus indicates the execution result. If execution failed, we wrap both the gas used and the error
-/// into ExecutionStatus::Failure.
+/// The return value is a two-layer SuiResult. The outer layer indicates whether a system error
+/// has occurred (i.e. issues with the sui system, not with user transaction).
+/// As long as there are no system issues we return Ok(SuiResult).
+/// The inner SuiResult indicates the execution result. If execution failed, we return Ok(Err),
+/// otherwise we return Ok(Ok).
+/// TODO: Do we really need the two layers?
 #[allow(clippy::too_many_arguments)]
 pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
     vm: &SuiMoveVM,
@@ -110,9 +105,9 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     type_args: Vec<TypeTag>,
     object_args: Vec<Object>,
     pure_args: Vec<Vec<u8>>,
-    gas_budget: u64,
+    gas_status: &mut SuiGasStatus,
     ctx: &mut TxContext,
-) -> SuiResult<ExecutionStatus> {
+) -> SuiResult<Vec<CallResult>> {
     // object_owner_map maps from object ID to its exclusive object owner.
     // This map will be used for detecting circular ownership among
     // objects, which can only happen to objects exclusively owned
@@ -131,23 +126,18 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         mutable_ref_objects,
         by_value_objects,
         return_types,
-    } = match resolve_and_type_check(
+    } = resolve_and_type_check(
         &cached_package,
         module,
         function,
         &type_args,
         object_args,
         pure_args,
-    ) {
-        Ok(ok) => ok,
-        Err(err) => {
-            exec_failure!(gas::MIN_MOVE, err);
-        }
-    };
+    )?;
 
     let mut args = args;
     args.push(ctx.to_vec());
-    Ok(execute_internal(
+    execute_internal(
         vm,
         state_view,
         &module_id,
@@ -157,15 +147,14 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         mutable_ref_objects,
         by_value_objects,
         object_owner_map,
-        gas_budget,
+        gas_status,
         ctx,
         return_types,
-    ))
+    )
 }
 
 /// This function calls into Move VM to execute a Move function
-/// call. It returns gas that needs to be colleted for this particular
-/// Move call both on successful and failed execution.
+/// call.
 #[allow(clippy::too_many_arguments)]
 fn execute_internal<
     E: Debug,
@@ -180,41 +169,29 @@ fn execute_internal<
     mutable_ref_objects: Vec<Object>,
     by_value_objects: BTreeMap<ObjectID, Object>,
     object_owner_map: HashMap<SuiAddress, SuiAddress>,
-    gas_budget: u64, // gas budget for the current call operation
+    gas_status: &mut SuiGasStatus, // gas status for the current call operation
     ctx: &mut TxContext,
     return_types: Vec<Type>,
-) -> ExecutionStatus {
-    // TODO: Update Move gas constants to reflect the gas fee on sui.
-    let cost_table = &move_vm_types::gas_schedule::INITIAL_COST_SCHEDULE;
-    let mut gas_status =
-        match get_gas_status(cost_table, Some(gas_budget)).map_err(|e| SuiError::GasBudgetTooHigh {
-            error: e.to_string(),
-        }) {
-            Ok(ok) => ok,
-            Err(err) => return ExecutionStatus::new_failure(gas::MIN_MOVE, err),
-        };
+) -> SuiResult<Vec<CallResult>> {
     let session = vm.movevm.new_session(state_view);
     match session.execute_function_for_effects(
         module_id,
         function,
         type_args,
         args,
-        &mut gas_status,
+        gas_status.get_move_gas_status(),
     ) {
         ExecutionResult::Success {
             change_set,
             events,
             return_values,
             mut mutable_ref_values,
-            gas_used,
+            gas_used: _,
         } => {
             // Sui Move programs should never touch global state, so ChangeSet should be empty
             debug_assert!(change_set.accounts().is_empty());
             // Input ref parameters we put in should be the same number we get out, plus one for the &mut TxContext
             debug_assert!(mutable_ref_objects.len() + 1 == mutable_ref_values.len());
-            debug_assert!(gas_used <= gas_budget);
-
-            let return_values = process_return_values(&return_values, &return_types);
 
             // When this function is used during publishing, it
             // may be executed several times, with objects being
@@ -222,56 +199,28 @@ fn execute_internal<
             // case, we need to update TxContext value so that it
             // reflects what happened each time we call into the
             // Move VM (e.g. to account for the number of created
-            // objects). We guard it with a flag to avoid
-            // serialization cost for non-publishing calls.
+            // objects).
             let ctx_bytes = mutable_ref_values.pop().unwrap();
             let updated_ctx: TxContext = bcs::from_bytes(ctx_bytes.as_slice()).unwrap();
-            if let Err(err) = ctx.update_state(updated_ctx) {
-                return ExecutionStatus::new_failure(gas_used, err);
-            }
+            ctx.update_state(updated_ctx)?;
 
             let mutable_refs = mutable_ref_objects
                 .into_iter()
                 .zip(mutable_ref_values.into_iter());
-            let (extra_gas_used, gas_refund, result) = process_successful_execution(
+            process_successful_execution(
                 state_view,
                 by_value_objects,
                 mutable_refs,
                 events,
                 ctx,
                 object_owner_map,
-            );
-            let total_gas = gas::aggregate_gas(gas_used + extra_gas_used, gas_refund);
-            if let Err(err) = result {
-                // Cap total_gas by gas_budget in the fail case.
-                return ExecutionStatus::new_failure(cmp::min(total_gas, gas_budget), err);
-            }
-            // gas_budget should be enough to pay not only the VM execution cost,
-            // but also the cost to process all events, such as transfers.
-            if total_gas > gas_budget {
-                ExecutionStatus::new_failure(
-                    gas_budget,
-                    SuiError::InsufficientGas {
-                        error: format!(
-                            "Total gas used ({}) exceeds gas budget ({})",
-                            total_gas, gas_budget
-                        ),
-                    },
-                )
-            } else {
-                ExecutionStatus::Success {
-                    gas_used: total_gas,
-                    results: return_values,
-                }
-            }
+            )?;
+            Ok(process_return_values(&return_values, &return_types))
         }
         // charge for all computations so far
-        ExecutionResult::Fail { error, gas_used } => ExecutionStatus::new_failure(
-            gas_used,
-            SuiError::AbortedExecution {
-                error: error.to_string(),
-            },
-        ),
+        ExecutionResult::Fail { error, gas_used: _ } => Err(SuiError::AbortedExecution {
+            error: error.to_string(),
+        }),
     }
 }
 
@@ -346,87 +295,37 @@ fn process_return_values(values: &[Vec<u8>], return_types: &[Type]) -> Vec<CallR
     results
 }
 
-/// Similar to execute(), only returns Err if there are system issues.
-/// ExecutionStatus contains the actual execution result.
 pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
     state_view: &mut S,
     natives: NativeFunctionTable,
     module_bytes: Vec<Vec<u8>>,
     ctx: &mut TxContext,
-    gas_budget: u64,
-) -> SuiResult<ExecutionStatus> {
-    let result = module_bytes
+    gas_status: &mut SuiGasStatus,
+) -> SuiResult {
+    gas_status.charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
+    let mut modules = module_bytes
         .iter()
         .map(|b| CompiledModule::deserialize(b))
-        .collect::<PartialVMResult<Vec<CompiledModule>>>();
-    let mut modules = match result {
-        Ok(ok) => ok,
-        Err(err) => {
-            exec_failure!(
-                gas::MIN_MOVE,
-                SuiError::ModuleDeserializationFailure {
-                    error: err.to_string(),
-                }
-            );
+        .collect::<PartialVMResult<Vec<CompiledModule>>>()
+        .map_err(|err| SuiError::ModuleDeserializationFailure {
+            error: err.to_string(),
+        })?;
+
+    fp_ensure!(
+        !modules.is_empty(),
+        SuiError::ModulePublishFailure {
+            error: "Publishing empty list of modules".to_string(),
         }
-    };
+    );
 
-    // run validation checks
-    let gas_used_for_publish = gas::calculate_module_publish_cost(&module_bytes);
-    if gas_used_for_publish > gas_budget {
-        exec_failure!(
-            gas::MIN_MOVE,
-            SuiError::InsufficientGas {
-                error: format!(
-                    "Gas cost to publish the package is {}, exceeding the budget which is {}",
-                    gas_used_for_publish, gas_budget
-                ),
-            }
-        );
-    }
-    if modules.is_empty() {
-        exec_failure!(
-            gas::MIN_MOVE,
-            SuiError::ModulePublishFailure {
-                error: "Publishing empty list of modules".to_string(),
-            }
-        );
-    }
-
-    let package_id = match generate_package_id(&mut modules, ctx) {
-        Ok(ok) => ok,
-        Err(err) => exec_failure!(gas::MIN_MOVE, err),
-    };
-    let vm = match verify_and_link(state_view, &modules, package_id, natives) {
-        Ok(ok) => ok,
-        Err(err) => exec_failure!(gas::MIN_MOVE, err),
-    };
+    let package_id = generate_package_id(&mut modules, ctx)?;
+    let vm = verify_and_link(state_view, &modules, package_id, natives, gas_status)?;
 
     let vm = SuiMoveVM::new(vm);
-    let gas_used_for_init = match store_package_and_init_modules(
-        state_view,
-        &vm,
-        modules,
-        ctx,
-        gas_budget - gas_used_for_publish,
-    ) {
-        ExecutionStatus::Success { gas_used, .. } => gas_used,
-        ExecutionStatus::Failure { gas_used, error } => {
-            // TODO: We should't charge the full publish cost when this failed.
-            // Instead we should only charge the cost to run bytecode verification.
-            exec_failure!(gas_used + gas_used_for_publish, *error)
-        }
-    };
-
-    let total_gas_used = gas_used_for_publish + gas_used_for_init;
-    Ok(ExecutionStatus::Success {
-        gas_used: total_gas_used,
-        results: vec![],
-    })
+    store_package_and_init_modules(state_view, &vm, modules, ctx, gas_status)
 }
 
 /// Store package in state_view and call module initializers
-/// Return gas used for initialization
 pub fn store_package_and_init_modules<
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
@@ -435,8 +334,8 @@ pub fn store_package_and_init_modules<
     vm: &SuiMoveVM,
     modules: Vec<CompiledModule>,
     ctx: &mut TxContext,
-    gas_budget: u64,
-) -> ExecutionStatus {
+    gas_status: &mut SuiGasStatus,
+) -> SuiResult {
     let mut modules_to_init = Vec::new();
     for module in modules.iter() {
         if module_has_init(module) {
@@ -450,7 +349,7 @@ pub fn store_package_and_init_modules<
     state_view.set_create_object_ids(HashSet::from([package_object.id()]));
     state_view.write_object(package_object);
 
-    init_modules(state_view, vm, modules_to_init, ctx, gas_budget)
+    init_modules(state_view, vm, modules_to_init, ctx, gas_status)
 }
 
 /// Modules in module_ids_to_init must have the init method defined
@@ -459,14 +358,12 @@ fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error 
     vm: &SuiMoveVM,
     module_ids_to_init: Vec<ModuleId>,
     ctx: &mut TxContext,
-    gas_budget: u64,
-) -> ExecutionStatus {
-    let mut total_gas_used = 0;
-    let mut current_gas_budget = gas_budget;
+    gas_status: &mut SuiGasStatus,
+) -> SuiResult {
     for module_id in module_ids_to_init {
         let args = vec![ctx.to_vec()];
 
-        let gas_used = match execute_internal(
+        execute_internal(
             vm,
             state_view,
             &module_id,
@@ -476,31 +373,12 @@ fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error 
             Vec::new(),
             BTreeMap::new(),
             HashMap::new(),
-            current_gas_budget,
+            gas_status,
             ctx,
             vec![], // no return types for module initializers
-        ) {
-            ExecutionStatus::Success { gas_used, .. } => gas_used,
-            ExecutionStatus::Failure { gas_used, error } => {
-                return ExecutionStatus::Failure {
-                    gas_used: gas_used + total_gas_used,
-                    error,
-                };
-            }
-        };
-        // This should never be the case as current_gas_budget
-        // (before the call) must be larger than gas_used (after
-        // the call) in order for the call to succeed in the first
-        // place.
-        debug_assert!(current_gas_budget >= gas_used);
-        current_gas_budget -= gas_used;
-        total_gas_used += gas_used;
+        )?;
     }
-
-    ExecutionStatus::Success {
-        gas_used: total_gas_used,
-        results: vec![],
-    }
+    Ok(())
 }
 
 /// Given a list of `modules`, links each module against its
@@ -514,19 +392,16 @@ pub fn verify_and_link<
     modules: &[CompiledModule],
     package_id: ObjectID,
     natives: NativeFunctionTable,
+    gas_status: &mut SuiGasStatus,
 ) -> Result<MoveVM, SuiError> {
     // Run the Move bytecode verifier and linker.
     // It is important to do this before running the Sui verifier, since the sui
     // verifier may assume well-formedness conditions enforced by the Move verifier hold
     let vm = MoveVM::new(natives)
         .expect("VM creation only fails if natives are invalid, and we created the natives");
-    // Note: VM does not do any gas metering on publish code path, so setting budget to None is fine
-    let cost_table = &move_vm_types::gas_schedule::INITIAL_COST_SCHEDULE;
-    let mut gas_status = get_gas_status(cost_table, None)
-        .expect("Can only fail if gas budget is too high, and we didn't supply one");
     let mut session = vm.new_session(state_view);
     // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
-    let new_module_bytes = modules
+    let new_module_bytes: Vec<_> = modules
         .iter()
         .map(|m| {
             let mut bytes = Vec::new();
@@ -538,7 +413,9 @@ pub fn verify_and_link<
         .publish_module_bundle(
             new_module_bytes,
             AccountAddress::from(package_id),
-            &mut gas_status,
+            // TODO: publish_module_bundle() currently doesn't charge gas.
+            // Do we want to charge there?
+            gas_status.get_move_gas_status(),
         )
         .map_err(|e| SuiError::ModulePublishFailure {
             error: e.to_string(),
@@ -600,7 +477,6 @@ type MoveEvent = (Vec<u8>, u64, TypeTag, Vec<u8>);
 /// - Look for each input in `by_value_objects` to determine whether the object was transferred, frozen, or deleted
 /// - Update objects passed via a mutable reference in `mutable_refs` to their new values
 /// - Process creation of new objects and user-emittd events in `events`
-/// - Returns (amount of extra gas used, amount of gas refund, process result)
 #[allow(clippy::too_many_arguments)]
 fn process_successful_execution<
     E: Debug,
@@ -612,7 +488,7 @@ fn process_successful_execution<
     events: Vec<MoveEvent>,
     ctx: &TxContext,
     mut object_owner_map: HashMap<SuiAddress, SuiAddress>,
-) -> (u64, u64, SuiResult) {
+) -> SuiResult {
     for (mut obj, new_contents) in mutable_refs {
         // update contents and increment sequence number
         obj.data
@@ -621,18 +497,16 @@ fn process_successful_execution<
             .update_contents(new_contents);
         state_view.write_object(obj);
     }
-    // process events to identify transfers, freezes
-    let mut gas_used = 0;
-    let mut gas_refund = 0;
     let tx_digest = ctx.digest();
     // newly_generated_ids contains all object IDs generated in this transaction.
     let newly_generated_ids = ctx.recreate_all_ids();
     state_view.set_create_object_ids(newly_generated_ids.clone());
+    // process events to identify transfers, freezes
     for e in events {
         let (recipient, event_type, type_, event_bytes) = e;
         let event_type = EventType::try_from(event_type as u8)
             .expect("Safe because event_type is derived from an EventType enum");
-        let result = match event_type {
+        match event_type {
             EventType::TransferToAddress
             | EventType::FreezeObject
             | EventType::TransferToObject => {
@@ -652,7 +526,6 @@ fn process_successful_execution<
                     event_bytes,
                     tx_digest,
                     &mut by_value_objects,
-                    &mut gas_used,
                     state_view,
                     &mut object_owner_map,
                     &newly_generated_ids,
@@ -677,10 +550,9 @@ fn process_successful_execution<
                             // the child object to an account address, or call through Transfer::delete_child_object(),
                             // which would consume both the child object and the ChildRef ownership reference,
                             // and emit the DeleteChildObject event. These child objects can be safely deleted.
-                            return (gas_used, 0, Err(SuiError::DeleteObjectOwnedObject));
+                            return Err(SuiError::DeleteObjectOwnedObject);
                         }
                         state_view.delete_object(obj_id, id.version(), DeleteKind::Normal);
-                        gas_refund += gas::calculate_object_deletion_refund(&object);
                     } else {
                         // This object wasn't in the input, and is being deleted. It must
                         // be unwrapped in this transaction and then get deleted.
@@ -705,7 +577,6 @@ fn process_successful_execution<
                 // must be passed by value in the input.
                 let object = by_value_objects.remove(&obj_id).unwrap();
                 state_view.delete_object(&obj_id, object.version(), DeleteKind::Normal);
-                gas_refund += gas::calculate_object_deletion_refund(&object);
                 Ok(())
             }
             EventType::User => {
@@ -717,10 +588,7 @@ fn process_successful_execution<
                 };
                 Ok(())
             }
-        };
-        if result.is_err() {
-            return (gas_used, 0, result);
-        }
+        }?;
     }
 
     // any object left in `by_value_objects` is an input passed by value that was not transferred or frozen.
@@ -730,7 +598,7 @@ fn process_successful_execution<
         state_view.delete_object(id, object.version(), DeleteKind::Wrap);
     }
 
-    (gas_used, gas_refund, Ok(()))
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -743,7 +611,6 @@ fn handle_transfer<
     contents: Vec<u8>,
     tx_digest: TransactionDigest,
     by_value_objects: &mut BTreeMap<ObjectID, Object>,
-    gas_used: &mut u64,
     state_view: &mut S,
     object_owner_map: &mut HashMap<SuiAddress, SuiAddress>,
     newly_generated_ids: &HashSet<ObjectID>,
@@ -779,7 +646,7 @@ fn handle_transfer<
             let obj = Object::new_move(move_obj, recipient, tx_digest);
             if old_object.is_none() {
                 // Charge extra gas based on object size if we are creating a new object.
-                *gas_used += gas::calculate_object_creation_cost(&obj);
+                // TODO: Do we charge extra gas when creating new objects (on top of storage write cost)?
             }
             let obj_address: SuiAddress = obj_id.into();
             object_owner_map.remove(&obj_address);

@@ -177,9 +177,9 @@ You should replace `{{owner_address}}` and `{{to_address}}` in the
 command above with an actual address values, for example one obtained
 from `wallet.conf`. You should also replace
 `{{coin_object_id}}` and `{{gas_object_id}}` in the command above with
-an actual object ID, for example one obtained from `objType` in the output
+an actual object ID, for example one obtained from `objId` in the output
 of [`GET /objects`](#get-apiobjects). You can see that all gas objects generated
-during genesis are of `Coin/SUI` type. For this call to work, objects
+during genesis are of `Coin/SUI` type). For this call to work, objects
 represented by both `{{coin_object_id}}` and `{{gas_object_id}}` must
 be owned by the address represented by `{{owner_address}}`.
 
@@ -254,12 +254,13 @@ the process of publishing a Move package). Gas budget is required because of the
 need to execute module initializers.
 
 You should replace `{{owner_address}}` in the
-command above with an actual address value, for example one obtained
-from [`GET /addresses`](#get-addresses). You should also replace `{{gas_object_id}}` in the command above with an actual object ID, for example one obtained from [`GET
-/objects`](#get-objects) (from `objType` in the output of [`GET
-/objects`](#get-objects). You can see that all gas objects generated
-during genesis are of `Coin/SUI` type). For this call to work, `{{gas_object_id}}` must
-be owned by the address represented by `{{owner_address}}`.
+command above with an actual address values, for example one obtained
+from `wallet.conf`. You should also replace `{{gas_object_id}}` in the command above with
+an actual object ID, for example one obtained from `objId` in the output
+of [`GET /objects`](#get-apiobjects). You can see that all gas objects generated
+during genesis are of `Coin/SUI` type). For this call to work, the object
+represented by `{{gas_object_id}}` must be owned by the address represented by
+`{{owner_address}}`.
 
 To publish a Move module, you also need `{{vector_of_compiled_modules}}`. To generate the value of this field, you can use the `sui-move` command. The `sui-move` command supports printing the bytecodes as hex with the following option
 

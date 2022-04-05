@@ -138,6 +138,9 @@ impl SuiCommand {
                 keystore.save(&keystore_path)?;
                 info!("Wallet keystore is stored in {:?}.", keystore_path);
 
+                // Use the first address if any
+                let active_address = accounts.get(0).copied();
+
                 let gateway_config = GatewayConfig {
                     db_folder_path,
                     authorities: network_config.get_authority_infos(),
@@ -152,6 +155,7 @@ impl SuiCommand {
                     accounts,
                     keystore: KeystoreType::File(keystore_path),
                     gateway: GatewayType::Embedded(PersistedConfig::read(&gateway_path)?),
+                    active_address,
                 };
 
                 let wallet_config = wallet_config.persisted(&wallet_path);

@@ -154,16 +154,23 @@ ExecutionStatus:
     0:
       Success:
         STRUCT:
-          - gas_used: U64
+          - gas_cost:
+              TYPENAME: GasCostSummary
           - results:
               SEQ:
                 TYPENAME: CallResult
     1:
       Failure:
         STRUCT:
-          - gas_used: U64
+          - gas_cost:
+              TYPENAME: GasCostSummary
           - error:
               TYPENAME: SuiError
+GasCostSummary:
+  STRUCT:
+    - computation_cost: U64
+    - storage_cost: U64
+    - storage_rebate: U64
 Identifier:
   NEWTYPESTRUCT: STR
 MoveCall:

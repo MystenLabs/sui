@@ -11,7 +11,6 @@ use move_package::BuildConfig;
 use std::{mem, path::PathBuf};
 use sui_types::{
     base_types::{self, SequenceNumber},
-    crypto::get_key_pair,
     error::SuiResult,
     gas_coin::GAS,
     object::{Data, Owner},
@@ -191,7 +190,7 @@ fn call(
     type_args: Vec<TypeTag>,
     object_args: Vec<Object>,
     pure_args: Vec<Vec<u8>>,
-) -> SuiResult<ExecutionStatus> {
+) -> SuiResult<Vec<CallResult>> {
     let package = storage.find_package(module_name).unwrap();
 
     let vm = adapter::new_move_vm(native_functions.clone()).expect("No errors");
@@ -205,7 +204,7 @@ fn call(
         type_args,
         object_args,
         pure_args,
-        gas_budget,
+        &mut SuiGasStatus::new_with_budget(gas_budget),
         &mut TxContext::random_for_testing_only(),
     )
 }
@@ -243,7 +242,6 @@ fn test_object_basics() {
         Vec::new(),
         pure_args,
     )
-    .unwrap()
     .unwrap();
 
     assert_eq!(storage.created().len(), 1);
@@ -268,7 +266,6 @@ fn test_object_basics() {
         vec![obj1.clone()],
         pure_args,
     )
-    .unwrap()
     .unwrap();
 
     assert_eq!(storage.updated().len(), 1);
@@ -305,7 +302,6 @@ fn test_object_basics() {
         Vec::new(),
         pure_args,
     )
-    .unwrap()
     .unwrap();
     let obj2 = storage
         .created()
@@ -326,7 +322,6 @@ fn test_object_basics() {
         vec![obj1.clone(), obj2],
         Vec::new(),
     )
-    .unwrap()
     .unwrap();
     assert_eq!(storage.updated().len(), 1);
     assert!(storage.created().is_empty());
@@ -363,7 +358,6 @@ fn test_object_basics() {
         vec![obj1],
         Vec::new(),
     )
-    .unwrap()
     .unwrap();
     assert_eq!(storage.deleted().len(), 1);
     assert!(storage.created().is_empty());
@@ -403,7 +397,6 @@ fn test_wrap_unwrap() {
         Vec::new(),
         pure_args,
     )
-    .unwrap()
     .unwrap();
     let id1 = storage.get_created_keys().pop().unwrap();
     storage.flush();
@@ -428,7 +421,6 @@ fn test_wrap_unwrap() {
         vec![obj1],
         Vec::new(),
     )
-    .unwrap()
     .unwrap();
     // wrapping should create wrapper object and "delete" wrapped object
     assert_eq!(storage.created().len(), 1);
@@ -450,7 +442,6 @@ fn test_wrap_unwrap() {
         vec![obj2],
         Vec::new(),
     )
-    .unwrap()
     .unwrap();
     // wrapping should delete wrapped object and "create" unwrapped object
     assert_eq!(storage.created().len(), 1);
@@ -472,59 +463,6 @@ fn test_wrap_unwrap() {
             .type_specific_contents(),
         &obj1_contents
     );
-}
-
-#[test]
-fn test_move_call_insufficient_gas() {
-    let native_functions =
-        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_packages();
-    let mut storage = InMemoryStorage::new(genesis_objects);
-
-    // 0. Create a gas object for gas payment.
-    let gas_object_id = ObjectID::random();
-    let gas_object =
-        Object::with_id_owner_for_testing(gas_object_id, base_types::SuiAddress::default());
-    storage.write_object(gas_object);
-    storage.flush();
-
-    // 1. Create obj1 owned by addr1
-    // ObjectBasics::create expects integer value and recipient address
-    let addr1 = get_key_pair().0;
-    let pure_args = vec![
-        10u64.to_le_bytes().to_vec(),
-        bcs::to_bytes(&AccountAddress::from(addr1)).unwrap(),
-    ];
-    let response = call(
-        &mut storage,
-        &native_functions,
-        "ObjectBasics",
-        "create",
-        15, // This budget is not enough to execute all bytecode.
-        Vec::new(),
-        Vec::new(),
-        pure_args.clone(),
-    );
-    let err = response.unwrap().unwrap_err();
-    assert!(err.1.to_string().contains("VMError with status OUT_OF_GAS"));
-    // Provided gas_budget will be deducted as gas.
-    assert_eq!(err.0, 15);
-
-    // Trying again with a different gas budget.
-    let response = call(
-        &mut storage,
-        &native_functions,
-        "ObjectBasics",
-        "create",
-        50, // This budget is enough to execute bytecode, but not enough for processing transfer events.
-        Vec::new(),
-        Vec::new(),
-        pure_args,
-    );
-    let err = response.unwrap().unwrap_err();
-    assert!(matches!(err.1, SuiError::InsufficientGas { .. }));
-    // Provided gas_budget will be deducted as gas.
-    assert_eq!(err.0, 50);
 }
 
 #[test]
@@ -558,7 +496,6 @@ fn test_freeze() {
         Vec::new(),
         pure_args,
     )
-    .unwrap()
     .unwrap();
 
     let id1 = storage.get_created_keys().pop().unwrap();
@@ -577,7 +514,6 @@ fn test_freeze() {
         vec![obj1],
         vec![],
     )
-    .unwrap()
     .unwrap();
     assert_eq!(storage.updated().len(), 1);
     storage.flush();
@@ -597,14 +533,10 @@ fn test_freeze() {
         vec![obj1],
         pure_args,
     );
-    let err = result.unwrap().unwrap_err();
+    let err = result.unwrap_err();
     assert!(err
-        .1
         .to_string()
         .contains("Shared object cannot be passed by-value, found in argument 0"));
-    // Since it failed before VM execution, during type resolving,
-    // only minimum gas will be charged.
-    assert_eq!(err.0, gas::MIN_MOVE);
 
     // 4. Call set_value (pass as mutable reference) should fail as well.
     let obj1 = storage.read_object(&id1).unwrap();
@@ -619,14 +551,10 @@ fn test_freeze() {
         vec![obj1],
         pure_args,
     );
-    let err = result.unwrap().unwrap_err();
+    let err = result.unwrap_err();
     assert!(err
-        .1
         .to_string()
         .contains("Argument 0 is expected to be mutable, immutable object found"));
-    // Since it failed before VM execution, during type resolving,
-    // only minimum gas will be charged.
-    assert_eq!(err.0, gas::MIN_MOVE);
 }
 
 #[test]
@@ -654,10 +582,8 @@ fn test_move_call_args_type_mismatch() {
         Vec::new(),
         Vec::new(),
         pure_args,
-    )
-    .unwrap();
-    let (gas_used, err) = status.unwrap_err();
-    assert_eq!(gas_used, gas::MIN_MOVE);
+    );
+    let err = status.unwrap_err();
     assert!(err
         .to_string()
         .contains("Expected 3 arguments calling function 'create', but found 2"));
@@ -712,12 +638,10 @@ fn test_move_call_incorrect_function() {
         vec![],
         vec![],
         vec![],
-        GAS_BUDGET,
+        &mut SuiGasStatus::new_unmetered(),
         &mut TxContext::random_for_testing_only(),
-    )
-    .unwrap();
-    let (gas_used, err) = status.unwrap_err();
-    assert_eq!(gas_used, gas::MIN_MOVE);
+    );
+    let err = status.unwrap_err();
     assert!(err
         .to_string()
         .contains("Expected a module object, but found a Move object"));
@@ -733,10 +657,8 @@ fn test_move_call_incorrect_function() {
         Vec::new(),
         Vec::new(),
         pure_args,
-    )
-    .unwrap();
-    let (gas_used, err) = status.unwrap_err();
-    assert_eq!(gas_used, gas::MIN_MOVE);
+    );
+    let err = status.unwrap_err();
     assert!(err.to_string().contains(&format!(
         "Could not resolve function 'foo' in module {}::ObjectBasics",
         SUI_FRAMEWORK_ADDRESS
@@ -801,11 +723,10 @@ fn test_publish_module_linker_error() {
         native_functions,
         module_bytes,
         &mut tx_context,
-        GAS_BUDGET,
+        &mut SuiGasStatus::new_unmetered(),
     );
-    let err = response.unwrap().unwrap_err();
-    assert_eq!(err.0, gas::MIN_MOVE);
-    let err_str = err.1.to_string();
+    let err = response.unwrap_err();
+    let err_str = err.to_string();
     // make sure it's a linker error
     assert!(err_str.contains("VMError with status LOOKUP_FAILED"));
     // related to failed lookup of a struct handle
@@ -842,12 +763,10 @@ fn test_publish_module_non_zero_address() {
         native_functions,
         module_bytes,
         &mut tx_context,
-        GAS_BUDGET,
+        &mut SuiGasStatus::new_unmetered(),
     );
-    let err = response.unwrap().unwrap_err();
-    assert_eq!(err.0, gas::MIN_MOVE);
-    let err_str = err.1.to_string();
-    println!("{:?}", err_str);
+    let err = response.unwrap_err();
+    let err_str = err.to_string();
     assert!(
         err_str.contains("Publishing module")
             && err_str.contains("with non-zero address is not allowed")
@@ -887,7 +806,6 @@ fn test_coin_transfer() {
             bcs::to_bytes(&AccountAddress::from(addr1)).unwrap(),
         ],
     )
-    .unwrap()
     .unwrap();
 
     // should update input coin
@@ -902,7 +820,7 @@ fn publish_from_src(
     natives: &NativeFunctionTable,
     src_path: &str,
     gas_object: Object,
-    gas_budget: u64,
+    _gas_budget: u64,
 ) {
     storage.write_object(gas_object);
     storage.flush();
@@ -923,14 +841,14 @@ fn publish_from_src(
         })
         .collect();
     let mut tx_context = TxContext::random_for_testing_only();
-    let response = adapter::publish(
+    adapter::publish(
         storage,
         natives.clone(),
         all_module_bytes,
         &mut tx_context,
-        gas_budget,
-    );
-    assert!(matches!(response.unwrap(), ExecutionStatus::Success { .. }));
+        &mut SuiGasStatus::new_unmetered(),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -963,7 +881,7 @@ fn test_simple_call() {
         bcs::to_bytes(&AccountAddress::from(addr)).unwrap(),
     ];
 
-    let response = call(
+    call(
         &mut storage,
         &native_functions,
         "M1",
@@ -972,8 +890,8 @@ fn test_simple_call() {
         Vec::new(),
         Vec::new(),
         pure_args,
-    );
-    assert!(matches!(response.unwrap(), ExecutionStatus::Success { .. }));
+    )
+    .unwrap();
 
     // check if the object was created and if it has the right value
     let id = storage.get_created_keys().pop().unwrap();
@@ -1137,19 +1055,9 @@ fn test_call_ret() {
         Vec::new(),
         Vec::new(),
         Vec::new(),
-    );
-    let mut success_64 = false;
-    if let ExecutionStatus::Success {
-        gas_used: _,
-        results,
-    } = response.unwrap()
-    {
-        if let CallResult::U64(val) = results.get(0).unwrap() {
-            if val == &42 {
-                success_64 = true;
-            }
-        }
-    }
+    )
+    .unwrap();
+    assert!(matches!(response.get(0).unwrap(), CallResult::U64(42)));
 
     // call published module function returning an address (0x42)
     let response = call(
@@ -1161,20 +1069,12 @@ fn test_call_ret() {
         Vec::new(),
         Vec::new(),
         Vec::new(),
+    )
+    .unwrap();
+    assert_eq!(
+        response.get(0).unwrap(),
+        &CallResult::Address(AccountAddress::from_hex_literal("0x42").unwrap()),
     );
-    let mut success_addr = false;
-    if let ExecutionStatus::Success {
-        gas_used: _,
-        results,
-    } = response.unwrap()
-    {
-        if let CallResult::Address(val) = results.get(0).unwrap() {
-            if val.to_hex_literal() == "0x42" {
-                success_addr = true;
-            }
-        }
-    }
-
     // call published module function returning two values: a u64 (42)
     // and an address (0x42)
     let response = call(
@@ -1186,21 +1086,13 @@ fn test_call_ret() {
         Vec::new(),
         Vec::new(),
         Vec::new(),
+    )
+    .unwrap();
+    assert!(matches!(response.get(0).unwrap(), CallResult::U64(42),));
+    assert_eq!(
+        response.get(1).unwrap(),
+        &CallResult::Address(AccountAddress::from_hex_literal("0x42").unwrap()),
     );
-    let mut success_tuple = false;
-    if let ExecutionStatus::Success {
-        gas_used: _,
-        results,
-    } = response.unwrap()
-    {
-        if let CallResult::U64(val1) = results.get(0).unwrap() {
-            if let CallResult::Address(val2) = results.get(1).unwrap() {
-                if val1 == &42 && val2.to_hex_literal() == "0x42" {
-                    success_tuple = true;
-                }
-            }
-        }
-    }
 
     // call published module function returning a vector
     let response = call(
@@ -1212,19 +1104,9 @@ fn test_call_ret() {
         Vec::new(),
         Vec::new(),
         Vec::new(),
-    );
-    let mut success_vec = false;
-    if let ExecutionStatus::Success {
-        gas_used: _,
-        results,
-    } = response.unwrap()
-    {
-        if let CallResult::U64Vec(val) = results.get(0).unwrap() {
-            if val.len() == 2 && val.get(0).unwrap() == &42 && val.get(1).unwrap() == &7 {
-                success_vec = true;
-            }
-        }
-    }
+    )
+    .unwrap();
+    assert_eq!(response.get(0).unwrap(), &CallResult::U64Vec(vec![42, 7]),);
 
     // call published module function returning a vector of vectors
     let response = call(
@@ -1236,23 +1118,10 @@ fn test_call_ret() {
         Vec::new(),
         Vec::new(),
         Vec::new(),
+    )
+    .unwrap();
+    assert_eq!(
+        response.get(0).unwrap(),
+        &CallResult::U64VecVec(vec![vec![42, 7]]),
     );
-    let mut success_vec_vec = false;
-    if let ExecutionStatus::Success {
-        gas_used: _,
-        results,
-    } = response.unwrap()
-    {
-        if let CallResult::U64VecVec(val) = results.get(0).unwrap() {
-            if val.len() == 1
-                && val.get(0).unwrap().len() == 2
-                && val.get(0).unwrap().get(0).unwrap() == &42
-                && val.get(0).unwrap().get(1).unwrap() == &7
-            {
-                success_vec_vec = true;
-            }
-        }
-    }
-
-    assert!(success_64 && success_addr && success_tuple && success_vec && success_vec_vec);
 }
