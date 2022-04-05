@@ -1,5 +1,5 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-&Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
 use std::fs::read_dir;
@@ -25,6 +25,7 @@ use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use sui_core::gateway_state::gateway_responses::SwitchResponse;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::get_key_pair;
+use sui_types::gas_coin::GasCoin;
 use sui_types::messages::TransactionEffects;
 use sui_types::object::{Object, ObjectRead, GAS_VALUE_FOR_TESTING};
 use tracing_test::traced_test;
@@ -686,13 +687,14 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         args.push(SuiJsonValue::new(a.clone()).unwrap());
     }
 
+    // Test case with no gas specified
     let resp = WalletCommands::Call {
         package: ObjectID::from_hex_literal("0x2").unwrap(),
         module: Identifier::new("ObjectBasics").unwrap(),
         function: Identifier::new("create").unwrap(),
         type_args: vec![],
         args,
-        gas: Some(gas),
+        gas: None,
         gas_budget: 1000,
     }
     .execute(&mut context)
@@ -1000,6 +1002,54 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     assert_eq!(gas.get_single_owner().unwrap(), address);
     assert_eq!(obj.get_single_owner().unwrap(), recipient);
 
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState {
+        address: Some(address),
+    }
+    .execute(&mut context)
+    .await?
+    .print(true);
+
+    let object_refs = context.gateway.get_owned_objects(address)?;
+
+    // Check log output contains all object ids.
+    let obj_id = object_refs.get(1).unwrap().0;
+
+    let resp = WalletCommands::Transfer {
+        gas: None,
+        to: recipient,
+        object_id: obj_id,
+        gas_budget: 50000,
+    }
+    .execute(&mut context)
+    .await?;
+
+    // Print it out to CLI/logs
+    resp.print(true);
+
+    let dumy_obj = Object::with_id_owner_for_testing(ObjectID::random(), address);
+
+    // Get the mutated objects
+    let (mut_obj1, mut_obj2) =
+        if let WalletCommandResult::Transfer(_, _, TransactionEffects { mutated, .. }) = resp {
+            (mutated.get(0).unwrap().0, mutated.get(1).unwrap().0)
+        } else {
+            assert!(false);
+            (
+                dumy_obj.compute_object_reference(),
+                dumy_obj.compute_object_reference(),
+            )
+        };
+
+    retry_assert!(
+        logs_contain(&format!("{:02X}", mut_obj1.0)),
+        Duration::from_millis(5000)
+    );
+    retry_assert!(
+        logs_contain(&format!("{:02X}", mut_obj2.0)),
+        Duration::from_millis(5000)
+    );
+
     network.kill().await?;
     Ok(())
 }
@@ -1142,6 +1192,200 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
             WalletCommandResult::Switch(SwitchResponse { address: addr2 })
         )
     );
+    network.kill().await?;
+    Ok(())
+}
+
+fn get_gas_value(o: &Object) -> u64 {
+    GasCoin::try_from(o.data.try_as_move().unwrap())
+        .unwrap()
+        .value()
+}
+
+async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<Object> {
+    if let ObjectRead::Exists(_, o, _) = context.gateway.get_object_info(id).await.unwrap() {
+        Some(o)
+    } else {
+        None
+    }
+}
+
+#[allow(clippy::assertions_on_constants)]
+#[traced_test]
+#[tokio::test]
+async fn test_merge_coin() -> Result<(), anyhow::Error> {
+    let working_dir = tempfile::tempdir()?;
+
+    let network = start_test_network(working_dir.path(), None).await?;
+
+    // Create Wallet context.
+    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
+
+    let mut context = WalletContext::new(&wallet_conf)?;
+    let address = context.config.accounts.first().cloned().unwrap();
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState {
+        address: Some(address),
+    }
+    .execute(&mut context)
+    .await?
+    .print(true);
+
+    let object_refs = context.gateway.get_owned_objects(address)?;
+
+    // Check log output contains all object ids.
+    let gas = object_refs.first().unwrap().0;
+    let primary_coin = object_refs.get(1).unwrap().0;
+    let coin_to_merge = object_refs.get(2).unwrap().0;
+
+    let total_value = get_gas_value(&get_object(primary_coin, &mut context).await.unwrap())
+        + get_gas_value(&get_object(coin_to_merge, &mut context).await.unwrap());
+
+    // Test with gas specified
+    let resp = WalletCommands::MergeCoin {
+        primary_coin,
+        coin_to_merge,
+        gas: Some(gas),
+        gas_budget: 1000,
+    }
+    .execute(&mut context)
+    .await?;
+
+    let g = if let WalletCommandResult::MergeCoin(r) = resp {
+        r
+    } else {
+        panic!("Command failed")
+    };
+
+    // Check total value is expected
+    assert_eq!(get_gas_value(&g.updated_coin), total_value);
+
+    // Check that old coin is deleted
+    assert_eq!(get_object(coin_to_merge, &mut context).await, None);
+
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState {
+        address: Some(address),
+    }
+    .execute(&mut context)
+    .await?;
+    let object_refs = context.gateway.get_owned_objects(address)?;
+
+    let primary_coin = object_refs.get(1).unwrap().0;
+    let coin_to_merge = object_refs.get(2).unwrap().0;
+
+    let total_value = get_gas_value(&get_object(primary_coin, &mut context).await.unwrap())
+        + get_gas_value(&get_object(coin_to_merge, &mut context).await.unwrap());
+
+    // Test with no gas specified
+    let resp = WalletCommands::MergeCoin {
+        primary_coin,
+        coin_to_merge,
+        gas: None,
+        gas_budget: 1000,
+    }
+    .execute(&mut context)
+    .await?;
+
+    let g = if let WalletCommandResult::MergeCoin(r) = resp {
+        r
+    } else {
+        panic!("Command failed")
+    };
+
+    // Check total value is expected
+    assert_eq!(get_gas_value(&g.updated_coin), total_value);
+
+    // Check that old coin is deleted
+    assert_eq!(get_object(coin_to_merge, &mut context).await, None);
+
+    network.kill().await?;
+    Ok(())
+}
+
+#[allow(clippy::assertions_on_constants)]
+#[traced_test]
+#[tokio::test]
+async fn test_split_coin() -> Result<(), anyhow::Error> {
+    let working_dir = tempfile::tempdir()?;
+
+    let network = start_test_network(working_dir.path(), None).await?;
+
+    // Create Wallet context.
+    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
+
+    let mut context = WalletContext::new(&wallet_conf)?;
+    let address = context.config.accounts.first().cloned().unwrap();
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState {
+        address: Some(address),
+    }
+    .execute(&mut context)
+    .await?
+    .print(true);
+
+    let object_refs = context.gateway.get_owned_objects(address)?;
+
+    // Check log output contains all object ids.
+    let gas = object_refs.first().unwrap().0;
+    let coin = object_refs.get(1).unwrap().0;
+
+    let orig_value = get_gas_value(&get_object(coin, &mut context).await.unwrap());
+
+    // Test with gas specified
+    let resp = WalletCommands::SplitCoin {
+        gas: Some(gas),
+        gas_budget: 1000,
+        coin_id: coin,
+        amounts: vec![1000, 10],
+    }
+    .execute(&mut context)
+    .await?;
+
+    let g = if let WalletCommandResult::SplitCoin(r) = resp {
+        r
+    } else {
+        panic!("Command failed")
+    };
+
+    // Check values expected
+    assert_eq!(get_gas_value(&g.updated_coin) + 1000 + 10, orig_value);
+    assert!((get_gas_value(&g.new_coins[0]) == 1000) || (get_gas_value(&g.new_coins[0]) == 10));
+    assert!((get_gas_value(&g.new_coins[1]) == 1000) || (get_gas_value(&g.new_coins[1]) == 10));
+
+    WalletCommands::SyncClientState {
+        address: Some(address),
+    }
+    .execute(&mut context)
+    .await?
+    .print(true);
+
+    let object_refs = context.gateway.get_owned_objects(address)?;
+
+    // Check log output contains all object ids.
+    let coin = object_refs.get(1).unwrap().0;
+    let orig_value = get_gas_value(&get_object(coin, &mut context).await.unwrap());
+
+    // Test with no gas specified
+    let resp = WalletCommands::SplitCoin {
+        gas: None,
+        gas_budget: 1000,
+        coin_id: coin,
+        amounts: vec![1000, 10],
+    }
+    .execute(&mut context)
+    .await?;
+
+    let g = if let WalletCommandResult::SplitCoin(r) = resp {
+        r
+    } else {
+        panic!("Command failed")
+    };
+
+    // Check values expected
+    assert_eq!(get_gas_value(&g.updated_coin) + 1000 + 10, orig_value);
+    assert!((get_gas_value(&g.new_coins[0]) == 1000) || (get_gas_value(&g.new_coins[0]) == 10));
+    assert!((get_gas_value(&g.new_coins[1]) == 1000) || (get_gas_value(&g.new_coins[1]) == 10));
     network.kill().await?;
     Ok(())
 }
