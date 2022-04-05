@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.55"
+anyhow = { version = "1.0.56", features = ["backtrace"] }
 base64 = "0.13.0"
 bcs = "0.1.3"
 bincode = "1.3.3"

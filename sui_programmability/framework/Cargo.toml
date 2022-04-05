@@ -8,7 +8,7 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-anyhow = "1.0.55"
+anyhow = { version = "1.0.56", features = ["backtrace"] }
 base64 = "0.13.0"
 smallvec = "1.8.0"
 num_enum = "0.5.6"
