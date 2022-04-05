@@ -2,9 +2,9 @@
 title: Local REST Server & REST API Quick Start
 ---
 
-Welcome to the Sui REST API quick start. 
+Welcome to the Sui REST API quick start.
 
-This document walks you through setting up your own local Sui REST Server and using the Sui REST API to interact with a local Sui network. This guide is useful for developers interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to the [wallet](wallet.md) documentation.  
+This document walks you through setting up your own local Sui REST Server and using the Sui REST API to interact with a local Sui network. This guide is useful for developers interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to the [wallet](wallet.md) documentation.
 
 Full [API documentation](https://app.swaggerhub.com/apis/MystenLabs/sui-api) can
 be found on SwaggerHub.
@@ -59,40 +59,10 @@ These are Sui [objects](objects.md) used
 to pay for Sui [transactions](transactions.md#transaction-metadata),
 such as object transfers or smart contract (Move) calls.
 
-If you want to use a custom genesis then you can do the following:
+If you want to use a custom genesis you can learn more in the wallet [docs](wallet.md#customize-genesis).
 
-Add `genesis.conf` to the working directory of the rest server i.e. 
-
-```
-{
-  "authorities": [
-    {},{},{},{}
-  ],
-  "accounts": [
-    {
-      "address": "09818AAC3EDF9CF9B006B70C36E7241768B26386",
-      "gas_objects": [
-        {
-          "object_id": "0000000000000000000000000000000000000003",
-          "gas_value": 10000000
-        }
-      ]
-    }
-  ]
-}
-```
-
-Next ensure any accounts provided in `gensis.conf` has a corresponding private key in
-`wallet.key`. Ensure wallet.key is in the working directory of the rest server. If you do not have the private key of the addresses specified you cannot use custom genesis. Never share your private keys, but for the `genesis.conf` example above you can use the following private key
-
-```
-[
-  "WKk4nT2oyPKbFrFAyepT5wEsummWsA6qdhsqzc6CVC9fvTt3J2u6yy5WuW9B6OU3mkcyPC/4Axstn0BpIhzZNg==",
-]
-```
-
-Once `genesis.conf` & `wallet.conf` have been added you can use the following to create a
-custom genesis. 
+As per the instructions in the wallet [docs](wallet.md#customize-genesis), `genesis.conf` & `wallet.key` need to be added so you can use the following to create a
+custom genesis.
 
 ```shell
 curl --location --request POST $SUI_GATEWAY_HOST/sui/genesis \
@@ -102,8 +72,6 @@ curl --location --request POST $SUI_GATEWAY_HOST/sui/genesis \
 }' | json_pp
 ```
 
-To learn more about `gensis.conf` formatting refer to the wallet [docs](wallet.md#customize-genesis).
-
 ### POST /sui/stop
 
 The `stop` commands kills the authorities and all of the data stored in the network:
@@ -112,12 +80,12 @@ The `stop` commands kills the authorities and all of the data stored in the netw
 curl --location --request POST $SUI_GATEWAY_HOST/sui/stop
 ```
 
-Use this if you want to reset the state of the network without having to kill the 
+Use this if you want to reset the state of the network without having to kill the
 REST server.
 
 ### POST /sui/start
 
-The `start` command starts the Sui network with the genesis configuration specified: 
+The `start` command starts the Sui network with the genesis configuration specified:
 
 ```shell
 curl --location --request POST $SUI_GATEWAY_HOST/sui/start | json_pp
@@ -247,7 +215,7 @@ from [`GET /addresses`](#get-addresses). You should also replace
 `{{coin_object_id}}` and `{{gas_object_id}}` in the command above with
 an actual object ID, for example one obtained from [`GET
 /objects`](#get-objects) (from `objType` in the output of [`GET
-/objects`](#get-objects). You can see that all objects generated
+/objects`](#get-objects). You can see that all gas objects generated
 during genesis are of `Coin/SUI` type). For this call to work, objects
 represented by both `{{coin_object_id}}` and `{{gas_object_id}}` must
 be owned by the address represented by `{{owner_address}}`.
@@ -297,7 +265,7 @@ To learn more about what `args` are accepted in a Move call, refer to the [SuiJS
 
 ### POST /publish
 
-Publish Move module. 
+Publish Move module.
 
 ```shell
 curl --location --request POST $SUI_GATEWAY_HOST/publish \
@@ -311,7 +279,7 @@ curl --location --request POST $SUI_GATEWAY_HOST/publish \
 ```
 
 This endpoint will perform proper verification and linking to make
-sure the package is valid. If some modules have initializers, these initializers
+sure the package is valid. If some modules have [initializers](move.md#module-initializers), these initializers
 will also be executed in Move (which means new Move objects can be created in
 the process of publishing a Move package). Gas budget is required because of the
 need to execute module initializers.
@@ -320,14 +288,29 @@ You should replace `{{owner_address}}` in the
 command above with an actual address value, for example one obtained
 from [`GET /addresses`](#get-addresses). You should also replace `{{gas_object_id}}` in the command above with an actual object ID, for example one obtained from [`GET
 /objects`](#get-objects) (from `objType` in the output of [`GET
-/objects`](#get-objects). You can see that all objects generated
+/objects`](#get-objects). You can see that all gas objects generated
 during genesis are of `Coin/SUI` type). For this call to work, `{{gas_object_id}}` must
 be owned by the address represented by `{{owner_address}}`.
 
-To publish a Move module you also need `{{vector_of_compiled_modules}}`. To generate the value of this field you can use the `sui-move` command showcased in the [Move documentation](move.md#publishing-a-package). i.e. 
+To publish a Move module you also need `{{vector_of_compiled_modules}}`. To generate the value of this field you can use the `sui-move` command. The `sui-move` command supports printing the bytecodes as hex with the following option
 
-You can copy the ouputting hex representation of the compiled Move module into the 
-REST publish endpoint and generate a pacakge object ID that can be used in subsequent Move calls.
+```
+sui-move --path <move-module-path> build --dump-bytecode-as-hex
+```
+
+You can copy the outputting hex into the REST publish endpoint. i.e.
+
+```
+sui-move --path <insert/some/path/here> build --dump-bytecode-as-hex
+
+["a11ceb0b0400000009010008020814031c3704530a055d7207cf017408c302280aeb02050cf0024200000101010201030000020001040c01000101010c010001030302000005000100000602010000070304000008050100010507010100010a090a0102030b0b0c00020c0d01010801070e0f01000108100101000406050607080806090603070b010108000b02010800070803000107080303070b0101080003070803010b02010800030b0101080005070803010800020b02010900070b01010900010b01010800020900070803010b01010900010608030105020900050303070b01010900070803010b02010900020b0101090005074d414e4147454404436f696e085472616e73666572095478436f6e746578740b5472656173757279436170046275726e04696e6974046d696e740c7472616e736665725f6361700b64756d6d795f6669656c640f6372656174655f63757272656e63790673656e646572087472616e736665720000000000000000000000000000000000000000000000000000000000000000000000000000000200020109010001000001040b010b0038000201000000080b0912000a0038010c010b010b002e11063802020201000001050b010b000b023803020301000001040b000b0138040200"]
+Build Successful
+```
+
+You can copy the outputting hex representation of the compiled Move module into the
+REST publish endpoint.
+
+Below you can see a sample output of [POST /publish](#post-publish). One of the results of executing this command is generation of a package object representing the published Move code. An ID of the package object can be used as an argument for subsequent Move calls to functions defined in this package.
 
 ```
 {
@@ -389,7 +372,7 @@ address that is managed by this server. This command has no output.
 
 
 ## Postman setup
-The recommended way to test the Sui REST API is to use Postman. 
+The recommended way to test the Sui REST API is to use Postman.
 
 Postman is an API platform for building and using APIs. Postman provides an alternative solution to accessing APIs over issuing `curl` commands in a terminal. You can use variables rather than copy-pasting addresses and object IDs for each call in a terminal. We have provided a sample Postman runbook for you to use.
 

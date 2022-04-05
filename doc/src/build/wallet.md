@@ -142,7 +142,7 @@ instance (it will not return the command prompt).
 NOTE: For logs, set `RUST_LOG=debug` before invoking `sui start`.
 
 If you see errors when trying to start Sui network, particularly if you made some custom changes
- (e.g, 
+ (e.g,
 [customized wallet configuration](#wallet-configuration)), you should [recreate Sui genesis state](#recreating-genesis).
 
 ## Using the wallet
@@ -183,20 +183,20 @@ wallet --config /path/to/wallet/config/file
 
 The Sui interactive wallet supports the following shell functionality:
 * Command History
-  The `history` command can be used to print the interactive shell's command history; 
-  you can also use Up, Down or Ctrl-P, Ctrl-N to navigate previous or next matches from history. 
+  The `history` command can be used to print the interactive shell's command history;
+  you can also use Up, Down or Ctrl-P, Ctrl-N to navigate previous or next matches from history.
   History search is also supported using Ctrl-R.
 * Tab completion
   Tab completion is supported for all commands using Tab and Ctrl-I keys.
 * Environment variable substitution
-  The wallet shell will substitute inputs prefixed with `$` with environment variables, 
-  you can use the `env` command to print out the entire list of variables and 
-  use `echo` to preview the substitution without invoking any commands.  
+  The wallet shell will substitute inputs prefixed with `$` with environment variables,
+  you can use the `env` command to print out the entire list of variables and
+  use `echo` to preview the substitution without invoking any commands.
 
 ### Command line mode
 
-The wallet can also be used without the interactive shell, which can be useful if 
-you want to pipe the output of the wallet to another application or invoke wallet 
+The wallet can also be used without the interactive shell, which can be useful if
+you want to pipe the output of the wallet to another application or invoke wallet
 commands using scripts.
 
 ```shell
@@ -712,7 +712,7 @@ initializers](move.md#module-initializers) for more details on module
 initializers.
 
 Finally, we  see that the the gas object that was used to pay for
-publishing was updated as well. 
+publishing was updated as well.
 
 ## Customize genesis
 
@@ -769,4 +769,34 @@ pre-populate two gas objects for four newly generated accounts:
     { "gas_objects":[{},{}] }
   ]
 }
+```
+
+If you use any custom accounts in `genesis.conf` ensure you have a corresponding private key in
+`wallet.key`. Ensure `wallet.key` is in the working directory of the wallet. If you do not have the private key of the addresses specified you cannot use custom genesis. Never share your private keys, but for the `genesis.conf` example below you can use the following private key
+
+`genesis.conf`
+
+```
+{
+  "authorities": [
+    {},{},{},{}
+  ],
+  "accounts": [
+    {
+      "address": "09818AAC3EDF9CF9B006B70C36E7241768B26386",
+      "gas_objects": [
+        {
+          "object_id": "0000000000000000000000000000000000000003",
+          "gas_value": 10000000
+        }
+      ]
+    }
+  ]
+}
+```
+`wallet.key`
+```
+[
+  "WKk4nT2oyPKbFrFAyepT5wEsummWsA6qdhsqzc6CVC9fvTt3J2u6yy5WuW9B6OU3mkcyPC/4Axstn0BpIhzZNg==",
+]
 ```

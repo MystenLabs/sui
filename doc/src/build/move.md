@@ -767,30 +767,12 @@ At this point, however, the
 `sui-move` command does not support package publishing. In fact, it is
 not clear if it even makes sense to accommodate package publishing,
 which happens once per package creation, in the context of a unit
-testing framework. 
-
-Instead, one can use a sample Sui wallet to
+testing framework. Instead, one can use a sample Sui wallet to
 [publish](wallet.md#publish-packages) Move code and to
 [call](wallet.md#calling-move-code) it. See the
 [wallet documentation](wallet.md) for a description of how
 to publish the package we have [written](#writing-a-package) as as
 part of this tutorial.
-
-Another option is to use the [REST](rest-api.md) endpoints to [publish](rest-api.md#post-publish) 
-the Move code and then [call](rest-api.md#post-call) it. To do this the Sui REST Server requires a hex representation of the compiled modules you wish to publish. The `sui-move` command supports printing the bytecodes as hex with the following option
-
-```
-sui-move --path <move-module-path> build --dump-bytecode-as-hex
-```
-
-You can copy the ouputting hex into the REST publish endpoint. i.e.
-
-```
-sui-move --path sui_programmability/examples/fungible_tokens build --dump-bytecode-as-hex
-
-["a11ceb0b0400000009010008020814031c3704530a055d7207cf017408c302280aeb02050cf0024200000101010201030000020001040c01000101010c010001030302000005000100000602010000070304000008050100010507010100010a090a0102030b0b0c00020c0d01010801070e0f01000108100101000406050607080806090603070b010108000b02010800070803000107080303070b0101080003070803010b02010800030b0101080005070803010800020b02010900070b01010900010b01010800020900070803010b01010900010608030105020900050303070b01010900070803010b02010900020b0101090005074d414e4147454404436f696e085472616e73666572095478436f6e746578740b5472656173757279436170046275726e04696e6974046d696e740c7472616e736665725f6361700b64756d6d795f6669656c640f6372656174655f63757272656e63790673656e646572087472616e736665720000000000000000000000000000000000000000000000000000000000000000000000000000000200020109010001000001040b010b0038000201000000080b0912000a0038010c010b010b002e11063802020201000001050b010b000b023803020301000001040b000b0138040200"]
-Build Successful
-```
 
 ### Module initializers
 
