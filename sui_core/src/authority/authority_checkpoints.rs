@@ -19,7 +19,10 @@ use typed_store::{
 pub type CheckpointSequenceNumber = u64;
 
 #[derive(Clone)]
-pub struct CheckpointProposal {
+pub struct CheckpointProposal<K> {
+    /// Name of the authority
+    name: K,
+
     /// The sequence number of this proposal
     sequence_number: CheckpointSequenceNumber,
 
@@ -31,13 +34,17 @@ pub struct CheckpointProposal {
     transactions: Vec<TransactionDigest>,
 }
 
-impl CheckpointProposal {
+impl<K> CheckpointProposal<K>
+where
+    K: Clone,
+{
     /// Create a proposal for a checkpoint at a partiular height
     /// This contains a sequence number, waypoint and a list of
     /// proposed trasnactions.
     /// TOOD: Add an identifier for the proposer, probably
     ///       an AuthorityName.
     pub fn new(
+        name: K,
         sequence_number: CheckpointSequenceNumber,
         transactions: Vec<TransactionDigest>,
     ) -> Self {
@@ -47,6 +54,7 @@ impl CheckpointProposal {
         });
 
         CheckpointProposal {
+            name,
             sequence_number,
             waypoint,
             transactions,
@@ -67,15 +75,10 @@ impl CheckpointProposal {
     /// TODO: down the line we can include other methods to get diffs
     /// line MerkleTrees or IBLT filters that do not require O(n) download
     /// of both proposals.
-    pub fn diff_with<K>(
+    pub fn diff_with(
         &self,
-        me: K,
-        other: K,
-        other_proposal: &CheckpointProposal,
-    ) -> WaypointDiff<K, TransactionDigest>
-    where
-        K: Clone,
-    {
+        other_proposal: &CheckpointProposal<K>,
+    ) -> WaypointDiff<K, TransactionDigest> {
         let all_elements = self
             .transactions
             .iter()
@@ -88,17 +91,17 @@ impl CheckpointProposal {
         let iter_missing_ot = all_elements.difference(&other_transactions).map(|x| **x);
 
         WaypointDiff::new(
-            me,
+            self.name.clone(),
             self.waypoint.clone(),
             iter_missing_me,
-            other,
+            other_proposal.name.clone(),
             other_proposal.waypoint.clone(),
             iter_missing_ot,
         )
     }
 }
 
-pub struct CheckpointStore {
+pub struct CheckpointStore<K> {
     /// The list of all transactions that are checkpointed mapping to the checkpoint
     /// sequence number they were assigned to.
     pub transactions_to_checkpoint:
@@ -125,11 +128,14 @@ pub struct CheckpointStore {
     /// this sequence number. At this point the unprocessed_transactions sequence
     /// should be empty. It is none if there is no active proposal. We also include here
     /// the proposal, although we could re-create it from the database.
-    proposal_checkpoint: Option<(TxSequenceNumber, CheckpointProposal)>,
+    proposal_checkpoint: Option<(TxSequenceNumber, CheckpointProposal<K>)>,
 }
 
-impl CheckpointStore {
-    pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> CheckpointStore {
+impl<K> CheckpointStore<K>
+where
+    K: Clone,
+{
+    pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> CheckpointStore<K> {
         let mut options = db_options.unwrap_or_default();
 
         /* The table cache is locked for updates and this determines the number
@@ -182,7 +188,7 @@ impl CheckpointStore {
     }
 
     /// Set the next checkpoint proposal.
-    pub fn set_proposal(&mut self) -> Result<CheckpointProposal, SuiError> {
+    pub fn set_proposal(&mut self, name: K) -> Result<CheckpointProposal<K>, SuiError> {
         // Check that:
         // - there is no current proposal.
         // - there are no unprocessed transactions.
@@ -213,7 +219,7 @@ impl CheckpointStore {
         let next_local_tx_sequence = self.extra_transactions.values().max().unwrap() + 1;
         let transactions: Vec<_> = self.extra_transactions.keys().collect();
 
-        let ckp = CheckpointProposal::new(sequence_number, transactions);
+        let ckp = CheckpointProposal::new(name, sequence_number, transactions);
 
         self.proposal_checkpoint = Some((next_local_tx_sequence, ckp.clone()));
 
@@ -221,7 +227,7 @@ impl CheckpointStore {
     }
 
     /// Get the current proposal or error if there is no current proposal
-    pub fn get_proposal(&self) -> Result<CheckpointProposal, SuiError> {
+    pub fn get_proposal(&self) -> Result<CheckpointProposal<K>, SuiError> {
         self.proposal_checkpoint
             .as_ref()
             .ok_or_else(|| SuiError::GenericAuthorityError {
@@ -469,7 +475,10 @@ mod tests {
     use std::{collections::HashSet, env, fs, path::PathBuf};
     use sui_types::{base_types::ObjectID, waypoint::GlobalCheckpoint};
 
-    fn random_ckpoint_store() -> (PathBuf, CheckpointStore) {
+    fn random_ckpoint_store<K>() -> (PathBuf, CheckpointStore<K>)
+    where
+        K: Clone,
+    {
         let dir = env::temp_dir();
         let path = dir.join(format!("SC_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
@@ -484,7 +493,7 @@ mod tests {
 
     #[test]
     fn make_checkpoint_db() {
-        let (_, mut cps) = random_ckpoint_store();
+        let (_, mut cps) = random_ckpoint_store::<u64>();
 
         let t1 = TransactionDigest::random();
         let t2 = TransactionDigest::random();
@@ -527,10 +536,10 @@ mod tests {
 
     #[test]
     fn make_proposals() {
-        let (_, mut cps1) = random_ckpoint_store();
-        let (_, mut cps2) = random_ckpoint_store();
-        let (_, mut cps3) = random_ckpoint_store();
-        let (_, mut cps4) = random_ckpoint_store();
+        let (_, mut cps1) = random_ckpoint_store::<u64>();
+        let (_, mut cps2) = random_ckpoint_store::<u64>();
+        let (_, mut cps3) = random_ckpoint_store::<u64>();
+        let (_, mut cps4) = random_ckpoint_store::<u64>();
 
         let t1 = TransactionDigest::random();
         let t2 = TransactionDigest::random();
@@ -551,9 +560,9 @@ mod tests {
         cps4.update_processed_transactions(&[(1, t4), (2, t5)])
             .unwrap();
 
-        let p1 = cps1.set_proposal().unwrap();
-        let p2 = cps2.set_proposal().unwrap();
-        let p3 = cps3.set_proposal().unwrap();
+        let p1 = cps1.set_proposal(1).unwrap();
+        let p2 = cps2.set_proposal(2).unwrap();
+        let p3 = cps3.set_proposal(3).unwrap();
 
         let ckp_items: Vec<_> = p1
             .transactions
@@ -604,20 +613,20 @@ mod tests {
         cps4.update_processed_transactions(&[(1, t4), (2, t5)])
             .unwrap();
 
-        let p1 = cps1.set_proposal().unwrap();
-        let p2 = cps2.set_proposal().unwrap();
-        let p3 = cps3.set_proposal().unwrap();
-        let p4 = cps4.set_proposal().unwrap();
+        let p1 = cps1.set_proposal(1).unwrap();
+        let p2 = cps2.set_proposal(2).unwrap();
+        let p3 = cps3.set_proposal(3).unwrap();
+        let p4 = cps4.set_proposal(4).unwrap();
 
-        let diff12 = p1.diff_with(1, 2, &p2);
-        let diff23 = p2.diff_with(2, 3, &p3);
+        let diff12 = p1.diff_with(&p2);
+        let diff23 = p2.diff_with(&p3);
 
         let mut global = GlobalCheckpoint::<i32, TransactionDigest>::new(0);
         global.insert(diff12.clone()).unwrap();
         global.insert(diff23).unwrap();
 
         // P4 proposal not selected
-        let diff41 = p4.diff_with(4, 1, &p1);
+        let diff41 = p4.diff_with(&p1);
         let all_items4 = global
             .checkpoint_items(diff41, p4.transactions.iter().cloned().collect())
             .unwrap();
