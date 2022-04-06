@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Transaction } from '../static/TransactionTypes';
 import { tryGetRpcSetting } from './rpcSetting';
 
 export class SuiRpcClient {
@@ -129,19 +130,17 @@ export interface TransactionKind {
     Call?: CallTransactionResponse;
 }
 
-// gas object id, gas used, ???
-export type GasPayment = [string, number, number[]]
+type PublicKeyBytes = number[];
+type AuthoritySignature = Signature;
 
-export interface TransactionData {
-    gas_payment: GasPayment;
-    kind: TransactionKind;
-    sender: AddressBytes;
+export interface AuthoritySignInfo {
+    authority: PublicKeyBytes,
+    signature: AuthoritySignature,
 }
 
-export interface Transaction {
-    data: TransactionData;
-    signature: Signature;
-}
+// gas object id, gas used, signature?
+export type GasPayment = [string, number, Signature]
+
 
 export interface Certificate {
     signatures: Signature[][];
