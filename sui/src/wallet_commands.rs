@@ -31,7 +31,7 @@ use sui_types::object::{Object, ObjectRead};
 
 use crate::config::{Config, PersistedConfig, WalletConfig};
 use crate::keystore::Keystore;
-use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
+use sui_core::sui_json::{resolve_move_function_args, SuiJsonValue};
 
 #[derive(StructOpt)]
 #[structopt(name = "", rename_all = "kebab-case")]
@@ -314,9 +314,8 @@ impl WalletCommands {
                         function.to_owned(),
                         type_args.clone(),
                         gas_obj_ref,
-                        object_args_refs,
                         vec![],
-                        pure_args,
+                        args.clone(),
                         *gas_budget,
                     )
                     .await?;

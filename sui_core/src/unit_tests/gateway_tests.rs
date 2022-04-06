@@ -17,6 +17,7 @@ use futures::channel::mpsc::{channel, Receiver};
 use futures::lock::Mutex;
 use futures::SinkExt;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
+use serde_json::{Number, Value};
 use signature::Signer;
 use typed_store::Map;
 
@@ -32,6 +33,7 @@ use sui_types::object::{Data, Object, Owner, GAS_VALUE_FOR_TESTING};
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::authority_client::BUFFER_SIZE;
 use crate::gateway_state::{GatewayAPI, GatewayState};
+use crate::sui_json::SuiJsonValue;
 
 use super::*;
 
@@ -802,10 +804,9 @@ async fn test_move_calls_object_create() {
             .compute_object_reference();
 
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
-    let pure_args = vec![
-        object_value.to_le_bytes().to_vec(),
-        bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
-    ];
+    let object_value = SuiJsonValue::new(Value::Number(Number::from(object_value))).unwrap();
+    let sender_value = SuiJsonValue::new(Value::String(format!("0x{}", &sender))).unwrap();
+    let args = vec![object_value, sender_value];
     let data = client
         .move_call(
             sender,
@@ -814,9 +815,8 @@ async fn test_move_calls_object_create() {
             ident_str!("create").to_owned(),
             Vec::new(),
             gas_object_ref,
-            Vec::new(),
             vec![],
-            pure_args,
+            args,
             GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
         )
         .await
@@ -870,10 +870,10 @@ async fn test_move_calls_object_transfer() {
             .compute_object_reference();
 
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
-    let pure_args = vec![
-        object_value.to_le_bytes().to_vec(),
-        bcs::to_bytes(&AccountAddress::from(addr1)).unwrap(),
-    ];
+    let object_value = SuiJsonValue::new(Value::Number(Number::from(object_value))).unwrap();
+    let sender_value = SuiJsonValue::new(Value::String(format!("0x{}", &addr1))).unwrap();
+    let args = vec![object_value, sender_value];
+
     let data = client
         .move_call(
             addr1,
@@ -882,9 +882,8 @@ async fn test_move_calls_object_transfer() {
             ident_str!("create").to_owned(),
             Vec::new(),
             gas_object_ref,
-            Vec::new(),
             vec![],
-            pure_args,
+            args,
             GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
         )
         .await
@@ -905,7 +904,9 @@ async fn test_move_calls_object_transfer() {
     let (new_obj_ref, _) = transaction_effects.created[0];
     gas_object_ref = client_object(&mut client, gas_object_ref.0).await.0;
 
-    let pure_args = vec![bcs::to_bytes(&AccountAddress::from(addr2)).unwrap()];
+    let addr2_value = SuiJsonValue::new(Value::String(format!("0x{}", &addr2))).unwrap();
+    let new_obj_value = SuiJsonValue::new(Value::String(format!("0x{}", &new_obj_ref.0))).unwrap();
+    let args = vec![new_obj_value, addr2_value];
     let data = client
         .move_call(
             addr1,
@@ -914,9 +915,8 @@ async fn test_move_calls_object_transfer() {
             ident_str!("transfer").to_owned(),
             Vec::new(),
             gas_object_ref,
-            vec![new_obj_ref],
             vec![],
-            pure_args,
+            args,
             GAS_VALUE_FOR_TESTING / 2,
         )
         .await
@@ -974,10 +974,10 @@ async fn test_move_calls_freeze_object() {
             .compute_object_reference();
 
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
-    let pure_args = vec![
-        object_value.to_le_bytes().to_vec(),
-        bcs::to_bytes(&AccountAddress::from(addr1)).unwrap(),
-    ];
+    let object_value = SuiJsonValue::new(Value::Number(Number::from(object_value))).unwrap();
+    let sender_value = SuiJsonValue::new(Value::String(format!("0x{}", &addr1))).unwrap();
+    let args = vec![object_value, sender_value];
+
     let data = client
         .move_call(
             addr1,
@@ -986,9 +986,8 @@ async fn test_move_calls_freeze_object() {
             ident_str!("create").to_owned(),
             Vec::new(),
             gas_object_ref,
-            Vec::new(),
             vec![],
-            pure_args,
+            args,
             GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
         )
         .await
@@ -1008,6 +1007,9 @@ async fn test_move_calls_freeze_object() {
     let new_obj_ref = client_object(&mut client, new_obj_ref.0).await.0;
     gas_object_ref = client_object(&mut client, gas_object_ref.0).await.0;
 
+    let new_obj_value = SuiJsonValue::new(Value::String(format!("0x{}", &new_obj_ref.0))).unwrap();
+    let args = vec![new_obj_value];
+
     let data = client
         .move_call(
             addr1,
@@ -1016,9 +1018,8 @@ async fn test_move_calls_freeze_object() {
             ident_str!("freeze_object").to_owned(),
             Vec::new(),
             gas_object_ref,
-            vec![new_obj_ref],
             vec![],
-            vec![],
+            args,
             GAS_VALUE_FOR_TESTING / 2,
         )
         .await
@@ -1077,10 +1078,10 @@ async fn test_move_calls_object_delete() {
             .compute_object_reference();
 
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
-    let pure_args = vec![
-        object_value.to_le_bytes().to_vec(),
-        bcs::to_bytes(&AccountAddress::from(addr1)).unwrap(),
-    ];
+    let object_value = SuiJsonValue::new(Value::Number(Number::from(object_value))).unwrap();
+    let sender_value = SuiJsonValue::new(Value::String(format!("0x{}", addr1))).unwrap();
+    let args = vec![object_value, sender_value];
+
     let data = client
         .move_call(
             addr1,
@@ -1089,9 +1090,8 @@ async fn test_move_calls_object_delete() {
             ident_str!("create").to_owned(),
             Vec::new(),
             gas_object_ref,
-            Vec::new(),
             vec![],
-            pure_args,
+            args,
             GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
         )
         .await
@@ -1107,6 +1107,8 @@ async fn test_move_calls_object_delete() {
     let (_, transaction_effects) = call_response.unwrap();
     // Get the object created from the call
     let (new_obj_ref, _) = transaction_effects.created[0];
+    let new_obj_value = SuiJsonValue::new(Value::String(format!("0x{}", &new_obj_ref.0))).unwrap();
+    let args = vec![new_obj_value];
 
     gas_object_ref = client_object(&mut client, gas_object_ref.0).await.0;
 
@@ -1118,9 +1120,8 @@ async fn test_move_calls_object_delete() {
             ident_str!("delete").to_owned(),
             Vec::new(),
             gas_object_ref,
-            vec![new_obj_ref],
             vec![],
-            Vec::new(),
+            args,
             GAS_VALUE_FOR_TESTING / 2,
         )
         .await
@@ -1225,6 +1226,11 @@ async fn test_module_publish_and_call_good() {
     // Confirm we own this object
     assert_eq!(tres_cap_obj_info.owner, gas_object.owner);
 
+    let object_value = SuiJsonValue::new(Value::Number(Number::from(42u64))).unwrap();
+    let new_obj_value =
+        SuiJsonValue::new(Value::String(format!("0x{}", &tres_cap_obj_info.id()))).unwrap();
+    let args = vec![new_obj_value, object_value];
+
     //Try to call a function in TrustedCoin module
     let data = client
         .move_call(
@@ -1234,9 +1240,8 @@ async fn test_module_publish_and_call_good() {
             ident_str!("mint").to_owned(),
             vec![],
             gas_object_ref,
-            vec![tres_cap_obj_info.compute_object_reference()],
             vec![],
-            vec![42u64.to_le_bytes().to_vec()],
+            args,
             1000,
         )
         .await

@@ -572,18 +572,6 @@ async fn handle_move_call(
     // Fetch the object info for the gas obj
     let (gas_obj_ref, _, _) = get_object_info(gateway, gas_object_id).await?;
 
-    // Fetch the objects for the object args
-    let mut object_args_refs = Vec::new();
-    for obj_id in call_params.object_arguments {
-        let (object_ref, _, _) = get_object_info(gateway, ObjectID::try_from(obj_id)?).await?;
-        object_args_refs.push(object_ref);
-    }
-    let pure_arguments = call_params
-        .pure_arguments
-        .iter()
-        .map(base64::decode)
-        .collect::<Result<_, _>>()?;
-
     let shared_object_arguments = call_params
         .shared_object_arguments
         .into_iter()
@@ -598,9 +586,8 @@ async fn handle_move_call(
             function.to_owned(),
             type_args.clone(),
             gas_obj_ref,
-            object_args_refs,
             shared_object_arguments,
-            pure_arguments,
+            call_params.arguments,
             gas_budget,
         )
         .await

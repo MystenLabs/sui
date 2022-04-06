@@ -14,7 +14,6 @@ pub mod keystore;
 pub mod rest_gateway;
 pub mod shell;
 pub mod sui_commands;
-pub mod sui_json;
 pub mod wallet_commands;
 
 const SUI_DIR: &str = ".sui";

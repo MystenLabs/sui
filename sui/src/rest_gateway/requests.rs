@@ -4,6 +4,7 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use sui_core::sui_json::SuiJsonValue;
 
 /// Request containing the information needed to create a split coin transaction.
 #[derive(Deserialize, Serialize, JsonSchema)]
@@ -63,13 +64,11 @@ pub struct CallRequest {
     /// Optional; The argument types to be parsed
     pub type_arguments: Option<Vec<String>>,
     /// Required; Byte representation of the arguments, Base64 encoded
-    pub pure_arguments: Vec<String>,
+    pub arguments: Vec<SuiJsonValue>,
     /// Required; Hex code as string representing the gas object id
     pub gas_object_id: String,
     /// Required; Gas budget required as a cap for gas usage
     pub gas_budget: u64,
-    /// Required; Object arguments
-    pub object_arguments: Vec<String>,
     /// Required; Share object arguments
     pub shared_object_arguments: Vec<String>,
 }

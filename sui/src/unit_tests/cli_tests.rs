@@ -19,10 +19,10 @@ use sui::config::{
 use sui::gateway::{GatewayConfig, GatewayType};
 use sui::keystore::KeystoreType;
 use sui::sui_commands::SuiCommand;
-use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use sui_core::gateway_state::gateway_responses::SwitchResponse;
+use sui_core::sui_json::SuiJsonValue;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::get_key_pair;
 use sui_types::gas_coin::GasCoin;

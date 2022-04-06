@@ -27,9 +27,12 @@ use tracing::{error, Instrument};
 
 use std::path::PathBuf;
 
+use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
+use futures::future::join_all;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
+use sui_types::move_package::resolve_and_type_check;
 
 use self::gateway_responses::*;
 
@@ -111,9 +114,8 @@ pub trait GatewayAPI {
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         gas_object_ref: ObjectRef,
-        object_arguments: Vec<ObjectRef>,
         shared_object_arguments: Vec<ObjectID>,
-        pure_arguments: Vec<Vec<u8>>,
+        arguments: Vec<SuiJsonValue>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -600,11 +602,40 @@ where
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         gas_object_ref: ObjectRef,
-        object_arguments: Vec<ObjectRef>,
         shared_object_arguments: Vec<ObjectID>,
-        pure_arguments: Vec<Vec<u8>>,
+        arguments: Vec<SuiJsonValue>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
+        let package = self.get_object(&package_object_ref.0).await?;
+        let (object_ids, pure_arguments) =
+            resolve_move_function_args(&package, module.clone(), function.clone(), arguments)?;
+
+        let input_objects = object_ids
+            .iter()
+            .map(|id| self.get_object(id))
+            .collect::<Vec<_>>();
+
+        let input_objects = join_all(input_objects)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let object_args_refs = input_objects
+            .iter()
+            .map(|obj| obj.compute_object_reference())
+            .collect::<Vec<_>>();
+
+        // Pass in the objects for a deeper check
+        // We can technically move this to impl MovePackage
+        resolve_and_type_check(
+            &package,
+            &module,
+            &function,
+            &type_arguments,
+            input_objects,
+            pure_arguments.clone(),
+        )?;
+
         let data = TransactionData::new_move_call(
             signer,
             package_object_ref,
@@ -612,7 +643,7 @@ where
             function,
             type_arguments,
             gas_object_ref,
-            object_arguments,
+            object_args_refs,
             shared_object_arguments,
             pure_arguments,
             gas_budget,

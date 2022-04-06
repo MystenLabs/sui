@@ -14,6 +14,7 @@ use serde_json::json;
 
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::GatewayAPI;
+use sui_core::sui_json::SuiJsonValue;
 use sui_types::base_types::{encode_bytes_hex, ObjectID, ObjectRef, SuiAddress};
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::object::ObjectRead;
@@ -94,9 +95,8 @@ impl GatewayAPI for RestGatewayClient {
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         gas_object_ref: ObjectRef,
-        object_arguments: Vec<ObjectRef>,
         shared_object_arguments: Vec<ObjectID>,
-        pure_arguments: Vec<Vec<u8>>,
+        arguments: Vec<SuiJsonValue>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
         let type_arg = type_arguments
@@ -104,17 +104,10 @@ impl GatewayAPI for RestGatewayClient {
             .map(|arg| arg.to_string())
             .collect::<Vec<_>>();
 
-        let object_arguments = object_arguments
-            .iter()
-            .map(|(object_id, _, _)| object_id.to_hex())
-            .collect();
-
         let shared_object_arguments = shared_object_arguments
             .iter()
             .map(|object_id| object_id.to_hex())
             .collect();
-
-        let pure_arguments = pure_arguments.iter().map(base64::encode).collect();
 
         let request = CallRequest {
             signer: encode_bytes_hex(&signer),
@@ -122,10 +115,9 @@ impl GatewayAPI for RestGatewayClient {
             module: module.into_string(),
             function: function.into_string(),
             type_arguments: Some(type_arg),
-            pure_arguments,
+            arguments,
             gas_object_id: gas_object_ref.0.to_hex(),
             gas_budget,
-            object_arguments,
             shared_object_arguments,
         };
         let tx: TransactionBytes = self.post("move_call", request).await?;
