@@ -129,8 +129,11 @@ export interface TransactionKind {
     Call?: CallTransactionResponse;
 }
 
+// gas object id, gas used, ???
+export type GasPayment = [string, number, number[]]
+
 export interface TransactionData {
-    gas_payment: any[];
+    gas_payment: GasPayment;
     kind: TransactionKind;
     sender: AddressBytes;
 }
