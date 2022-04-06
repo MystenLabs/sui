@@ -732,9 +732,6 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         .is_some());
 }
 
-// TODO: re-introduce test when issue fixed
-// https://github.com/MystenLabs/sui/issues/1232
-#[ignore]
 #[tokio::test]
 async fn test_handle_confirmation_transaction_ok() {
     let (sender, sender_key) = get_key_pair();
