@@ -493,7 +493,7 @@ async fn execute_transaction(
 
     let response: Result<_, anyhow::Error> = async {
         let data = base64::decode(response.tx_bytes)?;
-        let data = TransactionData::from_signable_bytes(data)?;
+        let data = TransactionData::from_signable_bytes(&data)?;
 
         let mut signature_bytes = base64::decode(response.signature)?;
         let mut pub_key_bytes = base64::decode(response.pub_key)?;
