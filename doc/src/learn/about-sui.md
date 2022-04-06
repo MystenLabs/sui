@@ -46,7 +46,7 @@ Sui scales horizontally to meet the demands of applications. Network capacity gr
 
 By design, Sui authorities (nodes) can effectively scale the network throughput infinitely to meet the demand of builders and creators. We believe Sui can do for web3 what broadband internet did for web2.
 
-Note: As of Mar 19, 2022, an unoptimized single-worker Sui authority running on an 8-core M1 Macbook Pro can execute and commit 120,000 token transfer transactions per second (TPS). Throughput scales linearly with the number of cores–the same machine processes 25,000 TPS in a single core configuration.
+> **Note:** As of Mar. 19, 2022, an unoptimized single-worker Sui authority running on an 8-core M1 Macbook Pro can execute and commit 120,000 token transfer transactions per second (TPS). Throughput scales linearly with the number of cores–the same machine processes 25,000 TPS in a single core configuration.
 
 This experiment uses a configuration where each client submits a batch of 100 transactions (i.e., transfers to 100 distinct recipients) with a single signature. This configuration captures the anticipated usage pattern of a highly scalable blockchain--e.g., a custodial wallet or game server operating at scale will likely need to submit hundreds or thousands of on-chain transactions per second. With a batch size of 1, an authority running on the same machine can process 20,000 TPS with 8 cores, and exhibits the same linear growth in throughput as more cores are added.
 
