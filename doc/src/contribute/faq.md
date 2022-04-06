@@ -1,6 +1,8 @@
-# Sui Developer FAQ
+---
+title: Sui Frequently Asked Questions
+---
 
-This page contains answers to frequently asked questions about Sui and Mysten Labs. 
+This page contains answers to frequently asked questions (FAQs) about Sui and Mysten Labs. 
 Ask more in [Discord](https://discord.gg/mysten), see where we are headed in our
 [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap), and
 find full details in our
