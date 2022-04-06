@@ -18,7 +18,6 @@ Use these online resources:
 
 * Sui Website: [https://sui.io/](https://sui.io/)
 * Sui Developer Portal: [https://docs.sui.io/](https://docs.sui.io/)
-* Move Programming Language: [https://docs.sui.io/build/move](../build/move.md)
 * Sui Smart Contract White Paper: [https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) 
 * SDK reference: [https://app.swaggerhub.com/apis/MystenLabs/sui-api/](https://app.swaggerhub.com/apis/MystenLabs/sui-api/)  
 
