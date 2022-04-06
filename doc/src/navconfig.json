@@ -108,6 +108,7 @@
         "label": "Frequently Asked Questions",
         "fileName": "contribute/faq"
       },
+      {
         "label": "Logging",
         "fileName": "contribute/observability"
       },
