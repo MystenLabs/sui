@@ -9,7 +9,7 @@ use std::io;
 use sui_types::crypto::PublicKeyBytes;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 
-use sui_types::batch::{SignedBatch, TxSequenceNumber, UpdateItem};
+use sui_types::batch::{AuthorityBatch, SignedBatch, UpdateItem};
 use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
@@ -175,6 +175,7 @@ impl<C> SafeClient<C> {
         request: BatchInfoRequest,
         signed_batch: &SignedBatch,
     ) -> SuiResult {
+        // check the signature of the batch
         signed_batch
             .signature
             .check(signed_batch, signed_batch.authority)?;
@@ -188,18 +189,23 @@ impl<C> SafeClient<C> {
                 authority: self.address
             }
         );
-        // todo: ensure signature valid over the set of transactions in the batch
-        // todo: ensure signature valid over the hash of the previous batch
-        Ok(())
-    }
 
-    fn check_update_item_transaction_response(
-        &self,
-        _request: BatchInfoRequest,
-        _seq: &TxSequenceNumber,
-        _digest: &TransactionDigest,
-    ) -> SuiResult {
-        todo!();
+        // reconstruct the batch and make sure the constructed digest matches the provided one
+        let provided_digest = signed_batch.batch.transactions_digest;
+
+        let reconstructed_batch = AuthorityBatch::make_next_with_previous_digest(
+            Some(provided_digest),
+            &signed_batch.batch.transaction_batch.0,
+        );
+        let computed_digest = reconstructed_batch.digest();
+
+        fp_ensure!(
+            provided_digest == computed_digest,
+            SuiError::ByzantineAuthoritySuspicion {
+                authority: self.address
+            }
+        );
+        Ok(())
     }
 
     /// This function is used by the higher level authority logic to report an
@@ -304,34 +310,39 @@ where
             .handle_batch_stream(request.clone())
             .await?;
 
+        let seq_requested = request.end - request.start;
+        let mut seq_to_be_returned = seq_requested as usize;
+        // check for overflow
+        if seq_requested > usize::MAX as u64 {
+            seq_to_be_returned = usize::MAX;
+        }
+
         let client = self.clone();
-        let stream = Box::pin(batch_info_items.then(move |batch_info_item| {
-            let req_clone = request.clone();
-            let client = client.clone();
-            async move {
-                match &batch_info_item {
-                    Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
-                        if let Err(err) =
-                            client.check_update_item_batch_response(req_clone, signed_batch)
-                        {
-                            client.report_client_error(err.clone());
-                            return Err(err);
+        let stream = Box::pin(
+            batch_info_items
+                .then(move |batch_info_item| {
+                    let req_clone = request.clone();
+                    let client = client.clone();
+                    async move {
+                        match &batch_info_item {
+                            Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
+                                if let Err(err) =
+                                    client.check_update_item_batch_response(req_clone, signed_batch)
+                                {
+                                    client.report_client_error(err.clone());
+                                    return Err(err);
+                                }
+                                batch_info_item
+                            }
+                            Ok(BatchInfoResponseItem(UpdateItem::Transaction((_seq, _digest)))) => {
+                                batch_info_item
+                            }
+                            Err(e) => Err(e.clone()),
                         }
-                        batch_info_item
                     }
-                    Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest)))) => {
-                        if let Err(err) =
-                            client.check_update_item_transaction_response(req_clone, seq, digest)
-                        {
-                            client.report_client_error(err.clone());
-                            return Err(err);
-                        }
-                        batch_info_item
-                    }
-                    Err(e) => Err(e.clone()),
-                }
-            }
-        }));
+                })
+                .take(seq_to_be_returned),
+        );
         Ok(Box::pin(stream))
     }
 }

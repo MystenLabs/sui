@@ -17,7 +17,7 @@ pub enum UpdateItem {
 pub type BatchDigest = [u8; 32];
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
-pub struct TransactionBatch(Vec<(TxSequenceNumber, TransactionDigest)>);
+pub struct TransactionBatch(pub Vec<(TxSequenceNumber, TransactionDigest)>);
 impl BcsSignable for TransactionBatch {}
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Default, Debug, Serialize, Deserialize)]
@@ -35,8 +35,11 @@ pub struct AuthorityBatch {
     /// The digest of the previous block, if there is one
     pub previous_digest: Option<BatchDigest>,
 
-    // The digest of all transactions digests in this batch
+    /// The digest of all transactions digests in this batch
     pub transactions_digest: [u8; 32],
+
+    /// The set of transactions in this batch
+    pub transaction_batch: TransactionBatch,
 }
 
 impl BcsSignable for AuthorityBatch {}
@@ -49,8 +52,8 @@ impl AuthorityBatch {
     /// The first batch for any authority indexes at zero
     /// and has zero length.
     pub fn initial() -> AuthorityBatch {
-        let to_hash = TransactionBatch(Vec::new());
-        let transactions_digest = sha3_hash(&to_hash);
+        let transaction_batch = TransactionBatch(Vec::new());
+        let transactions_digest = sha3_hash(&transaction_batch);
 
         AuthorityBatch {
             next_sequence_number: 0,
@@ -58,6 +61,7 @@ impl AuthorityBatch {
             size: 0,
             previous_digest: None,
             transactions_digest,
+            transaction_batch,
         }
     }
 
@@ -73,8 +77,8 @@ impl AuthorityBatch {
         let initial_sequence_number = transaction_vec[0].0 as u64;
         let next_sequence_number = (transaction_vec[transaction_vec.len() - 1].0 + 1) as u64;
 
-        let to_hash = TransactionBatch(transaction_vec);
-        let transactions_digest = sha3_hash(&to_hash);
+        let transaction_batch = TransactionBatch(transaction_vec);
+        let transactions_digest = sha3_hash(&transaction_batch);
 
         AuthorityBatch {
             next_sequence_number,
@@ -82,6 +86,32 @@ impl AuthorityBatch {
             size: transactions.len() as u64,
             previous_digest: Some(previous_batch.digest()),
             transactions_digest,
+            transaction_batch,
+        }
+    }
+
+    /// Make a batch, containing some transactions, and following the previous
+    /// batch, using the digest of the previous batch.
+    pub fn make_next_with_previous_digest(
+        previous_batch_digest: Option<BatchDigest>,
+        transactions: &[(TxSequenceNumber, TransactionDigest)],
+    ) -> AuthorityBatch {
+        let transaction_vec = transactions.to_vec();
+        debug_assert!(!transaction_vec.is_empty());
+
+        let initial_sequence_number = transaction_vec[0].0 as u64;
+        let next_sequence_number = (transaction_vec[transaction_vec.len() - 1].0 + 1) as u64;
+
+        let transaction_batch = TransactionBatch(transaction_vec);
+        let transactions_digest = sha3_hash(&transaction_batch);
+
+        AuthorityBatch {
+            next_sequence_number,
+            initial_sequence_number,
+            size: transactions.len() as u64,
+            previous_digest: previous_batch_digest,
+            transactions_digest,
+            transaction_batch,
         }
     }
 }
