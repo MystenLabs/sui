@@ -274,7 +274,7 @@ Object:
     - previous_transaction:
         TYPENAME: TransactionDigest
 ObjectDigest:
-  NEWTYPESTRUCT: STR
+  NEWTYPESTRUCT: BYTES
 ObjectFormatOptions:
   STRUCT:
     - include_types: BOOL
@@ -434,7 +434,7 @@ StructTag:
         SEQ:
           TYPENAME: TypeTag
 SuiAddress:
-  NEWTYPESTRUCT: STR
+  NEWTYPESTRUCT: BYTES
 SuiError:
   ENUM:
     0:
@@ -768,7 +768,7 @@ TransactionData:
           - TYPENAME: ObjectDigest
     - gas_budget: U64
 TransactionDigest:
-  NEWTYPESTRUCT: STR
+  NEWTYPESTRUCT: BYTES
 TransactionEffects:
   STRUCT:
     - status:
