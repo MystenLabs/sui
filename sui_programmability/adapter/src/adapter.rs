@@ -5,7 +5,7 @@ use anyhow::Result;
 
 use crate::bytecode_rewriter::ModuleHandleRewriter;
 use move_binary_format::{
-    access::ModuleAccess, errors::PartialVMResult, file_format::CompiledModule, normalized::Type,
+    access::ModuleAccess, errors::PartialVMResult, file_format::CompiledModule,
 };
 use sui_framework::EventType;
 use sui_types::{
@@ -27,8 +27,9 @@ use move_core_types::{
     identifier::Identifier,
     language_storage::{ModuleId, TypeTag},
     resolver::{ModuleResolver, ResourceResolver},
+    value::MoveTypeLayout,
 };
-use move_vm_runtime::{native_functions::NativeFunctionTable, session::ExecutionResult};
+use move_vm_runtime::{native_functions::NativeFunctionTable, session::SerializedReturnValues};
 use std::{
     borrow::Borrow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -125,7 +126,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         args,
         mutable_ref_objects,
         by_value_objects,
-        return_types,
+        return_types: _,
     } = resolve_and_type_check(
         &cached_package,
         module,
@@ -149,7 +150,6 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         object_owner_map,
         gas_status,
         ctx,
-        return_types,
     )
 }
 
@@ -171,27 +171,30 @@ fn execute_internal<
     object_owner_map: HashMap<SuiAddress, SuiAddress>,
     gas_status: &mut SuiGasStatus, // gas status for the current call operation
     ctx: &mut TxContext,
-    return_types: Vec<Type>,
 ) -> SuiResult<Vec<CallResult>> {
-    let session = vm.movevm.new_session(state_view);
-    match session.execute_function_for_effects(
-        module_id,
-        function,
-        type_args,
-        args,
-        gas_status.get_move_gas_status(),
-    ) {
-        ExecutionResult::Success {
-            change_set,
-            events,
-            return_values,
-            mut mutable_ref_values,
-            gas_used: _,
-        } => {
+    let mut session = vm.movevm.new_session(state_view);
+    let result = session
+        .execute_function_bypass_visibility(
+            module_id,
+            function,
+            type_args,
+            args,
+            gas_status.get_move_gas_status(),
+        )
+        .and_then(|ret| Ok((ret, session.finish()?)));
+
+    match result {
+        Ok((
+            SerializedReturnValues {
+                mut mutable_reference_outputs,
+                return_values,
+            },
+            (change_set, events),
+        )) => {
             // Sui Move programs should never touch global state, so ChangeSet should be empty
             debug_assert!(change_set.accounts().is_empty());
             // Input ref parameters we put in should be the same number we get out, plus one for the &mut TxContext
-            debug_assert!(mutable_ref_objects.len() + 1 == mutable_ref_values.len());
+            debug_assert!(mutable_ref_objects.len() + 1 == mutable_reference_outputs.len());
 
             // When this function is used during publishing, it
             // may be executed several times, with objects being
@@ -200,13 +203,15 @@ fn execute_internal<
             // reflects what happened each time we call into the
             // Move VM (e.g. to account for the number of created
             // objects).
-            let ctx_bytes = mutable_ref_values.pop().unwrap();
-            let updated_ctx: TxContext = bcs::from_bytes(ctx_bytes.as_slice()).unwrap();
+            let (_, ctx_bytes, _) = mutable_reference_outputs.pop().unwrap();
+            let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).unwrap();
             ctx.update_state(updated_ctx)?;
 
-            let mutable_refs = mutable_ref_objects
-                .into_iter()
-                .zip(mutable_ref_values.into_iter());
+            let mutable_refs = mutable_ref_objects.into_iter().zip(
+                mutable_reference_outputs
+                    .into_iter()
+                    .map(|(_local_idx, bytes, _layout)| bytes),
+            );
             process_successful_execution(
                 state_view,
                 by_value_objects,
@@ -215,84 +220,69 @@ fn execute_internal<
                 ctx,
                 object_owner_map,
             )?;
-            Ok(process_return_values(&return_values, &return_types))
+            Ok(process_return_values(&return_values))
         }
         // charge for all computations so far
-        ExecutionResult::Fail { error, gas_used: _ } => Err(SuiError::AbortedExecution {
+        Err(error) => Err(SuiError::AbortedExecution {
             error: error.to_string(),
         }),
     }
 }
 
-fn process_return_values(values: &[Vec<u8>], return_types: &[Type]) -> Vec<CallResult> {
-    let mut results = vec![];
-    debug_assert!(values.len() == return_types.len());
+fn process_return_values(return_values: &[(Vec<u8>, MoveTypeLayout)]) -> Vec<CallResult> {
+    return_values
+        .iter()
+        .filter_map(|(bytes, ty_layout)| {
+            Some(match ty_layout {
+                // debug_assert-s for missing arms should be OK here as we
+                // already checked in
+                // MovePackage::check_and_get_entry_function that no other
+                // types can exist in the signature
 
-    for (idx, r) in return_types.iter().enumerate() {
-        match r {
-            // debug_assert-s for missing arms should be OK here as we
-            // already checked in
-            // MovePackage::check_and_get_entry_function that no other
-            // types can exist in the signature
-
-            // see CallResults struct comments for why this is
-            // implemented the way it is
-            Type::Bool => results.push(CallResult::Bool(
-                bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
-            )),
-            Type::U8 => results.push(CallResult::U8(
-                bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
-            )),
-            Type::U64 => results.push(CallResult::U64(
-                bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
-            )),
-            Type::U128 => results.push(CallResult::U128(
-                bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
-            )),
-            Type::Address => results.push(CallResult::Address(
-                bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
-            )),
-            Type::Vector(t) => match &**t {
-                Type::Bool => results.push(CallResult::BoolVec(
-                    bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
-                )),
-                Type::U8 => results.push(CallResult::U8Vec(
-                    bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
-                )),
-                Type::U64 => results.push(CallResult::U64Vec(
-                    bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
-                )),
-                Type::U128 => results.push(CallResult::U128Vec(
-                    bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
-                )),
-                Type::Address => results.push(CallResult::AddrVec(
-                    bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
-                )),
-                Type::Vector(inner_t) => match &**inner_t {
-                    Type::Bool => results.push(CallResult::BoolVecVec(
-                        bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
-                    )),
-                    Type::U8 => results.push(CallResult::U8VecVec(
-                        bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
-                    )),
-                    Type::U64 => results.push(CallResult::U64VecVec(
-                        bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
-                    )),
-                    Type::U128 => results.push(CallResult::U128VecVec(
-                        bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
-                    )),
-                    Type::Address => results.push(CallResult::AddrVecVec(
-                        bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
-                    )),
-                    _ => debug_assert!(false),
+                // see CallResults struct comments for why this is
+                // implemented the way it is
+                MoveTypeLayout::Bool => CallResult::Bool(bcs::from_bytes(bytes).unwrap()),
+                MoveTypeLayout::U8 => CallResult::U8(bcs::from_bytes(bytes).unwrap()),
+                MoveTypeLayout::U64 => CallResult::U64(bcs::from_bytes(bytes).unwrap()),
+                MoveTypeLayout::U128 => CallResult::U128(bcs::from_bytes(bytes).unwrap()),
+                MoveTypeLayout::Address => CallResult::Address(bcs::from_bytes(bytes).unwrap()),
+                MoveTypeLayout::Vector(t) => match &**t {
+                    MoveTypeLayout::Bool => CallResult::BoolVec(bcs::from_bytes(bytes).unwrap()),
+                    MoveTypeLayout::U8 => CallResult::U8Vec(bcs::from_bytes(bytes).unwrap()),
+                    MoveTypeLayout::U64 => CallResult::U64Vec(bcs::from_bytes(bytes).unwrap()),
+                    MoveTypeLayout::U128 => CallResult::U128Vec(bcs::from_bytes(bytes).unwrap()),
+                    MoveTypeLayout::Address => CallResult::AddrVec(bcs::from_bytes(bytes).unwrap()),
+                    MoveTypeLayout::Vector(inner_t) => match &**inner_t {
+                        MoveTypeLayout::Bool => {
+                            CallResult::BoolVecVec(bcs::from_bytes(bytes).unwrap())
+                        }
+                        MoveTypeLayout::U8 => CallResult::U8VecVec(bcs::from_bytes(bytes).unwrap()),
+                        MoveTypeLayout::U64 => {
+                            CallResult::U64VecVec(bcs::from_bytes(bytes).unwrap())
+                        }
+                        MoveTypeLayout::U128 => {
+                            CallResult::U128VecVec(bcs::from_bytes(bytes).unwrap())
+                        }
+                        MoveTypeLayout::Address => {
+                            CallResult::AddrVecVec(bcs::from_bytes(bytes).unwrap())
+                        }
+                        _ => {
+                            debug_assert!(false);
+                            return None;
+                        }
+                    },
+                    _ => {
+                        debug_assert!(false);
+                        return None;
+                    }
                 },
-                _ => debug_assert!(false),
-            },
-            _ => debug_assert!(false),
-        }
-    }
-
-    results
+                _ => {
+                    debug_assert!(false);
+                    return None;
+                }
+            })
+        })
+        .collect()
 }
 
 pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
@@ -375,7 +365,6 @@ fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error 
             HashMap::new(),
             gas_status,
             ctx,
-            vec![], // no return types for module initializers
         )?;
     }
     Ok(())
