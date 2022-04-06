@@ -4,7 +4,7 @@ Congrats! You just saved yourself hours of work by bootstrapping this project wi
 
 > This TSDX setup is meant for developing libraries (not apps!) that can be published to NPM. If you’re looking to build a Node app, you could use `ts-node-dev`, plain `ts-node`, or simple `tsc`.
 
-> If you’re new to TypeScript, checkout the handy [TypeScript cheatsheet](https://devhints.io/typescript).
+> If you’re new to TypeScript, check out the handy [TypeScript cheatsheet](https://devhints.io/typescript).
 
 ## Commands
 
