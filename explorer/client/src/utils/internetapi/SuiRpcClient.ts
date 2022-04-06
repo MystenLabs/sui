@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Transaction } from '../static/TransactionTypes';
+import { Transaction } from './TransactionTypes';
 import { tryGetRpcSetting } from './rpcSetting';
 
 export class SuiRpcClient {
@@ -109,6 +109,7 @@ export interface ObjectSummary {
     version: string;
 }
 
+// TODO - remove / replace with TransactionEffects ?
 export interface ObjectEffectsSummary {
     created_objects?: ObjectSummary[];
     mutated_objects?: ObjectSummary[];
