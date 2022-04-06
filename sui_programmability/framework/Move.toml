@@ -10,6 +10,3 @@ MoveStdlib = { local = "deps/move-stdlib" }
 
 [addresses]
 Sui = "0x2"
-
-[dev-addresses]
-Sui = "0x2"
