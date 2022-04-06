@@ -118,32 +118,63 @@ impl<S> AuthorityTemporaryStore<S> {
     /// the gas object hasn't been mutated yet. Passing in `gas_object_size` so that we can also charge
     /// for the gas object mutation in advance.
     pub fn charge_gas_for_storage_changes(
-        &self,
+        &mut self,
         gas_status: &mut SuiGasStatus,
-        gas_object_size: usize,
+        gas_object: &mut Object,
     ) -> SuiResult {
-        for (object_id, (_object_ref, object)) in &self.written {
-            // Objects in written can be either mutation or creation.
-            // We figure it out by looking them up in `self.objects`.
-            let object_size = object.object_size_for_gas_metering();
-            let old_object_size = if let Some(old_obj) = self.objects.get(object_id) {
-                old_obj.object_size_for_gas_metering()
-            } else {
-                0
-            };
-            gas_status.charge_storage_mutation(old_object_size, object_size)?;
+        let mut objects_to_update = vec![];
+        // Also charge gas for mutating the gas object in advance.
+        let gas_object_size = gas_object.object_size_for_gas_metering();
+        gas_object.storage_rebate = gas_status.charge_storage_mutation(
+            gas_object_size,
+            gas_object_size,
+            gas_object.storage_rebate,
+        )?;
+        objects_to_update.push(gas_object.clone());
+
+        for (object_id, (_object_ref, object)) in &mut self.written {
+            let (old_object_size, storage_rebate) =
+                if let Some(old_object) = self.objects.get(object_id) {
+                    (
+                        old_object.object_size_for_gas_metering(),
+                        old_object.storage_rebate,
+                    )
+                } else {
+                    (0, 0)
+                };
+            let new_storage_rebate = gas_status.charge_storage_mutation(
+                old_object_size,
+                object.object_size_for_gas_metering(),
+                storage_rebate,
+            )?;
+            if !object.is_read_only() {
+                // We don't need to set storage rebate for immutable objects, as they will
+                // never be deleted.
+                object.storage_rebate = new_storage_rebate;
+                objects_to_update.push(object.clone());
+            }
         }
+
         for object_id in self.deleted.keys() {
             // If an object is in `self.deleted`, and also in `self.objects`, we give storage rebate.
             // Otherwise if an object is in `self.deleted` but not in `self.objects`, it means this
             // object was unwrapped and then deleted. The rebate would have been provided already when
             // mutating the object that wrapped this object.
-            if let Some(old_obj) = self.objects.get(object_id) {
-                gas_status.charge_storage_mutation(old_obj.object_size_for_gas_metering(), 0)?;
+            if let Some(old_object) = self.objects.get(object_id) {
+                gas_status.charge_storage_mutation(
+                    old_object.object_size_for_gas_metering(),
+                    0,
+                    old_object.storage_rebate,
+                )?;
             }
         }
-        // Also charge gas for mutating the gas object in advance.
-        gas_status.charge_storage_mutation(gas_object_size, gas_object_size)?;
+
+        // Write all objects at the end only if all previous gas charges succeeded.
+        // This avoids polluting the temporary store state if this function failed.
+        for object in objects_to_update {
+            self.write_object(object);
+        }
+
         Ok(())
     }
 

@@ -204,7 +204,7 @@ fn call(
         type_args,
         object_args,
         pure_args,
-        &mut SuiGasStatus::new_with_budget(gas_budget),
+        &mut SuiGasStatus::new_with_budget(gas_budget, 1, 1),
         &mut TxContext::random_for_testing_only(),
     )
 }
