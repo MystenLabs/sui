@@ -425,7 +425,7 @@ pub trait SignableBytes
 where
     Self: Sized,
 {
-    fn from_signable_bytes(bytes: Vec<u8>) -> Result<Self, anyhow::Error>;
+    fn from_signable_bytes(bytes: &[u8]) -> Result<Self, anyhow::Error>;
 }
 /// Activate the blanket implementation of `Signable` based on serde and BCS.
 /// * We use `serde_name` to extract a seed from the name of structs and enums.
@@ -449,7 +449,7 @@ impl<T> SignableBytes for T
 where
     T: BcsSignable,
 {
-    fn from_signable_bytes(bytes: Vec<u8>) -> Result<Self, Error> {
+    fn from_signable_bytes(bytes: &[u8]) -> Result<Self, Error> {
         // Remove name tag before deserialization using BCS
         let name = serde_name::trace_name::<Self>().expect("Self must be a struct or an enum");
         let name_byte_len = format!("{}::", name).bytes().len();
