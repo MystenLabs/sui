@@ -1362,7 +1362,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
 
     let object_refs = context.gateway.get_owned_objects(address)?;
 
-    // Get another coin 
+    // Get another coin
     for c in object_refs {
         if get_gas_value(&get_object(c.0, &mut context).await.unwrap()) > 2000 {
             coin = c.0;
