@@ -60,6 +60,19 @@ The set of objects that are available to be taken as input by a transaction are 
 
 When this DAG contains all committed transactions in the system, it forms a complete (and crytographically auditable) view of the system's state and history. In addition, we can use the scheme above to construct a DAG of the relevant history for a subset of transactions or objects (e.g., the objects owned by a single address).
 
+## The roles of Narwhal and Tusk
+
+Sui takes advantage of [Narwhal and Tusk: A DAG-based Mempool and Efficient BFT Consensus](https://arxiv.org/pdf/2105.11827.pdf). [Narwhal/Tusk (N/T)](https://github.com/MystenLabs/narwhal/blob/main/README.md) are also being developed by [Mysten Labs](https://mystenlabs.com/) so that per the referenced white paper, “When full agreement is required we use a high-throughput DAG-based consensus, e.g. [9] to manage locks, while execution on different shared objects is parallelized.”
+
+Narwhal enables the parallel ordering of transactions into batches that are collected into concurrently proposed blocks, and Tusk defines an algorithm for executing the DAG that these blocks form. N/T combined builds a DAG of blocks, concurrently proposed, and creates an order between those blocks as a byproduct of the building of the DAG. But that order is overlaid on top of the causal order of Sui transactions (the "payload" of Narwhal/Tusk here), and does not substitute for it:
+
+* Narwhal/Tusk operates in OX, rather than XO mode (O = order, X = execute); the execution occurs after the Narwhal/Tusk ordering.
+* The output of N/T is therefore a sequence of transactions, with interdependencies stored in the transaction data itself.
+
+What we sequence using consensus is certificates of transactions. These represent transactions that have already been presented to 2/3 of authorities that checked that all their owned objects are available to be operated on and signed the transaction. Upon a certificate being sequenced, what we do is set the *lock* of the shared objects at the next available version to map to the execution of that certificate. So for example if we have a shared object X at version 2, and we sequence certificate T, we store T -> [(X, 2)]. That is all we do synchronously when we reach consensus, and as a result we are able to ingest a lot of sequenced transactions.
+
+Now, once this is done we can process all certificates that had their locks set, on one or multiple cores (currently). Obviously, transactions for earlier versions of objects need to be processed first (causally), and that reduces the degree of concurrency. Both the read and write set is determined by the transaction itself, and not dynamically based on the contents of the object at a specific version (not currently). 
+
 ## Further reading
 * Objects are modified and created by [transactions](transactions.md).
 * Objects are stored by [authorities](authorities.md).
