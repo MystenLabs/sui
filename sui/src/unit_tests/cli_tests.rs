@@ -1328,7 +1328,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
 
     // Check log output contains all object ids.
     let gas = object_refs.first().unwrap().0;
-    let coin = object_refs.get(1).unwrap().0;
+    let mut coin = object_refs.get(1).unwrap().0;
 
     let orig_value = get_gas_value(&get_object(coin, &mut context).await.unwrap());
 
@@ -1362,8 +1362,12 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
 
     let object_refs = context.gateway.get_owned_objects(address)?;
 
-    // Check log output contains all object ids.
-    let coin = object_refs.get(1).unwrap().0;
+    // Get another coin 
+    for c in object_refs {
+        if get_gas_value(&get_object(c.0, &mut context).await.unwrap()) > 2000 {
+            coin = c.0;
+        }
+    }
     let orig_value = get_gas_value(&get_object(coin, &mut context).await.unwrap());
 
     // Test with no gas specified

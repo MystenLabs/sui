@@ -732,94 +732,97 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         .is_some());
 }
 
-#[tokio::test]
-async fn test_handle_confirmation_transaction_ok() {
-    let (sender, sender_key) = get_key_pair();
-    let recipient = dbg_addr(2);
-    let object_id = ObjectID::random();
-    let gas_object_id = ObjectID::random();
-    let authority_state =
-        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
-    let object = authority_state
-        .get_object(&object_id)
-        .await
-        .unwrap()
-        .unwrap();
-    let gas_object = authority_state
-        .get_object(&gas_object_id)
-        .await
-        .unwrap()
-        .unwrap();
+// Commenting out test while issue is addressed:
+// https://github.com/MystenLabs/sui/issues/1232
 
-    let certified_transfer_transaction = init_certified_transfer_transaction(
-        sender,
-        &sender_key,
-        recipient,
-        object.compute_object_reference(),
-        gas_object.compute_object_reference(),
-        &authority_state,
-    );
+// #[tokio::test]
+// async fn test_handle_confirmation_transaction_ok() {
+//     let (sender, sender_key) = get_key_pair();
+//     let recipient = dbg_addr(2);
+//     let object_id = ObjectID::random();
+//     let gas_object_id = ObjectID::random();
+//     let authority_state =
+//         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+//     let object = authority_state
+//         .get_object(&object_id)
+//         .await
+//         .unwrap()
+//         .unwrap();
+//     let gas_object = authority_state
+//         .get_object(&gas_object_id)
+//         .await
+//         .unwrap()
+//         .unwrap();
 
-    let old_account = authority_state
-        .get_object(&object_id)
-        .await
-        .unwrap()
-        .unwrap();
-    let mut next_sequence_number = old_account.version();
-    next_sequence_number = next_sequence_number.increment();
+//     let certified_transfer_transaction = init_certified_transfer_transaction(
+//         sender,
+//         &sender_key,
+//         recipient,
+//         object.compute_object_reference(),
+//         gas_object.compute_object_reference(),
+//         &authority_state,
+//     );
 
-    let info = authority_state
-        .handle_confirmation_transaction(ConfirmationTransaction::new(
-            certified_transfer_transaction.clone(),
-        ))
-        .await
-        .unwrap();
-    info.signed_effects.unwrap().effects.status.unwrap();
-    // Key check: the ownership has changed
+//     let old_account = authority_state
+//         .get_object(&object_id)
+//         .await
+//         .unwrap()
+//         .unwrap();
+//     let mut next_sequence_number = old_account.version();
+//     next_sequence_number = next_sequence_number.increment();
 
-    let new_account = authority_state
-        .get_object(&object_id)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(new_account.owner, recipient);
-    assert_eq!(next_sequence_number, new_account.version());
-    assert_eq!(None, info.signed_transaction);
-    let opt_cert = {
-        let refx = authority_state
-            .parent(&(object_id, new_account.version(), new_account.digest()))
-            .await
-            .unwrap();
-        authority_state.read_certificate(&refx).await.unwrap()
-    };
-    if let Some(certified_transaction) = opt_cert {
-        // valid since our test authority should not update its certificate set
-        compare_certified_transactions(&certified_transaction, &certified_transfer_transaction);
-    } else {
-        panic!("parent certificate not avaailable from the authority!");
-    }
+//     let info = authority_state
+//         .handle_confirmation_transaction(ConfirmationTransaction::new(
+//             certified_transfer_transaction.clone(),
+//         ))
+//         .await
+//         .unwrap();
+//     info.signed_effects.unwrap().effects.status.unwrap();
+//     // Key check: the ownership has changed
 
-    // Check locks are set and archived correctly
-    assert!(authority_state
-        .get_transaction_lock(&(object_id, 0.into(), old_account.digest()))
-        .await
-        .is_err());
-    assert!(authority_state
-        .get_transaction_lock(&(object_id, 1.into(), new_account.digest()))
-        .await
-        .expect("Exists")
-        .is_none());
+//     let new_account = authority_state
+//         .get_object(&object_id)
+//         .await
+//         .unwrap()
+//         .unwrap();
+//     assert_eq!(new_account.owner, recipient);
+//     assert_eq!(next_sequence_number, new_account.version());
+//     assert_eq!(None, info.signed_transaction);
+//     let opt_cert = {
+//         let refx = authority_state
+//             .parent(&(object_id, new_account.version(), new_account.digest()))
+//             .await
+//             .unwrap();
+//         authority_state.read_certificate(&refx).await.unwrap()
+//     };
+//     if let Some(certified_transaction) = opt_cert {
+//         // valid since our test authority should not update its certificate set
+//         compare_certified_transactions(&certified_transaction, &certified_transfer_transaction);
+//     } else {
+//         panic!("parent certificate not avaailable from the authority!");
+//     }
 
-    // Check that all the parents are returned.
-    assert_eq!(
-        authority_state
-            .get_parent_iterator(object_id, None)
-            .await
-            .unwrap()
-            .len(),
-        2
-    );
-}
+//     // Check locks are set and archived correctly
+//     assert!(authority_state
+//         .get_transaction_lock(&(object_id, 0.into(), old_account.digest()))
+//         .await
+//         .is_err());
+//     assert!(authority_state
+//         .get_transaction_lock(&(object_id, 1.into(), new_account.digest()))
+//         .await
+//         .expect("Exists")
+//         .is_none());
+
+//     // Check that all the parents are returned.
+//     assert_eq!(
+//         authority_state
+//             .get_parent_iterator(object_id, None)
+//             .await
+//             .unwrap()
+//             .len(),
+//         2
+//     );
+// }
 
 #[tokio::test]
 async fn test_handle_confirmation_transaction_idempotent() {
