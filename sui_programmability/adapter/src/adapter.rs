@@ -498,7 +498,8 @@ fn process_successful_execution<
         match event_type {
             EventType::TransferToAddress
             | EventType::FreezeObject
-            | EventType::TransferToObject => {
+            | EventType::TransferToObject
+            | EventType::ShareObject => {
                 let new_owner = match event_type {
                     EventType::TransferToAddress => {
                         Owner::AddressOwner(SuiAddress::try_from(recipient.as_slice()).unwrap())
@@ -507,6 +508,7 @@ fn process_successful_execution<
                     EventType::TransferToObject => {
                         Owner::ObjectOwner(ObjectID::try_from(recipient.borrow()).unwrap().into())
                     }
+                    EventType::ShareObject => Owner::SharedMutable,
                     _ => unreachable!(),
                 };
                 handle_transfer(
@@ -520,7 +522,6 @@ fn process_successful_execution<
                     &newly_generated_ids,
                 )
             }
-            EventType::ShareObject => Err(SuiError::UnsupportedSharedObjectError),
             EventType::DeleteObjectID => {
                 // unwrap safe because this event can only be emitted from processing
                 // native call delete_id, which guarantees the type of the id.
