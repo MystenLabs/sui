@@ -35,9 +35,6 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: beta # temporarily use beta till 'instrument-coverage' stabilizes in 1.60
-          profile: default
-          override: true
           components: llvm-tools-preview
       # Enable caching of the 'librocksdb-sys' crate by additionally caching the
       # 'librocksdb-sys' src directory which is managed by cargo
