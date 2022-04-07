@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 anyhow = "1.0.55"
+base64 = "0.13.0"
 smallvec = "1.8.0"
 num_enum = "0.5.6"
 
