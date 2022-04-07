@@ -91,8 +91,8 @@ name = "rest_server"
 path = "src/rest_server.rs"
 
 [[bin]]
-name = "rpc_gateway"
-path = "src/rpc_gateway.rs"
+name = "rpc_server"
+path = "src/rpc_server.rs"
 
 [[bin]]
 name = "validator"

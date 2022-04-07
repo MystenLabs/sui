@@ -13,6 +13,7 @@ pub mod config;
 pub mod gateway;
 pub mod keystore;
 pub mod rest_gateway;
+pub mod rpc_gateway;
 pub mod shell;
 pub mod sui_commands;
 pub mod sui_json;

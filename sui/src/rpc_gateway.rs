@@ -1,17 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
-use std::net::SocketAddr;
 use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
 
+use anyhow::anyhow;
 use async_trait::async_trait;
 use ed25519_dalek::ed25519::signature::Signature;
 use jsonrpsee::core::RpcResult;
-use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
-use jsonrpsee::RpcModule;
 use jsonrpsee_proc_macros::rpc;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
@@ -19,11 +16,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_with::serde_as;
 use tokio::sync::Mutex;
+use tracing::debug;
 
-use sui::config::PersistedConfig;
-use sui::gateway::GatewayConfig;
-use sui::rest_gateway::responses::{NamedObjectRef, ObjectResponse, TransactionBytes};
-use sui::sui_config_dir;
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::{GatewayClient, GatewayState};
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -32,8 +26,18 @@ use sui_types::crypto::SignableBytes;
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 
+use crate::config::PersistedConfig;
+use crate::gateway::GatewayConfig;
+use crate::rest_gateway::responses::{NamedObjectRef, ObjectResponse, TransactionBytes};
+
 #[rpc(server, client, namespace = "sui")]
 pub trait RPCGateway {
+    #[method(name = "get_objects")]
+    async fn get_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse>;
+
+    #[method(name = "get_object_info")]
+    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<ObjectRead>;
+
     #[method(name = "create_coin_transfer")]
     async fn create_coin_transfer(
         &self,
@@ -43,20 +47,6 @@ pub trait RPCGateway {
         gas_budget: u64,
         recipient: SuiAddress,
     ) -> RpcResult<TransactionBytes>;
-
-    #[method(name = "get_objects")]
-    async fn get_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse>;
-
-    #[method(name = "get_object_info")]
-    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<ObjectRead>;
-
-    #[method(name = "execute_transaction")]
-    async fn execute_transaction(
-        &self,
-        tx_bytes: Base64EncodedBytes,
-        signature: Base64EncodedBytes,
-        pub_key: Base64EncodedBytes,
-    ) -> RpcResult<TransactionResponse>;
 
     #[method(name = "create_move_call")]
     async fn create_move_call(
@@ -72,6 +62,46 @@ pub trait RPCGateway {
         object_arguments: Vec<ObjectID>,
         shared_object_arguments: Vec<ObjectID>,
     ) -> RpcResult<TransactionBytes>;
+
+    #[method(name = "create_publish_transaction")]
+    async fn publish(
+        &self,
+        sender: SuiAddress,
+        compiled_modules: Vec<Base64EncodedBytes>,
+        gas_object_id: ObjectID,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes>;
+
+    #[method(name = "create_split_coin_transaction")]
+    async fn split_coin(
+        &self,
+        signer: SuiAddress,
+        coin_object_id: ObjectID,
+        split_amounts: Vec<u64>,
+        gas_payment: ObjectID,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes>;
+
+    #[method(name = "create_merge_coin_transaction")]
+    async fn merge_coin(
+        &self,
+        signer: SuiAddress,
+        primary_coin: ObjectID,
+        coin_to_merge: ObjectID,
+        gas_payment: ObjectID,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes>;
+
+    #[method(name = "execute_transaction")]
+    async fn execute_transaction(
+        &self,
+        tx_bytes: Base64EncodedBytes,
+        signature: Base64EncodedBytes,
+        pub_key: Base64EncodedBytes,
+    ) -> RpcResult<TransactionResponse>;
+
+    #[method(name = "sync_account_state")]
+    async fn sync_account_state(&self, address: SuiAddress) -> RpcResult<()>;
 }
 
 pub struct RPCGatewayImpl {
@@ -79,7 +109,7 @@ pub struct RPCGatewayImpl {
 }
 
 impl RPCGatewayImpl {
-    fn new(config_path: &Path) -> anyhow::Result<Self> {
+    pub fn new(config_path: &Path) -> anyhow::Result<Self> {
         let config: GatewayConfig = PersistedConfig::read(config_path)?;
         let committee = config.make_committee();
         let authority_clients = config.make_authority_clients();
@@ -87,7 +117,7 @@ impl RPCGatewayImpl {
             config.db_folder_path,
             committee,
             authority_clients,
-        ));
+        )?);
         Ok(Self {
             gateway: Arc::new(Mutex::new(gateway)),
         })
@@ -113,7 +143,74 @@ impl RPCGatewayServer for RPCGatewayImpl {
         Ok(TransactionBytes::new(data))
     }
 
+    async fn publish(
+        &self,
+        sender: SuiAddress,
+        compiled_modules: Vec<Base64EncodedBytes>,
+        gas_object_id: ObjectID,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes> {
+        let compiled_modules = compiled_modules
+            .into_iter()
+            .map(|data| data.to_vec())
+            .collect::<Vec<_>>();
+
+        let mut gateway = self.gateway.lock().await;
+        let gas_obj_ref = gateway
+            .get_object_info(gas_object_id)
+            .await?
+            .reference()
+            .map_err(|e| anyhow!(e))?;
+
+        let data = gateway
+            .publish(sender, compiled_modules, gas_obj_ref, gas_budget)
+            .await?;
+
+        Ok(TransactionBytes::new(data))
+    }
+
+    async fn split_coin(
+        &self,
+        signer: SuiAddress,
+        coin_object_id: ObjectID,
+        split_amounts: Vec<u64>,
+        gas_payment: ObjectID,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes> {
+        let data = self
+            .gateway
+            .lock()
+            .await
+            .split_coin(
+                signer,
+                coin_object_id,
+                split_amounts,
+                gas_payment,
+                gas_budget,
+            )
+            .await?;
+        Ok(TransactionBytes::new(data))
+    }
+
+    async fn merge_coin(
+        &self,
+        signer: SuiAddress,
+        primary_coin: ObjectID,
+        coin_to_merge: ObjectID,
+        gas_payment: ObjectID,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes> {
+        let data = self
+            .gateway
+            .lock()
+            .await
+            .merge_coins(signer, primary_coin, coin_to_merge, gas_payment, gas_budget)
+            .await?;
+        Ok(TransactionBytes::new(data))
+    }
+
     async fn get_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse> {
+        debug!("get_objects : {}", owner);
         let objects = self
             .gateway
             .lock()
@@ -197,6 +294,16 @@ impl RPCGatewayServer for RPCGatewayImpl {
         .await?;
         Ok(TransactionBytes::new(data))
     }
+
+    async fn sync_account_state(&self, address: SuiAddress) -> RpcResult<()> {
+        debug!("sync_account_state : {}", address);
+        self.gateway
+            .lock()
+            .await
+            .sync_account_state(address)
+            .await?;
+        Ok(())
+    }
 }
 
 #[serde_as]
@@ -209,33 +316,4 @@ impl Deref for Base64EncodedBytes {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
-}
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::FmtSubscriber::builder()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .try_init()
-        .expect("setting default subscriber failed");
-
-    let (server_addr, handle) = run_server().await?;
-    println!("http://{}", server_addr);
-
-    handle.await;
-    Ok(())
-}
-
-async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
-    let config_path = sui_config_dir()?.join("gateway.conf");
-
-    let server = HttpServerBuilder::default()
-        .build("127.0.0.1:0".parse::<SocketAddr>()?)
-        .await?;
-
-    let mut module = RpcModule::new(());
-    module.merge(RPCGatewayImpl::new(&config_path)?.into_rpc())?;
-
-    let addr = server.local_addr()?;
-    let server_handle = server.start(module)?;
-    Ok((addr, server_handle))
 }
