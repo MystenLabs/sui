@@ -18,3 +18,7 @@ tracing = { version = "0.1.31", features = ["log"] }
 sui-types = { path = "../sui_types" }
 
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "e44bca4513a6ff6c97399cd79e82e4bc00571ac3"}
+
+[dev-dependencies]
+pretty_assertions = "1.2.0"
+tracing-subscriber = "0.3.9"

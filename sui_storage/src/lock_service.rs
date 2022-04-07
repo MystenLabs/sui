@@ -13,19 +13,39 @@
 //!
 //! Communication with the lock service happens through a MPSC queue/channel.
 
+use futures::channel::oneshot;
 use rocksdb::Options;
 use std::path::Path;
-use tracing::debug;
+use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
+use tracing::{debug, info};
 use typed_store::rocks::DBMap;
 use typed_store::{reopen, traits::Map};
 
-use sui_types::base_types::{ObjectRef, TransactionDigest};
-use sui_types::error::SuiError;
+use sui_types::base_types::{AuthorityName, ObjectRef, TransactionDigest};
+use sui_types::crypto::get_key_pair;
+use sui_types::error::{SuiError, SuiResult};
 
-/// Atomic Sui Object locking service.
-/// Primary abstraction is an atomic op to acquire a lock on a given set of objects.
-/// Atomicity relies on single threaded loop and only one instance per authority.
-struct LockService {
+/// Messages/Commands to send to the LockService.
+// TODO: use smallvec as an optimization
+enum LockServiceMessage {
+    Acquire {
+        refs: Vec<ObjectRef>,
+        tx_digest: TransactionDigest,
+        resp: oneshot::Sender<SuiResult>,
+    },
+    Initialize {
+        refs: Vec<ObjectRef>,
+        resp: oneshot::Sender<SuiResult>,
+    },
+    RemoveLocks {
+        refs: Vec<ObjectRef>,
+        resp: oneshot::Sender<SuiResult>,
+    },
+}
+
+/// Inner LockService implementation that does single threaded database accesses.  Cannot be
+/// used publicly, must be wrapped in a LockService to control access.
+struct LockServiceImpl {
     /// This is a map between object references of currently active objects that can be mutated,
     /// and the transaction that they are lock on for use by this specific authority. Where an object
     /// lock exists for an object version, but no transaction has been seen using it the lock is set
@@ -37,7 +57,7 @@ struct LockService {
 
 // TODO: Create method needs to make sure only one instance or thread of this is running per authority
 // If not for multiple authorities per process, it should really be one per process.
-impl LockService {
+impl LockServiceImpl {
     /// Open or create a new LockService database
     fn try_open_db<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Result<Self, SuiError> {
         let mut options = db_options.unwrap_or_default();
@@ -79,7 +99,7 @@ impl LockService {
         &self,
         owned_input_objects: &[ObjectRef],
         tx_digest: TransactionDigest,
-    ) -> Result<(), SuiError> {
+    ) -> SuiResult {
         let mut locks_to_write = Vec::new();
         let locks = self.transaction_lock.multi_get(owned_input_objects)?;
 
@@ -117,7 +137,7 @@ impl LockService {
 
     /// Initialize a lock to None (but exists) for a given list of ObjectRefs.
     /// If the lock already exists and is locked to a transaction, then return TransactionLockExists
-    fn initialize_locks(&self, objects: &[ObjectRef]) -> Result<(), SuiError> {
+    fn initialize_locks(&self, objects: &[ObjectRef]) -> SuiResult {
         // Use a multiget for efficiency
         let locks = self.transaction_lock.multi_get(objects)?;
 
@@ -153,30 +173,155 @@ impl LockService {
     }
 
     /// Removes locks for a given list of ObjectRefs.
-    fn delete_locks(&self, objects: &[ObjectRef]) -> Result<(), SuiError> {
+    fn delete_locks(&self, objects: &[ObjectRef]) -> SuiResult {
         self.transaction_lock.multi_remove(objects)?;
         Ok(())
+    }
+
+    /// Loop to continuously process messages in a single thread from async senders
+    fn receiving_loop(&self, receiver: Receiver<LockServiceMessage>) {
+        info!("LockService receiving loop started");
+        while let Ok(msg) = receiver.recv() {
+            match msg {
+                LockServiceMessage::Acquire {
+                    refs,
+                    tx_digest,
+                    resp,
+                } => {
+                    let res = self.acquire_locks(&refs, tx_digest);
+                    resp.send(res).expect("Could not respond to sender!");
+                }
+                LockServiceMessage::Initialize { refs, resp } => {
+                    resp.send(self.initialize_locks(&refs))
+                        .expect("Could not respond to sender!");
+                }
+                LockServiceMessage::RemoveLocks { refs, resp } => {
+                    resp.send(self.delete_locks(&refs))
+                        .expect("Could not respond to sender!");
+                }
+            }
+        }
+        info!("LockService receiving loop stopped, the sender on other end hung up/dropped");
+    }
+}
+
+const LOCKSERVICE_QUEUE_LEN: usize = 500;
+
+/// Atomic Sui Object locking service.
+/// Primary abstraction is an atomic op to acquire a lock on a given set of objects.
+/// Atomicity relies on single threaded loop and only one instance per authority.
+#[derive(Clone)]
+pub struct LockService {
+    sender: SyncSender<LockServiceMessage>,
+}
+
+impl LockService {
+    /// Return the single instance of a lock service for a given authority.
+    /// If the lock service is not created it will be initialized.
+    pub fn get_or_init_for_authority<P: AsRef<Path>>(
+        _authority: AuthorityName,
+        path: P,
+        db_options: Option<Options>,
+    ) -> Result<Self, SuiError> {
+        // TODO: ensure only one instance per authority
+
+        let inner_service = LockServiceImpl::try_open_db(path, db_options)?;
+
+        // Now, create a sync channel and spawn a thread
+        let (sender, receiver) = sync_channel(LOCKSERVICE_QUEUE_LEN);
+
+        std::thread::spawn(move || {
+            inner_service.receiving_loop(receiver);
+        });
+
+        Ok(Self { sender })
+    }
+
+    /// Acquires a lock for a transaction on the given objects if they have all been initialized previously
+    /// to None state.  The locks are all set to the given transacton digest.
+    /// Otherwise, SuiError(TransactionLockDoesNotExist, ConflictingTransaction) is returned.
+    /// Note that this method sends a message to inner LockService implementation and waits for a response
+    pub async fn acquire_locks(
+        &self,
+        refs: Vec<ObjectRef>,
+        tx_digest: TransactionDigest,
+    ) -> SuiResult {
+        let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
+        // NOTE: below is blocking, switch to Tokio channels which are async?
+        self.sender
+            .send(LockServiceMessage::Acquire {
+                refs,
+                tx_digest,
+                resp: os_sender,
+            })
+            .expect("Could not send message to inner LockService");
+        os_receiver
+            .await
+            .expect("Response from lockservice was cancelled, should not happen!")
+    }
+
+    /// Initialize a lock to None (but exists) for a given list of ObjectRefs.
+    /// If the lock already exists and is locked to a transaction, then return TransactionLockExists
+    pub async fn initialize_locks(&self, refs: Vec<ObjectRef>) -> SuiResult {
+        let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
+        self.sender
+            .send(LockServiceMessage::Initialize {
+                refs,
+                resp: os_sender,
+            })
+            .expect("Could not send message to inner LockService");
+        os_receiver
+            .await
+            .expect("Response from lockservice was cancelled, should not happen!")
+    }
+
+    /// Removes locks for a given list of ObjectRefs.
+    pub async fn remove_locks(&self, refs: Vec<ObjectRef>) -> SuiResult {
+        let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
+        self.sender
+            .send(LockServiceMessage::RemoveLocks {
+                refs,
+                resp: os_sender,
+            })
+            .expect("Could not send message to inner LockService");
+        os_receiver
+            .await
+            .expect("Response from lockservice was cancelled, should not happen!")
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures::future::join_all;
     use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, TransactionDigest};
     use sui_types::error::SuiError;
+
+    use pretty_assertions::assert_eq;
+
+    fn init_lockservice_db() -> LockServiceImpl {
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+        std::fs::create_dir(&path).unwrap();
+
+        LockServiceImpl::try_open_db(path, None).expect("Could not create LockDB")
+    }
 
     fn init_lockservice() -> LockService {
         let dir = std::env::temp_dir();
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         std::fs::create_dir(&path).unwrap();
 
-        LockService::try_open_db(path, None).expect("Could not create LockDB")
+        let (_, secret) = get_key_pair();
+        let authority = *secret.public_key_bytes();
+        LockService::get_or_init_for_authority(authority, path, None)
+            .expect("Could not create LockService")
     }
 
     #[test]
     // Test acquire_locks() and initialize_locks()
     fn test_lockdb_acquire_init_multiple() {
-        let ls = init_lockservice();
+        let ls = init_lockservice_db();
 
         let ref1: ObjectRef = (ObjectID::random(), 1.into(), ObjectDigest::random());
         let ref2: ObjectRef = (ObjectID::random(), 1.into(), ObjectDigest::random());
@@ -219,7 +364,7 @@ mod tests {
 
     #[test]
     fn test_lockdb_remove_multiple() {
-        let ls = init_lockservice();
+        let ls = init_lockservice_db();
 
         let ref1: ObjectRef = (ObjectID::random(), 1.into(), ObjectDigest::random());
         let ref2: ObjectRef = (ObjectID::random(), 1.into(), ObjectDigest::random());
@@ -243,5 +388,41 @@ mod tests {
 
         // Now initialization should succeed
         ls.initialize_locks(&[ref1, ref2]).unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_lockservice_conc_acquire_init() {
+        let ls = init_lockservice();
+        tracing_subscriber::fmt::init();
+
+        let ref1: ObjectRef = (ObjectID::random(), 1.into(), ObjectDigest::random());
+        let ref2: ObjectRef = (ObjectID::random(), 1.into(), ObjectDigest::random());
+        let txdigests: Vec<TransactionDigest> =
+            (0..10).map(|_n| TransactionDigest::random()).collect();
+
+        // Should be able to concurrently initialize locks for same objects, all should succeed
+        let futures = (0..10).map(|_n| {
+            let ls = ls.clone();
+            tokio::spawn(async move { ls.initialize_locks(vec![ref1, ref2]).await })
+        });
+        let results = join_all(futures).await;
+        assert!(results.iter().all(|res| res.is_ok()));
+
+        // only one party should be able to successfully acquire the lock.  Use diff tx for each one
+        let futures = txdigests.iter().map(|tx| {
+            let ls = ls.clone();
+            let tx = *tx;
+            tokio::spawn(async move { ls.acquire_locks(vec![ref1, ref2], tx).await })
+        });
+        let results = join_all(futures).await;
+        let inner_res: Vec<_> = results.into_iter().map(|r| r.unwrap()).collect();
+        let num_oks = inner_res.iter().filter(|r| r.is_ok()).count();
+        assert_eq!(num_oks, 1);
+
+        // All other results should be ConflictingTransaction
+        assert!(inner_res
+            .iter()
+            .filter(|r| r.is_err())
+            .all(|r| matches!(r, Err(SuiError::ConflictingTransaction { .. }))));
     }
 }
