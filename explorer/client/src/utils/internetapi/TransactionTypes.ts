@@ -1,15 +1,7 @@
 
-import { AddressBytes, AuthoritySignInfo, GasPayment, Signature, TransactionKind } from "../internetapi/SuiRpcClient"
+import { AddressBytes, AuthoritySignInfo, GasPayment, Signature, TransactionKind } from "./SuiRpcClient"
 
 type SuiBytes = number[] | string;
-
-// types in this file map usually directly to Rust types of the same name
-type TransactionEnvelope<S> = {
-    is_checked: boolean,
-    data: {},       // TransactionData
-    tx_signature: Signature,
-    auth_signature: Signature
-}
 
 type TransactionStatus = string;
 type TransactionDigest = SuiBytes;
@@ -17,6 +9,7 @@ type ObjectRef = SuiBytes;
 type Owner = SuiBytes;
 type ObjectRefOwnerPair = [ObjectRef, Owner]
 
+// many types in this file map directly to Rust types of the same name
 type TransactionEffects = {
     status: TransactionStatus,
     digest: TransactionDigest,
@@ -25,20 +18,27 @@ type TransactionEffects = {
     unwrapped?: ObjectRefOwnerPair[],
     deleted?: ObjectRef[],
     wrapped?: ObjectRef[],
-    gas: ObjectRefOwnerPair,
+    gas?: ObjectRefOwnerPair,
     events?: any[],                     // TODO - better type
-    dependencies: TransactionDigest[]
+    dependencies?: TransactionDigest[]
 }
 
 interface TransactionEffectsEnvelope<S> {
     effects: TransactionEffects,
-    auth_signature: S
+    auth_signature?: S
 }
 
 type AuthorityName = string;
 type AuthorityNameSigPair = [AuthorityName, SuiBytes];
 
-type EmptySignInfo = {};
+type TransactionEnvelope<S> = {
+    is_checked: boolean,
+    data: TransactionData,
+    tx_signature: Signature,
+    auth_signature?: S
+}
+
+type EmptySignInfo = null;
 type ClientSignedTransaction = TransactionEnvelope<EmptySignInfo>;
 
 interface CertifiedTransaction {
@@ -48,7 +48,7 @@ interface CertifiedTransaction {
     sigs: AuthorityNameSigPair[]        // signatures
 }
 
-// this type is NOT in Rust - it aggregates the effects and certs types from the Rust backend
+// this type is NOT in Rust yet - it aggregates the effects and certs types from the Rust backend
 interface TransactionDetails<S> {
     data: TransactionEffectsEnvelope<S>,
     certs?: CertifiedTransaction
@@ -67,4 +67,12 @@ interface Transaction {
     signature: Signature;
 }
 
-export type { Transaction, TransactionData, TransactionDetails, AuthorityTransactionDetails, CertifiedTransaction }
+// This is the type that should be rendered for a transaction details page
+type FriendlyTransactionData = {
+    digest: string,
+    tx: Transaction,
+    effects: TransactionEffects,
+    signatures: string[]
+}
+
+export type { Transaction, TransactionData, TransactionDetails, AuthorityTransactionDetails, CertifiedTransaction, FriendlyTransactionData }
