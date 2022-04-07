@@ -51,35 +51,35 @@
       }
     ],
     "build": [{
-        "label": "Install",
+        "label": "Install Sui",
         "fileName": "build/install"
       },
       {
-        "label": "Smart Contracts with Move",
+        "label": "Write Smart Contracts with Move",
         "fileName": "build/move"
       },
       {
-        "label": "Wallet",
+        "label": "Create Sui Wallet",
         "fileName": "build/wallet"
       },
       {
-        "label": "REST Server",
+        "label": "Use Sui REST Server",
         "fileName": "build/rest-api"
       },
       {
-        "label": "SuiJSON",
+        "label": "Employ SuiJSON Format",
         "fileName": "build/sui-json"
       },
       {
-        "label": "Authorities",
+        "label": "Understand Authorities",
         "fileName": "build/authorities"
       },
       {
-        "label": "Objects",
+        "label": "Manage Objects",
         "fileName": "build/objects"
       },
       {
-        "label": "Transactions",
+        "label": "Conduct Transactions",
         "fileName": "build/transactions"
       }
     ],
@@ -105,6 +105,9 @@
       }
     ],
     "contribute": [{
+        "label": "Frequently Asked Questions",
+        "fileName": "contribute/faq"
+      },
         "label": "Logging",
         "fileName": "contribute/observability"
       },

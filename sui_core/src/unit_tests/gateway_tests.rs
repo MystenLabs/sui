@@ -13,8 +13,9 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::channel::mpsc::Receiver;
+use futures::channel::mpsc::{channel, Receiver};
 use futures::lock::Mutex;
+use futures::SinkExt;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
 use signature::Signer;
 use typed_store::Map;
@@ -29,6 +30,7 @@ use sui_types::messages::Transaction;
 use sui_types::object::{Data, Object, Owner, GAS_VALUE_FOR_TESTING};
 
 use crate::authority::{AuthorityState, AuthorityStore};
+use crate::authority_client::BUFFER_SIZE;
 use crate::gateway_state::{GatewayAPI, GatewayState};
 
 use super::*;
@@ -116,9 +118,27 @@ impl AuthorityAPI for LocalAuthorityClient {
     /// Handle Batch information requests for this authority.
     async fn handle_batch_streaming(
         &self,
-        _request: BatchInfoRequest,
+        request: BatchInfoRequest,
     ) -> Result<Receiver<Result<BatchInfoResponseItem, SuiError>>, io::Error> {
-        todo!()
+        let state = self.0.clone();
+        let (mut tx_output, tr_output) = channel(BUFFER_SIZE);
+
+        let update_items = state.lock().await.handle_batch_info_request(request).await;
+
+        match update_items {
+            Ok(t) => {
+                let mut deq = t.0;
+                while let Some(update_item) = deq.pop_front() {
+                    let batch_info_response_item = BatchInfoResponseItem(update_item.clone());
+                    let _ = tx_output.send(Ok(batch_info_response_item)).await;
+                }
+            }
+            Err(e) => {
+                let err = std::io::Error::new(std::io::ErrorKind::Other, e);
+                return Err(err);
+            }
+        }
+        Ok(tr_output)
     }
 }
 
@@ -485,7 +505,7 @@ async fn test_initiating_valid_transfer() {
         (sender, SequenceNumber::from(0))
     );
     let data = client
-        .transfer_coin(sender, object_id_1, gas_object, recipient)
+        .transfer_coin(sender, object_id_1, gas_object, 50000, recipient)
         .await
         .unwrap();
     let signature = sender_key.sign(&data.to_bytes());
@@ -534,7 +554,7 @@ async fn test_initiating_valid_transfer_despite_bad_authority() {
     let (sender, sender_key) = get_key_pair();
     let mut client = init_local_client_and_fund_account_bad(sender, authority_objects).await;
     let data = client
-        .transfer_coin(sender, object_id, gas_object, recipient)
+        .transfer_coin(sender, object_id, gas_object, 50000, recipient)
         .await
         .unwrap();
 
@@ -583,7 +603,7 @@ async fn test_initiating_transfer_low_funds() {
 
     let transfer = async {
         let data = client
-            .transfer_coin(sender, object_id_2, gas_object, recipient)
+            .transfer_coin(sender, object_id_2, gas_object, 50000, recipient)
             .await?;
         let signature = sender_key.sign(&data.to_bytes());
         client
@@ -639,7 +659,7 @@ async fn test_bidirectional_transfer() {
     );
     // Transfer object to client.
     let data = client
-        .transfer_coin(addr1, object_id, gas_object1, addr2)
+        .transfer_coin(addr1, object_id, gas_object1, 50000, addr2)
         .await
         .unwrap();
 
@@ -685,7 +705,7 @@ async fn test_bidirectional_transfer() {
 
     // Transfer the object back to Client1
     let data = client
-        .transfer_coin(addr2, object_id, gas_object2, addr1)
+        .transfer_coin(addr2, object_id, gas_object2, 50000, addr1)
         .await
         .unwrap();
     let signature = key2.sign(&data.to_bytes());
@@ -716,7 +736,7 @@ async fn test_bidirectional_transfer() {
 
     // Should fail if Client 2 double spend the object
     let data = client
-        .transfer_coin(addr2, object_id, gas_object2, addr1)
+        .transfer_coin(addr2, object_id, gas_object2, 50000, addr1)
         .await
         .unwrap();
 
@@ -742,7 +762,7 @@ async fn test_client_state_sync_with_transferred_object() {
 
     // Transfer object to client.
     let data = client
-        .transfer_coin(addr1, object_id, gas_object_id, addr2)
+        .transfer_coin(addr1, object_id, gas_object_id, 50000, addr2)
         .await
         .unwrap();
 
@@ -759,7 +779,7 @@ async fn test_client_state_sync_with_transferred_object() {
     );
 
     // Confirm client 2 received the new object id
-    assert_eq!(1, client.get_owned_objects(addr2).len());
+    assert_eq!(1, client.get_owned_objects(addr2).unwrap().len());
 }
 
 #[tokio::test]
@@ -1326,7 +1346,7 @@ async fn test_transfer_object_error() {
     // Test 1: Double spend
     let object_id = *objects.next().unwrap();
     let data = client
-        .transfer_coin(sender, object_id, gas_object, recipient)
+        .transfer_coin(sender, object_id, gas_object, 50000, recipient)
         .await
         .unwrap();
 
@@ -1337,7 +1357,7 @@ async fn test_transfer_object_error() {
         .unwrap();
 
     let data = client
-        .transfer_coin(sender, object_id, gas_object, recipient)
+        .transfer_coin(sender, object_id, gas_object, 50000, recipient)
         .await
         .unwrap();
 
@@ -1356,7 +1376,7 @@ async fn test_transfer_object_error() {
     let obj = Object::with_id_owner_for_testing(ObjectID::random(), sender);
 
     let result = client
-        .transfer_coin(sender, obj.id(), gas_object, recipient)
+        .transfer_coin(sender, obj.id(), gas_object, 50000, recipient)
         .await;
     assert!(result.is_err());
 }
@@ -1938,7 +1958,7 @@ async fn test_transfer_pending_transactions() {
     // Test 1: Normal transfer
     let object_id = *objects.next().unwrap();
     let data = client
-        .transfer_coin(sender, object_id, gas_object, recipient)
+        .transfer_coin(sender, object_id, gas_object, 50000, recipient)
         .await
         .unwrap();
 
@@ -1955,7 +1975,7 @@ async fn test_transfer_pending_transactions() {
     let obj = Object::with_id_owner_for_testing(ObjectID::random(), sender);
 
     let result = client
-        .transfer_coin(sender, obj.id(), gas_object, recipient)
+        .transfer_coin(sender, obj.id(), gas_object, 50000, recipient)
         .await;
     assert!(result.is_err());
     // assert!(matches!(result.unwrap_err().downcast_ref(),

@@ -14,8 +14,8 @@ use structopt::StructOpt;
 use sui::shell::{
     install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
 };
-use sui::sui_commands;
 use sui::wallet_commands::*;
+use sui::{sui_config_dir, SUI_WALLET_CONFIG};
 
 const SUI: &str = "   _____       _    _       __      ____     __
   / ___/__  __(_)  | |     / /___ _/ / /__  / /_
@@ -62,15 +62,17 @@ async fn main() -> Result<(), anyhow::Error> {
     let wallet_conf_path = options
         .config
         .clone()
-        .unwrap_or(sui_commands::sui_config_dir()?.join(sui_commands::SUI_WALLET_CONFIG));
+        .unwrap_or(sui_config_dir()?.join(SUI_WALLET_CONFIG));
 
     let mut context = WalletContext::new(&wallet_conf_path)?;
 
     // Sync all accounts on start up.
     for address in context.config.accounts.clone() {
-        WalletCommands::SyncClientState { address }
-            .execute(&mut context)
-            .await?;
+        WalletCommands::SyncClientState {
+            address: Some(address),
+        }
+        .execute(&mut context)
+        .await?;
     }
 
     let mut out = stdout();
@@ -114,7 +116,7 @@ impl AsyncHandler<WalletContext> for ClientCommandHandler {
         completion_cache: CompletionCache,
     ) -> bool {
         if let Err(e) = handle_command(get_command(args), context, completion_cache).await {
-            let _err = writeln!(stderr(), "{}", e);
+            let _err = writeln!(stderr(), "{}", e.to_string().red());
         }
         false
     }

@@ -24,6 +24,7 @@ use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature, BcsSignable,
     EmptySignInfo, Signable, Signature, VerificationObligation,
 };
+use crate::gas::GasCostSummary;
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
@@ -52,13 +53,11 @@ pub struct MoveCall {
     pub object_arguments: Vec<ObjectRef>,
     pub shared_object_arguments: Vec<ObjectID>,
     pub pure_arguments: Vec<Vec<u8>>,
-    pub gas_budget: u64,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveModulePublish {
     pub modules: Vec<Vec<u8>>,
-    pub gas_budget: u64,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -174,13 +173,11 @@ impl Display for SingleTransactionKind {
                 writeln!(writer, "Sequence Number : {:?}", seq)?;
                 writeln!(writer, "Object Digest : {}", encode_bytes_hex(&digest.0))?;
             }
-            Self::Publish(p) => {
+            Self::Publish(_p) => {
                 writeln!(writer, "Transaction Kind : Publish")?;
-                writeln!(writer, "Gas Budget : {}", p.gas_budget)?;
             }
             Self::Call(c) => {
                 writeln!(writer, "Transaction Kind : Call")?;
-                writeln!(writer, "Gas Budget : {}", c.gas_budget)?;
                 writeln!(writer, "Package ID : {}", c.package.0.to_hex_literal())?;
                 writeln!(writer, "Module : {}", c.module)?;
                 writeln!(writer, "Function : {}", c.function)?;
@@ -228,17 +225,24 @@ pub struct TransactionData {
     pub kind: TransactionKind,
     sender: SuiAddress,
     gas_payment: ObjectRef,
+    pub gas_budget: u64,
 }
 
 impl TransactionData
 where
     Self: BcsSignable,
 {
-    pub fn new(kind: TransactionKind, sender: SuiAddress, gas_payment: ObjectRef) -> Self {
+    pub fn new(
+        kind: TransactionKind,
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Self {
         TransactionData {
             kind,
             sender,
             gas_payment,
+            gas_budget,
         }
     }
 
@@ -262,9 +266,8 @@ where
             object_arguments,
             shared_object_arguments,
             pure_arguments,
-            gas_budget,
         }));
-        Self::new(kind, sender, gas_payment)
+        Self::new(kind, sender, gas_payment, gas_budget)
     }
 
     pub fn new_transfer(
@@ -272,12 +275,13 @@ where
         object_ref: ObjectRef,
         sender: SuiAddress,
         gas_payment: ObjectRef,
+        gas_budget: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::Transfer(Transfer {
             recipient,
             object_ref,
         }));
-        Self::new(kind, sender, gas_payment)
+        Self::new(kind, sender, gas_payment, gas_budget)
     }
 
     pub fn new_module(
@@ -288,9 +292,8 @@ where
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::Publish(MoveModulePublish {
             modules,
-            gas_budget,
         }));
-        Self::new(kind, sender, gas_payment)
+        Self::new(kind, sender, gas_payment, gas_budget)
     }
 
     /// Returns the transaction kind as a &str (variant name, no fields)
@@ -310,6 +313,10 @@ where
         let mut writer = Vec::new();
         self.write(&mut writer);
         writer
+    }
+
+    pub fn to_base64(&self) -> String {
+        base64::encode(self.to_bytes())
     }
 }
 
@@ -780,20 +787,20 @@ pub enum CallResult {
 pub enum ExecutionStatus {
     // Gas used in the success case.
     Success {
-        gas_used: u64,
+        gas_cost: GasCostSummary,
         results: Vec<CallResult>,
     },
     // Gas used in the failed case, and the error.
     Failure {
-        gas_used: u64,
+        gas_cost: GasCostSummary,
         error: Box<SuiError>,
     },
 }
 
 impl ExecutionStatus {
-    pub fn new_failure(gas_used: u64, error: SuiError) -> ExecutionStatus {
+    pub fn new_failure(gas_used: GasCostSummary, error: SuiError) -> ExecutionStatus {
         ExecutionStatus::Failure {
-            gas_used,
+            gas_cost: gas_used,
             error: Box::new(error),
         }
     }
@@ -806,29 +813,39 @@ impl ExecutionStatus {
         matches!(self, ExecutionStatus::Failure { .. })
     }
 
-    pub fn unwrap(self) -> (u64, Vec<CallResult>) {
+    pub fn unwrap(self) -> (GasCostSummary, Vec<CallResult>) {
         match self {
-            ExecutionStatus::Success { gas_used, results } => (gas_used, results),
+            ExecutionStatus::Success {
+                gas_cost: gas_used,
+                results,
+            } => (gas_used, results),
             ExecutionStatus::Failure { .. } => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
         }
     }
 
-    pub fn unwrap_err(self) -> (u64, SuiError) {
+    pub fn unwrap_err(self) -> (GasCostSummary, SuiError) {
         match self {
             ExecutionStatus::Success { .. } => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
-            ExecutionStatus::Failure { gas_used, error } => (gas_used, *error),
+            ExecutionStatus::Failure {
+                gas_cost: gas_used,
+                error,
+            } => (gas_used, *error),
         }
     }
 
     /// Returns the gas used from the status
-    pub fn gas_used(&self) -> u64 {
+    pub fn gas_cost_summary(&self) -> &GasCostSummary {
         match &self {
-            ExecutionStatus::Success { gas_used, .. } => *gas_used,
-            ExecutionStatus::Failure { gas_used, .. } => *gas_used,
+            ExecutionStatus::Success {
+                gas_cost: gas_used, ..
+            } => gas_used,
+            ExecutionStatus::Failure {
+                gas_cost: gas_used, ..
+            } => gas_used,
         }
     }
 }

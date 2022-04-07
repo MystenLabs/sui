@@ -1,7 +1,7 @@
 too-many-arguments-threshold = 20
 disallowed-methods = [
     # unbounded channels are for expert use only
-    { path = "tokio::sync::mpsc::unbounded", reason = "use a bounded channel instead" },
+    { path = "tokio::sync::mpsc::unbounded_channel", reason = "use a bounded channel instead" },
     { path = "futures::channel::mpsc::unbounded", reason = "use a bounded channel instead" },
     { path = "futures_channel::mpsc::unbounded", reason = "use a bounded channel instead" },
 ]

@@ -66,7 +66,7 @@ async fn test_server() -> Result<(usize, usize), std::io::Error> {
     let counter = Arc::new(AtomicUsize::new(0));
     let mut received = 0;
 
-    let server = spawn_server(&address, TestService::new(counter.clone()), 100).await?;
+    let server = spawn_server(&address, Arc::new(TestService::new(counter.clone())), 100).await?;
 
     let mut client = connect(address.clone(), 1000).await?;
     client.write_data(b"abcdef").await?;

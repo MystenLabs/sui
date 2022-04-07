@@ -26,7 +26,8 @@ use sui_types::{
     committee::Committee,
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
-    fp_bail, fp_ensure, gas,
+    fp_bail, fp_ensure,
+    gas::{self, SuiGasStatus},
     messages::*,
     object::{Data, Object},
     storage::{BackingPackageStore, DeleteKind, Storage},
@@ -46,6 +47,10 @@ mod batch_transaction_tests;
 #[path = "unit_tests/move_integration_tests.rs"]
 pub mod move_integration_tests;
 
+#[cfg(test)]
+#[path = "unit_tests/gas_tests.rs"]
+mod gas_tests;
+
 mod temporary_store;
 pub use temporary_store::AuthorityTemporaryStore;
 
@@ -54,7 +59,7 @@ pub use authority_store::{AuthorityStore, GatewayStore};
 
 pub mod authority_notifier;
 
-const MAX_ITEMS_LIMIT: u64 = 10_000;
+const MAX_ITEMS_LIMIT: u64 = 100_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
 /// a Trait object for `signature::Signer` that is:
@@ -107,16 +112,46 @@ impl AuthorityState {
         self.batch_channels.subscribe()
     }
 
+    /// Checking gas budget by fetching the gas object only from the store,
+    /// and check whether the balance and budget satisfies the miminum requirement.
+    /// Returns the gas object (to be able to rese it latter) and a gas status
+    /// that will be used in the entire lifecycle of the transaction execution.
     #[instrument(level = "trace", skip_all)]
-    async fn check_locks_and_gas(
+    async fn check_gas(
+        &self,
+        gas_payment_id: ObjectID,
+        gas_budget: u64,
+    ) -> SuiResult<(Object, SuiGasStatus<'_>)> {
+        let gas_object = self.get_object(&gas_payment_id).await?;
+        let gas_object = gas_object.ok_or(SuiError::ObjectNotFound {
+            object_id: gas_payment_id,
+        })?;
+        gas::check_gas_balance(&gas_object, gas_budget)?;
+        let gas_status = gas::start_gas_metering(gas_budget)?;
+        Ok((gas_object, gas_status))
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    async fn check_locks(
         &self,
         transaction: &Transaction,
+        gas_object: Object,
+        gas_status: &mut SuiGasStatus<'_>,
     ) -> Result<Vec<(InputObjectKind, Object)>, SuiError> {
         let input_objects = transaction.input_objects()?;
         // These IDs act as authenticators that can own other objects.
-        let objects = self.fetch_objects(&input_objects).await?;
+        let objects = self.fetch_objects(&input_objects, Some(gas_object)).await?;
         let all_objects =
             transaction_input_checker::check_locks(transaction, input_objects, objects).await?;
+        // Charge gas for reading all objects from the DB.
+        // TODO: Some of the objects may be duplicate (for batch tx). We could save gas by
+        // fetching only unique objects.
+        let total_size = all_objects
+            .iter()
+            .map(|(_, obj)| obj.object_data_size())
+            .sum();
+        gas_status.charge_storage_read(total_size)?;
+
         Ok(all_objects)
     }
 
@@ -124,10 +159,19 @@ impl AuthorityState {
     async fn fetch_objects(
         &self,
         input_objects: &[InputObjectKind],
+        gas_object_opt: Option<Object>,
     ) -> Result<Vec<Option<Object>>, SuiError> {
         let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
-
-        self.get_objects(&ids[..]).await
+        if let Some(gas_object) = gas_object_opt {
+            // If we already have the gas object, avoid fetching it again.
+            // Skip the last one since it's the gas object.
+            debug_assert_eq!(gas_object.id(), ids[ids.len() - 1]);
+            let mut result = self.get_objects(&ids[..ids.len() - 1]).await?;
+            result.push(Some(gas_object));
+            Ok(result)
+        } else {
+            self.get_objects(&ids[..]).await
+        }
     }
 
     /// Initiate a new transaction.
@@ -145,7 +189,21 @@ impl AuthorityState {
             return Ok(transaction_info);
         }
 
-        let all_objects: Vec<_> = self.check_locks_and_gas(&transaction).await?;
+        let (gas_object, mut gas_status) = self
+            .check_gas(
+                transaction.gas_payment_object_ref().0,
+                transaction.data.gas_budget,
+            )
+            .await?;
+
+        let all_objects: Vec<_> = self
+            .check_locks(&transaction, gas_object, &mut gas_status)
+            .await?;
+        if transaction.contains_shared_object() {
+            // It's important that we do this here to make sure there is enough
+            // gas to cover shared objects, before we lock all objects.
+            gas_status.charge_consensus()?;
+        }
         let owned_objects = transaction_input_checker::filter_owned_objects(&all_objects);
 
         let signed_transaction = SignedTransaction::new(transaction, self.name, &*self.secret);
@@ -185,66 +243,60 @@ impl AuthorityState {
     async fn check_shared_locks(
         &self,
         transaction_digest: &TransactionDigest,
-        transaction: &Transaction,
         inputs: &[(InputObjectKind, Object)],
     ) -> Result<(), SuiError> {
-        // If the transaction contains shared objects, we need to ensure they have been scheduled
-        // for processing by the consensus protocol.
-        if transaction.contains_shared_object() {
-            debug!("Validating shared object sequence numbers from consensus...");
+        debug!("Validating shared object sequence numbers from consensus...");
 
-            // Collect the version we have for each shared object
-            let shared_ids: HashSet<_> = inputs
-                .iter()
-                .filter_map(|(kind, obj)| match kind {
-                    InputObjectKind::MutSharedMoveObject(..) if obj.owner.is_shared_mutable() => {
-                        Some((obj.id(), obj.version()))
-                    }
-                    _ => None,
-                })
-                .collect();
-            // Internal consistency check
-            debug_assert!(
-                !shared_ids.is_empty(),
-                "we just checked that there are share objects yet none found?"
-            );
-
-            // Read the
-            let shared_locks: HashMap<_, _> = self
-                ._database
-                .all_shared_locks(transaction_digest)?
-                .into_iter()
-                .collect();
-
-            // Check whether the shared objects have already been assigned a sequence number by
-            // the consensus. Bail if the transaction contains even one shared object that either:
-            // (i) was not assigned a sequence number, or
-            // (ii) has a different sequence number than the current one.
-
-            let lock_errors: Vec<_> = shared_ids
-                .iter()
-                .filter_map(|(object_id, version)| {
-                    if !shared_locks.contains_key(object_id) {
-                        Some(SuiError::SharedObjectLockNotSetObject)
-                    } else if shared_locks[object_id] != *version {
-                        Some(SuiError::UnexpectedSequenceNumber {
-                            object_id: *object_id,
-                            expected_sequence: shared_locks[object_id],
-                            given_sequence: *version,
-                        })
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            fp_ensure!(
-                lock_errors.is_empty(),
-                SuiError::LockErrors {
-                    errors: lock_errors
+        // Collect the version we have for each shared object
+        let shared_ids: HashSet<_> = inputs
+            .iter()
+            .filter_map(|(kind, obj)| match kind {
+                InputObjectKind::MutSharedMoveObject(..) if obj.owner.is_shared_mutable() => {
+                    Some((obj.id(), obj.version()))
                 }
-            );
-        }
+                _ => None,
+            })
+            .collect();
+        // Internal consistency check
+        debug_assert!(
+            !shared_ids.is_empty(),
+            "we just checked that there are share objects yet none found?"
+        );
+
+        let shared_locks: HashMap<_, _> = self
+            ._database
+            .all_shared_locks(transaction_digest)?
+            .into_iter()
+            .collect();
+
+        // Check whether the shared objects have already been assigned a sequence number by
+        // the consensus. Bail if the transaction contains even one shared object that either:
+        // (i) was not assigned a sequence number, or
+        // (ii) has a different sequence number than the current one.
+
+        let lock_errors: Vec<_> = shared_ids
+            .iter()
+            .filter_map(|(object_id, version)| {
+                if !shared_locks.contains_key(object_id) {
+                    Some(SuiError::SharedObjectLockNotSetObject)
+                } else if shared_locks[object_id] != *version {
+                    Some(SuiError::UnexpectedSequenceNumber {
+                        object_id: *object_id,
+                        expected_sequence: shared_locks[object_id],
+                        given_sequence: *version,
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        fp_ensure!(
+            lock_errors.is_empty(),
+            SuiError::LockErrors {
+                errors: lock_errors
+            }
+        );
 
         Ok(())
     }
@@ -258,14 +310,26 @@ impl AuthorityState {
         let transaction_digest = *certificate.digest();
         let transaction = &certificate.transaction;
 
-        let objects_by_kind = self.check_locks_and_gas(transaction).await?;
+        let (gas_object, mut gas_status) = self
+            .check_gas(
+                transaction.gas_payment_object_ref().0,
+                transaction.data.gas_budget,
+            )
+            .await?;
+
+        let objects_by_kind = self
+            .check_locks(transaction, gas_object, &mut gas_status)
+            .await?;
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
-        let _shared_objects = self
-            .check_shared_locks(&transaction_digest, transaction, &objects_by_kind)
-            .await?;
-        // inputs.extend(shared_objects);
+        if transaction.contains_shared_object() {
+            // If the transaction contains shared objects, we need to ensure they have been scheduled
+            // for processing by the consensus protocol.
+            self.check_shared_locks(&transaction_digest, &objects_by_kind)
+                .await?;
+            gas_status.charge_consensus()?;
+        }
 
         debug!(
             num_inputs = objects_by_kind.len(),
@@ -284,7 +348,9 @@ impl AuthorityState {
             objects_by_kind,
             &self.move_vm,
             &self._native_functions,
+            gas_status,
         )?;
+        // TODO: Distribute gas charge and rebate, which can be retrieved from effects.
         let signed_effects = effects.to_sign_effects(&self.name, &*self.secret);
 
         // Update the database in an atomic manner
@@ -574,7 +640,7 @@ impl AuthorityState {
     ) -> SuiResult {
         debug_assert!(ctx.digest() == TransactionDigest::genesis());
         let inputs = Transaction::input_objects_in_compiled_modules(&modules);
-        let input_objects = self.fetch_objects(&inputs).await?;
+        let input_objects = self.fetch_objects(&inputs, None).await?;
         // When publishing genesis packages, since the std framework packages all have
         // non-zero addresses, [`Transaction::input_objects_in_compiled_modules`] will consider
         // them as dependencies even though they are not. Hence input_objects contain objects
@@ -604,18 +670,23 @@ impl AuthorityState {
             AuthorityTemporaryStore::new(self._database.clone(), &filtered, ctx.digest());
         let package_id = ObjectID::from(*modules[0].self_id().address());
         let natives = self._native_functions.clone();
-        let vm = adapter::verify_and_link(&temporary_store, &modules, package_id, natives)?;
+        let mut gas_status = SuiGasStatus::new_unmetered();
+        let vm = adapter::verify_and_link(
+            &temporary_store,
+            &modules,
+            package_id,
+            natives,
+            &mut gas_status,
+        )?;
         let vm = SuiMoveVM::new(vm);
 
-        if let ExecutionStatus::Failure { error, .. } = adapter::store_package_and_init_modules(
+        adapter::store_package_and_init_modules(
             &mut temporary_store,
             &vm,
             modules,
             ctx,
-            gas::MAX_GAS_BUDGET,
-        ) {
-            return Err(*error);
-        };
+            &mut gas_status,
+        )?;
         self.db()
             .update_objects_state_for_genesis(temporary_store, ctx.digest())
     }

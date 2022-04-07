@@ -215,7 +215,7 @@ instance of the `Coin` struct. Direct access to fields of a struct is
 allowed only within the module defining a given struct as described in
 [Privileged Struct Operations](https://github.com/diem/move/blob/main/language/documentation/book/src/structs-and-resources.md#privileged-struct-operations).
 The body of the function simply retrieves the `value` field from the
-`Coin` struct instance parameter and returns it. Please note that the
+`Coin` struct instance parameter and returns it. Note that the
 coin parameter is a read-only reference to the `Coin` struct instance,
 indicated by the `&` preceding the parameter type. Move's type system
 enforces an invariant that struct instance arguments passed by
@@ -284,9 +284,12 @@ wallet in [Calling Move code](wallet.md#calling-move-code).
 
 In order to build a Move package and run code defined in
 this package, first [install Sui binaries](install.md).
-Please clone the repository as
-described in the installation instructions as this tutorial assumes that you have a clone of Sui's repository in your current directory, and the code example
-developed in this tutorial can also be found in the
+
+Then clone the repository as described in
+[Contributing to Sui](../contribute/index.md#download-and-learn-sui)
+as this tutorial assumes you have a clone of Sui's repository in your current directory.
+
+Refer to the code example developed for this tutorial in the
 [M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/tutorial/sources/M1.move) file.
 
 The directory structure used in this tutorial should at the moment
@@ -299,17 +302,24 @@ current_directory
 ```
 
 For convenience, make sure the path to Sui binaries
-(`sui/target/release`), including the sui-move command used throughout
-this tutorial, is part of your system path.
+(`~/.cargo/bin`), including the sui-move command used throughout
+this tutorial, is part of your system path:
 
-Now proceed to creating a package directory structure (in the current directory) with an
+```
+$ which sui-move
+```
+
+Now proceed to creating a package directory structure in the current
+directory, parallel to the `sui` repository. It will contain an
 empty manifest file and an empty module source file following the
 [Move code organization](#move-code-organization)
-described earlier:
+described earlier.
+
+So from the same directory containing the `sui` repository, run:
 
 ``` shell
 mkdir -p my_move_package/sources
-mkdir -p my_move_package/sources/M1.move
+touch my_move_package/sources/M1.move
 touch my_move_package/Move.toml
 ```
 
@@ -333,7 +343,10 @@ be an upgradable asset that can be shared between different players. A
 sword asset can be defined similarly to another asset we are already
 familiar with from our
 [First look at Move source code](#first-look-at-move-source-code). That
-is a `Coin` struct type. Let us put the following module and struct
+is a `Coin` struct type.
+
+
+Let us put the following module and struct
 definitions in the `M1.move` file:
 
 ``` rust
@@ -387,7 +400,12 @@ name = "MyFirstPackage"
 version = "0.0.1"
 
 [dependencies]
-Sui = { local = "https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/" }
+# Using a local dep for the Move stdlib instead of a git dep to avoid the overhead of fetching the git dep in
+# CI. The local dep is an unmodified version of the upstream stdlib
+# Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="sui_programmability/framework", rev="44b5702712c15df365989a3b3f80038b7bf6c2ef"}
+
+# Assuming the `sui` repository is at the same level as the package parent directory
+Sui = { local = "../sui/sui_programmability/framework/" }
 
 [addresses]
 MyFirstPackage = "0x0"
@@ -396,14 +414,18 @@ MyFirstPackage = "0x0"
 MyFirstPackage = "0x0"
 ```
 
-We can now go to the directory containing our package and build it:
+Ensure you are in the `my_move_package` directory containing your package and build it:
 
 ``` shell
-cd my_move_package
 sui-move build
 ```
 
-No output is expected on a successful build.
+A successful build yields results resembling:
+
+```shell
+Build Successful
+Artifacts path: "./build"
+```
 
 Now that we have designed our asset and its accessor functions, let us
 test the code we have written.
@@ -903,7 +925,7 @@ Once an account address owns an object, for any future use (either read or write
 
 #### Transfer to object
 We can also transfer an object to be owned by another object. Note that the ownership is only tracked in Sui. From Move's perspective, these two objects are still more or less independent, in that the child object isn't part of the parent object in terms of data store.
-Once an object is owned by another object, it is required that for any such object referenced in the entry function, its owner must also be one of the argument objects. For instance, if we have a chain of ownership: account address `Addr` owns object `a`, object `a` owns object `b`, and `b` owns object `c`, in order to use object `c` in a Move call, the entry function must also include both `b` and `a`, and the signer of the transaction must be `Addr1`, like this:
+Once an object is owned by another object, it is required that for any such object referenced in the entry function, its owner must also be one of the argument objects. For instance, if we have a chain of ownership: account address `Addr1` owns object `a`, object `a` owns object `b`, and `b` owns object `c`, in order to use object `c` in a Move call, the entry function must also include both `b` and `a`, and the signer of the transaction must be `Addr1`, like this:
 ```
 // signer of ctx is Addr1.
 public fun entry_function(a: &A, b: &B, c: &mut C, ctx: &mut TxContext);

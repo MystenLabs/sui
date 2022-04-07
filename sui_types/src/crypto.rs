@@ -1,5 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use anyhow::Error;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 
@@ -161,7 +162,7 @@ pub fn get_key_pair_from_bytes(bytes: &[u8]) -> (SuiAddress, KeyPair) {
 }
 
 // TODO: replace this with a byte interpretation based on multicodec
-const SUI_SIGNATURE_LENGTH: usize =
+pub const SUI_SIGNATURE_LENGTH: usize =
     ed25519_dalek::PUBLIC_KEY_LENGTH + ed25519_dalek::SIGNATURE_LENGTH;
 
 #[serde_as]
@@ -300,7 +301,6 @@ impl Signature {
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
 
 pub struct AuthoritySignature(pub dalek::Signature);
-
 impl AsRef<[u8]> for AuthoritySignature {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
@@ -421,7 +421,12 @@ mod private {
 pub trait Signable<W> {
     fn write(&self, writer: &mut W);
 }
-
+pub trait SignableBytes
+where
+    Self: Sized,
+{
+    fn from_signable_bytes(bytes: Vec<u8>) -> Result<Self, anyhow::Error>;
+}
 /// Activate the blanket implementation of `Signable` based on serde and BCS.
 /// * We use `serde_name` to extract a seed from the name of structs and enums.
 /// * We use `BCS` to generate canonical bytes suitable for hashing and signing.
@@ -437,6 +442,18 @@ where
         // Note: This assumes that names never contain the separator `::`.
         write!(writer, "{}::", name).expect("Hasher should not fail");
         bcs::serialize_into(writer, &self).expect("Message serialization should not fail");
+    }
+}
+
+impl<T> SignableBytes for T
+where
+    T: BcsSignable,
+{
+    fn from_signable_bytes(bytes: Vec<u8>) -> Result<Self, Error> {
+        // Remove name tag before deserialization using BCS
+        let name = serde_name::trace_name::<Self>().expect("Self must be a struct or an enum");
+        let name_byte_len = format!("{}::", name).bytes().len();
+        Ok(bcs::from_bytes(&bytes[name_byte_len..])?)
     }
 }
 

@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use sui_types::{
     base_types::{ObjectRef, SequenceNumber, SuiAddress},
     error::{SuiError, SuiResult},
-    fp_ensure, gas,
+    fp_ensure,
     messages::{InputObjectKind, SingleTransactionKind, Transaction},
     object::{Object, Owner},
 };
@@ -46,6 +46,16 @@ pub async fn check_locks(
     // Gather all objects and errors.
     let mut all_objects = Vec::with_capacity(input_objects.len());
     let mut errors = Vec::new();
+    let transfer_object_ids: HashSet<_> = transaction
+        .single_transactions()
+        .filter_map(|s| {
+            if let SingleTransactionKind::Transfer(t) = s {
+                Some(t.object_ref.0)
+            } else {
+                None
+            }
+        })
+        .collect();
     for (object_kind, object) in input_objects.into_iter().zip(objects) {
         // All objects must exist in the DB.
         let object = match object {
@@ -55,6 +65,9 @@ pub async fn check_locks(
                 continue;
             }
         };
+        if transfer_object_ids.contains(&object.id()) {
+            object.is_transfer_eligible()?;
+        }
         // Check if the object contents match the type of lock we need for
         // this object.
         match check_one_lock(
@@ -75,7 +88,6 @@ pub async fn check_locks(
         return Err(SuiError::LockErrors { errors });
     }
     fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
-    check_tx_requirement(transaction, &all_objects)?;
     Ok(all_objects)
 }
 
@@ -188,61 +200,4 @@ fn check_one_lock(
         }
     };
     Ok(())
-}
-
-/// This function does 3 things:
-/// 1. Check if the gas object has enough balance to pay for this transaction.
-///   Since the transaction may be a batch transaction, we need to walk through
-///   each single transaction in it and accumulate their gas cost. For Move call
-///   and publish we can simply use their budget, for transfer we will calculate
-///   the cost on the spot since it's deterministic (See comments inside the function).
-/// 2. Check if the gas budget for each single transction is above some minimum amount.
-///   This can help reduce DDos attacks.
-/// 3. Check that the objects used in transfers are mutable. We put the check here
-///   because this is the most convenient spot to check.
-fn check_tx_requirement(
-    transaction: &Transaction,
-    input_objects: &[(InputObjectKind, Object)],
-) -> SuiResult {
-    let mut total_cost = 0;
-    let mut idx = 0;
-    for tx in transaction.single_transactions() {
-        match tx {
-            SingleTransactionKind::Transfer(_) => {
-                // Index access safe because the inputs were constructed in order.
-                let transfer_object = &input_objects[idx].1;
-                transfer_object.is_transfer_eligible()?;
-                // TODO: Make Transfer transaction to also contain gas_budget.
-                // By @gdanezis: Now his is the only part of this function that requires
-                // an input object besides the gas object. It would be a major win if we
-                // can get rid of the requirement to have all objects to check the transfer
-                // requirement. If we can go this, then we could execute this check before
-                // we check for signatures.
-                // This would allow us to shore up out DoS defences: we only need to do a
-                // read on the gas object balance before we do anything expensive,
-                // such as checking signatures.
-                total_cost += gas::calculate_object_transfer_cost(transfer_object);
-                idx += tx.input_object_count();
-            }
-            SingleTransactionKind::Call(op) => {
-                gas::check_move_gas_requirement(op.gas_budget)?;
-                total_cost += op.gas_budget;
-                idx += tx.input_object_count();
-            }
-            SingleTransactionKind::Publish(op) => {
-                gas::check_move_gas_requirement(op.gas_budget)?;
-                total_cost += op.gas_budget;
-                // No need to update idx because Publish cannot show up in batch.
-            }
-        }
-    }
-    // The last element in the inputs is always gas object.
-    let gas_object = &input_objects.last().unwrap().1;
-    fp_ensure!(
-        !gas_object.is_shared(),
-        SuiError::InsufficientGas {
-            error: format!("Gas object cannot be shared: {:?}", gas_object.id())
-        }
-    );
-    gas::check_gas_balance(gas_object, total_cost)
 }

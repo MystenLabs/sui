@@ -21,6 +21,11 @@ the `wallet` command used in the remainder of this tutorial in your path.
 Simply leave the terminal with Sui running and start a new terminal for the
 remainder of this tutorial.
 
+This tutorial models gas fees under a simplified schema. In practice, the Sui
+network will charge for gas using its native currency SUI. This transaction fee
+equals the computational effort of executing operations on the Sui network (i.e.
+gas units) times the price of gas in the SUI currency (i.e. the gas price).
+
 ## Gather accounts and gas objects
 
 In that new terminal, let us take a look at the account addresses we own in 
@@ -102,7 +107,7 @@ The newly published package object: (A613A7FF8CB03E0DFC0D157E232BBA50C5F19D17, S
 List of objects created by running module initializers: []
 Updated Gas : Coin { id: 38B89FE9F4A4823F1406938E87A8767CBD7F0B93, value: 92939 }
 ```
-As we can see, the package was successfully published. Some gas was charged: the initial gas value was 10000, now it's 92939 (note: the current gas charging mechanism is rather arbitrary, we will come up with a gas mechanism shortly).
+As we can see, the package was successfully published. Some gas was charged: the initial gas value was 100000, now it's 92939 (note: the current gas charging mechanism is rather arbitrary, we will come up with a gas mechanism shortly).
 The newly published package has the ID `A613A7FF8CB03E0DFC0D157E232BBA50C5F19D17`. Note that this ID will also be different in your terminal. We add the package to another environment variable:
 ```
 export PACKAGE=A613A7FF8CB03E0DFC0D157E232BBA50C5F19D17

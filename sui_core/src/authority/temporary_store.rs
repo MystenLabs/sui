@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use move_core_types::account_address::AccountAddress;
-use sui_types::event::Event;
+use sui_types::{event::Event, gas::SuiGasStatus};
 
 use super::*;
 
@@ -100,8 +100,10 @@ impl<S> AuthorityTemporaryStore<S> {
     /// For every object from active_inputs (i.e. all mutable objects), if they are not
     /// mutated during the transaction execution, force mutating them by incrementing the
     /// sequence number. This is required to achieve safety.
+    /// We skip the last object, which is always the gas object, because gas object will be
+    /// updated after this.
     pub fn ensure_active_inputs_mutated(&mut self) {
-        for (id, _seq, _) in self.active_inputs.iter() {
+        for (id, _seq, _) in self.active_inputs[..self.active_inputs.len() - 1].iter() {
             if !self.written.contains_key(id) && !self.deleted.contains_key(id) {
                 let mut object = self.objects[id].clone();
                 // Active input object must be Move object.
@@ -110,6 +112,39 @@ impl<S> AuthorityTemporaryStore<S> {
                     .insert(*id, (object.compute_object_reference(), object));
             }
         }
+    }
+
+    /// For every object changes, charge gas accordingly. Since by this point we haven't charged gas yet,
+    /// the gas object hasn't been mutated yet. Passing in `gas_object_size` so that we can also charge
+    /// for the gas object mutation in advance.
+    pub fn charge_gas_for_storage_changes(
+        &self,
+        gas_status: &mut SuiGasStatus,
+        gas_object_size: usize,
+    ) -> SuiResult {
+        for (object_id, (_object_ref, object)) in &self.written {
+            // Objects in written can be either mutation or creation.
+            // We figure it out by looking them up in `self.objects`.
+            let object_size = object.object_data_size();
+            let old_object_size = if let Some(old_obj) = self.objects.get(object_id) {
+                old_obj.object_data_size()
+            } else {
+                0
+            };
+            gas_status.charge_storage_mutation(old_object_size, object_size)?;
+        }
+        for object_id in self.deleted.keys() {
+            // If an object is in `self.deleted`, and also in `self.objects`, we give storage rebate.
+            // Otherwise if an object is in `self.deleted` but not in `self.objects`, it means this
+            // object was unwrapped and then deleted. The rebate would have been provided already when
+            // mutating the object that wrapped this object.
+            if let Some(old_obj) = self.objects.get(object_id) {
+                gas_status.charge_storage_mutation(old_obj.object_data_size(), 0)?;
+            }
+        }
+        // Also charge gas for mutating the gas object in advance.
+        gas_status.charge_storage_mutation(gas_object_size, gas_object_size)?;
+        Ok(())
     }
 
     pub fn to_effects(

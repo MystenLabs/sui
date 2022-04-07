@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use core::fmt;
+use std::collections::BTreeSet;
 use std::fmt::{Debug, Display, Formatter, Write};
 use std::path::Path;
 use std::sync::{Arc, RwLock};
@@ -17,7 +18,7 @@ use structopt::StructOpt;
 use tracing::info;
 
 use sui_core::gateway_state::gateway_responses::{
-    MergeCoinResponse, PublishResponse, SplitCoinResponse,
+    MergeCoinResponse, PublishResponse, SplitCoinResponse, SwitchResponse,
 };
 use sui_core::gateway_state::GatewayClient;
 use sui_framework::build_move_package_to_bytes;
@@ -25,8 +26,8 @@ use sui_types::base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects};
 use sui_types::move_package::resolve_and_type_check;
-use sui_types::object::ObjectRead;
 use sui_types::object::ObjectRead::Exists;
+use sui_types::object::{Object, ObjectRead};
 
 use crate::config::{Config, PersistedConfig, WalletConfig};
 use crate::keystore::Keystore;
@@ -47,6 +48,18 @@ pub struct WalletOpts {
 #[structopt(rename_all = "kebab-case")]
 #[structopt(setting(AppSettings::NoBinaryName))]
 pub enum WalletCommands {
+    /// Switch active address
+    #[structopt(name = "switch")]
+    Switch {
+        /// Address to switch wallet commands to
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        address: SuiAddress,
+    },
+
+    /// Default address used for commands when none specified
+    #[structopt(name = "active-address")]
+    ActiveAddress {},
+
     /// Get obj info
     #[structopt(name = "object")]
     Object {
@@ -63,8 +76,9 @@ pub enum WalletCommands {
         path: String,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
+        /// If not provided, a gas object with at least gas_budget value will be selected
         #[structopt(long)]
-        gas: ObjectID,
+        gas: Option<ObjectID>,
 
         /// Gas budget for running module initializers
         #[structopt(long)]
@@ -92,7 +106,9 @@ pub enum WalletCommands {
         args: Vec<SuiJsonValue>,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         #[structopt(long)]
-        gas: ObjectID,
+        /// If not provided, a gas object with at least gas_budget value will be selected
+        #[structopt(long)]
+        gas: Option<ObjectID>,
         /// Gas budget for this call
         #[structopt(long)]
         gas_budget: u64,
@@ -110,14 +126,19 @@ pub enum WalletCommands {
         object_id: ObjectID,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
+        /// If not provided, a gas object with at least gas_budget value will be selected
         #[structopt(long)]
-        gas: ObjectID,
+        gas: Option<ObjectID>,
+
+        /// Gas budget for this transfer
+        #[structopt(long)]
+        gas_budget: u64,
     },
     /// Synchronize client state with authorities.
     #[structopt(name = "sync")]
     SyncClientState {
         #[structopt(long, parse(try_from_str = decode_bytes_hex))]
-        address: SuiAddress,
+        address: Option<SuiAddress>,
     },
 
     /// Obtain the Addresses managed by the wallet.
@@ -133,7 +154,7 @@ pub enum WalletCommands {
     Objects {
         /// Address owning the objects
         #[structopt(long, parse(try_from_str = decode_bytes_hex))]
-        address: SuiAddress,
+        address: Option<SuiAddress>,
     },
 
     /// Obtain all gas objects owned by the address.
@@ -141,7 +162,7 @@ pub enum WalletCommands {
     Gas {
         /// Address owning the objects
         #[structopt(long, parse(try_from_str = decode_bytes_hex))]
-        address: SuiAddress,
+        address: Option<SuiAddress>,
     },
 
     /// Split a coin object into multiple coins.
@@ -153,8 +174,9 @@ pub enum WalletCommands {
         #[structopt(long)]
         amounts: Vec<u64>,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
+        /// If not provided, a gas object with at least gas_budget value will be selected
         #[structopt(long)]
-        gas: ObjectID,
+        gas: Option<ObjectID>,
         /// Gas budget for this call
         #[structopt(long)]
         gas_budget: u64,
@@ -169,8 +191,9 @@ pub enum WalletCommands {
         #[structopt(long)]
         coin_to_merge: ObjectID,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
+        /// If not provided, a gas object with at least gas_budget value will be selected
         #[structopt(long)]
-        gas: ObjectID,
+        gas: Option<ObjectID>,
         /// Gas budget for this call
         #[structopt(long)]
         gas_budget: u64,
@@ -192,8 +215,9 @@ impl WalletCommands {
                 gas,
                 gas_budget,
             } => {
-                let gas_object_read = context.gateway.get_object_info(*gas).await?;
-                let gas_object = gas_object_read.object()?;
+                let gas_object = context
+                    .choose_gas_for_wallet(*gas, *gas_budget, BTreeSet::new())
+                    .await?;
                 let sender = gas_object.owner.get_owner_address()?;
                 let gas_obj_ref = gas_object.compute_object_reference();
 
@@ -230,10 +254,6 @@ impl WalletCommands {
                 gas_budget,
                 args,
             } => {
-                let gas_object_info = context.gateway.get_object_info(*gas).await?;
-                let gas_object = gas_object_info.object()?;
-                let sender = gas_object.owner.get_owner_address()?;
-
                 let package_obj_info = context.gateway.get_object_info(*package).await?;
                 let package_obj = package_obj_info.object().clone()?;
                 let package_obj_ref = package_obj_info.reference().unwrap();
@@ -258,6 +278,11 @@ impl WalletCommands {
                             .into_object()?,
                     );
                 }
+                let forbidden_gas_objects = BTreeSet::from_iter(object_ids.clone().into_iter());
+                let gas_object = context
+                    .choose_gas_for_wallet(*gas, *gas_budget, forbidden_gas_objects)
+                    .await?;
+                let sender = gas_object.owner.get_owner_address()?;
 
                 // Pass in the objects for a deeper check
                 // We can technically move this to impl MovePackage
@@ -271,12 +296,7 @@ impl WalletCommands {
                 )?;
 
                 // Fetch the object info for the gas obj
-                let gas_obj_ref = context
-                    .gateway
-                    .get_object_info(*gas)
-                    .await?
-                    .into_object()?
-                    .compute_object_reference();
+                let gas_obj_ref = gas_object.compute_object_reference();
 
                 // Fetch the objects for the object args
                 let mut object_args_refs = Vec::new();
@@ -317,16 +337,44 @@ impl WalletCommands {
                 WalletCommandResult::Call(cert, effects)
             }
 
-            WalletCommands::Transfer { to, object_id, gas } => {
-                let gas_object_info = context.gateway.get_object_info(*gas).await?;
-                let gas_object = gas_object_info.object()?;
+            WalletCommands::Transfer {
+                to,
+                object_id,
+                gas,
+                gas_budget,
+            } => {
+                let obj = context
+                    .gateway
+                    .get_object_info(*object_id)
+                    .await?
+                    .object()?
+                    .clone();
+                let forbidden_gas_objects = BTreeSet::from([*object_id]);
+
+                // If this isnt the active account, and no gas is specified, derive sender and gas from object to be sent
+                let gas_object = if context.active_address()? != obj.owner.get_owner_address()?
+                    && gas.is_none()
+                {
+                    context
+                        .gas_for_owner_budget(
+                            obj.owner.get_owner_address()?,
+                            *gas_budget,
+                            forbidden_gas_objects,
+                        )
+                        .await?
+                        .1
+                } else {
+                    context
+                        .choose_gas_for_wallet(*gas, *gas_budget, forbidden_gas_objects)
+                        .await?
+                };
                 let from = gas_object.owner.get_owner_address()?;
 
                 let time_start = Instant::now();
 
                 let data = context
                     .gateway
-                    .transfer_coin(from, *object_id, *gas, *to)
+                    .transfer_coin(from, *object_id, gas_object.id(), *gas_budget, *to)
                     .await?;
                 let signature = context
                     .keystore
@@ -352,11 +400,19 @@ impl WalletCommands {
             }
 
             WalletCommands::Objects { address } => {
-                WalletCommandResult::Objects(context.gateway.get_owned_objects(*address))
+                let address = match address {
+                    Some(a) => *a,
+                    None => context.active_address()?,
+                };
+                WalletCommandResult::Objects(context.gateway.get_owned_objects(address)?)
             }
 
             WalletCommands::SyncClientState { address } => {
-                context.gateway.sync_account_state(*address).await?;
+                let address = match address {
+                    Some(a) => *a,
+                    None => context.active_address()?,
+                };
+                context.gateway.sync_account_state(address).await?;
                 WalletCommandResult::SyncClientState
             }
             WalletCommands::NewAddress => {
@@ -366,23 +422,17 @@ impl WalletCommands {
                 WalletCommandResult::NewAddress(address)
             }
             WalletCommands::Gas { address } => {
-                context.gateway.sync_account_state(*address).await?;
-                let object_refs = context.gateway.get_owned_objects(*address);
-
-                // TODO: We should ideally fetch the objects from local cache
-                let mut coins = Vec::new();
-                for (id, _, _) in object_refs {
-                    match context.gateway.get_object_info(id).await? {
-                        Exists(_, o, _) => {
-                            if matches!( o.type_(), Some(v)  if *v == GasCoin::type_()) {
-                                // Okay to unwrap() since we already checked type
-                                let gas_coin = GasCoin::try_from(o.data.try_as_move().unwrap())?;
-                                coins.push(gas_coin);
-                            }
-                        }
-                        _ => continue,
-                    }
-                }
+                let address = match address {
+                    Some(a) => *a,
+                    None => context.active_address()?,
+                };
+                let coins = context
+                    .gas_objects(address)
+                    .await?
+                    .iter()
+                    // Ok to unwrap() since `get_gas_objects` guarantees gas
+                    .map(|q| GasCoin::try_from(&q.1).unwrap())
+                    .collect();
                 WalletCommandResult::Gas(coins)
             }
             WalletCommands::SplitCoin {
@@ -391,13 +441,20 @@ impl WalletCommands {
                 gas,
                 gas_budget,
             } => {
-                let gas_object_info = context.gateway.get_object_info(*gas).await?;
-                let gas_object = gas_object_info.object()?;
+                let forbidden_gas_objects = BTreeSet::from([*coin_id]);
+                let gas_object = context
+                    .choose_gas_for_wallet(*gas, *gas_budget, forbidden_gas_objects)
+                    .await?;
                 let signer = gas_object.owner.get_owner_address()?;
-
                 let data = context
                     .gateway
-                    .split_coin(signer, *coin_id, amounts.clone(), *gas, *gas_budget)
+                    .split_coin(
+                        signer,
+                        *coin_id,
+                        amounts.clone(),
+                        gas_object.id(),
+                        *gas_budget,
+                    )
                     .await?;
                 let signature = context
                     .keystore
@@ -417,12 +474,21 @@ impl WalletCommands {
                 gas,
                 gas_budget,
             } => {
-                let gas_object_info = context.gateway.get_object_info(*gas).await?;
-                let gas_object = gas_object_info.object()?;
+                let forbidden_gas_objects = BTreeSet::from([*primary_coin, *coin_to_merge]);
+                let gas_object = context
+                    .choose_gas_for_wallet(*gas, *gas_budget, forbidden_gas_objects)
+                    .await?;
+
                 let signer = gas_object.owner.get_owner_address()?;
                 let data = context
                     .gateway
-                    .merge_coins(signer, *primary_coin, *coin_to_merge, *gas, *gas_budget)
+                    .merge_coins(
+                        signer,
+                        *primary_coin,
+                        *coin_to_merge,
+                        gas_object.id(),
+                        *gas_budget,
+                    )
                     .await?;
                 let signature = context
                     .keystore
@@ -437,12 +503,32 @@ impl WalletCommands {
 
                 WalletCommandResult::MergeCoin(response)
             }
+            WalletCommands::Switch { address } => {
+                if !context.config.accounts.contains(address) {
+                    return Err(anyhow!("Address {} not managed by wallet", address));
+                }
+                context.config.active_address = Some(*address);
+                context.config.save()?;
+                WalletCommandResult::Switch(SwitchResponse { address: *address })
+            }
+            WalletCommands::ActiveAddress {} => {
+                WalletCommandResult::ActiveAddress(context.active_address().ok())
+            }
         });
         // Sync all managed addresses
         // This is wasteful because not all addresses might be modified
         // but will be removed as part of https://github.com/MystenLabs/sui/issues/1045
-        for address in context.config.accounts.clone() {
-            context.gateway.sync_account_state(address).await?;
+        match self {
+            WalletCommands::Publish { .. }
+            | WalletCommands::Call { .. }
+            | WalletCommands::Transfer { .. }
+            | WalletCommands::SplitCoin { .. }
+            | WalletCommands::MergeCoin { .. } => {
+                for address in context.config.accounts.clone() {
+                    context.gateway.sync_account_state(address).await?;
+                }
+            }
+            _ => {}
         }
         ret
     }
@@ -471,6 +557,97 @@ impl WalletContext {
             gateway,
         };
         Ok(context)
+    }
+    pub fn active_address(&mut self) -> Result<SuiAddress, anyhow::Error> {
+        if self.config.accounts.is_empty() {
+            return Err(anyhow!(
+                "No managed addresses. Create new address with `new-address` command."
+            ));
+        }
+
+        // Ok to unwrap because we checked that config addresses not empty
+        // Set it if not exists
+        self.config.active_address = Some(
+            self.config
+                .active_address
+                .unwrap_or(*self.config.accounts.get(0).unwrap()),
+        );
+
+        Ok(self.config.active_address.unwrap())
+    }
+
+    /// Get all the gas objects (and conveniently, gas amounts) for the address
+    pub async fn gas_objects(
+        &mut self,
+        address: SuiAddress,
+    ) -> Result<Vec<(u64, Object)>, anyhow::Error> {
+        let object_refs = self.gateway.get_owned_objects(address)?;
+
+        // TODO: We should ideally fetch the objects from local cache
+        let mut values_objects = Vec::new();
+        for (id, _, _) in object_refs {
+            match self.gateway.get_object_info(id).await? {
+                Exists(_, o, _) => {
+                    if matches!( o.type_(), Some(v)  if *v == GasCoin::type_()) {
+                        // Okay to unwrap() since we already checked type
+                        let gas_coin = GasCoin::try_from(o.data.try_as_move().unwrap())?;
+                        values_objects.push((gas_coin.value(), o));
+                    }
+                }
+                _ => continue,
+            }
+        }
+
+        Ok(values_objects)
+    }
+
+    /// Choose ideal gas object based on the budget and provided gas if any
+    async fn choose_gas_for_wallet(
+        &mut self,
+        specified_gas: Option<ObjectID>,
+        budget: u64,
+        forbidden_gas_objects: BTreeSet<ObjectID>,
+    ) -> Result<Object, anyhow::Error> {
+        Ok(match specified_gas {
+            None => {
+                let addr = self.active_address()?;
+                self.gas_for_owner_budget(addr, budget, forbidden_gas_objects)
+                    .await?
+                    .1
+            }
+            Some(g) => {
+                if forbidden_gas_objects.contains(&g) {
+                    return Err(anyhow!(
+                        "Gas {} cannot be used as payment and in transaction input",
+                        g
+                    ));
+                }
+
+                let gas_object_read = self.gateway.get_object_info(g).await?;
+                // You could technically try to pay with a gas not owned by user.
+                // Especially if one forgets to switch account
+                // Allow it still
+                gas_object_read.object()?.clone()
+            }
+        })
+    }
+
+    /// Find a gas object which fits the budget
+    pub async fn gas_for_owner_budget(
+        &mut self,
+        address: SuiAddress,
+        budget: u64,
+        forbidden_gas_objects: BTreeSet<ObjectID>,
+    ) -> Result<(u64, Object), anyhow::Error> {
+        for o in self.gas_objects(address).await.unwrap() {
+            if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.id()) {
+                return Ok(o);
+            }
+        }
+        return Err(anyhow!(
+            "No non-argument gas objects found with value >= budget {}",
+            budget
+        ));
     }
 }
 
@@ -536,6 +713,15 @@ impl Display for WalletCommandResult {
             }
             WalletCommandResult::MergeCoin(response) => {
                 write!(writer, "{}", response)?;
+            }
+            WalletCommandResult::Switch(response) => {
+                write!(writer, "{}", response)?;
+            }
+            WalletCommandResult::ActiveAddress(response) => {
+                match response {
+                    Some(r) => write!(writer, "{}", r)?,
+                    None => write!(writer, "None")?,
+                };
             }
         }
         write!(f, "{}", writer)
@@ -610,4 +796,6 @@ pub enum WalletCommandResult {
     Gas(Vec<GasCoin>),
     SplitCoin(SplitCoinResponse),
     MergeCoin(MergeCoinResponse),
+    Switch(SwitchResponse),
+    ActiveAddress(Option<SuiAddress>),
 }

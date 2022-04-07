@@ -154,16 +154,23 @@ ExecutionStatus:
     0:
       Success:
         STRUCT:
-          - gas_used: U64
+          - gas_cost:
+              TYPENAME: GasCostSummary
           - results:
               SEQ:
                 TYPENAME: CallResult
     1:
       Failure:
         STRUCT:
-          - gas_used: U64
+          - gas_cost:
+              TYPENAME: GasCostSummary
           - error:
               TYPENAME: SuiError
+GasCostSummary:
+  STRUCT:
+    - computation_cost: U64
+    - storage_cost: U64
+    - storage_rebate: U64
 Identifier:
   NEWTYPESTRUCT: STR
 MoveCall:
@@ -192,7 +199,6 @@ MoveCall:
     - pure_arguments:
         SEQ:
           SEQ: U8
-    - gas_budget: U64
 MoveFieldLayout:
   STRUCT:
     - name:
@@ -204,12 +210,11 @@ MoveModulePublish:
     - modules:
         SEQ:
           SEQ: U8
-    - gas_budget: U64
 MoveObject:
   STRUCT:
     - type_:
         TYPENAME: StructTag
-    - contents: BYTES
+    - contents: STR
 MovePackage:
   STRUCT:
     - id:
@@ -765,6 +770,7 @@ TransactionData:
           - TYPENAME: ObjectID
           - TYPENAME: SequenceNumber
           - TYPENAME: ObjectDigest
+    - gas_budget: U64
 TransactionDigest:
   NEWTYPESTRUCT: BYTES
 TransactionEffects:

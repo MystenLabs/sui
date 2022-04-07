@@ -22,18 +22,20 @@ thiserror = "1.0.30"
 hex = "0.4.3"
 serde_bytes = "0.11.5"
 serde_json = "1.0.79"
-serde_with = "1.12.0"
+serde_with = { version = "1.12.0", features = ["base64", "hex"] }
 signature = "1.5.0"
 static_assertions = "1.1.0"
 opentelemetry = { version = "0.17", features = ["rt-tokio"] }
 parking_lot = "0.12.0"
 
-name_variant = { git = "https://github.com/MystenLabs/mysten-infra", rev ="97a056f85555fa2afe497d6abb7cf6bf8faa63cf"}
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev ="e44bca4513a6ff6c97399cd79e82e4bc00571ac3"}
+name_variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "97a056f85555fa2afe497d6abb7cf6bf8faa63cf" }
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "e44bca4513a6ff6c97399cd79e82e4bc00571ac3" }
 
-move-binary-format = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
-move-bytecode-utils = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
-move-core-types = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a", features = ["address20"] }
-move-disassembler = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
-move-ir-types = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
+move-binary-format = { git = "https://github.com/diem/move", rev = "63bd52e0f5b02711d29a678e6f946b3d429f2090" }
+move-bytecode-utils = { git = "https://github.com/diem/move", rev = "63bd52e0f5b02711d29a678e6f946b3d429f2090" }
+move-core-types = { git = "https://github.com/diem/move", rev = "63bd52e0f5b02711d29a678e6f946b3d429f2090", features = ["address20"] }
+move-disassembler = { git = "https://github.com/diem/move", rev = "63bd52e0f5b02711d29a678e6f946b3d429f2090" }
+move-ir-types = { git = "https://github.com/diem/move", rev = "63bd52e0f5b02711d29a678e6f946b3d429f2090" }
+move-vm-types = { git = "https://github.com/diem/move", rev = "63bd52e0f5b02711d29a678e6f946b3d429f2090" }
+
 sha2 = "0.10.2"

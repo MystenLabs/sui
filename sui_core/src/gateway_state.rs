@@ -12,6 +12,7 @@ use futures::future;
 
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
+use sui_types::gas::{self, SuiGasStatus};
 use sui_types::{
     base_types::*,
     coin,
@@ -92,6 +93,7 @@ pub trait GatewayAPI {
         signer: SuiAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
+        gas_budget: u64,
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -160,7 +162,10 @@ pub trait GatewayAPI {
     async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error>;
 
     /// Get refs of all objects we own from local cache.
-    fn get_owned_objects(&mut self, account_addr: SuiAddress) -> Vec<ObjectRef>;
+    fn get_owned_objects(
+        &mut self,
+        account_addr: SuiAddress,
+    ) -> Result<Vec<ObjectRef>, anyhow::Error>;
 }
 
 impl<A> GatewayState<A>
@@ -197,6 +202,17 @@ where
             .set_transaction_lock(mutable_input_objects, tx_digest, transaction)
     }
 
+    async fn check_gas(
+        &self,
+        gas_payment_id: ObjectID,
+        gas_budget: u64,
+    ) -> SuiResult<(Object, SuiGasStatus<'_>)> {
+        let gas_object = self.get_object(&gas_payment_id).await?;
+        gas::check_gas_balance(&gas_object, gas_budget)?;
+        let gas_status = gas::start_gas_metering(gas_budget)?;
+        Ok((gas_object, gas_status))
+    }
+
     /// Execute (or retry) a transaction and execute the Confirmation Transaction.
     /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
     async fn execute_transaction_impl(
@@ -205,6 +221,12 @@ where
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         transaction.check_signature()?;
         let transaction_digest = transaction.digest();
+        self.check_gas(
+            transaction.gas_payment_object_ref().0,
+            transaction.data.gas_budget,
+        )
+        .await?;
+
         let input_objects = transaction.input_objects()?;
         let mut objects = self.read_objects_from_store(&input_objects).await?;
         for (object_opt, kind) in objects.iter_mut().zip(&input_objects) {
@@ -314,7 +336,7 @@ where
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
     ) -> Result<TransactionResponse, anyhow::Error> {
-        if let ExecutionStatus::Failure { gas_used: _, error } = effects.status {
+        if let ExecutionStatus::Failure { gas_cost: _, error } = effects.status {
             return Err(error.into());
         }
         fp_ensure!(
@@ -403,7 +425,7 @@ where
                 })?;
         let split_amounts: Vec<u64> = bcs::from_bytes(split_amounts)?;
 
-        if let ExecutionStatus::Failure { gas_used: _, error } = effects.status {
+        if let ExecutionStatus::Failure { gas_cost: _, error } = effects.status {
             return Err(error.into());
         }
         let created = &effects.created;
@@ -444,7 +466,7 @@ where
                 })?;
         let (gas_payment, _, _) = certificate.transaction.data.gas();
 
-        if let ExecutionStatus::Failure { gas_used: _, error } = effects.status {
+        if let ExecutionStatus::Failure { gas_cost: _, error } = effects.status {
             return Err(error.into());
         }
         fp_ensure!(
@@ -534,6 +556,7 @@ where
         signer: SuiAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
+        gas_budget: u64,
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error> {
         // TODO: We should be passing in object_ref directly instead of object_id.
@@ -542,7 +565,13 @@ where
         let gas_payment = self.get_object(&gas_payment).await?;
         let gas_payment_ref = gas_payment.compute_object_reference();
 
-        let data = TransactionData::new_transfer(recipient, object_ref, signer, gas_payment_ref);
+        let data = TransactionData::new_transfer(
+            recipient,
+            object_ref,
+            signer,
+            gas_payment_ref,
+            gas_budget,
+        );
 
         Ok(data)
     }
@@ -670,9 +699,10 @@ where
         Ok(result)
     }
 
-    fn get_owned_objects(&mut self, account_addr: SuiAddress) -> Vec<ObjectRef> {
-        self.store
-            .get_account_objects(account_addr)
-            .unwrap_or_default()
+    fn get_owned_objects(
+        &mut self,
+        account_addr: SuiAddress,
+    ) -> Result<Vec<ObjectRef>, anyhow::Error> {
+        Ok(self.store.get_account_objects(account_addr)?)
     }
 }

@@ -1,25 +1,24 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::crypto::PublicKeyBytes;
-use crate::error::SuiError;
-use ed25519_dalek::Digest;
-
-use hex::FromHex;
-use opentelemetry::{global, Context};
-use rand::Rng;
-use serde::{de::Error as _, Deserialize, Serialize};
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 
+use ed25519_dalek::Digest;
+use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
-
-use serde_with::{serde_as, Bytes};
+use opentelemetry::{global, Context};
+use rand::Rng;
+use serde::{de::Error as _, Deserialize, Serialize};
+use serde_with::serde_as;
+use serde_with::Bytes;
 use sha3::Sha3_256;
+
+use crate::crypto::PublicKeyBytes;
+use crate::error::SuiError;
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -130,7 +129,8 @@ impl AsRef<[u8]> for SuiAddress {
 }
 
 // We use SHA3-256 hence 32 bytes here
-const TRANSACTION_DIGEST_LENGTH: usize = 32;
+pub const TRANSACTION_DIGEST_LENGTH: usize = 32;
+pub const OBJECT_DIGEST_LENGTH: usize = 32;
 
 /// A transaction will have a (unique) digest.
 #[serde_as]
@@ -394,6 +394,23 @@ impl std::fmt::Debug for ObjectDigest {
         let s = hex::encode(&self.0);
         write!(f, "o#{}", s)?;
         Ok(())
+    }
+}
+
+impl AsRef<[u8]> for ObjectDigest {
+    fn as_ref(&self) -> &[u8] {
+        &self.0[..]
+    }
+}
+
+impl TryFrom<&[u8]> for ObjectDigest {
+    type Error = SuiError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, SuiError> {
+        let arr: [u8; OBJECT_DIGEST_LENGTH] = bytes
+            .try_into()
+            .map_err(|_| SuiError::InvalidTransactionDigest)?;
+        Ok(Self(arr))
     }
 }
 

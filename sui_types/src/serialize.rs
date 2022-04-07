@@ -200,14 +200,11 @@ pub fn deserialize_transaction_info(
 }
 
 pub fn deserialize_batch_info(
-    message: Result<SerializedMessage, SuiError>,
+    message: SerializedMessage,
 ) -> Result<BatchInfoResponseItem, SuiError> {
     match message {
-        Ok(message) => match message {
-            SerializedMessage::BatchInfoResp(resp) => Ok(*resp),
-            SerializedMessage::Error(error) => Err(*error),
-            _ => Err(SuiError::UnexpectedMessage),
-        },
-        Err(e) => Err(e),
+        SerializedMessage::BatchInfoResp(resp) => Ok(*resp),
+        SerializedMessage::Error(error) => Err(*error),
+        _ => Err(SuiError::UnexpectedMessage),
     }
 }
