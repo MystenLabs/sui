@@ -4,7 +4,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { DefaultRpcClient as rpc } from '../../utils/internetapi/SuiRpcClient';
+import { DefaultRpcClient as rpc } from '../../utils/api/SuiRpcClient';
 import { navigateWithUnknown } from '../../utils/searchUtil';
 import { findDataFromID } from '../../utils/static/searchUtil';
 import { trimStdLibPrefix, processDisplayValue } from '../../utils/stringUtils';

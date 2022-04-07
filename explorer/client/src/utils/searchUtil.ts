@@ -8,7 +8,7 @@ if (process.env.REACT_APP_DATA === 'static') {
         (uf) => (navigateWithUnknown = uf.navigateWithUnknown)
     );
 } else {
-    import('./internetapi/searchUtil').then(
+    import('./api/searchUtil').then(
         (uf) => (navigateWithUnknown = uf.navigateWithUnknown)
     );
 }

@@ -6,7 +6,7 @@ import { useLocation, useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import theme from '../../styles/theme.module.css';
-import { DefaultRpcClient as rpc } from '../../utils/internetapi/SuiRpcClient';
+import { DefaultRpcClient as rpc } from '../../utils/api/SuiRpcClient';
 import ObjectLoaded from './ObjectLoaded';
 import { type DataType } from './ObjectResultType';
 
