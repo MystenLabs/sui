@@ -4,7 +4,7 @@ title: Contributing to Sui
 
 This page describes how to add to Sui. If you merely need to get the Sui binaries, follow [Install Sui](../build/install.md).
 
-Find answers to common questions in our [FAQ](../contribute/faq.md). Read other sub-pages in this section for ways to contribute.
+Find answers to common questions in our [FAQ](../contribute/faq.md). Read other sub-pages in this section for ways to contribute to Sui.
 
 ## See our roadmap
 
