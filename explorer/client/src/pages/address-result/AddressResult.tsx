@@ -81,11 +81,7 @@ function AddressResultStatic({ addressID }: { addressID: string | undefined }) {
     }
 }
 
-function AddressResultInternetAPI({
-    addressID,
-}: {
-    addressID: string | undefined;
-}) {
+function AddressResultAPI({ addressID }: { addressID: string | undefined }) {
     const defaultData = (addressID: string | undefined) => ({
         id: addressID,
         objects: [{}],
@@ -143,7 +139,7 @@ function AddressResult() {
     }
 
     if (process.env.REACT_APP_DATA !== 'static') {
-        return <AddressResultInternetAPI addressID={addressID} />;
+        return <AddressResultAPI addressID={addressID} />;
     } else {
         return <AddressResultStatic addressID={addressID} />;
     }

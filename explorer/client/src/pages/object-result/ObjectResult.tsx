@@ -37,7 +37,7 @@ const Fail = ({ objID }: { objID: string | undefined }): JSX.Element => {
     );
 };
 
-const ObjectResultInternetAPI = ({ objID }: { objID: string }): JSX.Element => {
+const ObjectResultAPI = ({ objID }: { objID: string }): JSX.Element => {
     const [showObjectState, setObjectState] = useState(DATATYPE_DEFAULT);
     useEffect(() => {
         rpc.getObjectInfo(objID as string)
@@ -89,7 +89,7 @@ const ObjectResult = (): JSX.Element => {
 
     if (objID !== undefined) {
         if (process.env.REACT_APP_DATA !== 'static') {
-            return <ObjectResultInternetAPI objID={objID} />;
+            return <ObjectResultAPI objID={objID} />;
         } else {
             return <ObjectResultStatic objID={objID} />;
         }
