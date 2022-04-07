@@ -262,22 +262,22 @@ during genesis are of `Coin/SUI` type). For this call to work, the object
 represented by `{{gas_object_id}}` must be owned by the address represented by
 `{{owner_address}}`.
 
-To publish a Move module, you also need `{{vector_of_compiled_modules}}`. To generate the value of this field, you can use the `sui-move` command. The `sui-move` command supports printing the bytecodes as hex with the following option
+To publish a Move module, you also need `{{vector_of_compiled_modules}}`. To generate the value of this field, use the `sui-move` command. The `sui-move` command supports printing the bytecodes as base64 with the following option
 
 ```
-sui-move --path <move-module-path> build --dump-bytecode-as-hex
+sui-move --path <move-module-path> build --dump-bytecode-as-base64
 ```
 
-You can copy the outputting hex into the REST publish endpoint. i.e.
+Assuming that the location of the package's sources is in the `PATH_TO_PACKAGE` environment variable an example command would resemble the following
 
 ```
-sui-move --path <insert/some/path/here> build --dump-bytecode-as-hex
+sui-move --path $PATH_TO_PACKAGE/my_move_package build --dump-bytecode-as-base64
 
-["a11ceb0b0400000009010008020814031c3704530a055d7207cf017408c302280aeb02050cf0024200000101010201030000020001040c01000101010c010001030302000005000100000602010000070304000008050100010507010100010a090a0102030b0b0c00020c0d01010801070e0f01000108100101000406050607080806090603070b010108000b02010800070803000107080303070b0101080003070803010b02010800030b0101080005070803010800020b02010900070b01010900010b01010800020900070803010b01010900010608030105020900050303070b01010900070803010b02010900020b0101090005074d414e4147454404436f696e085472616e73666572095478436f6e746578740b5472656173757279436170046275726e04696e6974046d696e740c7472616e736665725f6361700b64756d6d795f6669656c640f6372656174655f63757272656e63790673656e646572087472616e736665720000000000000000000000000000000000000000000000000000000000000000000000000000000200020109010001000001040b010b0038000201000000080b0912000a0038010c010b010b002e11063802020201000001050b010b000b023803020301000001040b000b0138040200"]
+["oRzrCwUAAAAJAQAIAggUAxw3BFMKBV1yB88BdAjDAigK6wIFDPACQgAAAQEBAgEDAAACAAEEDAEAAQEBDAEAAQMDAgAABQABAAAGAgEAAAcDBAAACAUBAAEFBwEBAAEKCQoBAgMLCwwAAgwNAQEIAQcODwEAAQgQAQEABAYFBgcICAYJBgMHCwEBCAALAgEIAAcIAwABBwgDAwcLAQEIAAMHCAMBCwIBCAADCwEBCAAFBwgDAQgAAgsCAQkABwsBAQkAAQsBAQgAAgkABwgDAQsBAQkAAQYIAwEFAgkABQMDBwsBAQkABwgDAQsCAQkAAgsBAQkABQdNQU5BR0VEBENvaW4IVHJhbnNmZXIJVHhDb250ZXh0C1RyZWFzdXJ5Q2FwBGJ1cm4EaW5pdARtaW50DHRyYW5zZmVyX2NhcAtkdW1teV9maWVsZA9jcmVhdGVfY3VycmVuY3kGc2VuZGVyCHRyYW5zZmVyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgACAQkBAAEAAAEECwELADgAAgEAAAAICwkSAAoAOAEMAQsBCwAuEQY4AgICAQAAAQULAQsACwI4AwIDAQAAAQQLAAsBOAQCAA==", "oRzrCwUAAAALAQAOAg4kAzJZBIsBHAWnAasBB9IC6QEIuwQoBuMECgrtBB0MigWzAQ29BgYAAAABAQIBAwEEAQUBBgAAAgAABwgAAgIMAQABBAQCAAEBAgAGBgIAAxAEAAISDAEAAQAIAAEAAAkCAwAACgQFAAALBgcAAAwEBQAADQQFAAIVCgUBAAIICwMBAAIWDQ4BAAIXERIBAgYYAhMAAhkCDgEABRoVAwEIAhsWAwEAAgsXDgEAAg0YBQEABgkHCQgMCA8JCQsMCw8MFAYPBgwNDA0PDgkPCQMHCAELAgEIAAcIBQILAgEIAwsCAQgEAQcIBQABBggBAQMEBwgBCwIBCAMLAgEIBAcIBQELAgEIAAMLAgEIBAMLAgEIAwEIAAEGCwIBCQACCwIBCQAHCwcBCQABCAMDBwsCAQkAAwcIBQELAgEJAAEIBAELBwEIAAIJAAcIBQELBwEJAAEIBgEIAQEJAAIHCwIBCQALAgEJAAMDBwsHAQkABwgFAQYLBwEJAAZCQVNLRVQHTUFOQUdFRARDb2luAklEA1NVSQhUcmFuc2ZlcglUeENvbnRleHQHUmVzZXJ2ZQRidXJuBGluaXQObWFuYWdlZF9zdXBwbHkEbWludApzdWlfc3VwcGx5DHRvdGFsX3N1cHBseQtkdW1teV9maWVsZAJpZAtWZXJzaW9uZWRJRAx0cmVhc3VyeV9jYXALVHJlYXN1cnlDYXADc3VpB21hbmFnZWQFdmFsdWUId2l0aGRyYXcPY3JlYXRlX2N1cnJlbmN5Bm5ld19pZAR6ZXJvDHNoYXJlX29iamVjdARqb2luAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgMIAAAAAAAAAAAAAgEOAQECBA8IBhELBwEIABMLAgEIAxQLAgEIBAABAAAIFg4BOAAMBAsBCgAPADgBCgAPAQoECgI4AgwFCwAPAgsECwI4AwwDCwULAwIBAAAAEA8JEgAKADgEDAEKABEKCwEKADgFCwA4BhIBOAcCAgEAAAMECwAQAjgIAgMBAAAFHA4BOAkMBAoEDgI4CCEDDgsAAQsDAQcAJwoADwELATgKCgAPAgsCOAsLBAsADwALAzgMAgQBAAADBAsAEAE4CQIFAQAAAwQLABAAOA0CAQEBAgEDAA=="]
 Build Successful
 ```
 
-You can copy the outputting hex representation of the compiled Move module into the
+Copy the outputting base64 representation of the compiled Move module into the
 REST publish endpoint.
 
 #### 2, Sign the transaction
@@ -286,44 +286,13 @@ Follow the instructions to [sign the transaction](rest-api.md#2-sign-the-transac
 #### 3, Execute the transaction
 Follow the instructions to [execute the transaction](rest-api.md#3-execute-the-transaction-using-the-transaction-data-signature-and-public-key).
 
-Below you can see a sample output of [POST /publish](#post-publish). One of the results of executing this command is generation of a package object representing the published Move code. An ID of the package object can be used as an argument for subsequent Move calls to functions defined in this package.
+Below you can see a truncated sample output of [POST /publish](#post-publish). One of the results of executing this command is generation of a package object representing the published Move code. An ID of the package object can be used as an argument for subsequent Move calls to functions defined in this package.
 
 ```
 {
-    "certificate": {
-        "signedAuthorities": [
-            "058ca10c6e8b0bd72a122e2519dcb9039b094fe576d4edf79b72778b6f199792",
-            "81696bc8c7926773cc8cde35be765649b5ae4a084aefe9ffe782cba2b38d3a69",
-            "4efce82bd5c51ba2ee680d05bf548ee27b26d8da9f8c30aa5b1bd8a89b61f88a"
-        ]
-    },
-    "publishResults": {
-        "createdObjects": [
-            {
-                "id": "725BD00D0EC86B434D9E88B248D58FA387B08AC9",
-                "obj_type": "0x2::Coin::TreasuryCap<0xf699a118fc809171a994bbfd4c125fb21d6d188b::MANAGED::MANAGED>",
-                "owner": "AddressOwner(k#09818aac3edf9cf9b006b70c36e7241768b26386)",
-                "readonly": "false",
-                "version": "1"
-            }
-        ],
-        "package": {
-            "object_digest": "o#6029610f83b9b73f7412441d9e44435d4c7eedd409c9ab51908270faa6c6df4c",
-            "object_id": "F699A118FC809171A994BBFD4C125FB21D6D188B",
-            "version": 1
-        },
-        "updatedGas": {
-            "id": {
-                "id": {
-                    "id": {
-                        "bytes": "0000000000000000000000000000000000000003"
-                    }
-                },
-                "version": 1
-            },
-            "value": 9999450
-        }
-    }
+    "package": [
+            "13e3ec7279060663e1bbc45aaf5859113fc164d2",
+    ...
 }
 ```
 
