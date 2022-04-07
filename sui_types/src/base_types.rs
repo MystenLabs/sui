@@ -13,9 +13,8 @@ use move_core_types::identifier::IdentStr;
 use opentelemetry::{global, Context};
 use rand::Rng;
 use serde::{de::Error as _, Deserialize, Serialize};
-use serde_with::base64::Base64;
-use serde_with::hex::Hex;
 use serde_with::serde_as;
+use serde_with::Bytes;
 use sha3::Sha3_256;
 
 use crate::crypto::PublicKeyBytes;
@@ -45,7 +44,7 @@ pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;
 #[serde_as]
 #[derive(Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct SuiAddress(#[serde_as(as = "Hex")] [u8; SUI_ADDRESS_LENGTH]);
+pub struct SuiAddress(#[serde_as(as = "Bytes")] [u8; SUI_ADDRESS_LENGTH]);
 
 impl SuiAddress {
     pub fn to_vec(&self) -> Vec<u8> {
@@ -136,11 +135,11 @@ pub const OBJECT_DIGEST_LENGTH: usize = 32;
 /// A transaction will have a (unique) digest.
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct TransactionDigest(#[serde_as(as = "Base64")] [u8; TRANSACTION_DIGEST_LENGTH]);
+pub struct TransactionDigest(#[serde_as(as = "Bytes")] [u8; TRANSACTION_DIGEST_LENGTH]);
 // Each object has a unique digest
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct ObjectDigest(#[serde_as(as = "Base64")] pub [u8; OBJECT_DIGEST_LENGTH]);
+pub struct ObjectDigest(#[serde_as(as = "Bytes")] pub [u8; 32]); // We use SHA3-256 hence 32 bytes here
 
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;

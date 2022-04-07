@@ -6,10 +6,11 @@ use move_core_types::{account_address::AccountAddress, ident_str, language_stora
 use move_package::BuildConfig;
 use move_unit_test::UnitTestingConfig;
 use num_enum::TryFromPrimitive;
-use std::collections::HashSet;
-use std::path::Path;
-use sui_types::base_types::encode_bytes_hex;
-use sui_types::error::{SuiError, SuiResult};
+use std::{collections::HashSet, path::Path};
+use sui_types::{
+    base_types::encode_bytes_hex,
+    error::{SuiError, SuiResult},
+};
 use sui_verifier::verifier as sui_bytecode_verifier;
 
 #[cfg(test)]
@@ -165,13 +166,14 @@ pub fn build_move_package(
     }
 }
 
-pub fn build_and_verify_user_package(path: &Path) -> SuiResult {
+pub fn build_and_verify_user_package(path: &Path) -> SuiResult<Vec<CompiledModule>> {
     let build_config = BuildConfig {
         dev_mode: false,
         ..Default::default()
     };
     let modules = build_move_package(path, build_config, false)?;
-    verify_modules(&modules)
+    verify_modules(&modules)?;
+    Ok(modules)
 }
 
 fn verify_modules(modules: &[CompiledModule]) -> SuiResult {
@@ -214,7 +216,7 @@ pub fn run_move_unit_tests(path: &Path, config: Option<UnitTestingConfig>) -> Su
         /* compute_coverage */ false,
     )
     .map_err(|err| SuiError::MoveUnitTestFailure {
-        error: err.to_string(),
+        error: format!("{:?}", err),
     })?;
     if result == UnitTestResult::Failure {
         Err(SuiError::MoveUnitTestFailure {
