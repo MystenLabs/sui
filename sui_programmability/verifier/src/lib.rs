@@ -3,7 +3,7 @@
 
 pub mod verifier;
 
-pub mod entry_function_param_verifier;
+pub mod entry_points_verifier;
 pub mod global_storage_access_verifier;
 pub mod id_immutable_verifier;
 pub mod id_leak_verifier;

@@ -41,6 +41,7 @@ sui-adapter = { path = "../sui_programmability/adapter" }
 sui-framework = { path = "../sui_programmability/framework" }
 sui-network = { path = "../network_utils" }
 sui-types = { path = "../sui_types" }
+sui-verifier = { path = "../sui_programmability/verifier" }
 
 rustyline = "9.1.2"
 rustyline-derive = "0.6.0"
