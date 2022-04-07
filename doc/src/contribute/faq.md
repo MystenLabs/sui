@@ -55,7 +55,11 @@ There is no relationship between Sui/Mysten and Aptos. The similarity is that th
 
 ### Can I buy the Sui token?
 
-We will have a public token for the Sui mainnet, but it is not available right now and there is no timeline as of yet. Anyone who claims otherwise (offering tokens, whitelists, pre-sale, etc.) is running a scam.
+We will have a public token for the Sui mainnet. But it is not available right now and there is no timeline as of yet. Anyone who claims otherwise (offering tokens, whitelists, pre-sale, etc.) is running a scam.
+
+### Will the token name be SUI?
+
+Yes, the token name will be SUI.
 
 
 ### When is the Sui devnet/testnet/mainnet launching?
@@ -69,14 +73,19 @@ A testnet is coming in a few months. See our roadmap: \
 No. More information is forthcoming.
 
 
-## Getting involved {#getting-involved}
+## Getting involved
 
 
 ### How can I join the Sui network? How do I participate in the Sui project?
 
 Join our [Discord](https://discord.gg/mysten) and follow our [Twitter](https://twitter.com/Mysten_Labs) for the latest updates and announcements.
 
-For developers, [install Sui](https://docs.sui.io/build/install), spin up a local node, and [start building](https://docs.sui.io/build)!
+For developers:
+
+1. [Install Sui](https://docs.sui.io/build/install).
+1. Download the [Sui SDK](https://app.swaggerhub.com/apis/MystenLabs/sui-api/).
+1. Spin up a [local node](../build/wallet.md).
+2. [Start building](https://docs.sui.io/build)!
 
 ### Are there things we can already try if we are not a developer?
 
