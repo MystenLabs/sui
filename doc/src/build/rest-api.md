@@ -2,9 +2,9 @@
 title: Local REST Server & REST API Quick Start
 ---
 
-Welcome to the Sui REST API quick start. 
+Welcome to the Sui REST API quick start.
 
-This document walks you through setting up your own local Sui REST Server and using the Sui REST API to interact with a local Sui network. This guide is useful for developers interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to the [wallet](wallet.md) documentation.  
+This document walks you through setting up your own local Sui REST Server and using the Sui REST API to interact with a local Sui network. This guide is useful for developers interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to the [wallet](wallet.md) documentation.
 
 Full [API documentation](https://app.swaggerhub.com/apis/MystenLabs/sui-api) can
 be found on SwaggerHub.
@@ -51,6 +51,24 @@ Retrieve OpenAPI documentation:
 curl --location --request GET $SUI_GATEWAY_HOST/docs | json_pp
 ```
 
+### POST /api/sync_account_state
+
+Synchronize client state with authorities:
+
+```shell
+curl --location --request POST $SUI_GATEWAY_HOST/api/sync_account_state \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "address": "{{address}}"
+}'
+```
+
+You should replace `{{address}}` in the command above with an actual
+address value, for example one obtained from `wallet.conf` (without quotes).
+
+This will fetch the latest information on all objects owned by each
+address that is managed by this server. This command has no output.
+
 ### GET /api/objects
 
 Return the list of objects owned by an address:
@@ -59,8 +77,9 @@ curl --location --request GET $SUI_GATEWAY_HOST'/api/objects?address={{address}}
 ```
 
 You should replace `{{address}}` in the command above with an actual
-address value, you can retrieve the list of the addresses created during 
-genesis from `wallet.conf`.
+address value, you can retrieve the list of the addresses created during
+genesis from `wallet.conf`. Ensure you have run [`POST
+/api/sync_account_state`](#post-apisync_account_state)
 
 The output you see should resemble the following (abbreviated to show only two objects):
 
@@ -158,10 +177,9 @@ You should replace `{{owner_address}}` and `{{to_address}}` in the
 command above with an actual address values, for example one obtained
 from `wallet.conf`. You should also replace
 `{{coin_object_id}}` and `{{gas_object_id}}` in the command above with
-an actual object ID, for example one obtained from [`GET
-/objects`](#get-apiobjects) (from `objectId` in the output of [`GET
-/objects`](#get-apiobjects). You can see that all objects generated
-during genesis are of `Coin/GAS` type). For this call to work, objects
+an actual object ID, for example one obtained from `objectId` in the output
+of [`GET /objects`](#get-apiobjects). You can see that all gas objects generated
+during genesis are of `Coin/SUI` type). For this call to work, objects
 represented by both `{{coin_object_id}}` and `{{gas_object_id}}` must
 be owned by the address represented by `{{owner_address}}`.
 
@@ -210,31 +228,76 @@ objects). Consequently, you should fill out argument placeholders
 would for [`POST /api/transfer`](#post-apinew_transfer) - please not additional
 `0x` prepended to function arguments.
 
-NOTE: A Publish endpoint is in the works, but for now the only way to add a new module is to have it included as part of genesis. To do this, add your Move module to  `sui_programmability/framework/sources` before you hit the genesis endpoint. Once you have done this you will be able to use `"packageObjectId": "0x2"` in the call endpoint to find your Move module.
+NOTE: A Publish endpoint is in the works, but for now the only way to add a new module is to have it included as part of genesis. To do this, add your Move module to `sui_programmability/framework/sources` before you hit the genesis endpoint. Once you have done this you will be able to use `"packageObjectId": "0x2"` in the call endpoint to find your Move module.
 
 To learn more about what `args` are accepted in a Move call, refer to the [SuiJSON](sui-json.md) documentation.
 
-### POST /api/sync_account_state
+### POST /api/publish
 
-Synchronize client state with authorities:
+Publish Move module.
 
 ```shell
-curl --location --request POST $SUI_GATEWAY_HOST/api/sync_account_state \
+curl --location --request POST $SUI_GATEWAY_HOST/publish \
 --header 'Content-Type: application/json' \
 --data-raw '{
-    "address": "{{address}}"
+    "sender": "{{owner_address}}",
+    "compiledModules": {{vector_of_compiled_modules}},
+    "gasObjectId": "{{gas_object_id}}",
+    "gasBudget": 10000
 }' | json_pp
 ```
 
-You should replace `{{address}}` in the command above with an actual
-address value, for example one obtained from `wallet.conf` (without quotes).
+This endpoint will perform proper verification and linking to make
+sure the package is valid. If some modules have [initializers](move.md#module-initializers), these initializers
+will also be executed in Move (which means new Move objects can be created in
+the process of publishing a Move package). Gas budget is required because of the
+need to execute module initializers.
 
-This will fetch the latest information on all objects owned by each
-address that is managed by this server. This command has no output.
+You should replace `{{owner_address}}` in the
+command above with an actual address values, for example one obtained
+from `wallet.conf`. You should also replace `{{gas_object_id}}` in the command above with
+an actual object ID, for example one obtained from `objectId` in the output
+of [`GET /objects`](#get-apiobjects). You can see that all gas objects generated
+during genesis are of `Coin/SUI` type). For this call to work, the object
+represented by `{{gas_object_id}}` must be owned by the address represented by
+`{{owner_address}}`.
 
+To publish a Move module, you also need `{{vector_of_compiled_modules}}`. To generate the value of this field, use the `sui-move` command. The `sui-move` command supports printing the bytecodes as base64 with the following option
+
+```
+sui-move --path <move-module-path> build --dump-bytecode-as-base64
+```
+
+Assuming that the location of the package's sources is in the `PATH_TO_PACKAGE` environment variable an example command would resemble the following
+
+```
+sui-move --path $PATH_TO_PACKAGE/my_move_package build --dump-bytecode-as-base64
+
+["oRzrCwUAAAAJAQAIAggUAxw3BFMKBV1yB88BdAjDAigK6wIFDPACQgAAAQEBAgEDAAACAAEEDAEAAQEBDAEAAQMDAgAABQABAAAGAgEAAAcDBAAACAUBAAEFBwEBAAEKCQoBAgMLCwwAAgwNAQEIAQcODwEAAQgQAQEABAYFBgcICAYJBgMHCwEBCAALAgEIAAcIAwABBwgDAwcLAQEIAAMHCAMBCwIBCAADCwEBCAAFBwgDAQgAAgsCAQkABwsBAQkAAQsBAQgAAgkABwgDAQsBAQkAAQYIAwEFAgkABQMDBwsBAQkABwgDAQsCAQkAAgsBAQkABQdNQU5BR0VEBENvaW4IVHJhbnNmZXIJVHhDb250ZXh0C1RyZWFzdXJ5Q2FwBGJ1cm4EaW5pdARtaW50DHRyYW5zZmVyX2NhcAtkdW1teV9maWVsZA9jcmVhdGVfY3VycmVuY3kGc2VuZGVyCHRyYW5zZmVyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgACAQkBAAEAAAEECwELADgAAgEAAAAICwkSAAoAOAEMAQsBCwAuEQY4AgICAQAAAQULAQsACwI4AwIDAQAAAQQLAAsBOAQCAA==", "oRzrCwUAAAALAQAOAg4kAzJZBIsBHAWnAasBB9IC6QEIuwQoBuMECgrtBB0MigWzAQ29BgYAAAABAQIBAwEEAQUBBgAAAgAABwgAAgIMAQABBAQCAAEBAgAGBgIAAxAEAAISDAEAAQAIAAEAAAkCAwAACgQFAAALBgcAAAwEBQAADQQFAAIVCgUBAAIICwMBAAIWDQ4BAAIXERIBAgYYAhMAAhkCDgEABRoVAwEIAhsWAwEAAgsXDgEAAg0YBQEABgkHCQgMCA8JCQsMCw8MFAYPBgwNDA0PDgkPCQMHCAELAgEIAAcIBQILAgEIAwsCAQgEAQcIBQABBggBAQMEBwgBCwIBCAMLAgEIBAcIBQELAgEIAAMLAgEIBAMLAgEIAwEIAAEGCwIBCQACCwIBCQAHCwcBCQABCAMDBwsCAQkAAwcIBQELAgEJAAEIBAELBwEIAAIJAAcIBQELBwEJAAEIBgEIAQEJAAIHCwIBCQALAgEJAAMDBwsHAQkABwgFAQYLBwEJAAZCQVNLRVQHTUFOQUdFRARDb2luAklEA1NVSQhUcmFuc2ZlcglUeENvbnRleHQHUmVzZXJ2ZQRidXJuBGluaXQObWFuYWdlZF9zdXBwbHkEbWludApzdWlfc3VwcGx5DHRvdGFsX3N1cHBseQtkdW1teV9maWVsZAJpZAtWZXJzaW9uZWRJRAx0cmVhc3VyeV9jYXALVHJlYXN1cnlDYXADc3VpB21hbmFnZWQFdmFsdWUId2l0aGRyYXcPY3JlYXRlX2N1cnJlbmN5Bm5ld19pZAR6ZXJvDHNoYXJlX29iamVjdARqb2luAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgMIAAAAAAAAAAAAAgEOAQECBA8IBhELBwEIABMLAgEIAxQLAgEIBAABAAAIFg4BOAAMBAsBCgAPADgBCgAPAQoECgI4AgwFCwAPAgsECwI4AwwDCwULAwIBAAAAEA8JEgAKADgEDAEKABEKCwEKADgFCwA4BhIBOAcCAgEAAAMECwAQAjgIAgMBAAAFHA4BOAkMBAoEDgI4CCEDDgsAAQsDAQcAJwoADwELATgKCgAPAgsCOAsLBAsADwALAzgMAgQBAAADBAsAEAE4CQIFAQAAAwQLABAAOA0CAQEBAgEDAA=="]
+Build Successful
+```
+
+Copy the outputting base64 representation of the compiled Move module into the
+REST publish endpoint.
+
+#### 2, Sign the transaction
+Follow the instructions to [sign the transaction](rest-api.md#2-sign-the-transaction-using-the-sui-signtool).
+
+#### 3, Execute the transaction
+Follow the instructions to [execute the transaction](rest-api.md#3-execute-the-transaction-using-the-transaction-data-signature-and-public-key).
+
+Below you can see a truncated sample output of [POST /publish](#post-publish). One of the results of executing this command is generation of a package object representing the published Move code. An ID of the package object can be used as an argument for subsequent Move calls to functions defined in this package.
+
+```
+{
+    "package": [
+            "13e3ec7279060663e1bbc45aaf5859113fc164d2",
+    ...
+}
+```
 
 ## Postman setup
-The recommended way to test the Sui REST API is to use Postman. 
+The recommended way to test the Sui REST API is to use Postman.
 
 Postman is an API platform for building and using APIs. Postman provides an alternative solution to accessing APIs over issuing `curl` commands in a terminal. You can use variables rather than copy-pasting addresses and object IDs for each call in a terminal. We have provided a sample Postman runbook for you to use.
 

@@ -240,15 +240,15 @@ $ wallet --config /path/to/wallet/config/file
 The Sui interactive wallet supports the following shell functionality:
 
 * *Command history* -
-  The `history` command can be used to print the interactive shell's command history; 
-  you can also use Up, Down or Ctrl-P, Ctrl-N to navigate previous or next matches from history. 
+  The `history` command can be used to print the interactive shell's command history;
+  you can also use Up, Down or Ctrl-P, Ctrl-N to navigate previous or next matches from history.
   History search is also supported using Ctrl-R.
 * *Tab completion* -
   Tab completion is supported for all commands using Tab and Ctrl-I keys.
 * *Environment variable substitution* -
-  The wallet shell will substitute inputs prefixed with `$` with environment variables, 
-  you can use the `env` command to print out the entire list of variables and 
-  use `echo` to preview the substitution without invoking any commands.  
+  The wallet shell will substitute inputs prefixed with `$` with environment variables,
+  you can use the `env` command to print out the entire list of variables and
+  use `echo` to preview the substitution without invoking any commands.
 
 ### Command line mode
 
@@ -349,26 +349,26 @@ To see how much gas is in an account, use the `gas` command. Note that this comm
 
 ```
 wallet --no-shell gas
-                Object ID                 |  Version   |  Gas Value 
+                Object ID                 |  Version   |  Gas Value
 ----------------------------------------------------------------------
- 0B8A4620426E526FA42995CF26EB610BFE6BF063 |     0      |   100000   
- 3C0763CCDEA4FF5A4557505A62AB5E1DAF91F4A2 |     0      |   100000   
- 45A589A9E760D7F75D399327AC0FCBA21495C22E |     0      |   100000   
- 4C377A3A9D4B1B9C92189DD12BB1DCD0302A954B |     0      |   100000   
- F2961464AC6860A05D21B48C020B7E121399965C |     0      |   100000   
+ 0B8A4620426E526FA42995CF26EB610BFE6BF063 |     0      |   100000
+ 3C0763CCDEA4FF5A4557505A62AB5E1DAF91F4A2 |     0      |   100000
+ 45A589A9E760D7F75D399327AC0FCBA21495C22E |     0      |   100000
+ 4C377A3A9D4B1B9C92189DD12BB1DCD0302A954B |     0      |   100000
+ F2961464AC6860A05D21B48C020B7E121399965C |     0      |   100000
 ```
 
 If one does not want to use the active address, the addresses can be specified:
 
 ```
 /wallet --no-shell gas --address 562F07CF6369E8D22DBF226A5BFEDC6300014837
-                Object ID                 |  Version   |  Gas Value 
+                Object ID                 |  Version   |  Gas Value
 ----------------------------------------------------------------------
- A8DDC2661A19010E5F85CBF6D905DDFBE4DD0320 |     0      |   100000   
- B2683D0B592E5B002D110989A52943BC9DA19158 |     0      |   100000   
- B41BF45B01C9BEFCE3A0A371E2B98E062691438D |     0      |   100000   
- BA9E10F319182F3BD584EDB92C7899CC6D018723 |     0      |   100000   
- F8BFE77A5B21E7ABFA3BC285991F9DA4E5CC2D7B |     0      |   100000  
+ A8DDC2661A19010E5F85CBF6D905DDFBE4DD0320 |     0      |   100000
+ B2683D0B592E5B002D110989A52943BC9DA19158 |     0      |   100000
+ B41BF45B01C9BEFCE3A0A371E2B98E062691438D |     0      |   100000
+ BA9E10F319182F3BD584EDB92C7899CC6D018723 |     0      |   100000
+ F8BFE77A5B21E7ABFA3BC285991F9DA4E5CC2D7B |     0      |   100000
 
 ```
 
@@ -971,4 +971,34 @@ pre-populate two gas objects for four newly generated accounts:
     { "gas_objects":[{},{}] }
   ]
 }
+```
+
+If you use any custom accounts in `genesis.conf`, ensure you have a corresponding private key in
+`wallet.key`. Ensure `wallet.key` is in the working directory of the wallet. If you do not have the private key of the addresses specified, you cannot use custom genesis. *Never share your private keys.* For testing the `genesis.conf` example below, you can use the following private key:
+
+`genesis.conf`
+
+```
+{
+  "authorities": [
+    {},{},{},{}
+  ],
+  "accounts": [
+    {
+      "address": "09818AAC3EDF9CF9B006B70C36E7241768B26386",
+      "gas_objects": [
+        {
+          "object_id": "0000000000000000000000000000000000000003",
+          "gas_value": 10000000
+        }
+      ]
+    }
+  ]
+}
+```
+`wallet.key`
+```
+[
+  "WKk4nT2oyPKbFrFAyepT5wEsummWsA6qdhsqzc6CVC9fvTt3J2u6yy5WuW9B6OU3mkcyPC/4Axstn0BpIhzZNg==",
+]
 ```
