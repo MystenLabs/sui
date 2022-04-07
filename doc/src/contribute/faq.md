@@ -85,7 +85,8 @@ For developers:
 1. [Install Sui](https://docs.sui.io/build/install).
 1. Download the [Sui SDK](https://app.swaggerhub.com/apis/MystenLabs/sui-api/).
 1. Spin up a [local node](../build/wallet.md).
-2. [Start building](https://docs.sui.io/build)!
+1. Join the [Move](https://discord.gg/8prNjUqyFj) and [Sui](https://discord.gg/CVcnUzKYCB) developer channels in Discord.
+1. [Start building](https://docs.sui.io/build)!
 
 ### Are there things we can already try if we are not a developer?
 
