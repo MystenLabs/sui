@@ -374,7 +374,7 @@ describe('End-to-end Tests', () => {
             const btn = await page.$('#nextBtn');
             await btn.click();
             const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(4)'
+                'div#ownedObjects > div:nth-child(2)'
             );
             await objectLink.click();
 
@@ -384,9 +384,7 @@ describe('End-to-end Tests', () => {
                 (el: any) => el.textContent,
                 objectIDEl
             );
-            expect(objectValue.trim()).toBe(
-                '0ef165hf64032961fg1g2656h23hgi665jii7690'
-            );
+            expect(objectValue.trim()).toBe('playerTwo');
         });
         it('to go to the last page', async () => {
             const address = 'ownsAllAddress';
@@ -394,7 +392,7 @@ describe('End-to-end Tests', () => {
             const btn = await page.$('#lastBtn');
             await btn.click();
             const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(2)'
+                'div#ownedObjects > div:nth-child(1)'
             );
             await objectLink.click();
 
@@ -428,7 +426,7 @@ describe('End-to-end Tests', () => {
             await page.$('#backBtn').then((btn: any) => btn.click());
 
             const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(4)'
+                'div#ownedObjects > div:nth-child(2)'
             );
             await objectLink.click();
 
@@ -438,7 +436,7 @@ describe('End-to-end Tests', () => {
                 (el: any) => el.textContent,
                 objectIDEl
             );
-            expect(objectValue.trim()).toBe('CollectionObject');
+            expect(objectValue.trim()).toBe('playerTwo');
         });
 
         it('to go to first page', async () => {
@@ -461,9 +459,7 @@ describe('End-to-end Tests', () => {
                 (el: any) => el.textContent,
                 objectIDEl
             );
-            expect(objectValue.trim()).toBe(
-                '8cd943fd42810749de9e0434f01feg443hgg54v1'
-            );
+            expect(objectValue.trim()).toBe('ComponentObject');
         });
         it('where first and back disappear in first page', async () => {
             const address = 'ownsAllAddress';

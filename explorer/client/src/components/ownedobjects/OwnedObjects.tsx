@@ -133,7 +133,7 @@ function OwnedObjectView({ results }: { results: resultType }) {
 function OwnedObject({ objects }: { objects: string[] }) {
     const [pageIndex, setPageIndex] = useState(0);
 
-    const ITEMS_PER_PAGE = 4;
+    const ITEMS_PER_PAGE = 12;
 
     const FINAL_PAGE_NO =
         Math.floor(objects.length / ITEMS_PER_PAGE) +
