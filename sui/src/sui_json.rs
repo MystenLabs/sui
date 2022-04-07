@@ -49,7 +49,7 @@ impl SuiJsonValue {
             // Must be homogeneous
             JsonValue::Array(a) => {
                 // Fail if not homogeneous
-                if !is_homogenous(&JsonValue::Array(a)) {
+                if !is_homogeneous(&JsonValue::Array(a)) {
                     return Err(anyhow!("Arrays must be homogeneous",));
                 }
             }
@@ -208,15 +208,15 @@ enum ValidJsonType {
 
 /// Check via BFS
 /// The invariant is that all types at a given level must be the same or be empty
-pub fn is_homogenous(val: &JsonValue) -> bool {
+pub fn is_homogeneous(val: &JsonValue) -> bool {
     let mut deq: VecDeque<&JsonValue> = VecDeque::new();
     deq.push_back(val);
-    is_homogenous_rec(&mut deq)
+    is_homogeneous_rec(&mut deq)
 }
 
 /// Check via BFS
 /// The invariant is that all types at a given level must be the same or be empty
-fn is_homogenous_rec(curr_q: &mut VecDeque<&JsonValue>) -> bool {
+fn is_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> bool {
     if curr_q.is_empty() {
         // Nothing to do
         return true;
@@ -251,7 +251,7 @@ fn is_homogenous_rec(curr_q: &mut VecDeque<&JsonValue>) -> bool {
         }
     }
     // Process the next level
-    is_homogenous_rec(&mut next_q)
+    is_homogeneous_rec(&mut next_q)
 }
 
 fn check_and_serialize_pure_args(

@@ -1,21 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::Path;
+
 use move_binary_format::normalized::Type;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use serde_json::{json, Value};
 use sui_adapter::{self, genesis::clone_genesis_packages};
 use sui_types::{
-    base_types::{ObjectID, SuiAddress},
+    base_types::{ObjectID, SuiAddress, TransactionDigest},
+    object::Object,
     SUI_FRAMEWORK_ADDRESS,
 };
 
 use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
 
-use super::{is_homogenous, HEX_PREFIX};
+use super::{is_homogeneous, HEX_PREFIX};
 
 #[test]
-fn test_json_is_homogenous() {
+fn test_json_is_homogeneous() {
     let checks = vec![
         (json!([1, 2, 3, true, 5, 6, 7]), false),
         (json!([1, 2, 3, 4, 5, 6, 7]), true),
@@ -42,7 +45,7 @@ fn test_json_is_homogenous() {
 
     // Driver
     for (arg, expected_val) in checks {
-        assert_eq!(is_homogenous(&arg), expected_val);
+        assert_eq!(is_homogeneous(&arg), expected_val);
     }
 }
 
@@ -51,7 +54,7 @@ fn test_json_is_valid_sui_json() {
     let checks = vec![
         // Not homogeneous
         (json!([1, 2, 3, true, 5, 6, 7]), false),
-        // Homogenous
+        // Homogeneous
         (json!([1, 2, 3, 4, 5, 6, 7]), true),
         // String allowed
         (json!("a string"), true),
@@ -69,7 +72,7 @@ fn test_json_is_valid_sui_json() {
             false,
         ),
         (json!([]), true),
-        // Homogenous
+        // Homogeneous
         (
             json!([[[9, 53, 434], [0], [300]], [], [[332], [4, 5, 6, 7]]]),
             true,
@@ -286,11 +289,9 @@ fn test_basic_args_linter_pure_args() {
 
 #[test]
 fn test_basic_args_linter_top_level() {
-    let genesis_objs = clone_genesis_packages();
-    let framework_pkg = genesis_objs
-        .iter()
-        .find(|q| q.id() == ObjectID::from(SUI_FRAMEWORK_ADDRESS))
-        .expect("Unable to find framework object");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sui_programmability/examples/nfts");
+    let compiled_modules = sui_framework::build_and_verify_user_package(&path).unwrap();
+    let example_package = Object::new_package(compiled_modules, TransactionDigest::genesis());
 
     let module = Identifier::new("Geniteam").unwrap();
     let function = Identifier::new("create_monster").unwrap();
@@ -351,7 +352,8 @@ fn test_basic_args_linter_top_level() {
     .collect();
 
     let (object_args, pure_args) =
-        resolve_move_function_args(framework_pkg, module.clone(), function.clone(), args).unwrap();
+        resolve_move_function_args(&example_package, module.clone(), function.clone(), args)
+            .unwrap();
 
     assert!(!object_args.is_empty());
 
@@ -385,9 +387,14 @@ fn test_basic_args_linter_top_level() {
     .iter()
     .map(|q| SuiJsonValue::new(q.clone()).unwrap())
     .collect();
-    assert!(resolve_move_function_args(framework_pkg, module, function, args).is_err());
+    assert!(resolve_move_function_args(&example_package, module, function, args).is_err());
 
     // Test with vecu8 as address
+    let genesis_objs = clone_genesis_packages();
+    let framework_pkg = genesis_objs
+        .iter()
+        .find(|q| q.id() == ObjectID::from(SUI_FRAMEWORK_ADDRESS))
+        .expect("Unable to find framework object");
 
     let module = Identifier::new("ObjectBasics").unwrap();
     let function = Identifier::new("create").unwrap();
