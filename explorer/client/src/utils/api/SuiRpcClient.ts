@@ -84,19 +84,21 @@ type BoolString = 'true' | 'false';
 export type JsonBytes = { bytes: number[] };
 export type MoveVec<T extends object | string> = { vec: T[] };
 
-export interface ObjectInfoResponse {
+interface ContentsDefault {
+    [key: string]: any;
+}
+
+export interface ObjectInfoResponse<T = ContentsDefault> {
     owner: string;
     version: string;
     id: string;
     readonly: BoolString;
     objType: string;
-    data: SuiObject;
+    data: SuiObject<T>;
 }
 
-export interface SuiObject {
-    contents: {
-        [key: string]: any;
-    };
+export interface SuiObject<T = ContentsDefault> {
+    contents: T;
     owner: ObjectOwner | AddressOwner;
     tx_digest: number[];
 }
