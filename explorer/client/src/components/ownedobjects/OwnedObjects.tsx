@@ -42,7 +42,7 @@ function OwnedObjectStatic({ objects }: { objects: string[] }) {
     return <OwnedObjectView results={results} />;
 }
 
-function OwnecObjectInternetAPI({ objects }: { objects: string[] }) {
+function OwnedObjectAPI({ objects }: { objects: string[] }) {
     const [results, setResults] = useState(DATATYPE_DEFAULT);
     const [isLoaded, setIsLoaded] = useState(false);
 
@@ -148,7 +148,7 @@ function OwnedObject({ objects }: { objects: string[] }) {
         if (process.env.REACT_APP_DATA === 'static') {
             return <OwnedObjectStatic objects={objectSample} />;
         }
-        return <OwnecObjectInternetAPI objects={objectSample} />;
+        return <OwnedObjectAPI objects={objectSample} />;
     };
 
     const handleFirstClick = useCallback(() => setPageIndex(0), []);
