@@ -84,15 +84,13 @@ function OwnedObjectView({ results }: { results: resultType }) {
                     key={`object-${index1}`}
                     onClick={handlePreviewClick(entryObj.id, navigate)}
                 >
-                    {entryObj.display !== undefined ? (
+                    {entryObj.display !== undefined && (
                         <div className={styles.previewimage}>
                             <DisplayBox
                                 display={entryObj.display}
                                 tag="imageURL"
                             />
                         </div>
-                    ) : (
-                        <div className={styles.previewimage} />
                     )}
                     {Object.entries(entryObj).map(([key, value], index2) => (
                         <div key={`object-${index1}-${index2}`}>

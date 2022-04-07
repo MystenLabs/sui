@@ -9,7 +9,7 @@
 }
 
 .objectbox {
-    @apply border-solid border-stone-300 rounded-lg my-2 p-[1vw] lg:w-[30vw] hover:shadow-md cursor-pointer;
+    @apply border-solid border-stone-300 rounded-lg my-2 p-[1vw] lg:w-[30vw] lg:self-center hover:shadow-md cursor-pointer;
 }
 
 .objectbox > div > div {
@@ -26,11 +26,11 @@
 }
 
 .previewimage > div > img {
-    @apply h-[20vh];
+    @apply h-[15vh];
 }
 
 .previewimage {
-    @apply h-[20vh];
+    @apply h-[15vh];
 }
 
 .gone {
