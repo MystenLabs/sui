@@ -9,6 +9,7 @@ use std::time::Duration;
 use tokio::time::interval;
 
 use futures::StreamExt;
+use sui_types::messages::TransactionInfoResponse;
 use typed_store::Map;
 
 #[cfg(test)]
@@ -74,6 +75,7 @@ impl crate::authority::AuthorityState {
             .executed_sequence
             .iter()
             .skip_to(&last_batch.next_sequence_number)?
+            .map(|(seq, tx_digest)| (seq, tx_digest, None))
             .collect();
 
         if !transactions.is_empty() {
@@ -107,7 +109,7 @@ impl crate::authority::AuthorityState {
             .next()
             .unwrap();
 
-        // Let's ensure we can get (exclusive) access to the trasnaction stream.
+        // Let's ensure we can get (exclusive) access to the transaction stream.
         let mut transaction_stream = self.batch_notifier.iter_from(next_sequence_number)?;
 
         // Then we operate in a loop, where for each new update we consider
@@ -121,7 +123,11 @@ impl crate::authority::AuthorityState {
         // The structures we use to build the next batch. The current_batch holds the sequence
         // of transactions in order, following the last batch. The loose transactions holds
         // transactions we may have received out of order.
-        let mut current_batch: Vec<(TxSequenceNumber, TransactionDigest)> = Vec::new();
+        let mut current_batch: Vec<(
+            TxSequenceNumber,
+            TransactionDigest,
+            Option<Box<TransactionInfoResponse>>,
+        )> = Vec::new();
 
         while !exit {
             // Reset the flags.
@@ -140,10 +146,10 @@ impl crate::authority::AuthorityState {
                         make_batch = true;
                         exit = true;
                     },
-                    Some((seq, tx_digest)) => {
+                    Some((seq, tx_digest, tx_info)) => {
                         // Add to batch and broadcast
-                        current_batch.push((seq, tx_digest));
-                        let _ = self.batch_channels.send(UpdateItem::Transaction((seq, tx_digest)));
+                        current_batch.push((seq, tx_digest, tx_info.clone()));
+                        let _ = self.batch_channels.send(UpdateItem::Transaction((seq, tx_digest, tx_info)));
 
                         if current_batch.len() as TxSequenceNumber >= min_batch_size {
                             make_batch = true;
@@ -161,7 +167,7 @@ impl crate::authority::AuthorityState {
 
                 // Make and store a new batch.
                 let new_batch = SignedBatch::new(
-                    AuthorityBatch::make_next(&prev_batch, &current_batch),
+                    AuthorityBatch::make_next(&prev_batch, current_batch.as_slice()),
                     &*self.secret,
                     self.name,
                 );

@@ -149,7 +149,7 @@ async fn test_batch_manager_happy_path() {
     let mut rx = authority_state.subscribe_batch();
     assert!(matches!(
         rx.recv().await.unwrap(),
-        UpdateItem::Transaction((0, _))
+        UpdateItem::Transaction((0, _, _))
     ));
 
     // Then we (eventually) get a batch
@@ -166,7 +166,7 @@ async fn test_batch_manager_happy_path() {
     // But the block is made, and sent as a notification.
     assert!(matches!(
         rx.recv().await.unwrap(),
-        UpdateItem::Transaction((1, _))
+        UpdateItem::Transaction((1, _, _))
     ));
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
 
@@ -213,20 +213,20 @@ async fn test_batch_manager_out_of_order() {
     // Get transactions in order then batch.
     assert!(matches!(
         rx.recv().await.unwrap(),
-        UpdateItem::Transaction((0, _))
+        UpdateItem::Transaction((0, _, _))
     ));
 
     assert!(matches!(
         rx.recv().await.unwrap(),
-        UpdateItem::Transaction((1, _))
+        UpdateItem::Transaction((1, _, _))
     ));
     assert!(matches!(
         rx.recv().await.unwrap(),
-        UpdateItem::Transaction((2, _))
+        UpdateItem::Transaction((2, _, _))
     ));
     assert!(matches!(
         rx.recv().await.unwrap(),
-        UpdateItem::Transaction((3, _))
+        UpdateItem::Transaction((3, _, _))
     ));
 
     // Then we (eventually) get a batch
@@ -272,7 +272,7 @@ async fn test_handle_move_order_with_batch() {
     println!("{:?}", y);
     assert!(matches!(
         y,
-        UpdateItem::Transaction((0, x)) if x == effects.transaction_digest
+        UpdateItem::Transaction((0, x, _)) if x == effects.transaction_digest
     ));
 
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));

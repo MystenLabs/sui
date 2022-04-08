@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use base64ct::{Base64, Encoding};
+use std::cmp::Ordering;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::{
@@ -648,7 +649,7 @@ pub struct BatchInfoRequest {
     pub end: TxSequenceNumber,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchInfoResponseItem(pub UpdateItem);
 
 impl From<SuiAddress> for AccountInfoRequest {
@@ -760,6 +761,36 @@ pub struct TransactionInfoResponse {
     // The effects resulting from a successful execution should
     // contain ObjectRef created, mutated, deleted and events.
     pub signed_effects: Option<SignedTransactionEffects>,
+}
+
+impl Eq for TransactionInfoResponse {}
+
+impl PartialEq for TransactionInfoResponse {
+    fn eq(&self, other: &Self) -> bool {
+        if self.signed_transaction == other.signed_transaction
+            //&& self.certified_transaction == other.certified_transaction
+            && self.signed_effects == other.signed_effects
+        {
+            return true;
+        }
+        false
+    }
+}
+
+impl PartialOrd for TransactionInfoResponse {
+    fn partial_cmp(&self, _other: &Self) -> Option<Ordering> {
+        None
+    }
+}
+
+impl Ord for TransactionInfoResponse {
+    fn cmp(&self, _other: &Self) -> Ordering {
+        Ordering::Equal
+    }
+}
+
+impl Hash for TransactionInfoResponse {
+    fn hash<H: Hasher>(&self, _state: &mut H) {}
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]

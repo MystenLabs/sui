@@ -56,6 +56,7 @@ pub use temporary_store::AuthorityTemporaryStore;
 
 mod authority_store;
 pub use authority_store::{AuthorityStore, GatewayStore};
+use sui_types::batch::{SignedBatch, TxSequenceNumber};
 
 pub mod authority_notifier;
 
@@ -517,12 +518,31 @@ impl AuthorityState {
             return Err(SuiError::TooManyItemsError(MAX_ITEMS_LIMIT));
         }
 
-        let (batches, transactions) = self
+        let (batches, transactions): (
+            Vec<SignedBatch>,
+            Vec<(TxSequenceNumber, TransactionDigest)>,
+        ) = self
             ._database
             .batches_and_transactions(request.start, request.end)?;
 
+        let mut transactions_info = Vec::new();
+        for (seq, digest) in transactions.iter() {
+            if true {
+                // TODO: @Laura add flag to request
+                let tx_info = self.make_transaction_info(digest).await;
+                match tx_info {
+                    Ok(info) => {
+                        transactions_info.push((*seq, *digest, Some(Box::new(info))));
+                    }
+                    Err(e) => return Err(e),
+                }
+            } else {
+                transactions_info.push((*seq, *digest, None))
+            }
+        }
+
+        let mut dq_transactions = std::collections::VecDeque::from(transactions_info);
         let mut dq_batches = std::collections::VecDeque::from(batches);
-        let mut dq_transactions = std::collections::VecDeque::from(transactions);
         let mut items = VecDeque::with_capacity(dq_batches.len() + dq_transactions.len());
         let mut last_batch_next_seq = 0;
 
@@ -538,7 +558,7 @@ impl AuthorityState {
                 }
 
                 let current_transaction = dq_transactions.pop_front().unwrap();
-                items.push_back(UpdateItem::Transaction(current_transaction));
+                items.push_back(UpdateItem::Transaction(current_transaction)); //todo: @Laura update Transaction contents
             }
 
             // Now send the batch

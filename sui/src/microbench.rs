@@ -332,6 +332,7 @@ impl ClientServerBenchmark {
                         Ok(BatchInfoResponseItem(UpdateItem::Transaction((
                             _tx_seq,
                             _tx_digest,
+                            _tx_info,
                         )))) => {
                             start = _tx_seq + 1;
                         }

@@ -159,9 +159,11 @@ impl AuthorityAPI for AuthorityClient {
                     Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
                         signed_batch.batch.next_sequence_number < request.end
                     }
-                    Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest)))) => {
-                        *seq < request.end
-                    }
+                    Ok(BatchInfoResponseItem(UpdateItem::Transaction((
+                        seq,
+                        _digest,
+                        _tx_info,
+                    )))) => *seq < request.end,
                     Err(_e) => {
                         // TODO: record e
                         error_count += 1;

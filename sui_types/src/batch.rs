@@ -3,21 +3,34 @@
 
 use crate::base_types::{AuthorityName, TransactionDigest};
 use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable};
+use crate::messages::TransactionInfoResponse;
 use serde::{Deserialize, Serialize};
 
 pub type TxSequenceNumber = u64;
 
 /// Either a freshly sequenced transaction hash or a batch
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum UpdateItem {
-    Transaction((TxSequenceNumber, TransactionDigest)),
+    Transaction(
+        (
+            TxSequenceNumber,
+            TransactionDigest,
+            Option<Box<TransactionInfoResponse>>,
+        ),
+    ),
     Batch(SignedBatch),
 }
 
 pub type BatchDigest = [u8; 32];
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
-pub struct TransactionBatch(pub Vec<(TxSequenceNumber, TransactionDigest)>);
+pub struct TransactionBatch(
+    pub  Vec<(
+        TxSequenceNumber,
+        TransactionDigest,
+        Option<Box<TransactionInfoResponse>>,
+    )>,
+);
 impl BcsSignable for TransactionBatch {}
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Default, Debug, Serialize, Deserialize)]
@@ -69,7 +82,11 @@ impl AuthorityBatch {
     /// batch.
     pub fn make_next(
         previous_batch: &AuthorityBatch,
-        transactions: &[(TxSequenceNumber, TransactionDigest)],
+        transactions: &[(
+            TxSequenceNumber,
+            TransactionDigest,
+            Option<Box<TransactionInfoResponse>>,
+        )],
     ) -> AuthorityBatch {
         let transaction_vec = transactions.to_vec();
         debug_assert!(!transaction_vec.is_empty());
@@ -94,7 +111,11 @@ impl AuthorityBatch {
     /// batch, using the digest of the previous batch.
     pub fn make_next_with_previous_digest(
         previous_batch_digest: Option<BatchDigest>,
-        transactions: &[(TxSequenceNumber, TransactionDigest)],
+        transactions: &[(
+            TxSequenceNumber,
+            TransactionDigest,
+            Option<Box<TransactionInfoResponse>>,
+        )],
     ) -> AuthorityBatch {
         let transaction_vec = transactions.to_vec();
         debug_assert!(!transaction_vec.is_empty());

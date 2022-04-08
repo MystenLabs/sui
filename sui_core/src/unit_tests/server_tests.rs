@@ -182,7 +182,7 @@ async fn test_subscription() {
                         break;
                     }
                 }
-                BatchInfoResponseItem(UpdateItem::Transaction((_seq, _digest))) => {
+                BatchInfoResponseItem(UpdateItem::Transaction((_seq, _digest, _))) => {
                     num_transactions += 1;
                 }
             },
@@ -240,7 +240,7 @@ async fn test_subscription() {
                         break;
                     }
                 }
-                BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
+                BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest, _))) => {
                     println!("Received {seq}");
                     num_transactions += 1;
                 }

@@ -334,9 +334,11 @@ where
                                 }
                                 batch_info_item
                             }
-                            Ok(BatchInfoResponseItem(UpdateItem::Transaction((_seq, _digest)))) => {
-                                batch_info_item
-                            }
+                            Ok(BatchInfoResponseItem(UpdateItem::Transaction((
+                                _seq,
+                                _digest,
+                                _tx_info,
+                            )))) => batch_info_item,
                             Err(e) => Err(e.clone()),
                         }
                     }

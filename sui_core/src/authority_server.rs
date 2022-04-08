@@ -106,7 +106,7 @@ impl AuthorityServer {
         let mut last_seq_sent = 0;
         while let Some(item) = items.pop_front() {
             // Remember the last transaction sequence number sent
-            if let UpdateItem::Transaction((seq, _)) = &item {
+            if let UpdateItem::Transaction((seq, _, _)) = &item {
                 last_seq_sent = *seq;
             }
 
@@ -129,7 +129,7 @@ impl AuthorityServer {
             match subscriber.recv().await {
                 Ok(item) => {
                     let seq = match &item {
-                        UpdateItem::Transaction((seq, _)) => *seq,
+                        UpdateItem::Transaction((seq, _, _)) => *seq,
                         UpdateItem::Batch(signed_batch) => signed_batch.batch.next_sequence_number,
                     };
 
