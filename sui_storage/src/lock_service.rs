@@ -23,7 +23,7 @@ use tracing::{debug, info};
 use typed_store::rocks::DBMap;
 use typed_store::{reopen, traits::Map};
 
-use sui_types::base_types::{AuthorityName, ObjectRef, TransactionDigest};
+use sui_types::base_types::{ObjectRef, TransactionDigest};
 use sui_types::error::{SuiError, SuiResult};
 
 /// Commands to send to the LockService (for mutating lock state)
@@ -254,15 +254,9 @@ pub struct LockService {
 }
 
 impl LockService {
-    /// Return the single instance of a lock service for a given authority.
-    /// If the lock service is not created it will be initialized.
-    pub fn get_or_init_for_authority<P: AsRef<Path>>(
-        _authority: AuthorityName,
-        path: P,
-        db_options: Option<Options>,
-    ) -> Result<Self, SuiError> {
-        // TODO: ensure only one instance per authority
-
+    /// Create a new instance of LockService.  For now, the caller has to guarantee only one per data store -
+    /// namely each SuiDataStore creates its own LockService.
+    pub fn new<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Result<Self, SuiError> {
         let inner_service = LockServiceImpl::try_open_db(path, db_options)?;
 
         // Now, create a sync channel and spawn a thread
@@ -359,7 +353,6 @@ mod tests {
     use super::*;
     use futures::future::join_all;
     use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, TransactionDigest};
-    use sui_types::crypto::get_key_pair;
     use sui_types::error::SuiError;
 
     use pretty_assertions::assert_eq;
@@ -377,10 +370,7 @@ mod tests {
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         std::fs::create_dir(&path).unwrap();
 
-        let (_, secret) = get_key_pair();
-        let authority = *secret.public_key_bytes();
-        LockService::get_or_init_for_authority(authority, path, None)
-            .expect("Could not create LockService")
+        LockService::new(path, None).expect("Could not create LockService")
     }
 
     #[test]

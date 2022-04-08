@@ -199,7 +199,8 @@ where
         transaction: Transaction,
     ) -> Result<(), SuiError> {
         self.store
-            .set_transaction_lock(mutable_input_objects, tx_digest, transaction)
+            .lock_and_write_transaction(mutable_input_objects, tx_digest, transaction)
+            .await
     }
 
     async fn check_gas(
@@ -282,12 +283,14 @@ where
         let mutated_objects = self
             .download_objects_from_authorities(mutated_object_refs)
             .await?;
-        self.store.update_gateway_state(
-            &objects_by_kind,
-            mutated_objects,
-            new_certificate.clone(),
-            effects.clone(),
-        )?;
+        self.store
+            .update_gateway_state(
+                &objects_by_kind,
+                mutated_objects,
+                new_certificate.clone(),
+                effects.clone(),
+            )
+            .await?;
 
         Ok((new_certificate, effects))
     }

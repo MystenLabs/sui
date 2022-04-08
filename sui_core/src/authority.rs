@@ -629,6 +629,7 @@ impl AuthorityState {
     pub async fn insert_genesis_object(&self, object: Object) {
         self._database
             .insert_genesis_object(object)
+            .await
             .expect("TODO: propagate the error")
     }
 
@@ -689,6 +690,7 @@ impl AuthorityState {
         )?;
         self.db()
             .update_objects_state_for_genesis(temporary_store, ctx.digest())
+            .await
     }
 
     /// Make an information response for a transaction
@@ -720,7 +722,8 @@ impl AuthorityState {
         signed_transaction: SignedTransaction,
     ) -> Result<(), SuiError> {
         self._database
-            .set_transaction_lock(mutable_input_objects, tx_digest, signed_transaction)
+            .lock_and_write_transaction(mutable_input_objects, tx_digest, signed_transaction)
+            .await
     }
 
     /// Update state and signals that a new transactions has been processed
@@ -733,12 +736,14 @@ impl AuthorityState {
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
         let notifier_ticket = self.batch_notifier.ticket()?;
-        self._database.update_state(
-            temporary_store,
-            certificate,
-            signed_effects,
-            Some(notifier_ticket.seq()),
-        )
+        self._database
+            .update_state(
+                temporary_store,
+                certificate,
+                signed_effects,
+                Some(notifier_ticket.seq()),
+            )
+            .await
         // implicitly we drop the ticket here and that notifies the batch manager
     }
 
@@ -747,7 +752,7 @@ impl AuthorityState {
         &self,
         object_ref: &ObjectRef,
     ) -> Result<Option<SignedTransaction>, SuiError> {
-        self._database.get_transaction_lock(object_ref)
+        self._database.get_transaction_envelope(object_ref).await
     }
 
     // Helper functions to manage certificates

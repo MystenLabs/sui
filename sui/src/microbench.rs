@@ -101,7 +101,8 @@ impl std::fmt::Display for BenchmarkType {
 const MIN_COMMITTEE_SIZE: usize = 4;
 const OBJECT_ID_OFFSET: usize = 10000;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     let subscriber_builder =
         tracing_subscriber::fmt::Subscriber::builder().with_env_filter(env_filter);
@@ -120,7 +121,7 @@ fn main() {
         "num_transactions must integer divide batch_size",
     );
 
-    let (state, transactions) = benchmark.make_authority_and_transactions();
+    let (state, transactions) = benchmark.make_authority_and_transactions().await;
 
     // Make multi-threaded runtime for the authority
     let b = benchmark.clone();
@@ -181,7 +182,7 @@ fn main() {
 }
 
 impl ClientServerBenchmark {
-    fn make_authority_and_transactions(&self) -> (AuthorityState, Vec<Bytes>) {
+    async fn make_authority_and_transactions(&self) -> (AuthorityState, Vec<Bytes>) {
         info!("Starting benchmark: {}", self.benchmark_type);
         info!("Preparing accounts.");
         let mut keys = Vec::new();
@@ -245,7 +246,10 @@ impl ClientServerBenchmark {
             batch_tx_count * (self.batch_size + 1)
         );
         // Insert the objects
-        store_bis.bulk_object_insert(&all_objects[..]).unwrap();
+        store_bis
+            .bulk_object_insert(&all_objects[..])
+            .await
+            .unwrap();
 
         info!("Preparing transactions.");
         let transactions = make_serialized_transactions(
