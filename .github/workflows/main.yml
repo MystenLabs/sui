@@ -1,0 +1,18 @@
+name: Auto Assign to Partner Project
+on:
+  issues:
+    types: [opened, labeled]
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  assign_one_project:
+    runs-on: ubuntu-latest
+    name: Assign to Partner Project
+    steps:
+    - name: Assign NEW issues Partner Project
+      uses: srggrs/assign-one-project-github-action@1.3.1
+      if: github.event.action == 'opened'
+      with:
+        project: 'https://github.com/MystenLabs/sui/projects/10'
+        
