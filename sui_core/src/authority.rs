@@ -148,7 +148,7 @@ impl AuthorityState {
         // fetching only unique objects.
         let total_size = all_objects
             .iter()
-            .map(|(_, obj)| obj.object_data_size())
+            .map(|(_, obj)| obj.object_size_for_gas_metering())
             .sum();
         gas_status.charge_storage_read(total_size)?;
 
