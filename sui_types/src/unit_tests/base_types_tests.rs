@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![allow(clippy::blacklisted_name)]
+use super::*;
+use crate::crypto::AuthoritySignature;
 
 use move_binary_format::file_format;
 
@@ -12,8 +14,6 @@ use crate::{
     object::Object,
 };
 use std::str::FromStr;
-
-use super::*;
 
 #[derive(Serialize, Deserialize)]
 struct Foo(String);
@@ -170,6 +170,77 @@ fn test_object_id_serde_json() {
 }
 
 #[test]
+fn test_object_id_serde_not_human_readable() {
+    let obj_id = ObjectID::random();
+    let serialized = bincode::serialize(&obj_id).unwrap();
+    assert_eq!(obj_id.0.to_vec(), serialized);
+    let deserialized: ObjectID = bincode::deserialize(&serialized).unwrap();
+    assert_eq!(deserialized, obj_id);
+}
+
+#[test]
+fn test_address_serde_not_human_readable() {
+    let address = SuiAddress::random_for_testing_only();
+    let serialized = bincode::serialize(&address).unwrap();
+    let serialized_bcs = bcs::to_bytes(&address).unwrap();
+    assert_eq!(serialized, serialized_bcs);
+    assert_eq!(address.0.to_vec(), serialized);
+    let deserialized: SuiAddress = bincode::deserialize(&serialized).unwrap();
+    assert_eq!(deserialized, address);
+}
+
+#[test]
+fn test_address_serde_human_readable() {
+    let address = SuiAddress::random_for_testing_only();
+    let serialized = serde_json::to_string(&address).unwrap();
+    assert_eq!(format!("\"{}\"", hex::encode(address)), serialized);
+    let deserialized: SuiAddress = serde_json::from_str(&serialized).unwrap();
+    assert_eq!(deserialized, address);
+}
+
+#[test]
+fn test_transaction_digest_serde_not_human_readable() {
+    let digest = TransactionDigest::random();
+    let serialized = bincode::serialize(&digest).unwrap();
+    let serialized_bcs = bcs::to_bytes(&digest).unwrap();
+    assert_eq!(serialized, serialized_bcs);
+    assert_eq!(digest.0.to_vec(), serialized);
+    let deserialized: TransactionDigest = bincode::deserialize(&serialized).unwrap();
+    assert_eq!(deserialized, digest);
+}
+
+#[test]
+fn test_transaction_digest_serde_human_readable() {
+    let digest = TransactionDigest::random();
+    let serialized = serde_json::to_string(&digest).unwrap();
+    assert_eq!(format!("\"{}\"", base64::encode(digest.0)), serialized);
+    let deserialized: TransactionDigest = serde_json::from_str(&serialized).unwrap();
+    assert_eq!(deserialized, digest);
+}
+
+#[test]
+fn test_signature_serde_not_human_readable() {
+    let (_, key) = get_key_pair();
+    let sig = AuthoritySignature::new(&Foo("some data".to_string()), &key);
+    let serialized = bincode::serialize(&sig).unwrap();
+    let serialized_bcs = bcs::to_bytes(&sig).unwrap();
+    assert_eq!(serialized, serialized_bcs);
+    assert_eq!(sig.0.as_ref(), serialized.as_slice());
+    let deserialized: AuthoritySignature = bincode::deserialize(&serialized).unwrap();
+    assert_eq!(deserialized, sig);
+}
+
+#[test]
+fn test_signature_serde_human_readable() {
+    let (_, key) = get_key_pair();
+    let sig = AuthoritySignature::new(&Foo("some data".to_string()), &key);
+    let serialized = serde_json::to_string(&sig).unwrap();
+    assert_eq!(format!("\"{}\"", base64::encode(sig)), serialized);
+    let deserialized: AuthoritySignature = serde_json::from_str(&serialized).unwrap();
+    assert_eq!(deserialized, sig);
+}
+
+#[test]
 fn test_object_id_from_empty_string() {
     assert!(ObjectID::try_from("".to_string()).is_err());
     assert!(ObjectID::from_str("").is_err());
@@ -187,7 +258,7 @@ fn test_move_object_size_for_gas_metering() {
     // all the metadata data needed for serializing various types.
     // If the following assertion breaks, it's likely you have changed MoveObject's fields.
     // Make sure to adjust `object_size_for_gas_metering()` to include those changes.
-    assert_eq!(size + 16, serialized.len());
+    assert_eq!(size + 14, serialized.len());
 }
 
 #[test]
@@ -198,5 +269,5 @@ fn test_move_package_size_for_gas_metering() {
     let serialized = bcs::to_bytes(&package).unwrap();
     // If the following assertion breaks, it's likely you have changed MovePackage's fields.
     // Make sure to adjust `object_size_for_gas_metering()` to include those changes.
-    assert_eq!(size + 5, serialized.len());
+    assert_eq!(size + 4, serialized.len());
 }

@@ -275,7 +275,10 @@ Object:
         TYPENAME: TransactionDigest
     - storage_rebate: U64
 ObjectDigest:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
 ObjectFormatOptions:
   STRUCT:
     - include_types: BOOL
@@ -338,7 +341,10 @@ Owner:
     3:
       SharedImmutable: UNIT
 PublicKeyBytes:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
 SequenceNumber:
   NEWTYPESTRUCT: U64
 SerializedMessage:
@@ -400,7 +406,10 @@ SerializedMessage:
         NEWTYPE:
           TYPENAME: ConsensusSync
 Signature:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 96
 SignedBatch:
   STRUCT:
     - batch:
@@ -435,7 +444,10 @@ StructTag:
         SEQ:
           TYPENAME: TypeTag
 SuiAddress:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 20
 SuiError:
   ENUM:
     0:
@@ -773,7 +785,10 @@ TransactionData:
           - TYPENAME: ObjectDigest
     - gas_budget: U64
 TransactionDigest:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
 TransactionEffects:
   STRUCT:
     - status:

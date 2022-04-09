@@ -5,6 +5,8 @@ use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 
+use crate::readable_serde::BytesOrBase64;
+use crate::readable_serde::BytesOrHex;
 use ed25519_dalek::Digest;
 use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
@@ -12,9 +14,8 @@ use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use opentelemetry::{global, Context};
 use rand::Rng;
-use serde::{de::Error as _, Deserialize, Serialize};
-use serde_with::serde_as;
-use serde_with::Bytes;
+use serde::de::Error;
+use serde::{Deserialize, Serialize};
 use sha3::Sha3_256;
 
 use crate::crypto::PublicKeyBytes;
@@ -42,9 +43,8 @@ pub struct ObjectID(AccountAddress);
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
 pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;
-#[serde_as]
 #[derive(Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct SuiAddress(#[serde_as(as = "Bytes")] [u8; SUI_ADDRESS_LENGTH]);
+pub struct SuiAddress(#[serde(with = "BytesOrHex")] [u8; SUI_ADDRESS_LENGTH]);
 
 impl SuiAddress {
     pub fn to_vec(&self) -> Vec<u8> {
@@ -133,13 +133,11 @@ pub const TRANSACTION_DIGEST_LENGTH: usize = 32;
 pub const OBJECT_DIGEST_LENGTH: usize = 32;
 
 /// A transaction will have a (unique) digest.
-#[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct TransactionDigest(#[serde_as(as = "Bytes")] [u8; TRANSACTION_DIGEST_LENGTH]);
+pub struct TransactionDigest(#[serde(with = "BytesOrBase64")] [u8; TRANSACTION_DIGEST_LENGTH]);
 // Each object has a unique digest
-#[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct ObjectDigest(#[serde_as(as = "Bytes")] pub [u8; 32]); // We use SHA3-256 hence 32 bytes here
+pub struct ObjectDigest(#[serde(with = "BytesOrBase64")] pub [u8; 32]); // We use SHA3-256 hence 32 bytes here
 
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
