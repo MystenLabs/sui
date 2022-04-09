@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module Tutorial::Ch1 {
+module Tutorial::ColorObject {
     use Sui::ID::VersionedID;
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};

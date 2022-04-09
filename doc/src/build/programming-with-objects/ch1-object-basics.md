@@ -71,7 +71,7 @@ public fun create(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
 ```
 > :bulb: Naming convention: Constructors are typically named **`new`**, which returns an instance of the struct type. The **`create`** function is typically defined as an entry function, that constructs the struct and transfer it to the desired owner (most commonly the sender).
 
-You can find the full code [here](../../../move_code/objects_tutorial/sources/Ch1.move).
+You can find the full code [here](../../../move_code/objects_tutorial/sources/Ch1/ColorObject.move).
 
 ### Onchain Interactions
 Now let's try to call the `create` in transactions and see what happens. To do this we need to start Sui and the wallet. Please follow the [Wallet guide](../wallet.md) to start the Sui network and setup the wallet.
