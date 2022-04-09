@@ -45,7 +45,11 @@ export class PublicKey {
       this._bn = value._bn;
     } else {
       if (typeof value === 'string') {
-        this._bn = new BN(Buffer.from(value, 'base64'));
+        const buffer = Buffer.from(value, 'base64');
+        if (buffer.length !== 32) {
+          throw new Error(`Invalid public key input`);
+        }
+        this._bn = new BN(buffer);
       } else {
         this._bn = new BN(value);
       }
@@ -54,11 +58,6 @@ export class PublicKey {
       }
     }
   }
-
-  /**
-   * Default public key value.(All zeros)
-   */
-  static default: PublicKey = new PublicKey(Buffer.alloc(PUBLIC_KEY_SIZE));
 
   /**
    * Checks if two publicKeys are equal
@@ -71,11 +70,7 @@ export class PublicKey {
    * Return the base-64 representation of the public key
    */
   toBase64(): string {
-    return this._bn.toString(64);
-  }
-
-  toJSON(): string {
-    return this.toBase64();
+    return this.toBuffer().toString('base64');
   }
 
   /**

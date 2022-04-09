@@ -55,7 +55,9 @@
   },
   "dependencies": {
     "bn.js": "^5.2.0",
-    "tweetnacl": "^1.0.3"
+    "buffer": "^6.0.3",
+    "tweetnacl": "^1.0.3",
+    "util": "^0.12.4"
   },
   "resolutions": {
     "tsdx/**/node-notifier": "10.0.0"

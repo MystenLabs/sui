@@ -5,6 +5,7 @@ import nacl from 'tweetnacl';
 import { Base64DataBuffer } from '../serialization/base64';
 import { Keypair } from './keypair';
 import { PublicKey } from './publickey';
+import { TextEncoder } from 'util';
 
 /**
  * Ed25519 Keypair data
@@ -86,7 +87,7 @@ export class Ed25519Keypair implements Keypair {
   }
 
   /**
-   * Returns the signature for the provided data.
+   * Return the signature for the provided data.
    */
   signData(data: Base64DataBuffer): Base64DataBuffer {
     return new Base64DataBuffer(
