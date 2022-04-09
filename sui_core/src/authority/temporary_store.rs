@@ -125,9 +125,9 @@ impl<S> AuthorityTemporaryStore<S> {
         for (object_id, (_object_ref, object)) in &self.written {
             // Objects in written can be either mutation or creation.
             // We figure it out by looking them up in `self.objects`.
-            let object_size = object.object_data_size();
+            let object_size = object.object_size_for_gas_metering();
             let old_object_size = if let Some(old_obj) = self.objects.get(object_id) {
-                old_obj.object_data_size()
+                old_obj.object_size_for_gas_metering()
             } else {
                 0
             };
@@ -139,7 +139,7 @@ impl<S> AuthorityTemporaryStore<S> {
             // object was unwrapped and then deleted. The rebate would have been provided already when
             // mutating the object that wrapped this object.
             if let Some(old_obj) = self.objects.get(object_id) {
-                gas_status.charge_storage_mutation(old_obj.object_data_size(), 0)?;
+                gas_status.charge_storage_mutation(old_obj.object_size_for_gas_metering(), 0)?;
             }
         }
         // Also charge gas for mutating the gas object in advance.
