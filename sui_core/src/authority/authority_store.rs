@@ -575,6 +575,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         mutated_objects: HashMap<ObjectRef, Object>,
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
+        sequence_number: TxSequenceNumber,
     ) -> SuiResult {
         let transaction_digest = certificate.digest();
         let mut temporary_store =
@@ -590,12 +591,24 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         }
 
         let mut write_batch = self.transaction_lock.batch();
+
+        // Store the certificate indexed by transaction digest
+        write_batch = write_batch.insert_batch(
+            &self.certificates,
+            std::iter::once((transaction_digest, &certificate)),
+        )?;
+
         // Once a transaction is done processing and effects committed, we no longer
         // need it in the transactions table. This also allows us to track pending
         // transactions.
         write_batch =
-            write_batch.delete_batch(&self.transactions, std::iter::once(certificate.digest()))?;
-        self.batch_update_objects(write_batch, temporary_store, *transaction_digest, None)
+            write_batch.delete_batch(&self.transactions, std::iter::once(transaction_digest))?;
+        self.batch_update_objects(
+            write_batch,
+            temporary_store,
+            *transaction_digest,
+            Some(sequence_number),
+        )
     }
 
     /// Helper function for updating the objects in the state

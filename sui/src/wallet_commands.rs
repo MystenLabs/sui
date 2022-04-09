@@ -550,7 +550,7 @@ impl WalletContext {
         })?;
         let config = config.persisted(config_path);
         let keystore = Arc::new(RwLock::new(config.keystore.init()?));
-        let gateway = config.gateway.init();
+        let gateway = config.gateway.init()?;
         let context = Self {
             config,
             keystore,
