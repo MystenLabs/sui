@@ -96,7 +96,7 @@ async fn main() -> Result<(), anyhow::Error> {
         config.db_folder_path,
         committee,
         authority_clients,
-    ));
+    )?);
 
     let api_context = ServerContext::new(documentation, gateway);
     let server = HttpServerStarter::new(&config_dropshot, api, api_context, &log)?.start();

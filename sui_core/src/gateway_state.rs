@@ -28,6 +28,7 @@ use tracing::{error, Instrument};
 use std::path::PathBuf;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -42,6 +43,12 @@ pub type GatewayClient = Box<dyn GatewayAPI + Sync + Send>;
 pub struct GatewayState<A> {
     authorities: AuthorityAggregator<A>,
     store: Arc<GatewayStore>,
+    /// Every transaction committed in authorities (and hence also committed in the Gateway)
+    /// will have a unique sequence number. This number is specific to this gateway,
+    /// and hence will not be compatible with authorities or other gateways.
+    /// It's useful if we need some kind of ordering for transactions
+    /// from a gateway.
+    next_tx_seq_number: AtomicU64,
 }
 
 impl<A> GatewayState<A> {
@@ -50,11 +57,14 @@ impl<A> GatewayState<A> {
         path: PathBuf,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
-    ) -> Self {
-        Self {
-            store: Arc::new(GatewayStore::open(path, None)),
+    ) -> SuiResult<Self> {
+        let store = Arc::new(GatewayStore::open(path, None));
+        let next_tx_seq_number = AtomicU64::new(store.next_sequence_number()?);
+        Ok(Self {
+            store,
             authorities: AuthorityAggregator::new(committee, authority_clients),
-        }
+            next_tx_seq_number,
+        })
     }
 
     // Given a list of inputs from a transaction, fetch the objects
@@ -166,6 +176,9 @@ pub trait GatewayAPI {
         &mut self,
         account_addr: SuiAddress,
     ) -> Result<Vec<ObjectRef>, anyhow::Error>;
+
+    /// Get the total number of transactions ever happened in history.
+    fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error>;
 }
 
 impl<A> GatewayState<A>
@@ -287,6 +300,8 @@ where
             mutated_objects,
             new_certificate.clone(),
             effects.clone(),
+            self.next_tx_seq_number
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
         )?;
 
         Ok((new_certificate, effects))
@@ -704,5 +719,9 @@ where
         account_addr: SuiAddress,
     ) -> Result<Vec<ObjectRef>, anyhow::Error> {
         Ok(self.store.get_account_objects(account_addr)?)
+    }
+
+    fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
+        Ok(self.store.next_sequence_number()?)
     }
 }
