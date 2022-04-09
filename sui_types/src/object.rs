@@ -167,7 +167,7 @@ impl MoveObject {
     /// Approximate size of the object in bytes. This is used for gas metering.
     /// For the type tag field, we serialize it on the spot to get the accurate size.
     /// This should not be very expensive since the type tag is usually simple, and
-    /// we only do this once perf object being mutated.
+    /// we only do this once per object being mutated.
     pub fn object_size_for_gas_metering(&self) -> usize {
         let seriealized_type_tag =
             bcs::to_bytes(&self.type_).expect("Serializing type tag should not fail");

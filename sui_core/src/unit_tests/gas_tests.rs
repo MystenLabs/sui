@@ -106,6 +106,8 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
     let mut gas_status = SuiGasStatus::new_with_budget(*MAX_GAS_BUDGET);
     gas_status.charge_min_tx_gas()?;
 
+    // Both the object to be transferred and the gas object will be read
+    // from the store. Hence we need to charge for 2 reads.
     gas_status.charge_storage_read(
         object.object_size_for_gas_metering() + gas_object.object_size_for_gas_metering(),
     )?;
