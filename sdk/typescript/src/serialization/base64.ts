@@ -3,7 +3,6 @@
 
 import { Buffer } from 'buffer';
 
-// TODO: Buffer is not supported in browser environments
 export class Base64DataBuffer {
   private _data: Uint8Array;
 

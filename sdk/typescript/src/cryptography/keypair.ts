@@ -14,7 +14,7 @@ export interface Keypair {
   getPublicKey(): PublicKey;
 
   /**
-   * Returns the signature of the data
+   * Return the signature for the data
    */
   signData(data: Base64DataBuffer): Base64DataBuffer;
 }
