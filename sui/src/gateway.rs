@@ -16,6 +16,7 @@ use sui_network::network::NetworkClient;
 use sui_network::transport;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::Committee;
+use sui_types::error::SuiResult;
 
 use crate::config::{AuthorityInfo, Config};
 use crate::rest_gateway::RestGatewayClient;
@@ -59,16 +60,16 @@ impl Display for GatewayType {
 }
 
 impl GatewayType {
-    pub fn init(&self) -> GatewayClient {
-        match self {
+    pub fn init(&self) -> SuiResult<GatewayClient> {
+        Ok(match self {
             GatewayType::Embedded(config) => {
                 let path = config.db_folder_path.clone();
                 let committee = config.make_committee();
                 let authority_clients = config.make_authority_clients();
-                Box::new(GatewayState::new(path, committee, authority_clients))
+                Box::new(GatewayState::new(path, committee, authority_clients)?)
             }
             GatewayType::Rest(url) => Box::new(RestGatewayClient { url: url.clone() }),
-        }
+        })
     }
 }
 

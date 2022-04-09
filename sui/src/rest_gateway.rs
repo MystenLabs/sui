@@ -208,6 +208,11 @@ impl GatewayAPI for RestGatewayClient {
             .collect::<Result<Vec<_>, anyhow::Error>>()?;
         Ok(objects)
     }
+
+    fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
+        // TODO: Implement this.
+        Ok(0)
+    }
 }
 
 impl RestGatewayClient {
