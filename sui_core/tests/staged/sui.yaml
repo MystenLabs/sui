@@ -39,7 +39,10 @@ AuthoritySignInfo:
     - signature:
         TYPENAME: AuthoritySignature
 AuthoritySignature:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 64
 BatchInfoRequest:
   STRUCT:
     - start: U64

@@ -70,13 +70,31 @@ where
 }
 
 impl<'de> BytesOrBase64<'de> for ed25519_dalek::Signature {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        Self: AsRef<[u8]>,
+    {
+        if serializer.is_human_readable() {
+            Encoding::Base64.encode(self.as_ref()).serialize(serializer)
+        } else {
+            <Self as Serialize>::serialize(self, serializer)
+        }
+    }
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let value = deserialize_from_bytes_or_decode(deserializer, Encoding::Base64)?;
-        Self::try_from(value.as_slice())
-            .map_err(|_| D::Error::custom("byte deserialization failed"))
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            let value = Encoding::Base64
+                .decode(s)
+                .map_err(|_| D::Error::custom("byte deserialization failed"))?;
+            Self::try_from(value.as_slice())
+                .map_err(|_| D::Error::custom("byte deserialization failed"))
+        } else {
+            <Self as Deserialize>::deserialize(deserializer)
+        }
     }
 }
 
