@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Sui::Transfer {
+    use Std::Option::{Self, Option};
+
     use Sui::ID::{Self, ID, VersionedID};
 
     // To allow access to transfer_to_object_unsafe.
@@ -87,8 +89,20 @@ module Sui::Transfer {
     /// Similar to transfer_to_object, to transfer an object to another object.
     /// However it does not return the ChildRef. This can be unsafe to use since there is
     /// no longer guarantee that the ID stored in the parent actually represent ownership.
-    public fun transfer_to_object_unsafe<T: key, R: key>(obj: T, owner: &mut R) {
-        let ChildRef { child_id: _ } = transfer_to_object(obj, owner);
+    /// If the object was owned by another object, an `old_child_ref` would be around
+    /// and need to be consumed as well.
+    public(friend) fun transfer_to_object_unsafe<T: key, R: key>(
+        obj: T,
+        old_child_ref: Option<ChildRef<T>>,
+        owner: &mut R,
+    ) {
+        let ChildRef { child_id: _ } = if (Option::is_none(&old_child_ref)) {
+            transfer_to_object(obj, owner)
+        } else {
+            let child_ref = Option::extract(&mut old_child_ref);
+            transfer_child_to_object(obj, child_ref, owner)
+        };
+        Option::destroy_none(old_child_ref);
     }
 
     /// Transfer a child object to new owner. This is one of the two ways that can

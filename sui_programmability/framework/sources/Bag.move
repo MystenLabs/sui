@@ -14,7 +14,7 @@ module Sui::Bag {
     use Std::Option::{Self, Option};
     use Std::Vector::Self;
     use Sui::ID::{Self, ID, VersionedID};
-    use Sui::Transfer;
+    use Sui::Transfer::{Self, ChildRef};
     use Sui::TxContext::{Self, TxContext};
 
     // Error codes
@@ -70,9 +70,11 @@ module Sui::Bag {
         Vector::length(&c.objects)
     }
 
-    /// Add a new object to the Bag.
+    /// Add an object to the Bag.
     /// Abort if the object is already in the Bag.
-    public fun add<T: key>(c: &mut Bag, object: T) {
+    /// If the object was owned by another object, an `old_child_ref` would be around
+    /// and need to be consumed as well.
+    fun add_impl<T: key>(c: &mut Bag, object: T, old_child_ref: Option<ChildRef<T>>) {
         assert!(
             size(c) + 1 <= c.max_capacity,
             Errors::limit_exceeded(EMAX_CAPACITY_EXCEEDED)
@@ -82,7 +84,20 @@ module Sui::Bag {
             abort EOBJECT_DOUBLE_ADD
         };
         Vector::push_back(&mut c.objects, *id);
-        Transfer::transfer_to_object_unsafe(object, c);
+        Transfer::transfer_to_object_unsafe(object, old_child_ref, c);
+    }
+
+    /// Add a new object to the Bag.
+    /// Abort if the object is already in the Bag.
+    public fun add<T: key>(c: &mut Bag, object: T) {
+        add_impl(c, object, Option::none())
+    }
+
+    /// Transfer a object that was owned by another object to the bag.
+    /// Since the object is a child object of another object, an `old_child_ref`
+    /// is around and needs to be consumed.
+    public fun add_child_object<T: key>(c: &mut Bag, object: T, old_child_ref: ChildRef<T>) {
+        add_impl(c, object, Option::some(old_child_ref))
     }
 
     /// Check whether the Bag contains a specific object,
