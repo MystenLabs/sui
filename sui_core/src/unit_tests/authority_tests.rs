@@ -1416,15 +1416,8 @@ async fn shared_object() {
         use sui_types::object::MoveObject;
 
         let content = GasCoin::new(shared_object_id, SequenceNumber::new(), 10);
-        let data = Data::Move(MoveObject::new(
-            /* type */ GasCoin::type_(),
-            content.to_bcs_bytes(),
-        ));
-        Object {
-            data,
-            owner: Owner::SharedMutable,
-            previous_transaction: TransactionDigest::genesis(),
-        }
+        let obj = MoveObject::new(/* type */ GasCoin::type_(), content.to_bcs_bytes());
+        Object::new_move(obj, Owner::SharedMutable, TransactionDigest::genesis())
     };
 
     let authority = init_state_with_objects(vec![gas_object, shared_object]).await;
