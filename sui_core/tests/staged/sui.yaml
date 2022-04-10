@@ -39,10 +39,7 @@ AuthoritySignInfo:
     - signature:
         TYPENAME: AuthoritySignature
 AuthoritySignature:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 64
+  NEWTYPESTRUCT: BYTES
 BatchInfoRequest:
   STRUCT:
     - start: U64
@@ -275,10 +272,7 @@ Object:
         TYPENAME: TransactionDigest
     - storage_rebate: U64
 ObjectDigest:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 32
+  NEWTYPESTRUCT: BYTES
 ObjectFormatOptions:
   STRUCT:
     - include_types: BOOL
@@ -341,10 +335,7 @@ Owner:
     3:
       SharedImmutable: UNIT
 PublicKeyBytes:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 32
+  NEWTYPESTRUCT: BYTES
 SequenceNumber:
   NEWTYPESTRUCT: U64
 SerializedMessage:
@@ -406,10 +397,7 @@ SerializedMessage:
         NEWTYPE:
           TYPENAME: ConsensusSync
 Signature:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 96
+  NEWTYPESTRUCT: BYTES
 SignedBatch:
   STRUCT:
     - batch:
@@ -444,10 +432,7 @@ StructTag:
         SEQ:
           TYPENAME: TypeTag
 SuiAddress:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 20
+  NEWTYPESTRUCT: BYTES
 SuiError:
   ENUM:
     0:
@@ -785,10 +770,7 @@ TransactionData:
           - TYPENAME: ObjectDigest
     - gas_budget: U64
 TransactionDigest:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 32
+  NEWTYPESTRUCT: BYTES
 TransactionEffects:
   STRUCT:
     - status:

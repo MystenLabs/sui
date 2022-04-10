@@ -182,9 +182,10 @@ fn test_object_id_serde_not_human_readable() {
 fn test_address_serde_not_human_readable() {
     let address = SuiAddress::random_for_testing_only();
     let serialized = bincode::serialize(&address).unwrap();
-    let serialized_bcs = bcs::to_bytes(&address).unwrap();
-    assert_eq!(serialized, serialized_bcs);
-    assert_eq!(address.0.to_vec(), serialized);
+    let bcs_serialized = bcs::to_bytes(&address).unwrap();
+    // bincode use 8 bytes for BYTES len and bcs use 1 byte
+    assert_eq!(serialized[8..], bcs_serialized[1..]);
+    assert_eq!(address.0, serialized[8..]);
     let deserialized: SuiAddress = bincode::deserialize(&serialized).unwrap();
     assert_eq!(deserialized, address);
 }
@@ -202,9 +203,10 @@ fn test_address_serde_human_readable() {
 fn test_transaction_digest_serde_not_human_readable() {
     let digest = TransactionDigest::random();
     let serialized = bincode::serialize(&digest).unwrap();
-    let serialized_bcs = bcs::to_bytes(&digest).unwrap();
-    assert_eq!(serialized, serialized_bcs);
-    assert_eq!(digest.0.to_vec(), serialized);
+    let bcs_serialized = bcs::to_bytes(&digest).unwrap();
+    // bincode use 8 bytes for BYTES len and bcs use 1 byte
+    assert_eq!(serialized[8..], bcs_serialized[1..]);
+    assert_eq!(digest.0.to_vec(), serialized[8..]);
     let deserialized: TransactionDigest = bincode::deserialize(&serialized).unwrap();
     assert_eq!(deserialized, digest);
 }
@@ -223,9 +225,11 @@ fn test_signature_serde_not_human_readable() {
     let (_, key) = get_key_pair();
     let sig = AuthoritySignature::new(&Foo("some data".to_string()), &key);
     let serialized = bincode::serialize(&sig).unwrap();
-    let serialized_bcs = bcs::to_bytes(&sig).unwrap();
-    assert_eq!(serialized, serialized_bcs);
-    assert_eq!(sig.0.as_ref(), serialized.as_slice());
+    let bcs_serialized = bcs::to_bytes(&sig).unwrap();
+
+    // bincode use 8 bytes for BYTES len and bcs use 1 byte
+    assert_eq!(serialized[8..], bcs_serialized[1..]);
+    assert_eq!(sig.0.to_bytes(), serialized[8..]);
     let deserialized: AuthoritySignature = bincode::deserialize(&serialized).unwrap();
     assert_eq!(deserialized, sig);
 }
@@ -258,7 +262,7 @@ fn test_move_object_size_for_gas_metering() {
     // all the metadata data needed for serializing various types.
     // If the following assertion breaks, it's likely you have changed MoveObject's fields.
     // Make sure to adjust `object_size_for_gas_metering()` to include those changes.
-    assert_eq!(size + 14, serialized.len());
+    assert_eq!(size + 16, serialized.len());
 }
 
 #[test]
@@ -269,5 +273,5 @@ fn test_move_package_size_for_gas_metering() {
     let serialized = bcs::to_bytes(&package).unwrap();
     // If the following assertion breaks, it's likely you have changed MovePackage's fields.
     // Make sure to adjust `object_size_for_gas_metering()` to include those changes.
-    assert_eq!(size + 4, serialized.len());
+    assert_eq!(size + 5, serialized.len());
 }
