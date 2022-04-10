@@ -24,7 +24,6 @@ module NFTs::Marketplace {
     struct Marketplace has key {
         id: VersionedID,
         objects: vector<ID>,
-        owner: address,
     }
 
     /// A single listing which contains the listed item and its price in [`Coin<C>`].
@@ -40,7 +39,6 @@ module NFTs::Marketplace {
         Transfer::share_object(Marketplace {
             id: TxContext::new_id(ctx),
             objects: Vector::empty(),
-            owner: TxContext::sender(ctx),
         });
     }
 
@@ -198,7 +196,7 @@ module NFTs::MarketplaceTests {
         TestScenario::next_tx(scenario, &SELLER);
         let mkp = TestScenario::remove_object<Marketplace>(scenario);
         let nft = TestScenario::remove_object<NFT<KITTY>>(scenario);
-            
+
         Marketplace::list<NFT<KITTY>, SUI>(&mut mkp, nft, 100, TestScenario::ctx(scenario));
         TestScenario::return_object(scenario, mkp);
     }
@@ -241,7 +239,7 @@ module NFTs::MarketplaceTests {
         {
             let mkp = TestScenario::remove_object<Marketplace>(scenario);
             let listing = TestScenario::remove_nested_object<Marketplace, Listing<NFT<KITTY>, SUI>>(scenario, &mkp);
-            
+
             // Do the delist operation on a Marketplace.
             let nft = Marketplace::delist<NFT<KITTY>, SUI>(&mut mkp, listing, TestScenario::ctx(scenario));
             let _ = NFT::burn<KITTY>(nft);
