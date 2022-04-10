@@ -187,6 +187,13 @@ impl<'a> SuiGasStatus<'a> {
         }
     }
 
+    /// This function is only called during testing, where we need to mock
+    /// Move VM charging gas.
+    pub fn charge_vm_exec_test_only(&mut self, cost: u64) -> SuiResult {
+        self.gas_status.deduct_gas(InternalGasUnits::new(cost))?;
+        Ok(())
+    }
+
     /// Returns the final (computation cost, storage cost, storage rebate) of the gas meter.
     /// We use initial budget, combined with remaining gas and storage cost to derive
     /// computation cost.

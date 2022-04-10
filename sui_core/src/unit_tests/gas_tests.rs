@@ -352,33 +352,32 @@ async fn test_move_call_gas() -> SuiResult {
     );
 
     // Mimic the gas charge behavior and cross check the result with above.
-    let mut gas_status = SuiGasStatus::new_with_budget(*MAX_GAS_BUDGET);
+    let mut gas_status = SuiGasStatus::new_with_budget(GAS_VALUE_FOR_TESTING);
     gas_status.charge_min_tx_gas()?;
     let package_object = authority_state
         .get_object(&package_object_ref.0)
         .await?
         .unwrap();
-    gas_status.charge_storage_read(package_object.object_size_for_gas_metering())?;
-    gas_status.charge_storage_read(gas_object.object_size_for_gas_metering())?;
+    gas_status.charge_storage_read(
+        package_object.object_size_for_gas_metering() + gas_object.object_size_for_gas_metering(),
+    )?;
     let gas_used_before_vm_exec = gas_status.summary(true).gas_used();
     // The gas cost to execute the function in Move VM.
     // Hard code it here since it's difficult to mock that in test.
-    const MOVE_VM_EXEC_COST: u64 = 17;
-    gas_status.charge_storage_mutation(
-        gas_object.object_size_for_gas_metering(),
-        gas_object.object_size_for_gas_metering(),
-    )?;
+    const MOVE_VM_EXEC_COST: u64 = 17006;
+    gas_status.charge_vm_exec_test_only(MOVE_VM_EXEC_COST)?;
     let created_object = authority_state
         .get_object(&effects.created[0].0 .0)
         .await?
         .unwrap();
     gas_status.charge_storage_mutation(0, created_object.object_size_for_gas_metering())?;
+    gas_status.charge_storage_mutation(
+        gas_object.object_size_for_gas_metering(),
+        gas_object.object_size_for_gas_metering(),
+    )?;
 
     let new_cost = gas_status.summary(true);
-    assert_eq!(
-        gas_cost.computation_cost,
-        new_cost.computation_cost + MOVE_VM_EXEC_COST
-    );
+    assert_eq!(gas_cost.computation_cost, new_cost.computation_cost,);
     assert_eq!(gas_cost.storage_cost, new_cost.storage_cost);
 
     // Create a transaction with gas budget that should run out during Move VM execution.
