@@ -40,6 +40,10 @@ pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
 pub type GatewayClient = Box<dyn GatewayAPI + Sync + Send>;
 
+pub type GatewayTxSeqNumber = u64;
+
+const MAX_TX_RANGE_SIZE: u64 = 4096;
+
 pub struct GatewayState<A> {
     authorities: AuthorityAggregator<A>,
     store: Arc<GatewayStore>,
@@ -179,6 +183,20 @@ pub trait GatewayAPI {
 
     /// Get the total number of transactions ever happened in history.
     fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error>;
+
+    /// Return the list of transactions with sequence number in range [`start`, end).
+    /// `start` is included, `end` is excluded.
+    fn get_transactions_in_range(
+        &self,
+        start: GatewayTxSeqNumber,
+        end: GatewayTxSeqNumber,
+    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error>;
+
+    /// Return the most recent `count` transactions.
+    fn get_recent_transactions(
+        &self,
+        count: u64,
+    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error>;
 }
 
 impl<A> GatewayState<A>
@@ -724,5 +742,53 @@ where
 
     fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
         Ok(self.store.next_sequence_number()?)
+    }
+
+    fn get_transactions_in_range(
+        &self,
+        start: GatewayTxSeqNumber,
+        end: GatewayTxSeqNumber,
+    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
+        fp_ensure!(
+            start < end,
+            SuiError::GatewayInvalidTxRangeQuery {
+                error: format!(
+                    "start must be smaller than end, (start={}, end={}) given",
+                    start, end
+                ),
+            }
+            .into()
+        );
+        fp_ensure!(
+            end - start <= MAX_TX_RANGE_SIZE,
+            SuiError::GatewayInvalidTxRangeQuery {
+                error: format!(
+                    "Number of transactions queried must not exceed {}, {} queried",
+                    MAX_TX_RANGE_SIZE,
+                    end - start
+                ),
+            }
+            .into()
+        );
+        Ok(self.store.transactions_in_seq_range(start, end)?)
+    }
+
+    fn get_recent_transactions(
+        &self,
+        count: u64,
+    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
+        fp_ensure!(
+            count <= MAX_TX_RANGE_SIZE,
+            SuiError::GatewayInvalidTxRangeQuery {
+                error: format!(
+                    "Number of transactions queried must not exceed {}, {} queried",
+                    MAX_TX_RANGE_SIZE, count
+                ),
+            }
+            .into()
+        );
+        let end = self.get_total_transaction_number()?;
+        let start = if end >= count { end - count } else { 0 };
+        self.get_transactions_in_range(start, end)
     }
 }

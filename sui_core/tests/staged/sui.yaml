@@ -755,6 +755,10 @@ SuiError:
         STRUCT:
           - error: STR
     92:
+      GatewayInvalidTxRangeQuery:
+        STRUCT:
+          - error: STR
+    93:
       OnlyOneConsensusClientPermitted: UNIT
 TransactionData:
   STRUCT:

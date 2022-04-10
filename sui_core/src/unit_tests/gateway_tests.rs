@@ -2103,7 +2103,7 @@ async fn test_coin_merge() {
 }
 
 #[tokio::test]
-async fn test_get_total_transaction_number() -> Result<(), anyhow::Error> {
+async fn test_recent_transactions() -> Result<(), anyhow::Error> {
     let (mut client, authority_clients) = make_address_manager(4).await;
     let (addr1, key1) = get_key_pair();
     let (addr2, _) = get_key_pair();
@@ -2122,20 +2122,32 @@ async fn test_get_total_transaction_number() -> Result<(), anyhow::Error> {
     )
     .await;
 
+    assert_eq!(client.get_total_transaction_number()?, 0);
     let mut cnt = 0;
+    let mut digests = vec![];
     for obj_id in [object_id1, object_id2, object_id3] {
-        assert_eq!(client.get_total_transaction_number()?, cnt);
         let data = client
             .transfer_coin(addr1, obj_id, gas_object, 50000, addr2)
             .await
             .unwrap();
         let signature = key1.sign(&data.to_bytes());
-        client
+        let response = client
             .execute_transaction(Transaction::new(data, signature))
             .await?;
+        digests.push((cnt, *response.to_effect_response()?.0.digest()));
         cnt += 1;
         assert_eq!(client.get_total_transaction_number()?, cnt);
     }
+    // start must < end.
+    assert!(client.get_transactions_in_range(1, 1).is_err());
+    // Extends max range allowed.
+    assert!(client.get_transactions_in_range(1, 100000).is_err());
+    let txs = client.get_recent_transactions(10)?;
+    assert_eq!(txs.len(), 3);
+    assert_eq!(txs, digests);
+    let txs = client.get_transactions_in_range(0, 10)?;
+    assert_eq!(txs.len(), 3);
+    assert_eq!(txs, digests);
 
     Ok(())
 }
