@@ -222,7 +222,8 @@ where
     ) -> SuiResult<(Object, SuiGasStatus<'_>)> {
         let gas_object = self.get_object(&gas_payment_id).await?;
         gas::check_gas_balance(&gas_object, gas_budget)?;
-        let gas_status = gas::start_gas_metering(gas_budget)?;
+        // TODO: Pass in real computation gas unit price and storage gas unit price.
+        let gas_status = gas::start_gas_metering(gas_budget, 1, 1)?;
         Ok((gas_object, gas_status))
     }
 

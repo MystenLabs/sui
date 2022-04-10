@@ -132,15 +132,18 @@ fn execute_transaction<S: BackingPackageStore>(
         temporary_store.reset();
     }
     temporary_store.ensure_active_inputs_mutated();
-    if let Err(err) = temporary_store
-        .charge_gas_for_storage_changes(&mut gas_status, gas_object.object_size_for_gas_metering())
+    if let Err(err) =
+        temporary_store.charge_gas_for_storage_changes(&mut gas_status, &mut gas_object)
     {
         result = Err(err);
+        // No need to roll back the temporary store here since `charge_gas_for_storage_changes`
+        // will not modify `temporary_store` if it failed.
     }
 
     let cost_summary = gas_status.summary(result.is_ok());
     let gas_used = cost_summary.gas_used();
-    gas::deduct_gas(&mut gas_object, gas_used);
+    let gas_rebate = cost_summary.storage_rebate;
+    gas::deduct_gas(&mut gas_object, gas_used, gas_rebate);
     temporary_store.write_object(gas_object);
 
     // TODO: Return cost_summary so that the detailed summary exists in TransactionEffects for

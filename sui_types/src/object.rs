@@ -336,6 +336,10 @@ pub struct Object {
     pub owner: Owner,
     /// The digest of the transaction that created or last mutated this object
     pub previous_transaction: TransactionDigest,
+    /// The amount of SUI we would rebate if this object gets deleted.
+    /// This number is re-calculated each time the object is mutated based on
+    /// the present storage gas price.
+    pub storage_rebate: u64,
 }
 
 impl BcsSignable for Object {}
@@ -347,6 +351,7 @@ impl Object {
             data: Data::Move(o),
             owner,
             previous_transaction,
+            storage_rebate: 0,
         }
     }
 
@@ -358,6 +363,7 @@ impl Object {
             data: Data::Package(MovePackage::from(&modules)),
             owner: Owner::SharedImmutable,
             previous_transaction,
+            storage_rebate: 0,
         }
     }
 
@@ -419,7 +425,7 @@ impl Object {
     /// we also don't want to serialize the object just to get the size.
     /// This approximation should be good enough for gas metering.
     pub fn object_size_for_gas_metering(&self) -> usize {
-        let meta_data_size = size_of::<Owner>() + size_of::<TransactionDigest>();
+        let meta_data_size = size_of::<Owner>() + size_of::<TransactionDigest>() + size_of::<u64>();
         let data_size = match &self.data {
             Data::Move(m) => m.object_size_for_gas_metering(),
             Data::Package(p) => p
@@ -450,6 +456,7 @@ impl Object {
             owner: Owner::SharedImmutable,
             data,
             previous_transaction: TransactionDigest::genesis(),
+            storage_rebate: 0,
         }
     }
 
@@ -467,6 +474,7 @@ impl Object {
             owner: Owner::AddressOwner(owner),
             data,
             previous_transaction: TransactionDigest::genesis(),
+            storage_rebate: 0,
         }
     }
 
@@ -492,6 +500,7 @@ impl Object {
             owner: Owner::AddressOwner(owner),
             data,
             previous_transaction: TransactionDigest::genesis(),
+            storage_rebate: 0,
         }
     }
 
