@@ -44,7 +44,7 @@ pub struct WalletOpts {
     pub json: bool,
 }
 
-#[derive(StructOpt)]
+#[derive(StructOpt, Debug)]
 #[structopt(rename_all = "kebab-case")]
 #[structopt(setting(AppSettings::NoBinaryName))]
 pub enum WalletCommands {
