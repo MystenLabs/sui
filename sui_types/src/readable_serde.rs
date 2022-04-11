@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::base_types::{SUI_ADDRESS_LENGTH, TRANSACTION_DIGEST_LENGTH};
+use crate::crypto::SUI_SIGNATURE_LENGTH;
 use serde;
 use serde::de::{Deserialize, Deserializer, Error};
 use serde::ser::Serializer;
@@ -161,5 +163,5 @@ impl Encoding {
     }
 }
 
-byte_or_hex!(20,);
-byte_or_base64!(32, 96,);
+byte_or_hex!(SUI_ADDRESS_LENGTH,);
+byte_or_base64!(TRANSACTION_DIGEST_LENGTH, SUI_SIGNATURE_LENGTH,);
