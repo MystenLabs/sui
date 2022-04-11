@@ -56,7 +56,7 @@ pub use temporary_store::AuthorityTemporaryStore;
 
 mod authority_store;
 pub use authority_store::{AuthorityStore, GatewayStore};
-use sui_types::batch::{SignedBatch, TxSequenceNumber};
+use sui_types::batch::{SignedBatch, TransactionBatch, TxSequenceNumber};
 
 pub mod authority_notifier;
 
@@ -518,29 +518,37 @@ impl AuthorityState {
             return Err(SuiError::TooManyItemsError(MAX_ITEMS_LIMIT));
         }
 
-        let (batches, transactions): (
+        let (mut batches, transactions): (
             Vec<SignedBatch>,
             Vec<(TxSequenceNumber, TransactionDigest)>,
         ) = self
             ._database
             .batches_and_transactions(request.start, request.end)?;
 
-        let mut transactions_info = Vec::new();
+        // Append the transaction info to individual transactions if requested
+        let mut transactions_with_info = Vec::new();
         for (seq, digest) in transactions.iter() {
             if request.include_tx_info {
-                let tx_info = self.make_transaction_info(digest).await;
-                match tx_info {
-                    Ok(info) => {
-                        transactions_info.push((*seq, *digest, Some(Box::new(info))));
-                    }
-                    Err(e) => return Err(e),
-                }
+                let tx_info = self.make_transaction_info(digest).await?;
+                transactions_with_info.push((*seq, *digest, Some(Box::new(tx_info))));
             } else {
-                transactions_info.push((*seq, *digest, None))
+                transactions_with_info.push((*seq, *digest, None))
             }
         }
 
-        let mut dq_transactions = std::collections::VecDeque::from(transactions_info);
+        // Append the transaction info to batches if requested
+        if request.include_tx_info {
+            for mut signed_batch in &mut batches {
+                let mut transactions_with_info = Vec::new();
+                for (seq, digest, _) in &signed_batch.batch.transaction_batch.0 {
+                    let tx_info = self.make_transaction_info(digest).await?;
+                    transactions_with_info.push((*seq, *digest, Some(Box::new(tx_info))));
+                }
+                signed_batch.batch.transaction_batch = TransactionBatch(transactions_with_info);
+            }
+        }
+
+        let mut dq_transactions = std::collections::VecDeque::from(transactions_with_info);
         let mut dq_batches = std::collections::VecDeque::from(batches);
         let mut items = VecDeque::with_capacity(dq_batches.len() + dq_transactions.len());
         let mut last_batch_next_seq = 0;
@@ -577,6 +585,8 @@ impl AuthorityState {
 
         Ok((items, should_subscribe))
     }
+
+    pub async fn add_tx_info() {}
 
     pub async fn new(
         committee: Committee,

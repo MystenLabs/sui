@@ -50,15 +50,7 @@ impl TransactionNotifier {
     pub fn iter_from(
         self: &Arc<Self>,
         next_seq: u64,
-    ) -> SuiResult<
-        impl futures::Stream<
-                Item = (
-                    TxSequenceNumber,
-                    TransactionDigest,
-                    Option<Box<TransactionInfoResponse>>,
-                ),
-            > + Unpin,
-    > {
+    ) -> SuiResult<impl futures::Stream<Item = (TxSequenceNumber, TransactionDigest)> + Unpin> {
         if self
             .has_stream
             .compare_exchange(
@@ -74,11 +66,7 @@ impl TransactionNotifier {
 
         // The state we inject in the async stream
         let transaction_notifier = self.clone();
-        let temp_buffer: VecDeque<(
-            TxSequenceNumber,
-            TransactionDigest,
-            Option<Box<TransactionInfoResponse>>,
-        )> = VecDeque::new();
+        let temp_buffer: VecDeque<(TxSequenceNumber, TransactionDigest)> = VecDeque::new();
         let uniquess_guard = IterUniquenessGuard(transaction_notifier.clone());
         let initial_state = (transaction_notifier, temp_buffer, next_seq, uniquess_guard);
 
@@ -110,10 +98,8 @@ impl TransactionNotifier {
                         .skip_to(&next_seq)
                     {
                         // ... contued here with take_while. And expand the buffer with the new items.
-                        temp_buffer.extend(
-                            iter.take_while(|(tx_seq, _tx_digest)| *tx_seq < last_safe)
-                                .map(|(tx_seq, _tx_digest)| (tx_seq, _tx_digest, None)),
-                        );
+                        temp_buffer
+                            .extend(iter.take_while(|(tx_seq, _tx_digest)| *tx_seq < last_safe));
 
                         // Update what the next item would be to no re-read messages in the buffer
                         if !temp_buffer.is_empty() {
@@ -237,9 +223,9 @@ mod tests {
             Err(SuiError::ConcurrentIteratorError)
         ));
 
-        assert!(matches!(iter.next().await, Some((0, _, _))));
-        assert!(matches!(iter.next().await, Some((1, _, _))));
-        assert!(matches!(iter.next().await, Some((2, _, _))));
+        assert!(matches!(iter.next().await, Some((0, _))));
+        assert!(matches!(iter.next().await, Some((1, _))));
+        assert!(matches!(iter.next().await, Some((2, _))));
 
         assert!(timeout(Duration::from_millis(10), iter.next())
             .await
@@ -258,7 +244,7 @@ mod tests {
         }
 
         let x = iter.next().await;
-        assert!(matches!(x, Some((4, _, _))));
+        assert!(matches!(x, Some((4, _))));
 
         assert!(timeout(Duration::from_millis(10), iter.next())
             .await
@@ -282,9 +268,9 @@ mod tests {
         store.side_sequence(t8.seq(), &TransactionDigest::random());
         drop(t8);
 
-        assert!(matches!(iter.next().await, Some((5, _, _))));
-        assert!(matches!(iter.next().await, Some((6, _, _))));
-        assert!(matches!(iter.next().await, Some((8, _, _))));
+        assert!(matches!(iter.next().await, Some((5, _))));
+        assert!(matches!(iter.next().await, Some((6, _))));
+        assert!(matches!(iter.next().await, Some((8, _))));
 
         assert!(timeout(Duration::from_millis(10), iter.next())
             .await

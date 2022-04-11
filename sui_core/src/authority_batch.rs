@@ -137,7 +137,7 @@ impl crate::authority::AuthorityState {
             tokio::select! {
               _ = interval.tick() => {
                 // Every so often we check if we should make a batch
-                // but it should never be empty. But never empty.
+                // but it should never be empty.
                   make_batch = true;
               },
               item_option = transaction_stream.next() => {
@@ -146,10 +146,11 @@ impl crate::authority::AuthorityState {
                         make_batch = true;
                         exit = true;
                     },
-                    Some((seq, tx_digest, tx_info)) => {
+                    Some((seq, tx_digest)) => {
                         // Add to batch and broadcast
-                        current_batch.push((seq, tx_digest, tx_info.clone()));
-                        let _ = self.batch_channels.send(UpdateItem::Transaction((seq, tx_digest, tx_info)));
+                        // The Tx info gets populated at broadcast time if it was requested, so here it is set to None.
+                        current_batch.push((seq, tx_digest, None));
+                        let _ = self.batch_channels.send(UpdateItem::Transaction((seq, tx_digest, None)));
 
                         if current_batch.len() as TxSequenceNumber >= min_batch_size {
                             make_batch = true;
