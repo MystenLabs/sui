@@ -73,7 +73,7 @@ public fun create(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
 
 You can find the full code in [ColorObject.move](../../../move_code/objects_tutorial/sources/Ch1/ColorObject.move).
 
-### On-chain Interactions
+### On-chain interactions
 Now let's try to call `create` in transactions and see what happens. To do this we need to start Sui and the wallet. Follow the [Wallet Quick Start](../wallet.md) to start the Sui network and set up the wallet.
 
 Before starting, let's take a look at the default wallet address (this is address that will eventually own the object later):
