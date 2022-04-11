@@ -225,7 +225,7 @@ terminal window than one used to execute `sui start`). Assuming you
 accepted the default location for configuration:
 
 ```shell
-$ wallet
+$ wallet -i
 ```
 
 This command will look for the wallet configuration file
@@ -234,7 +234,7 @@ override this setting by providing a path to the directory where this
 file is stored:
 
 ```shell
-$ wallet --config /path/to/wallet/config/file
+$ wallet -i --config /path/to/wallet/config/file
 ```
 
 The Sui interactive wallet supports the following shell functionality:
@@ -258,14 +258,14 @@ commands using scripts.
 
 ```shell
 USAGE:
-    wallet --no-shell [SUBCOMMAND]
+    wallet [SUBCOMMAND]
 ```
 
 For example, we can use the following command to see the list of
 accounts available on the platform:
 
 ```shell
-$ wallet --no-shell addresses
+$ wallet addresses
 ```
 
 The result of running this command should resemble the following output:
@@ -300,7 +300,7 @@ at the start, but this can be changed later.
 In order to see what the current active address is, use the command `active-address`
 
 ```
-wallet --no-shell active-address
+wallet active-address
 562F07CF6369E8D22DBF226A5BFEDC6300014837
 ```
 
@@ -308,7 +308,7 @@ Changing the default address is as easy as calling the `switch` command
 
 ```
 
-wallet --no-shell switch --address 913CF36F370613ED131868AC6F9DA2420166062E
+wallet switch --address 913CF36F370613ED131868AC6F9DA2420166062E
 Active address switched to 913CF36F370613ED131868AC6F9DA2420166062E
 ```
 
@@ -348,7 +348,7 @@ To see how much gas is in an account, use the `gas` command. Note that this comm
 `active-address`, unless otherwise specified.
 
 ```
-wallet --no-shell gas
+wallet gas
                 Object ID                 |  Version   |  Gas Value
 ----------------------------------------------------------------------
  0B8A4620426E526FA42995CF26EB610BFE6BF063 |     0      |   100000
@@ -361,7 +361,7 @@ wallet --no-shell gas
 If one does not want to use the active address, the addresses can be specified:
 
 ```
-/wallet --no-shell gas --address 562F07CF6369E8D22DBF226A5BFEDC6300014837
+/wallet gas --address 562F07CF6369E8D22DBF226A5BFEDC6300014837
                 Object ID                 |  Version   |  Gas Value
 ----------------------------------------------------------------------
  A8DDC2661A19010E5F85CBF6D905DDFBE4DD0320 |     0      |   100000
@@ -382,7 +382,7 @@ not enough, there are two ways to add accounts to the Sui wallet if needed.
 To create a new account, execute the `new-address` command:
 
 ```shell
-$ wallet --no-shell new-address
+$ wallet new-address
 ```
 
 The output shows a confirmation after the account has been created:
@@ -421,7 +421,7 @@ OPTIONS:
 To view the objects owned by the accounts created in genesis, run the following command (substitute the address with one of the genesis addresses in your wallet):
 
 ```shell
-$ wallet --no-shell objects --address 66AF3898E7558B79E115AB61184A958497D1905A
+$ wallet objects --address 66AF3898E7558B79E115AB61184A958497D1905A
 ```
 
 The result should resemble the following, which shows the object in the format of (`object_id`, `sequence_number`, `object_hash`).
@@ -455,7 +455,7 @@ OPTIONS:
 To view the object, use the following command:
 
 ```bash
-$ wallet --no-shell object --id EEA4167BE074537F4A2879C7781D8EF4FFD651CC
+$ wallet object --id EEA4167BE074537F4A2879C7781D8EF4FFD651CC
 ```
 
 This should give you output similar to the following:
@@ -484,7 +484,7 @@ Here is an example:
 If you inspect a newly created account, you would expect the account does not own any object. Let us inspect the fresh account we create in the [Generating a new account](#generating-a-new-account) section (`C72CF3ADCC4D11C03079CEF2C8992AEA5268677A`):
 
 ```shell
-$ wallet --no-shell objects --address C72CF3ADCC4D11C03079CEF2C8992AEA5268677A
+$ wallet objects --address C72CF3ADCC4D11C03079CEF2C8992AEA5268677A
 Showing 0 results.
 
 ```
@@ -522,7 +522,7 @@ mechanisms. For now, just set something large enough.
 Here is an example transfer of an object to account `F456EBEF195E4A231488DF56B762AC90695BE2DD`:
 
 ```shell
-$ wallet --no-shell transfer --to C72CF3ADCC4D11C03079CEF2C8992AEA5268677A --object-id DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1 --gas-budget 100
+$ wallet transfer --to C72CF3ADCC4D11C03079CEF2C8992AEA5268677A --object-id DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1 --gas-budget 100
 ```
 
 With output like:
@@ -547,7 +547,7 @@ DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1 SequenceNumber(1) o#f77edd77f5c154a8500
 The account will now have one object:
 
 ```shell
-$ wallet --no-shell objects --address C72CF3ADCC4D11C03079CEF2C8992AEA5268677A
+$ wallet objects --address C72CF3ADCC4D11C03079CEF2C8992AEA5268677A
 Showing 1 results.
 (DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1, SequenceNumber(1), o#f77edd77f5c154a850078b81b320870890bbb4f06d18f80fd512b1cc26bc3297)
 ```
@@ -588,7 +588,7 @@ Let us examine objects owned by address `EF999DBDB19CCCA504EEF5432CEC69EA8A1D4A1
 and use the first coin (gas) object as the one to be the result of the merge, the second one to be merged, and the third one to be used as payment:
 
 ```shell
-$ wallet --no-shell objects --address EF999DBDB19CCCA504EEF5432CEC69EA8A1D4A1B
+$ wallet objects --address EF999DBDB19CCCA504EEF5432CEC69EA8A1D4A1B
 ```
 
 And its output:
@@ -604,7 +604,7 @@ Showing 5 results.
 
 Then we merge:
 ```shell
-$ wallet --no-shell merge-coin --primary-coin 149A3493C97FAFC696526052FE08E77043D4BE0B  --coin-to-merge 1B19F74AD77A95D7562432F6991AC9EC1EA2C57C --gas-budget 1000
+$ wallet merge-coin --primary-coin 149A3493C97FAFC696526052FE08E77043D4BE0B  --coin-to-merge 1B19F74AD77A95D7562432F6991AC9EC1EA2C57C --gas-budget 1000
 ```
 
 With results resembling:
@@ -653,7 +653,7 @@ one coin to split, one for the gas payment.
 Let us examine objects owned by address `45CDA12E3BAFE3017B4B3CD62C493E5FBAAD7FB0`:
 
 ```shell
-$ wallet --no-shell objects --address 45CDA12E3BAFE3017B4B3CD62C493E5FBAAD7FB0
+$ wallet objects --address 45CDA12E3BAFE3017B4B3CD62C493E5FBAAD7FB0
 ```
 
 With output resembling:
@@ -672,7 +672,7 @@ with values of 1000, 5000 and 3000, respectively; note the `--amounts` argument 
 We use the second coin on the list to pay for this transaction.
 
 ```shell
-$ wallet --no-shell split-coin --coin-id 13347BD461E8A2B9EE5DE7F6131063A3050A45C4 --amounts 1000 5000 3000 --gas-budget 1000
+$ wallet split-coin --coin-id 13347BD461E8A2B9EE5DE7F6131063A3050A45C4 --amounts 1000 5000 3000 --gas-budget 1000
 ```
 
 You will see output resembling:
@@ -696,7 +696,7 @@ New Coins : Coin { id: 72129FBF3168C37A4DD8EC7EE69DA28D0D4D4636, value: 5000 },
             Coin { id: D2E65E9A3107662F7B6399BD1D82C235CFD8C874, value: 3000 }
 Updated Gas : Coin { id: B402F52BA6216A770939E6D4922AE6D6D05C2256, value: 99780 }
 
-$ wallet --no-shell objects --address 45CDA12E3BAFE3017B4B3CD62C493E5FBAAD7FB0
+$ wallet objects --address 45CDA12E3BAFE3017B4B3CD62C493E5FBAAD7FB0
 Showing 8 results.
 (13347BD461E8A2B9EE5DE7F6131063A3050A45C4, SequenceNumber(1), o#4f86a454ed9aa482adcbfece78cdd77d491d4e768aa8034af78a237d18e09f9f)
 (72129FBF3168C37A4DD8EC7EE69DA28D0D4D4636, SequenceNumber(1), o#247905d1c8eee09b4d3bd02f4229376cd7482705e28ef7ff4ca86774d09c72b8)
@@ -732,7 +732,7 @@ simplicity.
 Let us examine objects owned by address `AE6FB6036570FEC1DF71599740C132CDF5B45B9D`:
 
 ```shell
-$ wallet --no-shell objects --address AE6FB6036570FEC1DF71599740C132CDF5B45B9D
+$ wallet objects --address AE6FB6036570FEC1DF71599740C132CDF5B45B9D
 Showing 5 results.
 (5044DC15D3C71D500116EB026E8B70D0A180F3AC, SequenceNumber(0), o#748fabf1f7f92c8d00b54f5b431fd4e28d9dfd642cc0bc5c48b16dc0efdc58c1)
 (749E3EE0E0AC93BFC06ED58972EFE87717A428DA, SequenceNumber(0), o#05efb7971ec89b78fd512913fb6f9bfbd0b5ffd2e99775493f9703ff153b3998)
@@ -752,7 +752,7 @@ We will perform the transfer by calling the `transfer` function from
 the SUI module using the following Sui Wallet command:
 
 ```shell
-wallet --no-shell call --function transfer --module SUI --package 0x2 --args \"0x5044DC15D3C71D500116EB026E8B70D0A180F3AC\" \"0xF456EBEF195E4A231488DF56B762AC90695BE2DD\" --gas-budget 1000
+wallet call --function transfer --module SUI --package 0x2 --args \"0x5044DC15D3C71D500116EB026E8B70D0A180F3AC\" \"0xF456EBEF195E4A231488DF56B762AC90695BE2DD\" --gas-budget 1000
 ```
 
 This is a pretty complicated command so let's explain all of its
@@ -812,7 +812,7 @@ of the `transfer` function) by querying objects that are now owned by
 the sender:
 
 ```shell
-$ wallet --no-shell objects --address AE6FB6036570FEC1DF71599740C132CDF5B45B9D
+$ wallet objects --address AE6FB6036570FEC1DF71599740C132CDF5B45B9D
 Showing 4 results.
 (749E3EE0E0AC93BFC06ED58972EFE87717A428DA, SequenceNumber(0), o#05efb7971ec89b78fd512913fb6f9bfbd0b5ffd2e99775493f9703ff153b3998)
 (98765D1CBC66BDFC443AA60B614427470B266B28, SequenceNumber(0), o#5f1696a263b9c97ba2e50175db0af1052a70943148b697fca98f98781482eba5)
@@ -825,7 +825,7 @@ And if we inspect this object, we can see it has the new
 owner, different from the original one:
 
 ```shell
-$ wallet --no-shell object --id 5044DC15D3C71D500116EB026E8B70D0A180F3AC
+$ wallet object --id 5044DC15D3C71D500116EB026E8B70D0A180F3AC
 ```
 
 Resulting in:
@@ -858,7 +858,7 @@ an upper limit (we use 1000 as our gas budget.
 Let us use the same address for publishing that we used for calling Move code in the previous [section](#calling-move-code) (`AE6FB6036570FEC1DF71599740C132CDF5B45B9D`) which now has 4 objecst left:
 
 ```shell
-$ wallet --no-shell objects --address AE6FB6036570FEC1DF71599740C132CDF5B45B9D
+$ wallet objects --address AE6FB6036570FEC1DF71599740C132CDF5B45B9D
 ```
 
 Outputting:
@@ -877,7 +877,7 @@ that the location of the package's sources is in the `PATH_TO_PACKAGE`
 environment variable):
 
 ```shell
-wallet --no-shell publish --path $PATH_TO_PACKAGE/my_move_package --gas-budget 30000
+wallet publish --path $PATH_TO_PACKAGE/my_move_package --gas-budget 30000
 ```
 
 The result of running this command should look as follows:
