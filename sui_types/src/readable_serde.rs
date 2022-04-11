@@ -6,6 +6,7 @@ use serde::de::{Deserialize, Deserializer, Error};
 use serde::ser::Serializer;
 use serde::Serialize;
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
+use std::fmt::Display;
 
 /// Encode bytes to Hex for human readable serializer and deserializer,
 /// serde to Bytes for non human readable serializer and deserializer.
@@ -46,9 +47,7 @@ where
 {
     if deserializer.is_human_readable() {
         let s = String::deserialize(deserializer)?;
-        encoding
-            .decode(s)
-            .map_err(|_| D::Error::custom("byte deserialization failed"))
+        encoding.decode(s).map_err(to_custom_error::<'de, D, _>)
     } else {
         Bytes::deserialize_as(deserializer)
     }
@@ -89,13 +88,20 @@ impl<'de> BytesOrBase64<'de> for ed25519_dalek::Signature {
             let s = String::deserialize(deserializer)?;
             let value = Encoding::Base64
                 .decode(s)
-                .map_err(|_| D::Error::custom("byte deserialization failed"))?;
-            Self::try_from(value.as_slice())
-                .map_err(|_| D::Error::custom("byte deserialization failed"))
+                .map_err(to_custom_error::<'de, D, _>)?;
+            Self::try_from(value.as_slice()).map_err(to_custom_error::<'de, D, _>)
         } else {
             <Self as Deserialize>::deserialize(deserializer)
         }
     }
+}
+
+fn to_custom_error<'de, D, E>(e: E) -> D::Error
+where
+    E: Display,
+    D: Deserializer<'de>,
+{
+    D::Error::custom(format!("byte deserialization failed, cause by: {}", e))
 }
 
 macro_rules! byte_or_hex {
