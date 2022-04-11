@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
+use crate::gateway_state::GatewayTxSeqNumber;
 
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -575,7 +576,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         mutated_objects: HashMap<ObjectRef, Object>,
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
-        sequence_number: TxSequenceNumber,
+        sequence_number: GatewayTxSeqNumber,
     ) -> SuiResult {
         let transaction_digest = certificate.digest();
         let mut temporary_store =
@@ -852,6 +853,19 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         write_batch = write_batch.insert_batch(&self.schedule, schedule_to_write)?;
         write_batch = write_batch.insert_batch(&self.last_consensus_index, index_to_write)?;
         write_batch.write().map_err(SuiError::from)
+    }
+
+    pub fn transactions_in_seq_range(
+        &self,
+        start: GatewayTxSeqNumber,
+        end: GatewayTxSeqNumber,
+    ) -> SuiResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        Ok(self
+            .executed_sequence
+            .iter()
+            .skip_to(&start)?
+            .take_while(|(seq, _tx)| *seq < end)
+            .collect())
     }
 
     /// Retrieves batches including transactions within a range.
