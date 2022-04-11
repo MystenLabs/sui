@@ -151,3 +151,34 @@ impl Encoding {
         }
     }
 }
+
+pub struct VecOrBase64;
+
+impl SerializeAs<Vec<u8>> for VecOrBase64 {
+    fn serialize_as<S>(value: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if serializer.is_human_readable() {
+            Encoding::Base64.encode(value).serialize(serializer)
+        } else {
+            <Vec<u8> as Serialize>::serialize(value, serializer)
+        }
+    }
+}
+
+impl<'de> DeserializeAs<'de, Vec<u8>> for VecOrBase64 {
+    fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            Encoding::Base64
+                .decode(s)
+                .map_err(to_custom_error::<'de, D, _>)
+        } else {
+            <Vec<u8> as Deserialize>::deserialize(deserializer)
+        }
+    }
+}

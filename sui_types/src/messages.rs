@@ -2,14 +2,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use base64ct::{Base64, Encoding};
-use std::fmt::Write;
-use std::fmt::{Display, Formatter};
-use std::{
-    collections::{BTreeSet, HashSet},
-    hash::{Hash, Hasher},
+use crate::crypto::{
+    sha3_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature, BcsSignable,
+    EmptySignInfo, Signable, Signature, VerificationObligation,
 };
-
+use crate::gas::GasCostSummary;
+use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
+use crate::readable_serde::VecOrBase64;
+use base64ct::{Base64, Encoding};
 use itertools::Either;
 use move_binary_format::{access::ModuleAccess, CompiledModule};
 use move_core_types::{
@@ -20,13 +20,13 @@ use name_variant::NamedVariant;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
-
-use crate::crypto::{
-    sha3_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature, BcsSignable,
-    EmptySignInfo, Signable, Signature, VerificationObligation,
+use serde_with::serde_as;
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
+use std::{
+    collections::{BTreeSet, HashSet},
+    hash::{Hash, Hasher},
 };
-use crate::gas::GasCostSummary;
-use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
 
@@ -56,8 +56,10 @@ pub struct MoveCall {
     pub pure_arguments: Vec<Vec<u8>>,
 }
 
+#[serde_as]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveModulePublish {
+    #[serde_as(as = "Vec<VecOrBase64>")]
     pub modules: Vec<Vec<u8>>,
 }
 

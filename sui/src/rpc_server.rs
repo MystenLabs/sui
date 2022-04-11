@@ -1,32 +1,34 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 
 use jsonrpsee::http_server::HttpServerBuilder;
 use jsonrpsee::RpcModule;
-use structopt::StructOpt;
 use tracing::info;
 
-use sui::rpc_gateway::RPCGatewayImpl;
-use sui::rpc_gateway::RPCGatewayServer;
+use clap::Parser;
+use sui::rpc_gateway::RpcGatewayImpl;
+use sui::rpc_gateway::RpcGatewayServer;
 use sui::sui_config_dir;
-
 const DEFAULT_REST_SERVER_PORT: &str = "5001";
 const DEFAULT_REST_SERVER_ADDR_IPV4: &str = "127.0.0.1";
 
-#[derive(StructOpt)]
-#[structopt(
+#[derive(Parser)]
+#[clap(
     name = "Sui RPC Gateway",
     about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
     rename_all = "kebab-case"
 )]
 struct RpcGatewayOpt {
-    #[structopt(long)]
+    #[clap(long)]
     config: Option<PathBuf>,
 
-    #[structopt(long, default_value = DEFAULT_REST_SERVER_PORT)]
+    #[clap(long, default_value = DEFAULT_REST_SERVER_PORT)]
     port: u16,
 
-    #[structopt(long, default_value = DEFAULT_REST_SERVER_ADDR_IPV4)]
+    #[clap(long, default_value = DEFAULT_REST_SERVER_ADDR_IPV4)]
     host: Ipv4Addr,
 }
 
@@ -41,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
     #[allow(unused)]
     let guard = telemetry_subscribers::init(config);
 
-    let options: RpcGatewayOpt = RpcGatewayOpt::from_args();
+    let options: RpcGatewayOpt = RpcGatewayOpt::parse();
 
     let config_path = options
         .config
@@ -52,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     let mut module = RpcModule::new(());
-    module.merge(RPCGatewayImpl::new(&config_path)?.into_rpc())?;
+    module.merge(RpcGatewayImpl::new(&config_path)?.into_rpc())?;
 
     let addr = server.local_addr()?;
     let server_handle = server.start(module)?;

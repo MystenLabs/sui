@@ -19,8 +19,8 @@ use tokio::sync::Mutex;
 use tracing::debug;
 
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
-use sui_core::gateway_state::{GatewayClient, GatewayState};
-use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::crypto;
 use sui_types::crypto::SignableBytes;
 use sui_types::messages::{Transaction, TransactionData};
@@ -30,11 +30,8 @@ use crate::config::PersistedConfig;
 use crate::gateway::GatewayConfig;
 use crate::rest_gateway::responses::{NamedObjectRef, ObjectResponse, TransactionBytes};
 
-#[rpc(server, client, namespace = "sui")]
-pub trait RPCGateway {
-    #[method(name = "get_objects")]
-    async fn get_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse>;
-
+#[rpc(server, client, namespace = "gateway")]
+pub trait RpcGateway {
     #[method(name = "get_object_info")]
     async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<ObjectRead>;
 
@@ -102,13 +99,32 @@ pub trait RPCGateway {
 
     #[method(name = "sync_account_state")]
     async fn sync_account_state(&self, address: SuiAddress) -> RpcResult<()>;
+
+    #[method(name = "get_objects")]
+    async fn get_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse>;
+
+    #[method(name = "get_total_transaction_number")]
+    async fn get_total_transaction_number(&self) -> RpcResult<u64>;
+
+    #[method(name = "get_transactions_in_range")]
+    async fn get_transactions_in_range(
+        &self,
+        start: GatewayTxSeqNumber,
+        end: GatewayTxSeqNumber,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
+
+    #[method(name = "get_recent_transactions")]
+    async fn get_recent_transactions(
+        &self,
+        count: u64,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
 }
 
-pub struct RPCGatewayImpl {
+pub struct RpcGatewayImpl {
     gateway: Arc<Mutex<GatewayClient>>,
 }
 
-impl RPCGatewayImpl {
+impl RpcGatewayImpl {
     pub fn new(config_path: &Path) -> anyhow::Result<Self> {
         let config: GatewayConfig = PersistedConfig::read(config_path)?;
         let committee = config.make_committee();
@@ -125,7 +141,7 @@ impl RPCGatewayImpl {
 }
 
 #[async_trait]
-impl RPCGatewayServer for RPCGatewayImpl {
+impl RpcGatewayServer for RpcGatewayImpl {
     async fn create_coin_transfer(
         &self,
         signer: SuiAddress,
@@ -304,11 +320,34 @@ impl RPCGatewayServer for RPCGatewayImpl {
             .await?;
         Ok(())
     }
+
+    async fn get_total_transaction_number(&self) -> RpcResult<u64> {
+        Ok(self.gateway.lock().await.get_total_transaction_number()?)
+    }
+
+    async fn get_transactions_in_range(
+        &self,
+        start: GatewayTxSeqNumber,
+        end: GatewayTxSeqNumber,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        Ok(self
+            .gateway
+            .lock()
+            .await
+            .get_transactions_in_range(start, end)?)
+    }
+
+    async fn get_recent_transactions(
+        &self,
+        count: u64,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        Ok(self.gateway.lock().await.get_recent_transactions(count)?)
+    }
 }
 
 #[serde_as]
 #[derive(Serialize, Deserialize)]
-pub struct Base64EncodedBytes(#[serde_as(as = "serde_with::base64::Base64")] Vec<u8>);
+pub struct Base64EncodedBytes(#[serde_as(as = "serde_with::base64::Base64")] pub Vec<u8>);
 
 impl Deref for Base64EncodedBytes {
     type Target = [u8];

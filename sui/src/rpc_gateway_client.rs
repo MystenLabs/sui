@@ -1,0 +1,202 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use crate::rest_gateway::responses::{ObjectResponse, TransactionBytes};
+use crate::rpc_gateway::{Base64EncodedBytes, RpcGatewayClient as RpcGateway};
+use anyhow::Error;
+use async_trait::async_trait;
+use ed25519_dalek::ed25519::signature::Signature;
+use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::TypeTag;
+use sui_core::gateway_state::gateway_responses::TransactionResponse;
+use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
+use sui_types::messages::{Transaction, TransactionData};
+use sui_types::object::ObjectRead;
+use tokio::runtime::Handle;
+
+pub struct RpcGatewayClient {
+    client: HttpClient,
+}
+
+impl RpcGatewayClient {
+    pub fn new(server_url: String) -> Result<Self, anyhow::Error> {
+        let client = HttpClientBuilder::default().build(&server_url)?;
+        Ok(Self { client })
+    }
+}
+
+#[async_trait]
+impl GatewayAPI for RpcGatewayClient {
+    async fn execute_transaction(&mut self, tx: Transaction) -> Result<TransactionResponse, Error> {
+        let signature = tx.tx_signature.as_bytes();
+        let pub_key = &signature[32..];
+        let signature = &signature[..32];
+        Ok(self
+            .client
+            .execute_transaction(
+                Base64EncodedBytes(tx.data.to_bytes()),
+                Base64EncodedBytes(signature.to_vec()),
+                Base64EncodedBytes(pub_key.to_vec()),
+            )
+            .await?)
+    }
+
+    async fn transfer_coin(
+        &mut self,
+        signer: SuiAddress,
+        object_id: ObjectID,
+        gas_payment: ObjectID,
+        gas_budget: u64,
+        recipient: SuiAddress,
+    ) -> Result<TransactionData, Error> {
+        let bytes: TransactionBytes = self
+            .client
+            .create_coin_transfer(signer, object_id, gas_payment, gas_budget, recipient)
+            .await?;
+        bytes.to_data()
+    }
+
+    async fn sync_account_state(&self, account_addr: SuiAddress) -> Result<(), Error> {
+        self.client.sync_account_state(account_addr).await?;
+        Ok(())
+    }
+
+    async fn move_call(
+        &mut self,
+        signer: SuiAddress,
+        package_object_ref: ObjectRef,
+        module: Identifier,
+        function: Identifier,
+        type_arguments: Vec<TypeTag>,
+        gas_object_ref: ObjectRef,
+        object_arguments: Vec<ObjectRef>,
+        shared_object_arguments: Vec<ObjectID>,
+        pure_arguments: Vec<Vec<u8>>,
+        gas_budget: u64,
+    ) -> Result<TransactionData, Error> {
+        let pure_arguments = pure_arguments.into_iter().map(Base64EncodedBytes).collect();
+        let object_arguments = object_arguments
+            .into_iter()
+            .map(|object_ref| object_ref.0)
+            .collect();
+
+        let bytes: TransactionBytes = self
+            .client
+            .create_move_call(
+                signer,
+                package_object_ref.0,
+                module,
+                function,
+                type_arguments,
+                pure_arguments,
+                gas_object_ref.0,
+                gas_budget,
+                object_arguments,
+                shared_object_arguments,
+            )
+            .await?;
+        bytes.to_data()
+    }
+
+    async fn publish(
+        &mut self,
+        signer: SuiAddress,
+        package_bytes: Vec<Vec<u8>>,
+        gas_object_ref: ObjectRef,
+        gas_budget: u64,
+    ) -> Result<TransactionData, Error> {
+        let package_bytes = package_bytes.into_iter().map(Base64EncodedBytes).collect();
+        let bytes: TransactionBytes = self
+            .client
+            .publish(signer, package_bytes, gas_object_ref.0, gas_budget)
+            .await?;
+        bytes.to_data()
+    }
+
+    async fn split_coin(
+        &mut self,
+        signer: SuiAddress,
+        coin_object_id: ObjectID,
+        split_amounts: Vec<u64>,
+        gas_payment: ObjectID,
+        gas_budget: u64,
+    ) -> Result<TransactionData, Error> {
+        let bytes: TransactionBytes = self
+            .client
+            .split_coin(
+                signer,
+                coin_object_id,
+                split_amounts,
+                gas_payment,
+                gas_budget,
+            )
+            .await?;
+        bytes.to_data()
+    }
+
+    async fn merge_coins(
+        &mut self,
+        signer: SuiAddress,
+        primary_coin: ObjectID,
+        coin_to_merge: ObjectID,
+        gas_payment: ObjectID,
+        gas_budget: u64,
+    ) -> Result<TransactionData, Error> {
+        let bytes: TransactionBytes = self
+            .client
+            .merge_coin(signer, primary_coin, coin_to_merge, gas_payment, gas_budget)
+            .await?;
+        bytes.to_data()
+    }
+
+    async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, Error> {
+        Ok(self.client.get_object_info(object_id).await?)
+    }
+
+    fn get_owned_objects(&mut self, account_addr: SuiAddress) -> Result<Vec<ObjectRef>, Error> {
+        let handle = Handle::current();
+        let _ = handle.enter();
+        let object_response: ObjectResponse =
+            futures::executor::block_on(self.client.get_objects(account_addr))?;
+
+        let object_refs = object_response
+            .objects
+            .into_iter()
+            .map(|o| o.to_object_ref())
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(object_refs)
+    }
+
+    fn get_total_transaction_number(&self) -> Result<u64, Error> {
+        let handle = Handle::current();
+        let _ = handle.enter();
+        Ok(futures::executor::block_on(
+            self.client.get_total_transaction_number(),
+        )?)
+    }
+
+    fn get_transactions_in_range(
+        &self,
+        start: GatewayTxSeqNumber,
+        end: GatewayTxSeqNumber,
+    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, Error> {
+        let handle = Handle::current();
+        let _ = handle.enter();
+        Ok(futures::executor::block_on(
+            self.client.get_transactions_in_range(start, end),
+        )?)
+    }
+
+    fn get_recent_transactions(
+        &self,
+        count: u64,
+    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, Error> {
+        let handle = Handle::current();
+        let _ = handle.enter();
+        Ok(futures::executor::block_on(
+            self.client.get_recent_transactions(count),
+        )?)
+    }
+}
