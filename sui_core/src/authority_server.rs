@@ -11,7 +11,11 @@ use sui_network::{
     transport::{spawn_server, MessageHandler, RwChannel, SpawnedServer},
 };
 use sui_types::{
-    batch::UpdateItem, crypto::VerificationObligation, error::*, messages::*, serialize::*,
+    batch::{TransactionBatch, UpdateItem},
+    crypto::VerificationObligation,
+    error::*,
+    messages::*,
+    serialize::*,
 };
 
 use futures::{SinkExt, StreamExt};
@@ -21,6 +25,7 @@ use tracing::*;
 
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
+use sui_types::batch::{AuthorityBatch, SignedBatch};
 use tokio::sync::broadcast::error::RecvError;
 
 #[cfg(test)]
@@ -99,6 +104,7 @@ impl AuthorityServer {
         // Register a subscriber to not miss any updates
         let mut subscriber = self.state.subscribe_batch();
         let message_end = request.end;
+        let include_tx_info = request.include_tx_info;
 
         // Get the historical data requested
         let (mut items, should_subscribe) = self.state.handle_batch_info_request(request).await?;
@@ -138,7 +144,59 @@ impl AuthorityServer {
                         continue;
                     }
 
-                    let response = BatchInfoResponseItem(item);
+                    // add tx_info if requested
+                    let mut response = BatchInfoResponseItem(item.clone());
+                    if include_tx_info {
+                        match &item {
+                            UpdateItem::Transaction((seq, digest, _)) => {
+                                let tx_info = self
+                                    .state
+                                    .handle_transaction_info_request(TransactionInfoRequest {
+                                        transaction_digest: *digest,
+                                    })
+                                    .await?;
+                                response = BatchInfoResponseItem(UpdateItem::Transaction((
+                                    *seq,
+                                    *digest,
+                                    // include fetched info
+                                    Some(Box::new(tx_info)),
+                                )));
+                            }
+                            UpdateItem::Batch(signed_batch) => {
+                                let mut transactions_with_info = Vec::new();
+                                for (seq, digest, _) in &signed_batch.batch.transaction_batch.0 {
+                                    let tx_info = self
+                                        .state
+                                        .handle_transaction_info_request(TransactionInfoRequest {
+                                            transaction_digest: *digest,
+                                        })
+                                        .await?;
+                                    transactions_with_info.push((
+                                        *seq,
+                                        *digest,
+                                        Some(Box::new(tx_info)),
+                                    ));
+                                }
+                                response = BatchInfoResponseItem(UpdateItem::Batch(SignedBatch {
+                                    batch: AuthorityBatch {
+                                        next_sequence_number: signed_batch
+                                            .batch
+                                            .next_sequence_number,
+                                        initial_sequence_number: signed_batch
+                                            .batch
+                                            .initial_sequence_number,
+                                        size: signed_batch.batch.initial_sequence_number,
+                                        previous_digest: signed_batch.batch.previous_digest,
+                                        transactions_digest: signed_batch.batch.transactions_digest,
+                                        // include fetched info
+                                        transaction_batch: TransactionBatch(transactions_with_info),
+                                    },
+                                    authority: signed_batch.authority,
+                                    signature: signed_batch.signature,
+                                }));
+                            }
+                        }
+                    }
 
                     // Send back the item from the subscription
                     let resp = serialize_batch_item(&response);
