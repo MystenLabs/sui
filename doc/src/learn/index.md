@@ -8,7 +8,7 @@ Welcome to the documentation for the Sui platform. Since Sui is built upon the c
 programming language, you should familiarize yourself with it and use this content to apply the differences. For a summary of these differences, see
 [Sui compared to other blockchains](../learn/sui-move-diffs.md).
 
-For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](../../../paper/sui.pdf) white paper.
+For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](../../../paper/sui.pdf) white paper. Find answers to common questions about our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md) and more in our [FAQ](../contribute/faq.md).
 
 ## Kickstart development
 
