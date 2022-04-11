@@ -171,7 +171,7 @@ fn substitute_env_variables(s: String) -> String {
     s
 }
 
-pub fn install_shell_plugins<'a>(clap: Command<'a>) -> Command<'a> {
+pub fn install_shell_plugins(clap: Command) -> Command {
     clap.subcommand(
         Command::new("exit")
             .alias("quit")
