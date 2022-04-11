@@ -163,7 +163,11 @@ async fn test_subscription() {
     println!("Started messahe handling.");
     // TEST 1: Get historical data
 
-    let req = BatchInfoRequest { start: 12, end: 34 };
+    let req = BatchInfoRequest {
+        start: 12,
+        end: 34,
+        include_tx_info: false,
+    };
 
     let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);
     tx.send(Ok(bytes)).await.expect("Problem sending");
@@ -221,6 +225,7 @@ async fn test_subscription() {
     let req = BatchInfoRequest {
         start: 101,
         end: 112,
+        include_tx_info: false,
     };
 
     let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);

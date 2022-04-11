@@ -647,6 +647,7 @@ pub struct AccountInfoRequest {
 pub struct BatchInfoRequest {
     pub start: TxSequenceNumber,
     pub end: TxSequenceNumber,
+    pub include_tx_info: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

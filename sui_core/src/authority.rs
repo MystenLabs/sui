@@ -527,8 +527,7 @@ impl AuthorityState {
 
         let mut transactions_info = Vec::new();
         for (seq, digest) in transactions.iter() {
-            if true {
-                // TODO: @Laura add flag to request
+            if request.include_tx_info {
                 let tx_info = self.make_transaction_info(digest).await;
                 match tx_info {
                     Ok(info) => {

@@ -317,6 +317,7 @@ impl ClientServerBenchmark {
                     .handle_batch_stream(BatchInfoRequest {
                         start,
                         end: start + 10_000,
+                        include_tx_info: false,
                     })
                     .await;
 

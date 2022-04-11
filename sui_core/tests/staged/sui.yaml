@@ -32,6 +32,8 @@ AuthorityBatch:
         TUPLEARRAY:
           CONTENT: U8
           SIZE: 32
+    - transaction_batch:
+        TYPENAME: TransactionBatch
 AuthoritySignInfo:
   STRUCT:
     - authority:
@@ -47,6 +49,7 @@ BatchInfoRequest:
   STRUCT:
     - start: U64
     - end: U64
+    - include_tx_info: BOOL
 BatchInfoResponseItem:
   NEWTYPESTRUCT:
     TYPENAME: UpdateItem
@@ -760,6 +763,14 @@ SuiError:
           - error: STR
     93:
       OnlyOneConsensusClientPermitted: UNIT
+TransactionBatch:
+  NEWTYPESTRUCT:
+    SEQ:
+      TUPLE:
+        - U64
+        - TYPENAME: TransactionDigest
+        - OPTION:
+            TYPENAME: TransactionInfoResponse
 TransactionData:
   STRUCT:
     - kind:
@@ -913,6 +924,8 @@ UpdateItem:
           TUPLE:
             - U64
             - TYPENAME: TransactionDigest
+            - OPTION:
+                TYPENAME: TransactionInfoResponse
     1:
       Batch:
         NEWTYPE:
