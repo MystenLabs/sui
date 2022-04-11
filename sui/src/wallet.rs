@@ -25,14 +25,14 @@ const SUI: &str = "   _____       _    _       __      ____     __
 
 #[derive(StructOpt)]
 #[structopt(
-    name = "Sui Demo Wallet",
+    name = "wallet",
     about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
     rename_all = "kebab-case"
 )]
 struct ClientOpt {
-    #[structopt(long, global = true)]
-    /// Run wallet command without interactive shell
-    no_shell: bool,
+    #[structopt(short, global = true)]
+    /// Start interactive wallet
+    interactive: bool,
     /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
     #[structopt(long)]
     config: Option<PathBuf>,
@@ -77,7 +77,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let mut out = stdout();
 
-    if !options.no_shell {
+    if options.interactive {
         let app: App = WalletCommands::clap();
         writeln!(out, "{}", SUI.cyan().bold())?;
         let version = app
@@ -101,6 +101,8 @@ async fn main() -> Result<(), anyhow::Error> {
         shell.run_async(&mut out, &mut stderr()).await?;
     } else if let Some(mut cmd) = options.cmd {
         cmd.execute(&mut context).await?.print(!options.json);
+    } else {
+        ClientOpt::clap().print_long_help()?
     }
     Ok(())
 }

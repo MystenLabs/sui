@@ -78,13 +78,13 @@ Now let's try to call the `create` in transactions and see what happens. To do t
 
 Before starting, let's take a look at the default wallet address (this will be the address that will eventually own the object latter):
 ```
-wallet --no-shell active-address
+wallet active-address
 ```
 It will tell you the current wallet address.
 
 First of all, we need to publish the code onchain. Assuming the path to the root of the repository is $ROOT:
 ```
-wallet --no-shell publish --path $ROOT/doc/move_code/objects_tutorial --gas-budget 10000
+wallet publish --path $ROOT/doc/move_code/objects_tutorial --gas-budget 10000
 ```
 You can find the published package object ID in the **Publish Results**, like this:
 ```
@@ -94,7 +94,7 @@ The newly published package object: (57258F32746FD1443F2A077C0C6EC03282087C19, S
 Note that the exact data you see will be different. The first hex string in that triple is the package object ID (57258F32746FD1443F2A077C0C6EC03282087C19 in this case).
 Next we can call the function to create a color object:
 ```
-wallet --no-shell call --gas-budget 1000 --package "57258F32746FD1443F2A077C0C6EC03282087C19" --module "Ch1" --function "create" --args 0 255 0
+wallet call --gas-budget 1000 --package "57258F32746FD1443F2A077C0C6EC03282087C19" --module "Ch1" --function "create" --args 0 255 0
 ```
 In the **Transaction Effects**, you will see an object showing up in the list of **Created Objects**, like this:
 ```
@@ -103,7 +103,7 @@ Created Objects:
 ```
 We can inspect this object and see what kind of object it is:
 ```
-wallet --no-shell object --id 5EB2C3E55693282FAA7F5B07CE1C4803E6FDC1BB
+wallet object --id 5EB2C3E55693282FAA7F5B07CE1C4803E6FDC1BB
 ```
 It will show you the meta data of this object with its type:
 ```
@@ -117,7 +117,7 @@ As we can see, it's owned by the current default wallet address that we have see
 
 You can also look at the data content of the object by adding the `--json` parameter:
 ```
-wallet --no-shell object --id 5EB2C3E55693282FAA7F5B07CE1C4803E6FDC1BB --json
+wallet object --id 5EB2C3E55693282FAA7F5B07CE1C4803E6FDC1BB --json
 ```
 It will print all the value of all the fields in the Move object, such as the value of `red`, `green`, and `blue`.
 
