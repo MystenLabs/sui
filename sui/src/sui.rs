@@ -2,21 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 extern crate core;
 
-use structopt::StructOpt;
+use clap::*;
 use sui::sui_commands::SuiCommand;
 
 #[cfg(test)]
 #[path = "unit_tests/cli_tests.rs"]
 mod cli_tests;
 
-#[derive(StructOpt)]
-#[structopt(
+#[derive(Parser)]
+#[clap(
     name = "Sui Local",
     about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
     rename_all = "kebab-case"
 )]
 struct SuiOpt {
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     command: SuiCommand,
 }
 
@@ -31,6 +31,6 @@ async fn main() -> Result<(), anyhow::Error> {
     #[allow(unused)]
     let guard = telemetry_subscribers::init(config);
 
-    let options: SuiOpt = SuiOpt::from_args();
+    let options: SuiOpt = SuiOpt::parse();
     options.command.execute().await
 }
