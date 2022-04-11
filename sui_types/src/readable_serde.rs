@@ -8,8 +8,8 @@ use serde::Serialize;
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
 use std::fmt::Display;
 
-/// Encode bytes to Hex for human readable serializer and deserializer,
-/// serde to Bytes for non human readable serializer and deserializer.
+/// Encode bytes to hex for human-readable serializer and deserializer,
+/// serde to bytes for non-human-readable serializer and deserializer.
 pub trait BytesOrHex<'de>: Sized {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -23,8 +23,8 @@ pub trait BytesOrHex<'de>: Sized {
         D: Deserializer<'de>;
 }
 
-/// Encode bytes to Base64 for human readable serializer and deserializer,
-/// serde to array tuple for non human readable serializer and deserializer.
+/// Encode bytes to Base64 for human-readable serializer and deserializer,
+/// serde to array tuple for non-human-readable serializer and deserializer.
 pub trait BytesOrBase64<'de>: Sized {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
