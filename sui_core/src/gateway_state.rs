@@ -750,10 +750,10 @@ where
         end: GatewayTxSeqNumber,
     ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
         fp_ensure!(
-            start < end,
+            start <= end,
             SuiError::GatewayInvalidTxRangeQuery {
                 error: format!(
-                    "start must be smaller than end, (start={}, end={}) given",
+                    "start must not exceed end, (start={}, end={}) given",
                     start, end
                 ),
             }

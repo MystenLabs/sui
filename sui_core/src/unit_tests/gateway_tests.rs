@@ -2138,8 +2138,9 @@ async fn test_recent_transactions() -> Result<(), anyhow::Error> {
         cnt += 1;
         assert_eq!(client.get_total_transaction_number()?, cnt);
     }
-    // start must < end.
-    assert!(client.get_transactions_in_range(1, 1).is_err());
+    // start must <= end.
+    assert!(client.get_transactions_in_range(2, 1).is_err());
+    assert!(client.get_transactions_in_range(1, 1).unwrap().is_empty());
     // Extends max range allowed.
     assert!(client.get_transactions_in_range(1, 100000).is_err());
     let txs = client.get_recent_transactions(10)?;
