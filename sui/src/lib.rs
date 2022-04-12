@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use anyhow::bail;
 
+pub mod benchmark;
 pub mod config;
 pub mod gateway;
 pub mod keystore;
