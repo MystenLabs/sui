@@ -25,6 +25,7 @@ pub mod id;
 pub mod messages;
 pub mod move_package;
 pub mod object;
+pub mod readable_serde;
 pub mod serialize;
 pub mod storage;
 

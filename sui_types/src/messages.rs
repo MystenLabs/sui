@@ -2,6 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use base64ct::{Base64, Encoding};
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::{
@@ -316,7 +317,7 @@ where
     }
 
     pub fn to_base64(&self) -> String {
-        base64::encode(self.to_bytes())
+        Base64::encode_string(&self.to_bytes())
     }
 }
 
