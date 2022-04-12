@@ -12,7 +12,7 @@ Prerequisite Readings:
 - [Sui Objects](../../build/objects.md)
 
 Index:
-- Chapter 1: Object Basics
+- [Chapter 1: Object Basics](../../build/programming-with-objects/ch1-object-basics.md)
   - Defining Move object types, creating objects, transferring objects.
 - Chapter 2: Using Objects
   - Passing Move objects as arguments, mutating objects, deleting objects.
