@@ -5,6 +5,9 @@ export * from './cryptography/ed25519-keypair';
 export * from './cryptography/keypair';
 export * from './cryptography/publickey';
 
+export * from './providers/provider';
+export * from './providers/json-rpc-provider';
+
 export * from './serialization/base64';
 
 export * from './signers/txn-data-serializers/rpc-txn-data-serializer';
