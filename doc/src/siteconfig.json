@@ -144,11 +144,11 @@
         "name": "See what's New",
         "sublist": [{
             "name": "Publish Move modules via Rest",
-            "url": "/build/rest-api#post-apipublish",
+            "url": "/build/rest-api#post-apipublish"
           },
           {
             "name": "Use gas objects for transactions",
-            "url": "/build/wallet#paying-for-transactions-with-gas-objects",
+            "url": "/build/wallet#paying-for-transactions-with-gas-objects"
           },
           {
             "name": "Read the Sui FAQ",
@@ -159,8 +159,8 @@
       {
         "name": "See Sui in Action",
         "sublist": [{
-          "name": "Create and play Tic-Tac-Toe on Sui",
-          "url": "/explore/tutorials"
+            "name": "Create and play Tic-Tac-Toe on Sui",
+            "url": "/explore/tutorials"
           },
           {
             "name": "See two games with mutable, expressive NFTs",
