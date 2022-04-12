@@ -148,11 +148,20 @@
         }]
       },
       {
-        "name": "Explore Prototypes",
+        "name": "See what's New",
         "sublist": [{
-          "name": "Two games with mutable, expressive NFTs",
-          "url": "/explore/prototypes"
-        }]
+            "name": "??",
+            "url": "??",
+          },
+          {
+            "name": "??,
+            "url": "??",
+          },
+          {
+            "name": "??",
+            "url": "??"
+          }
+        ]
       },
       {
         "name": "Build with Examples",
