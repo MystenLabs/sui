@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![allow(clippy::blacklisted_name)]
+use super::*;
+use crate::crypto::AuthoritySignature;
 
 use move_binary_format::file_format;
 
@@ -11,9 +13,8 @@ use crate::{
     gas_coin::GasCoin,
     object::Object,
 };
+use base64ct::{Base64, Encoding};
 use std::str::FromStr;
-
-use super::*;
 
 #[derive(Serialize, Deserialize)]
 struct Foo(String);
@@ -167,6 +168,86 @@ fn test_object_id_serde_json() {
 
     assert_eq!(json, json_hex);
     assert_eq!(obj_id, json_obj_id);
+}
+
+#[test]
+fn test_object_id_serde_not_human_readable() {
+    let obj_id = ObjectID::random();
+    let serialized = bincode::serialize(&obj_id).unwrap();
+    assert_eq!(obj_id.0.to_vec(), serialized);
+    let deserialized: ObjectID = bincode::deserialize(&serialized).unwrap();
+    assert_eq!(deserialized, obj_id);
+}
+
+#[test]
+fn test_address_serde_not_human_readable() {
+    let address = SuiAddress::random_for_testing_only();
+    let serialized = bincode::serialize(&address).unwrap();
+    let bcs_serialized = bcs::to_bytes(&address).unwrap();
+    // bincode use 8 bytes for BYTES len and bcs use 1 byte
+    assert_eq!(serialized[8..], bcs_serialized[1..]);
+    assert_eq!(address.0, serialized[8..]);
+    let deserialized: SuiAddress = bincode::deserialize(&serialized).unwrap();
+    assert_eq!(deserialized, address);
+}
+
+#[test]
+fn test_address_serde_human_readable() {
+    let address = SuiAddress::random_for_testing_only();
+    let serialized = serde_json::to_string(&address).unwrap();
+    assert_eq!(format!("\"{}\"", hex::encode(address)), serialized);
+    let deserialized: SuiAddress = serde_json::from_str(&serialized).unwrap();
+    assert_eq!(deserialized, address);
+}
+
+#[test]
+fn test_transaction_digest_serde_not_human_readable() {
+    let digest = TransactionDigest::random();
+    let serialized = bincode::serialize(&digest).unwrap();
+    let bcs_serialized = bcs::to_bytes(&digest).unwrap();
+    // bincode use 8 bytes for BYTES len and bcs use 1 byte
+    assert_eq!(serialized[8..], bcs_serialized[1..]);
+    assert_eq!(digest.0.to_vec(), serialized[8..]);
+    let deserialized: TransactionDigest = bincode::deserialize(&serialized).unwrap();
+    assert_eq!(deserialized, digest);
+}
+
+#[test]
+fn test_transaction_digest_serde_human_readable() {
+    let digest = TransactionDigest::random();
+    let serialized = serde_json::to_string(&digest).unwrap();
+    assert_eq!(
+        format!("\"{}\"", Base64::encode_string(&digest.0)),
+        serialized
+    );
+    let deserialized: TransactionDigest = serde_json::from_str(&serialized).unwrap();
+    assert_eq!(deserialized, digest);
+}
+
+#[test]
+fn test_signature_serde_not_human_readable() {
+    let (_, key) = get_key_pair();
+    let sig = AuthoritySignature::new(&Foo("some data".to_string()), &key);
+    let serialized = bincode::serialize(&sig).unwrap();
+    let bcs_serialized = bcs::to_bytes(&sig).unwrap();
+
+    assert_eq!(serialized, bcs_serialized);
+    assert_eq!(sig.0.to_bytes(), serialized[..]);
+    let deserialized: AuthoritySignature = bincode::deserialize(&serialized).unwrap();
+    assert_eq!(deserialized, sig);
+}
+
+#[test]
+fn test_signature_serde_human_readable() {
+    let (_, key) = get_key_pair();
+    let sig = AuthoritySignature::new(&Foo("some data".to_string()), &key);
+    let serialized = serde_json::to_string(&sig).unwrap();
+    assert_eq!(
+        format!("\"{}\"", Base64::encode_string(sig.as_ref())),
+        serialized
+    );
+    let deserialized: AuthoritySignature = serde_json::from_str(&serialized).unwrap();
+    assert_eq!(deserialized, sig);
 }
 
 #[test]

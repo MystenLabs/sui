@@ -8,7 +8,6 @@ edition = "2021"
 
 [dependencies]
 anyhow = { version = "1.0.56", features = ["backtrace"] }
-base64 = "0.13.0"
 bcs = "0.1.3"
 bincode = "1.3.3"
 itertools = "0.10.3"
@@ -27,6 +26,7 @@ signature = "1.5.0"
 static_assertions = "1.1.0"
 opentelemetry = { version = "0.17", features = ["rt-tokio"] }
 parking_lot = "0.12.0"
+base64ct = { version = "1.5.0", features = ["alloc"] }
 
 name_variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "97a056f85555fa2afe497d6abb7cf6bf8faa63cf" }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "e44bca4513a6ff6c97399cd79e82e4bc00571ac3" }
