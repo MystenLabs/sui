@@ -98,8 +98,6 @@ $ wallet call --gas-budget 1000 --package "57258F32746FD1443F2A077C0C6EC03282087
 ```
 In the **Transaction Effects** portion of the output, you will see an object showing up in the list of **Created Objects**, like this:
 
-TODO: Where are Transaction Effects shown above? Do we need it?
-
 ```
 Created Objects:
 5EB2C3E55693282FAA7F5B07CE1C4803E6FDC1BB SequenceNumber(1) o#691b417670979c6c192bdfd643630a125961c71c841a6c7d973cf9429c792efa
