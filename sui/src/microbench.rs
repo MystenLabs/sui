@@ -6,13 +6,13 @@
 
 use anyhow::Error;
 use bytes::Bytes;
+use clap::*;
 use futures::stream::StreamExt;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use rayon::prelude::*;
 use std::collections::{HashSet, VecDeque};
 use std::time::{Duration, Instant};
-use structopt::StructOpt;
 use sui_adapter::genesis;
 use sui_core::authority_client::AuthorityClient;
 use sui_core::{authority::*, authority_server::AuthorityServer};
@@ -38,52 +38,52 @@ use std::sync::Arc;
 use std::thread;
 use strum_macros::EnumString;
 
-#[derive(Debug, Clone, StructOpt)]
-#[structopt(
+#[derive(Debug, Clone, Parser)]
+#[clap(
     name = "Sui Microbenchmark",
     about = "Local test and microbenchmark of the Sui authorities"
 )]
 struct ClientServerBenchmark {
     /// Hostname
-    #[structopt(long, default_value = "127.0.0.1")]
+    #[clap(long, default_value = "127.0.0.1")]
     host: String,
     /// Path to the database
-    #[structopt(long, default_value = "")]
+    #[clap(long, default_value = "")]
     db_dir: String,
     /// Base port number
-    #[structopt(long, default_value = "9555")]
+    #[clap(long, default_value = "9555")]
     port: u16,
     /// Size of the Sui committee. Minimum size is 4 to tolerate one fault
-    #[structopt(long, default_value = "10")]
+    #[clap(long, default_value = "10")]
     committee_size: usize,
     /// Forces sending transactions one at a time
-    #[structopt(long)]
+    #[clap(long)]
     single_operation: bool,
     /// Number of transactions to be sent in the benchmark
-    #[structopt(long, default_value = "100000")]
+    #[clap(long, default_value = "100000")]
     num_transactions: usize,
     /// Timeout for sending queries (us)
-    #[structopt(long, default_value = "40000000")]
+    #[clap(long, default_value = "40000000")]
     send_timeout_us: u64,
     /// Timeout for receiving responses (us)
-    #[structopt(long, default_value = "40000000")]
+    #[clap(long, default_value = "40000000")]
     recv_timeout_us: u64,
     /// Maximum size of datagrams received and sent (bytes)
-    #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE_STR)]
+    #[clap(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE_STR)]
     buffer_size: usize,
     /// Which execution path to track. TransactionsAndCerts or TransactionsOnly or CertsOnly
-    #[structopt(long, default_value = "TransactionsAndCerts")]
+    #[clap(long, default_value = "TransactionsAndCerts")]
     benchmark_type: BenchmarkType,
     /// Number of connections to the server
-    #[structopt(long, default_value = "0")]
+    #[clap(long, default_value = "0")]
     tcp_connections: usize,
     /// Number of database cpus
-    #[structopt(long, default_value = "1")]
+    #[clap(long, default_value = "1")]
     db_cpus: usize,
     /// Use Move orders
-    #[structopt(long)]
+    #[clap(long)]
     use_move: bool,
-    #[structopt(long, default_value = "2000")]
+    #[clap(long, default_value = "2000")]
     batch_size: usize,
 }
 #[derive(Debug, Clone, Copy, PartialEq, EnumString)]
@@ -107,7 +107,7 @@ fn main() {
         tracing_subscriber::fmt::Subscriber::builder().with_env_filter(env_filter);
     let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
     set_global_default(subscriber).expect("Failed to set subscriber");
-    let benchmark = ClientServerBenchmark::from_args();
+    let benchmark = ClientServerBenchmark::parse();
     assert!(
         benchmark.committee_size >= MIN_COMMITTEE_SIZE,
         "Found committee size of {:?}, but minimum committee size is {:?}",

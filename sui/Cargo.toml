@@ -13,7 +13,6 @@ bytes = "1.1.0"
 futures = "0.3.21"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
-structopt = "0.3.26"
 tempfile = "3.3.0"
 tokio = { version = "1.17.0", features = ["full"] }
 rand = "0.8.4"
@@ -33,7 +32,7 @@ serde-value = "0.7.0"
 serde-name = "0.2.0"
 log = "0.4.14"
 dirs = "4.0.0"
-clap = { version = "3", features = ["derive"] }
+clap = { version = "3.1.8", features = ["derive"] }
 telemetry_subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a45af6dc28aa12c8cc13521d118c24aadd4c6adf" }
 
 bcs = "0.1.3"
@@ -54,12 +53,12 @@ http = "0.2.6"
 hyper = "0.14.17"
 schemars = "0.8.8"
 
-move-package = { git = "https://github.com/diem/move", rev = "63bd52e0f5b02711d29a678e6f946b3d429f2090" }
-move-core-types = { git = "https://github.com/diem/move", rev = "63bd52e0f5b02711d29a678e6f946b3d429f2090", features = ["address20"] }
-move-bytecode-verifier = { git = "https://github.com/diem/move", rev = "63bd52e0f5b02711d29a678e6f946b3d429f2090" }
-move-binary-format = { git = "https://github.com/diem/move", rev = "63bd52e0f5b02711d29a678e6f946b3d429f2090" }
-move-bytecode-utils = { git = "https://github.com/diem/move", rev = "63bd52e0f5b02711d29a678e6f946b3d429f2090" }
-move-unit-test = { git = "https://github.com/diem/move", rev = "63bd52e0f5b02711d29a678e6f946b3d429f2090" }
+move-package = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a", features = ["address20"] }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
+move-unit-test = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
 
 once_cell = "1.9.0"
 reqwest = { version = "0.11.10", features=["json","serde_json", "blocking"]}

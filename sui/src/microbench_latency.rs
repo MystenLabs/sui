@@ -5,6 +5,7 @@
 
 use anyhow::Error;
 use bytes::Bytes;
+use clap::*;
 use futures::channel::mpsc::{channel as MpscChannel, Sender as MpscSender};
 use futures::stream::StreamExt;
 use futures::SinkExt;
@@ -12,7 +13,6 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use rayon::prelude::*;
 use std::time::{Duration, Instant};
-use structopt::StructOpt;
 use sui_adapter::genesis;
 use sui_core::{authority::*, authority_server::AuthorityServer};
 use sui_network::{network::NetworkClient, transport};
@@ -35,48 +35,48 @@ use std::path::Path;
 use std::sync::Arc;
 use std::thread;
 
-#[derive(Debug, Clone, StructOpt)]
-#[structopt(
+#[derive(Debug, Clone, Parser)]
+#[clap(
     name = "Sui Latency Microbenchmark",
     about = "Local test and latency microbenchmark of the Sui authorities"
 )]
 struct FixedRateBenchmark {
     /// Hostname
-    #[structopt(long, default_value = "127.0.0.1")]
+    #[clap(long, default_value = "127.0.0.1")]
     host: String,
     /// Base port number
-    #[structopt(long, default_value = "9550")]
+    #[clap(long, default_value = "9550")]
     port: u16,
     /// Size of the Sui committee. Minimum size is 4 to tolerate one fault
-    #[structopt(long, default_value = "10")]
+    #[clap(long, default_value = "10")]
     committee_size: usize,
 
     /// Timeout for sending queries (us)
-    #[structopt(long, default_value = "10000000")]
+    #[clap(long, default_value = "10000000")]
     send_timeout_us: u64,
     /// Timeout for receiving responses (us)
-    #[structopt(long, default_value = "10000000")]
+    #[clap(long, default_value = "10000000")]
     recv_timeout_us: u64,
     /// Maximum size of datagrams received and sent (bytes)
-    #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE_STR)]
+    #[clap(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE_STR)]
     buffer_size: usize,
     /// Number of connections to the server
-    #[structopt(long, default_value = "0")]
+    #[clap(long, default_value = "0")]
     tcp_connections: usize,
-    #[structopt(long, default_value = "1")]
+    #[clap(long, default_value = "1")]
     db_cpus: usize,
     /// Use Move orders
-    #[structopt(long)]
+    #[clap(long)]
     use_move: bool,
 
     /// Number of chunks to send
-    #[structopt(long, default_value = "100")]
+    #[clap(long, default_value = "100")]
     num_chunks: usize,
     /// Size of chunks per tick
-    #[structopt(long, default_value = "1000")]
+    #[clap(long, default_value = "1000")]
     chunk_size: usize,
     /// The time between each tick. Default 10ms
-    #[structopt(long, default_value = "10000")]
+    #[clap(long, default_value = "10000")]
     period_us: u64,
 }
 
@@ -89,7 +89,7 @@ fn main() {
         tracing_subscriber::fmt::Subscriber::builder().with_env_filter(env_filter);
     let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
     set_global_default(subscriber).expect("Failed to set subscriber");
-    let benchmark = FixedRateBenchmark::from_args();
+    let benchmark = FixedRateBenchmark::parse();
     assert!(
         benchmark.committee_size >= MIN_COMMITTEE_SIZE,
         "Found committee size of {:?}, but minimum committee size is {:?}",

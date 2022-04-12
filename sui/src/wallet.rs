@@ -7,9 +7,8 @@ use std::ops::Deref;
 use std::path::PathBuf;
 
 use async_trait::async_trait;
+use clap::*;
 use colored::Colorize;
-use structopt::clap::{App, AppSettings};
-use structopt::StructOpt;
 
 use sui::shell::{
     install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
@@ -23,24 +22,24 @@ const SUI: &str = "   _____       _    _       __      ____     __
  ___/ / /_/ / /    | |/ |/ / /_/ / / /  __/ /_
 /____/\\__,_/_/     |__/|__/\\__,_/_/_/\\___/\\__/";
 
-#[derive(StructOpt)]
-#[structopt(
+#[derive(Parser)]
+#[clap(
     name = "wallet",
     about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
     rename_all = "kebab-case"
 )]
 struct ClientOpt {
-    #[structopt(short, global = true)]
+    #[clap(short, global = true)]
     /// Start interactive wallet
     interactive: bool,
     /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
-    #[structopt(long)]
+    #[clap(long)]
     config: Option<PathBuf>,
     /// Subcommands. Acceptable values are transfer, query_objects, benchmark, and create_accounts.
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     cmd: Option<WalletCommands>,
     /// Return command outputs in json format.
-    #[structopt(long, global = true)]
+    #[clap(long, global = true)]
     json: bool,
 }
 
@@ -56,9 +55,9 @@ async fn main() -> Result<(), anyhow::Error> {
     #[allow(unused)]
     let guard = telemetry_subscribers::init(config);
 
-    let mut app: App = ClientOpt::clap();
-    app = app.unset_setting(AppSettings::NoBinaryName);
-    let options: ClientOpt = ClientOpt::from_clap(&app.get_matches());
+    let mut app: Command = ClientOpt::command();
+    app = app.no_binary_name(false);
+    let options: ClientOpt = ClientOpt::from_arg_matches(&app.get_matches()).unwrap();
     let wallet_conf_path = options
         .config
         .clone()
@@ -78,13 +77,11 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut out = stdout();
 
     if options.interactive {
-        let app: App = WalletCommands::clap();
+        let app: Command = WalletCommands::command();
         writeln!(out, "{}", SUI.cyan().bold())?;
         let version = app
-            .p
-            .meta
-            .long_version
-            .unwrap_or_else(|| app.p.meta.version.unwrap_or("unknown"));
+            .get_long_version()
+            .unwrap_or_else(|| app.get_version().unwrap_or("unknown"));
         writeln!(out, "--- sui wallet {} ---", version)?;
         writeln!(out)?;
         writeln!(out, "{}", context.config.deref())?;
@@ -102,7 +99,7 @@ async fn main() -> Result<(), anyhow::Error> {
     } else if let Some(mut cmd) = options.cmd {
         cmd.execute(&mut context).await?.print(!options.json);
     } else {
-        ClientOpt::clap().print_long_help()?
+        ClientOpt::command().print_long_help()?
     }
     Ok(())
 }
@@ -125,8 +122,10 @@ impl AsyncHandler<WalletContext> for ClientCommandHandler {
 }
 
 fn get_command(args: Vec<String>) -> Result<WalletOpts, anyhow::Error> {
-    let app: App = install_shell_plugins(WalletOpts::clap());
-    Ok(WalletOpts::from_clap(&app.get_matches_from_safe(args)?))
+    let app: Command = install_shell_plugins(WalletOpts::command());
+    Ok(WalletOpts::from_arg_matches(
+        &app.try_get_matches_from(args)?,
+    )?)
 }
 
 async fn handle_command(
