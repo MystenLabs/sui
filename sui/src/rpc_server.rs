@@ -15,6 +15,10 @@ use sui::sui_config_dir;
 const DEFAULT_REST_SERVER_PORT: &str = "5001";
 const DEFAULT_REST_SERVER_ADDR_IPV4: &str = "127.0.0.1";
 
+#[cfg(test)]
+#[path = "unit_tests/rpc_server_tests.rs"]
+mod rpc_server_tests;
+
 #[derive(Parser)]
 #[clap(
     name = "Sui RPC Gateway",

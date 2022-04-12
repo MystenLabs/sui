@@ -8,7 +8,7 @@ use crate::crypto::{
 };
 use crate::gas::GasCostSummary;
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
-use crate::readable_serde::VecOrBase64;
+use crate::readable_serde::Base64OrDefault;
 use base64ct::{Base64, Encoding};
 use itertools::Either;
 use move_binary_format::{access::ModuleAccess, CompiledModule};
@@ -59,7 +59,7 @@ pub struct MoveCall {
 #[serde_as]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveModulePublish {
-    #[serde_as(as = "Vec<VecOrBase64>")]
+    #[serde_as(as = "Vec<Base64OrDefault>")]
     pub modules: Vec<Vec<u8>>,
 }
 

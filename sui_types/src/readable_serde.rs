@@ -9,6 +9,7 @@ use serde;
 use serde::de::{Deserialize, Deserializer, Error};
 use serde::ser::Serializer;
 use serde::Serialize;
+use serde_bytes::ByteBuf;
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
 
 /// Encode bytes to hex for human-readable serializer and deserializer,
@@ -152,22 +153,25 @@ impl Encoding {
     }
 }
 
-pub struct VecOrBase64;
+pub struct Base64OrDefault;
 
-impl SerializeAs<Vec<u8>> for VecOrBase64 {
-    fn serialize_as<S>(value: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
+impl<T> SerializeAs<T> for Base64OrDefault
+where
+    T: AsRef<[u8]> + Serialize,
+{
+    fn serialize_as<S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         if serializer.is_human_readable() {
             Encoding::Base64.encode(value).serialize(serializer)
         } else {
-            <Vec<u8> as Serialize>::serialize(value, serializer)
+            <T as Serialize>::serialize(value, serializer)
         }
     }
 }
 
-impl<'de> DeserializeAs<'de, Vec<u8>> for VecOrBase64 {
+impl<'de> DeserializeAs<'de, Vec<u8>> for Base64OrDefault {
     fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
     where
         D: Deserializer<'de>,
@@ -179,6 +183,24 @@ impl<'de> DeserializeAs<'de, Vec<u8>> for VecOrBase64 {
                 .map_err(to_custom_error::<'de, D, _>)
         } else {
             <Vec<u8> as Deserialize>::deserialize(deserializer)
+        }
+    }
+}
+
+impl<'de> DeserializeAs<'de, ByteBuf> for Base64OrDefault {
+    fn deserialize_as<D>(deserializer: D) -> Result<ByteBuf, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            Ok(ByteBuf::from(
+                Encoding::Base64
+                    .decode(s)
+                    .map_err(to_custom_error::<'de, D, _>)?,
+            ))
+        } else {
+            <ByteBuf as Deserialize>::deserialize(deserializer)
         }
     }
 }

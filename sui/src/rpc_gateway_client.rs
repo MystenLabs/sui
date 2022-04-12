@@ -1,8 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::rest_gateway::responses::{ObjectResponse, TransactionBytes};
-use crate::rpc_gateway::{Base64EncodedBytes, RpcGatewayClient as RpcGateway};
+use crate::rest_gateway::responses::ObjectResponse;
+use crate::rpc_gateway::{
+    Base64EncodedBytes, RpcGatewayClient as RpcGateway, SignedTransaction, TransactionBytes,
+};
 use anyhow::Error;
 use async_trait::async_trait;
 use ed25519_dalek::ed25519::signature::Signature;
@@ -33,14 +35,14 @@ impl GatewayAPI for RpcGatewayClient {
         let signature = tx.tx_signature.as_bytes();
         let pub_key = &signature[32..];
         let signature = &signature[..32];
-        Ok(self
-            .client
-            .execute_transaction(
-                Base64EncodedBytes(tx.data.to_bytes()),
-                Base64EncodedBytes(signature.to_vec()),
-                Base64EncodedBytes(pub_key.to_vec()),
-            )
-            .await?)
+
+        let signed_tx = SignedTransaction {
+            tx_bytes: tx.data.to_bytes(),
+            signature: signature.to_vec(),
+            pub_key: pub_key.to_vec(),
+        };
+
+        Ok(self.client.execute_transaction(signed_tx).await?)
     }
 
     async fn transfer_coin(

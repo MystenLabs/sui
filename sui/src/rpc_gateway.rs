@@ -18,6 +18,7 @@ use serde_with::serde_as;
 use tokio::sync::Mutex;
 use tracing::debug;
 
+use serde_with::base64::Base64;
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
@@ -28,7 +29,7 @@ use sui_types::object::ObjectRead;
 
 use crate::config::PersistedConfig;
 use crate::gateway::GatewayConfig;
-use crate::rest_gateway::responses::{NamedObjectRef, ObjectResponse, TransactionBytes};
+use crate::rest_gateway::responses::{NamedObjectRef, ObjectResponse};
 
 #[rpc(server, client, namespace = "gateway")]
 pub trait RpcGateway {
@@ -92,9 +93,7 @@ pub trait RpcGateway {
     #[method(name = "execute_transaction")]
     async fn execute_transaction(
         &self,
-        tx_bytes: Base64EncodedBytes,
-        signature: Base64EncodedBytes,
-        pub_key: Base64EncodedBytes,
+        signed_transaction: SignedTransaction,
     ) -> RpcResult<TransactionResponse>;
 
     #[method(name = "sync_account_state")]
@@ -156,7 +155,9 @@ impl RpcGatewayServer for RpcGatewayImpl {
             .await
             .transfer_coin(signer, object_id, gas_payment, gas_budget, recipient)
             .await?;
-        Ok(TransactionBytes::new(data))
+        Ok(TransactionBytes {
+            tx_bytes: data.to_bytes(),
+        })
     }
 
     async fn publish(
@@ -182,7 +183,9 @@ impl RpcGatewayServer for RpcGatewayImpl {
             .publish(sender, compiled_modules, gas_obj_ref, gas_budget)
             .await?;
 
-        Ok(TransactionBytes::new(data))
+        Ok(TransactionBytes {
+            tx_bytes: data.to_bytes(),
+        })
     }
 
     async fn split_coin(
@@ -205,7 +208,9 @@ impl RpcGatewayServer for RpcGatewayImpl {
                 gas_budget,
             )
             .await?;
-        Ok(TransactionBytes::new(data))
+        Ok(TransactionBytes {
+            tx_bytes: data.to_bytes(),
+        })
     }
 
     async fn merge_coin(
@@ -222,7 +227,9 @@ impl RpcGatewayServer for RpcGatewayImpl {
             .await
             .merge_coins(signer, primary_coin, coin_to_merge, gas_payment, gas_budget)
             .await?;
-        Ok(TransactionBytes::new(data))
+        Ok(TransactionBytes {
+            tx_bytes: data.to_bytes(),
+        })
     }
 
     async fn get_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse> {
@@ -244,13 +251,12 @@ impl RpcGatewayServer for RpcGatewayImpl {
 
     async fn execute_transaction(
         &self,
-        tx_bytes: Base64EncodedBytes,
-        signature: Base64EncodedBytes,
-        pub_key: Base64EncodedBytes,
+        signed_tx: SignedTransaction,
     ) -> RpcResult<TransactionResponse> {
-        let data = TransactionData::from_signable_bytes(&tx_bytes)?;
-        let signature = crypto::Signature::from_bytes(&[&*signature, &*pub_key].concat())
-            .map_err(|e| anyhow!(e))?;
+        let data = TransactionData::from_signable_bytes(&signed_tx.tx_bytes)?;
+        let signature =
+            crypto::Signature::from_bytes(&[&*signed_tx.signature, &*signed_tx.pub_key].concat())
+                .map_err(|e| anyhow!(e))?;
         Ok(self
             .gateway
             .lock()
@@ -308,7 +314,9 @@ impl RpcGatewayServer for RpcGatewayImpl {
                 .await
         }
         .await?;
-        Ok(TransactionBytes::new(data))
+        Ok(TransactionBytes {
+            tx_bytes: data.to_bytes(),
+        })
     }
 
     async fn sync_account_state(&self, address: SuiAddress) -> RpcResult<()> {
@@ -342,6 +350,41 @@ impl RpcGatewayServer for RpcGatewayImpl {
         count: u64,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
         Ok(self.gateway.lock().await.get_recent_transactions(count)?)
+    }
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize)]
+pub struct SignedTransaction {
+    #[serde_as(as = "Base64")]
+    pub tx_bytes: Vec<u8>,
+    #[serde_as(as = "Base64")]
+    pub signature: Vec<u8>,
+    #[serde_as(as = "Base64")]
+    pub pub_key: Vec<u8>,
+}
+
+impl SignedTransaction {
+    pub fn new(tx_bytes: Vec<u8>, signature: crypto::Signature) -> Self {
+        let signature_bytes = signature.as_bytes();
+        Self {
+            tx_bytes,
+            signature: signature_bytes[..32].to_vec(),
+            pub_key: signature_bytes[32..].to_vec(),
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize)]
+pub struct TransactionBytes {
+    #[serde_as(as = "Base64")]
+    pub tx_bytes: Vec<u8>,
+}
+
+impl TransactionBytes {
+    pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
+        TransactionData::from_signable_bytes(&self.tx_bytes)
     }
 }
 
