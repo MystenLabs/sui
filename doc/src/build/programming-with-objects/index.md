@@ -14,18 +14,18 @@ Prerequisite Readings:
 Index:
 - [Chapter 1: Object Basics](../../build/programming-with-objects/ch1-object-basics.md)
   - Defining Move object types, creating objects, transferring objects.
-- [Chapter 2: Using Objects](../../build/programming-with-objects/ch2-using-objects.md)
+- Chapter 2: Using Objects
   - Passing Move objects as arguments, mutating objects, deleting objects.
-- [Chapter 3: Immutable Objects](../../build/programming-with-objects/ch3-immutable-objects.md)
+- Chapter 3: Immutable Objects
   - Freezing an object, using immutable objects.
-- [Chapter 4: Object Wrapping](../../build/programming-with-objects/ch4-object-wrapping.md)
+- Chapter 4: Object Wrapping
   - Wrapping objects in another object.
-- [Chapter 5: Child Objects](../../build/programming-with-objects/ch5-child-objects.md)
+- Chapter 5: Child Objects
   - Enabling objects to own other objects, transferring objects to objects, adding child objects, removing child objects.
-- [Chapter 6: Collection and Bag](../../build/programming-with-objects/ch6-collection-and-bag.md)
+- Chapter 6: Collection and Bag
   - Using Collection and Bag library.
-- [Chapter 7: Shared Objects](../../build/programming-with-objects/ch7-shared-objects.md)
+- Chapter 7: Shared Objects
   - Creating shared objects, using share objects.
-- [Chapter 8: Case Study (TicTacToe)](../../build/programming-with-objects/ch8-case-study-tictactoe.md)
+- Chapter 8: Case Study (TicTacToe)
   - Developing a real game with objects, trade-offs between shared objects and single-writer objects.
 - Chapter 9: Case Study (TBD)
