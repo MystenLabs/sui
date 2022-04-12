@@ -71,10 +71,78 @@ public fun create(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
 ```
 > :bulb: Naming convention: Constructors are typically named **`new`**, which returns an instance of the struct type. The **`create`** function is typically defined as an entry function that constructs the struct and transfers it to the desired owner (most commonly the sender).
 
-You can find the full code in [ColorObject.move](../../../move_code/objects_tutorial/sources/Ch1/ColorObject.move).
+We can also add a getter to `ColorObject` that returns the color values, so that modules outside of `ColorObject` are able to read their values:
+```rust
+public fun get_color(self: &ColorObject): (u8, u8, u8) {
+    (self.red, self.green, self.blue)
+}
+```
 
-### On-chain interactions
-Now let's try to call `create` in transactions and see what happens. To do this we need to start Sui and the wallet. Follow the [Wallet Quick Start](../wallet.md) to start the Sui network and set up the wallet.
+You can find the full code [ColorObject.move](../../../move_code/objects_tutorial/sources/Ch1_2/ColorObject.move).
+
+To compile the code, make sure you have followed the [Sui installation guide](../install.md) so that `sui-move` is in `PATH`. In the code [root directory](../../../move_code/objects_tutorial/) (where `Move.toml` is), you can run:
+```
+sui-move build
+```
+
+### Writing Unit Tests
+After defining the `create` function, we want to test this function in Move using unit tests, without having to go all the way to sending Sui transactions. Since Sui manages global storage separately outside of Move, there is no direct way to retrieve objects from global storage within Move. This poses a question: after calling the `create` function, how do we check that the object is properly transferred?
+
+To assist easy testing in Move, we provide a comprehensive testing framework in the [TestScenario](../../../../sui_programmability/framework/sources/TestScenario.move) module, which allows us to interact with objects that are put into the global storage, so that we can test the behavior of any function directly in Move unit tests. A lot of this is also covered in our [Move testing doc](../move.md#sui-specific-testing).
+
+The idea of `TestScenario` is to emulate a series of Sui transactions, each sent from a particular address. A developer writing a test starts the first transaction using the `TestScenario::begin` function that takes the address of the user sending this transaction as argument and returns an instance of the `Scenario` struct representing a test scenario.
+
+An instance of the `Scenario` struct contains a per-address object pool emulating Sui's object storage, with helper functions provided to manipulate objects in the pool. Once the first transaction is finished, subsequent transactions can be started using the `TestScenario::next_tx` function that takes an instance of the `Scenario` struct representing the current scenario and an address of a (new) user as arguments.
+
+Now let's try to write a test for the `create` function. Tests that need to use `TestScenario` must be in a separate module, either under `tests` directory, or in the same file but in a module annotated with `#[test_only]`. This is because `TestScenario` itself is a test-only module, and can only be used by test-only modules.
+First of all, we begin the test with a hardcoded test address, which will also give us a transaction context as if we are sending a transaction from this address. We then call the `create` function, which should create a `ColorObject` and transfer it to the test address:
+```rust
+let owner = @0x1;
+// Create a ColorObject and transfer it to @owner.
+let scenario = &mut TestScenario::begin(&owner);
+{
+    let ctx = TestScenario::ctx(scenario);
+    ColorObject::create(255, 0, 255, ctx);
+};
+```
+>:books: Note there is a "`;`" after "`}`". This is required except for the last statement in the function. Refer to the [Move book](https://move-book.com/syntax-basics/expression-and-scope.html) for detailed explanations.
+
+Now account `@0x1` should own the object. Let's first make sure it's not owned by anyone else:
+```rust
+let not_owner = @0x2;
+// Check that @not_owner does not own the just-created ColorObject.
+TestScenario::next_tx(scenario, &not_owner);
+{
+    assert!(!TestScenario::can_remove_object<ColorObject>(scenario), 0);
+};
+```
+`TestScenario::next_tx` switches the transaction sender to `@0x2`, which is a new address than the previous one.
+`TestScenario::can_remove_object` checks whether an object with the given type actually exists in the global storage owned by the current sender of the transaction. In this code, we assert that we should not be able to remove such an object, because `@0x2` does not own any object.
+> :bulb: The second parameter of `assert!` is the error code. In non-test code, we usually define a list of dedicated error code constants for each type of error that could happen in production. For unit tests though, it's usually unnecessary because there will be way too many assetions and the stacktrace upon error is sufficient to tell where the error happened. Hence we recommend just putting `0` there in unit tests for assertions.
+
+Finally we check that `@0x1` owns the object and the object value is consistent:
+```rust
+TestScenario::next_tx(scenario, &owner);
+{
+    let object = TestScenario::remove_object<ColorObject>(scenario);
+    let (red, green, blue) = ColorObject::get_color(&object);
+    assert!(red == 255 && green == 0 && blue == 255, 0);
+    TestScenario::return_object(scenario, object);
+};
+```
+`TestScenario::remove_object` removes the object of given type from global storage that's owned by the current transaction sender (it also implicitly checks `can_remove_object`). If this line of code succeeds, it means that `owner` indeed owns an object of type `ColorObject`.
+We also check that the field values of the object match with what we set in creation. At the end, we must return the object back to the global storage by calling `TestScenario::return_object` so that it's back to the global storage. This also ensures that if any mutations happened to the object during the test, the global storage is aware of the changes.
+You may have noticed that `remove_object` picks the object only based on the type parameter. What if there are multiple objects of the same type owned by the account? How do we retrieve each of them? In fact, if you call `remove_object` when there are more than one object of the same type in the same account, an assertion failure will be triggered. We are working on adding an API just for this. Update coming soon.
+
+Again, you can find the full code [here](../../../move_code/objects_tutorial/sources/Ch1_2/ColorObject.move).
+
+To run the test, simply run the following in the code root directory:
+```
+sui-move test
+```
+
+### On-chain Interactions
+Now let's try to call `create` in actual transactions and see what happens. To do this we need to start Sui and the wallet. Please follow the [Wallet guide](../wallet.md) to start the Sui network and setup the wallet.
 
 Before starting, let's take a look at the default wallet address (this is address that will eventually own the object later):
 ```
@@ -91,10 +159,13 @@ You can find the published package object ID in the **Publish Results** output:
 ----- Publish Results ----
 The newly published package object: (57258F32746FD1443F2A077C0C6EC03282087C19, SequenceNumber(1), o#b3a8e284dea7482891768e166e4cd16f9749e0fa90eeb0834189016c42327401)
 ```
-Note that the exact data you see will be different. The first hex string in that triple is the package object ID (`57258F32746FD1443F2A077C0C6EC03282087C19` in this case).
+Note that the exact data you see will be different. The first hex string in that triple is the package object ID (`57258F32746FD1443F2A077C0C6EC03282087C19` in this case). For convenience, let's save it to an environment variable:
+```
+$ export PACKAGE=57258F32746FD1443F2A077C0C6EC03282087C19
+```
 Next we can call the function to create a color object:
 ```
-$ wallet call --gas-budget 1000 --package "57258F32746FD1443F2A077C0C6EC03282087C19" --module "ColorObject" --function "create" --args 0 255 0
+$ wallet call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "create" --args 0 255 0
 ```
 In the **Transaction Effects** portion of the output, you will see an object showing up in the list of **Created Objects**, like this:
 
@@ -102,9 +173,13 @@ In the **Transaction Effects** portion of the output, you will see an object sho
 Created Objects:
 5EB2C3E55693282FAA7F5B07CE1C4803E6FDC1BB SequenceNumber(1) o#691b417670979c6c192bdfd643630a125961c71c841a6c7d973cf9429c792efa
 ```
+Again, for convenience, let's save the object ID:
+```
+$ export OBJECT=5EB2C3E55693282FAA7F5B07CE1C4803E6FDC1BB
+```
 We can inspect this object and see what kind of object it is:
 ```
-$ wallet object --id 5EB2C3E55693282FAA7F5B07CE1C4803E6FDC1BB
+$ wallet object --id $OBJECT
 ```
 This will show you the metadata of the object with its type:
 ```
@@ -118,8 +193,8 @@ As we can see, it's owned by the current default wallet address that we saw earl
 
 You can also look at the data content of the object by adding the `--json` parameter:
 ```
-$ wallet object --id 5EB2C3E55693282FAA7F5B07CE1C4803E6FDC1BB --json
+$ wallet object --id $OBJECT --json
 ```
 This will print the values of all the fields in the Move object, such as the values of `red`, `green`, and `blue`.
 
-Congratulations! You have learned how to define, create, and transfer objects. In the next chapter, we will learn how to use the objects that we own.
+Congratulations! You have learned how to define, create, and transfer objects. We also showed how to write unit tests to mock transactions and interact with the objects. In the next chapter, we will learn how to use the objects that we own.
