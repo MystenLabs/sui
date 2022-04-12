@@ -9,6 +9,7 @@ use std::io::Write;
 use std::sync::{Arc, RwLock};
 
 use async_trait::async_trait;
+use clap::*;
 use colored::Colorize;
 use rustyline::completion::{Completer, Pair};
 use rustyline::error::ReadlineError;
@@ -17,7 +18,6 @@ use rustyline::hint::Hinter;
 use rustyline::validate::Validator;
 use rustyline::{Config, Context, Editor};
 use rustyline_derive::Helper;
-use structopt::clap::{App, SubCommand};
 use unescape::unescape;
 
 #[path = "unit_tests/shell_tests.rs"]
@@ -171,16 +171,16 @@ fn substitute_env_variables(s: String) -> String {
     s
 }
 
-pub fn install_shell_plugins<'a>(clap: App<'a, 'a>) -> App<'a, 'a> {
+pub fn install_shell_plugins(clap: Command) -> Command {
     clap.subcommand(
-        SubCommand::with_name("exit")
+        Command::new("exit")
             .alias("quit")
             .about("Exit the interactive shell"),
     )
-    .subcommand(SubCommand::with_name("clear").about("Clear screen"))
-    .subcommand(SubCommand::with_name("echo").about("Write arguments to the console output"))
-    .subcommand(SubCommand::with_name("env").about("Print environment"))
-    .subcommand(SubCommand::with_name("history").about("Print history"))
+    .subcommand(Command::new("clear").about("Clear screen"))
+    .subcommand(Command::new("echo").about("Write arguments to the console output"))
+    .subcommand(Command::new("env").about("Print environment"))
+    .subcommand(Command::new("history").about("Print history"))
 }
 
 #[derive(Helper)]
@@ -260,21 +260,20 @@ pub struct CommandStructure {
 }
 
 impl CommandStructure {
-    /// Create CommandStructure using structopt::clap::App, currently only support 1 level of subcommands
-    pub fn from_clap(app: &App) -> Self {
+    /// Create CommandStructure using clap::Command, currently only support 1 level of subcommands
+    pub fn from_clap(app: &Command) -> Self {
         let subcommands = app
-            .p
-            .subcommands
-            .iter()
+            .get_subcommands()
             .map(|it| {
                 let name = it.get_name();
                 CommandStructure {
                     name: name.to_string(),
                     completions: it
-                        .p
-                        .opts
-                        .iter()
-                        .map(|it| format!("--{}", it.b.name))
+                        .get_opts()
+                        .map(|it| match it.get_long() {
+                            Some(long) => format!("--{}", long),
+                            None => format!("--{}", name),
+                        })
                         .collect::<Vec<_>>(),
                     children: vec![],
                 }

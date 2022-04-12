@@ -8,13 +8,12 @@ use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 use anyhow::anyhow;
+use clap::*;
 use colored::Colorize;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::parser::parse_type_tag;
 use serde::Serialize;
-use structopt::clap::AppSettings;
-use structopt::StructOpt;
 use tracing::info;
 
 use sui_core::gateway_state::gateway_responses::{
@@ -33,169 +32,167 @@ use crate::config::{Config, PersistedConfig, WalletConfig};
 use crate::keystore::Keystore;
 use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
 
-#[derive(StructOpt)]
-#[structopt(name = "", rename_all = "kebab-case")]
-#[structopt(setting(AppSettings::NoBinaryName))]
+#[derive(Parser)]
+#[clap(name = "", rename_all = "kebab-case", no_binary_name = true)]
 pub struct WalletOpts {
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     pub command: WalletCommands,
     /// Returns command outputs in JSON format.
-    #[structopt(long, global = true)]
+    #[clap(long, global = true)]
     pub json: bool,
 }
 
 #[derive(StructOpt, Debug)]
-#[structopt(rename_all = "kebab-case")]
-#[structopt(setting(AppSettings::NoBinaryName))]
+#[clap(rename_all = "kebab-case", no_binary_name = true)]
 pub enum WalletCommands {
     /// Switch active address
-    #[structopt(name = "switch")]
+    #[clap(name = "switch")]
     Switch {
         /// Address to switch wallet commands to
-        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long, parse(try_from_str = decode_bytes_hex))]
         address: SuiAddress,
     },
 
     /// Default address used for commands when none specified
-    #[structopt(name = "active-address")]
+    #[clap(name = "active-address")]
     ActiveAddress {},
 
     /// Get obj info
-    #[structopt(name = "object")]
+    #[clap(name = "object")]
     Object {
         /// Object ID of the object to fetch
-        #[structopt(long)]
+        #[clap(long)]
         id: ObjectID,
     },
 
     /// Publish Move modules
-    #[structopt(name = "publish")]
+    #[clap(name = "publish")]
     Publish {
         /// Path to directory containing a Move package
-        #[structopt(long)]
+        #[clap(long)]
         path: String,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
-        #[structopt(long)]
+        #[clap(long)]
         gas: Option<ObjectID>,
 
         /// Gas budget for running module initializers
-        #[structopt(long)]
+        #[clap(long)]
         gas_budget: u64,
     },
 
     /// Call Move function
-    #[structopt(name = "call")]
+    #[clap(name = "call")]
     Call {
         /// Object ID of the package, which contains the module
-        #[structopt(long)]
+        #[clap(long)]
         package: ObjectID,
         /// The name of the module in the package
-        #[structopt(long)]
+        #[clap(long)]
         module: Identifier,
         /// Function name in module
-        #[structopt(long)]
+        #[clap(long)]
         function: Identifier,
         /// Function name in module
-        #[structopt(long, parse(try_from_str = parse_type_tag))]
+        #[clap(long, parse(try_from_str = parse_type_tag))]
         type_args: Vec<TypeTag>,
         /// Simplified ordered args like in the function syntax
         /// ObjectIDs, Addresses must be hex strings
-        #[structopt(long)]
+        #[clap(long)]
         args: Vec<SuiJsonValue>,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
-        #[structopt(long)]
+        #[clap(long)]
         /// If not provided, a gas object with at least gas_budget value will be selected
-        #[structopt(long)]
+        #[clap(long)]
         gas: Option<ObjectID>,
         /// Gas budget for this call
-        #[structopt(long)]
+        #[clap(long)]
         gas_budget: u64,
     },
 
     /// Transfer an object
-    #[structopt(name = "transfer")]
+    #[clap(name = "transfer")]
     Transfer {
         /// Recipient address
-        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long, parse(try_from_str = decode_bytes_hex))]
         to: SuiAddress,
 
         /// Object to transfer, in 20 bytes Hex string
-        #[structopt(long)]
+        #[clap(long)]
         object_id: ObjectID,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
-        #[structopt(long)]
+        #[clap(long)]
         gas: Option<ObjectID>,
 
         /// Gas budget for this transfer
-        #[structopt(long)]
+        #[clap(long)]
         gas_budget: u64,
     },
     /// Synchronize client state with authorities.
-    #[structopt(name = "sync")]
+    #[clap(name = "sync")]
     SyncClientState {
-        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long, parse(try_from_str = decode_bytes_hex))]
         address: Option<SuiAddress>,
     },
 
     /// Obtain the Addresses managed by the wallet.
-    #[structopt(name = "addresses")]
+    #[clap(name = "addresses")]
     Addresses,
 
     /// Generate new address and keypair.
-    #[structopt(name = "new-address")]
+    #[clap(name = "new-address")]
     NewAddress,
 
     /// Obtain all objects owned by the address.
-    #[structopt(name = "objects")]
+    #[clap(name = "objects")]
     Objects {
         /// Address owning the objects
-        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long, parse(try_from_str = decode_bytes_hex))]
         address: Option<SuiAddress>,
     },
 
     /// Obtain all gas objects owned by the address.
-    #[structopt(name = "gas")]
+    #[clap(name = "gas")]
     Gas {
         /// Address owning the objects
-        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long, parse(try_from_str = decode_bytes_hex))]
         address: Option<SuiAddress>,
     },
 
     /// Split a coin object into multiple coins.
     SplitCoin {
         /// Coin to Split, in 20 bytes Hex string
-        #[structopt(long)]
+        #[clap(long)]
         coin_id: ObjectID,
         /// Amount to split out from the coin
-        #[structopt(long)]
+        #[clap(long)]
         amounts: Vec<u64>,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
-        #[structopt(long)]
+        #[clap(long)]
         gas: Option<ObjectID>,
         /// Gas budget for this call
-        #[structopt(long)]
+        #[clap(long)]
         gas_budget: u64,
     },
 
     /// Merge two coin objects into one coin
     MergeCoin {
         /// Coin to merge into, in 20 bytes Hex string
-        #[structopt(long)]
+        #[clap(long)]
         primary_coin: ObjectID,
         /// Coin to be merged, in 20 bytes Hex string
-        #[structopt(long)]
+        #[clap(long)]
         coin_to_merge: ObjectID,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
-        #[structopt(long)]
+        #[clap(long)]
         gas: Option<ObjectID>,
         /// Gas budget for this call
-        #[structopt(long)]
+        #[clap(long)]
         gas_budget: u64,
     },
 }
