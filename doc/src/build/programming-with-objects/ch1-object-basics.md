@@ -96,7 +96,7 @@ Next we can call the function to create a color object:
 ```
 $ wallet call --gas-budget 1000 --package "57258F32746FD1443F2A077C0C6EC03282087C19" --module "Ch1" --function "create" --args 0 255 0
 ```
-In the **Transaction Effects**, you will see an object showing up in the list of **Created Objects**, like this:
+In the **Transaction Effects** portion of the output, you will see an object showing up in the list of **Created Objects**, like this:
 
 TODO: Where are Transaction Effects shown above? Do we need it?
 
