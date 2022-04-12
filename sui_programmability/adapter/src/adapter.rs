@@ -925,12 +925,12 @@ fn resolve_struct(
 
 fn format_signature_token(module: &CompiledModule, t: &SignatureToken) -> String {
     match t {
-        SignatureToken::Bool => format!("bool"),
-        SignatureToken::U8 => format!("u8"),
-        SignatureToken::U64 => format!("u64"),
-        SignatureToken::U128 => format!("u128"),
-        SignatureToken::Address => format!("address"),
-        SignatureToken::Signer => format!("signer"),
+        SignatureToken::Bool => "bool".to_string(),
+        SignatureToken::U8 => "u8".to_string(),
+        SignatureToken::U64 => "u64".to_string(),
+        SignatureToken::U128 => "u128".to_string(),
+        SignatureToken::Address => "address".to_string(),
+        SignatureToken::Signer => "signer".to_string(),
         SignatureToken::Vector(inner) => {
             format!("vector<{}>", format_signature_token(module, inner))
         }
@@ -957,14 +957,11 @@ fn format_signature_token_struct(
     let ty_args_string = if ty_args.is_empty() {
         ""
     } else {
-        s = format!(
-            "{}",
-            ty_args
-                .iter()
-                .map(|t| format_signature_token(module, t))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
+        s = ty_args
+            .iter()
+            .map(|t| format_signature_token(module, t))
+            .collect::<Vec<_>>()
+            .join(", ");
         &s
     };
     format!(
