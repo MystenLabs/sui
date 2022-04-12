@@ -343,33 +343,6 @@ impl fmt::Display for SuiAddress {
     }
 }
 
-pub fn address_as_base64<S>(address: &SuiAddress, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::ser::Serializer,
-{
-    serializer.serialize_str(&encode_address(address))
-}
-
-pub fn address_from_base64<'de, D>(deserializer: D) -> Result<SuiAddress, D::Error>
-where
-    D: serde::de::Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-    let value = decode_address(&s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
-    Ok(value)
-}
-
-pub fn encode_address(address: &SuiAddress) -> String {
-    base64::encode(&address.0[..])
-}
-
-pub fn decode_address(s: &str) -> Result<SuiAddress, anyhow::Error> {
-    let value = base64::decode(s)?;
-    let mut address = [0u8; SUI_ADDRESS_LENGTH];
-    address.copy_from_slice(&value[..SUI_ADDRESS_LENGTH]);
-    Ok(SuiAddress(address))
-}
-
 pub fn dbg_addr(name: u8) -> SuiAddress {
     let addr = [name; SUI_ADDRESS_LENGTH];
     SuiAddress(addr)

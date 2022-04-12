@@ -1,14 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::{SUI_ADDRESS_LENGTH, TRANSACTION_DIGEST_LENGTH};
-use crate::crypto::SUI_SIGNATURE_LENGTH;
+use anyhow::anyhow;
+use std::fmt::Display;
+
+use base64ct::{Base64, Encoding as _};
 use serde;
 use serde::de::{Deserialize, Deserializer, Error};
 use serde::ser::Serializer;
 use serde::Serialize;
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
-use std::fmt::Display;
 
 /// Encode bytes to hex for human-readable serializer and deserializer,
 /// serde to bytes for non-human-readable serializer and deserializer.
@@ -106,39 +107,27 @@ where
     D::Error::custom(format!("byte deserialization failed, cause by: {}", e))
 }
 
-macro_rules! byte_or_hex {
-    ($($len:expr,)+) => {
-        $(
-            impl<'de> BytesOrHex<'de> for [u8; $len]{
-                fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-                where
-                    D: Deserializer<'de>,
-                {
-                    let value = deserialize_from_bytes_or_decode(deserializer, Encoding::Hex)?;
-                    let mut array = [0u8; $len];
-                    array.copy_from_slice(&value[..$len]);
-                    Ok(array)
-                }
-            }
-        )+
+impl<'de, const N: usize> BytesOrHex<'de> for [u8; N] {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = deserialize_from_bytes_or_decode(deserializer, Encoding::Hex)?;
+        let mut array = [0u8; N];
+        array.copy_from_slice(&value[..N]);
+        Ok(array)
     }
 }
 
-macro_rules! byte_or_base64 {
-    ($($len:expr,)+) => {
-        $(
-            impl<'de> BytesOrBase64<'de> for [u8; $len]{
-                fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-                where
-                    D: Deserializer<'de>,
-                {
-                    let value = deserialize_from_bytes_or_decode(deserializer, Encoding::Base64)?;
-                    let mut array = [0u8; $len];
-                    array.copy_from_slice(&value[..$len]);
-                    Ok(array)
-                }
-            }
-        )+
+impl<'de, const N: usize> BytesOrBase64<'de> for [u8; N] {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = deserialize_from_bytes_or_decode(deserializer, Encoding::Base64)?;
+        let mut array = [0u8; N];
+        array.copy_from_slice(&value[..N]);
+        Ok(array)
     }
 }
 
@@ -150,18 +139,15 @@ enum Encoding {
 impl Encoding {
     fn decode(&self, s: String) -> Result<Vec<u8>, anyhow::Error> {
         Ok(match self {
-            Encoding::Base64 => base64::decode(s)?,
+            Encoding::Base64 => Base64::decode_vec(&s).map_err(|e| anyhow!(e))?,
             Encoding::Hex => hex::decode(s)?,
         })
     }
 
     fn encode<T: AsRef<[u8]>>(&self, data: T) -> String {
         match self {
-            Encoding::Base64 => base64::encode(data),
+            Encoding::Base64 => Base64::encode_string(data.as_ref()),
             Encoding::Hex => hex::encode(data),
         }
     }
 }
-
-byte_or_hex!(SUI_ADDRESS_LENGTH,);
-byte_or_base64!(TRANSACTION_DIGEST_LENGTH, SUI_SIGNATURE_LENGTH,);

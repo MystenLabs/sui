@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::Error;
+use base64ct::{Base64, Encoding};
 use std::borrow::Borrow;
 use std::collections::HashMap;
 
@@ -48,7 +49,7 @@ impl Serialize for KeyPair {
     where
         S: serde::ser::Serializer,
     {
-        serializer.serialize_str(&base64::encode(&self.key_pair.to_bytes()))
+        serializer.serialize_str(&Base64::encode_string(&self.key_pair.to_bytes()))
     }
 }
 
@@ -58,7 +59,8 @@ impl<'de> Deserialize<'de> for KeyPair {
         D: serde::de::Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        let value = base64::decode(&s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
+        let value =
+            Base64::decode_vec(&s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
         let key = dalek::Keypair::from_bytes(&value)
             .map_err(|err| serde::de::Error::custom(err.to_string()))?;
         Ok(KeyPair {
@@ -182,8 +184,8 @@ impl signature::Signature for Signature {
 
 impl std::fmt::Debug for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = base64::encode(self.signature_bytes());
-        let p = base64::encode(self.public_key_bytes());
+        let s = Base64::encode_string(self.signature_bytes());
+        let p = Base64::encode_string(self.public_key_bytes());
         write!(f, "{s}@{p}")?;
         Ok(())
     }
