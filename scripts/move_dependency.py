@@ -25,7 +25,7 @@ def parse_args():
     )
     subparser.add_parser("local")
     upgrade = subparser.add_parser("upgrade")
-    upgrade.add_argument("--repo", required=False, default="diem")
+    upgrade.add_argument("--repo", required=False, default="move-language")
     upgrade_group = upgrade.add_mutually_exclusive_group(required=True)
     upgrade_group.add_argument("--rev")
     upgrade_group.add_argument("--branch")
