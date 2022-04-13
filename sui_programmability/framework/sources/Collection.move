@@ -102,7 +102,7 @@ module Sui::Collection {
         add_impl(c, object, Option::none())
     }
 
-    /// Transfer a object that was owned by another object to the collection.
+    /// Transfer an object that was owned by another object to the collection.
     /// Since the object is a child object of another object, an `old_child_ref`
     /// is around and needs to be consumed.
     public fun add_child_object<T: key>(c: &mut Collection<T>, object: T, old_child_ref: ChildRef<T>) {
