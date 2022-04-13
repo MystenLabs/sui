@@ -14,6 +14,7 @@ use sui_types::messages::{BatchInfoRequest, BatchInfoResponseItem};
 use sui_types::serialize::*;
 use tokio::runtime::{Builder, Runtime};
 use tracing::{error, info};
+use tokio::sync::oneshot;
 
 pub mod bench_types;
 pub mod load_generator;
@@ -24,6 +25,7 @@ use crate::benchmark::load_generator::{
     FixedRateLoadGenerator,
 };
 use crate::benchmark::transaction_creator::TransactionCreator;
+use crate::trace_utils;
 
 use self::bench_types::{BenchmarkResult, MicroBenchmarkResult, MicroBenchmarkType};
 
@@ -82,6 +84,34 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
     }
 }
 
+// Returns a oneshot sender/receiver pair, which can be used to request
+// the server be shut down, and wait for the shutdown to finish, respectively.
+fn start_authority_server_new_thread(
+    network_server: NetworkServer,
+    tx_cr: TransactionCreator,
+) -> (oneshot::Sender<()>, oneshot::Receiver<()>) {
+    let (req_tx, req_rx) = oneshot::channel();
+    let (ack_tx, ack_rx) = oneshot::channel();
+
+    // Make multi-threaded runtime for the authority
+    thread::spawn(move || {
+        get_multithread_runtime().block_on(async move {
+            let server = spawn_authority_server(network_server, tx_cr.authority_state).await;
+            let _guard = trace_utils::init_telemetry();
+
+            if let Err(e) = req_rx.await {
+                error!("shutdown_rx error {e}");
+            }
+            if let Err(e) = server.kill().await {
+                error!("Server ended with an error: {e}");
+            }
+            let _ = ack_tx.send(());
+        });
+    });
+
+    (req_tx, ack_rx)
+}
+
 fn run_throughout_microbench(
     network_client: NetworkClient,
     network_server: NetworkServer,
@@ -114,15 +144,7 @@ fn run_throughout_microbench(
         num_transactions / chunk_size,
     );
 
-    // Make multi-threaded runtime for the authority
-    thread::spawn(move || {
-        get_multithread_runtime().block_on(async move {
-            let server = spawn_authority_server(network_server, tx_cr.authority_state).await;
-            if let Err(e) = server.join().await {
-                error!("Server ended with an error: {e}");
-            }
-        });
-    });
+    let (req_tx, ack_rx) = start_authority_server_new_thread(network_server, tx_cr);
 
     // Wait for server start
     sleep(Duration::from_secs(3));
@@ -144,6 +166,12 @@ fn run_throughout_microbench(
         .par_iter()
         .map(|q| check_transaction_response(deserialize_message(&(q.as_ref().unwrap())[..])))
         .collect();
+
+    runtime.block_on(async move {
+        req_tx.send(()).unwrap();
+        ack_rx.await.unwrap();
+    });
+
     MicroBenchmarkResult::Throughput {
         chunk_throughput: calculate_throughput(num_transactions, elapsed),
     }
@@ -176,15 +204,8 @@ fn run_latency_microbench(
     // These are tracer TXes used for measuring latency
     let tracer_txes = tx_cr.generate_transactions(1, use_move, 1, num_chunks);
 
-    // Make multi-threaded runtime for the authority
-    thread::spawn(move || {
-        get_multithread_runtime().block_on(async move {
-            let server = spawn_authority_server(network_server, tx_cr.authority_state).await;
-            if let Err(e) = server.join().await {
-                error!("Server ended with an error: {e}");
-            }
-        });
-    });
+    let (shutdown_req_tx, shutdown_ack_rx) =
+        start_authority_server_new_thread(network_server, tx_cr);
 
     // Wait for server start
     sleep(Duration::from_secs(3));
@@ -205,6 +226,11 @@ fn run_latency_microbench(
     // Run the load gen and tracers
     let (load_latencies, tracer_latencies) =
         runtime.block_on(async move { join!(load_gen.start(), tracer_gen.start()) });
+
+    runtime.block_on(async move {
+        shutdown_req_tx.send(()).unwrap();
+        shutdown_ack_rx.await.unwrap();
+    });
 
     MicroBenchmarkResult::Latency {
         load_chunk_size: chunk_size,
