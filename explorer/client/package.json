@@ -36,18 +36,16 @@
     },
     "scripts": {
         "start": "react-scripts start",
-        "start:dev": "concurrently \"npm:start\" \"npm:prettier:fix:watch\"",
         "build": "react-scripts build",
         "test": "REACT_APP_DATA=static react-scripts test",
         "eslint:check": "eslint --max-warnings=0 .eslintrc.js \"./src/**/*.{js,jsx,ts,tsx}\"",
-        "eslint:fix": "npm run eslint:check -- --fix",
+        "eslint:fix": "yarn eslint:check --fix",
         "prettier:check": "prettier -c --ignore-unknown .",
         "prettier:fix": "prettier -w --ignore-unknown .",
-        "prettier:fix:watch": "npm run prettier:fix && onchange '**' --exclude-path .gitignore -- prettier -w --ignore-unknown {{file}}",
         "stylelint:check": "stylelint \"**/*.{css,scss}\"",
-        "stylelint:fix": "npm run stylelint:check -- --fix",
-        "lint": "npm run eslint:check && npm run prettier:check && npm run stylelint:check",
-        "lint:fix": "npm run eslint:fix && npm run prettier:fix && npm run stylelint:fix"
+        "stylelint:fix": "yarn stylelint:check --fix",
+        "lint": "yarn eslint:check && yarn prettier:check && yarn stylelint:check",
+        "lint:fix": "yarn eslint:fix && yarn prettier:fix && yarn stylelint:fix"
     },
     "resolutions": {
         "async": "3.2.2",
