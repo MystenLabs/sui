@@ -336,9 +336,19 @@ where
                             }
                             Ok(BatchInfoResponseItem(UpdateItem::Transaction((
                                 _seq,
-                                _digest,
-                                _tx_info,
-                            )))) => batch_info_item,
+                                digest,
+                                tx_info,
+                            )))) => {
+                                if let Some(transaction_info) = tx_info {
+                                    if let Err(err) =
+                                        client.check_transaction_response(*digest, transaction_info)
+                                    {
+                                        client.report_client_error(err.clone());
+                                        return Err(err);
+                                    }
+                                }
+                                batch_info_item
+                            }
                             Err(e) => Err(e.clone()),
                         }
                     }

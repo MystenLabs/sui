@@ -11,8 +11,6 @@ use sui_network::transport::TcpDataStream;
 use sui_types::batch::UpdateItem;
 use sui_types::{error::SuiError, messages::*, serialize::*};
 
-static MAX_ERRORS: i32 = 10;
-
 #[async_trait]
 pub trait AuthorityAPI {
     /// Initiate a new transaction to a Sui or Primary account.
@@ -132,7 +130,6 @@ impl AuthorityAPI for AuthorityClient {
             .connect_for_stream(serialize_batch_request(&request))
             .await?;
 
-        let mut error_count = 0;
         let TcpDataStream { framed_read, .. } = tcp_stream;
 
         let stream = framed_read
@@ -165,9 +162,8 @@ impl AuthorityAPI for AuthorityClient {
                         _tx_info,
                     )))) => *seq < request.end,
                     Err(_e) => {
-                        // TODO: record e
-                        error_count += 1;
-                        error_count < MAX_ERRORS
+                        // stop processing on error
+                        false
                     }
                 };
                 futures::future::ready(flag)
