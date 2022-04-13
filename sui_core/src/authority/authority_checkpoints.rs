@@ -5,7 +5,7 @@ use std::{collections::HashSet, path::Path};
 
 use rocksdb::Options;
 use sui_types::{
-    base_types::TransactionDigest,
+    base_types::{AuthorityName, TransactionDigest},
     batch::TxSequenceNumber,
     error::SuiError,
     waypoint::{Waypoint, WaypointDiff},
@@ -16,12 +16,16 @@ use typed_store::{
     Map,
 };
 
+#[cfg(test)]
+#[path = "../unit_tests/checkpoint_tests.rs"]
+mod checkpoint_tests;
+
 pub type CheckpointSequenceNumber = u64;
 
 #[derive(Clone)]
-pub struct CheckpointProposal<K> {
+pub struct CheckpointProposal {
     /// Name of the authority
-    name: K,
+    name: AuthorityName,
 
     /// The sequence number of this proposal
     sequence_number: CheckpointSequenceNumber,
@@ -34,17 +38,14 @@ pub struct CheckpointProposal<K> {
     transactions: Vec<TransactionDigest>,
 }
 
-impl<K> CheckpointProposal<K>
-where
-    K: Clone,
-{
+impl CheckpointProposal {
     /// Create a proposal for a checkpoint at a partiular height
     /// This contains a sequence number, waypoint and a list of
     /// proposed trasnactions.
     /// TOOD: Add an identifier for the proposer, probably
     ///       an AuthorityName.
     pub fn new(
-        name: K,
+        name: AuthorityName,
         sequence_number: CheckpointSequenceNumber,
         transactions: Vec<TransactionDigest>,
     ) -> Self {
@@ -67,8 +68,7 @@ where
     }
 
     /// Construct a Diff structure between this proposal and another
-    /// proposal. A diff structure has to contain keys (TODO: down the
-    /// line include AuthorityName in the proposals). The diff represents
+    /// proposal. A diff structure has to contain keys. The diff represents
     /// the elements that each proposal need to be augmented by to
     /// contain the same elements.
     ///
@@ -77,8 +77,8 @@ where
     /// of both proposals.
     pub fn diff_with(
         &self,
-        other_proposal: &CheckpointProposal<K>,
-    ) -> WaypointDiff<K, TransactionDigest> {
+        other_proposal: &CheckpointProposal,
+    ) -> WaypointDiff<AuthorityName, TransactionDigest> {
         let all_elements = self
             .transactions
             .iter()
@@ -91,17 +91,17 @@ where
         let iter_missing_ot = all_elements.difference(&other_transactions).map(|x| **x);
 
         WaypointDiff::new(
-            self.name.clone(),
+            self.name,
             self.waypoint.clone(),
             iter_missing_me,
-            other_proposal.name.clone(),
+            other_proposal.name,
             other_proposal.waypoint.clone(),
             iter_missing_ot,
         )
     }
 }
 
-pub struct CheckpointStore<K> {
+pub struct CheckpointStore {
     /// The list of all transactions that are checkpointed mapping to the checkpoint
     /// sequence number they were assigned to.
     pub transactions_to_checkpoint:
@@ -128,14 +128,11 @@ pub struct CheckpointStore<K> {
     /// this sequence number. At this point the unprocessed_transactions sequence
     /// should be empty. It is none if there is no active proposal. We also include here
     /// the proposal, although we could re-create it from the database.
-    proposal_checkpoint: Option<(TxSequenceNumber, CheckpointProposal<K>)>,
+    proposal_checkpoint: Option<(TxSequenceNumber, CheckpointProposal)>,
 }
 
-impl<K> CheckpointStore<K>
-where
-    K: Clone,
-{
-    pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> CheckpointStore<K> {
+impl CheckpointStore {
+    pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> CheckpointStore {
         let mut options = db_options.unwrap_or_default();
 
         /* The table cache is locked for updates and this determines the number
@@ -188,7 +185,7 @@ where
     }
 
     /// Set the next checkpoint proposal.
-    pub fn set_proposal(&mut self, name: K) -> Result<CheckpointProposal<K>, SuiError> {
+    pub fn set_proposal(&mut self, name: AuthorityName) -> Result<CheckpointProposal, SuiError> {
         // Check that:
         // - there is no current proposal.
         // - there are no unprocessed transactions.
@@ -202,7 +199,7 @@ where
 
         if self.unprocessed_transactions.iter().count() > 0 {
             return Err(SuiError::GenericAuthorityError {
-                error: "Cannot propose with unprocessed trasnactions from the previous checkpoint."
+                error: "Cannot propose with unprocessed transactions from the previous checkpoint."
                     .to_string(),
             });
         }
@@ -213,7 +210,7 @@ where
             });
         }
 
-        // Include the sequence number of all extra trasnactions not already in a
+        // Include the sequence number of all extra transactions not already in a
         // checkpoint. And make a list of the transactions.
         let sequence_number = self.next_checkpoint_sequence();
         let next_local_tx_sequence = self.extra_transactions.values().max().unwrap() + 1;
@@ -227,7 +224,7 @@ where
     }
 
     /// Get the current proposal or error if there is no current proposal
-    pub fn get_proposal(&self) -> Result<CheckpointProposal<K>, SuiError> {
+    pub fn get_proposal(&self) -> Result<CheckpointProposal, SuiError> {
         self.proposal_checkpoint
             .as_ref()
             .ok_or_else(|| SuiError::GenericAuthorityError {
@@ -465,178 +462,5 @@ where
         batch.write()?;
 
         Ok(self.lowest_unprocessed_sequence())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::authority::authority_tests::max_files_authority_tests;
-    use std::{collections::HashSet, env, fs, path::PathBuf};
-    use sui_types::{base_types::ObjectID, waypoint::GlobalCheckpoint};
-
-    fn random_ckpoint_store<K>() -> (PathBuf, CheckpointStore<K>)
-    where
-        K: Clone,
-    {
-        let dir = env::temp_dir();
-        let path = dir.join(format!("SC_{:?}", ObjectID::random()));
-        fs::create_dir(&path).unwrap();
-
-        // Create an authority
-        let mut opts = rocksdb::Options::default();
-        opts.set_max_open_files(max_files_authority_tests());
-
-        let cps = CheckpointStore::open(path.clone(), Some(opts));
-        (path, cps)
-    }
-
-    #[test]
-    fn make_checkpoint_db() {
-        let (_, mut cps) = random_ckpoint_store::<u64>();
-
-        let t1 = TransactionDigest::random();
-        let t2 = TransactionDigest::random();
-        let t3 = TransactionDigest::random();
-        let t4 = TransactionDigest::random();
-        let t5 = TransactionDigest::random();
-        let t6 = TransactionDigest::random();
-
-        cps.update_processed_transactions(&[(1, t1), (2, t2), (3, t3)])
-            .unwrap();
-        assert!(cps.checkpoint_contents.iter().count() == 0);
-        assert!(cps.extra_transactions.iter().count() == 3);
-        assert!(cps.unprocessed_transactions.iter().count() == 0);
-
-        assert!(cps.next_checkpoint_sequence() == 0);
-
-        cps.update_new_checkpoint(0, &[t1, t2, t4, t5]).unwrap();
-        assert!(cps.checkpoint_contents.iter().count() == 4);
-        assert_eq!(cps.extra_transactions.iter().count(), 1);
-        assert!(cps.unprocessed_transactions.iter().count() == 2);
-
-        assert_eq!(cps.lowest_unprocessed_sequence(), 0);
-
-        let (_cp_seq, tx_seq) = cps.transactions_to_checkpoint.get(&t4).unwrap().unwrap();
-        assert!(tx_seq >= u64::MAX / 2);
-
-        assert!(cps.next_checkpoint_sequence() == 1);
-
-        cps.update_processed_transactions(&[(4, t4), (5, t5), (6, t6)])
-            .unwrap();
-        assert!(cps.checkpoint_contents.iter().count() == 4);
-        assert_eq!(cps.extra_transactions.iter().count(), 2); // t3 & t6
-        assert!(cps.unprocessed_transactions.iter().count() == 0);
-
-        assert_eq!(cps.lowest_unprocessed_sequence(), 1);
-
-        let (_cp_seq, tx_seq) = cps.transactions_to_checkpoint.get(&t4).unwrap().unwrap();
-        assert_eq!(tx_seq, 4);
-    }
-
-    #[test]
-    fn make_proposals() {
-        let (_, mut cps1) = random_ckpoint_store::<u64>();
-        let (_, mut cps2) = random_ckpoint_store::<u64>();
-        let (_, mut cps3) = random_ckpoint_store::<u64>();
-        let (_, mut cps4) = random_ckpoint_store::<u64>();
-
-        let t1 = TransactionDigest::random();
-        let t2 = TransactionDigest::random();
-        let t3 = TransactionDigest::random();
-        let t4 = TransactionDigest::random();
-        let t5 = TransactionDigest::random();
-        // let t6 = TransactionDigest::random();
-
-        cps1.update_processed_transactions(&[(1, t2), (2, t3)])
-            .unwrap();
-
-        cps2.update_processed_transactions(&[(1, t1), (2, t2)])
-            .unwrap();
-
-        cps3.update_processed_transactions(&[(1, t3), (2, t4)])
-            .unwrap();
-
-        cps4.update_processed_transactions(&[(1, t4), (2, t5)])
-            .unwrap();
-
-        let p1 = cps1.set_proposal(1).unwrap();
-        let p2 = cps2.set_proposal(2).unwrap();
-        let p3 = cps3.set_proposal(3).unwrap();
-
-        let ckp_items: Vec<_> = p1
-            .transactions
-            .into_iter()
-            .chain(p2.transactions.into_iter())
-            .chain(p3.transactions.into_iter())
-            .collect();
-
-        cps1.update_new_checkpoint(0, &ckp_items[..]).unwrap();
-        cps2.update_new_checkpoint(0, &ckp_items[..]).unwrap();
-        cps3.update_new_checkpoint(0, &ckp_items[..]).unwrap();
-        cps4.update_new_checkpoint(0, &ckp_items[..]).unwrap();
-
-        assert!(
-            cps4.unprocessed_transactions.keys().collect::<HashSet<_>>()
-                == [t1, t2, t3].into_iter().collect::<HashSet<_>>()
-        );
-
-        assert!(
-            cps4.extra_transactions.keys().collect::<HashSet<_>>()
-                == [t5].into_iter().collect::<HashSet<_>>()
-        );
-    }
-
-    #[test]
-    fn make_diffs() {
-        let (_, mut cps1) = random_ckpoint_store();
-        let (_, mut cps2) = random_ckpoint_store();
-        let (_, mut cps3) = random_ckpoint_store();
-        let (_, mut cps4) = random_ckpoint_store();
-
-        let t1 = TransactionDigest::random();
-        let t2 = TransactionDigest::random();
-        let t3 = TransactionDigest::random();
-        let t4 = TransactionDigest::random();
-        let t5 = TransactionDigest::random();
-        // let t6 = TransactionDigest::random();
-
-        cps1.update_processed_transactions(&[(1, t2), (2, t3)])
-            .unwrap();
-
-        cps2.update_processed_transactions(&[(1, t1), (2, t2)])
-            .unwrap();
-
-        cps3.update_processed_transactions(&[(1, t3), (2, t4)])
-            .unwrap();
-
-        cps4.update_processed_transactions(&[(1, t4), (2, t5)])
-            .unwrap();
-
-        let p1 = cps1.set_proposal(1).unwrap();
-        let p2 = cps2.set_proposal(2).unwrap();
-        let p3 = cps3.set_proposal(3).unwrap();
-        let p4 = cps4.set_proposal(4).unwrap();
-
-        let diff12 = p1.diff_with(&p2);
-        let diff23 = p2.diff_with(&p3);
-
-        let mut global = GlobalCheckpoint::<i32, TransactionDigest>::new(0);
-        global.insert(diff12.clone()).unwrap();
-        global.insert(diff23).unwrap();
-
-        // P4 proposal not selected
-        let diff41 = p4.diff_with(&p1);
-        let all_items4 = global
-            .checkpoint_items(diff41, p4.transactions.iter().cloned().collect())
-            .unwrap();
-
-        // P1 proposal selected
-        let all_items1 = global
-            .checkpoint_items(diff12, p1.transactions.iter().cloned().collect())
-            .unwrap();
-
-        // All get the same set for the proposal
-        assert_eq!(all_items1, all_items4);
     }
 }
