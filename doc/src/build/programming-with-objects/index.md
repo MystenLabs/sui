@@ -14,7 +14,7 @@ Prerequisite Readings:
 Index:
 - [Chapter 1: Object Basics](../../build/programming-with-objects/ch1-object-basics.md)
   - Defining Move object types, creating objects, transferring objects.
-- Chapter 2: Using Objects
+- [Chapter 2: Using Objects](../../build/programming-with-objects/ch2-using-objects.md)
   - Passing Move objects as arguments, mutating objects, deleting objects.
 - Chapter 3: Immutable Objects
   - Freezing an object, using immutable objects.
