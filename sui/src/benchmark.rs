@@ -3,11 +3,14 @@
 
 #![deny(warnings)]
 
-use futures::join;
+use futures::{join, StreamExt};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::thread;
 use std::{thread::sleep, time::Duration};
+use sui_core::authority_client::AuthorityClient;
 use sui_network::network::{NetworkClient, NetworkServer};
+use sui_types::batch::UpdateItem;
+use sui_types::messages::{BatchInfoRequest, BatchInfoResponseItem};
 use sui_types::serialize::*;
 use tokio::runtime::Builder;
 use tracing::*;
@@ -138,6 +141,20 @@ fn run_throughout_microbench(
     // Wait for server start
     sleep(Duration::from_secs(3));
 
+    // Follower to observe batches
+    let follower_network_client = network_client.clone();
+    thread::spawn(move || {
+        let runtime = Builder::new_multi_thread()
+            .enable_all()
+            .thread_stack_size(32 * 1024 * 1024)
+            .build()
+            .unwrap();
+
+        runtime.block_on(async move { run_follower(follower_network_client).await });
+    });
+
+    sleep(Duration::from_secs(3));
+
     // Run load
     let (elapsed, resp) =
         runtime.block_on(async move { send_tx_chunks(txes, network_client, connections).await });
@@ -146,7 +163,6 @@ fn run_throughout_microbench(
         .par_iter()
         .map(|q| check_transaction_response(deserialize_message(&(q.as_ref().unwrap())[..])))
         .collect();
-
     MicroBenchmarkResult::Throughput {
         chunk_throughput: 1_000_000.0 * num_transactions as f64 / elapsed as f64,
     }
@@ -227,4 +243,47 @@ fn run_latency_microbench(
         tick_period_us: period_us as usize,
         chunk_latencies: tracer_latencies,
     }
+}
+
+async fn run_follower(network_client: NetworkClient) {
+    // We spawn a second client that listens to the batch interface
+    let _batch_client_handle = tokio::task::spawn(async move {
+        let authority_client = AuthorityClient::new(network_client);
+
+        let mut start = 0;
+
+        loop {
+            let receiver = authority_client
+                .handle_batch_streaming_as_stream(BatchInfoRequest {
+                    start,
+                    end: start + 10_000,
+                })
+                .await;
+
+            if let Err(e) = &receiver {
+                error!("Listener error: {:?}", e);
+                break;
+            }
+            let mut receiver = receiver.unwrap();
+
+            info!("Start batch listener at sequence: {}.", start);
+            while let Some(item) = receiver.next().await {
+                match item {
+                    Ok(BatchInfoResponseItem(UpdateItem::Transaction((_tx_seq, _tx_digest)))) => {
+                        start = _tx_seq + 1;
+                    }
+                    Ok(BatchInfoResponseItem(UpdateItem::Batch(_signed_batch))) => {
+                        info!(
+                            "Client received batch up to sequence {}",
+                            _signed_batch.batch.next_sequence_number
+                        );
+                    }
+                    Err(err) => {
+                        error!("{:?}", err);
+                        break;
+                    }
+                }
+            }
+        }
+    });
 }
