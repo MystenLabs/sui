@@ -178,7 +178,7 @@ impl<C> SafeClient<C> {
         // check the signature of the batch
         signed_batch
             .signature
-            .check(signed_batch, signed_batch.authority)?;
+            .check(&signed_batch.batch, signed_batch.authority)?;
 
         // ensure transactions enclosed match requested range
         fp_ensure!(
@@ -197,7 +197,7 @@ impl<C> SafeClient<C> {
             Some(provided_digest),
             &signed_batch.batch.transaction_batch.0,
         );
-        let computed_digest = reconstructed_batch.digest();
+        let computed_digest = reconstructed_batch.transactions_digest;
 
         fp_ensure!(
             provided_digest == computed_digest,
