@@ -9,6 +9,7 @@ module Sui::TestScenarioTests {
 
     const ID_BYTES_MISMATCH: u64 = 0;
     const VALUE_MISMATCH: u64 = 1;
+    const OBJECT_ID_NOT_FOUND: u64 = 2;
 
     struct Object has key, store {
         id: ID::VersionedID,
@@ -201,6 +202,50 @@ module Sui::TestScenarioTests {
         {
             assert!(!TestScenario::can_remove_object<Object>(&scenario), 2);
         }
+    }
+
+    #[test]
+    fun test_remove_object_by_id() {
+        let sender = @0x0;
+        let scenario = TestScenario::begin(&sender);
+        let versioned_id1 = TestScenario::new_id(&mut scenario);
+        let versioned_id2 = TestScenario::new_id(&mut scenario);
+        let versioned_id3 = TestScenario::new_id(&mut scenario);
+        let id1 = *ID::inner(&versioned_id1);
+        let id2 = *ID::inner(&versioned_id2);
+        let id3 = *ID::inner(&versioned_id3);
+        {
+            let obj1 = Object { id: versioned_id1, value: 10 };
+            let obj2 = Object { id: versioned_id2, value: 20 };
+            let obj3 = Object { id: versioned_id3, value: 30 };
+            Transfer::transfer(obj1, copy sender);
+            Transfer::transfer(obj2, copy sender);
+            Transfer::transfer(obj3, copy sender);
+        };
+        TestScenario::next_tx(&mut scenario, &sender);
+        {
+            assert!(
+                TestScenario::can_remove_object_by_id<Object>(&mut scenario, id1),
+                OBJECT_ID_NOT_FOUND
+            );
+            assert!(
+                TestScenario::can_remove_object_by_id<Object>(&mut scenario, id2),
+                OBJECT_ID_NOT_FOUND
+            );
+            assert!(
+                TestScenario::can_remove_object_by_id<Object>(&mut scenario, id3),
+                OBJECT_ID_NOT_FOUND
+            );
+            let obj1 = TestScenario::remove_object_by_id<Object>(&mut scenario, id1);
+            let obj3 = TestScenario::remove_object_by_id<Object>(&mut scenario, id3);
+            let obj2 = TestScenario::remove_object_by_id<Object>(&mut scenario, id2);
+            assert!(obj1.value == 10, VALUE_MISMATCH);
+            assert!(obj2.value == 20, VALUE_MISMATCH);
+            assert!(obj3.value == 30, VALUE_MISMATCH);
+            TestScenario::return_object(&mut scenario, obj1);
+            TestScenario::return_object(&mut scenario, obj2);
+            TestScenario::return_object(&mut scenario, obj3);
+        };
     }
 
     #[test]

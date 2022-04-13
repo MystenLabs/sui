@@ -5,6 +5,7 @@
 module Sui::TestScenario {
     use Sui::ID::{Self, ID, VersionedID};
     use Sui::TxContext::{Self, TxContext};
+    use Std::Option::{Self, Option};
     use Std::Vector;
 
     /// Attempted an operation that required a concluded transaction, but there are none
@@ -31,6 +32,12 @@ module Sui::TestScenario {
     /// The inventory previously contained an object of this type, but it was removed during the current
     /// transaction.
     const EALREADY_REMOVED_OBJECT: u64 = 5;
+
+    /// Object of given ID cannot be found in the inventory.
+    const EOBJECT_ID_NOT_FOUND: u64 = 6;
+
+    /// Found two objects with the same ID in the inventory.
+    const EDUPLICATE_OBJCET_ID_FOUND: u64 = 7;
 
     /// Utility for mocking a multi-transaction Sui execution in a single Move procedure.
     /// A `Scenario` maintains a view of the global object pool built up by the execution.
@@ -142,9 +149,32 @@ module Sui::TestScenario {
     /// Same as `remove_object`, but returns the object of type `T` with object ID `id`.
     /// Should only be used in cases where current tx sender has more than one object of
     /// type `T` in their inventory.
-    public fun remove_object_by_id<T: key>(_scenario: &mut Scenario, _id: ID): T {
-        // TODO: implement me
-        abort(100)
+    public fun remove_object_by_id<T: key>(scenario: &mut Scenario, id: ID): T {
+        let object_opt: Option<T> = find_object_by_id_in_inventory(scenario, &id);
+
+        assert!(Option::is_some(&object_opt), EOBJECT_ID_NOT_FOUND);
+        let object = Option::extract(&mut object_opt);
+        Option::destroy_none(object_opt);
+
+        assert!(!Vector::contains(&scenario.removed, &id), EALREADY_REMOVED_OBJECT);
+        Vector::push_back(&mut scenario.removed, id);
+
+        object
+    }
+
+    /// This function tells you whether calling `remove_object_by_id` would succeed.
+    /// It provides a way to check without triggering assertions.
+    public fun can_remove_object_by_id<T: key>(scenario: &Scenario, id: ID): bool {
+        let object_opt: Option<T> = find_object_by_id_in_inventory(scenario, &id);
+        if (Option::is_none(&object_opt)) {
+            Option::destroy_none(object_opt);
+            return false
+        };
+        let object = Option::extract(&mut object_opt);
+        Option::destroy_none(object_opt);
+        delete_object_for_testing(object);
+
+        return !Vector::contains(&scenario.removed, &id)
     }
 
     /// Same as `remove_nested_object`, but returns the child object of type `T` with object ID `id`.
@@ -253,6 +283,29 @@ module Sui::TestScenario {
         }
     }
 
+    fun find_object_by_id_in_inventory<T: key>(scenario: &Scenario, id: &ID): Option<T> {
+        let sender = sender(scenario);
+        let objects: vector<T> = get_inventory<T>(
+            sender,
+            last_tx_start_index(scenario)
+        );
+        let object_opt = Option::none();
+        while (!Vector::is_empty(&objects)) {
+            let element = Vector::pop_back(&mut objects);
+            if (ID::id(&element) == id) {
+                // Within the same test scenario, there is no way to
+                // create two objects with the same ID. So this should
+                // be unique.
+                Option::fill(&mut object_opt, element);
+            } else {
+                delete_object_for_testing(element);
+            }
+        };
+        Vector::destroy_empty(objects);
+
+        object_opt
+    }
+
     // TODO: Add API's for inspecting user events, printing the user's inventory, ...
 
     // ---Natives---
@@ -261,7 +314,9 @@ module Sui::TestScenario {
     /// Events at or beyond `tx_end_index` in the log should not be processed to build this inventory
     native fun get_inventory<T: key>(signer_address: address, tx_end_index: u64): vector<T>;
 
-    /// Test-only function for deleting an arbitrary object. Useful for eliminating objects without the `drop` ability.
+    /// Test-only function for discarding an arbitrary object.
+    /// Useful for eliminating objects without the `drop` ability.
+    /// TODO: Rename this function to avoid confusion.
     native fun delete_object_for_testing<T>(t: T);
 
     /// Return the total number of events emitted by all txes in the current VM execution, including both user-defined events and system events
