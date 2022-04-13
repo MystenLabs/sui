@@ -4,6 +4,7 @@
 use std::{collections::HashSet, path::Path};
 
 use rocksdb::Options;
+use serde::{Serialize, Deserialize};
 use sui_types::{
     base_types::{AuthorityName, TransactionDigest},
     batch::TxSequenceNumber,
@@ -22,7 +23,7 @@ mod checkpoint_tests;
 
 pub type CheckpointSequenceNumber = u64;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct CheckpointProposal {
     /// Name of the authority
     name: AuthorityName,
