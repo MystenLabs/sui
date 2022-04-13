@@ -565,7 +565,7 @@ impl AuthorityState {
                 }
 
                 let current_transaction = dq_transactions.pop_front().unwrap();
-                items.push_back(UpdateItem::Transaction(current_transaction)); //todo: @Laura update Transaction contents
+                items.push_back(UpdateItem::Transaction(current_transaction));
             }
 
             // Now send the batch
