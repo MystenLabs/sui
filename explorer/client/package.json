@@ -16,7 +16,7 @@
         "onchange": "^7.1.0",
         "postcss": "^8.4.6",
         "prettier": "2.5.1",
-        "react-scripts": "5.0.0",
+        "react-scripts": "5.0.1",
         "stylelint": "^14.5.0",
         "stylelint-config-prettier": "^9.0.3",
         "stylelint-config-standard": "^25.0.0",
@@ -48,6 +48,10 @@
         "stylelint:fix": "npm run stylelint:check -- --fix",
         "lint": "npm run eslint:check && npm run prettier:check && npm run stylelint:check",
         "lint:fix": "npm run eslint:fix && npm run prettier:fix && npm run stylelint:fix"
+    },
+    "resolutions": {
+        "async": "3.2.2",
+        "nth-check": "2.0.1"
     },
     "browserslist": {
         "production": [
