@@ -89,7 +89,7 @@ TODO: Doesn't this assume they have downloaded the entire `sui` repo too? `insta
 Regardless, I think we should make install part of Prerequisites on `programming-with-objects/index.md` and then merely remind them as we do here ("make sure you have [installed...").
 
 ### Writing unit tests
-After defining the `create` function, we want to test this function in Move using unit tests, without having to go all the way through sending Sui transactions. Since [Sui manages global storage separately outside of Move](../../learn/sui-move-diffs#object-centric-global-storage), there is no direct way to retrieve objects from global storage within Move. This poses a question: after calling the `create` function, how do we check that the object is properly transferred?
+After defining the `create` function, we want to test this function in Move using unit tests, without having to go all the way through sending Sui transactions. Since [Sui manages global storage separately outside of Move](../../learn/sui-move-diffs.md#object-centric-global-storage), there is no direct way to retrieve objects from global storage within Move. This poses a question: after calling the `create` function, how do we check that the object is properly transferred?
 
 To assist easy testing in Move, we provide a comprehensive testing framework in the [TestScenario](../../../../sui_programmability/framework/sources/TestScenario.move) module that allows us to interact with objects put into the global storage. This allows us to test the behavior of any function directly in Move unit tests. A lot of this is also covered in our [Move testing doc](../move.md#sui-specific-testing).
 
