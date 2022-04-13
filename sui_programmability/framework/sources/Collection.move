@@ -75,17 +75,38 @@ module Sui::Collection {
         Vector::length(&c.objects)
     }
 
-    /// Add a new object to the collection.
+    /// Add an object to the collection.
+    /// If the object was owned by another object, an `old_child_ref` would be around
+    /// and need to be consumed as well.
     /// Abort if the object is already in the collection.
-    public fun add<T: key>(c: &mut Collection<T>, object: T) {
+    fun add_impl<T: key>(c: &mut Collection<T>, object: T, old_child_ref: Option<ChildRef<T>>) {
         assert!(
             size(c) + 1 <= c.max_capacity,
             Errors::limit_exceeded(EMAX_CAPACITY_EXCEEDED)
         );
         let id = ID::id(&object);
         assert!(!contains(c, id), EOBJECT_DOUBLE_ADD);
-        let child_ref = Transfer::transfer_to_object(object, c);
+        let child_ref = if (Option::is_none(&old_child_ref)) {
+            Transfer::transfer_to_object(object, c)
+        } else {
+            let old_child_ref = Option::extract(&mut old_child_ref);
+            Transfer::transfer_child_to_object(object, old_child_ref, c)
+        };
         Vector::push_back(&mut c.objects, child_ref);
+        Option::destroy_none(old_child_ref);
+    }
+
+    /// Add an object to the collection.
+    /// Abort if the object is already in the collection.
+    public fun add<T: key>(c: &mut Collection<T>, object: T) {
+        add_impl(c, object, Option::none())
+    }
+
+    /// Transfer an object that was owned by another object to the collection.
+    /// Since the object is a child object of another object, an `old_child_ref`
+    /// is around and needs to be consumed.
+    public fun add_child_object<T: key>(c: &mut Collection<T>, object: T, old_child_ref: ChildRef<T>) {
+        add_impl(c, object, Option::some(old_child_ref))
     }
 
     /// Check whether the collection contains a specific object,

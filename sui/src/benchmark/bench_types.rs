@@ -1,80 +1,80 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use clap::*;
 use std::default::Default;
-use structopt::StructOpt;
 use strum_macros::EnumString;
 use sui_network::transport;
 
-#[derive(Debug, Clone, StructOpt)]
-#[structopt(
+#[derive(Debug, Clone, Parser)]
+#[clap(
     name = "Sui Benchmark",
     about = "Local test and benchmark of the Sui authorities"
 )]
 pub struct Benchmark {
     /// Size of the Sui committee. Minimum size is 4 to tolerate one fault
-    #[structopt(long, default_value = "10", global = true)]
+    #[clap(long, default_value = "10", global = true)]
     pub committee_size: usize,
     /// Timeout for sending queries (us)
-    #[structopt(long, default_value = "40000000", global = true)]
+    #[clap(long, default_value = "40000000", global = true)]
     pub send_timeout_us: u64,
     /// Timeout for receiving responses (us)
-    #[structopt(long, default_value = "40000000", global = true)]
+    #[clap(long, default_value = "40000000", global = true)]
     pub recv_timeout_us: u64,
     /// Maximum size of datagrams received and sent (bytes)
-    #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE_STR, global = true)]
+    #[clap(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE_STR, global = true)]
     pub buffer_size: usize,
     /// Number of connections to the server
-    #[structopt(long, default_value = "0", global = true)]
+    #[clap(long, default_value = "0", global = true)]
     pub tcp_connections: usize,
     /// Number of database cpus
-    #[structopt(long, default_value = "1", global = true)]
+    #[clap(long, default_value = "1", global = true)]
     pub db_cpus: usize,
     /// Use Move orders
-    #[structopt(long, global = true)]
+    #[clap(long, global = true)]
     pub use_move: bool,
-    #[structopt(long, default_value = "2000", global = true)]
+    #[clap(long, default_value = "2000", global = true)]
     pub batch_size: usize,
 
     /// Type of benchmark to run
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     pub bench_type: BenchmarkType,
 }
 
-#[derive(StructOpt, Debug, Clone, PartialEq, EnumString)]
-#[structopt(rename_all = "kebab-case")]
+#[derive(Parser, Debug, Clone, PartialEq, EnumString)]
+#[clap(rename_all = "kebab-case")]
 pub enum BenchmarkType {
-    #[structopt(name = "microbench")]
+    #[clap(name = "microbench")]
     MicroBenchmark {
         /// Hostname
-        #[structopt(long, default_value = "127.0.0.1")]
+        #[clap(long, default_value = "127.0.0.1")]
         host: String,
         /// Base port number
-        #[structopt(long, default_value = "9555")]
+        #[clap(long, default_value = "9555")]
         port: u16,
-        #[structopt(subcommand)]
+        #[clap(subcommand)]
         type_: MicroBenchmarkType,
     },
     // ... more benchmark types here
 }
 
-#[derive(Debug, Clone, StructOpt, Eq, PartialEq, EnumString)]
-#[structopt(rename_all = "kebab-case")]
+#[derive(Debug, Clone, Parser, Eq, PartialEq, EnumString)]
+#[clap(rename_all = "kebab-case")]
 pub enum MicroBenchmarkType {
     Throughput {
         /// Number of transactions to be sent in the benchmark
-        #[structopt(long, default_value = "100000")]
+        #[clap(long, default_value = "100000")]
         num_transactions: usize,
     },
     Latency {
         /// Number of chunks to send
-        #[structopt(long, default_value = "100")]
+        #[clap(long, default_value = "100")]
         num_chunks: usize,
         /// Size of chunks per tick
-        #[structopt(long, default_value = "1000")]
+        #[clap(long, default_value = "1000")]
         chunk_size: usize,
         /// The time between each tick. Default 10ms
-        #[structopt(long, default_value = "10000")]
+        #[clap(long, default_value = "10000")]
         period_us: u64,
     },
 }
