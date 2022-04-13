@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use core::fmt;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Display, Formatter, Write};
 use std::path::Path;
 use std::sync::{Arc, RwLock};
@@ -25,14 +25,16 @@ use sui_core::gateway_state::GatewayClient;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects};
+use sui_types::messages::{
+    CallArg, CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects,
+};
 use sui_types::object::ObjectRead::Exists;
 use sui_types::object::{Object, ObjectRead};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 use crate::config::{Config, PersistedConfig, WalletConfig};
 use crate::keystore::Keystore;
-use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
+use crate::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 
 const EXAMPLE_NFT_NAME: &str = "Example NFT";
 const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the wallet Command Line Tool";

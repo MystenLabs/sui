@@ -16,7 +16,7 @@ use sui_types::{
     crypto::{get_key_pair, AuthoritySignature, Signature},
     error::SuiError,
     messages::{
-        CallResult, ExecutionStatus, ObjectInfoRequestKind, SingleTransactionKind, TransactionKind,
+        CallArg, ExecutionStatus, ObjectInfoRequestKind, SingleTransactionKind, TransactionKind,
     },
     object::{Data, Owner},
     serialize,
@@ -59,7 +59,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<SuiError>(&samples)?;
     tracer.trace_type::<Owner>(&samples)?;
     tracer.trace_type::<ExecutionStatus>(&samples)?;
-    tracer.trace_type::<CallResult>(&samples)?;
+    tracer.trace_type::<CallArg>(&samples)?;
     tracer.trace_type::<Data>(&samples)?;
     tracer.trace_type::<TypeTag>(&samples)?;
     tracer.trace_type::<TypedStoreError>(&samples)?;

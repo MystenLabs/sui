@@ -13,7 +13,6 @@ use crate::readable_serde::encoding::Base64;
 use crate::readable_serde::Readable;
 use base64ct::Encoding;
 use itertools::Either;
-use move_binary_format::{access::ModuleAccess, CompiledModule};
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
     value::MoveStructLayout,
@@ -27,12 +26,23 @@ use serde_with::Bytes;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::{
-    collections::{BTreeSet, HashSet},
+    collections::HashSet,
     hash::{Hash, Hasher},
 };
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum CallArg {
+    // contains no structs or objects
+    Pure(Vec<u8>),
+    // TODO support more than one object (object vector of some sort)
+    // A Move object, either immutable, or owned mutable.
+    ImmOrOwnedObject(ObjectRef),
+    // A Move object that's shared and mutable.
+    SharedObject(ObjectID),
+}
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Transfer {
@@ -51,9 +61,7 @@ pub struct MoveCall {
     pub module: Identifier,
     pub function: Identifier,
     pub type_arguments: Vec<TypeTag>,
-    pub object_arguments: Vec<ObjectRef>,
-    pub shared_object_arguments: Vec<ObjectID>,
-    pub pure_arguments: Vec<Vec<u8>>,
+    pub arguments: Vec<CallArg>,
 }
 
 #[serde_as]
@@ -76,26 +84,18 @@ pub enum SingleTransactionKind {
 
 impl SingleTransactionKind {
     pub fn contains_shared_object(&self) -> bool {
-        match &self {
-            Self::Transfer(..) => false,
-            Self::Call(c) => !c.shared_object_arguments.is_empty(),
-            Self::Publish(..) => false,
-        }
+        self.shared_input_objects().peekable().peek().is_some()
     }
 
-    pub fn shared_input_objects(&self) -> &[ObjectID] {
+    pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
         match &self {
-            Self::Call(c) => &c.shared_object_arguments,
-            _ => &[],
-        }
-    }
-
-    pub fn input_object_count(&self) -> usize {
-        match &self {
-            Self::Transfer(_) => 1,
-            Self::Call(c) => 1 + c.object_arguments.len() + c.shared_object_arguments.len(),
-            // We always special handle Publish, hence the result doesn't matter.
-            Self::Publish(_) => 0,
+            Self::Call(MoveCall { arguments, .. }) => {
+                Either::Left(arguments.iter().filter_map(|arg| match arg {
+                    CallArg::Pure(_) | CallArg::ImmOrOwnedObject(_) => None,
+                    CallArg::SharedObject(id) => Some(id),
+                }))
+            }
+            _ => Either::Right(std::iter::empty()),
         }
     }
 
@@ -105,48 +105,21 @@ impl SingleTransactionKind {
     /// TODO: use an iterator over references here instead of a Vec to avoid allocations.
     pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
         let input_objects = match &self {
-            Self::Transfer(t) => {
-                vec![InputObjectKind::ImmOrOwnedMoveObject(t.object_ref)]
+            Self::Transfer(Transfer { object_ref, .. }) => {
+                vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
             }
-            Self::Call(c) => {
-                let mut call_inputs = Vec::with_capacity(
-                    1 + c.object_arguments.len() + c.shared_object_arguments.len(),
-                );
-                call_inputs.extend(
-                    c.object_arguments
-                        .clone()
-                        .into_iter()
-                        .map(InputObjectKind::ImmOrOwnedMoveObject)
-                        .collect::<Vec<_>>(),
-                );
-                call_inputs.extend(
-                    c.shared_object_arguments
-                        .iter()
-                        .cloned()
-                        .map(InputObjectKind::SharedMoveObject)
-                        .collect::<Vec<_>>(),
-                );
-                call_inputs.push(InputObjectKind::MovePackage(c.package.0));
-                call_inputs
-            }
-            Self::Publish(m) => {
-                // For module publishing, all the dependent packages are implicit input objects
-                // because they must all be on-chain in order for the package to publish.
-                // All authorities must have the same view of those dependencies in order
-                // to achieve consistent publish results.
-                let compiled_modules = m
-                    .modules
-                    .iter()
-                    .filter_map(|bytes| match CompiledModule::deserialize(bytes) {
-                        Ok(m) => Some(m),
-                        // We will ignore this error here and simply let latter execution
-                        // to discover this error again and fail the transaction.
-                        // It's preferable to let transaction fail and charge gas when
-                        // malformed package is provided.
-                        Err(_) => None,
-                    })
-                    .collect::<Vec<_>>();
-                Transaction::input_objects_in_compiled_modules(&compiled_modules)
+            Self::Call(MoveCall { arguments, .. }) => arguments
+                .iter()
+                .filter_map(|arg| match arg {
+                    CallArg::Pure(_) => None,
+                    CallArg::ImmOrOwnedObject(object_ref) => {
+                        Some(InputObjectKind::ImmOrOwnedMoveObject(*object_ref))
+                    }
+                    CallArg::SharedObject(id) => Some(InputObjectKind::SharedMoveObject(*id)),
+                })
+                .collect(),
+            Self::Publish(_) => {
+                vec![]
             }
         };
         // Ensure that there are no duplicate inputs. This cannot be removed because:
@@ -157,7 +130,10 @@ impl SingleTransactionKind {
         // the same shared object doesn't show up more than once in the same single
         // transaction.
         let mut used = HashSet::new();
-        if !input_objects.iter().all(|o| used.insert(o.object_id())) {
+        if input_objects.iter().any(|o| {
+            let was_newly_inserted = used.insert(o.object_id());
+            !was_newly_inserted
+        }) {
             return Err(SuiError::DuplicateObjectRefInput);
         }
         Ok(input_objects)
@@ -184,8 +160,7 @@ impl Display for SingleTransactionKind {
                 writeln!(writer, "Package ID : {}", c.package.0.to_hex_literal())?;
                 writeln!(writer, "Module : {}", c.module)?;
                 writeln!(writer, "Function : {}", c.function)?;
-                writeln!(writer, "Object Arguments : {:?}", c.object_arguments)?;
-                writeln!(writer, "Pure Arguments : {:?}", c.pure_arguments)?;
+                writeln!(writer, "Arguments : {:?}", c.arguments)?;
                 writeln!(writer, "Type Arguments : {:?}", c.type_arguments)?;
             }
         }
@@ -256,9 +231,7 @@ where
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         gas_payment: ObjectRef,
-        object_arguments: Vec<ObjectRef>,
-        shared_object_arguments: Vec<ObjectID>,
-        pure_arguments: Vec<Vec<u8>>,
+        arguments: Vec<CallArg>,
         gas_budget: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::Call(MoveCall {
@@ -266,9 +239,7 @@ where
             module,
             function,
             type_arguments,
-            object_arguments,
-            shared_object_arguments,
-            pure_arguments,
+            arguments,
         }));
         Self::new(kind, sender, gas_payment, gas_budget)
     }
@@ -386,15 +357,12 @@ impl<S: AuthoritySignInfoTrait> TransactionEnvelope<S> {
     }
 
     pub fn contains_shared_object(&self) -> bool {
-        match &self.data.kind {
-            TransactionKind::Single(s) => s.contains_shared_object(),
-            TransactionKind::Batch(b) => b.iter().any(|kind| kind.contains_shared_object()),
-        }
+        self.shared_input_objects().peekable().peek().is_some()
     }
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
         match &self.data.kind {
-            TransactionKind::Single(s) => Either::Left(s.shared_input_objects().iter()),
+            TransactionKind::Single(s) => Either::Left(s.shared_input_objects()),
             TransactionKind::Batch(b) => {
                 Either::Right(b.iter().flat_map(|kind| kind.shared_input_objects()))
             }
@@ -410,12 +378,11 @@ impl<S: AuthoritySignInfoTrait> TransactionEnvelope<S> {
                     fp_ensure!(
                         !matches!(kind, &SingleTransactionKind::Publish(..)),
                         SuiError::InvalidBatchTransaction {
-                            error: "Publish transaction is now allowed in Batch Transaction"
+                            error: "Publish transaction is not allowed in Batch Transaction"
                                 .to_owned(),
                         }
                     );
                     let sub = kind.input_objects()?;
-                    debug_assert_eq!(sub.len(), kind.input_object_count());
                     result.extend(sub);
                 }
                 result
@@ -444,27 +411,6 @@ impl<S: AuthoritySignInfoTrait> TransactionEnvelope<S> {
     // Derive a cryptographic hash of the transaction.
     pub fn digest(&self) -> TransactionDigest {
         TransactionDigest::new(sha3_hash(&self.data))
-    }
-
-    pub fn input_objects_in_compiled_modules(
-        compiled_modules: &[CompiledModule],
-    ) -> Vec<InputObjectKind> {
-        let mut dependent_packages = BTreeSet::new();
-        for module in compiled_modules.iter() {
-            for handle in module.module_handles.iter() {
-                let address = ObjectID::from(*module.address_identifier_at(handle.address));
-                if address != ObjectID::ZERO {
-                    dependent_packages.insert(address);
-                }
-            }
-        }
-
-        // We don't care about the digest of the dependent packages.
-        // They are all read-only on-chain and their digest never changes.
-        dependent_packages
-            .into_iter()
-            .map(InputObjectKind::MovePackage)
-            .collect::<Vec<_>>()
     }
 }
 
@@ -791,7 +737,6 @@ pub enum ExecutionStatus {
     // Gas used in the success case.
     Success {
         gas_cost: GasCostSummary,
-        results: Vec<CallResult>,
     },
     // Gas used in the failed case, and the error.
     Failure {
@@ -816,12 +761,9 @@ impl ExecutionStatus {
         matches!(self, ExecutionStatus::Failure { .. })
     }
 
-    pub fn unwrap(self) -> (GasCostSummary, Vec<CallResult>) {
+    pub fn unwrap(self) -> GasCostSummary {
         match self {
-            ExecutionStatus::Success {
-                gas_cost: gas_used,
-                results,
-            } => (gas_used, results),
+            ExecutionStatus::Success { gas_cost: gas_used } => gas_used,
             ExecutionStatus::Failure { .. } => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
@@ -1000,8 +942,6 @@ impl PartialEq for SignedTransactionEffects {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InputObjectKind {
-    // A Move package, must be immutable.
-    MovePackage(ObjectID),
     // A Move object, either immutable, or owned mutable.
     ImmOrOwnedMoveObject(ObjectRef),
     // A Move object that's shared and mutable.
@@ -1011,7 +951,6 @@ pub enum InputObjectKind {
 impl InputObjectKind {
     pub fn object_id(&self) -> ObjectID {
         match self {
-            Self::MovePackage(id) => *id,
             Self::ImmOrOwnedMoveObject((id, _, _)) => *id,
             Self::SharedMoveObject(id) => *id,
         }
@@ -1019,7 +958,6 @@ impl InputObjectKind {
 
     pub fn version(&self) -> SequenceNumber {
         match self {
-            Self::MovePackage(..) => OBJECT_START_VERSION,
             Self::ImmOrOwnedMoveObject((_, version, _)) => *version,
             Self::SharedMoveObject(..) => OBJECT_START_VERSION,
         }
@@ -1027,7 +965,6 @@ impl InputObjectKind {
 
     pub fn object_not_found_error(&self) -> SuiError {
         match *self {
-            Self::MovePackage(package_id) => SuiError::DependentPackageNotFound { package_id },
             Self::ImmOrOwnedMoveObject((object_id, _, _)) => SuiError::ObjectNotFound { object_id },
             Self::SharedMoveObject(object_id) => SuiError::ObjectNotFound { object_id },
         }

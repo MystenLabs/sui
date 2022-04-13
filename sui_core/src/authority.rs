@@ -204,7 +204,10 @@ impl AuthorityState {
         let all_objects: Vec<_> = self
             .check_locks(&transaction, gas_object, &mut gas_status)
             .await?;
-        if transaction.contains_shared_object() {
+        let has_shared_object = all_objects
+            .iter()
+            .any(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)));
+        if has_shared_object {
             // It's important that we do this here to make sure there is enough
             // gas to cover shared objects, before we lock all objects.
             gas_status.charge_consensus()?;
@@ -328,7 +331,10 @@ impl AuthorityState {
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
-        if transaction.contains_shared_object() {
+        let has_shared_object = objects_by_kind
+            .iter()
+            .any(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)));
+        if has_shared_object {
             // If the transaction contains shared objects, we need to ensure they have been scheduled
             // for processing by the consensus protocol.
             self.check_shared_locks(&transaction_digest, &objects_by_kind)
@@ -346,11 +352,15 @@ impl AuthorityState {
             &objects_by_kind,
             transaction_digest,
         );
+        let transaction_dependencies = objects_by_kind
+            .iter()
+            .map(|(_, obj)| obj.previous_transaction)
+            .collect();
         let effects = execution_engine::execute_transaction_to_effects(
             &mut temporary_store,
             transaction.clone(),
             transaction_digest,
-            objects_by_kind,
+            transaction_dependencies,
             &self.move_vm,
             &self._native_functions,
             gas_status,
@@ -376,8 +386,9 @@ impl AuthorityState {
         certificate: CertifiedTransaction,
         last_consensus_index: ExecutionIndices,
     ) -> SuiResult<()> {
+        let mut mut_shared_inputs = certificate.transaction.shared_input_objects().peekable();
         // Ensure it is a shared object certificate
-        if !certificate.transaction.contains_shared_object() {
+        if mut_shared_inputs.peek().is_none() {
             log::debug!(
                 "Transaction without shared object has been sequenced: {:?}",
                 certificate.transaction
@@ -387,10 +398,9 @@ impl AuthorityState {
 
         // Ensure it is the first time we see this certificate.
         let transaction_digest = *certificate.digest();
-        if self._database.sequenced(
-            &transaction_digest,
-            certificate.transaction.shared_input_objects(),
-        )?[0]
+        if self
+            ._database
+            .sequenced(&transaction_digest, mut_shared_inputs)?[0]
             .is_some()
         {
             return Ok(());
@@ -646,35 +656,8 @@ impl AuthorityState {
         modules: Vec<CompiledModule>,
     ) -> SuiResult {
         debug_assert!(ctx.digest() == TransactionDigest::genesis());
-        let inputs = Transaction::input_objects_in_compiled_modules(&modules);
-        let input_objects = self.fetch_objects(&inputs, None).await?;
-        // When publishing genesis packages, since the std framework packages all have
-        // non-zero addresses, [`Transaction::input_objects_in_compiled_modules`] will consider
-        // them as dependencies even though they are not. Hence input_objects contain objects
-        // that don't exist on-chain because they are yet to be published.
-        #[cfg(debug_assertions)]
-        {
-            let to_be_published_addresses: HashSet<_> = modules
-                .iter()
-                .map(|module| *module.self_id().address())
-                .collect();
-            assert!(
-                // An object either exists on-chain, or is one of the packages to be published.
-                inputs
-                    .iter()
-                    .zip(input_objects.iter())
-                    .all(|(kind, obj_opt)| obj_opt.is_some()
-                        || to_be_published_addresses.contains(&kind.object_id()))
-            );
-        }
-        let filtered = inputs
-            .into_iter()
-            .zip(input_objects.into_iter())
-            .filter_map(|(input, object_opt)| object_opt.map(|object| (input, object)))
-            .collect::<Vec<_>>();
-
         let mut temporary_store =
-            AuthorityTemporaryStore::new(self._database.clone(), &filtered, ctx.digest());
+            AuthorityTemporaryStore::new(self._database.clone(), &[], ctx.digest());
         let package_id = ObjectID::from(*modules[0].self_id().address());
         let natives = self._native_functions.clone();
         let mut gas_status = SuiGasStatus::new_unmetered();

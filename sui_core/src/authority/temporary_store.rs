@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use move_core_types::account_address::AccountAddress;
@@ -28,7 +30,7 @@ pub struct AuthorityTemporaryStore<S> {
     events: Vec<Event>,
     // New object IDs created during the transaction, needed for
     // telling apart unwrapped objects.
-    created_object_ids: HashSet<ObjectID>,
+    created_object_ids: BTreeSet<ObjectID>,
 }
 
 impl<S> AuthorityTemporaryStore<S> {
@@ -49,7 +51,6 @@ impl<S> AuthorityTemporaryStore<S> {
             active_inputs: input_objects
                 .iter()
                 .filter_map(|(kind, object)| match kind {
-                    InputObjectKind::MovePackage(_) => None,
                     InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
                         if object.is_immutable() {
                             None
@@ -63,7 +64,7 @@ impl<S> AuthorityTemporaryStore<S> {
             written: BTreeMap::new(),
             deleted: BTreeMap::new(),
             events: Vec::new(),
-            created_object_ids: HashSet::new(),
+            created_object_ids: BTreeSet::new(),
         }
     }
 
@@ -262,7 +263,7 @@ impl<S> AuthorityTemporaryStore<S> {
 
         debug_assert!(
             {
-                let input_ids: HashSet<ObjectID> = self.objects.clone().into_keys().collect();
+                let input_ids = self.objects.clone().into_keys().collect();
                 self.created_object_ids.is_disjoint(&input_ids)
             },
             "Newly created object IDs showed up in the input",
@@ -279,16 +280,16 @@ impl<S> Storage for AuthorityTemporaryStore<S> {
         self.created_object_ids.clear();
     }
 
-    fn read_object(&self, id: &ObjectID) -> Option<Object> {
+    fn read_object(&self, id: &ObjectID) -> Option<&Object> {
         // there should be no read after delete
         debug_assert!(self.deleted.get(id) == None);
         match self.written.get(id) {
-            Some(x) => Some(x.1.clone()),
-            None => self.objects.get(id).cloned(),
+            Some((_, obj)) => Some(obj),
+            None => self.objects.get(id),
         }
     }
 
-    fn set_create_object_ids(&mut self, ids: HashSet<ObjectID>) {
+    fn set_create_object_ids(&mut self, ids: BTreeSet<ObjectID>) {
         self.created_object_ids = ids;
     }
 
@@ -345,10 +346,14 @@ impl<S: BackingPackageStore> ModuleResolver for AuthorityTemporaryStore<S> {
     type Error = SuiError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         let package_id = &ObjectID::from(*module_id.address());
+        let package_obj;
         let package = match self.read_object(package_id) {
             Some(object) => object,
             None => match self.package_store.get_package(package_id)? {
-                Some(object) => object,
+                Some(object) => {
+                    package_obj = object;
+                    &package_obj
+                }
                 None => {
                     return Ok(None);
                 }

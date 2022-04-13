@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 use crate::{
     base_types::{ObjectID, SequenceNumber},
@@ -25,11 +25,11 @@ pub enum DeleteKind {
 pub trait Storage {
     fn reset(&mut self);
 
-    fn read_object(&self, id: &ObjectID) -> Option<Object>;
+    fn read_object(&self, id: &ObjectID) -> Option<&Object>;
 
     // Specify the list of object IDs created during the transaction.
     // This is needed to determine unwrapped objects at the end.
-    fn set_create_object_ids(&mut self, ids: HashSet<ObjectID>);
+    fn set_create_object_ids(&mut self, ids: BTreeSet<ObjectID>);
 
     fn write_object(&mut self, object: Object);
 

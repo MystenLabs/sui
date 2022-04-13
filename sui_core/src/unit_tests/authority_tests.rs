@@ -1326,6 +1326,17 @@ pub async fn call_move(
                 .compute_object_reference(),
         );
     }
+    // TODO improve API here
+    let args = object_args
+        .into_iter()
+        .map(CallArg::ImmOrOwnedObject)
+        .chain(
+            shared_object_args_ids
+                .into_iter()
+                .map(CallArg::SharedObject),
+        )
+        .chain(pure_args.into_iter().map(CallArg::Pure))
+        .collect();
     let data = TransactionData::new_move_call(
         *sender,
         *package,
@@ -1333,9 +1344,7 @@ pub async fn call_move(
         ident_str!(function).to_owned(),
         type_args,
         gas_object_ref,
-        object_args,
-        shared_object_args_ids,
-        pure_args,
+        args,
         MAX_GAS,
     );
 
@@ -1435,12 +1444,11 @@ async fn shared_object() {
         ident_str!(function).to_owned(),
         /* type_args */ vec![],
         gas_object_ref,
-        /* object_args */ vec![],
-        vec![shared_object_id],
-        /* pure_args */
+        /* args */
         vec![
-            16u64.to_le_bytes().to_vec(),
-            bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
+            CallArg::SharedObject(shared_object_id),
+            CallArg::Pure(16u64.to_le_bytes().to_vec()),
+            CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
         ],
         MAX_GAS,
     );

@@ -63,7 +63,7 @@ module NFTs::Marketplace {
     }
 
     /// Remove listing and get an item back. Only owner can do that.
-    public(script) fun delist<T: key + store, C>(
+    public fun delist<T: key + store, C>(
         _marketplace: &Marketplace,
         objects: &mut Bag,
         listing: Listing<T, C>,
