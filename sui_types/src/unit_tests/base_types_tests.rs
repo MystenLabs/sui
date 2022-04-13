@@ -268,7 +268,7 @@ fn test_move_object_size_for_gas_metering() {
     // all the metadata data needed for serializing various types.
     // If the following assertion breaks, it's likely you have changed MoveObject's fields.
     // Make sure to adjust `object_size_for_gas_metering()` to include those changes.
-    assert_eq!(size + 16, serialized.len());
+    assert_eq!(size + 4, serialized.len());
 }
 
 #[test]

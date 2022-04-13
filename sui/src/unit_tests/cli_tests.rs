@@ -27,7 +27,7 @@ use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::get_key_pair;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::TransactionEffects;
-use sui_types::object::{Object, ObjectRead, GAS_VALUE_FOR_TESTING};
+use sui_types::object::{Object, ObjectInfo, ObjectRead, GAS_VALUE_FOR_TESTING};
 use tracing_test::traced_test;
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
@@ -618,7 +618,7 @@ async fn get_move_object(
 
     match obj {
         WalletCommandResult::Object(obj) => match obj {
-            ObjectRead::Exists(_, obj, layout) => {
+            ObjectRead::Exists(ObjectInfo(_, obj, layout)) => {
                 Ok(obj.to_json(&layout).unwrap_or_else(|_| json!("")))
             }
             _ => panic!("WalletCommands::Object returns wrong type"),
@@ -974,24 +974,26 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let resp = WalletCommands::Object { id: mut_obj1.0 }
         .execute(&mut context)
         .await?;
-    let mut_obj1 = if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
-        object
-    } else {
-        // Fail this way because Panic! causes test issues
-        assert!(false);
-        dumy_obj.clone()
-    };
+    let mut_obj1 =
+        if let WalletCommandResult::Object(ObjectRead::Exists(ObjectInfo(_, object, _))) = resp {
+            object
+        } else {
+            // Fail this way because Panic! causes test issues
+            assert!(false);
+            dumy_obj.clone()
+        };
 
     let resp = WalletCommands::Object { id: mut_obj2.0 }
         .execute(&mut context)
         .await?;
-    let mut_obj2 = if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
-        object
-    } else {
-        // Fail this way because Panic! causes test issues
-        assert!(false);
-        dumy_obj
-    };
+    let mut_obj2 =
+        if let WalletCommandResult::Object(ObjectRead::Exists(ObjectInfo(_, object, _))) = resp {
+            object
+        } else {
+            // Fail this way because Panic! causes test issues
+            assert!(false);
+            dumy_obj
+        };
 
     let (gas, obj) = if mut_obj1.get_single_owner().unwrap() == address {
         (mut_obj1, mut_obj2)
@@ -1203,7 +1205,9 @@ fn get_gas_value(o: &Object) -> u64 {
 }
 
 async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<Object> {
-    if let ObjectRead::Exists(_, o, _) = context.gateway.get_object_info(id).await.unwrap() {
+    if let ObjectRead::Exists(ObjectInfo(_, o, _)) =
+        context.gateway.get_object_info(id).await.unwrap()
+    {
         Some(o)
     } else {
         None

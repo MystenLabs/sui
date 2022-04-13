@@ -5,6 +5,17 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt::{Debug, Display, Formatter};
 use std::mem::size_of;
 
+use crate::coin::Coin;
+use crate::crypto::{sha3_hash, BcsSignable};
+use crate::error::{SuiError, SuiResult};
+use crate::move_package::MovePackage;
+use crate::readable_serde::Base64OrBytes;
+use crate::{
+    base_types::{
+        ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
+    },
+    gas_coin::GasCoin,
+};
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::layout::TypeLayoutBuilder;
@@ -14,22 +25,10 @@ use move_core_types::language_storage::TypeTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout};
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
-use serde::{Deserialize, Serialize};
+use serde::ser::SerializeTuple;
+use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{json, Value};
-use serde_with::base64::Base64;
 use serde_with::serde_as;
-
-use crate::coin::Coin;
-use crate::crypto::{sha3_hash, BcsSignable};
-use crate::error::{SuiError, SuiResult};
-use crate::move_package::MovePackage;
-use crate::{
-    base_types::{
-        ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
-    },
-    gas_coin::GasCoin,
-};
-
 pub const GAS_VALUE_FOR_TESTING: u64 = 100000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 
@@ -37,7 +36,7 @@ pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MoveObject {
     pub type_: StructTag,
-    #[serde_as(as = "Base64")]
+    #[serde_as(as = "Base64OrBytes")]
     contents: Vec<u8>,
 }
 
@@ -569,8 +568,47 @@ impl Object {
 #[derive(Serialize, Deserialize)]
 pub enum ObjectRead {
     NotExists(ObjectID),
-    Exists(ObjectRef, Object, Option<MoveStructLayout>),
+    Exists(ObjectInfo),
     Deleted(ObjectRef),
+}
+
+#[derive(Deserialize)]
+pub struct ObjectInfo(pub ObjectRef, pub Object, pub Option<MoveStructLayout>);
+
+impl Serialize for ObjectInfo {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let is_human_readable = serializer.is_human_readable();
+        let mut info = serializer.serialize_tuple(3)?;
+        let Self(object_ref, object, layout) = self;
+
+        info.serialize_element(object_ref)?;
+        if is_human_readable {
+            #[derive(Serialize)]
+            struct Object {
+                data: Data,
+                json_data: Option<Value>,
+                owner: Owner,
+                previous_transaction: TransactionDigest,
+                storage_rebate: u64,
+            }
+            let object = Object {
+                data: object.data.clone(),
+                json_data: object.data.to_json(layout).ok(),
+                owner: object.owner,
+                previous_transaction: object.previous_transaction,
+                storage_rebate: object.storage_rebate,
+            };
+            info.serialize_element(&object)?;
+        } else {
+            info.serialize_element(object)?;
+        };
+
+        info.serialize_element(layout)?;
+        info.end()
+    }
 }
 
 impl ObjectRead {
@@ -580,7 +618,7 @@ impl ObjectRead {
         match &self {
             Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: *oref }),
             Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
-            Self::Exists(_, o, _) => Ok(o),
+            Self::Exists(ObjectInfo(_, o, _)) => Ok(o),
         }
     }
 
@@ -590,7 +628,7 @@ impl ObjectRead {
         match self {
             Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: oref }),
             Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: id }),
-            Self::Exists(_, o, _) => Ok(o),
+            Self::Exists(ObjectInfo(_, o, _)) => Ok(o),
         }
     }
 
@@ -600,7 +638,7 @@ impl ObjectRead {
         match &self {
             Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: *oref }),
             Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
-            Self::Exists(_, _, layout) => Ok(layout),
+            Self::Exists(ObjectInfo(_, _, layout)) => Ok(layout),
         }
     }
 
@@ -610,7 +648,7 @@ impl ObjectRead {
         match &self {
             Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: *oref }),
             Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
-            Self::Exists(oref, _, _) => Ok(*oref),
+            Self::Exists(ObjectInfo(_, o, _)) => Ok(o.compute_object_reference()),
         }
     }
 }

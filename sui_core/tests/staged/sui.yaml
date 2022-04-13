@@ -214,7 +214,7 @@ MoveObject:
   STRUCT:
     - type_:
         TYPENAME: StructTag
-    - contents: STR
+    - contents: BYTES
 MovePackage:
   STRUCT:
     - id:

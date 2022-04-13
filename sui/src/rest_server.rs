@@ -39,8 +39,8 @@ use sui_types::base_types::*;
 use sui_types::crypto;
 use sui_types::crypto::SignableBytes;
 use sui_types::messages::{Transaction, TransactionData};
-use sui_types::object::Object as SuiObject;
 use sui_types::object::ObjectRead;
+use sui_types::object::{Object as SuiObject, ObjectInfo};
 
 const DEFAULT_REST_SERVER_PORT: &str = "5001";
 const DEFAULT_REST_SERVER_ADDR_IPV4: &str = "127.0.0.1";
@@ -222,7 +222,7 @@ async fn object_schema(
     };
 
     let layout = match gateway.get_object_info(object_id).await {
-        Ok(ObjectRead::Exists(_, _, layout)) => layout,
+        Ok(ObjectRead::Exists(ObjectInfo(_, _, layout))) => layout,
         Ok(ObjectRead::Deleted(_)) => {
             return Err(custom_http_error(
                 StatusCode::NOT_FOUND,
@@ -513,7 +513,9 @@ async fn get_object_info(
     object_id: ObjectID,
 ) -> Result<(ObjectRef, SuiObject, Option<MoveStructLayout>), HttpError> {
     let (object_ref, object, layout) = match gateway.get_object_info(object_id).await {
-        Ok(ObjectRead::Exists(object_ref, object, layout)) => (object_ref, object, layout),
+        Ok(ObjectRead::Exists(ObjectInfo(object_ref, object, layout))) => {
+            (object_ref, object, layout)
+        }
         Ok(ObjectRead::Deleted(_)) => {
             return Err(custom_http_error(
                 StatusCode::NOT_FOUND,

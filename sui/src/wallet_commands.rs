@@ -26,7 +26,7 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects};
 use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::ObjectRead::Exists;
-use sui_types::object::{Object, ObjectRead};
+use sui_types::object::{Object, ObjectInfo, ObjectRead};
 
 use crate::config::{Config, PersistedConfig, WalletConfig};
 use crate::keystore::Keystore;
@@ -589,7 +589,7 @@ impl WalletContext {
         let mut values_objects = Vec::new();
         for (id, _, _) in object_refs {
             match self.gateway.get_object_info(id).await? {
-                Exists(_, o, _) => {
+                Exists(ObjectInfo(_, o, _)) => {
                     if matches!( o.type_(), Some(v)  if *v == GasCoin::type_()) {
                         // Okay to unwrap() since we already checked type
                         let gas_coin = GasCoin::try_from(o.data.try_as_move().unwrap())?;

@@ -360,8 +360,7 @@ impl<S: BackingPackageStore> ModuleResolver for AuthorityTemporaryStore<S> {
             Data::Package(c) => Ok(c
                 .serialized_module_map()
                 .get(module_id.name().as_str())
-                .cloned()
-                .map(|m| m.into_vec())),
+                .cloned()),
             _ => Err(SuiError::BadObjectType {
                 error: "Expected module object".to_string(),
             }),

@@ -7,12 +7,14 @@ use std::collections::HashMap;
 
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::error::{SuiError, SuiResult};
-use crate::readable_serde::BytesOrBase64;
+use crate::readable_serde::Base64OrBytes;
+use crate::readable_serde::Base64OrDefault;
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Digest, PublicKey, Verifier};
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use sha3::Sha3_256;
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
@@ -88,8 +90,9 @@ impl signature::Signer<AuthoritySignature> for KeyPair {
     }
 }
 
+#[serde_as]
 #[derive(Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct PublicKeyBytes(#[serde(with = "BytesOrBase64")] [u8; dalek::PUBLIC_KEY_LENGTH]);
+pub struct PublicKeyBytes(#[serde_as(as = "Base64OrBytes")] [u8; dalek::PUBLIC_KEY_LENGTH]);
 
 impl PublicKeyBytes {
     pub fn to_vec(&self) -> Vec<u8> {
@@ -165,8 +168,9 @@ pub fn get_key_pair_from_bytes(bytes: &[u8]) -> (SuiAddress, KeyPair) {
 pub const SUI_SIGNATURE_LENGTH: usize =
     ed25519_dalek::PUBLIC_KEY_LENGTH + ed25519_dalek::SIGNATURE_LENGTH;
 
+#[serde_as]
 #[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
-pub struct Signature(#[serde(with = "BytesOrBase64")] [u8; SUI_SIGNATURE_LENGTH]);
+pub struct Signature(#[serde_as(as = "Base64OrBytes")] [u8; SUI_SIGNATURE_LENGTH]);
 
 impl AsRef<[u8]> for Signature {
     fn as_ref(&self) -> &[u8] {
@@ -297,8 +301,9 @@ impl Signature {
 
 /// A signature emitted by an authority. It's useful to decouple this from user signatures,
 /// as their set of supported schemes will probably diverge
+#[serde_as]
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
-pub struct AuthoritySignature(#[serde(with = "BytesOrBase64")] pub dalek::Signature);
+pub struct AuthoritySignature(#[serde_as(as = "Base64OrDefault")] pub dalek::Signature);
 impl AsRef<[u8]> for AuthoritySignature {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()

@@ -31,6 +31,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_types::object::ObjectInfo;
 
 use self::gateway_responses::*;
 
@@ -265,7 +266,7 @@ where
             // If any object does not exist in the store, give it a chance
             // to download from authorities.
             if object_opt.is_none() {
-                if let ObjectRead::Exists(_, object, _) =
+                if let ObjectRead::Exists(ObjectInfo(_, object, _)) =
                     self.get_object_info(kind.object_id()).await?
                 {
                     *object_opt = Some(object);
@@ -328,7 +329,7 @@ where
 
     async fn download_object_from_authorities(&self, object_id: ObjectID) -> SuiResult<ObjectRead> {
         let result = self.authorities.get_object_info_execute(object_id).await?;
-        if let ObjectRead::Exists(obj_ref, object, _) = &result {
+        if let ObjectRead::Exists(ObjectInfo(obj_ref, object, _)) = &result {
             let local_object = self.store.get_object(&object_id)?;
             if local_object.is_none()
                 || &local_object.unwrap().compute_object_reference() != obj_ref

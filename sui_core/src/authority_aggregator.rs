@@ -8,7 +8,7 @@ use crate::safe_client::SafeClient;
 use futures::{future, StreamExt};
 use move_core_types::value::MoveStructLayout;
 use sui_types::crypto::{AuthoritySignature, PublicKeyBytes};
-use sui_types::object::{Object, ObjectFormatOptions, ObjectRead};
+use sui_types::object::{Object, ObjectFormatOptions, ObjectInfo, ObjectRead};
 use sui_types::{
     base_types::*,
     committee::Committee,
@@ -1158,7 +1158,7 @@ where
             if is_ok {
                 match obj_option {
                     Some(obj) => {
-                        return Ok(ObjectRead::Exists(obj_ref, obj, layout_option));
+                        return Ok(ObjectRead::Exists(ObjectInfo(obj_ref, obj, layout_option)));
                     }
                     None => {
                         // TODO: Figure out how to find out object being wrapped instead of deleted.

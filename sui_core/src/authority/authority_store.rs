@@ -1049,7 +1049,6 @@ impl<const A: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> ModuleResolve
                     .serialized_module_map()
                     .get(module_id.name().as_str())
                     .cloned()
-                    .map(|m| m.into_vec())
             }))
     }
 }

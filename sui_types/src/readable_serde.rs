@@ -1,9 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
 use std::fmt::Display;
 
+use anyhow::anyhow;
 use base64ct::{Base64, Encoding as _};
 use serde;
 use serde::de::{Deserialize, Deserializer, Error};
@@ -13,32 +13,99 @@ use serde_with::{Bytes, DeserializeAs, SerializeAs};
 
 /// Encode bytes to hex for human-readable serializer and deserializer,
 /// serde to bytes for non-human-readable serializer and deserializer.
-pub trait BytesOrHex<'de>: Sized {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+pub struct HexOrBytes;
+impl<T> SerializeAs<T> for HexOrBytes
+where
+    T: AsRef<[u8]>,
+{
+    fn serialize_as<S>(source: &T, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
-        Self: AsRef<[u8]>,
     {
-        serialize_to_bytes_or_encode(serializer, self.as_ref(), Encoding::Hex)
+        serialize_to_bytes_or_encode(serializer, source.as_ref(), Encoding::Hex)
     }
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+}
+impl<'de, const N: usize> DeserializeAs<'de, [u8; N]> for HexOrBytes {
+    fn deserialize_as<D>(deserializer: D) -> Result<[u8; N], D::Error>
     where
-        D: Deserializer<'de>;
+        D: Deserializer<'de>,
+    {
+        let value = deserialize_from_bytes_or_decode(deserializer, Encoding::Hex)?;
+        let mut array = [0u8; N];
+        array.copy_from_slice(&value[..N]);
+        Ok(array)
+    }
 }
 
 /// Encode bytes to Base64 for human-readable serializer and deserializer,
 /// serde to array tuple for non-human-readable serializer and deserializer.
-pub trait BytesOrBase64<'de>: Sized {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+pub struct Base64OrBytes;
+impl<T> SerializeAs<T> for Base64OrBytes
+where
+    T: AsRef<[u8]>,
+{
+    fn serialize_as<S>(source: &T, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
-        Self: AsRef<[u8]>,
     {
-        serialize_to_bytes_or_encode(serializer, self.as_ref(), Encoding::Base64)
+        serialize_to_bytes_or_encode(serializer, source.as_ref(), Encoding::Base64)
     }
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+}
+impl<'de> DeserializeAs<'de, Vec<u8>> for Base64OrBytes {
+    fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
     where
-        D: Deserializer<'de>;
+        D: Deserializer<'de>,
+    {
+        deserialize_from_bytes_or_decode(deserializer, Encoding::Base64)
+    }
+}
+
+impl<'de, const N: usize> DeserializeAs<'de, [u8; N]> for Base64OrBytes {
+    fn deserialize_as<D>(deserializer: D) -> Result<[u8; N], D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = deserialize_from_bytes_or_decode(deserializer, Encoding::Base64)?;
+        let mut array = [0u8; N];
+        array.copy_from_slice(&value[..N]);
+        Ok(array)
+    }
+}
+
+/// Encode bytes to Base64 for human-readable serializer and deserializer,
+/// serde using `T`'s default serde implementation non-human-readable serializer and deserializer.
+pub struct Base64OrDefault;
+impl<T> SerializeAs<T> for Base64OrDefault
+where
+    T: AsRef<[u8]> + Serialize,
+{
+    fn serialize_as<S>(source: &T, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if serializer.is_human_readable() {
+            Encoding::Base64.encode(source).serialize(serializer)
+        } else {
+            T::serialize(source, serializer)
+        }
+    }
+}
+impl<'de> DeserializeAs<'de, ed25519_dalek::Signature> for Base64OrDefault {
+    fn deserialize_as<D>(deserializer: D) -> Result<ed25519_dalek::Signature, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            let value = Encoding::Base64
+                .decode(s)
+                .map_err(to_custom_error::<'de, D, _>)?;
+            ed25519_dalek::Signature::try_from(value.as_slice())
+                .map_err(to_custom_error::<'de, D, _>)
+        } else {
+            <ed25519_dalek::Signature as Deserialize>::deserialize(deserializer)
+        }
+    }
 }
 
 fn deserialize_from_bytes_or_decode<'de, D>(
@@ -71,64 +138,12 @@ where
     }
 }
 
-impl<'de> BytesOrBase64<'de> for ed25519_dalek::Signature {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-        Self: AsRef<[u8]>,
-    {
-        if serializer.is_human_readable() {
-            Encoding::Base64.encode(self.as_ref()).serialize(serializer)
-        } else {
-            <Self as Serialize>::serialize(self, serializer)
-        }
-    }
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        if deserializer.is_human_readable() {
-            let s = String::deserialize(deserializer)?;
-            let value = Encoding::Base64
-                .decode(s)
-                .map_err(to_custom_error::<'de, D, _>)?;
-            Self::try_from(value.as_slice()).map_err(to_custom_error::<'de, D, _>)
-        } else {
-            <Self as Deserialize>::deserialize(deserializer)
-        }
-    }
-}
-
 fn to_custom_error<'de, D, E>(e: E) -> D::Error
 where
     E: Display,
     D: Deserializer<'de>,
 {
     D::Error::custom(format!("byte deserialization failed, cause by: {}", e))
-}
-
-impl<'de, const N: usize> BytesOrHex<'de> for [u8; N] {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = deserialize_from_bytes_or_decode(deserializer, Encoding::Hex)?;
-        let mut array = [0u8; N];
-        array.copy_from_slice(&value[..N]);
-        Ok(array)
-    }
-}
-
-impl<'de, const N: usize> BytesOrBase64<'de> for [u8; N] {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = deserialize_from_bytes_or_decode(deserializer, Encoding::Base64)?;
-        let mut array = [0u8; N];
-        array.copy_from_slice(&value[..N]);
-        Ok(array)
-    }
 }
 
 enum Encoding {
