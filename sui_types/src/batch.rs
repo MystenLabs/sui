@@ -138,8 +138,6 @@ impl SignedBatch {
     }
 }
 
-impl BcsSignable for SignedBatch {}
-
 impl PartialEq for SignedBatch {
     fn eq(&self, other: &Self) -> bool {
         self.batch == other.batch && self.authority == other.authority
