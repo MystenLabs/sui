@@ -5,7 +5,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use crate::authority::AuthorityTemporaryStore;
 use move_core_types::language_storage::ModuleId;
-use move_vm_runtime::native_functions::NativeFunctionTable;
+use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::adapter;
 use sui_types::{
     base_types::{SuiAddress, TransactionDigest, TxContext},
@@ -25,7 +25,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     transaction: Transaction,
     transaction_digest: TransactionDigest,
     objects_by_kind: Vec<(InputObjectKind, Object)>,
-    move_vm: &Arc<adapter::SuiMoveVM>,
+    move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     gas_status: SuiGasStatus,
 ) -> SuiResult<TransactionEffects> {
@@ -73,7 +73,7 @@ fn execute_transaction<S: BackingPackageStore>(
     transaction: Transaction,
     mut objects_by_kind: Vec<(InputObjectKind, Object)>,
     tx_ctx: &mut TxContext,
-    move_vm: &Arc<adapter::SuiMoveVM>,
+    move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     mut gas_status: SuiGasStatus,
 ) -> ExecutionStatus {

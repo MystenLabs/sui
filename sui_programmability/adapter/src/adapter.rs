@@ -7,7 +7,7 @@ use crate::bytecode_rewriter::ModuleHandleRewriter;
 use move_binary_format::{
     access::ModuleAccess,
     errors::PartialVMResult,
-    file_format::{CompiledModule, SignatureToken, StructHandleIndex},
+    file_format::{CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
 };
 use sui_framework::EventType;
 use sui_types::{
@@ -39,7 +39,6 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     convert::TryFrom,
     fmt::Debug,
-    sync::Arc,
 };
 
 pub use move_vm_runtime::move_vm::MoveVM;
@@ -48,24 +47,8 @@ pub use move_vm_runtime::move_vm::MoveVM;
 #[path = "unit_tests/adapter_tests.rs"]
 mod adapter_tests;
 
-// This structure holds a VM and a cache of packages that contain
-// in turn caches of their Function entry points,
-// that involve re-computation / deserialization to otherwise get.
-pub struct SuiMoveVM {
-    movevm: MoveVM,
-}
-
-impl SuiMoveVM {
-    /// Make a new struct from a VM
-    pub fn new(vm: MoveVM) -> SuiMoveVM {
-        SuiMoveVM { movevm: vm }
-    }
-}
-
-pub fn new_move_vm(natives: NativeFunctionTable) -> Result<Arc<SuiMoveVM>, SuiError> {
-    Ok(Arc::new(SuiMoveVM {
-        movevm: MoveVM::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)?,
-    }))
+pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
+    Ok(MoveVM::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)?)
 }
 
 /// Execute `module::function<type_args>(object_args ++ pure_args)` as a call from `sender` with the given `gas_budget`.
@@ -79,7 +62,7 @@ pub fn new_move_vm(natives: NativeFunctionTable) -> Result<Arc<SuiMoveVM>, SuiEr
 /// TODO: Do we really need the two layers?
 #[allow(clippy::too_many_arguments)]
 pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
-    vm: &SuiMoveVM,
+    vm: &MoveVM,
     state_view: &mut S,
     _natives: &NativeFunctionTable,
     module_id: ModuleId,
@@ -101,7 +84,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         }
     }
 
-    let module = vm.movevm.load_module(&module_id, state_view)?;
+    let module = vm.load_module(&module_id, state_view)?;
     let TypeCheckSuccess {
         module_id,
         args,
@@ -133,19 +116,19 @@ fn execute_internal<
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
 >(
-    vm: &SuiMoveVM,
+    vm: &MoveVM,
     state_view: &mut S,
     module_id: &ModuleId,
     function: &Identifier,
     type_args: Vec<TypeTag>,
     args: Vec<Vec<u8>>,
-    mut mutable_ref_objects: BTreeMap<usize, Object>,
+    mut mutable_ref_objects: BTreeMap<LocalIndex, Object>,
     by_value_objects: BTreeMap<ObjectID, Object>,
     object_owner_map: HashMap<SuiAddress, SuiAddress>,
     gas_status: &mut SuiGasStatus, // gas status for the current call operation
     ctx: &mut TxContext,
 ) -> SuiResult<Vec<CallResult>> {
-    let mut session = vm.movevm.new_session(state_view);
+    let mut session = vm.new_session(state_view);
     // script visibility checked manually for entry points
     let result = session
         .execute_function_bypass_visibility(
@@ -185,7 +168,7 @@ fn execute_internal<
                 mutable_reference_outputs
                     .into_iter()
                     .map(|(local_idx, bytes, _layout)| {
-                        let object = mutable_ref_objects.remove(&(local_idx as usize)).unwrap();
+                        let object = mutable_ref_objects.remove(&local_idx).unwrap();
                         (object, bytes)
                     });
             process_successful_execution(
@@ -196,6 +179,8 @@ fn execute_internal<
                 ctx,
                 object_owner_map,
             )?;
+            // All mutable references should have been marked as updated
+            debug_assert!(mutable_ref_objects.is_empty());
             Ok(process_return_values(&return_values))
         }
         // charge for all computations so far
@@ -286,8 +271,6 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 
     let package_id = generate_package_id(&mut modules, ctx)?;
     let vm = verify_and_link(state_view, &modules, package_id, natives, gas_status)?;
-
-    let vm = SuiMoveVM::new(vm);
     store_package_and_init_modules(state_view, &vm, modules, ctx, gas_status)
 }
 
@@ -297,7 +280,7 @@ pub fn store_package_and_init_modules<
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
 >(
     state_view: &mut S,
-    vm: &SuiMoveVM,
+    vm: &MoveVM,
     modules: Vec<CompiledModule>,
     ctx: &mut TxContext,
     gas_status: &mut SuiGasStatus,
@@ -321,7 +304,7 @@ pub fn store_package_and_init_modules<
 /// Modules in module_ids_to_init must have the init method defined
 fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
     state_view: &mut S,
-    vm: &SuiMoveVM,
+    vm: &MoveVM,
     module_ids_to_init: Vec<ModuleId>,
     ctx: &mut TxContext,
     gas_status: &mut SuiGasStatus,
@@ -657,7 +640,7 @@ pub struct TypeCheckSuccess {
     pub module_id: ModuleId,
     pub args: Vec<Vec<u8>>,
     pub by_value_objects: BTreeMap<ObjectID, Object>,
-    pub mutable_ref_objects: BTreeMap</* local idx */ usize, Object>,
+    pub mutable_ref_objects: BTreeMap<LocalIndex, Object>,
 }
 
 /// - Check that `package_object`, `module` and `function` are valid
@@ -785,7 +768,7 @@ pub fn resolve_and_type_check(
         type_check_struct(module, type_args, &move_object.type_, inner_param_type)?;
         match &param_type {
             SignatureToken::MutableReference(_) => {
-                let _prev = mutable_ref_objects.insert(idx, object);
+                let _prev = mutable_ref_objects.insert(idx as LocalIndex, object);
                 debug_assert!(_prev.is_none());
             }
             SignatureToken::Reference(_) => (),
