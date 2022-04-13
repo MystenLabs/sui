@@ -94,7 +94,7 @@ The newly published package object: (57258F32746FD1443F2A077C0C6EC03282087C19, S
 Note that the exact data you see will be different. The first hex string in that triple is the package object ID (`57258F32746FD1443F2A077C0C6EC03282087C19` in this case).
 Next we can call the function to create a color object:
 ```
-$ wallet call --gas-budget 1000 --package "57258F32746FD1443F2A077C0C6EC03282087C19" --module "Ch1" --function "create" --args 0 255 0
+$ wallet call --gas-budget 1000 --package "57258F32746FD1443F2A077C0C6EC03282087C19" --module "ColorObject" --function "create" --args 0 255 0
 ```
 In the **Transaction Effects** portion of the output, you will see an object showing up in the list of **Created Objects**, like this:
 
