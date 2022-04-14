@@ -2,7 +2,7 @@
 
 In [Chapter 1](./ch1-object-basics.md) we covered how to define, create and take ownership of a Sui object in Move. In this chapter we will look at how to use objects that you own in Move calls.
 
-Sui authentication mechanisms ensure only you can use objects owned by you in Move calls. (We will cover non-owned objects in future chapters.) To use an object in Move calls, pass them as parameters to an entry function. Similar to Rust, there are a few ways to pass parameters:
+Sui authentication mechanisms ensure only you can use objects owned by you in Move calls. (We will cover non-owned objects in future chapters.) To use an object in Move calls, pass them as parameters to an [entry function](../move.md#entry-functions). Similar to Rust, there are a few ways to pass parameters:
 
 ### Pass objects by reference
 There are two ways to pass objects by reference: read-only references (`&T`) and mutable references (`&mut T`). Read-only references allow you to read data from the object, while mutable references allow you to mutate the data in the object. Let's try to add a function that would allow us to update one of `ColorObject`'s values with another `ColorObject`'s value. This will exercise using both read-only references and mutable references.
@@ -25,7 +25,7 @@ public(script) fun copy_into(from_object: &ColorObject, into_object, &mut ColorO
     into_object.blue = from_object.blue;
 }
 ```
-> :bulb: We added a `&mut TxContext` parameter to the function signature although it's not used. This is to allow the `copy_into` function to be called as [entry function](../move.md#entry-functions) from transactions. The parameter is named with an underscore `_` prefix to tell the compiler that it won't be used and we don't get an unused parameter warning.
+> :bulb: We added a `&mut TxContext` parameter to the function signature although it's not used. This is to allow the `copy_into` function to be called as an entry function from transactions. The parameter is named with an underscore `_` prefix to tell the compiler that it won't be used and we don't get an unused parameter warning.
 
 In the above function signature, `from_object` can be a read-only reference because we only need to read its fields; conversely, `into_object` must be a mutable reference since we need to mutate it. In order for a transaction to make a call to the `copy_into` function, **the sender of the transaction must be the owner of both of `from_object` and `into_object`**.
 
@@ -87,7 +87,7 @@ public(script) fun transfer(object: ColorObject, recipient: address, _ctx: &mut 
     Transfer::transfer(object, recipient)
 }
 ```
->:bulb: One cannot call `Transfer::transfer` directly in a transaction because it doesn't have `TxContext` as the last parameter, and hence it cannot be called as an [entry function](../../../../../src/build/move#entry-functions).
+>:bulb: One cannot call `Transfer::transfer` directly in a transaction because it doesn't have `TxContext` as the last parameter, and hence it cannot be called as an entry function.
 
 Let's add a test for transferring too. First of all, we create an object in `owner`'s account and then transfer it to a different account `recipient`:
 ```rust
