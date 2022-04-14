@@ -88,5 +88,5 @@ div.bytecodebox > div > div:first-child {
 
 div.bytecodebox > div > div:nth-child(2) {
     @apply overflow-auto h-[30vh] w-[65vw] 
-  border-solid border-stone-300 mt-[2vh] mb-[5vh] p-2;
+  border-solid border-stone-300 mt-[2vh] mb-[5vh] p-2 whitespace-pre text-sm;
 }
