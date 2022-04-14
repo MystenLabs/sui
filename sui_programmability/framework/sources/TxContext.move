@@ -9,12 +9,18 @@ module Sui::TxContext {
     use Std::Errors;
     #[test_only]
     use Std::Vector;
+    #[test_only]
+    use Sui::ID::ID;
 
     /// Number of bytes in an tx hash (which will be the transaction digest)
     const TX_HASH_LENGTH: u64 = 32;
 
     /// Expected an tx hash of length 32, but found a different length
     const EBAD_TX_HASH_LENGTH: u64 = 0;
+
+    #[test_only]
+    /// Attempt to get the most recent created object ID when none has been created.
+    const ENO_IDS_CREATED: u64 = 1;
 
     /// Information about the transaction currently being executed.
     /// This cannot be constructed by a transaction--it is a privileged object created by
@@ -43,7 +49,7 @@ module Sui::TxContext {
     /// Generate a new, globally unique object ID with version 0
     public fun new_id(ctx: &mut TxContext): VersionedID {
         let ids_created = ctx.ids_created;
-        let id = ID::new_versioned_id(fresh_id(*&ctx.tx_hash, ids_created));
+        let id = ID::new_versioned_id(derive_id(*&ctx.tx_hash, ids_created));
         ctx.ids_created = ids_created + 1;
         id
     }
@@ -54,8 +60,8 @@ module Sui::TxContext {
         self.ids_created
     }
 
-    /// Native function for deriving an ID via hash(tx_hash || ids_created || domain_separator)
-    native fun fresh_id(tx_hash: vector<u8>, ids_created: u64): address;
+    /// Native function for deriving an ID via hash(tx_hash || ids_created)
+    native fun derive_id(tx_hash: vector<u8>, ids_created: u64): address;
 
     // ==== test-only functions ====
 
@@ -98,6 +104,14 @@ module Sui::TxContext {
     #[test_only]
     public fun get_ids_created(self: &TxContext): u64 {
         ids_created(self)
+    }
+
+    #[test_only]
+    /// Return the most recent created object ID.
+    public fun get_last_created_object_id(self: &TxContext): ID {
+        let ids_created = self.ids_created;
+        assert!(ids_created > 0, ENO_IDS_CREATED);
+        ID::new(derive_id(*&self.tx_hash, ids_created - 1))
     }
 
     #[test_only]
