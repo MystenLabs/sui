@@ -1,6 +1,6 @@
 # Move BCS
 
-This library implements [BCS](https://github.com/diem/bcs) in JavaScript, making BCS available in both Browser and NodeJS environment.
+This library implements [Binary Canonical Serialization (BCS)](https://github.com/diem/bcs) in JavaScript, making BCS available in both Browser and NodeJS environments.
 
 ## Feature set
 
@@ -12,7 +12,7 @@ This library implements [BCS](https://github.com/diem/bcs) in JavaScript, making
 
 ### Working with primitive types
 
-To deserialize data, use a `MoveBCS.de(type: string, data: string)`. Type parameter is a name of the type, data is a BCS encoded as HEX. 
+To deserialize data, use a `MoveBCS.de(type: string, data: string)`. Type parameter is a name of the type; data is a BCS encoded as hex. 
 
 ```js
 // MoveBCS has a set of built ins:
@@ -33,7 +33,7 @@ let bool = MoveBCS.de(MoveBCS.BOOL, hex('00')); // false
 // There's also a handy built-in for ASCII strings (which are `vector<u8>` under the hood)
 let str = MoveBCS.de(MoveBCS.STRING, hex('0a68656c6c6f5f6d6f7665')); // hello_move
 
-// Address support TBD once an the best API is figured out;
+// Address support TBD once the best API is figured out;
 // let addr = MoveBCS.de(Move.ADDRESS, '0a68656c6c6f5f6d6f7665'); // 0a68656c6c6f5f6d6f7665
 ```
 
