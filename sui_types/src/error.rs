@@ -215,6 +215,8 @@ pub enum SuiError {
     TransactionLockDoesNotExist,
     #[error("Attempt to reset a set transaction lock to a different value.")]
     TransactionLockReset,
+    #[error("Could not find the referenced transaction {:?}.", digest)]
+    TransactionNotFound { digest: TransactionDigest },
     #[error("Could not find the referenced object {:?}.", object_id)]
     ObjectNotFound { object_id: ObjectID },
     #[error("Object deleted at reference {:?}.", object_ref)]
