@@ -23,7 +23,7 @@ Install:
   - Defining Move object types, creating objects, transferring objects.
 - [Chapter 2: Using Objects](../../build/programming-with-objects/ch2-using-objects.md)
   - Passing Move objects as arguments, mutating objects, deleting objects.
-- Chapter 3: Immutable Objects
+- [Chapter 3: Immutable Objects](../../build//programming-with-objects/ch3-immutable-objects.md)
   - Freezing an object, using immutable objects.
 - Chapter 4: Object Wrapping
   - Wrapping objects in another object.
