@@ -71,30 +71,31 @@ public fun create(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
 ```
 > :bulb: Naming convention: Constructors are typically named **`new`**, which returns an instance of the struct type. The **`create`** function is typically defined as an entry function that constructs the struct and transfers it to the desired owner (most commonly the sender).
 
-We can also add a getter to `ColorObject` that returns the color values, so that modules outside of `ColorObject` are able to read their values:
+We can also add a getter to `ColorObject` that returns the color values so that modules outside of `ColorObject` are able to read their values:
 ```rust
 public fun get_color(self: &ColorObject): (u8, u8, u8) {
     (self.red, self.green, self.blue)
 }
 ```
 
-You can find the full code [ColorObject.move](../../../move_code/objects_tutorial/sources/Ch1_2/ColorObject.move).
+Find the full code online in [ColorObject.move](../../../move_code/objects_tutorial/sources/Ch1_2/ColorObject.move).
 
-To compile the code, make sure you have followed the [Sui installation guide](../install.md) so that `sui-move` is in `PATH`. In the code [root directory](../../../move_code/objects_tutorial/) (where `Move.toml` is), you can run:
+To compile the code, make sure you have [installed Sui](../install.md) so that `sui-move` is in `PATH`. In the code [root directory](../../../move_code/objects_tutorial/) (where `Move.toml` is), run:
 ```
 sui-move build
 ```
 
-### Writing Unit Tests
-After defining the `create` function, we want to test this function in Move using unit tests, without having to go all the way to sending Sui transactions. Since Sui manages global storage separately outside of Move, there is no direct way to retrieve objects from global storage within Move. This poses a question: after calling the `create` function, how do we check that the object is properly transferred?
+### Writing unit tests
+After defining the `create` function, we want to test this function in Move using unit tests, without having to go all the way through sending Sui transactions. Since [Sui manages global storage separately outside of Move](../../learn/sui-move-diffs.md#object-centric-global-storage), there is no direct way to retrieve objects from global storage within Move. This poses a question: after calling the `create` function, how do we check that the object is properly transferred?
 
-To assist easy testing in Move, we provide a comprehensive testing framework in the [TestScenario](../../../../sui_programmability/framework/sources/TestScenario.move) module, which allows us to interact with objects that are put into the global storage, so that we can test the behavior of any function directly in Move unit tests. A lot of this is also covered in our [Move testing doc](../move.md#sui-specific-testing).
+To assist easy testing in Move, we provide a comprehensive testing framework in the [TestScenario](../../../../sui_programmability/framework/sources/TestScenario.move) module that allows us to interact with objects put into the global storage. This allows us to test the behavior of any function directly in Move unit tests. A lot of this is also covered in our [Move testing doc](../move.md#sui-specific-testing).
 
-The idea of `TestScenario` is to emulate a series of Sui transactions, each sent from a particular address. A developer writing a test starts the first transaction using the `TestScenario::begin` function that takes the address of the user sending this transaction as argument and returns an instance of the `Scenario` struct representing a test scenario.
+The idea of `TestScenario` is to emulate a series of Sui transactions, each sent from a particular address. A developer writing a test starts the first transaction using the `TestScenario::begin` function that takes the address of the user sending this transaction as an argument and returns an instance of the `Scenario` struct representing a test scenario.
 
 An instance of the `Scenario` struct contains a per-address object pool emulating Sui's object storage, with helper functions provided to manipulate objects in the pool. Once the first transaction is finished, subsequent transactions can be started using the `TestScenario::next_tx` function that takes an instance of the `Scenario` struct representing the current scenario and an address of a (new) user as arguments.
 
-Now let's try to write a test for the `create` function. Tests that need to use `TestScenario` must be in a separate module, either under `tests` directory, or in the same file but in a module annotated with `#[test_only]`. This is because `TestScenario` itself is a test-only module, and can only be used by test-only modules.
+Now let's try to write a test for the `create` function. Tests that need to use `TestScenario` must be in a separate module, either under a `tests` directory, or in the same file but in a module annotated with `#[test_only]`. This is because `TestScenario` itself is a test-only module, and can be used only by test-only modules.
+
 First of all, we begin the test with a hardcoded test address, which will also give us a transaction context as if we are sending a transaction from this address. We then call the `create` function, which should create a `ColorObject` and transfer it to the test address:
 ```rust
 let owner = @0x1;
@@ -105,7 +106,7 @@ let scenario = &mut TestScenario::begin(&owner);
     ColorObject::create(255, 0, 255, ctx);
 };
 ```
->:books: Note there is a "`;`" after "`}`". This is required except for the last statement in the function. Refer to the [Move book](https://move-book.com/syntax-basics/expression-and-scope.html) for detailed explanations.
+>:books: Note there is a "`;`" after "`}`". This is required except for the last statement in the function. Refer to the [Move book](https://move-book.com/syntax-basics/expression-and-scope.html) for a detailed explanation.
 
 Now account `@0x1` should own the object. Let's first make sure it's not owned by anyone else:
 ```rust
@@ -116,6 +117,7 @@ TestScenario::next_tx(scenario, &not_owner);
     assert!(!TestScenario::can_take_object<ColorObject>(scenario), 0);
 };
 ```
+
 `TestScenario::next_tx` switches the transaction sender to `@0x2`, which is a new address than the previous one.
 `TestScenario::can_take_object` checks whether an object with the given type actually exists in the global storage owned by the current sender of the transaction. In this code, we assert that we should not be able to remove such an object, because `@0x2` does not own any object.
 > :bulb: The second parameter of `assert!` is the error code. In non-test code, we usually define a list of dedicated error code constants for each type of error that could happen in production. For unit tests though, it's usually unnecessary because there will be way too many assetions and the stacktrace upon error is sufficient to tell where the error happened. Hence we recommend just putting `0` there in unit tests for assertions.
@@ -130,11 +132,14 @@ TestScenario::next_tx(scenario, &owner);
     TestScenario::return_object(scenario, object);
 };
 ```
+
 `TestScenario::take_object` removes the object of given type from global storage that's owned by the current transaction sender (it also implicitly checks `can_take_object`). If this line of code succeeds, it means that `owner` indeed owns an object of type `ColorObject`.
 We also check that the field values of the object match with what we set in creation. At the end, we must return the object back to the global storage by calling `TestScenario::return_object` so that it's back to the global storage. This also ensures that if any mutations happened to the object during the test, the global storage is aware of the changes.
 You may have noticed that `take_object` picks the object only based on the type parameter. What if there are multiple objects of the same type owned by the account? How do we retrieve each of them? In fact, if you call `take_object` when there are more than one object of the same type in the same account, an assertion failure will be triggered. We are working on adding an API just for this. Update coming soon.
 
-Again, you can find the full code [here](../../../move_code/objects_tutorial/sources/Ch1_2/ColorObject.move).
+You may have noticed that `take_object` picks the object based solely on the type parameter. What if there are multiple objects of the same type owned by the account? How do we retrieve each of them? In fact, if you call `take_object` when there are more than one object of the same type in the same account, an assertion failure will be triggered. We are working on adding an API just for this. Update coming soon.
+
+Again, you can find the full code in [ColorObject.move](../../../move_code/objects_tutorial/sources/Ch1_2/ColorObject.move).
 
 To run the test, simply run the following in the code root directory:
 ```
@@ -142,9 +147,9 @@ sui-move test
 ```
 
 ### On-chain Interactions
-Now let's try to call `create` in actual transactions and see what happens. To do this we need to start Sui and the wallet. Please follow the [Wallet guide](../wallet.md) to start the Sui network and setup the wallet.
+Now let's try to call `create` in actual transactions and see what happens. To do this, we need to start Sui and the wallet. Follow the [Wallet guide](../wallet.md) to start the Sui network and set up the wallet.
 
-Before starting, let's take a look at the default wallet address (this is address that will eventually own the object later):
+Before starting, let's take a look at the default wallet address (this is the address that will eventually own the object later):
 ```
 $ wallet active-address
 ```
@@ -197,4 +202,4 @@ $ wallet object --id $OBJECT --json
 ```
 This will print the values of all the fields in the Move object, such as the values of `red`, `green`, and `blue`.
 
-Congratulations! You have learned how to define, create, and transfer objects. We also showed how to write unit tests to mock transactions and interact with the objects. In the next chapter, we will learn how to use the objects that we own.
+Congratulations! You have learned how to define, create, and transfer objects. You should also know how to write unit tests to mock transactions and interact with the objects. In the next chapter, we will learn how to use the objects that we own.
