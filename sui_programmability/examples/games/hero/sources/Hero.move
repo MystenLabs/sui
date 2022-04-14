@@ -316,15 +316,15 @@ module HeroGame::Hero {
         // Admin sends a boar to the Player
         TestScenario::next_tx(scenario, &admin);
         {
-            let admin_cap = TestScenario::remove_object<GameAdmin>(scenario);
+            let admin_cap = TestScenario::take_object<GameAdmin>(scenario);
             send_boar(&mut admin_cap, 10, 10, player, TestScenario::ctx(scenario));
             TestScenario::return_object(scenario, admin_cap)
         };
         // Player slays the boar!
         TestScenario::next_tx(scenario, &player);
         {
-            let hero = TestScenario::remove_object<Hero>(scenario);
-            let boar = TestScenario::remove_object<Boar>(scenario);
+            let hero = TestScenario::take_object<Hero>(scenario);
+            let boar = TestScenario::take_object<Boar>(scenario);
             slay(&mut hero, boar, TestScenario::ctx(scenario));
             TestScenario::return_object(scenario, hero)
         };
