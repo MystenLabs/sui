@@ -85,9 +85,6 @@ To compile the code, make sure you have [installed Sui](../install.md) so that `
 sui-move build
 ```
 
-TODO: Doesn't this assume they have downloaded the entire `sui` repo too? `install.md` gets them the `sui-move` binary but not the repo. Adam asked me to keep that out of install and so instead lives at [Contribute to Sui](../../contribute/index.md) with `git clone` covered there.
-Regardless, I think we should make install part of Prerequisites on `programming-with-objects/index.md` and then merely remind them as we do here ("make sure you have [installed...").
-
 ### Writing unit tests
 After defining the `create` function, we want to test this function in Move using unit tests, without having to go all the way through sending Sui transactions. Since [Sui manages global storage separately outside of Move](../../learn/sui-move-diffs.md#object-centric-global-storage), there is no direct way to retrieve objects from global storage within Move. This poses a question: after calling the `create` function, how do we check that the object is properly transferred?
 
