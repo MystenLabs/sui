@@ -23,7 +23,9 @@ module Basics::Sandwich {
     }
 
     // This Capability allows the owner to withdraw profits
-    struct GroceryOwnerCapability has key {}
+    struct GroceryOwnerCapability has key {
+        id: VersionedID
+    }
 
     // Grocery is created on module init
     struct Grocery has key {
@@ -43,10 +45,12 @@ module Basics::Sandwich {
     fun init(ctx: &mut TxContext) {
         Transfer::share_object(Grocery { 
             id: TxContext::new_id(ctx),
-            profits: Coin::zero<SUI>()
+            profits: Coin::zero<SUI>(ctx)
         });
 
-        Transfer::transfer(GroceryOwnerCapability, TxContext::sender(ctx));
+        Transfer::transfer(GroceryOwnerCapability {
+            id: TxContext::new_id(ctx)
+        }, TxContext::sender(ctx));
     }
 
     /// Exchange `c` for some ham
@@ -72,10 +76,75 @@ module Basics::Sandwich {
         Transfer::transfer(Sandwich { id: TxContext::new_id(ctx) }, TxContext::sender(ctx))
     }
 
+    /// See the profits of a grocery
+    public fun profits(grocery: &Grocery): u64 {
+        Coin::value(&grocery.profits)
+    }
+
     /// Owner of the grocery can collect profits by passing his capability
     public fun collect_profits(cap: GroceryOwnerCapability, grocery: &mut Grocery, ctx: &mut TxContext) {
-        let coin = Coin::withdraw(&mut grocery.profits, Coin::amount(&grocery.profits));
+        let amount = Coin::value(&grocery.profits);
+        
+        assert!(amount >= 0, EINSUFFICIENT_FUNDS);
+
+        let coin = Coin::withdraw(&mut grocery.profits, amount, ctx);
         Transfer::transfer(coin, TxContext::sender(ctx));
         Transfer::transfer(cap, TxContext::sender(ctx));
+    }
+
+    #[test_only]
+    public fun init_for_testing(ctx: &mut TxContext) {
+        init(ctx);
+    }
+}
+
+#[test_only]
+module Basics::TestSandwich {
+    use Basics::Sandwich::{Self, Grocery, GroceryOwnerCapability};
+    use Sui::TestScenario;
+    use Sui::Coin::{Self};
+    use Sui::SUI::SUI;
+    
+    #[test]
+    fun test_make_sandwich() {
+        let owner = @0x1;
+        let the_guy = @0x2;
+
+        let scenario = &mut TestScenario::begin(&owner);
+        TestScenario::next_tx(scenario, &owner);
+        {
+            Sandwich::init_for_testing(TestScenario::ctx(scenario));
+        };
+
+        TestScenario::next_tx(scenario, &the_guy);
+        {
+            let grocery = TestScenario::take_object<Grocery>(scenario);
+            let ctx = TestScenario::ctx(scenario);
+            
+            let ham = {
+                let coin = Coin::mint_for_testing<SUI>(10, ctx);
+                Sandwich::buy_ham(&mut grocery, coin, ctx)
+            };
+
+            let bread = {
+                let coin = Coin::mint_for_testing<SUI>(2, ctx);
+                Sandwich::buy_bread(&mut grocery, coin, ctx)
+            };
+
+            Sandwich::make_sandwich(ham, bread, TestScenario::ctx(scenario));
+            TestScenario::return_object(scenario, grocery);
+        };
+
+        TestScenario::next_tx(scenario, &owner);
+        {  
+            let grocery = TestScenario::take_object<Grocery>(scenario);
+            let capability = TestScenario::take_object<GroceryOwnerCapability>(scenario);
+
+            assert!(Sandwich::profits(&grocery) == 12, 0);
+            Sandwich::collect_profits(capability, &mut grocery, TestScenario::ctx(scenario));
+            assert!(Sandwich::profits(&grocery) == 0, 0);
+
+            TestScenario::return_object(scenario, grocery);
+        };
     }
 }
