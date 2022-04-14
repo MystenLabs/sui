@@ -159,11 +159,13 @@ impl ModuleResolver for InMemoryStorage {
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self
             .read_object(&ObjectID::from(*module_id.address()))
-            .map(|o| match &o.data {
-                Data::Package(m) => m.serialized_module_map()[module_id.name().as_str()]
-                    .clone()
-                    .into_vec(),
-                Data::Move(_) => panic!("Type error"),
+            .and_then(|o| match &o.data {
+                Data::Package(m) => Some(
+                    m.serialized_module_map()[module_id.name().as_str()]
+                        .clone()
+                        .into_vec(),
+                ),
+                Data::Move(_) => None,
             }))
     }
 }
@@ -191,15 +193,14 @@ fn call(
     object_args: Vec<Object>,
     pure_args: Vec<Vec<u8>>,
 ) -> SuiResult<Vec<CallResult>> {
-    let package = storage.find_package(module_name).unwrap();
-
     let vm = adapter::new_move_vm(native_functions.clone()).expect("No errors");
+    let package = storage.find_package(module_name).unwrap();
+    let module_id = ModuleId::new(package.id().into(), Identifier::new(module_name).unwrap());
     adapter::execute(
         &vm,
         storage,
         native_functions,
-        &package,
-        &Identifier::new(module_name).unwrap(),
+        module_id,
         &Identifier::new(fun_name).unwrap(),
         type_args,
         object_args,
@@ -628,12 +629,15 @@ fn test_move_call_incorrect_function() {
 
     // Instead of calling on the genesis package, we are calling the gas object.
     let vm = adapter::new_move_vm(native_functions.clone()).expect("No errors");
+    let module_id = ModuleId::new(
+        gas_object.id().into(),
+        Identifier::new("ObjectBasics").unwrap(),
+    );
     let status = adapter::execute(
         &vm,
         &mut storage,
         &native_functions,
-        &gas_object,
-        &Identifier::new("ObjectBasics").unwrap(),
+        module_id,
         &Identifier::new("create").unwrap(),
         vec![],
         vec![],
@@ -642,9 +646,9 @@ fn test_move_call_incorrect_function() {
         &mut TxContext::random_for_testing_only(),
     );
     let err = status.unwrap_err();
-    assert!(err
-        .to_string()
-        .contains("Expected a module object, but found a Move object"));
+    // TODO redo these contains messages to matches? need better error statuses
+    // LINKER_ERROR is a verification error by the VM given since this module is not found
+    assert!(err.to_string().contains("LINKER_ERROR"));
 
     // Calling a non-existing function.
     let pure_args = vec![10u64.to_le_bytes().to_vec()];

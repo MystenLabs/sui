@@ -85,7 +85,7 @@ module NFTs::Auction {
     /// Updates the auction based on the information in the bid
     /// (update auction if higher bid received and send coin back for
     /// bids that are too low). This is executed by the auctioneer.
-    public fun update_auction<T: key + store>(auction: &mut Auction<T>, bid: Bid, _ctx: &mut TxContext) {
+    public(script) fun update_auction<T: key + store>(auction: &mut Auction<T>, bid: Bid, _ctx: &mut TxContext) {
         let Bid { id, bidder, auction_id, coin } = bid;
         ID::delete(id);
         assert!(AuctionLib::auction_id(auction) == &auction_id, EWRONG_AUCTION);
@@ -95,7 +95,7 @@ module NFTs::Auction {
     /// Ends the auction - transfers item to the currently highest
     /// bidder or to the original owner if no bids have been
     /// placed. This is executed by the auctioneer.
-    public fun end_auction<T: key + store>(auction: Auction<T>, _ctx: &mut TxContext) {
+    public(script) fun end_auction<T: key + store>(auction: Auction<T>, _ctx: &mut TxContext) {
         AuctionLib::end_and_destroy_auction(auction);
     }
 }

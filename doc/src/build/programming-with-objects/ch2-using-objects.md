@@ -19,7 +19,7 @@ struct ColorObject has key {
 Now let's add this function:
 ```rust
 /// Copies the values of `from_object` into `into_object`.
-public fun copy_into(from_object: &ColorObject, into_object, &mut ColorObject, _ctx: &mut TxContext) {
+public(script) fun copy_into(from_object: &ColorObject, into_object, &mut ColorObject, _ctx: &mut TxContext) {
     into_object.red = from_object.red;
     into_object.green = from_object.green;
     into_object.blue = from_object.blue;
@@ -49,7 +49,7 @@ public fun delete(versioned_id: VersionedID);
 ```
 Let's define a function in the `ColorObject` module that allows us to delete the object:
 ```rust
-    public fun delete(object: ColorObject, _ctx: &mut TxContext) {
+    public(script) fun delete(object: ColorObject, _ctx: &mut TxContext) {
         let ColorObject { id, red: _, green: _, blue: _ } = object;
         ID::delete(id);
     }
@@ -83,7 +83,7 @@ The first part is the same as what we have seen in [Chapter 1](./ch1-object-basi
 #### Option 2. Transfer the object
 The owner of the object may want to transfer it to another account. To support this, the `ColorObject` module will need to define a `transfer` API:
 ```rust
-public fun transfer(object: ColorObject, recipient: address, _ctx: &mut TxContext) {
+public(script) fun transfer(object: ColorObject, recipient: address, _ctx: &mut TxContext) {
     Transfer::transfer(object, recipient)
 }
 ```

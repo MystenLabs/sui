@@ -24,7 +24,7 @@ module Tutorial::ColorObject {
         }
     }
 
-    public fun create(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
+    public(script) fun create(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
         let color_object = new(red, green, blue, ctx);
         Transfer::transfer(color_object, TxContext::sender(ctx))
     }
@@ -35,12 +35,12 @@ module Tutorial::ColorObject {
 
     // == Functions covered in Chapter 2 ==
 
-    public fun delete(object: ColorObject, _ctx: &mut TxContext) {
+    public(script) fun delete(object: ColorObject, _ctx: &mut TxContext) {
         let ColorObject { id, red: _, green: _, blue: _ } = object;
         ID::delete(id);
     }
 
-    public fun transfer(object: ColorObject, recipient: address, _ctx: &mut TxContext) {
+    public(script) fun transfer(object: ColorObject, recipient: address, _ctx: &mut TxContext) {
         Transfer::transfer(object, recipient)
     }
 }

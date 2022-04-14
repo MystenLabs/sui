@@ -94,7 +94,7 @@ module NFTs::Geniteam {
     // ============================ Entry functions ============================
 
     /// Create a player and transfer it to the transaction sender
-    public fun create_player(
+    public(script) fun create_player(
         player_name: vector<u8>, ctx: &mut TxContext
     ) {
         // Create player simply and transfer to caller
@@ -103,7 +103,7 @@ module NFTs::Geniteam {
     }
 
     /// Create a Farm and add it to the Player
-    public fun create_farm(
+    public(script) fun create_farm(
         player: &mut Player, farm_img_index: u64, farm_name: vector<u8>,
         total_monster_slots: u64, ctx: &mut TxContext
     ) {
@@ -121,7 +121,7 @@ module NFTs::Geniteam {
 
     /// Create a Monster and add it to the Farm's collection of Monsters, which
     /// is unbounded
-    public fun create_monster(_player: &mut Player,
+    public(script) fun create_monster(_player: &mut Player,
                               farm: &mut Farm,
                               pet_monsters: &mut Collection<Monster>,
                               monster_name: vector<u8>,

@@ -4,7 +4,7 @@
 /// Allow a trusted oracle to mint a copy of NFT from a different chain. There can
 /// only be one copy for each unique pair of contract_address and token_id. We only
 /// support a single chain(Ethereum) right now, but this can be extended to other
-/// chains by adding a chain_id field. 
+/// chains by adding a chain_id field.
 module Sui::CrossChainAirdrop {
     use Std::Vector;
     use Sui::ERC721Metadata::{Self, ERC721Metadata, TokenID};
@@ -17,7 +17,7 @@ module Sui::CrossChainAirdrop {
     struct CrossChainAirdropOracle has key {
         id: VersionedID,
         // TODO: replace this with SparseSet for O(1) on-chain uniqueness check
-        managed_contracts: vector<PerContractAirdropInfo>,        
+        managed_contracts: vector<PerContractAirdropInfo>,
     }
 
     /// The address of the source contract
@@ -37,7 +37,7 @@ module Sui::CrossChainAirdrop {
         // TODO: replace this with SparseSet for O(1) on-chain uniqueness check
         claimed_source_token_ids: vector<TokenID>
     }
-    
+
     /// The Sui representation of the original ERC721 NFT on Eth
     struct ERC721 has store {
         /// The address of the source contract, e.g, the Ethereum contract address
@@ -63,7 +63,7 @@ module Sui::CrossChainAirdrop {
     }
 
     /// Called by the oracle to mint the airdrop NFT and transfer to the recipient
-    public fun claim(
+    public(script) fun claim(
         oracle: &mut CrossChainAirdropOracle,
         recipient: address,
         source_contract_address: vector<u8>,
@@ -77,7 +77,7 @@ module Sui::CrossChainAirdrop {
         // NOTE: this is where the globally uniqueness check happens
         assert!(!is_token_claimed(contract, &token_id), ETOKEN_ID_CLAIMED);
         let nft = NFT::mint(
-            ERC721 {            
+            ERC721 {
                 source_contract_address: SourceContractAddress { address: source_contract_address },
                 metadata: ERC721Metadata::new(token_id, name, token_uri),
             },
@@ -97,7 +97,7 @@ module Sui::CrossChainAirdrop {
             };
             index = index + 1;
         };
-        
+
         create_contract(oracle, source_contract_address)
     }
 
@@ -130,4 +130,3 @@ module Sui::CrossChainAirdrop {
         init(ctx)
     }
 }
-
