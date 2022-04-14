@@ -138,31 +138,31 @@ module Sui::Coin {
 
     /// Send `amount` units of `c` to `recipient
     /// Aborts with `EVALUE` if `amount` is greater than or equal to `amount`
-    public fun transfer_<T>(c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext) {
+    public(script) fun transfer_<T>(c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext) {
         Transfer::transfer(withdraw(c, amount, ctx), recipient)
     }
 
     /// Consume the coin `c` and add its value to `self`.
     /// Aborts if `c.value + self.value > U64_MAX`
-    public fun join_<T>(self: &mut Coin<T>, c: Coin<T>, _ctx: &mut TxContext) {
+    public(script) fun join_<T>(self: &mut Coin<T>, c: Coin<T>, _ctx: &mut TxContext) {
         join(self, c)
     }
 
     /// Join everything in `coins` with `self`
-    public fun join_vec_<T>(self: &mut Coin<T>, coins: vector<Coin<T>>, _ctx: &mut TxContext) {
+    public(script) fun join_vec_<T>(self: &mut Coin<T>, coins: vector<Coin<T>>, _ctx: &mut TxContext) {
         join_vec(self, coins)
     }
 
     /// Split coin `self` to two coins, one with balance `split_amount`,
     /// and the remaining balance is left is `self`.
-    public fun split<T>(self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext) {
+    public(script) fun split<T>(self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext) {
         let new_coin = withdraw(self, split_amount, ctx);
         Transfer::transfer(new_coin, TxContext::sender(ctx));
     }
 
     /// Split coin `self` into multiple coins, each with balance specified
     /// in `split_amounts`. Remaining balance is left in `self`.
-    public fun split_vec<T>(self: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext) {
+    public(script) fun split_vec<T>(self: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext) {
         let i = 0;
         let len = Vector::length(&split_amounts);
         while (i < len) {

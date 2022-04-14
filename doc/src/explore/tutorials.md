@@ -28,7 +28,7 @@ gas units) times the price of gas in the SUI currency (i.e. the gas price).
 
 ## Gather accounts and gas objects
 
-In that new terminal, let us take a look at the account addresses we own in 
+In that new terminal, let us take a look at the account addresses we own in
 our wallet:
 ```
 $ wallet addresses
@@ -183,7 +183,7 @@ export GAME=F1B8161BD97D3CD6627E739AD675089C5ACFB452
 By convention, Player X goes first. Player X wants to put a mark at the center of the gameboard ((1, 1)). This needs to take two steps. First Player X creates a Mark object with the placement intention and send it to the admin.
 We will call the `send_mark_to_game` function in `TicTacToe`, whose signature looks like this:
 ```
-public fun send_mark_to_game(cap: &mut MarkMintCap, game_address: address, row: u64, col: u64, ctx: &mut TxContext);
+public(script) fun send_mark_to_game(cap: &mut MarkMintCap, game_address: address, row: u64, col: u64, ctx: &mut TxContext);
 ```
 The `cap` argument will be Player X's capability object (XCAP), and `game_address` argument will be the admin's address (ADMIN):
 ```
@@ -209,7 +209,7 @@ Mutated Objects:
 The above call created a Mark object, with ID `AE3CE9176F1A8C1F21D922722486DF667FA00394`, and it was sent to the admin.
 The admin can now place the mark on the gameboard. The function to place the mark looks like this:
 ```
-public fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext);
+public(script) fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext);
 ```
 The first argument is the game board, and the second argument is the mark the admin just received from the player. We will call this function (replace the second argument with the Mark object ID above):
 ```

@@ -33,21 +33,21 @@ module Basics::Sandwich {
     const EINSUFFICIENT_FUNDS: u64 = 0;
 
     /// Exchange `c` for some ham
-    public fun buy_ham(c: Coin<SUI>, ctx: &mut TxContext): Ham {
+    fun buy_ham(c: Coin<SUI>, ctx: &mut TxContext): Ham {
         assert!(Coin::value(&c) == HAM_PRICE, EINSUFFICIENT_FUNDS);
         Transfer::transfer(c, GROCERY);
         Ham { id: TxContext::new_id(ctx) }
     }
 
     /// Exchange `c` for some bread
-    public fun buy_bread(c: Coin<SUI>, ctx: &mut TxContext): Bread {
+    fun buy_bread(c: Coin<SUI>, ctx: &mut TxContext): Bread {
         assert!(Coin::value(&c) == BREAD_PRICE, EINSUFFICIENT_FUNDS);
         Transfer::transfer(c, GROCERY);
         Bread { id: TxContext::new_id(ctx) }
     }
 
     /// Combine the `ham` and `bread` into a delicious sandwich
-    public fun make_sandwich(
+    public(script) fun make_sandwich(
         ham: Ham, bread: Bread, ctx: &mut TxContext
     ) {
         let Ham { id: ham_id } = ham;

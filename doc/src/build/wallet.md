@@ -137,7 +137,7 @@ connection to the authorities.
 You can also connect the wallet to the Sui network via a [Rest Gateway](rest-api.md#start-local-rest-server);
 To use the rest gateway, update `wallet.conf`'s `gateway` section to:
 ```json
-{ 
+{
   ...
   "gateway": {
     "rest":"http://127.0.0.1:5001"
@@ -719,7 +719,7 @@ for the first look at Move source code and a description of the
 following function we will be calling in this tutorial:
 
 ```rust
-public fun transfer(c: Coin::Coin<SUI>, recipient: address, _ctx: &mut TxContext) {
+public(script) fun transfer(c: Coin::Coin<SUI>, recipient: address, _ctx: &mut TxContext) {
     Coin::transfer(c, Address::new(recipient))
 }
 ```

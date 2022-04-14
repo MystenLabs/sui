@@ -59,7 +59,7 @@ module Examples::TicTacToe {
     }
 
     /// `x_address` and `o_address` are the account address of the two players.
-    public fun create_game(x_address: address, o_address: address, ctx: &mut TxContext) {
+    public(script) fun create_game(x_address: address, o_address: address, ctx: &mut TxContext) {
         // TODO: Validate sender address, only GameAdmin can create games.
 
         let id = TxContext::new_id(ctx);
@@ -94,7 +94,7 @@ module Examples::TicTacToe {
 
     /// Generate a new mark intended for location (row, col).
     /// This new mark is not yet placed, just transferred to the game.
-    public fun send_mark_to_game(cap: &mut MarkMintCap, game_address: address, row: u64, col: u64, ctx: &mut TxContext) {
+    public(script) fun send_mark_to_game(cap: &mut MarkMintCap, game_address: address, row: u64, col: u64, ctx: &mut TxContext) {
         if (row > 2 || col > 2) {
             abort INVALID_LOCATION
         };
@@ -108,7 +108,7 @@ module Examples::TicTacToe {
         Transfer::transfer(mark, game_address);
     }
 
-    public fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext) {
+    public(script) fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext) {
         // If we are placing the mark at the wrong turn, or if game has ended,
         // destroy the mark.
         let addr = get_cur_turn_address(game);
@@ -138,7 +138,7 @@ module Examples::TicTacToe {
         }
     }
 
-    public fun delete_game(game: TicTacToe, _ctx: &mut TxContext) {
+    public(script) fun delete_game(game: TicTacToe, _ctx: &mut TxContext) {
         let TicTacToe { id, gameboard, cur_turn: _, game_status: _, x_address: _, o_address: _ } = game;
         while (Vector::length(&gameboard) > 0) {
             let row = Vector::pop_back(&mut gameboard);
@@ -156,12 +156,12 @@ module Examples::TicTacToe {
         ID::delete(id);
     }
 
-    public fun delete_trophy(trophy: Trophy, _ctx: &mut TxContext) {
+    public(script) fun delete_trophy(trophy: Trophy, _ctx: &mut TxContext) {
         let Trophy { id } = trophy;
         ID::delete(id);
     }
 
-    public fun delete_cap(cap: MarkMintCap, _ctx: &mut TxContext) {
+    public(script) fun delete_cap(cap: MarkMintCap, _ctx: &mut TxContext) {
         let MarkMintCap { id, game_id: _, remaining_supply: _ } = cap;
         ID::delete(id);
     }

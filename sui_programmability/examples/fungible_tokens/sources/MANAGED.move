@@ -28,12 +28,12 @@ module FungibleTokens::MANAGED {
     }
 
     /// Manager can burn coins
-    public fun burn(treasury_cap: &mut TreasuryCap<MANAGED>, coin: Coin<MANAGED>, _ctx: &mut TxContext) {
+    public(script) fun burn(treasury_cap: &mut TreasuryCap<MANAGED>, coin: Coin<MANAGED>, _ctx: &mut TxContext) {
         Coin::burn(coin, treasury_cap)
     }
 
     /// Manager can transfer the treasury capability to a new manager
-    public fun transfer_cap(treasury_cap: TreasuryCap<MANAGED>, recipient: address, _ctx: &mut TxContext) {
+    public(script) fun transfer_cap(treasury_cap: TreasuryCap<MANAGED>, recipient: address, _ctx: &mut TxContext) {
         Coin::transfer_cap<MANAGED>(treasury_cap, recipient);
     }
 
