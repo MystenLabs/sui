@@ -95,11 +95,16 @@ pub enum WalletCommands {
         #[clap(long)]
         function: Identifier,
         /// Function name in module
-        #[clap(long, parse(try_from_str = parse_type_tag))]
+        #[clap(
+            long,
+            parse(try_from_str = parse_type_tag),
+            multiple_occurrences = false,
+            multiple_values = true
+        )]
         type_args: Vec<TypeTag>,
         /// Simplified ordered args like in the function syntax
         /// ObjectIDs, Addresses must be hex strings
-        #[clap(long)]
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
         args: Vec<SuiJsonValue>,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         #[clap(long)]
@@ -168,7 +173,7 @@ pub enum WalletCommands {
         #[clap(long)]
         coin_id: ObjectID,
         /// Amount to split out from the coin
-        #[clap(long)]
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
         amounts: Vec<u64>,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected

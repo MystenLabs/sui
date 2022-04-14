@@ -89,7 +89,14 @@ async fn main() -> Result<(), anyhow::Error> {
     let config_path = options
         .config
         .unwrap_or(sui_config_dir()?.join(SUI_GATEWAY_CONFIG));
-    let config: GatewayConfig = PersistedConfig::read(&config_path)?;
+
+    let config: GatewayConfig = PersistedConfig::read(&config_path).map_err(|e| {
+        anyhow!(
+            "Failed to read config file at {:?}: {}. Have you run `sui genesis` first?",
+            config_path,
+            e
+        )
+    })?;
     let committee = config.make_committee();
     let authority_clients = config.make_authority_clients();
     let gateway = Box::new(GatewayState::new(
