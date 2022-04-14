@@ -75,11 +75,11 @@ module Games::TicTacToeTests {
 
         // X has the trophy
         TestScenario::next_tx(scenario, &player_x);
-        assert!(TestScenario::can_remove_object<Trophy>(scenario), 1);
+        assert!(TestScenario::can_take_object<Trophy>(scenario), 1);
 
         TestScenario::next_tx(scenario, &player_o);
         // O has no Trophy
-        assert!(!TestScenario::can_remove_object<Trophy>(scenario), 1);
+        assert!(!TestScenario::can_take_object<Trophy>(scenario), 1);
     }
 
 
@@ -186,9 +186,9 @@ module Games::TicTacToeTests {
 
         // No one has the trophy
         TestScenario::next_tx(scenario, &player_x);
-        assert!(!TestScenario::can_remove_object<Trophy>(scenario), 1);
+        assert!(!TestScenario::can_take_object<Trophy>(scenario), 1);
         TestScenario::next_tx(scenario, &player_o);
-        assert!(!TestScenario::can_remove_object<Trophy>(scenario), 1);
+        assert!(!TestScenario::can_take_object<Trophy>(scenario), 1);
     }
 
     fun place_mark(
@@ -201,7 +201,7 @@ module Games::TicTacToeTests {
         // Step 1: player creates a mark and sends it to the game.
         TestScenario::next_tx(scenario, player);
         {
-            let cap = TestScenario::remove_object<MarkMintCap>(scenario);
+            let cap = TestScenario::take_object<MarkMintCap>(scenario);
             TicTacToe::send_mark_to_game(&mut cap, *admin, row, col, TestScenario::ctx(scenario));
             TestScenario::return_object(scenario, cap);
         };
@@ -209,8 +209,8 @@ module Games::TicTacToeTests {
         TestScenario::next_tx(scenario, admin);
         let status;
         {
-            let game = TestScenario::remove_object<TicTacToe>(scenario);
-            let mark = TestScenario::remove_object<Mark>(scenario);
+            let game = TestScenario::take_object<TicTacToe>(scenario);
+            let mark = TestScenario::take_object<Mark>(scenario);
             assert!(TicTacToe::mark_player(&mark) == player, 0);
             assert!(TicTacToe::mark_row(&mark) == row, 1);
             assert!(TicTacToe::mark_col(&mark) == col, 2);

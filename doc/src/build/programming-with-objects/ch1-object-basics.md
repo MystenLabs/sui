@@ -113,26 +113,26 @@ let not_owner = @0x2;
 // Check that @not_owner does not own the just-created ColorObject.
 TestScenario::next_tx(scenario, &not_owner);
 {
-    assert!(!TestScenario::can_remove_object<ColorObject>(scenario), 0);
+    assert!(!TestScenario::can_take_object<ColorObject>(scenario), 0);
 };
 ```
 `TestScenario::next_tx` switches the transaction sender to `@0x2`, which is a new address than the previous one.
-`TestScenario::can_remove_object` checks whether an object with the given type actually exists in the global storage owned by the current sender of the transaction. In this code, we assert that we should not be able to remove such an object, because `@0x2` does not own any object.
+`TestScenario::can_take_object` checks whether an object with the given type actually exists in the global storage owned by the current sender of the transaction. In this code, we assert that we should not be able to remove such an object, because `@0x2` does not own any object.
 > :bulb: The second parameter of `assert!` is the error code. In non-test code, we usually define a list of dedicated error code constants for each type of error that could happen in production. For unit tests though, it's usually unnecessary because there will be way too many assetions and the stacktrace upon error is sufficient to tell where the error happened. Hence we recommend just putting `0` there in unit tests for assertions.
 
 Finally we check that `@0x1` owns the object and the object value is consistent:
 ```rust
 TestScenario::next_tx(scenario, &owner);
 {
-    let object = TestScenario::remove_object<ColorObject>(scenario);
+    let object = TestScenario::take_object<ColorObject>(scenario);
     let (red, green, blue) = ColorObject::get_color(&object);
     assert!(red == 255 && green == 0 && blue == 255, 0);
     TestScenario::return_object(scenario, object);
 };
 ```
-`TestScenario::remove_object` removes the object of given type from global storage that's owned by the current transaction sender (it also implicitly checks `can_remove_object`). If this line of code succeeds, it means that `owner` indeed owns an object of type `ColorObject`.
+`TestScenario::take_object` removes the object of given type from global storage that's owned by the current transaction sender (it also implicitly checks `can_take_object`). If this line of code succeeds, it means that `owner` indeed owns an object of type `ColorObject`.
 We also check that the field values of the object match with what we set in creation. At the end, we must return the object back to the global storage by calling `TestScenario::return_object` so that it's back to the global storage. This also ensures that if any mutations happened to the object during the test, the global storage is aware of the changes.
-You may have noticed that `remove_object` picks the object only based on the type parameter. What if there are multiple objects of the same type owned by the account? How do we retrieve each of them? In fact, if you call `remove_object` when there are more than one object of the same type in the same account, an assertion failure will be triggered. We are working on adding an API just for this. Update coming soon.
+You may have noticed that `take_object` picks the object only based on the type parameter. What if there are multiple objects of the same type owned by the account? How do we retrieve each of them? In fact, if you call `take_object` when there are more than one object of the same type in the same account, an assertion failure will be triggered. We are working on adding an API just for this. Update coming soon.
 
 Again, you can find the full code [here](../../../move_code/objects_tutorial/sources/Ch1_2/ColorObject.move).
 

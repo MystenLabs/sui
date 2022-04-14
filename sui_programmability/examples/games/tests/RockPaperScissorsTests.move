@@ -31,8 +31,8 @@ module Games::RockPaperScissorsTests {
         // Now it's time for The Main Guy to accept his turn.
         TestScenario::next_tx(scenario, &the_main_guy);
         {
-            let game = TestScenario::remove_object<Game>(scenario);
-            let cap = TestScenario::remove_object<PlayerTurn>(scenario);
+            let game = TestScenario::take_object<Game>(scenario);
+            let cap = TestScenario::take_object<PlayerTurn>(scenario);
 
             assert!(Game::status(&game) == 0, 0); // STATUS_READY
 
@@ -52,8 +52,8 @@ module Games::RockPaperScissorsTests {
 
         TestScenario::next_tx(scenario, &the_main_guy);
         {
-            let game = TestScenario::remove_object<Game>(scenario);
-            let cap = TestScenario::remove_object<PlayerTurn>(scenario);
+            let game = TestScenario::take_object<Game>(scenario);
+            let cap = TestScenario::take_object<PlayerTurn>(scenario);
             Game::add_hash(&mut game, cap, TestScenario::ctx(scenario));
 
             assert!(Game::status(&game) == 2, 0); // STATUS_HASHES_SUBMITTED
@@ -69,8 +69,8 @@ module Games::RockPaperScissorsTests {
 
         TestScenario::next_tx(scenario, &the_main_guy);
         {
-            let game = TestScenario::remove_object<Game>(scenario);
-            let secret = TestScenario::remove_object<Secret>(scenario);
+            let game = TestScenario::take_object<Game>(scenario);
+            let secret = TestScenario::take_object<Secret>(scenario);
             Game::match_secret(&mut game, secret, TestScenario::ctx(scenario));
 
             assert!(Game::status(&game) == 3, 0); // STATUS_REVEALING
@@ -85,8 +85,8 @@ module Games::RockPaperScissorsTests {
         // calls the [`select_winner`] function to release The Prize.
         TestScenario::next_tx(scenario, &the_main_guy);
         {
-            let game = TestScenario::remove_object<Game>(scenario);
-            let secret = TestScenario::remove_object<Secret>(scenario);
+            let game = TestScenario::take_object<Game>(scenario);
+            let secret = TestScenario::take_object<Secret>(scenario);
             Game::match_secret(&mut game, secret, TestScenario::ctx(scenario));
 
             assert!(Game::status(&game) == 4, 0); // STATUS_REVEALED
@@ -96,7 +96,7 @@ module Games::RockPaperScissorsTests {
 
         TestScenario::next_tx(scenario, &mr_spock);
         // If it works, then MrSpock is in possession of the prize;
-        let prize = TestScenario::remove_object<ThePrize>(scenario);
+        let prize = TestScenario::take_object<ThePrize>(scenario);
         // Don't forget to give it back!
         TestScenario::return_object(scenario, prize);
     }

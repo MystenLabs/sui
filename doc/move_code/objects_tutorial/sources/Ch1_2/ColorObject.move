@@ -65,13 +65,13 @@ module Tutorial::ColorObjectTests {
         let not_owner = @0x2;
         TestScenario::next_tx(scenario, &not_owner);
         {
-            assert!(!TestScenario::can_remove_object<ColorObject>(scenario), 0);
+            assert!(!TestScenario::can_take_object<ColorObject>(scenario), 0);
         };
         // Check that @owner indeed owns the just-created ColorObject.
         // Also checks the value fields of the object.
         TestScenario::next_tx(scenario, &owner);
         {
-            let object = TestScenario::remove_object<ColorObject>(scenario);
+            let object = TestScenario::take_object<ColorObject>(scenario);
             let (red, green, blue) = ColorObject::get_color(&object);
             assert!(red == 255 && green == 0 && blue == 255, 0);
             TestScenario::return_object(scenario, object);
@@ -92,14 +92,14 @@ module Tutorial::ColorObjectTests {
         // Delete the ColorObject we just created.
         TestScenario::next_tx(scenario, &owner);
         {
-            let object = TestScenario::remove_object<ColorObject>(scenario);
+            let object = TestScenario::take_object<ColorObject>(scenario);
             let ctx = TestScenario::ctx(scenario);
             ColorObject::delete(object, ctx);
         };
         // Verify that the object was indeed deleted.
         TestScenario::next_tx(scenario, &owner);
         {
-            assert!(!TestScenario::can_remove_object<ColorObject>(scenario), 0);
+            assert!(!TestScenario::can_take_object<ColorObject>(scenario), 0);
         }
     }
 
@@ -116,19 +116,19 @@ module Tutorial::ColorObjectTests {
         let recipient = @0x2;
         TestScenario::next_tx(scenario, &owner);
         {
-            let object = TestScenario::remove_object<ColorObject>(scenario);
+            let object = TestScenario::take_object<ColorObject>(scenario);
             let ctx = TestScenario::ctx(scenario);
             ColorObject::transfer(object, recipient, ctx);
         };
         // Check that owner no longer owns the object.
         TestScenario::next_tx(scenario, &owner);
         {
-            assert!(!TestScenario::can_remove_object<ColorObject>(scenario), 0);
+            assert!(!TestScenario::can_take_object<ColorObject>(scenario), 0);
         };
         // Check that recipient now owns the object.
         TestScenario::next_tx(scenario, &recipient);
         {
-            assert!(TestScenario::can_remove_object<ColorObject>(scenario), 0);
+            assert!(TestScenario::can_take_object<ColorObject>(scenario), 0);
         };
     }
 }
