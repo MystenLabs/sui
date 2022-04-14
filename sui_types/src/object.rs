@@ -575,6 +575,9 @@ pub enum ObjectRead {
 #[derive(Deserialize)]
 pub struct ObjectInfo(pub ObjectRef, pub Object, pub Option<MoveStructLayout>);
 
+/// Custom serializer for ObjectInfo
+/// This serializer inject an extra field `json_data` to Object, the data is created using `Data::to_json` and `MoveStructLayout`
+/// The `json_data` is not deserializable and will be ignored by the deserializer
 impl Serialize for ObjectInfo {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
