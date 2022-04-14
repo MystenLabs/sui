@@ -15,7 +15,8 @@ use serde_json::json;
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
 use sui_types::base_types::{encode_bytes_hex, ObjectID, ObjectRef, SuiAddress, TransactionDigest};
-use sui_types::messages::{Transaction, TransactionData};
+use sui_types::crypto::EmptySignInfo;
+use sui_types::messages::{Transaction, TransactionData, TransactionEnvelope};
 use sui_types::object::ObjectRead;
 
 use crate::rest_gateway::requests::{
@@ -229,6 +230,17 @@ impl GatewayAPI for RestGatewayClient {
     ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
         // TODO: Implement this.
         Ok(vec![])
+    }
+
+    async fn get_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<TransactionEnvelope<EmptySignInfo>, anyhow::Error> {
+        // TODO: Implement this.
+        let hex_digest = encode_bytes_hex(&digest);
+        let url = format!("{}/api/tx?digest={}", self.url, hex_digest);
+        let response = reqwest::blocking::get(url)?;
+        Ok(response.json()?)
     }
 }
 

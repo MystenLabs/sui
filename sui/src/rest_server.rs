@@ -26,7 +26,7 @@ use sui::config::PersistedConfig;
 use sui::gateway::GatewayConfig;
 use sui::rest_gateway::requests::{
     CallRequest, GetObjectInfoRequest, GetObjectSchemaRequest, GetObjectsRequest, MergeCoinRequest,
-    PublishRequest, SignedTransaction, SplitCoinRequest, SyncRequest, TransferTransactionRequest,
+    PublishRequest, SignedTransaction, SplitCoinRequest, SyncRequest, TransferTransactionRequest, GetTransactionDetailsRequest,
 };
 use sui::rest_gateway::responses::{
     custom_http_error, HttpResponseOk, JsonResponse, NamedObjectRef, ObjectResponse,
@@ -36,9 +36,9 @@ use sui::{sui_config_dir, SUI_GATEWAY_CONFIG};
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::{GatewayClient, GatewayState};
 use sui_types::base_types::*;
-use sui_types::crypto;
+use sui_types::crypto::{self, EmptySignInfo};
 use sui_types::crypto::SignableBytes;
-use sui_types::messages::{Transaction, TransactionData};
+use sui_types::messages::{Transaction, TransactionData, TransactionEnvelope};
 use sui_types::object::Object as SuiObject;
 use sui_types::object::ObjectRead;
 
@@ -127,6 +127,7 @@ fn create_api() -> ApiDescription<ServerContext> {
     api.register(move_call).unwrap();
     api.register(sync_account_state).unwrap();
     api.register(execute_transaction).unwrap();
+    api.register(get_transaction_details).unwrap();
 
     api
 }
@@ -612,4 +613,45 @@ async fn handle_move_call(
             gas_budget,
         )
         .await
+}
+
+/// on all objects owned by each address that is managed by this client state.
+#[endpoint {
+    method = GET,
+    path = "/api/tx",
+    tags = [ "API" ]
+}]
+async fn get_transaction_details(
+    ctx: Arc<RequestContext<ServerContext>>,
+    query: Query<GetTransactionDetailsRequest>
+) -> Result<HttpResponseOk<JsonResponse<TransactionEnvelope<EmptySignInfo>>>, HttpError> {
+
+    let gateway = ctx.context().gateway.lock().await;
+    let query: GetTransactionDetailsRequest = query.into_inner();
+
+    let digest_u8 = query.digest.as_bytes();
+    let mut digest_fixu8 = [0u8; 32];
+    digest_fixu8.copy_from_slice(digest_u8);
+    let digest = TransactionDigest::new(digest_fixu8);
+
+    let result = match get_transaction(&gateway, digest).await {
+        Ok(tx_env) => tx_env,
+        Err(err) => return Err(err),
+    };
+
+    Ok(HttpResponseOk(JsonResponse(result)))
+}
+
+
+async fn get_transaction(
+    gateway: &GatewayClient,
+    digest: TransactionDigest,
+) -> Result<TransactionEnvelope<EmptySignInfo>, HttpError> {
+    match gateway.get_transaction(digest).await {
+        Ok(tx_env) => Ok(tx_env),
+        Err(err) => Err(custom_http_error(
+            StatusCode::NOT_FOUND,
+            format!("Error while getting transaction details: {err:?}"),
+        )),
+    }
 }

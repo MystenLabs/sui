@@ -12,6 +12,7 @@ use futures::future;
 
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
+use sui_types::crypto::EmptySignInfo;
 use sui_types::gas::{self, SuiGasStatus};
 use sui_types::{
     base_types::*,
@@ -197,6 +198,12 @@ pub trait GatewayAPI {
         &self,
         count: u64,
     ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error>;
+
+    // return transaction details by digest
+    async fn get_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<TransactionEnvelope<EmptySignInfo>, anyhow::Error>;
 }
 
 impl<A> GatewayState<A>
@@ -790,5 +797,21 @@ where
         let end = self.get_total_transaction_number()?;
         let start = if end >= count { end - count } else { 0 };
         self.get_transactions_in_range(start, end)
+    }
+
+    async fn get_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<TransactionEnvelope<EmptySignInfo>, anyhow::Error> {
+        match self.store.get_transaction(&digest) {
+            Ok(opt) => match opt {
+                Some(t) => Ok(t),
+                None => {
+                    let sui_err = SuiError::TransactionNotFound { digest };
+                    Err(anyhow::Error::new(sui_err))
+                }
+            },
+            Err(err) => Err(anyhow::Error::new(err)),
+        }
     }
 }
