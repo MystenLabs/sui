@@ -14,6 +14,8 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 
+use crate::format_signature_token;
+
 pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
 
 /// Checks if parameters of functions that can become entry
@@ -124,8 +126,13 @@ fn verify_entry_function_impl(
     if !is_tx_context(&view, last_param) {
         debug_assert!(!_is_entrypoint_execution);
         return Err(format!(
-            "Expected last parameter of function signature to be &mut {}::{}::{}, but found {:?}",
-            SUI_FRAMEWORK_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME, last_param
+            "{}::{}. Expected last parameter of function signature to be &mut {}::{}::{}, but found {}",
+            module.self_id(),
+            view.identifier_at(handle.name),
+            SUI_FRAMEWORK_ADDRESS,
+            TX_CONTEXT_MODULE_NAME,
+            TX_CONTEXT_STRUCT_NAME,
+            format_signature_token(module, last_param),
         ));
     }
 
@@ -148,8 +155,10 @@ fn verify_entry_function_impl(
     {
         if !is_primitive(function_type_args, pessimistic_type_args, t) {
             return Err(format!(
-                "Expected primitive parameter after object parameters for function {} at \
+                "{}::{}. Expected primitive parameter after object parameters for function {} at \
                         position {}",
+                module.self_id(),
+                view.identifier_at(handle.name),
                 view.identifier_at(handle.name),
                 pos,
             ));
@@ -159,7 +168,9 @@ fn verify_entry_function_impl(
     for (pos, ret_t) in view.signature_at(handle.return_).0.iter().enumerate() {
         if !is_entry_ret_type(function_type_args, pessimistic_type_args, ret_t) {
             return Err(format!(
-                "Expected primitive return type for function {} at position {}",
+                "{}::{}. Expected primitive return type for function {} at position {}",
+                module.self_id(),
+                view.identifier_at(handle.name),
                 view.identifier_at(handle.name),
                 pos,
             ));

@@ -61,7 +61,7 @@ module Sui::Bag {
     }
 
     /// Create a new Bag and transfer it to the signer.
-    public fun create(ctx: &mut TxContext) {
+    public(script) fun create(ctx: &mut TxContext) {
         Transfer::transfer(new(ctx), TxContext::sender(ctx))
     }
 
@@ -118,13 +118,13 @@ module Sui::Bag {
     }
 
     /// Remove the object from the Bag, and then transfer it to the signer.
-    public fun remove_and_take<T: key>(c: &mut Bag, object: T, ctx: &mut TxContext) {
+    public(script) fun remove_and_take<T: key>(c: &mut Bag, object: T, ctx: &mut TxContext) {
         let object = remove(c, object);
         Transfer::transfer(object, TxContext::sender(ctx));
     }
 
     /// Transfer the entire Bag to `recipient`.
-    public fun transfer(c: Bag, recipient: address, _ctx: &mut TxContext) {
+    public(script) fun transfer(c: Bag, recipient: address, _ctx: &mut TxContext) {
         Transfer::transfer(c, recipient)
     }
 

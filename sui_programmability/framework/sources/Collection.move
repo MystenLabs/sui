@@ -66,7 +66,7 @@ module Sui::Collection {
     }
 
     /// Create a new Collection and transfer it to the signer.
-    public fun create<T: key>(ctx: &mut TxContext) {
+    public(script) fun create<T: key>(ctx: &mut TxContext) {
         Transfer::transfer(new<T>(ctx), TxContext::sender(ctx))
     }
 
@@ -125,13 +125,13 @@ module Sui::Collection {
     }
 
     /// Remove the object from the collection, and then transfer it to the signer.
-    public fun remove_and_take<T: key>(c: &mut Collection<T>, object: T, ctx: &mut TxContext) {
+    public(script) fun remove_and_take<T: key>(c: &mut Collection<T>, object: T, ctx: &mut TxContext) {
         let (object, child_ref) = remove(c, object);
         Transfer::transfer_child_to_address(object, child_ref, TxContext::sender(ctx));
     }
 
     /// Transfer the entire collection to `recipient`.
-    public fun transfer<T: key>(c: Collection<T>, recipient: address, _ctx: &mut TxContext) {
+    public(script) fun transfer<T: key>(c: Collection<T>, recipient: address, _ctx: &mut TxContext) {
         Transfer::transfer(c, recipient)
     }
 

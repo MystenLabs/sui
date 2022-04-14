@@ -35,7 +35,7 @@ module NFTs::AuctionTests {
     }
 
     #[test]
-    public fun simple_auction_test() {
+    public(script) fun simple_auction_test() {
         let auctioneer = @0xABBA;
         let owner = @0xACE;
         let bidder1 = @0xFACE;

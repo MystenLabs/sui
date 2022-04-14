@@ -62,7 +62,7 @@ module Games::SharedTicTacToe {
     }
 
     /// `x_address` and `o_address` are the account address of the two players.
-    public fun create_game(x_address: address, o_address: address, ctx: &mut TxContext) {
+    public(script) fun create_game(x_address: address, o_address: address, ctx: &mut TxContext) {
         // TODO: Validate sender address, only GameAdmin can create games.
 
         let id = TxContext::new_id(ctx);
@@ -83,7 +83,7 @@ module Games::SharedTicTacToe {
         Transfer::share_object(game);
     }
 
-    public fun place_mark(game: &mut TicTacToe, row: u8, col: u8, ctx: &mut TxContext) {
+    public(script) fun place_mark(game: &mut TicTacToe, row: u8, col: u8, ctx: &mut TxContext) {
         assert!(row < 3 && col < 3, EINVALID_LOCATION);
         assert!(game.game_status == IN_PROGRESS, EGAME_ENDED);
         let addr = get_cur_turn_address(game);
@@ -107,12 +107,12 @@ module Games::SharedTicTacToe {
         }
     }
 
-    public fun delete_game(game: TicTacToe, _ctx: &mut TxContext) {
+    public(script) fun delete_game(game: TicTacToe, _ctx: &mut TxContext) {
         let TicTacToe { id, gameboard: _, cur_turn: _, game_status: _, x_address: _, o_address: _ } = game;
         ID::delete(id);
     }
 
-    public fun delete_trophy(trophy: Trophy, _ctx: &mut TxContext) {
+    public(script) fun delete_trophy(trophy: Trophy, _ctx: &mut TxContext) {
         let Trophy { id } = trophy;
         ID::delete(id);
     }

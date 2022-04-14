@@ -117,7 +117,7 @@ module Games::RockPaperScissors {
     /// is initiated with default/empty values which will be filled later in the game.
     ///
     /// todo: extend with generics + T as prize
-    public fun new_game(player_one: address, player_two: address, ctx: &mut TxContext) {
+    public(script) fun new_game(player_one: address, player_two: address, ctx: &mut TxContext) {
         Transfer::transfer(Game {
             id: TxContext::new_id(ctx),
             prize: ThePrize { id: TxContext::new_id(ctx) },
@@ -134,7 +134,7 @@ module Games::RockPaperScissors {
     /// is encoded inside the [`hash`] argument.
     ///
     /// Currently there's no check on whether the game exists.
-    public fun player_turn(at: address, hash: vector<u8>, ctx: &mut TxContext) {
+    public(script) fun player_turn(at: address, hash: vector<u8>, ctx: &mut TxContext) {
         Transfer::transfer(PlayerTurn {
             hash,
             id: TxContext::new_id(ctx),
@@ -144,7 +144,7 @@ module Games::RockPaperScissors {
 
     /// Add a hashed gesture to the game. Store it as a `hash_one` or `hash_two` depending
     /// on the player number (one or two)
-    public fun add_hash(game: &mut Game, cap: PlayerTurn, _ctx: &mut TxContext) {
+    public(script) fun add_hash(game: &mut Game, cap: PlayerTurn, _ctx: &mut TxContext) {
         let PlayerTurn { hash, id, player } = cap;
         let status = status(game);
 
@@ -164,7 +164,7 @@ module Games::RockPaperScissors {
 
     /// Submit a [`Secret`] to the game owner who then matches the hash and saves the
     /// gesture in the [`Game`] object.
-    public fun reveal(at: address, salt: vector<u8>, ctx: &mut TxContext) {
+    public(script) fun reveal(at: address, salt: vector<u8>, ctx: &mut TxContext) {
         Transfer::transfer(Secret {
             id: TxContext::new_id(ctx),
             salt,
@@ -175,7 +175,7 @@ module Games::RockPaperScissors {
     /// Use submitted [`Secret`]'s salt to find the gesture played by the player and set it
     /// in the [`Game`] object.
     /// TODO: think of ways to
-    public fun match_secret(game: &mut Game, secret: Secret, _ctx: &mut TxContext) {
+    public(script) fun match_secret(game: &mut Game, secret: Secret, _ctx: &mut TxContext) {
         let Secret { salt, player, id } = secret;
 
         assert!(player == game.player_one || player == game.player_two, 0);
@@ -191,7 +191,7 @@ module Games::RockPaperScissors {
 
     /// The final accord to the game logic. After both secrets have been revealed,
     /// the game owner can choose a winner and release the prize.
-    public fun select_winner(game: Game, ctx: &mut TxContext) {
+    public(script) fun select_winner(game: Game, ctx: &mut TxContext) {
         assert!(status(&game) == STATUS_REVEALED, 0);
 
         let Game {

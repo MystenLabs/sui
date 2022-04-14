@@ -42,7 +42,7 @@ module NFTs::SharedAuction {
 
     /// Creates an auction. This is executed by the owner of the asset
     /// to be auctioned.
-    public fun create_auction<T: key + store >(to_sell: T, ctx: &mut TxContext) {
+    public(script) fun create_auction<T: key + store >(to_sell: T, ctx: &mut TxContext) {
         let auction = AuctionLib::create_auction(TxContext::new_id(ctx), to_sell, ctx);
         Transfer::share_object(auction);
     }
@@ -51,7 +51,7 @@ module NFTs::SharedAuction {
     /// change of the auction state (if bid was high enough) or return
     /// of the funds (if the bid was too low). This is executed by a
     /// bidder.
-    public fun bid<T: key + store>(coin: Coin<SUI>, auction: &mut Auction<T>, ctx: &mut TxContext) {
+    public(script) fun bid<T: key + store>(coin: Coin<SUI>, auction: &mut Auction<T>, ctx: &mut TxContext) {
         let bidder = TxContext::sender(ctx);
         AuctionLib::update_auction(auction, bidder, coin);
     }
@@ -60,7 +60,7 @@ module NFTs::SharedAuction {
     /// bidder or back to the original owner if no bids have been
     /// placed. This is executed by the owner of the asset to be
     /// auctioned.
-    public fun end_auction<T: key + store>(auction: &mut Auction<T>, ctx: &mut TxContext) {
+    public(script) fun end_auction<T: key + store>(auction: &mut Auction<T>, ctx: &mut TxContext) {
         let owner = AuctionLib::auction_owner(auction);
         assert!(TxContext::sender(ctx) == owner, EWRONG_OWNER);
         AuctionLib::end_shared_auction(auction);

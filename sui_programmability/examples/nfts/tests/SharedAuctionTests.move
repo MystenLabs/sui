@@ -39,7 +39,7 @@ module NFTs::SharedAuctionTests {
     }
 
     #[test]
-    public fun simple_auction_test() {
+    public(script) fun simple_auction_test() {
         let admin = @0xABBA; // needed only to initialize "state of the world"
         let owner = @0xACE;
         let bidder1 = @0xFACE;
