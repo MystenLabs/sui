@@ -12,7 +12,7 @@ use sui_network::network::{NetworkClient, NetworkServer};
 use sui_types::batch::UpdateItem;
 use sui_types::messages::{BatchInfoRequest, BatchInfoResponseItem};
 use sui_types::serialize::*;
-use tokio::runtime::Builder;
+use tokio::runtime::{Builder, Runtime};
 use tracing::*;
 
 pub mod bench_types;
@@ -20,11 +20,14 @@ pub mod load_generator;
 pub mod transaction_creator;
 use crate::benchmark::bench_types::{Benchmark, BenchmarkType};
 use crate::benchmark::load_generator::{
-    check_transaction_response, send_tx_chunks, spawn_authority_server, FixedRateLoadGenerator,
+    calculate_throughput, check_transaction_response, send_tx_chunks, spawn_authority_server,
+    FixedRateLoadGenerator,
 };
 use crate::benchmark::transaction_creator::TransactionCreator;
 
 use self::bench_types::{BenchmarkResult, MicroBenchmarkResult, MicroBenchmarkType};
+
+const FOLLOWER_BATCH_SIZE: u64 = 10_000;
 
 pub fn run_benchmark(benchmark: Benchmark) -> BenchmarkResult {
     // Only microbenchmark support is supported
@@ -32,13 +35,9 @@ pub fn run_benchmark(benchmark: Benchmark) -> BenchmarkResult {
 }
 
 fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
-    #[allow(irrefutable_let_patterns)]
-    let (host, port, type_) =
-        if let BenchmarkType::MicroBenchmark { host, port, type_ } = benchmark.bench_type {
-            (host, port, type_)
-        } else {
-            panic!("Invalid variant")
-        };
+    let (host, port, type_) = match benchmark.bench_type {
+        BenchmarkType::MicroBenchmark { host, port, type_ } => (host, port, type_),
+    };
 
     let network_client = NetworkClient::new(
         host.clone(),
@@ -98,7 +97,7 @@ fn run_throughout_microbench(
         0,
         "num_transactions must integer divide batch_size",
     );
-
+    // In order to simplify things, we send chunks on each connection and try to ensure all connections have equal load
     assert!(
         (num_transactions % connections) == 0,
         "num_transactions must {} be multiple of number of TCP connections {}",
@@ -117,13 +116,7 @@ fn run_throughout_microbench(
 
     // Make multi-threaded runtime for the authority
     thread::spawn(move || {
-        let runtime = Builder::new_multi_thread()
-            .enable_all()
-            .thread_stack_size(32 * 1024 * 1024)
-            .build()
-            .unwrap();
-
-        runtime.block_on(async move {
+        get_multithread_runtime().block_on(async move {
             let server = spawn_authority_server(network_server, tx_cr.authority_state).await;
             if let Err(e) = server.join().await {
                 error!("Server ended with an error: {e}");
@@ -131,40 +124,28 @@ fn run_throughout_microbench(
         });
     });
 
-    let runtime = Builder::new_multi_thread()
-        .enable_all()
-        .thread_stack_size(32 * 1024 * 1024)
-        .worker_threads(usize::min(num_cpus::get(), 24))
-        .build()
-        .unwrap();
-
     // Wait for server start
     sleep(Duration::from_secs(3));
 
     // Follower to observe batches
     let follower_network_client = network_client.clone();
     thread::spawn(move || {
-        let runtime = Builder::new_multi_thread()
-            .enable_all()
-            .thread_stack_size(32 * 1024 * 1024)
-            .build()
-            .unwrap();
-
-        runtime.block_on(async move { run_follower(follower_network_client).await });
+        get_multithread_runtime()
+            .block_on(async move { run_follower(follower_network_client).await });
     });
 
     sleep(Duration::from_secs(3));
 
     // Run load
-    let (elapsed, resp) =
-        runtime.block_on(async move { send_tx_chunks(txes, network_client, connections).await });
+    let (elapsed, resp) = get_multithread_runtime()
+        .block_on(async move { send_tx_chunks(txes, network_client, connections).await });
 
     let _: Vec<_> = resp
         .par_iter()
         .map(|q| check_transaction_response(deserialize_message(&(q.as_ref().unwrap())[..])))
         .collect();
     MicroBenchmarkResult::Throughput {
-        chunk_throughput: 1_000_000.0 * num_transactions as f64 / elapsed as f64,
+        chunk_throughput: calculate_throughput(num_transactions, elapsed),
     }
 }
 
@@ -180,6 +161,7 @@ fn run_latency_microbench(
     chunk_size: usize,
     period_us: u64,
 ) -> MicroBenchmarkResult {
+    // In order to simplify things, we send chunks on each connection and try to ensure all connections have equal load
     assert!(
         (num_chunks * chunk_size % connections) == 0,
         "num_transactions must {} be multiple of number of TCP connections {}",
@@ -196,13 +178,7 @@ fn run_latency_microbench(
 
     // Make multi-threaded runtime for the authority
     thread::spawn(move || {
-        let runtime = Builder::new_multi_thread()
-            .enable_all()
-            .thread_stack_size(32 * 1024 * 1024)
-            .build()
-            .unwrap();
-
-        runtime.block_on(async move {
+        get_multithread_runtime().block_on(async move {
             let server = spawn_authority_server(network_server, tx_cr.authority_state).await;
             if let Err(e) = server.join().await {
                 error!("Server ended with an error: {e}");
@@ -212,14 +188,7 @@ fn run_latency_microbench(
 
     // Wait for server start
     sleep(Duration::from_secs(3));
-
-    let runtime = Builder::new_multi_thread()
-        .enable_all()
-        .thread_stack_size(32 * 1024 * 1024)
-        .worker_threads(usize::min(num_cpus::get(), 24))
-        .build()
-        .unwrap();
-
+    let runtime = get_multithread_runtime();
     // Prep the generators
     let (mut load_gen, mut tracer_gen) = runtime.block_on(async move {
         join!(
@@ -256,7 +225,7 @@ async fn run_follower(network_client: NetworkClient) {
             let receiver = authority_client
                 .handle_batch_streaming_as_stream(BatchInfoRequest {
                     start,
-                    end: start + 10_000,
+                    end: start + FOLLOWER_BATCH_SIZE,
                 })
                 .await;
 
@@ -286,4 +255,13 @@ async fn run_follower(network_client: NetworkClient) {
             }
         }
     });
+}
+
+fn get_multithread_runtime() -> Runtime {
+    Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(32 * 1024 * 1024)
+        .worker_threads(usize::min(num_cpus::get(), 24))
+        .build()
+        .unwrap()
 }

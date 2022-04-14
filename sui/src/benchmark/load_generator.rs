@@ -176,3 +176,7 @@ pub async fn spawn_authority_server(
     );
     server.spawn().await.unwrap()
 }
+
+pub fn calculate_throughput(num_items: usize, elapsed_time_us: u128) -> f64 {
+    1_000_000.0 * num_items as f64 / elapsed_time_us as f64
+}

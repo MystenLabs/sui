@@ -6,6 +6,8 @@ use std::default::Default;
 use strum_macros::EnumString;
 use sui_network::transport;
 
+use super::load_generator::calculate_throughput;
+
 #[derive(Debug, Clone, Parser)]
 #[clap(
     name = "Sui Benchmark",
@@ -143,9 +145,10 @@ impl std::fmt::Display for MicroBenchmarkResult {
 
                 write!(
                     f,
-                    "Average Latency {} us @ {} tps",
+                    "Average Latency {} us @ {} tps ({} samples)",
                     tracer_avg,
-                    1_000_000.0 * *load_chunk_size as f64 / *tick_period as f64,
+                    calculate_throughput(*load_chunk_size, *tick_period as u128),
+                    chunk_latencies.len()
                 )
             }
         }
