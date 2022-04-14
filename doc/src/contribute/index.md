@@ -32,7 +32,7 @@ Simply edit the file in question and generate a pull request. We will get back t
 ## Download Sui
 
 In order to obtain the Sui source code, follow the steps to download (`git clone`) the `sui` repository
-at [Install Sui](../build/install.md).
+at [Install Sui](../build/install.md#source-code).
 
 ## Send pull requests
 
