@@ -20,7 +20,7 @@ When running most of the below yarn commands, the SuiExplorer Client will extrac
 
 If the environment variable `REACT_APP_DATA` is set to `static`, then the SuiExplorer will instead pull data from a local, static JSON dataset that can be found at `./src/utils/static/mock_data.json`.
 
-For example, suppose we wish to locally run the website using the static JSON dataset and not the API, then we would run the following:
+For example, suppose we wish to locally run the website using the static JSON dataset and not the API, then we could run the following:
 
 ```bash
 REACT_APP_DATA=static yarn start
@@ -63,11 +63,6 @@ Run linting check (prettier/eslint/stylelint).
 ### `yarn lint:fix`
 
 Run linting check but also try to fix any issues.
-
-### `yarn prettier:fix:watch`
-
-Run prettier in watch mode and format any file that changes. (Also runs prettier once in the beginning for all the files)\
-It can be useful during development to format automatically all the files that change.
 
 ## Deployment
 
