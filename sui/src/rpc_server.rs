@@ -1,17 +1,19 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::env;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 
-use jsonrpsee::http_server::HttpServerBuilder;
+use clap::Parser;
+use jsonrpsee::http_server::{AccessControlBuilder, HttpServerBuilder};
 use jsonrpsee::RpcModule;
 use tracing::info;
 
-use clap::Parser;
 use sui::rpc_gateway::RpcGatewayImpl;
 use sui::rpc_gateway::RpcGatewayServer;
 use sui::sui_config_dir;
+
 const DEFAULT_REST_SERVER_PORT: &str = "5001";
 const DEFAULT_REST_SERVER_ADDR_IPV4: &str = "127.0.0.1";
 
@@ -46,19 +48,33 @@ async fn main() -> anyhow::Result<()> {
     };
     #[allow(unused)]
     let guard = telemetry_subscribers::init(config);
-
     let options: RpcGatewayOpt = RpcGatewayOpt::parse();
-
     let config_path = options
         .config
         .unwrap_or(sui_config_dir()?.join("gateway.conf"));
+    info!("Gateway config file path: {:?}", config_path);
 
-    let server = HttpServerBuilder::default()
+    let server_builder = HttpServerBuilder::default();
+    let mut ac_builder = AccessControlBuilder::default();
+
+    if let Ok(value) = env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
+        let list = value.split(',').collect::<Vec<_>>();
+        info!("Setting ACCESS_CONTROL_ALLOW_ORIGIN to : {:?}", list);
+        ac_builder = ac_builder.set_allowed_origins(list)?;
+    }
+
+    let server = server_builder
+        .set_access_control(ac_builder.build())
         .build(SocketAddr::new(IpAddr::V4(options.host), options.port))
         .await?;
 
     let mut module = RpcModule::new(());
     module.merge(RpcGatewayImpl::new(&config_path)?.into_rpc())?;
+
+    info!(
+        "Available JSON-RPC methods : {:?}",
+        module.method_names().collect::<Vec<_>>()
+    );
 
     let addr = server.local_addr()?;
     let server_handle = server.start(module)?;

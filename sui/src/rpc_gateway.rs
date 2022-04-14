@@ -31,12 +31,12 @@ use crate::config::PersistedConfig;
 use crate::gateway::GatewayConfig;
 use crate::rest_gateway::responses::{NamedObjectRef, ObjectResponse};
 
-#[rpc(server, client, namespace = "gateway")]
+#[rpc(server, client, namespace = "sui")]
 pub trait RpcGateway {
-    #[method(name = "get_object_info")]
+    #[method(name = "getObjectInfo")]
     async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<ObjectRead>;
 
-    #[method(name = "transfer_coin")]
+    #[method(name = "transferCoin")]
     async fn transfer_coin(
         &self,
         signer: SuiAddress,
@@ -46,7 +46,7 @@ pub trait RpcGateway {
         recipient: SuiAddress,
     ) -> RpcResult<TransactionBytes>;
 
-    #[method(name = "move_call")]
+    #[method(name = "moveCall")]
     async fn move_call(
         &self,
         signer: SuiAddress,
@@ -70,7 +70,7 @@ pub trait RpcGateway {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
-    #[method(name = "split_coin")]
+    #[method(name = "splitCoin")]
     async fn split_coin(
         &self,
         signer: SuiAddress,
@@ -80,7 +80,7 @@ pub trait RpcGateway {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
-    #[method(name = "merge_coins")]
+    #[method(name = "mergeCoins")]
     async fn merge_coin(
         &self,
         signer: SuiAddress,
@@ -90,29 +90,29 @@ pub trait RpcGateway {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
-    #[method(name = "execute_transaction")]
+    #[method(name = "executeTransaction")]
     async fn execute_transaction(
         &self,
         signed_transaction: SignedTransaction,
     ) -> RpcResult<TransactionResponse>;
 
-    #[method(name = "sync_account_state")]
+    #[method(name = "syncAccountState")]
     async fn sync_account_state(&self, address: SuiAddress) -> RpcResult<()>;
 
-    #[method(name = "get_owned_objects")]
+    #[method(name = "getOwnedObjects")]
     async fn get_owned_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse>;
 
-    #[method(name = "get_total_transaction_number")]
+    #[method(name = "getTotalTransactionNumber")]
     async fn get_total_transaction_number(&self) -> RpcResult<u64>;
 
-    #[method(name = "get_transactions_in_range")]
+    #[method(name = "getTransactionsInRange")]
     async fn get_transactions_in_range(
         &self,
         start: GatewayTxSeqNumber,
         end: GatewayTxSeqNumber,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
 
-    #[method(name = "get_recent_transactions")]
+    #[method(name = "getRecentTransactions")]
     async fn get_recent_transactions(
         &self,
         count: u64,
