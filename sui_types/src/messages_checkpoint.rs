@@ -316,9 +316,10 @@ mod tests {
         assert!(proposal.check_transactions(&contents).is_ok());
 
         // Error on different transactions
-        let contents = CheckpointContents { transactions: [TransactionDigest::random()].into_iter().collect() };
+        let contents = CheckpointContents {
+            transactions: [TransactionDigest::random()].into_iter().collect(),
+        };
         assert!(proposal.check_transactions(&contents).is_err());
-
 
         // Modify the proposal, and observe the signature fail
         proposal.checkpoint.sequence_number = SequenceNumber::from(2);
