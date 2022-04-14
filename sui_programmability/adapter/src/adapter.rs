@@ -48,7 +48,7 @@ pub use move_vm_runtime::move_vm::MoveVM;
 mod adapter_tests;
 
 pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
-    Ok(MoveVM::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)?)
+    MoveVM::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)
 }
 
 /// Execute `module::function<type_args>(object_args ++ pure_args)` as a call from `sender` with the given `gas_budget`.
