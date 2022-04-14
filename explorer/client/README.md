@@ -25,6 +25,7 @@ For example, suppose we wish to locally run the website using the static JSON da
 ```bash
 REACT_APP_DATA=static yarn start
 ```
+
 Note that the commands `yarn test` and `yarn start:static` are the exceptions. Here the SuiExplorer will instead use the static JSON dataset. The tests have been written to specifically check the UI and not the API connection and so use the static JSON dataset.
 
 ## Yarn Commands and what they do
