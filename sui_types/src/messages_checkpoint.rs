@@ -302,17 +302,26 @@ mod tests {
 
         let set: BTreeSet<_> = [TransactionDigest::random()].into_iter().collect();
 
-        let proposal = SignedCheckpointProposal::new(
+        let mut proposal = SignedCheckpointProposal::new(
             SequenceNumber::from(1),
             *name,
             &authority_key,
             set.clone(),
         );
 
+        // Signature is correct on proposal, and with same transactions
         assert!(proposal.check_digest().is_ok());
 
         let contents = CheckpointContents { transactions: set };
-
         assert!(proposal.check_transactions(&contents).is_ok());
+
+        // Error on different transactions
+        let contents = CheckpointContents { transactions: [TransactionDigest::random()].into_iter().collect() };
+        assert!(proposal.check_transactions(&contents).is_err());
+
+
+        // Modify the proposal, and observe the signature fail
+        proposal.checkpoint.sequence_number = SequenceNumber::from(2);
+        assert!(proposal.check_digest().is_err());
     }
 }
