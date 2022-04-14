@@ -4,7 +4,7 @@
 use std::{collections::HashSet, path::Path};
 
 use rocksdb::Options;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use sui_types::{
     base_types::{AuthorityName, TransactionDigest},
     batch::TxSequenceNumber,

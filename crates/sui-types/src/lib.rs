@@ -24,6 +24,7 @@ pub mod gas_coin;
 pub mod iblt;
 pub mod id;
 pub mod messages;
+pub mod messages_checkpoint;
 pub mod move_package;
 pub mod object;
 pub mod signature_seed;

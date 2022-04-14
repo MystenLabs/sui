@@ -1,9 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::fmt::Debug;
-use serde::{Serialize, Deserialize};
 use thiserror::Error;
 
 use std::collections::{BTreeMap, BTreeSet};
