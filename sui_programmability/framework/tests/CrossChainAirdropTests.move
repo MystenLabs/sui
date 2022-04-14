@@ -31,13 +31,13 @@ module Sui::CrossChainAirdropTests {
 
         // claim a token
         claim_token(&mut scenario, &oracle_address, SOURCE_TOKEN_ID);
-        
+
         // verify that the recipient has received the nft
         assert!(owns_object(&mut scenario, &RECIPIENT_ADDRESS), EOBJECT_NOT_FOUND);
     }
 
     #[test]
-    #[expected_failure(abort_code = 0)] 
+    #[expected_failure(abort_code = 0)]
     fun test_double_claim() {
         let (scenario, oracle_address) = init();
 
@@ -60,7 +60,7 @@ module Sui::CrossChainAirdropTests {
     fun claim_token(scenario: &mut Scenario, oracle_address: &address, token_id: u64) {
         TestScenario::next_tx(scenario, oracle_address);
         {
-            let oracle = TestScenario::remove_object<CrossChainAirdropOracle>(scenario);
+            let oracle = TestScenario::take_object<CrossChainAirdropOracle>(scenario);
             let ctx = TestScenario::ctx(scenario);
             CrossChainAirdrop::claim(
                 &mut oracle,
@@ -78,6 +78,6 @@ module Sui::CrossChainAirdropTests {
     fun owns_object(scenario: &mut Scenario, owner: &address): bool{
         // Verify the token has been transfer to the recipient
         TestScenario::next_tx(scenario, owner);
-        TestScenario::can_remove_object<NFT<ERC721>>(scenario)
+        TestScenario::can_take_object<NFT<ERC721>>(scenario)
     }
 }

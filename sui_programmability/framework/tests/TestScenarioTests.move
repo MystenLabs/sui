@@ -34,15 +34,15 @@ module Sui::TestScenarioTests {
         TestScenario::next_tx(&mut scenario, &sender);
         {
             let id = TestScenario::new_id(&mut scenario);
-            let child = TestScenario::remove_object<Object>(&mut scenario);
+            let child = TestScenario::take_object<Object>(&mut scenario);
             let wrapper = Wrapper { id, child };
             Transfer::transfer(wrapper, copy sender);
         };
         // wrapped object should no longer be removable, but wrapper should be
         TestScenario::next_tx(&mut scenario, &sender);
         {
-            assert!(!TestScenario::can_remove_object<Object>(&scenario), 0);
-            assert!(TestScenario::can_remove_object<Wrapper>(&scenario), 1);
+            assert!(!TestScenario::can_take_object<Object>(&scenario), 0);
+            assert!(TestScenario::can_take_object<Wrapper>(&scenario), 1);
         }
     }
 
@@ -58,13 +58,13 @@ module Sui::TestScenarioTests {
         // object gets removed, then returned
         TestScenario::next_tx(&mut scenario, &sender);
         {
-            let object = TestScenario::remove_object<Object>(&mut scenario);
+            let object = TestScenario::take_object<Object>(&mut scenario);
             TestScenario::return_object(&mut scenario, object);
         };
         // Object should remain accessible
         TestScenario::next_tx(&mut scenario, &sender);
         {
-            assert!(TestScenario::can_remove_object<Object>(&scenario), 0);
+            assert!(TestScenario::can_take_object<Object>(&scenario), 0);
         }
     }
 
@@ -79,14 +79,14 @@ module Sui::TestScenarioTests {
         };
         TestScenario::next_tx(&mut scenario, &sender);
         {
-            let obj = TestScenario::remove_object<Object>(&mut scenario);
+            let obj = TestScenario::take_object<Object>(&mut scenario);
             assert!(obj.value == 10, 0);
             obj.value = 100;
             TestScenario::return_object(&mut scenario, obj);
         };
         TestScenario::next_tx(&mut scenario, &sender);
         {
-            let obj = TestScenario::remove_object<Object>(&mut scenario);
+            let obj = TestScenario::take_object<Object>(&mut scenario);
             assert!(obj.value == 100, 1);
             TestScenario::return_object(&mut scenario, obj);
         }
@@ -101,7 +101,7 @@ module Sui::TestScenarioTests {
             let obj = Object { id, value: 10 };
             Transfer::transfer(obj, copy sender);
             // an object transferred during the tx shouldn't be available in that tx
-            assert!(!TestScenario::can_remove_object<Object>(&scenario), 0)
+            assert!(!TestScenario::can_take_object<Object>(&scenario), 0)
         };
     }
 
@@ -117,8 +117,8 @@ module Sui::TestScenarioTests {
         };
         TestScenario::next_tx(&mut scenario, &sender);
         {
-            let obj1 = TestScenario::remove_object<Object>(&mut scenario);
-            let obj2 = TestScenario::remove_object<Object>(&mut scenario);
+            let obj1 = TestScenario::take_object<Object>(&mut scenario);
+            let obj2 = TestScenario::take_object<Object>(&mut scenario);
             TestScenario::return_object(&mut scenario, obj1);
             TestScenario::return_object(&mut scenario, obj2);
         }
@@ -141,34 +141,34 @@ module Sui::TestScenarioTests {
         // addr1 -> addr2
         TestScenario::next_tx(&mut scenario, &addr1);
         {
-            let obj = TestScenario::remove_object<Object>(&mut scenario);
+            let obj = TestScenario::take_object<Object>(&mut scenario);
             Transfer::transfer(obj, copy addr2)
         };
         // addr1 cannot access
         TestScenario::next_tx(&mut scenario, &addr1);
         {
-            assert!(!TestScenario::can_remove_object<Object>(&scenario), 0);
+            assert!(!TestScenario::can_take_object<Object>(&scenario), 0);
         };
         // addr2 -> addr3
         TestScenario::next_tx(&mut scenario, &addr2);
         {
-            let obj = TestScenario::remove_object<Object>(&mut scenario);
+            let obj = TestScenario::take_object<Object>(&mut scenario);
             Transfer::transfer(obj, copy addr3)
         };
         // addr1 cannot access
         TestScenario::next_tx(&mut scenario, &addr1);
         {
-            assert!(!TestScenario::can_remove_object<Object>(&scenario), 0);
+            assert!(!TestScenario::can_take_object<Object>(&scenario), 0);
         };
         // addr2 cannot access
         TestScenario::next_tx(&mut scenario, &addr2);
         {
-            assert!(!TestScenario::can_remove_object<Object>(&scenario), 0);
+            assert!(!TestScenario::can_take_object<Object>(&scenario), 0);
         };
         // addr3 *can* access
         TestScenario::next_tx(&mut scenario, &addr3);
         {
-            assert!(TestScenario::can_remove_object<Object>(&scenario), 0);
+            assert!(TestScenario::can_take_object<Object>(&scenario), 0);
         }
     }
 
@@ -185,13 +185,13 @@ module Sui::TestScenarioTests {
             let obj = Object { id, value: 100 };
             Transfer::transfer(obj, copy tx2_sender);
             // sender cannot access the object
-            assert!(!TestScenario::can_remove_object<Object>(&scenario), 0);
+            assert!(!TestScenario::can_take_object<Object>(&scenario), 0);
         };
         // check that tx2_sender can get the object, and it's the same one
         TestScenario::next_tx(&mut scenario, &tx2_sender);
         {
-            assert!(TestScenario::can_remove_object<Object>(&scenario), 1);
-            let received_obj = TestScenario::remove_object<Object>(&mut scenario);
+            assert!(TestScenario::can_take_object<Object>(&scenario), 1);
+            let received_obj = TestScenario::take_object<Object>(&mut scenario);
             let Object { id: received_id, value } = received_obj;
             assert!(ID::inner(&received_id) == &id_bytes, ID_BYTES_MISMATCH);
             assert!(value == 100, VALUE_MISMATCH);
@@ -200,12 +200,12 @@ module Sui::TestScenarioTests {
         // check that the object is no longer accessible after deletion
         TestScenario::next_tx(&mut scenario, &tx2_sender);
         {
-            assert!(!TestScenario::can_remove_object<Object>(&scenario), 2);
+            assert!(!TestScenario::can_take_object<Object>(&scenario), 2);
         }
     }
 
     #[test]
-    fun test_remove_object_by_id() {
+    fun test_take_object_by_id() {
         let sender = @0x0;
         let scenario = TestScenario::begin(&sender);
         let versioned_id1 = TestScenario::new_id(&mut scenario);
@@ -225,20 +225,20 @@ module Sui::TestScenarioTests {
         TestScenario::next_tx(&mut scenario, &sender);
         {
             assert!(
-                TestScenario::can_remove_object_by_id<Object>(&mut scenario, id1),
+                TestScenario::can_take_object_by_id<Object>(&mut scenario, id1),
                 OBJECT_ID_NOT_FOUND
             );
             assert!(
-                TestScenario::can_remove_object_by_id<Object>(&mut scenario, id2),
+                TestScenario::can_take_object_by_id<Object>(&mut scenario, id2),
                 OBJECT_ID_NOT_FOUND
             );
             assert!(
-                TestScenario::can_remove_object_by_id<Object>(&mut scenario, id3),
+                TestScenario::can_take_object_by_id<Object>(&mut scenario, id3),
                 OBJECT_ID_NOT_FOUND
             );
-            let obj1 = TestScenario::remove_object_by_id<Object>(&mut scenario, id1);
-            let obj3 = TestScenario::remove_object_by_id<Object>(&mut scenario, id3);
-            let obj2 = TestScenario::remove_object_by_id<Object>(&mut scenario, id2);
+            let obj1 = TestScenario::take_object_by_id<Object>(&mut scenario, id1);
+            let obj3 = TestScenario::take_object_by_id<Object>(&mut scenario, id3);
+            let obj2 = TestScenario::take_object_by_id<Object>(&mut scenario, id2);
             assert!(obj1.value == 10, VALUE_MISMATCH);
             assert!(obj2.value == 20, VALUE_MISMATCH);
             assert!(obj3.value == 30, VALUE_MISMATCH);
@@ -259,7 +259,7 @@ module Sui::TestScenarioTests {
         };
         TestScenario::next_tx(&mut scenario, &sender);
         {
-            let obj = TestScenario::remove_object<Object>(&mut scenario);
+            let obj = TestScenario::take_object<Object>(&mut scenario);
             // Transfer an immutable object, this won't fail right away.
             Transfer::transfer(obj, copy sender);
         };
@@ -267,7 +267,7 @@ module Sui::TestScenarioTests {
         {
             // while removing the object, test scenario will read the inventory,
             // and discover that we transferred an immutable object.
-            let obj = TestScenario::remove_object<Object>(&mut scenario);
+            let obj = TestScenario::take_object<Object>(&mut scenario);
             TestScenario::return_object(&mut scenario, obj);
         };
     }
@@ -283,7 +283,7 @@ module Sui::TestScenarioTests {
         };
         TestScenario::next_tx(&mut scenario, &sender);
         {
-            let obj = TestScenario::remove_object<Object>(&mut scenario);
+            let obj = TestScenario::take_object<Object>(&mut scenario);
             obj.value = 200;
             TestScenario::return_object(&mut scenario, obj);
         };

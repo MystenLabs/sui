@@ -62,14 +62,14 @@ let scenario = &mut TestScenario::begin(&owner);
 // Delete the ColorObject we just created.
 TestScenario::next_tx(scenario, &owner);
 {
-    let object = TestScenario::remove_object<ColorObject>(scenario);
+    let object = TestScenario::take_object<ColorObject>(scenario);
     let ctx = TestScenario::ctx(scenario);
     ColorObject::delete(object, ctx);
 };
 // Verify that the object was indeed deleted.
 TestScenario::next_tx(scenario, &owner);
 {
-    assert!(!TestScenario::can_remove_object<ColorObject>(scenario), 0);
+    assert!(!TestScenario::can_take_object<ColorObject>(scenario), 0);
 }
 ```
 The first part is the same as what we have seen in [Chapter 1](./ch1-object-basics.md#writing-unit-tests), which creates a new `ColorObject` and put it to the owner's account. The second transaction is what we are testing: retrieve the object from the storage, and then delete it. Since the object is deleted, there is no need (in fact, impossible) to return it to the storage. The last part checks that the object is indeed no longer in the global storage, and hence cannot be retrieved from there.
@@ -96,7 +96,7 @@ let scenario = &mut TestScenario::begin(&owner);
 let recipient = @0x2;
 TestScenario::next_tx(scenario, &owner);
 {
-    let object = TestScenario::remove_object<ColorObject>(scenario);
+    let object = TestScenario::take_object<ColorObject>(scenario);
     let ctx = TestScenario::ctx(scenario);
     ColorObject::transfer(object, recipient, ctx);
 };
@@ -106,12 +106,12 @@ Note that in the second transaction, the sender of the transaction should still 
 // Check that owner no longer owns the object.
 TestScenario::next_tx(scenario, &owner);
 {
-    assert!(!TestScenario::can_remove_object<ColorObject>(scenario), 0);
+    assert!(!TestScenario::can_take_object<ColorObject>(scenario), 0);
 };
 // Check that recipient now owns the object.
 TestScenario::next_tx(scenario, &recipient);
 {
-    assert!(TestScenario::can_remove_object<ColorObject>(scenario), 0);
+    assert!(TestScenario::can_take_object<ColorObject>(scenario), 0);
 };
 ```
 

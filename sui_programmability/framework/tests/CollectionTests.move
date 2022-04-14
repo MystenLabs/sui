@@ -27,7 +27,7 @@ module Sui::CollectionTests {
         // Add two objects of different types into the collection.
         TestScenario::next_tx(scenario, &sender);
         {
-            let collection = TestScenario::remove_object<Collection<Object>>(scenario);
+            let collection = TestScenario::take_object<Collection<Object>>(scenario);
             assert!(Collection::size(&collection) == 0, 0);
 
             let obj1 = Object { id: TxContext::new_id(TestScenario::ctx(scenario)) };
@@ -61,7 +61,7 @@ module Sui::CollectionTests {
         // Add a new object to the Collection.
         TestScenario::next_tx(scenario, &sender);
         {
-            let collection = TestScenario::remove_object<Collection<Object>>(scenario);
+            let collection = TestScenario::take_object<Collection<Object>>(scenario);
             let obj = Object { id: TxContext::new_id(TestScenario::ctx(scenario)) };
             Collection::add(&mut collection, obj);
             TestScenario::return_object(scenario, collection);
@@ -70,9 +70,9 @@ module Sui::CollectionTests {
         // Remove the object from the collection and add it to the bag.
         TestScenario::next_tx(scenario, &sender);
         {
-            let collection = TestScenario::remove_object<Collection<Object>>(scenario);
-            let bag = TestScenario::remove_object<Bag>(scenario);
-            let obj = TestScenario::remove_nested_object<Collection<Object>, Object>(scenario, &collection);
+            let collection = TestScenario::take_object<Collection<Object>>(scenario);
+            let bag = TestScenario::take_object<Bag>(scenario);
+            let obj = TestScenario::take_nested_object<Collection<Object>, Object>(scenario, &collection);
             let id = *ID::id(&obj);
 
             let (obj, child_ref) = Collection::remove(&mut collection, obj);
@@ -89,9 +89,9 @@ module Sui::CollectionTests {
         // Remove the object from the bag and add it back to the collection.
         TestScenario::next_tx(scenario, &sender);
         {
-            let collection = TestScenario::remove_object<Collection<Object>>(scenario);
-            let bag = TestScenario::remove_object<Bag>(scenario);
-            let obj = TestScenario::remove_nested_object<Bag, Object>(scenario, &bag);
+            let collection = TestScenario::take_object<Collection<Object>>(scenario);
+            let bag = TestScenario::take_object<Bag>(scenario);
+            let obj = TestScenario::take_nested_object<Bag, Object>(scenario, &bag);
             let id = *ID::id(&obj);
 
             let obj = Bag::remove(&mut bag, obj);
