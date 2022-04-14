@@ -170,9 +170,9 @@ module NFTs::MarketplaceTests {
     // SELLER lists KITTY at the Marketplace for 100 SUI.
     fun list_kitty(scenario: &mut Scenario) {
         TestScenario::next_tx(scenario, &SELLER);
-        let mkp = TestScenario::remove_object<Marketplace>(scenario);
-        let bag = TestScenario::remove_nested_object<Marketplace, Bag>(scenario, &mkp);
-        let nft = TestScenario::remove_object<NFT<KITTY>>(scenario);
+        let mkp = TestScenario::take_object<Marketplace>(scenario);
+        let bag = TestScenario::take_nested_object<Marketplace, Bag>(scenario, &mkp);
+        let nft = TestScenario::take_object<NFT<KITTY>>(scenario);
 
         Marketplace::list<NFT<KITTY>, SUI>(&mkp, &mut bag, nft, 100, TestScenario::ctx(scenario));
         TestScenario::return_object(scenario, mkp);
@@ -189,9 +189,9 @@ module NFTs::MarketplaceTests {
 
         TestScenario::next_tx(scenario, &SELLER);
         {
-            let mkp = TestScenario::remove_object<Marketplace>(scenario);
-            let bag = TestScenario::remove_nested_object<Marketplace, Bag>(scenario, &mkp);
-            let listing = TestScenario::remove_nested_object<Bag, Listing<NFT<KITTY>, SUI>>(scenario, &bag);
+            let mkp = TestScenario::take_object<Marketplace>(scenario);
+            let bag = TestScenario::take_nested_object<Marketplace, Bag>(scenario, &mkp);
+            let listing = TestScenario::take_nested_object<Bag, Listing<NFT<KITTY>, SUI>>(scenario, &bag);
 
             // Do the delist operation on a Marketplace.
             let nft = Marketplace::delist<NFT<KITTY>, SUI>(&mkp, &mut bag, listing, TestScenario::ctx(scenario));
@@ -217,9 +217,9 @@ module NFTs::MarketplaceTests {
         // BUYER attempts to delist KITTY and he has no right to do so. :(
         TestScenario::next_tx(scenario, &BUYER);
         {
-            let mkp = TestScenario::remove_object<Marketplace>(scenario);
-            let bag = TestScenario::remove_nested_object<Marketplace, Bag>(scenario, &mkp);
-            let listing = TestScenario::remove_nested_object<Bag, Listing<NFT<KITTY>, SUI>>(scenario, &bag);
+            let mkp = TestScenario::take_object<Marketplace>(scenario);
+            let bag = TestScenario::take_nested_object<Marketplace, Bag>(scenario, &mkp);
+            let listing = TestScenario::take_nested_object<Bag, Listing<NFT<KITTY>, SUI>>(scenario, &bag);
 
             // Do the delist operation on a Marketplace.
             let nft = Marketplace::delist<NFT<KITTY>, SUI>(&mkp, &mut bag, listing, TestScenario::ctx(scenario));
@@ -242,10 +242,10 @@ module NFTs::MarketplaceTests {
         // BUYER takes 100 SUI from his wallet and purchases KITTY.
         TestScenario::next_tx(scenario, &BUYER);
         {
-            let coin = TestScenario::remove_object<Coin<SUI>>(scenario);
-            let mkp = TestScenario::remove_object<Marketplace>(scenario);
-            let bag = TestScenario::remove_nested_object<Marketplace, Bag>(scenario, &mkp);
-            let listing = TestScenario::remove_nested_object<Bag, Listing<NFT<KITTY>, SUI>>(scenario, &bag);
+            let coin = TestScenario::take_object<Coin<SUI>>(scenario);
+            let mkp = TestScenario::take_object<Marketplace>(scenario);
+            let bag = TestScenario::take_nested_object<Marketplace, Bag>(scenario, &mkp);
+            let listing = TestScenario::take_nested_object<Bag, Listing<NFT<KITTY>, SUI>>(scenario, &bag);
             let payment = Coin::withdraw(&mut coin, 100, TestScenario::ctx(scenario));
 
             // Do the buy call and expect successful purchase.
@@ -273,10 +273,10 @@ module NFTs::MarketplaceTests {
         // BUYER takes 100 SUI from his wallet and purchases KITTY.
         TestScenario::next_tx(scenario, &BUYER);
         {
-            let coin = TestScenario::remove_object<Coin<SUI>>(scenario);
-            let mkp = TestScenario::remove_object<Marketplace>(scenario);
-            let bag = TestScenario::remove_nested_object<Marketplace, Bag>(scenario, &mkp);
-            let listing = TestScenario::remove_nested_object<Bag, Listing<NFT<KITTY>, SUI>>(scenario, &bag);
+            let coin = TestScenario::take_object<Coin<SUI>>(scenario);
+            let mkp = TestScenario::take_object<Marketplace>(scenario);
+            let bag = TestScenario::take_nested_object<Marketplace, Bag>(scenario, &mkp);
+            let listing = TestScenario::take_nested_object<Bag, Listing<NFT<KITTY>, SUI>>(scenario, &bag);
 
             // AMOUNT here is 10 while expected is 100.
             let payment = Coin::withdraw(&mut coin, 10, TestScenario::ctx(scenario));
