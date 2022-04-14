@@ -36,8 +36,8 @@ pub trait RpcGateway {
     #[method(name = "get_object_info")]
     async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<ObjectRead>;
 
-    #[method(name = "create_coin_transfer")]
-    async fn create_coin_transfer(
+    #[method(name = "transfer_coin")]
+    async fn transfer_coin(
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
@@ -46,8 +46,8 @@ pub trait RpcGateway {
         recipient: SuiAddress,
     ) -> RpcResult<TransactionBytes>;
 
-    #[method(name = "create_move_call")]
-    async fn create_move_call(
+    #[method(name = "move_call")]
+    async fn move_call(
         &self,
         signer: SuiAddress,
         package_object_id: ObjectID,
@@ -61,7 +61,7 @@ pub trait RpcGateway {
         shared_object_arguments: Vec<ObjectID>,
     ) -> RpcResult<TransactionBytes>;
 
-    #[method(name = "create_publish_transaction")]
+    #[method(name = "publish")]
     async fn publish(
         &self,
         sender: SuiAddress,
@@ -70,7 +70,7 @@ pub trait RpcGateway {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
-    #[method(name = "create_split_coin_transaction")]
+    #[method(name = "split_coin")]
     async fn split_coin(
         &self,
         signer: SuiAddress,
@@ -80,7 +80,7 @@ pub trait RpcGateway {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
-    #[method(name = "create_merge_coin_transaction")]
+    #[method(name = "merge_coins")]
     async fn merge_coin(
         &self,
         signer: SuiAddress,
@@ -99,8 +99,8 @@ pub trait RpcGateway {
     #[method(name = "sync_account_state")]
     async fn sync_account_state(&self, address: SuiAddress) -> RpcResult<()>;
 
-    #[method(name = "get_objects")]
-    async fn get_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse>;
+    #[method(name = "get_owned_objects")]
+    async fn get_owned_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse>;
 
     #[method(name = "get_total_transaction_number")]
     async fn get_total_transaction_number(&self) -> RpcResult<u64>;
@@ -125,7 +125,13 @@ pub struct RpcGatewayImpl {
 
 impl RpcGatewayImpl {
     pub fn new(config_path: &Path) -> anyhow::Result<Self> {
-        let config: GatewayConfig = PersistedConfig::read(config_path)?;
+        let config: GatewayConfig = PersistedConfig::read(config_path).map_err(|e| {
+            anyhow!(
+                "Failed to read config file at {:?}: {}. Have you run `sui genesis` first?",
+                config_path,
+                e
+            )
+        })?;
         let committee = config.make_committee();
         let authority_clients = config.make_authority_clients();
         let gateway = Box::new(GatewayState::new(
@@ -141,7 +147,7 @@ impl RpcGatewayImpl {
 
 #[async_trait]
 impl RpcGatewayServer for RpcGatewayImpl {
-    async fn create_coin_transfer(
+    async fn transfer_coin(
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
@@ -232,7 +238,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
         })
     }
 
-    async fn get_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse> {
+    async fn get_owned_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse> {
         debug!("get_objects : {}", owner);
         let objects = self
             .gateway
@@ -265,7 +271,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
             .await?)
     }
 
-    async fn create_move_call(
+    async fn move_call(
         &self,
         signer: SuiAddress,
         package_object_id: ObjectID,

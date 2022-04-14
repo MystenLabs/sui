@@ -55,7 +55,7 @@ impl GatewayAPI for RpcGatewayClient {
     ) -> Result<TransactionData, Error> {
         let bytes: TransactionBytes = self
             .client
-            .create_coin_transfer(signer, object_id, gas_payment, gas_budget, recipient)
+            .transfer_coin(signer, object_id, gas_payment, gas_budget, recipient)
             .await?;
         bytes.to_data()
     }
@@ -86,7 +86,7 @@ impl GatewayAPI for RpcGatewayClient {
 
         let bytes: TransactionBytes = self
             .client
-            .create_move_call(
+            .move_call(
                 signer,
                 package_object_ref.0,
                 module,
@@ -161,7 +161,7 @@ impl GatewayAPI for RpcGatewayClient {
         let handle = Handle::current();
         let _ = handle.enter();
         let object_response: ObjectResponse =
-            futures::executor::block_on(self.client.get_objects(account_addr))?;
+            futures::executor::block_on(self.client.get_owned_objects(account_addr))?;
 
         let object_refs = object_response
             .objects

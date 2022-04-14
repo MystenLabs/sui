@@ -40,7 +40,7 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
     let http_client = HttpClientBuilder::default().build(format!("http://{}", server_addr))?;
 
     http_client.sync_account_state(*address).await?;
-    let result: ObjectResponse = http_client.get_objects(*address).await?;
+    let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
     let result = result
         .objects
         .into_iter()
@@ -61,7 +61,7 @@ async fn test_transfer_coin() -> Result<(), anyhow::Error> {
     let http_client = HttpClientBuilder::default().build(format!("http://{}", server_addr))?;
     let address = wallet_conf.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
-    let result: ObjectResponse = http_client.get_objects(*address).await?;
+    let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
     let objects = result
         .objects
         .into_iter()
@@ -69,7 +69,7 @@ async fn test_transfer_coin() -> Result<(), anyhow::Error> {
         .collect::<Result<Vec<_>, _>>()?;
 
     let tx_data: TransactionBytes = http_client
-        .create_coin_transfer(
+        .transfer_coin(
             *address,
             objects.first().unwrap().0,
             objects.last().unwrap().0,
@@ -101,7 +101,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let http_client = HttpClientBuilder::default().build(format!("http://{}", server_addr))?;
     let address = wallet_conf.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
-    let result: ObjectResponse = http_client.get_objects(*address).await?;
+    let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
     let objects = result
         .objects
         .into_iter()
@@ -144,7 +144,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let http_client = HttpClientBuilder::default().build(format!("http://{}", server_addr))?;
     let address = wallet_conf.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
-    let result: ObjectResponse = http_client.get_objects(*address).await?;
+    let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
     let objects = result
         .objects
         .into_iter()
@@ -175,7 +175,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
         .collect::<Vec<_>>();
 
     let tx_data: TransactionBytes = http_client
-        .create_move_call(
+        .move_call(
             *address,
             package_id,
             module,
