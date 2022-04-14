@@ -67,12 +67,8 @@ reqwest = { version = "0.11.10", features=["json","serde_json", "blocking"]}
 tracing-test = "0.2.1"
 
 [[bin]]
-name = "microbench"
-path = "src/microbench.rs"
-
-[[bin]]
-name = "microbench_latency"
-path = "src/microbench_latency.rs"
+name = "bench"
+path = "src/bench.rs"
 
 [[bin]]
 name = "wallet"
