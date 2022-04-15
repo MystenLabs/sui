@@ -41,7 +41,7 @@ You can start exploring Sui's source code by looking into the following primary 
 
 * [sui](https://github.com/MystenLabs/sui/tree/main/sui) - the Sui binaries (`wallet`, `sui-move`, and more)
 * [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui's Move language integration also including games and other Move code examples for testing and reuse
-* [sui_core](https://github.com/MystenLabs/sui/tree/main/sui_core) - authority server and Sui Gateway
+* [sui_core](https://github.com/MystenLabs/sui/tree/main/sui_core) - validator server and Sui Gateway
 * [sui_types](https://github.com/MystenLabs/sui/tree/main/sui_types) - coins, gas, and other object types
 * [explorer](https://github.com/MystenLabs/sui/tree/main/explorer) - object explorer for the Sui network
 * [network_utils](https://github.com/MystenLabs/sui/tree/main/network_utils) - networking utilities and related unit tests

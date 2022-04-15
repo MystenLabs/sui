@@ -58,4 +58,4 @@ Inputs: A list of unique object references pointing to mutable objects owned by 
 
 * See the [Move Quick Start](move.md) to learn about smart contracts.
 * Transactions take objects as input and produce objects as output--learn about the [objects](objects.md), their structure and attributes.
-* Transactions are executed by Sui [authorities](authorities.md).
+* Transactions are executed by Sui [validators](authorities.md).
