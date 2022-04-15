@@ -32,6 +32,8 @@ pub mod storage;
 pub mod sui_serde;
 pub mod waypoint;
 
+#[path = "./unit_tests/utils.rs"]
+pub mod utils;
 
 /// 0x1-- account address where Move stdlib modules are stored
 /// Same as the ObjectID

@@ -3,7 +3,7 @@ use std::collections::{BTreeSet, HashSet};
 use crate::batch::SignedBatch;
 use crate::crypto::Signable;
 use crate::{
-    base_types::{AuthorityName, SequenceNumber, TransactionDigest},
+    base_types::{AuthorityName, TransactionDigest},
     committee::Committee,
     crypto::{sha3_hash, AuthoritySignature, BcsSignable, VerificationObligation},
     error::SuiError,
@@ -64,6 +64,8 @@ use serde::{Deserialize, Serialize};
 
 */
 
+pub type CheckpointSequenceNumber = u64;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointRequest {
     // Type of checkpoint request
@@ -79,7 +81,7 @@ pub enum CheckpointRequestType {
     // Request the latest proposal and previous checkpoint.
     LatestCheckpointProposal,
     // Requests a past checkpoint
-    PastCheckpoint(SequenceNumber),
+    PastCheckpoint(CheckpointSequenceNumber),
 
     // DEVNET: until we have a consensus core to collectivelly decide 
     // the checkpoint we allow a trusted client to just force a 
@@ -150,7 +152,7 @@ pub type CheckpointDigest = [u8; 32];
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CheckpointSummary {
-    sequence_number: SequenceNumber,
+    sequence_number: CheckpointSequenceNumber,
     digest: CheckpointDigest,
 }
 
@@ -166,7 +168,7 @@ pub struct SignedCheckpoint {
 impl SignedCheckpoint {
     /// Create a new signed checkpoint proposal for this authority
     pub fn new(
-        sequence_number: SequenceNumber,
+        sequence_number: CheckpointSequenceNumber,
         authority: AuthorityName,
         signer: &dyn signature::Signer<AuthoritySignature>,
         transactions: BTreeSet<TransactionDigest>,
@@ -191,7 +193,7 @@ impl SignedCheckpoint {
 
     /// Checks that the signature on the digest is correct
     pub fn check_digest(&self) -> Result<(), SuiError> {
-        self.signature.check(&self.checkpoint, self.authority)?;
+        self.signature.verify(&self.checkpoint, self.authority)?;
         Ok(())
     }
 
@@ -336,26 +338,9 @@ impl CheckpointContents {
 
 #[cfg(test)]
 mod tests {
+    use crate::utils::make_committee_key;
     use super::*;
-    use crate::crypto::{get_key_pair, KeyPair};
-    use std::collections::BTreeMap;
-
-    fn make_committee_key() -> (Vec<KeyPair>, Committee) {
-        let mut authorities = BTreeMap::new();
-        let mut keys = Vec::new();
-
-        for _ in 0..4 {
-            let (_, inner_authority_key) = get_key_pair();
-            authorities.insert(
-                /* address */ *inner_authority_key.public_key_bytes(),
-                /* voting right */ 1,
-            );
-            keys.push(inner_authority_key);
-        }
-
-        let committee = Committee::new(authorities);
-        (keys, committee)
-    }
+    
 
     #[test]
     fn test_signed_proposal() {
@@ -365,7 +350,7 @@ mod tests {
         let set: BTreeSet<_> = [TransactionDigest::random()].into_iter().collect();
 
         let mut proposal = SignedCheckpoint::new(
-            SequenceNumber::from(1),
+            1,
             *name,
             &authority_key[0],
             set.clone(),
@@ -384,7 +369,7 @@ mod tests {
         assert!(proposal.check_transactions(&contents).is_err());
 
         // Modify the proposal, and observe the signature fail
-        proposal.checkpoint.sequence_number = SequenceNumber::from(2);
+        proposal.checkpoint.sequence_number = 2;
         assert!(proposal.check_digest().is_err());
     }
 
@@ -399,7 +384,7 @@ mod tests {
             .map(|k| {
                 let name = k.public_key_bytes();
 
-                SignedCheckpoint::new(SequenceNumber::from(1), *name, k, set.clone())
+                SignedCheckpoint::new(1, *name, k, set.clone())
             })
             .collect();
 
@@ -418,7 +403,7 @@ mod tests {
                 let name = k.public_key_bytes();
                 let set: BTreeSet<_> = [TransactionDigest::random()].into_iter().collect();
 
-                SignedCheckpoint::new(SequenceNumber::from(1), *name, k, set)
+                SignedCheckpoint::new(1, *name, k, set)
             })
             .collect();
 

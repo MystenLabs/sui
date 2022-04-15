@@ -8,7 +8,9 @@ use serde::{Deserialize, Serialize};
 use sui_types::{
     base_types::{AuthorityName, TransactionDigest},
     batch::TxSequenceNumber,
+    committee::Committee,
     error::SuiError,
+    messages_checkpoint::CheckpointSequenceNumber,
     waypoint::{Waypoint, WaypointDiff},
 };
 use typed_store::{
@@ -17,11 +19,11 @@ use typed_store::{
     Map,
 };
 
+use super::StableSyncAuthoritySigner;
+
 #[cfg(test)]
 #[path = "../unit_tests/checkpoint_tests.rs"]
 mod checkpoint_tests;
-
-pub type CheckpointSequenceNumber = u64;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CheckpointProposal {
@@ -103,6 +105,14 @@ impl CheckpointProposal {
 }
 
 pub struct CheckpointStore {
+    // Fixed size, static, identity of the authority
+    /// The name of this authority.
+    pub name: AuthorityName,
+    /// Committee of this Sui instance.
+    pub committee: Committee,
+    /// The signature key of the authority.
+    pub secret: StableSyncAuthoritySigner,
+
     /// The list of all transactions that are checkpointed mapping to the checkpoint
     /// sequence number they were assigned to.
     pub transactions_to_checkpoint:
@@ -133,7 +143,13 @@ pub struct CheckpointStore {
 }
 
 impl CheckpointStore {
-    pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> CheckpointStore {
+    pub fn open<P: AsRef<Path>>(
+        path: P,
+        db_options: Option<Options>,
+        name: AuthorityName,
+        committee: Committee,
+        secret: StableSyncAuthoritySigner,
+    ) -> CheckpointStore {
         let mut options = db_options.unwrap_or_default();
 
         /* The table cache is locked for updates and this determines the number
@@ -177,6 +193,9 @@ impl CheckpointStore {
             "extra_transactions";<TransactionDigest,TxSequenceNumber>
         );
         CheckpointStore {
+            name,
+            committee,
+            secret,
             transactions_to_checkpoint,
             checkpoint_contents,
             unprocessed_transactions,

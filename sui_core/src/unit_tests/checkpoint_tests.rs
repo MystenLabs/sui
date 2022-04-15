@@ -4,9 +4,10 @@
 use super::*;
 use crate::authority::authority_tests::max_files_authority_tests;
 use rand::Rng;
-use std::{collections::HashSet, env, fs, path::PathBuf};
+use std::{collections::HashSet, env, fs, path::PathBuf, sync::Arc};
 use sui_types::{
     base_types::{AuthorityName, ObjectID},
+    utils::make_committee_key,
     waypoint::GlobalCheckpoint,
 };
 
@@ -16,6 +17,8 @@ fn random_authority_name() -> AuthorityName {
 }
 
 fn random_ckpoint_store() -> (PathBuf, CheckpointStore) {
+    let (keys, committee) = make_committee_key();
+
     let dir = env::temp_dir();
     let path = dir.join(format!("SC_{:?}", ObjectID::random()));
     fs::create_dir(&path).unwrap();
@@ -24,7 +27,13 @@ fn random_ckpoint_store() -> (PathBuf, CheckpointStore) {
     let mut opts = rocksdb::Options::default();
     opts.set_max_open_files(max_files_authority_tests());
 
-    let cps = CheckpointStore::open(path.clone(), Some(opts));
+    let cps = CheckpointStore::open(
+        path.clone(),
+        Some(opts),
+        *keys[0].public_key_bytes(),
+        committee,
+        Arc::pin(keys[0].copy()),
+    );
     (path, cps)
 }
 
