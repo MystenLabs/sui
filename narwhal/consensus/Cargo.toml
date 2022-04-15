@@ -11,6 +11,7 @@ rand = { version = "0.7.3", optional = true }
 crypto = { path = "../crypto" }
 config = { path = "../config" }
 primary = { path = "../primary" }
+blake2 = "0.9"
 tracing = "0.1.31"
 tokio-util = { version = "0.7.0", features = ["codec"] }
 serde = { version = "1.0.136", features = ["derive"] }

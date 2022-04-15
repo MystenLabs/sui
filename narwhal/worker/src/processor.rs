@@ -1,10 +1,9 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::worker::SerializedWorkerPrimaryMessage;
+use crate::worker::{SerializedBatchMessage, SerializedWorkerPrimaryMessage};
 use blake2::digest::Update;
 use config::WorkerId;
-
 use primary::{BatchDigest, WorkerPrimaryMessage};
 use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -12,9 +11,6 @@ use tokio::sync::mpsc::{Receiver, Sender};
 #[cfg(test)]
 #[path = "tests/processor_tests.rs"]
 pub mod processor_tests;
-
-/// Indicates a serialized `WorkerMessage::Batch` message.
-pub type SerializedBatchMessage = Vec<u8>;
 
 /// Hashes and stores batches, it then outputs the batch's digest.
 pub struct Processor;

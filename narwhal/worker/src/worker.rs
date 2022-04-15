@@ -2,12 +2,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    batch_maker::BatchMaker,
-    helper::Helper,
-    primary_connector::PrimaryConnector,
-    processor::{Processor, SerializedBatchMessage},
-    quorum_waiter::QuorumWaiter,
-    synchronizer::Synchronizer,
+    batch_maker::BatchMaker, helper::Helper, primary_connector::PrimaryConnector,
+    processor::Processor, quorum_waiter::QuorumWaiter, synchronizer::Synchronizer,
 };
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -38,6 +34,9 @@ pub type Round = u64;
 
 /// Indicates a serialized `WorkerPrimaryMessage` message.
 pub type SerializedWorkerPrimaryMessage = Vec<u8>;
+
+/// Indicates a serialized `WorkerMessage::Batch` message.
+pub type SerializedBatchMessage = Vec<u8>;
 
 /// The message exchanged between workers.
 #[derive(Debug, Serialize, Deserialize)]
@@ -290,6 +289,7 @@ struct WorkerReceiverHandler<PublicKey: VerifyingKey> {
 impl<PublicKey: VerifyingKey> MessageHandler for WorkerReceiverHandler<PublicKey> {
     async fn dispatch(&self, writer: &mut Writer, serialized: Bytes) -> Result<(), Box<dyn Error>> {
         // Deserialize and parse the message.
+        // TODO [issue #7]: Do some accounting to prevent bad actors from use all our resources.
         match bincode::deserialize(&serialized) {
             Ok(WorkerMessage::Batch(..)) => {
                 self.tx_processor

@@ -272,7 +272,7 @@ impl<PublicKey: VerifyingKey> SubscriberConnection<PublicKey> {
             .expect("Failed to send new subscriber to core");
 
         // Interact with the subscriber.
-        // TODO [issue #120]: Better error handling (we have a log of prints and breaks here).
+        // TODO [issue #120]: Better error handling (we have a lot of prints and breaks here).
         loop {
             tokio::select! {
                 // Update the subscriber every time a certificate is sequenced.
