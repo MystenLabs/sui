@@ -85,7 +85,7 @@ module Basics::Sandwich {
     public fun collect_profits(_cap: &GroceryOwnerCapability, grocery: &mut Grocery, ctx: &mut TxContext) {
         let amount = Coin::value(&grocery.profits);
         
-        assert!(amount >= 0, EINSUFFICIENT_FUNDS);
+        assert!(amount > 0, EINSUFFICIENT_FUNDS);
 
         let coin = Coin::withdraw(&mut grocery.profits, amount, ctx);
         Transfer::transfer(coin, TxContext::sender(ctx));
