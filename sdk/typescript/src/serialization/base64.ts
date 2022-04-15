@@ -4,25 +4,25 @@
 import { Buffer } from 'buffer';
 
 export class Base64DataBuffer {
-  private _data: Uint8Array;
+  private data: Uint8Array;
 
   constructor(data: Uint8Array | string) {
     if (typeof data === 'string') {
-      this._data = new Uint8Array(Buffer.from(data, 'base64'));
+      this.data = new Uint8Array(Buffer.from(data, 'base64'));
     } else {
-      this._data = data;
+      this.data = data;
     }
   }
 
   getData(): Uint8Array {
-    return this._data;
+    return this.data;
   }
 
   getLength(): number {
-    return this._data.length;
+    return this.data.length;
   }
 
   toString(): string {
-    return Buffer.from(this._data).toString('base64');
+    return Buffer.from(this.data).toString('base64');
   }
 }

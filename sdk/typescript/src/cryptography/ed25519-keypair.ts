@@ -19,7 +19,7 @@ export interface Ed25519KeypairData {
  * An Ed25519 Keypair used for signing transactions.
  */
 export class Ed25519Keypair implements Keypair {
-  private _keypair: Ed25519KeypairData;
+  private keypair: Ed25519KeypairData;
 
   /**
    * Create a new keypair instance.
@@ -29,9 +29,9 @@ export class Ed25519Keypair implements Keypair {
    */
   constructor(keypair?: Ed25519KeypairData) {
     if (keypair) {
-      this._keypair = keypair;
+      this.keypair = keypair;
     } else {
-      this._keypair = nacl.sign.keyPair();
+      this.keypair = nacl.sign.keyPair();
     }
   }
 
@@ -83,7 +83,7 @@ export class Ed25519Keypair implements Keypair {
    * The public key for this keypair
    */
   getPublicKey(): PublicKey {
-    return new PublicKey(this._keypair.publicKey);
+    return new PublicKey(this.keypair.publicKey);
   }
 
   /**
@@ -91,7 +91,7 @@ export class Ed25519Keypair implements Keypair {
    */
   signData(data: Base64DataBuffer): Base64DataBuffer {
     return new Base64DataBuffer(
-      nacl.sign.detached(data.getData(), this._keypair.secretKey)
+      nacl.sign.detached(data.getData(), this.keypair.secretKey)
     );
   }
 }
