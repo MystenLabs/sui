@@ -1,5 +1,6 @@
 use std::collections::{BTreeSet, HashSet};
 
+use crate::batch::SignedBatch;
 use crate::crypto::Signable;
 use crate::{
     base_types::{AuthorityName, SequenceNumber, TransactionDigest},
@@ -14,16 +15,22 @@ use serde::{Deserialize, Serialize};
     The checkpoint messages, structures and protocol: A gentle overview
     -------------------------------------------------------------------
 
+    Checkpoint proposals:
+    --------------------
+
     Authorities operate and process certified transactions. When they have
     processed all transactions included in a previous checkpoint (we will
     see how this is set) each authority proposes a signed proposed
     checkpoint (SignedCheckpointProposal) for the next sequence number.
 
-    A proposal is built on the basis of a set of trasnactions that the
+    A proposal is built on the basis of a set of transactions that the
     authority has processed and wants to include in the next checkpoint.
     Right now we just list these as transaction digests but down the line
     we will rely on more efficient ways to determine the set for parties that
     may already have a very simlar set of digests.
+
+    From proposals to checkpoints:
+    -----------------------------
 
     A checkpoint is formed by a set of checkpoint proposals representing
     2/3 of the authorities by stake. The checkpoint contains the union of
@@ -33,13 +40,19 @@ use serde::{Deserialize, Serialize};
     of the potentially many sets of 2/3 stake) constitutes the checkpoint
     we need an agreement protocol to detemrine this.
 
+    Checkpoint confirmation:
+    -----------------------
+
     Once a checkpoint is determined each authority forms a CheckpointSummary
-    with all the trasnactions in the checkpoint, and signs it with its
+    with all the transactions in the checkpoint, and signs it with its
     authority key to form a SignedCheckpoint. A collection of 2/3 authority
     signatures on a checkpoint forms a CertifiedCheckpoint. And this is the
     structure that is kept in the long term to attest of the sequence of
     checkpoints. Once a CertifiedCheckpoint is recoded for a checkpoint
     all other information leading to the checkpoint may be deleted.
+
+    Reads:
+    -----
 
     To facilitate the protocol authorities always provide facilities for
     reads:
@@ -52,69 +65,124 @@ use serde::{Deserialize, Serialize};
 */
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum CheckpointRequest {
+pub struct CheckpointRequest {
+    // Type of checkpoint request
+    pub request_type: CheckpointRequestType,
+    // A flag, if true also return the contents of the
+    // checkpoint besides the meta-data.
+    pub detail: bool,
+}
+
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum CheckpointRequestType {
+    // Request the latest proposal and previous checkpoint.
     LatestCheckpointProposal,
+    // Requests a past checkpoint
     PastCheckpoint(SequenceNumber),
-    DebugSubmitCheckpoint(SequenceNumber, Vec<TransactionDigest>),
+
+    // DEVNET: until we have a consensus core to collectivelly decide 
+    // the checkpoint we allow a trusted client to just force a 
+    // checkpoint. This is for early testing and removal at Testnet
+    // time.
+    DEBUGSetCheckpoint(AuthenticatedCheckpoint, CheckpointContents),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum CheckpointResponse {
-    Proposal {
-        proposal_sequence_number: SequenceNumber,
-        transactions: Vec<TransactionDigest>,
-    },
-    NoProposal {
-        last_sequence_number: SequenceNumber,
-        missing: Vec<TransactionDigest>,
-    },
-    Past {
-        past_sequence_number: SequenceNumber,
-        transactions: Vec<TransactionDigest>,
-    },
+pub struct CheckpointResponse {
+    // The response to the request, according to the type
+    // and the information available.
+    pub info: AuthorityCheckpointInfo,
+    // If the detail flag in the request was set, then return
+    // the list of transactions as well.
+    pub detail: Option<CheckpointContents>,
+    // Include in all responses the local state of the sequence
+    // of trasacation to allow followers to track the latest 
+    // updates.
+    pub local_sequence_info: LocalSequenceInfo,
 }
+
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum AuthorityCheckpointInfo {
+    // Returns the current proposal if any, and
+    // the previous checkpoint.
+    Proposal {
+        current: Option<SignedCheckpointProposal>,
+        previous: AuthenticatedCheckpoint,
+    },
+    // Returns the requested checkpoint.
+    Past(AuthenticatedCheckpoint),
+}
+
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LocalSequenceInfo {
+    pub last_local_batch: SignedBatch,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum AuthenticatedCheckpoint {
+    // No authentication information is available
+    // or checkpoint is not available on this authority.
+    None,
+    // The checkpoint with just a single authority 
+    // signature.
+    Signed(SignedCheckpoint),
+    // The checkpoint with a quorum of signatures.
+    Certified(CertifiedCheckpoint),
+}
+
 
 // Proposals are signed by a single authority, and 2f+1 are collected
 // to actually form a checkpoint, so we never expect a certificate on
 // a proposal.
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckpointProposalSummary(pub CheckpointSummary);
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SignedCheckpointProposal(pub SignedCheckpoint);
+
 pub type CheckpointDigest = [u8; 32];
 
+
+// The constituant parts of checkpoints, signed and certified
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct CheckpointProposalSummary {
+pub struct CheckpointSummary {
     sequence_number: SequenceNumber,
     digest: CheckpointDigest,
 }
 
-impl BcsSignable for CheckpointProposalSummary {}
+impl BcsSignable for CheckpointSummary {}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SignedCheckpointProposal {
-    checkpoint: CheckpointProposalSummary,
+pub struct SignedCheckpoint {
+    checkpoint: CheckpointSummary,
     authority: AuthorityName,
     signature: AuthoritySignature,
 }
 
-impl SignedCheckpointProposal {
+impl SignedCheckpoint {
     /// Create a new signed checkpoint proposal for this authority
     pub fn new(
         sequence_number: SequenceNumber,
         authority: AuthorityName,
         signer: &dyn signature::Signer<AuthoritySignature>,
         transactions: BTreeSet<TransactionDigest>,
-    ) -> SignedCheckpointProposal {
+    ) -> SignedCheckpoint {
         let contents = CheckpointContents { transactions };
 
         let proposal_digest = contents.digest();
 
-        let proposal = CheckpointProposalSummary {
+        let proposal = CheckpointSummary {
             sequence_number,
             digest: proposal_digest,
         };
 
         let signature = AuthoritySignature::new(&proposal, signer);
 
-        SignedCheckpointProposal {
+        SignedCheckpoint {
             checkpoint: proposal,
             authority,
             signature,
@@ -147,9 +215,6 @@ impl SignedCheckpointProposal {
 // we might extend this to contain roots of merkle trees,
 // or other authenticated data strucures to support light
 // clients and more efficient sync protocols.
-
-pub type CheckpointSummary = CheckpointProposalSummary;
-pub type SignedCheckpoint = SignedCheckpointProposal;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CertifiedCheckpoint {
@@ -275,37 +340,34 @@ mod tests {
     use crate::crypto::{get_key_pair, KeyPair};
     use std::collections::BTreeMap;
 
-    fn make_committee_key() -> (KeyPair, Committee) {
-        let (_, authority_key) = get_key_pair();
+    fn make_committee_key() -> (Vec<KeyPair>, Committee) {
         let mut authorities = BTreeMap::new();
-        authorities.insert(
-            /* address */ *authority_key.public_key_bytes(),
-            /* voting right */ 1,
-        );
+        let mut keys = Vec::new();
 
-        for _ in 0..3 {
+        for _ in 0..4 {
             let (_, inner_authority_key) = get_key_pair();
             authorities.insert(
                 /* address */ *inner_authority_key.public_key_bytes(),
                 /* voting right */ 1,
             );
+            keys.push(inner_authority_key);
         }
 
         let committee = Committee::new(authorities);
-        (authority_key, committee)
+        (keys, committee)
     }
 
     #[test]
     fn test_signed_proposal() {
         let (authority_key, _committee) = make_committee_key();
-        let name = authority_key.public_key_bytes();
+        let name = authority_key[0].public_key_bytes();
 
         let set: BTreeSet<_> = [TransactionDigest::random()].into_iter().collect();
 
-        let mut proposal = SignedCheckpointProposal::new(
+        let mut proposal = SignedCheckpoint::new(
             SequenceNumber::from(1),
             *name,
-            &authority_key,
+            &authority_key[0],
             set.clone(),
         );
 
@@ -324,5 +386,42 @@ mod tests {
         // Modify the proposal, and observe the signature fail
         proposal.checkpoint.sequence_number = SequenceNumber::from(2);
         assert!(proposal.check_digest().is_err());
+    }
+
+    #[test]
+    fn test_certified_checkpoint() {
+        let (keys, committee) = make_committee_key();
+
+        let set: BTreeSet<_> = [TransactionDigest::random()].into_iter().collect();
+
+        let signed_checkpoints: Vec<_> = keys
+            .iter()
+            .map(|k| {
+                let name = k.public_key_bytes();
+
+                SignedCheckpoint::new(SequenceNumber::from(1), *name, k, set.clone())
+            })
+            .collect();
+
+        let checkpoint_cert =
+            CertifiedCheckpoint::aggregate(signed_checkpoints, &committee).expect("Cert is OK");
+
+        // Signature is correct on proposal, and with same transactions
+        assert!(checkpoint_cert
+            .check_transactions(&committee, &CheckpointContents { transactions: set })
+            .is_ok());
+
+        // Make a bad proposal
+        let signed_checkpoints: Vec<_> = keys
+            .iter()
+            .map(|k| {
+                let name = k.public_key_bytes();
+                let set: BTreeSet<_> = [TransactionDigest::random()].into_iter().collect();
+
+                SignedCheckpoint::new(SequenceNumber::from(1), *name, k, set)
+            })
+            .collect();
+
+        assert!(CertifiedCheckpoint::aggregate(signed_checkpoints, &committee).is_err());
     }
 }
