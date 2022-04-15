@@ -22,7 +22,7 @@ use std::{env, io};
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
     ConfirmationTransaction, ObjectInfoRequest, ObjectInfoResponse, Transaction,
-    TransactionInfoRequest,
+    TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::object::Object;
 
@@ -479,7 +479,7 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
                     if seq <= request.end {
                         let mut transactions = Vec::new();
                         for i in 0..batch_size {
-                            transactions.push((seq + i, TransactionDigest::random(), None));
+                            transactions.push((seq + i, TransactionDigest::random()));
                         }
                         let next = AuthorityBatch::make_next_with_previous_digest(
                             Some(last_batch.digest()),
@@ -580,11 +580,11 @@ impl AuthorityAPI for ByzantineAuthorityClient {
             move |(seq, last_batch)| {
                 let auth_secret = secret.clone();
                 async move {
-                    if request.include_tx_info {
+                    if request.end % 2 == 0 {
                         if seq <= request.end {
                             let mut transactions = Vec::new();
                             for i in 0..batch_size {
-                                transactions.push((seq + i, TransactionDigest::random(), None));
+                                transactions.push((seq + i, TransactionDigest::random()));
                             }
                             let next = AuthorityBatch::make_next_with_previous_digest(
                                 Some(last_batch.digest()),
@@ -595,11 +595,10 @@ impl AuthorityAPI for ByzantineAuthorityClient {
                             // Remove a transaction after creating the batch
                             item.batch.transaction_batch.0.pop();
                             // And then add in a fake transaction
-                            item.batch.transaction_batch.0.push((
-                                seq + batch_size,
-                                TransactionDigest::random(),
-                                None,
-                            ));
+                            item.batch
+                                .transaction_batch
+                                .0
+                                .push((seq + batch_size, TransactionDigest::random()));
                             let response = BatchInfoResponseItem(UpdateItem::Batch(item));
                             Some((Ok(response), (seq + batch_size, next)))
                         } else {
@@ -610,7 +609,7 @@ impl AuthorityAPI for ByzantineAuthorityClient {
                         if seq <= request.end * 100 {
                             let mut transactions = Vec::new();
                             for i in 0..batch_size {
-                                transactions.push((seq + i, TransactionDigest::random(), None));
+                                transactions.push((seq + i, TransactionDigest::random()));
                             }
                             let next = AuthorityBatch::make_next_with_previous_digest(
                                 Some(last_batch.digest()),
@@ -669,11 +668,7 @@ async fn test_safe_batch_stream() {
     let auth_client = TrustworthyAuthorityClient::new(state);
     let safe_client = SafeClient::new(auth_client, committee.clone(), public_key_bytes);
 
-    let request = BatchInfoRequest {
-        start: 0,
-        end: 15,
-        include_tx_info: false,
-    };
+    let request = BatchInfoRequest { start: 0, end: 15 };
     let batch_stream = safe_client.handle_batch_stream(request.clone()).await;
 
     // No errors expected
@@ -730,11 +725,7 @@ async fn test_safe_batch_stream() {
     // Length should be within sequenced range, despite authority that never stop sending
     assert!(items.len() <= (request.end - request.start) as usize && !items.is_empty());
 
-    let request_b = BatchInfoRequest {
-        start: 0,
-        end: 10,
-        include_tx_info: true,
-    };
+    let request_b = BatchInfoRequest { start: 0, end: 10 };
     batch_stream = safe_client_from_byzantine
         .handle_batch_stream(request_b.clone())
         .await;
