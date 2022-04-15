@@ -15,6 +15,7 @@ use sui::shell::{
 };
 use sui::wallet_commands::*;
 use sui::{sui_config_dir, SUI_WALLET_CONFIG};
+use sui_utils::trace_utils;
 
 const SUI: &str = "   _____       _    _       __      ____     __
   / ___/__  __(_)  | |     / /___ _/ / /__  / /_
@@ -45,15 +46,13 @@ struct ClientOpt {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let config = telemetry_subscribers::TelemetryConfig {
-        service_name: "wallet".into(),
-        enable_tracing: std::env::var("SUI_TRACING_ENABLE").is_ok(),
-        json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
-        log_file: Some("wallet.log".into()),
-        ..Default::default()
-    };
-    #[allow(unused)]
-    let guard = telemetry_subscribers::init(config);
+    let _guard = trace_utils::init_telemetry_with_config(
+        trace_utils::TelemetryConfig {
+            service_name: "wallet".into(),
+            log_file: Some("wallet.log".into()),
+            ..Default::default()
+        }
+    );
 
     let mut app: Command = ClientOpt::command();
     app = app.no_binary_name(false);

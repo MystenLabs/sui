@@ -24,8 +24,8 @@ use crate::benchmark::load_generator::{
     calculate_throughput, check_transaction_response, send_tx_chunks, spawn_authority_server,
     FixedRateLoadGenerator,
 };
-use crate::benchmark::transaction_creator::TransactionCreator;
-use crate::trace_utils;
+use crate::benchmark::transaction_creator::{TransactionCreator, TraceSetting};
+use sui_utils::trace_utils;
 
 use self::bench_types::{BenchmarkResult, MicroBenchmarkResult, MicroBenchmarkType};
 
@@ -142,6 +142,7 @@ fn run_throughout_microbench(
         use_move,
         batch_size * connections,
         num_transactions / chunk_size,
+        TraceSetting::TraceNone,
     );
 
     let (req_tx, ack_rx) = start_authority_server_new_thread(network_server, tx_cr);
@@ -199,10 +200,10 @@ fn run_latency_microbench(
     let mut tx_cr = TransactionCreator::new(committee_size, db_cpus);
 
     // These TXes are to load the network
-    let load_gen_txes = tx_cr.generate_transactions(connections, use_move, chunk_size, num_chunks);
+    let load_gen_txes = tx_cr.generate_transactions(connections, use_move, chunk_size, num_chunks, TraceSetting::TraceNone);
 
     // These are tracer TXes used for measuring latency
-    let tracer_txes = tx_cr.generate_transactions(1, use_move, 1, num_chunks);
+    let tracer_txes = tx_cr.generate_transactions(1, use_move, 1, num_chunks, TraceSetting::TraceAll);
 
     let (shutdown_req_tx, shutdown_ack_rx) =
         start_authority_server_new_thread(network_server, tx_cr);
@@ -217,9 +218,14 @@ fn run_latency_microbench(
                 load_gen_txes,
                 period_us,
                 network_client.clone(),
-                connections,
+                connections
             ),
-            FixedRateLoadGenerator::new(tracer_txes, period_us, network_client, 1),
+            FixedRateLoadGenerator::new(
+                tracer_txes,
+                period_us,
+                network_client,
+                1
+            ),
         )
     });
 

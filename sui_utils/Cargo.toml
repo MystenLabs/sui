@@ -1,0 +1,11 @@
+[package]
+name = "sui-utils"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+tracing = { version = "0.1.31", features = ["log"] }
+telemetry_subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a45af6dc28aa12c8cc13521d118c24aadd4c6adf" }

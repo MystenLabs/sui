@@ -4,7 +4,7 @@ extern crate core;
 
 use clap::*;
 use sui::sui_commands::SuiCommand;
-use sui::trace_utils;
+use sui_utils::trace_utils;
 
 #[cfg(test)]
 #[path = "unit_tests/cli_tests.rs"]
