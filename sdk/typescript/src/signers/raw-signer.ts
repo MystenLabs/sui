@@ -4,16 +4,20 @@
 import { Ed25519Keypair } from '../cryptography/ed25519-keypair';
 import { Provider } from '../providers/provider';
 import { Base64DataBuffer } from '../serialization/base64';
-import { defineReadOnly } from '../utils/properties';
-import { SignaturePubkeyPair, Signer } from './signer';
+import { SignaturePubkeyPair } from './signer';
+import { SignerWithProvider } from './signer-with-provider';
+import { TxnDataSerializer } from './txn-data-serializers/txn-data-serializer';
 
-export class RawSigner extends Signer {
+export class RawSigner extends SignerWithProvider {
   private readonly _keypair: Ed25519Keypair;
 
-  constructor(keypair: Ed25519Keypair, provider?: Provider) {
-    super();
+  constructor(
+    keypair: Ed25519Keypair,
+    provider?: Provider,
+    serializer?: TxnDataSerializer
+  ) {
+    super(provider, serializer);
     this._keypair = keypair;
-    defineReadOnly(this, 'provider', provider);
   }
 
   async getAddress(): Promise<string> {
@@ -27,7 +31,7 @@ export class RawSigner extends Signer {
     };
   }
 
-  connect(provider: Provider): Signer {
+  connect(provider: Provider): SignerWithProvider {
     return new RawSigner(this._keypair, provider);
   }
 }

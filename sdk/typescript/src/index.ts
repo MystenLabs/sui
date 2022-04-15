@@ -14,4 +14,4 @@ export * from './signers/txn-data-serializers/rpc-txn-data-serializer';
 export * from './signers/txn-data-serializers/txn-data-serializer';
 
 export * from './signers/raw-signer';
-export * from './signers/signer';
+export * from './signers/signer-with-provider';
