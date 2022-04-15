@@ -7,22 +7,22 @@ Find terms used in Sui defined below. Where possible, we link to a canonical def
 
 ### Accumulator
 
-An *accumulator* makes sure the transaction is received by a quorum of authorities, collects a quorum of votes, submits the certificate to the authorities, and replies to the client. The accumulator enables transactions to be certified. Sui offers a Gateway service that can assume the role of accumulator and collect votes on transactions from authorities in Sui, saving end-users bandwidth.
+An *accumulator* makes sure the transaction is received by a quorum of validators, collects a quorum of votes, submits the certificate to the validators, and replies to the client. The accumulator enables transactions to be certified. Sui offers a Gateway service that can assume the role of accumulator and collect votes on transactions from validators in Sui, saving end-users bandwidth.
 
 
-### Authority
+### Validator
 
-An authority in Sui plays a passive role analogous to the more active role of validators and minors in other blockchains. In Sui,
-authorities do not continuously participate in the consensus protocol but are called into action only when receiving a transaction or
+A validator in Sui plays a passive role analogous to the more active role of validators and minors in other blockchains. In Sui,
+validators do not continuously participate in the consensus protocol but are called into action only when receiving a transaction or
 certificate.
 
-For more information, see [Authorities vs validators/miners](sui-compared#authorities-vs-validatorsminers).
+For more information, see [Validators vs validators/miners](sui-compared#validators-vs-validatorsminers).
 
 
 ### Causal order
 
 [Causal order](https://www.scattered-thoughts.net/writing/causal-ordering/) is a representation of the relationship between transactions
-and the objects they produce, laid out as dependencies. Authorities cannot execute a transaction dependent on objects created by a prior
+and the objects they produce, laid out as dependencies. Validators cannot execute a transaction dependent on objects created by a prior
 transaction that has not finished. Rather than total order, Sui uses causal order (a partial order).
 
 For more information, see [Causal order vs total order](sui-compared#causal-order-vs-total-order). 
@@ -30,8 +30,8 @@ For more information, see [Causal order vs total order](sui-compared#causal-orde
 
 ### Certificate
 
-A certificate is the mechanism proving a transaction has been approved, or certified. Authorities vote on transactions, and an aggregator collects
-a Byzantine-resistant-majority of these votes into a certificate and broadcasts it to all Sui authorities, thereby ensuring finality.
+A certificate is the mechanism proving a transaction has been approved, or certified. Validators vote on transactions, and an aggregator collects
+a Byzantine-resistant-majority of these votes into a certificate and broadcasts it to all Sui validators, thereby ensuring finality.
 
 
 ### Equivocation
@@ -41,15 +41,15 @@ Equivocation in blockchains is the malicious action of dishonest actors giving c
 
 ### Epoch
 
-Operation of the Sui network is temporally partitioned into non-overlapping, fixed-duration *epochs*. During a particular epoch, the set of authorities participating in the network is fixed.
+Operation of the Sui network is temporally partitioned into non-overlapping, fixed-duration *epochs*. During a particular epoch, the set of validators participating in the network is fixed.
 
 For more information, see [Epochs](../build/authorities.md#epochs).
 
 
 ### Eventual consistency
 
-[Eventual consistency](https://en.wikipedia.org/wiki/Eventual_consistency) is the consensus model employed by Sui; if one honest authority
-certifies the transaction, all of the other honest authorities will too eventually.
+[Eventual consistency](https://en.wikipedia.org/wiki/Eventual_consistency) is the consensus model employed by Sui; if one honest validator
+certifies the transaction, all of the other honest validators will too eventually.
 
 
 ### Causal history
@@ -91,7 +91,7 @@ those affecting only single-writer objects, which require only a confirmation of
 
 ### Proof-of-stake
 
-[Proof-of-stake](https://en.wikipedia.org/wiki/Proof_of_stake) is a blockchain consensus mechanism where the voting weights of authorities or validators is proportional to a bonded amount of the network's native currency (called their stake in the network). This mitigates [Sybil attacks](https://en.wikipedia.org/wiki/Sybil_attack) by forcing bad actors to gain a large stake in the blockchain first. 
+[Proof-of-stake](https://en.wikipedia.org/wiki/Proof_of_stake) is a blockchain consensus mechanism where the voting weights of validators or validators is proportional to a bonded amount of the network's native currency (called their stake in the network). This mitigates [Sybil attacks](https://en.wikipedia.org/wiki/Sybil_attack) by forcing bad actors to gain a large stake in the blockchain first.
 
 
 ### Smart contract
