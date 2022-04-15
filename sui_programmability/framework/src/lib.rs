@@ -235,7 +235,14 @@ fn run_framework_move_unit_tests() {
 
 #[test]
 fn run_examples_move_unit_tests() {
-    let examples = vec!["basics", "defi", "fungible_tokens", "games", "nfts"];
+    let examples = vec![
+        "basics",
+        "defi",
+        "fungible_tokens",
+        "games",
+        "nfts",
+        "objects_tutorial",
+    ];
     for example in examples {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../examples")
