@@ -62,4 +62,4 @@ When this DAG contains all committed transactions in the system, it forms a comp
 
 ## Further reading
 * Objects are modified and created by [transactions](transactions.md).
-* Objects are stored by [validators](authorities.md).
+* Objects are stored by [validators](../learn/architecture/validators.md).

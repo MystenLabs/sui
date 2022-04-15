@@ -43,7 +43,7 @@ Equivocation in blockchains is the malicious action of dishonest actors giving c
 
 Operation of the Sui network is temporally partitioned into non-overlapping, fixed-duration *epochs*. During a particular epoch, the set of validators participating in the network is fixed.
 
-For more information, see [Epochs](../build/authorities.md#epochs).
+For more information, see [Epochs](architecture/validators.md#epochs).
 
 
 ### Eventual consistency
