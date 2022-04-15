@@ -1,7 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{crypto::{get_key_pair, KeyPair}, committee::Committee};
+use crate::{
+    committee::Committee,
+    crypto::{get_key_pair, KeyPair},
+};
 use std::collections::BTreeMap;
 
 pub fn make_committee_key() -> (Vec<KeyPair>, Committee) {

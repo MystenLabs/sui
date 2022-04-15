@@ -205,7 +205,7 @@ impl CheckpointStore {
     }
 
     /// Set the next checkpoint proposal.
-    pub fn set_proposal(&mut self, name: AuthorityName) -> Result<CheckpointProposal, SuiError> {
+    pub fn set_proposal(&mut self) -> Result<CheckpointProposal, SuiError> {
         // Check that:
         // - there is no current proposal.
         // - there are no unprocessed transactions.
@@ -236,7 +236,7 @@ impl CheckpointStore {
         let next_local_tx_sequence = self.extra_transactions.values().max().unwrap() + 1;
         let transactions: Vec<_> = self.extra_transactions.keys().collect();
 
-        let ckp = CheckpointProposal::new(name, sequence_number, transactions);
+        let ckp = CheckpointProposal::new(self.name, sequence_number, transactions);
 
         self.proposal_checkpoint = Some((next_local_tx_sequence, ckp.clone()));
 

@@ -3,7 +3,6 @@
 
 use super::*;
 use crate::authority::authority_tests::max_files_authority_tests;
-use rand::Rng;
 use std::{collections::HashSet, env, fs, path::PathBuf, sync::Arc};
 use sui_types::{
     base_types::{AuthorityName, ObjectID},
@@ -11,35 +10,34 @@ use sui_types::{
     waypoint::GlobalCheckpoint,
 };
 
-fn random_authority_name() -> AuthorityName {
-    let mut rng = rand::thread_rng();
-    AuthorityName::try_from(&rng.gen::<[u8; 32]>()[..]).expect("all ok")
-}
-
-fn random_ckpoint_store() -> (PathBuf, CheckpointStore) {
+fn random_ckpoint_store() -> Vec<(PathBuf, CheckpointStore)> {
     let (keys, committee) = make_committee_key();
 
-    let dir = env::temp_dir();
-    let path = dir.join(format!("SC_{:?}", ObjectID::random()));
-    fs::create_dir(&path).unwrap();
+    keys.iter()
+        .map(|k| {
+            let dir = env::temp_dir();
+            let path = dir.join(format!("SC_{:?}", ObjectID::random()));
+            fs::create_dir(&path).unwrap();
 
-    // Create an authority
-    let mut opts = rocksdb::Options::default();
-    opts.set_max_open_files(max_files_authority_tests());
+            // Create an authority
+            let mut opts = rocksdb::Options::default();
+            opts.set_max_open_files(max_files_authority_tests());
 
-    let cps = CheckpointStore::open(
-        path.clone(),
-        Some(opts),
-        *keys[0].public_key_bytes(),
-        committee,
-        Arc::pin(keys[0].copy()),
-    );
-    (path, cps)
+            let cps = CheckpointStore::open(
+                path.clone(),
+                Some(opts),
+                *k.public_key_bytes(),
+                committee.clone(),
+                Arc::pin(k.copy()),
+            );
+            (path, cps)
+        })
+        .collect()
 }
 
 #[test]
 fn make_checkpoint_db() {
-    let (_, mut cps) = random_ckpoint_store();
+    let (_, mut cps) = random_ckpoint_store().pop().unwrap();
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -82,10 +80,11 @@ fn make_checkpoint_db() {
 
 #[test]
 fn make_proposals() {
-    let (_, mut cps1) = random_ckpoint_store();
-    let (_, mut cps2) = random_ckpoint_store();
-    let (_, mut cps3) = random_ckpoint_store();
-    let (_, mut cps4) = random_ckpoint_store();
+    let mut test_objects = random_ckpoint_store();
+    let (_, mut cps1) = test_objects.pop().unwrap();
+    let (_, mut cps2) = test_objects.pop().unwrap();
+    let (_, mut cps3) = test_objects.pop().unwrap();
+    let (_, mut cps4) = test_objects.pop().unwrap();
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -106,13 +105,9 @@ fn make_proposals() {
     cps4.update_processed_transactions(&[(1, t4), (2, t5)])
         .unwrap();
 
-    let authority1 = random_authority_name();
-    let authority2 = random_authority_name();
-    let authority3 = random_authority_name();
-
-    let p1 = cps1.set_proposal(authority1).unwrap();
-    let p2 = cps2.set_proposal(authority2).unwrap();
-    let p3 = cps3.set_proposal(authority3).unwrap();
+    let p1 = cps1.set_proposal().unwrap();
+    let p2 = cps2.set_proposal().unwrap();
+    let p3 = cps3.set_proposal().unwrap();
 
     let ckp_items: Vec<_> = p1
         .transactions
@@ -139,10 +134,11 @@ fn make_proposals() {
 
 #[test]
 fn make_diffs() {
-    let (_, mut cps1) = random_ckpoint_store();
-    let (_, mut cps2) = random_ckpoint_store();
-    let (_, mut cps3) = random_ckpoint_store();
-    let (_, mut cps4) = random_ckpoint_store();
+    let mut test_objects = random_ckpoint_store();
+    let (_, mut cps1) = test_objects.pop().unwrap();
+    let (_, mut cps2) = test_objects.pop().unwrap();
+    let (_, mut cps3) = test_objects.pop().unwrap();
+    let (_, mut cps4) = test_objects.pop().unwrap();
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -163,15 +159,10 @@ fn make_diffs() {
     cps4.update_processed_transactions(&[(1, t4), (2, t5)])
         .unwrap();
 
-    let authority1 = random_authority_name();
-    let authority2 = random_authority_name();
-    let authority3 = random_authority_name();
-    let authority4 = random_authority_name();
-
-    let p1 = cps1.set_proposal(authority1).unwrap();
-    let p2 = cps2.set_proposal(authority2).unwrap();
-    let p3 = cps3.set_proposal(authority3).unwrap();
-    let p4 = cps4.set_proposal(authority4).unwrap();
+    let p1 = cps1.set_proposal().unwrap();
+    let p2 = cps2.set_proposal().unwrap();
+    let p3 = cps3.set_proposal().unwrap();
+    let p4 = cps4.set_proposal().unwrap();
 
     let diff12 = p1.diff_with(&p2);
     let diff23 = p2.diff_with(&p3);

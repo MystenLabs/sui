@@ -35,7 +35,7 @@ impl WaypointError {
    point on an eliptic curve on which the DL problem is
    hard. The accumulator is the sum of all points.
 */
-#[derive(Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Accumulator {
     accumulator: RistrettoPoint,
 }
@@ -67,7 +67,7 @@ impl Accumulator {
     all elements so far. Waypoints with increasing sequence numbers should
     contain all element in previous waypoints and expand them.
 */
-#[derive(PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Waypoint {
     pub sequence_number: u64,
     pub accumulator: Accumulator,

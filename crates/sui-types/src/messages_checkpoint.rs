@@ -2,6 +2,7 @@ use std::collections::{BTreeSet, HashSet};
 
 use crate::batch::SignedBatch;
 use crate::crypto::Signable;
+use crate::waypoint::Waypoint;
 use crate::{
     base_types::{AuthorityName, TransactionDigest},
     committee::Committee,
@@ -75,7 +76,6 @@ pub struct CheckpointRequest {
     pub detail: bool,
 }
 
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CheckpointRequestType {
     // Request the latest proposal and previous checkpoint.
@@ -83,8 +83,8 @@ pub enum CheckpointRequestType {
     // Requests a past checkpoint
     PastCheckpoint(CheckpointSequenceNumber),
 
-    // DEVNET: until we have a consensus core to collectivelly decide 
-    // the checkpoint we allow a trusted client to just force a 
+    // DEVNET: until we have a consensus core to collectivelly decide
+    // the checkpoint we allow a trusted client to just force a
     // checkpoint. This is for early testing and removal at Testnet
     // time.
     DEBUGSetCheckpoint(AuthenticatedCheckpoint, CheckpointContents),
@@ -99,11 +99,10 @@ pub struct CheckpointResponse {
     // the list of transactions as well.
     pub detail: Option<CheckpointContents>,
     // Include in all responses the local state of the sequence
-    // of trasacation to allow followers to track the latest 
+    // of trasacation to allow followers to track the latest
     // updates.
     pub local_sequence_info: LocalSequenceInfo,
 }
-
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AuthorityCheckpointInfo {
@@ -117,7 +116,6 @@ pub enum AuthorityCheckpointInfo {
     Past(AuthenticatedCheckpoint),
 }
 
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LocalSequenceInfo {
     pub last_local_batch: SignedBatch,
@@ -128,13 +126,12 @@ pub enum AuthenticatedCheckpoint {
     // No authentication information is available
     // or checkpoint is not available on this authority.
     None,
-    // The checkpoint with just a single authority 
+    // The checkpoint with just a single authority
     // signature.
     Signed(SignedCheckpoint),
     // The checkpoint with a quorum of signatures.
     Certified(CertifiedCheckpoint),
 }
-
 
 // Proposals are signed by a single authority, and 2f+1 are collected
 // to actually form a checkpoint, so we never expect a certificate on
@@ -147,13 +144,34 @@ pub struct SignedCheckpointProposal(pub SignedCheckpoint);
 
 pub type CheckpointDigest = [u8; 32];
 
-
 // The constituant parts of checkpoints, signed and certified
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CheckpointSummary {
     sequence_number: CheckpointSequenceNumber,
+    waypoint: Waypoint,
     digest: CheckpointDigest,
+}
+
+impl CheckpointSummary {
+    pub fn new(
+        sequence_number: CheckpointSequenceNumber,
+        transactions: BTreeSet<TransactionDigest>,
+    ) -> CheckpointSummary {
+        let mut waypoint = Waypoint::new(sequence_number);
+        transactions.iter().for_each(|tx| {
+            waypoint.insert(tx);
+        });
+
+        let contents = CheckpointContents { transactions };
+        let proposal_digest = contents.digest();
+
+        CheckpointSummary {
+            sequence_number,
+            waypoint,
+            digest: proposal_digest,
+        }
+    }
 }
 
 impl BcsSignable for CheckpointSummary {}
@@ -173,15 +191,7 @@ impl SignedCheckpoint {
         signer: &dyn signature::Signer<AuthoritySignature>,
         transactions: BTreeSet<TransactionDigest>,
     ) -> SignedCheckpoint {
-        let contents = CheckpointContents { transactions };
-
-        let proposal_digest = contents.digest();
-
-        let proposal = CheckpointSummary {
-            sequence_number,
-            digest: proposal_digest,
-        };
-
+        let proposal = CheckpointSummary::new(sequence_number, transactions);
         let signature = AuthoritySignature::new(&proposal, signer);
 
         SignedCheckpoint {
@@ -338,9 +348,8 @@ impl CheckpointContents {
 
 #[cfg(test)]
 mod tests {
-    use crate::utils::make_committee_key;
     use super::*;
-    
+    use crate::utils::make_committee_key;
 
     #[test]
     fn test_signed_proposal() {
@@ -349,12 +358,7 @@ mod tests {
 
         let set: BTreeSet<_> = [TransactionDigest::random()].into_iter().collect();
 
-        let mut proposal = SignedCheckpoint::new(
-            1,
-            *name,
-            &authority_key[0],
-            set.clone(),
-        );
+        let mut proposal = SignedCheckpoint::new(1, *name, &authority_key[0], set.clone());
 
         // Signature is correct on proposal, and with same transactions
         assert!(proposal.check_digest().is_ok());
