@@ -11,9 +11,9 @@ tokio = { version = "1.16.1", features = ["sync", "rt"] }
 bytes = "1.1.0"
 futures = "0.3.21"
 async-trait = "0.1.52"
-log = "0.4.14"
 rand = "0.7.3"
 rocksdb = "0.18.0"
+tracing = { version = "0.1.31", features = ["log"] }
 
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev ="e44bca4513a6ff6c97399cd79e82e4bc00571ac3"}
 

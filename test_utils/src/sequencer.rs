@@ -20,6 +20,7 @@ use sui_types::messages::ConsensusOutput;
 use sui_types::serialize::{deserialize_message, serialize_consensus_output, SerializedMessage};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::time::sleep;
+use tracing::log;
 use typed_store::rocks::{DBMap, TypedStoreError};
 use typed_store::traits::Map;
 
