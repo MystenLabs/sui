@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, path::Path};
+use std::{collections::HashSet, path::Path, sync::Arc};
 
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -10,8 +10,11 @@ use sui_types::{
     batch::TxSequenceNumber,
     committee::Committee,
     error::SuiError,
-    messages_checkpoint::CheckpointSequenceNumber,
-    waypoint::{Waypoint, WaypointDiff},
+    messages_checkpoint::{
+        CheckpointContents, CheckpointSequenceNumber, CheckpointSummary, SignedCheckpoint,
+        SignedCheckpointProposal,
+    },
+    waypoint::WaypointDiff,
 };
 use typed_store::{
     reopen,
@@ -20,6 +23,7 @@ use typed_store::{
 };
 
 use super::StableSyncAuthoritySigner;
+use arc_swap::ArcSwapOption;
 
 #[cfg(test)]
 #[path = "../unit_tests/checkpoint_tests.rs"]
@@ -28,17 +32,10 @@ mod checkpoint_tests;
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CheckpointProposal {
     /// Name of the authority
-    name: AuthorityName,
-
-    /// The sequence number of this proposal
-    sequence_number: CheckpointSequenceNumber,
-
-    /// A way point is a commitment to the set of transactions
-    /// included in this proposal.
-    waypoint: Waypoint,
+    pub proposal: SignedCheckpointProposal,
     /// The transactions included in the proposal.
     /// TODO: only include a commitment by default.
-    transactions: Vec<TransactionDigest>,
+    pub transactions: CheckpointContents,
 }
 
 impl CheckpointProposal {
@@ -47,27 +44,30 @@ impl CheckpointProposal {
     /// proposed trasnactions.
     /// TOOD: Add an identifier for the proposer, probably
     ///       an AuthorityName.
-    pub fn new(
-        name: AuthorityName,
-        sequence_number: CheckpointSequenceNumber,
-        transactions: Vec<TransactionDigest>,
-    ) -> Self {
-        let mut waypoint = Waypoint::new(sequence_number);
-        transactions.iter().for_each(|tx| {
-            waypoint.insert(tx);
-        });
-
+    pub fn new(proposal: SignedCheckpointProposal, transactions: CheckpointContents) -> Self {
         CheckpointProposal {
-            name,
-            sequence_number,
-            waypoint,
+            proposal,
             transactions,
         }
     }
 
     /// Returns the sequence number of this proposal
     pub fn sequence_number(&self) -> &CheckpointSequenceNumber {
-        &self.sequence_number
+        &self.proposal.0.checkpoint.waypoint.sequence_number
+    }
+
+    // Iterate over all transactions
+    pub fn transactions(&self) -> impl Iterator<Item = &TransactionDigest> {
+        self.transactions.transactions.iter()
+    }
+
+    // Get the inner checkpoint
+    pub fn checkpoint(&self) -> &CheckpointSummary {
+        &self.proposal.0.checkpoint
+    }
+
+    pub fn name(&self) -> &AuthorityName {
+        &self.proposal.0.authority
     }
 
     /// Construct a Diff structure between this proposal and another
@@ -83,22 +83,21 @@ impl CheckpointProposal {
         other_proposal: &CheckpointProposal,
     ) -> WaypointDiff<AuthorityName, TransactionDigest> {
         let all_elements = self
-            .transactions
-            .iter()
-            .chain(other_proposal.transactions.iter())
+            .transactions()
+            .chain(other_proposal.transactions.transactions.iter())
             .collect::<HashSet<_>>();
 
-        let my_transactions = self.transactions.iter().collect();
+        let my_transactions = self.transactions().collect();
         let iter_missing_me = all_elements.difference(&my_transactions).map(|x| **x);
-        let other_transactions = other_proposal.transactions.iter().collect();
+        let other_transactions = other_proposal.transactions().collect();
         let iter_missing_ot = all_elements.difference(&other_transactions).map(|x| **x);
 
         WaypointDiff::new(
-            self.name,
-            self.waypoint.clone(),
+            *self.name(),
+            *self.checkpoint().waypoint.clone(),
             iter_missing_me,
-            other_proposal.name,
-            other_proposal.waypoint.clone(),
+            *other_proposal.name(),
+            *other_proposal.checkpoint().waypoint.clone(),
             iter_missing_ot,
         )
     }
@@ -139,7 +138,7 @@ pub struct CheckpointStore {
     /// this sequence number. At this point the unprocessed_transactions sequence
     /// should be empty. It is none if there is no active proposal. We also include here
     /// the proposal, although we could re-create it from the database.
-    proposal_checkpoint: Option<(TxSequenceNumber, CheckpointProposal)>,
+    proposal_checkpoint: ArcSwapOption<(TxSequenceNumber, CheckpointProposal)>,
 }
 
 impl CheckpointStore {
@@ -200,18 +199,18 @@ impl CheckpointStore {
             checkpoint_contents,
             unprocessed_transactions,
             extra_transactions,
-            proposal_checkpoint: None,
+            proposal_checkpoint: ArcSwapOption::from(None),
         }
     }
 
     /// Set the next checkpoint proposal.
-    pub fn set_proposal(&mut self) -> Result<CheckpointProposal, SuiError> {
+    pub fn set_proposal(&self) -> Result<CheckpointProposal, SuiError> {
         // Check that:
         // - there is no current proposal.
         // - there are no unprocessed transactions.
         // - there are some extra transactions to include.
 
-        if self.proposal_checkpoint.is_some() {
+        if self.proposal_checkpoint.load().is_some() {
             return Err(SuiError::GenericAuthorityError {
                 error: "Proposal already set.".to_string(),
             });
@@ -234,11 +233,21 @@ impl CheckpointStore {
         // checkpoint. And make a list of the transactions.
         let sequence_number = self.next_checkpoint_sequence();
         let next_local_tx_sequence = self.extra_transactions.values().max().unwrap() + 1;
-        let transactions: Vec<_> = self.extra_transactions.keys().collect();
+        // let transactions: Vec<_> = self.extra_transactions.keys().collect();
 
-        let ckp = CheckpointProposal::new(self.name, sequence_number, transactions);
+        let transactions = CheckpointContents::new(self.extra_transactions.keys());
 
-        self.proposal_checkpoint = Some((next_local_tx_sequence, ckp.clone()));
+        let proposal = SignedCheckpointProposal(SignedCheckpoint::new(
+            sequence_number,
+            self.name,
+            &*self.secret,
+            &transactions,
+        ));
+
+        let ckp = CheckpointProposal::new(proposal, transactions);
+
+        self.proposal_checkpoint
+            .store(Some(Arc::new((next_local_tx_sequence, ckp.clone()))));
 
         Ok(ckp)
     }
@@ -246,6 +255,7 @@ impl CheckpointStore {
     /// Get the current proposal or error if there is no current proposal
     pub fn get_proposal(&self) -> Result<CheckpointProposal, SuiError> {
         self.proposal_checkpoint
+            .load()
             .as_ref()
             .ok_or_else(|| SuiError::GenericAuthorityError {
                 error: "No checkpoint proposal found.".to_string(),
@@ -275,7 +285,7 @@ impl CheckpointStore {
     /// Add transactions associated with a new checkpoint in the structure, and
     /// updates all tables including unprocessed and extra transactions.
     pub fn update_new_checkpoint(
-        &mut self,
+        &self,
         seq: CheckpointSequenceNumber,
         transactions: &[TransactionDigest],
     ) -> Result<(), SuiError> {
@@ -291,7 +301,7 @@ impl CheckpointStore {
 
         // Reset the proposal, it should already have been used by this
         // point or not included in the checkpoint. Either way it is stale.
-        self.proposal_checkpoint = None;
+        self.proposal_checkpoint.store(None);
 
         // Process transactions not already in a checkpoint
         let new_transactions = self
@@ -373,7 +383,7 @@ impl CheckpointStore {
     /// and nothing unsafe happens if it is called twice. Returns the lowest checkpoint number with
     /// unprocessed transactions (this is the low watermark).
     pub fn update_processed_transactions(
-        &mut self, // We take by &mut to prevent concurrent access.
+        &self, // We take by &mut to prevent concurrent access.
         transactions: &[(TxSequenceNumber, TransactionDigest)],
     ) -> Result<CheckpointSequenceNumber, TypedStoreError> {
         let in_checkpoint = self

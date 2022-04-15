@@ -37,7 +37,7 @@ fn random_ckpoint_store() -> Vec<(PathBuf, CheckpointStore)> {
 
 #[test]
 fn make_checkpoint_db() {
-    let (_, mut cps) = random_ckpoint_store().pop().unwrap();
+    let (_, cps) = random_ckpoint_store().pop().unwrap();
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -81,10 +81,10 @@ fn make_checkpoint_db() {
 #[test]
 fn make_proposals() {
     let mut test_objects = random_ckpoint_store();
-    let (_, mut cps1) = test_objects.pop().unwrap();
-    let (_, mut cps2) = test_objects.pop().unwrap();
-    let (_, mut cps3) = test_objects.pop().unwrap();
-    let (_, mut cps4) = test_objects.pop().unwrap();
+    let (_, cps1) = test_objects.pop().unwrap();
+    let (_, cps2) = test_objects.pop().unwrap();
+    let (_, cps3) = test_objects.pop().unwrap();
+    let (_, cps4) = test_objects.pop().unwrap();
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -110,10 +110,10 @@ fn make_proposals() {
     let p3 = cps3.set_proposal().unwrap();
 
     let ckp_items: Vec<_> = p1
-        .transactions
-        .into_iter()
-        .chain(p2.transactions.into_iter())
-        .chain(p3.transactions.into_iter())
+        .transactions()
+        .chain(p2.transactions())
+        .chain(p3.transactions())
+        .cloned()
         .collect();
 
     cps1.update_new_checkpoint(0, &ckp_items[..]).unwrap();
@@ -135,10 +135,10 @@ fn make_proposals() {
 #[test]
 fn make_diffs() {
     let mut test_objects = random_ckpoint_store();
-    let (_, mut cps1) = test_objects.pop().unwrap();
-    let (_, mut cps2) = test_objects.pop().unwrap();
-    let (_, mut cps3) = test_objects.pop().unwrap();
-    let (_, mut cps4) = test_objects.pop().unwrap();
+    let (_, cps1) = test_objects.pop().unwrap();
+    let (_, cps2) = test_objects.pop().unwrap();
+    let (_, cps3) = test_objects.pop().unwrap();
+    let (_, cps4) = test_objects.pop().unwrap();
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -174,12 +174,12 @@ fn make_diffs() {
     // P4 proposal not selected
     let diff41 = p4.diff_with(&p1);
     let all_items4 = global
-        .checkpoint_items(diff41, p4.transactions.iter().cloned().collect())
+        .checkpoint_items(diff41, p4.transactions().cloned().collect())
         .unwrap();
 
     // P1 proposal selected
     let all_items1 = global
-        .checkpoint_items(diff12, p1.transactions.iter().cloned().collect())
+        .checkpoint_items(diff12, p1.transactions().cloned().collect())
         .unwrap();
 
     // All get the same set for the proposal

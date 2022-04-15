@@ -41,6 +41,7 @@ curve25519-dalek = { version = "3", default-features = false }
 structopt = "0.3.26"
 log = "0.4.14"
 thiserror = "1.0.30"
+arc-swap = "1.5.0"
 
 
 sui-adapter = { path = "../crates/sui-adapter" }

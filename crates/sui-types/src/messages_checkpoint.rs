@@ -148,7 +148,7 @@ pub type CheckpointDigest = [u8; 32];
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CheckpointSummary {
-    waypoint: Box<Waypoint>, // Bigger strucure, can live on heap.
+    pub waypoint: Box<Waypoint>, // Bigger strucure, can live on heap.
     digest: CheckpointDigest,
 }
 
@@ -169,16 +169,14 @@ impl CheckpointSummary {
             digest: proposal_digest,
         }
     }
-
-    
 }
 
 impl BcsSignable for CheckpointSummary {}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignedCheckpoint {
-    checkpoint: CheckpointSummary,
-    authority: AuthorityName,
+    pub checkpoint: CheckpointSummary,
+    pub authority: AuthorityName,
     signature: AuthoritySignature,
 }
 
@@ -336,7 +334,7 @@ impl CertifiedCheckpoint {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointContents {
-    transactions: BTreeSet<TransactionDigest>,
+    pub transactions: BTreeSet<TransactionDigest>,
 }
 
 impl BcsSignable for CheckpointContents {}
