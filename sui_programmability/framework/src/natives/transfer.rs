@@ -1,7 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{natives::get_object_id, EventType};
+use crate::{
+    abort_if_object_shared,
+    natives::{
+        get_object_id_bytes, get_object_id_bytes_value, id_value_to_bytes, is_object_shared_in_test,
+    },
+    EventType,
+};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::account_address::AccountAddress;
 use move_vm_runtime::native_functions::NativeContext;
@@ -42,8 +48,10 @@ pub fn transfer_internal(
     // Charge a constant native gas cost here, since
     // we will charge it properly when processing
     // all the events in adapter.
-    // TODO: adjust native_gas cost size base.
     let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 1);
+
+    abort_if_object_shared!(context, cost, get_object_id_bytes(&transferred_obj));
+
     if context.save_event(recipient.to_vec(), event_type as u64, ty, transferred_obj)? {
         Ok(NativeResult::ok(cost, smallvec![]))
     } else {
@@ -65,6 +73,9 @@ pub fn freeze_object(
     let obj = args.pop_back().unwrap();
     let event_type = EventType::FreezeObject;
     let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 1);
+
+    abort_if_object_shared!(context, cost, get_object_id_bytes(&obj));
+
     if context.save_event(vec![], event_type as u64, ty, obj)? {
         Ok(NativeResult::ok(cost, smallvec![]))
     } else {
@@ -86,6 +97,9 @@ pub fn share_object(
     let obj = args.pop_back().unwrap();
     let event_type = EventType::ShareObject;
     let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 1);
+
+    abort_if_object_shared!(context, cost, get_object_id_bytes(&obj));
+
     if context.save_event(vec![], event_type as u64, ty, obj)? {
         Ok(NativeResult::ok(cost, smallvec![]))
     } else {
@@ -105,9 +119,11 @@ pub fn delete_child_object_internal(
 
     let obj = args.pop_back().unwrap();
     let event_type = EventType::DeleteChildObject;
-    let obj_id = get_object_id(obj);
-    // TODO: Decide the cost.
+    let obj_id = get_object_id_bytes_value(&obj);
     let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 1);
+
+    abort_if_object_shared!(context, cost, id_value_to_bytes(&obj_id));
+
     if context.save_event(vec![], event_type as u64, Type::Address, obj_id)? {
         Ok(NativeResult::ok(cost, smallvec![]))
     } else {

@@ -21,17 +21,13 @@ use sui_types::{
     object::Owner,
 };
 
-use super::{get_nested_struct_field, get_nth_struct_field};
+use super::{get_nth_struct_field, get_versioned_id_bytes};
 
 type Event = (Vec<u8>, u64, Type, MoveTypeLayout, Value);
 
 const WRAPPED_OBJECT_EVENT: u64 = 255;
 const UPDATE_OBJECT_EVENT: u64 = 254;
-
-/// Trying to transfer a shared object, which is not allowed.
-/// This won't be detected right away when a transfer is happening.
-/// Instead, it's detected when processing the inventory events.
-const ETRANSFER_SHARED_OBJECT: u64 = 100;
+pub const TEST_START_EVENT: u64 = 253;
 
 /// Trying to mutating an immutable object.
 /// This is detected when returning an immutable object back to
@@ -51,14 +47,6 @@ struct OwnedObj {
 // into the module's StructHandle table for structs) to something human-readable like `TypeTag`.
 // TODO: add a native function that prints the log of transfers, deletes, wraps for debugging purposes
 type Inventory = BTreeMap<ObjectID, OwnedObj>;
-
-// The deleted id event contains the VersionedID.
-// We want to retrieve the inner id bytes.
-fn get_deleted_id_bytes(id: &Value) -> AccountAddress {
-    get_nested_struct_field(id.copy_value().unwrap(), &[0, 0, 0])
-        .value_as::<AccountAddress>()
-        .unwrap()
-}
 
 fn get_value_object_id(val: &Value, layout: &MoveTypeLayout) -> ObjectID {
     let obj_bytes = val
@@ -91,6 +79,9 @@ fn get_global_inventory(events: &[Event]) -> Result<Inventory, u64> {
             }
             continue;
         }
+        if *event_type_byte == TEST_START_EVENT {
+            continue;
+        }
         let event_type = EventType::try_from_primitive(*event_type_byte as u8)
             .expect("This will always succeed for a well-structured event log");
         match event_type {
@@ -99,7 +90,7 @@ fn get_global_inventory(events: &[Event]) -> Result<Inventory, u64> {
             | EventType::FreezeObject
             | EventType::ShareObject => {
                 let obj_id = get_value_object_id(val, layout);
-                let owner = get_new_owner(&inventory, &obj_id, event_type, recipient.clone())?;
+                let owner = get_new_owner(event_type, recipient.clone());
                 // note; may overwrite older values of the object, which is intended
                 inventory.insert(
                     obj_id,
@@ -112,12 +103,12 @@ fn get_global_inventory(events: &[Event]) -> Result<Inventory, u64> {
             }
             EventType::DeleteObjectID => {
                 // note: obj_id may or may not be present in `inventory`--a useer can create an ID and delete it without associating it with a transferred object
-                inventory.remove(&get_deleted_id_bytes(val).into());
+                inventory.remove(&get_versioned_id_bytes(val).into());
             }
             EventType::DeleteChildObject => {
                 // val is an Sui object, with the first field as the versioned id.
-                let versioned_id = get_nth_struct_field(val.copy_value().unwrap(), 0);
-                inventory.remove(&get_deleted_id_bytes(&versioned_id).into());
+                let versioned_id = get_nth_struct_field(val, 0);
+                inventory.remove(&get_versioned_id_bytes(&versioned_id).into());
             }
             EventType::User => (),
         }
@@ -125,19 +116,8 @@ fn get_global_inventory(events: &[Event]) -> Result<Inventory, u64> {
     Ok(inventory)
 }
 
-fn get_new_owner(
-    inventory: &Inventory,
-    obj_id: &ObjectID,
-    event_type: EventType,
-    recipient: Vec<u8>,
-) -> Result<Owner, u64> {
-    if let Some(existing) = inventory.get(obj_id) {
-        if existing.owner.is_shared() {
-            // Shared objects are not allowed to be transferred.
-            return Err(ETRANSFER_SHARED_OBJECT);
-        }
-    }
-    Ok(match event_type {
+fn get_new_owner(event_type: EventType, recipient: Vec<u8>) -> Owner {
+    match event_type {
         EventType::FreezeObject => Owner::SharedImmutable,
         EventType::ShareObject => Owner::SharedMutable,
         EventType::TransferToAddress => {
@@ -145,7 +125,7 @@ fn get_new_owner(
         }
         EventType::TransferToObject => Owner::ObjectOwner(SuiAddress::try_from(recipient).unwrap()),
         _ => panic!("Unrecognized event_type"),
-    })
+    }
 }
 
 /// Get the objects of type `type_` that can be spent by `addr`
@@ -194,7 +174,7 @@ pub fn deleted_object_ids(
         .skip(tx_begin_idx)
         .filter_map(|(_, event_type_byte, _, _, val)| {
             if *event_type_byte == EventType::DeleteObjectID as u64 {
-                Some(Value::vector_u8(get_deleted_id_bytes(val).to_vec()))
+                Some(Value::vector_u8(get_versioned_id_bytes(val).to_vec()))
             } else {
                 None
             }
@@ -253,6 +233,22 @@ pub fn emit_wrapped_object_event(
     let dummy_type = Type::Bool;
     let dummy_value = Value::bool(true);
     context.save_event(wrapped_id, WRAPPED_OBJECT_EVENT, dummy_type, dummy_value)?;
+    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
+    Ok(NativeResult::ok(cost, smallvec![]))
+}
+
+pub fn emit_test_start_event(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.is_empty());
+
+    // type and value are not needed for this event.
+    let dummy_type = Type::Bool;
+    let dummy_value = Value::bool(true);
+    context.save_event(vec![], TEST_START_EVENT, dummy_type, dummy_value)?;
     let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
     Ok(NativeResult::ok(cost, smallvec![]))
 }

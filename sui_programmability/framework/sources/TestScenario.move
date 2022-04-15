@@ -76,6 +76,7 @@ module Sui::TestScenario {
 
     /// Begin a new multi-transaction test scenario in a context where `sender` is the tx sender
     public fun begin(sender: &address): Scenario {
+        emit_test_start_event();
         Scenario {
             ctx: TxContext::new_from_address(*sender, 0),
             removed: Vector::empty(),
@@ -328,6 +329,12 @@ module Sui::TestScenario {
 
     /// Return the ID's of objects deleted since the `tx_begin_idx`th event in the global event log
     native fun deleted_object_ids(tx_begin_idx: u64): vector<vector<u8>>;
+
+    /// Emit a special, test-only event indicating that a unit test has started.
+    /// This must be the first event emitted during a test run.
+    /// In the native functions, we rely on this to quickly tell whether we are
+    /// in test mode or not.
+    native fun emit_test_start_event();
 
     /// Emit a special, test-only event recording that `object_id` was wrapped
     native fun emit_wrapped_object_event(object_id: vector<u8>);

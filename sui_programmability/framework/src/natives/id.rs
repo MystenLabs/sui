@@ -1,7 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::EventType;
+use crate::{
+    abort_if_object_shared,
+    natives::{get_versioned_id_bytes, is_object_shared_in_test},
+    EventType,
+};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::account_address::AccountAddress;
 use move_vm_runtime::native_functions::NativeContext;
@@ -65,6 +69,8 @@ pub fn delete_id(
 
     // TODO: what should the cost of this be?
     let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
+
+    abort_if_object_shared!(context, cost, get_versioned_id_bytes(&versioned_id));
 
     if !context.save_event(vec![], EventType::DeleteObjectID as u64, ty, versioned_id)? {
         return Ok(NativeResult::err(cost, 0));

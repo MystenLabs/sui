@@ -249,7 +249,7 @@ module Sui::TestScenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 100 /* ETRANSFER_SHARED_OBJECT */)]
+    #[expected_failure(abort_code = 100 /* ECONSUME_SHARED_OBJECT */)]
     fun test_freeze_then_transfer() {
         let sender = @0x0;
         let scenario = TestScenario::begin(&sender);
@@ -260,15 +260,60 @@ module Sui::TestScenarioTests {
         TestScenario::next_tx(&mut scenario, &sender);
         {
             let obj = TestScenario::take_object<Object>(&mut scenario);
-            // Transfer an immutable object, this won't fail right away.
+            // Transfer an immutable object, this will fail.
             Transfer::transfer(obj, copy sender);
+        };
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 100 /* ECONSUME_SHARED_OBJECT */)]
+    fun test_freeze_then_delete() {
+        let sender = @0x0;
+        let scenario = TestScenario::begin(&sender);
+        {
+            let obj = Object { id: TestScenario::new_id(&mut scenario), value: 100 };
+            Transfer::freeze_object(obj);
         };
         TestScenario::next_tx(&mut scenario, &sender);
         {
-            // while removing the object, test scenario will read the inventory,
-            // and discover that we transferred an immutable object.
             let obj = TestScenario::take_object<Object>(&mut scenario);
-            TestScenario::return_object(&mut scenario, obj);
+            // Delete an immutable object, this will fail.
+            let Object { id, value: _ } = obj;
+            ID::delete(id);
+        };
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 100 /* ECONSUME_SHARED_OBJECT */)]
+    fun test_share_then_transfer() {
+        let sender = @0x0;
+        let scenario = TestScenario::begin(&sender);
+        {
+            let obj = Object { id: TestScenario::new_id(&mut scenario), value: 100 };
+            Transfer::share_object(obj);
+        };
+        TestScenario::next_tx(&mut scenario, &sender);
+        {
+            let obj = TestScenario::take_object<Object>(&mut scenario);
+            // Transfer a shared object, this will fail.
+            Transfer::transfer(obj, copy sender);
+        };
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 100 /* ECONSUME_SHARED_OBJECT */)]
+    fun test_double_freeze() {
+        let sender = @0x0;
+        let scenario = TestScenario::begin(&sender);
+        {
+            let obj = Object { id: TestScenario::new_id(&mut scenario), value: 100 };
+            Transfer::freeze_object(obj);
+        };
+        TestScenario::next_tx(&mut scenario, &sender);
+        {
+            let obj = TestScenario::take_object<Object>(&mut scenario);
+            // Freeze an immutable object again, this will fail.
+            Transfer::freeze_object(obj);
         };
     }
 
