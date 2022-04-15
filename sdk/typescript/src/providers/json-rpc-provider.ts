@@ -9,7 +9,8 @@ import {
 } from './provider';
 
 export class JsonRpcProvider extends Provider {
-  /** @internal */ _endpointURL: string;
+  //@ts-ignore
+  private endpointURL: string;
 
   /**
    * Establish a connection to a Sui Gateway endpoint
@@ -18,7 +19,7 @@ export class JsonRpcProvider extends Provider {
    */
   constructor(endpoint: string) {
     super();
-    this._endpointURL = endpoint;
+    this.endpointURL = endpoint;
   }
 
   // Objects

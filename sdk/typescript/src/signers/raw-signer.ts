@@ -9,7 +9,7 @@ import { SignerWithProvider } from './signer-with-provider';
 import { TxnDataSerializer } from './txn-data-serializers/txn-data-serializer';
 
 export class RawSigner extends SignerWithProvider {
-  private readonly _keypair: Ed25519Keypair;
+  private readonly keypair: Ed25519Keypair;
 
   constructor(
     keypair: Ed25519Keypair,
@@ -17,21 +17,21 @@ export class RawSigner extends SignerWithProvider {
     serializer?: TxnDataSerializer
   ) {
     super(provider, serializer);
-    this._keypair = keypair;
+    this.keypair = keypair;
   }
 
   async getAddress(): Promise<string> {
-    throw this._keypair.getPublicKey().toSuiAddress();
+    throw this.keypair.getPublicKey().toSuiAddress();
   }
 
   async signData(data: Base64DataBuffer): Promise<SignaturePubkeyPair> {
     return {
-      signature: this._keypair.signData(data),
-      pubKey: this._keypair.getPublicKey(),
+      signature: this.keypair.signData(data),
+      pubKey: this.keypair.getPublicKey(),
     };
   }
 
   connect(provider: Provider): SignerWithProvider {
-    return new RawSigner(this._keypair, provider);
+    return new RawSigner(this.keypair, provider);
   }
 }
