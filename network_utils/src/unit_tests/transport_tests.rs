@@ -8,6 +8,7 @@ use std::{
     time::Duration,
 };
 use tokio::{runtime::Runtime, time::timeout};
+use tracing::error;
 
 async fn get_new_local_address() -> Result<String, std::io::Error> {
     let builder = net2::TcpBuilder::new_v4()?;
