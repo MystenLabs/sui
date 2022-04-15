@@ -13,7 +13,7 @@ use sui_types::batch::UpdateItem;
 use sui_types::messages::{BatchInfoRequest, BatchInfoResponseItem};
 use sui_types::serialize::*;
 use tokio::runtime::{Builder, Runtime};
-use tracing::*;
+use tracing::{error, info};
 
 pub mod bench_types;
 pub mod load_generator;
