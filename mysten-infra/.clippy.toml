@@ -6,8 +6,13 @@ type-complexity-threshold = 10000
 too-many-arguments-threshold =  14
 
 disallowed-methods = [
+    # we use tracing with the log feature instead of the log crate.
+    { path = "log::info", reason = "use tracing::info instead" },
+    { path = "log::debug", reason = "use tracing::debug instead" },
+    { path = "log::error", reason = "use tracing::error instead" },
+    { path = "log::warn", reason = "use tracing::warn instead" },
     # unbounded channels are for expert use only
-    { path = "tokio::sync::mpsc::unbounded", reason = "use a bounded channel instead" },
+    { path = "tokio::sync::mpsc::unbounded_channel", reason = "use a bounded channel instead" },
     { path = "futures::channel::mpsc::unbounded", reason = "use a bounded channel instead" },
     { path = "futures_channel::mpsc::unbounded", reason = "use a bounded channel instead" },
 ]
