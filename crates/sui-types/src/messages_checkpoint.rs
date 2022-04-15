@@ -87,7 +87,7 @@ pub enum CheckpointRequestType {
     // the checkpoint we allow a trusted client to just force a
     // checkpoint. This is for early testing and removal at Testnet
     // time.
-    DEBUGSetCheckpoint(AuthenticatedCheckpoint, CheckpointContents),
+    DEBUGSetCheckpoint(Box<(AuthenticatedCheckpoint, CheckpointContents)>),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -148,30 +148,29 @@ pub type CheckpointDigest = [u8; 32];
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CheckpointSummary {
-    sequence_number: CheckpointSequenceNumber,
-    waypoint: Waypoint,
+    waypoint: Box<Waypoint>, // Bigger strucure, can live on heap.
     digest: CheckpointDigest,
 }
 
 impl CheckpointSummary {
     pub fn new(
         sequence_number: CheckpointSequenceNumber,
-        transactions: BTreeSet<TransactionDigest>,
+        transactions: &CheckpointContents,
     ) -> CheckpointSummary {
-        let mut waypoint = Waypoint::new(sequence_number);
-        transactions.iter().for_each(|tx| {
+        let mut waypoint = Box::new(Waypoint::new(sequence_number));
+        transactions.transactions.iter().for_each(|tx| {
             waypoint.insert(tx);
         });
 
-        let contents = CheckpointContents { transactions };
-        let proposal_digest = contents.digest();
+        let proposal_digest = transactions.digest();
 
         CheckpointSummary {
-            sequence_number,
             waypoint,
             digest: proposal_digest,
         }
     }
+
+    
 }
 
 impl BcsSignable for CheckpointSummary {}
@@ -189,7 +188,7 @@ impl SignedCheckpoint {
         sequence_number: CheckpointSequenceNumber,
         authority: AuthorityName,
         signer: &dyn signature::Signer<AuthoritySignature>,
-        transactions: BTreeSet<TransactionDigest>,
+        transactions: &CheckpointContents,
     ) -> SignedCheckpoint {
         let proposal = CheckpointSummary::new(sequence_number, transactions);
         let signature = AuthoritySignature::new(&proposal, signer);
@@ -210,8 +209,10 @@ impl SignedCheckpoint {
     // Check that the digest and transactions are correctly signed
     pub fn check_transactions(&self, contents: &CheckpointContents) -> Result<(), SuiError> {
         self.check_digest()?;
+        let recomputed = CheckpointSummary::new(self.checkpoint.waypoint.sequence_number, contents);
+
         fp_ensure!(
-            contents.digest() == self.checkpoint.digest,
+            recomputed == self.checkpoint,
             SuiError::GenericAuthorityError {
                 error: "Transaction digest mismatch".to_string()
             }
@@ -341,6 +342,15 @@ pub struct CheckpointContents {
 impl BcsSignable for CheckpointContents {}
 
 impl CheckpointContents {
+    pub fn new<T>(contents: T) -> CheckpointContents
+    where
+        T: Iterator<Item = TransactionDigest>,
+    {
+        CheckpointContents {
+            transactions: contents.collect(),
+        }
+    }
+
     pub fn digest(&self) -> [u8; 32] {
         sha3_hash(self)
     }
@@ -356,15 +366,14 @@ mod tests {
         let (authority_key, _committee) = make_committee_key();
         let name = authority_key[0].public_key_bytes();
 
-        let set: BTreeSet<_> = [TransactionDigest::random()].into_iter().collect();
+        let set = [TransactionDigest::random()];
+        let set = CheckpointContents::new(set.iter().cloned());
 
-        let mut proposal = SignedCheckpoint::new(1, *name, &authority_key[0], set.clone());
+        let mut proposal = SignedCheckpoint::new(1, *name, &authority_key[0], &set);
 
         // Signature is correct on proposal, and with same transactions
         assert!(proposal.check_digest().is_ok());
-
-        let contents = CheckpointContents { transactions: set };
-        assert!(proposal.check_transactions(&contents).is_ok());
+        assert!(proposal.check_transactions(&set).is_ok());
 
         // Error on different transactions
         let contents = CheckpointContents {
@@ -373,7 +382,7 @@ mod tests {
         assert!(proposal.check_transactions(&contents).is_err());
 
         // Modify the proposal, and observe the signature fail
-        proposal.checkpoint.sequence_number = 2;
+        proposal.checkpoint.waypoint.sequence_number = 2;
         assert!(proposal.check_digest().is_err());
     }
 
@@ -381,14 +390,15 @@ mod tests {
     fn test_certified_checkpoint() {
         let (keys, committee) = make_committee_key();
 
-        let set: BTreeSet<_> = [TransactionDigest::random()].into_iter().collect();
+        let set = [TransactionDigest::random()];
+        let set = CheckpointContents::new(set.iter().cloned());
 
         let signed_checkpoints: Vec<_> = keys
             .iter()
             .map(|k| {
                 let name = k.public_key_bytes();
 
-                SignedCheckpoint::new(1, *name, k, set.clone())
+                SignedCheckpoint::new(1, *name, k, &set)
             })
             .collect();
 
@@ -396,9 +406,7 @@ mod tests {
             CertifiedCheckpoint::aggregate(signed_checkpoints, &committee).expect("Cert is OK");
 
         // Signature is correct on proposal, and with same transactions
-        assert!(checkpoint_cert
-            .check_transactions(&committee, &CheckpointContents { transactions: set })
-            .is_ok());
+        assert!(checkpoint_cert.check_transactions(&committee, &set).is_ok());
 
         // Make a bad proposal
         let signed_checkpoints: Vec<_> = keys
@@ -406,8 +414,9 @@ mod tests {
             .map(|k| {
                 let name = k.public_key_bytes();
                 let set: BTreeSet<_> = [TransactionDigest::random()].into_iter().collect();
+                let set = CheckpointContents::new(set.iter().cloned());
 
-                SignedCheckpoint::new(1, *name, k, set)
+                SignedCheckpoint::new(1, *name, k, &set)
             })
             .collect();
 
