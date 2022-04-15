@@ -3,7 +3,6 @@
 
 import { PublicKey } from '../cryptography/publickey';
 import { Base64DataBuffer } from '../serialization/base64';
-import { TxnDataSerializer } from './txn-data-serializers/txn-data-serializer';
 
 ///////////////////////////////
 // Exported Types
@@ -18,17 +17,15 @@ export type SignaturePubkeyPair = {
 
 ///////////////////////////////
 // Exported Abstracts
-export abstract class Signer {
-  readonly serializer?: TxnDataSerializer;
-
-  ///////////////////
-  // Sub-classes MUST implement these
-
+/**
+ * Serializes a transaction to a string that can be signed by a `Signer`.
+ */
+export interface Signer {
   // Returns the checksum address
-  abstract getAddress(): Promise<string>;
+  getAddress(): Promise<string>;
 
   /**
    * Returns the signature for the data and the public key of the signer
    */
-  abstract signData(data: Base64DataBuffer): Promise<SignaturePubkeyPair>;
+  signData(data: Base64DataBuffer): Promise<SignaturePubkeyPair>;
 }
