@@ -11,8 +11,9 @@ use sui_types::{
     committee::Committee,
     error::SuiError,
     messages_checkpoint::{
-        CheckpointContents, CheckpointSequenceNumber, CheckpointSummary, SignedCheckpoint,
-        SignedCheckpointProposal,
+        AuthenticatedCheckpoint, AuthorityCheckpointInfo, CheckpointContents, CheckpointRequest,
+        CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber, CheckpointSummary,
+        SignedCheckpoint, SignedCheckpointProposal,
     },
     waypoint::WaypointDiff,
 };
@@ -66,6 +67,7 @@ impl CheckpointProposal {
         &self.proposal.0.checkpoint
     }
 
+    // Get the authority name
     pub fn name(&self) -> &AuthorityName {
         &self.proposal.0.authority
     }
@@ -133,6 +135,9 @@ pub struct CheckpointStore {
     /// of this authority.
     pub extra_transactions: DBMap<TransactionDigest, TxSequenceNumber>,
 
+    /// The list of checkpoint, along with their authentication information
+    pub checkpoints: DBMap<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
+
     /// The local sequence at which the proposal for the next checkpoint is created
     /// This is a sequence number containing all unprocessed trasnactions lower than
     /// this sequence number. At this point the unprocessed_transactions sequence
@@ -175,6 +180,7 @@ impl CheckpointStore {
                 ("checkpoint_contents", &options),
                 ("unprocessed_transactions", &point_lookup),
                 ("extra_transactions", &point_lookup),
+                ("checkpoints", &point_lookup),
             ],
         )
         .expect("Cannot open DB.");
@@ -184,12 +190,14 @@ impl CheckpointStore {
             checkpoint_contents,
             unprocessed_transactions,
             extra_transactions,
+            checkpoints,
         ) = reopen! (
             &db,
             "transactions_to_checkpoint";<TransactionDigest,(CheckpointSequenceNumber, TxSequenceNumber)>,
             "checkpoint_contents";<(CheckpointSequenceNumber,TxSequenceNumber),TransactionDigest>,
             "unprocessed_transactions";<TransactionDigest,CheckpointSequenceNumber>,
-            "extra_transactions";<TransactionDigest,TxSequenceNumber>
+            "extra_transactions";<TransactionDigest,TxSequenceNumber>,
+            "checkpoints";<CheckpointSequenceNumber, AuthenticatedCheckpoint>
         );
         CheckpointStore {
             name,
@@ -199,8 +207,118 @@ impl CheckpointStore {
             checkpoint_contents,
             unprocessed_transactions,
             extra_transactions,
+            checkpoints,
             proposal_checkpoint: ArcSwapOption::from(None),
         }
+    }
+
+    // Define handlers for request
+
+    pub fn handle_checkpoint_request(
+        &self,
+        request: CheckpointRequest,
+    ) -> Result<CheckpointResponse, SuiError> {
+        match &request.request_type {
+            CheckpointRequestType::LatestCheckpointProposal => {
+                self.handle_latest_proposal(&request)
+            }
+            CheckpointRequestType::PastCheckpoint(seq) => {
+                self.handle_past_checkpoint(&request, *seq)
+            }
+            CheckpointRequestType::DEBUGSetCheckpoint(_box_checkpoint) => {
+                unimplemented!();
+            }
+        }
+    }
+
+    pub fn handle_latest_proposal(
+        &self,
+        request: &CheckpointRequest,
+    ) -> Result<CheckpointResponse, SuiError> {
+        // Try to load any latest proposal
+        let latest_checkpoint_proposal = self.proposal_checkpoint.load();
+
+        // Load the latest checkpoint from the database
+        let previous_checkpoint = self
+            .checkpoints
+            .iter()
+            .skip_to_last()
+            .next()
+            .map(|(_, c)| c)
+            .unwrap_or(AuthenticatedCheckpoint::None);
+
+        // Get the current proposal if there is one.
+        let current = latest_checkpoint_proposal
+            .as_ref()
+            .map(|arc| arc.1.proposal.clone());
+
+        // If requested include either the trasnactions in the latest checkpoint proposal
+        // or the unprocessed transactions that block the generation of a proposal.
+        let detail = if request.detail {
+            latest_checkpoint_proposal
+                .as_ref()
+                // If the checkpoint exist return its contents.
+                .map(|arc| arc.1.transactions.clone())
+                // If the checkpoint does not exist return the unprocessed transactions
+                .or_else(|| {
+                    Some(CheckpointContents::new(
+                        self.unprocessed_transactions.keys(),
+                    ))
+                })
+        } else {
+            None
+        };
+
+        // Make the response
+        Ok(CheckpointResponse {
+            info: AuthorityCheckpointInfo::Proposal {
+                current,
+                previous: previous_checkpoint,
+            },
+            detail,
+        })
+    }
+
+    pub fn handle_past_checkpoint(
+        &self,
+        request: &CheckpointRequest,
+        seq: CheckpointSequenceNumber,
+    ) -> Result<CheckpointResponse, SuiError> {
+        // Get the checkpoint with a given sequence number
+        let checkpoint = self
+            .checkpoints
+            .get(&seq)?
+            .unwrap_or(AuthenticatedCheckpoint::None);
+
+        // If a checkpoint is found, and if requested, return the list of transaction digest in it.
+        let detail = if let &AuthenticatedCheckpoint::None = &checkpoint {
+            None
+        } else if request.detail {
+            Some(CheckpointContents::new(
+                self.checkpoint_contents
+                    .iter()
+                    .skip_to(&(seq, 0))?
+                    .take_while(|((k, _), _)| *k == seq)
+                    .map(|(_, digest)| digest),
+            ))
+        } else {
+            None
+        };
+
+        Ok(CheckpointResponse {
+            info: AuthorityCheckpointInfo::Past(checkpoint),
+            detail,
+        })
+    }
+
+    // Helper functions
+
+    pub fn next_local_tx_number(&self) -> TxSequenceNumber {
+        self.extra_transactions
+            .values()
+            .max()
+            .map(|v| v + 1)
+            .unwrap_or(0)
     }
 
     /// Set the next checkpoint proposal.
@@ -233,10 +351,8 @@ impl CheckpointStore {
         // checkpoint. And make a list of the transactions.
         let sequence_number = self.next_checkpoint_sequence();
         let next_local_tx_sequence = self.extra_transactions.values().max().unwrap() + 1;
-        // let transactions: Vec<_> = self.extra_transactions.keys().collect();
 
         let transactions = CheckpointContents::new(self.extra_transactions.keys());
-
         let proposal = SignedCheckpointProposal(SignedCheckpoint::new(
             sequence_number,
             self.name,
@@ -244,12 +360,13 @@ impl CheckpointStore {
             &transactions,
         ));
 
-        let ckp = CheckpointProposal::new(proposal, transactions);
+        let proposal_and_transactions = CheckpointProposal::new(proposal, transactions);
+        self.proposal_checkpoint.store(Some(Arc::new((
+            next_local_tx_sequence,
+            proposal_and_transactions.clone(),
+        ))));
 
-        self.proposal_checkpoint
-            .store(Some(Arc::new((next_local_tx_sequence, ckp.clone()))));
-
-        Ok(ckp)
+        Ok(proposal_and_transactions)
     }
 
     /// Get the current proposal or error if there is no current proposal
@@ -267,7 +384,8 @@ impl CheckpointStore {
     pub fn next_checkpoint_sequence(&self) -> CheckpointSequenceNumber {
         self.checkpoint_contents
             .iter()
-            .last()
+            .skip_to_last()
+            .next()
             .map(|((seq, _), _)| seq + 1)
             .unwrap_or_else(|| 0)
     }

@@ -1,6 +1,5 @@
 use std::collections::{BTreeSet, HashSet};
 
-use crate::batch::SignedBatch;
 use crate::crypto::Signable;
 use crate::waypoint::Waypoint;
 use crate::{
@@ -98,10 +97,6 @@ pub struct CheckpointResponse {
     // If the detail flag in the request was set, then return
     // the list of transactions as well.
     pub detail: Option<CheckpointContents>,
-    // Include in all responses the local state of the sequence
-    // of trasacation to allow followers to track the latest
-    // updates.
-    pub local_sequence_info: LocalSequenceInfo,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -111,14 +106,14 @@ pub enum AuthorityCheckpointInfo {
     Proposal {
         current: Option<SignedCheckpointProposal>,
         previous: AuthenticatedCheckpoint,
+
+        // Include in all responses the local state of the sequence
+        // of trasacation to allow followers to track the latest
+        // updates.
+        // last_local_sequence: TxSequenceNumber,
     },
     // Returns the requested checkpoint.
     Past(AuthenticatedCheckpoint),
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LocalSequenceInfo {
-    pub last_local_batch: SignedBatch,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
