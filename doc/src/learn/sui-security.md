@@ -112,7 +112,7 @@ pseudonymity, or third-party custodial or non-custodial services. Specific smart
 ### Censorship-resistance and openness
 
 Sui uses the established Delegated Proof-of Stake model to periodically determine its set of validators. Users can lock and delegate their SUI tokens in each epoch to determine the committee of validators that operate the Sui network in the next epoch. Anyone with over a minimum
-amount of delegated stake may operate an validator.
+amount of delegated stake may operate a validator.
 
 Validators operate the network and provide
 rewards to users that delegated their Sui to support them as validators, through gas fee income. Validators with poor reliability, and in turn the users that delegated their stake to them, may receive a lower reward. But user stake cannot be confiscated away either by malicious validators or anyone in the network.
