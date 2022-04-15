@@ -19,6 +19,10 @@ use sui_types::serialize::{deserialize_message, serialize_consensus_sync, Serial
 use sui_types::{fp_bail, fp_ensure};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -76,7 +80,7 @@ impl ConsensusClient {
         address: SocketAddr,
         buffer_size: usize,
     ) -> JoinHandle<SuiResult<()>> {
-        log::info!("Consensus client connecting to {address}");
+        info!("Consensus client connecting to {address}");
         tokio::spawn(async move { handler.run(address, buffer_size).await })
     }
 
@@ -111,11 +115,11 @@ impl ConsensusClient {
                 (message, sequence_number)
             }
             Ok(_) => {
-                log::error!("{}", SuiError::UnexpectedMessage);
+                error!("{}", SuiError::UnexpectedMessage);
                 return Err(SuiError::UnexpectedMessage);
             }
             Err(e) => {
-                log::error!("Failed to deserialize consensus output {e}");
+                error!("Failed to deserialize consensus output {e}");
                 return Err(SuiError::InvalidDecoding);
             }
         };
@@ -124,11 +128,11 @@ impl ConsensusClient {
         match self.last_consensus_index.cmp(&consensus_index) {
             Ordering::Greater => {
                 // Something is very wrong. Liveness may be lost (but not safety).
-                log::error!("Consensus index of authority bigger than expected");
+                error!("Consensus index of authority bigger than expected");
                 return Ok(ProcessingOutcome::Ok);
             }
             Ordering::Less => {
-                log::debug!("Authority is synchronizing missed sequenced certificates");
+                debug!("Authority is synchronizing missed sequenced certificates");
                 return Ok(ProcessingOutcome::MissingOutputs);
             }
             Ordering::Equal => (),
@@ -150,11 +154,11 @@ impl ConsensusClient {
                 certificate: *certificate,
             },
             Ok(_) => {
-                log::debug!("{}", SuiError::UnexpectedMessage);
+                debug!("{}", SuiError::UnexpectedMessage);
                 return Err(SuiError::UnexpectedMessage);
             }
             Err(e) => {
-                log::debug!("Failed to deserialize certificate {e}");
+                debug!("Failed to deserialize certificate {e}");
                 return Err(SuiError::InvalidDecoding);
             }
         };
@@ -188,7 +192,7 @@ impl ConsensusClient {
             let mut connection = match transport::connect(address.to_string(), buffer_size).await {
                 Ok(connection) => connection,
                 Err(e) => {
-                    log::warn!(
+                    warn!(
                         "Failed to subscribe to consensus output (retry {}): {}",
                         connection_waiter.status(),
                         e
@@ -202,11 +206,11 @@ impl ConsensusClient {
                 let bytes = match connection.stream().next().await {
                     Some(Ok(data)) => Bytes::from(data),
                     Some(Err(e)) => {
-                        log::warn!("Failed to receive data from consensus: {e}");
+                        warn!("Failed to receive data from consensus: {e}");
                         continue 'main;
                     }
                     None => {
-                        log::debug!("Connection dropped by consensus");
+                        debug!("Connection dropped by consensus");
                         continue 'main;
                     }
                 };
@@ -214,7 +218,7 @@ impl ConsensusClient {
                 match self.handle_consensus_message(bytes).await {
                     // Log the errors that are our faults (not the client's).
                     Err(SuiError::StorageError(e)) => {
-                        log::error!("{e}");
+                        error!("{e}");
 
                         // If we have a store error we cannot continue processing other
                         // outputs from consensus. We may otherwise attribute locks to
@@ -225,11 +229,11 @@ impl ConsensusClient {
                     }
                     // Log the errors that are the client's fault (not ours). This is
                     // only for debug purposes: all correct authorities will do the same.
-                    Err(e) => log::debug!("{e}"),
+                    Err(e) => debug!("{e}"),
                     // The authority missed some consensus outputs and needs to sync.
                     Ok(ProcessingOutcome::MissingOutputs) => {
                         if let Err(e) = self.synchronize(&mut connection).await {
-                            log::warn!("Failed to send sync request to consensus: {e}");
+                            warn!("Failed to send sync request to consensus: {e}");
                             continue 'main;
                         }
                         connection_waiter.reset();

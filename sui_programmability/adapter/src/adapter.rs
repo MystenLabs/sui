@@ -780,6 +780,7 @@ pub fn resolve_and_type_check(
         }
     }
 
+    #[cfg(debug_assertions)]
     debug_assert!(
         by_value_objects.len() + mutable_ref_objects.len() + num_immutable_objects == num_objects
     );
