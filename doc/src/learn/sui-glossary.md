@@ -12,7 +12,7 @@ An *accumulator* makes sure the transaction is received by a quorum of validator
 
 ### Validator
 
-An validator in Sui plays a passive role analogous to the more active role of validators and minors in other blockchains. In Sui,
+A validator in Sui plays a passive role analogous to the more active role of validators and minors in other blockchains. In Sui,
 validators do not continuously participate in the consensus protocol but are called into action only when receiving a transaction or
 certificate.
 
