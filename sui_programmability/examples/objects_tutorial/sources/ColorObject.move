@@ -53,7 +53,7 @@ module Tutorial::ColorObjectTests {
     // == Tests covered in Chapter 1 ==
 
     #[test]
-    fun test_create() {
+    public(script) fun test_create() {
         let owner = @0x1;
         // Create a ColorObject and transfer it to @owner.
         let scenario = &mut TestScenario::begin(&owner);
@@ -81,7 +81,7 @@ module Tutorial::ColorObjectTests {
     // == Tests covered in Chapter 2 ==
 
     #[test]
-    fun test_delete() {
+    public(script) fun test_delete() {
         let owner = @0x1;
         // Create a ColorObject and transfer it to @owner.
         let scenario = &mut TestScenario::begin(&owner);
@@ -104,7 +104,7 @@ module Tutorial::ColorObjectTests {
     }
 
     #[test]
-    fun test_transfer() {
+    public(script) fun test_transfer() {
         let owner = @0x1;
         // Create a ColorObject and transfer it to @owner.
         let scenario = &mut TestScenario::begin(&owner);

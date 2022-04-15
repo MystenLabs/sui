@@ -78,7 +78,7 @@ public fun get_color(self: &ColorObject): (u8, u8, u8) {
 }
 ```
 
-Find the full code online in [ColorObject.move](../../../move_code/objects_tutorial/sources/Ch1_2/ColorObject.move).
+Find the full code online in [ColorObject.move](../../../../sui_programmability/examples/objects_tutorial/sources/ColorObject.move).
 
 To compile the code, make sure you have [installed Sui](../install.md) so that `sui-move` is in `PATH`. In the code [root directory](../../../move_code/objects_tutorial/) (where `Move.toml` is), run:
 ```
@@ -139,7 +139,7 @@ You may have noticed that `take_object` picks the object only based on the type 
 
 You may have noticed that `take_object` picks the object based solely on the type parameter. What if there are multiple objects of the same type owned by the account? How do we retrieve each of them? In fact, if you call `take_object` when there are more than one object of the same type in the same account, an assertion failure will be triggered. We are working on adding an API just for this. Update coming soon.
 
-Again, you can find the full code in [ColorObject.move](../../../move_code/objects_tutorial/sources/Ch1_2/ColorObject.move).
+Again, you can find the full code in [ColorObject.move](../../../../sui_programmability/examples/objects_tutorial/sources/ColorObject.move).
 
 To run the test, simply run the following in the code root directory:
 ```
@@ -157,7 +157,7 @@ This will tell you the current wallet address.
 
 First, we need to publish the code on-chain. Assuming the path to the root of the repository is $ROOT:
 ```
-$ wallet publish --path $ROOT/doc/move_code/objects_tutorial --gas-budget 10000
+$ wallet publish --path $ROOT/sui_programmability/examples/objects_tutorial --gas-budget 10000
 ```
 You can find the published package object ID in the **Publish Results** output:
 ```
@@ -192,7 +192,7 @@ Owner: AddressOwner(k#5db53ebb05fd3ea5f1d163d9d487ee8cd7b591ee)
 Version: 1
 ID: 5EB2C3E55693282FAA7F5B07CE1C4803E6FDC1BB
 Readonly: false
-Type: 0x57258f32746fd1443f2a077c0c6ec03282087c19::Ch1::ColorObject
+Type: 0x57258f32746fd1443f2a077c0c6ec03282087c19::ColorObject
 ```
 As we can see, it's owned by the current default wallet address that we saw earlier. And the type of this object is `ColorObject`!
 
