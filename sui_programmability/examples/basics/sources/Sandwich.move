@@ -82,14 +82,13 @@ module Basics::Sandwich {
     }
 
     /// Owner of the grocery can collect profits by passing his capability
-    public fun collect_profits(cap: GroceryOwnerCapability, grocery: &mut Grocery, ctx: &mut TxContext) {
+    public fun collect_profits(_cap: &GroceryOwnerCapability, grocery: &mut Grocery, ctx: &mut TxContext) {
         let amount = Coin::value(&grocery.profits);
         
         assert!(amount >= 0, EINSUFFICIENT_FUNDS);
 
         let coin = Coin::withdraw(&mut grocery.profits, amount, ctx);
         Transfer::transfer(coin, TxContext::sender(ctx));
-        Transfer::transfer(cap, TxContext::sender(ctx));
     }
 
     #[test_only]
@@ -141,9 +140,10 @@ module Basics::TestSandwich {
             let capability = TestScenario::take_object<GroceryOwnerCapability>(scenario);
 
             assert!(Sandwich::profits(&grocery) == 12, 0);
-            Sandwich::collect_profits(capability, &mut grocery, TestScenario::ctx(scenario));
+            Sandwich::collect_profits(&capability, &mut grocery, TestScenario::ctx(scenario));
             assert!(Sandwich::profits(&grocery) == 0, 0);
 
+            TestScenario::return_object(scenario, capability);
             TestScenario::return_object(scenario, grocery);
         };
     }
