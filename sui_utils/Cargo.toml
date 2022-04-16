@@ -8,4 +8,4 @@ edition = "2021"
 
 [dependencies]
 tracing = { version = "0.1.31", features = ["log"] }
-telemetry_subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a45af6dc28aa12c8cc13521d118c24aadd4c6adf" }
+telemetry_subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "c7ff7ac8849011ad5d00ab7be86773ffa05f11f7" }
