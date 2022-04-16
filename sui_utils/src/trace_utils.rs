@@ -15,7 +15,9 @@ pub fn init_telemetry() -> telemetry_subscribers::TelemetryGuards {
     })
 }
 
-pub fn init_telemetry_with_config(config: telemetry_subscribers::TelemetryConfig) -> telemetry_subscribers::TelemetryGuards {
+pub fn init_telemetry_with_config(
+    config: telemetry_subscribers::TelemetryConfig,
+) -> telemetry_subscribers::TelemetryGuards {
     let config = telemetry_subscribers::TelemetryConfig {
         service_name: "sui".into(),
         enable_tracing: std::env::var("SUI_TRACING_ENABLE").is_ok(),

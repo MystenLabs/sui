@@ -46,13 +46,11 @@ struct ClientOpt {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let _guard = trace_utils::init_telemetry_with_config(
-        trace_utils::TelemetryConfig {
-            service_name: "wallet".into(),
-            log_file: Some("wallet.log".into()),
-            ..Default::default()
-        }
-    );
+    let _guard = trace_utils::init_telemetry_with_config(trace_utils::TelemetryConfig {
+        service_name: "wallet".into(),
+        log_file: Some("wallet.log".into()),
+        ..Default::default()
+    });
 
     let mut app: Command = ClientOpt::command();
     app = app.no_binary_name(false);
