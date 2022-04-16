@@ -193,6 +193,17 @@ impl SignedCheckpoint {
         }
     }
 
+    pub fn new_from_summary(checkpoint: CheckpointSummary, authority: AuthorityName,
+        signer: &dyn signature::Signer<AuthoritySignature>, ) -> SignedCheckpoint {
+            let signature = AuthoritySignature::new(&checkpoint, signer);
+
+            SignedCheckpoint {
+                checkpoint,
+                authority,
+                signature,
+            }
+    }
+
     /// Checks that the signature on the digest is correct
     pub fn check_digest(&self) -> Result<(), SuiError> {
         self.signature.verify(&self.checkpoint, self.authority)?;

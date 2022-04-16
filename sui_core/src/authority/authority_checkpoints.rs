@@ -7,7 +7,7 @@ use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use sui_types::{
     base_types::{AuthorityName, TransactionDigest},
-    batch::TxSequenceNumber,
+    batch::{AuthorityBatch, TxSequenceNumber},
     committee::Committee,
     error::SuiError,
     messages_checkpoint::{
@@ -310,6 +310,73 @@ impl CheckpointStore {
             detail,
         })
     }
+
+    /// Call this function internally to update the latest checkpoint.
+    /// Internally it is called with an unsigned checkpoint, and results
+    /// in the signed checkpoint being signed, stored and the contents
+    /// registered as processed or unprocessed.
+    pub fn handle_internal_set_checkpoint(
+        &self,
+        checkpoint: CheckpointSummary,
+        contents: &CheckpointContents,
+    ) -> Result<(), SuiError> {
+        // Process checkpoints once but allow idempotent processing
+        if self
+            .checkpoints
+            .get(&checkpoint.waypoint.sequence_number)?
+            .is_some()
+        {
+            return Ok(());
+        }
+
+        // Update the transactions databases.
+        let transactions: Vec<_> = contents.transactions.iter().cloned().collect();
+        self.update_new_checkpoint(checkpoint.waypoint.sequence_number, &transactions)?;
+
+        // Sign the new checkpoint
+        let sequence_number = checkpoint.waypoint.sequence_number;
+        let signed_checkpoint = AuthenticatedCheckpoint::Signed(
+            SignedCheckpoint::new_from_summary(checkpoint, self.name, &*self.secret),
+        );
+
+        // Last store the actual checkpoints.
+        self.checkpoints
+            .insert(&sequence_number, &signed_checkpoint)?;
+
+        // Clean up our proposal if any
+        if self
+            .proposal_checkpoint
+            .load()
+            .as_ref()
+            .map(|v| *v.1.sequence_number())
+            .unwrap_or(0)
+            <= sequence_number
+        {
+            self.proposal_checkpoint.store(None);
+        }
+
+        // Try to set a fresh proposal, and ignore errors if this fails.
+        let _ = self.set_proposal();
+
+        Ok(())
+    }
+
+    /// Call this function internally to register the latest batch of
+    /// transactions processed by this authority. The latest batch is
+    /// stored to ensure upon crash recovery all batches are processed.
+    pub fn handle_internal_batch(
+        &self,
+        _batch: &AuthorityBatch,
+        transactions: &[(TxSequenceNumber, TransactionDigest)],
+    ) -> Result<(), SuiError> {
+        self.update_processed_transactions(transactions)?;
+        // TODO: Store the batch or at least its sequence number here.
+        Ok(())
+    }
+
+    /// Handles the submission of a full checkpoint externally, and stores
+    /// the certificate.
+    pub fn handle_external_checkpoint() {}
 
     // Helper functions
 
