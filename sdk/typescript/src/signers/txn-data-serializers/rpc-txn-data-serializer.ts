@@ -12,7 +12,8 @@ import { TransferTransaction, TxnDataSerializer } from './txn-data-serializer';
  * the encoding.
  */
 export class RpcTxnDataSerializer implements TxnDataSerializer {
-  /** @internal */ _endpointURL: string;
+  //@ts-ignore
+  private endpointURL: string;
 
   /**
    * Establish a connection to a Sui Gateway endpoint
@@ -20,7 +21,7 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
    * @param endpoint URL to the Sui Gateway endpoint
    */
   constructor(endpoint: string) {
-    this._endpointURL = endpoint;
+    this.endpointURL = endpoint;
   }
 
   async new_transfer(

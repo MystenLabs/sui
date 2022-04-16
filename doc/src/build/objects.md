@@ -44,7 +44,7 @@ An object can be shared and mutable, meaning that anyone can use and mutate this
 There are a few different ways to concisely refer to an object without specifying its full contents and metadata, each with slightly different use cases:
 * ID: the globally unique ID of the object mentioned above. This is a stable identifier for the object across time, and is useful for querying the current state of an object or describing which object was transferred between two addresses.
 * Versioned ID: an (ID, version) pair. This describes the state of the object at a particular point in the object's history, and is useful for asking what the value of the object was at some point in the past or determining how fresh some view of an object is now.
-* Object Reference: an (ID, version, object digest) triple. The object digest is the hash of the object's contents and metadata. An object reference provides an authenticated view of the object at a particular point in the object's history. Transactions require object inputs to be specified via object references to ensure the transaction's sender and an authority processing the transaction agree on the contents and metadata of the object.
+* Object Reference: an (ID, version, object digest) triple. The object digest is the hash of the object's contents and metadata. An object reference provides an authenticated view of the object at a particular point in the object's history. Transactions require object inputs to be specified via object references to ensure the transaction's sender and a validator processing the transaction agree on the contents and metadata of the object.
 
 ## The transaction-object DAG: Relating objects and transactions
 
@@ -62,4 +62,4 @@ When this DAG contains all committed transactions in the system, it forms a comp
 
 ## Further reading
 * Objects are modified and created by [transactions](transactions.md).
-* Objects are stored by [authorities](authorities.md).
+* Objects are stored by [validators](authorities.md).

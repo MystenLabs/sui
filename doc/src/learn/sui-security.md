@@ -17,7 +17,7 @@ the basic components of Sui.
 
 We designed Sui to provide very high security guarantees to asset owners. We ensure that assets on Sui can be used
 only by their owners, according to the logic pre-defined by smart contracts that can be audited, and that the network will be available 
-to process them correctly despite some of the authorities operating Sui not following the protocol correctly (fault tolerance). 
+to process them correctly despite some of the validators operating Sui not following the protocol correctly (fault tolerance).
 
 The security features of the Sui system ensure a number of properties:
 
@@ -26,28 +26,28 @@ The security features of the Sui system ensure a number of properties:
 * Transactions operate on assets according to predefined rules set by the smart contract creator that defined the asset type. These are expressed using the Move language.
 * Once a transaction is finalized, its effects - namely changes to the assets it operates on or new assets created - will be persisted, and the resulting 
   assets will be available for further processing.
-* The Sui system operates through a protocol between a set of independent authorities. Yet all its security properties are preserved 
-  when a small subset of the authorities do not follow the protocol.
+* The Sui system operates through a protocol between a set of independent validators. Yet all its security properties are preserved
+  when a small subset of the validators do not follow the protocol.
 * All operations in Sui can be audited to ensure any assets have been correctly processed. This implies all operations on Sui
   are visible to all, and users may wish to use multiple different addresses to protect their privacy.
-* Authorities are determined periodically through users of Sui locking and delegating SUI tokens to one or more authorities.
+* Validators are determined periodically through users of Sui locking and delegating SUI tokens to one or more validators.
 
 ## Security architecture
 
-The Sui system is operated by a set of authorities that process transactions. They implement the Sui protocol that allows them to 
+The Sui system is operated by a set of validators that process transactions. They implement the Sui protocol that allows them to
 reach agreement on valid transactions submitted and processed in the system. 
 
-The agreement protocols Sui uses tolerate a fraction of authorities not following the Sui protocol correctly, through 
-the use of Byzantine fault tolerant broadcast and consensus. Specifically, each authority has some voting power,
+The agreement protocols Sui uses tolerate a fraction of validators not following the Sui protocol correctly, through
+the use of Byzantine fault tolerant broadcast and consensus. Specifically, each validator has some voting power,
 assigned to it through the process of users delegating / voting for them using their SUI tokens. Sui maintains
-all its security properties if over 2/3 of the stake is assigned to authorities that follow the protocol. However,
-a number of auditing properties are maintained even if more authorities are faulty.
+all its security properties if over 2/3 of the stake is assigned to validators that follow the protocol. However,
+a number of auditing properties are maintained even if more validators are faulty.
 
 ### Addresses and ownership
 
 A Sui transaction is valid and can proceed only if the owner of all owned assets it operates on digitally signs it with their private 
 signature key (currently using the EdDSA algorithm). This signature key can be kept private by the user and not be shared with 
-anyone else. As a result, it is not feasible for any other party to operate on an owned asset of a user undetected, even if all authorities 
+anyone else. As a result, it is not feasible for any other party to operate on an owned asset of a user undetected, even if all validators
 do not follow the protocol.
 
 A private signature key also corresponds to a public address on the Sui network that can be used to send a user assets or
@@ -77,12 +77,12 @@ on which address and how the shared assets may be used.
 
 ### Transaction finality
 
-A valid transaction submitted to all authorities to be certified and its certificate also has to be submitted to all authorities
-to be finalized. Even if a subset of authorities do not follow the protocol, the transaction can be finalized through the
-remaining authorities that correctly follow the Sui protocol. This is achieved throught the use of cryptographic 
+A valid transaction submitted to all validators to be certified and its certificate also has to be submitted to all validators
+to be finalized. Even if a subset of validators do not follow the protocol, the transaction can be finalized through the
+remaining validators that correctly follow the Sui protocol. This is achieved throught the use of cryptographic
 Byzantine fault tolerant agremment protocols for broadcast and consensus defined by the Sui protocol. These protocols
-ensure both safety, meaning that the incorrect authorities cannot convince correct clients of incorrect state, and 
-liveness, meaning that incorrect authorities cannot prevent transaction processing.
+ensure both safety, meaning that the incorrect validators cannot convince correct clients of incorrect state, and
+liveness, meaning that incorrect validators cannot prevent transaction processing.
 
 All transactions in Sui have to be associated with a gas asset to cover the cost of processing by Sui. A valid 
 transaction may result in a status of successful execution or an aborted execution. An execution may abort due to a 
@@ -92,18 +92,18 @@ assets in the transaction is not changed. However, the gas asset is always charg
 denial-of-service attacks on the system as a whole.
 
 A user client can perform the process of submitting the transaction and certificate itself or rely on third party 
-services to submit the transaction and interact with authorities. Such third parties need not have user private signature keys and cannot forge transactions on the users' behalf.
+services to submit the transaction and interact with validators. Such third parties need not have user private signature keys and cannot forge transactions on the users' behalf.
 They can reassure a user client a transaction has been finalized through a set of signatures from 
-authorities attesting to the transactions finality and its effects. After that point, the users can be assured that 
+validators attesting to the transactions finality and its effects. After that point, the users can be assured that
 changes the transaction resulted in are final. 
 
 ### Auditing and privacy
 
-Sui authorities provide facilities for users to read all asserts they store, as well as the historical record of
-transactions they have processed that led to these assets. Authorities also provide cryptographic evidence of the full
+Sui validators provide facilities for users to read all asserts they store, as well as the historical record of
+transactions they have processed that led to these assets. Validators also provide cryptographic evidence of the full
 chain of transactions that contributed to an asset state. User clients can request and validate this chain of 
-evidence to ensure all operations were correct and the result of the collective agreement between authorities. 
-Services that operate full replicas, mirroring the state of one or more authorities, perform such audits routinely.
+evidence to ensure all operations were correct and the result of the collective agreement between validators.
+Services that operate full replicas, mirroring the state of one or more validators, perform such audits routinely.
 
 The extreme public auditability of Sui also implies that all transactions and assets within Sui are publicly
 visible. Users that are mindful of their privacy may use multiple addresses to benefit from some degree of
@@ -111,14 +111,14 @@ pseudonymity, or third-party custodial or non-custodial services. Specific smart
 
 ### Censorship-resistance and openness
 
-Sui uses the established Delegated Proof-of Stake model to periodically determine its set of authorities. Users can lock and delegate their SUI tokens in each epoch to determine the committee of authorities that operate the Sui network in the next epoch. Anyone with over a minimum 
-amount of delegated stake may operate an authority. 
+Sui uses the established Delegated Proof-of Stake model to periodically determine its set of validators. Users can lock and delegate their SUI tokens in each epoch to determine the committee of validators that operate the Sui network in the next epoch. Anyone with over a minimum
+amount of delegated stake may operate a validator.
 
-Authorities operate the network and provide
-rewards to users that delegated their Sui to support them as validators, through gas fee income. Authorities with poor reliability, and in turn the users that delegated their stake to them, may receive a lower reward. But user stake cannot be confiscated away either by malicious authorities or anyone in the network.
+Validators operate the network and provide
+rewards to users that delegated their Sui to support them as validators, through gas fee income. Validators with poor reliability, and in turn the users that delegated their stake to them, may receive a lower reward. But user stake cannot be confiscated away either by malicious validators or anyone in the network.
 
-This mechanism ensures that authorities are accountable to Sui users and can be rotated out at the first sign 
-of unreliability or misbehavior, including noticed attempts to censor valid transactions. Through choices of authorities, and the protocol 
+This mechanism ensures that validators are accountable to Sui users and can be rotated out at the first sign
+of unreliability or misbehavior, including noticed attempts to censor valid transactions. Through choices of validators, and the protocol
 they are willing to operate, Sui users also have a meaningful say on the future evolution of the Sui system.
 
 ## Further reading

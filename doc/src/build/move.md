@@ -246,7 +246,7 @@ simplest entry functions is defined in the SUI
 implement gas object transfer:
 
 ```rust
-public fun transfer(c: Coin::Coin<SUI>, recipient: address, _ctx: &mut TxContext) {
+public(script) fun transfer(c: Coin::Coin<SUI>, recipient: address, _ctx: &mut TxContext) {
     ...
 }
 ```
@@ -631,7 +631,7 @@ point of view of a Sui developer. First, let us create
 sword creation and transfer and put them into the `M1.move` file:
 
 ``` rust
-    public fun sword_create(magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
+    public(script) fun sword_create(magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
         use Sui::Transfer;
         use Sui::TxContext;
         // create a sword
@@ -644,7 +644,7 @@ sword creation and transfer and put them into the `M1.move` file:
         Transfer::transfer(sword, recipient);
     }
 
-    public fun sword_transfer(sword: Sword, recipient: address, _ctx: &mut TxContext) {
+    public(script) fun sword_transfer(sword: Sword, recipient: address, _ctx: &mut TxContext) {
         use Sui::Transfer;
         // transfer the sword
         Transfer::transfer(sword, recipient);
@@ -852,7 +852,7 @@ function to take the forge as a parameter and to update the number of
 created swords at the end of the function:
 
 ``` rust
-    public fun sword_create(forge: &mut Forge, magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
+    public(script) fun sword_create(forge: &mut Forge, magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
         ...
         forge.swords_created = forge.swords_created + 1;
     }
@@ -928,7 +928,7 @@ We can also transfer an object to be owned by another object. Note that the owne
 Once an object is owned by another object, it is required that for any such object referenced in the entry function, its owner must also be one of the argument objects. For instance, if we have a chain of ownership: account address `Addr1` owns object `a`, object `a` owns object `b`, and `b` owns object `c`, in order to use object `c` in a Move call, the entry function must also include both `b` and `a`, and the signer of the transaction must be `Addr1`, like this:
 ```
 // signer of ctx is Addr1.
-public fun entry_function(a: &A, b: &B, c: &mut C, ctx: &mut TxContext);
+public(script) fun entry_function(a: &A, b: &B, c: &mut C, ctx: &mut TxContext);
 ```
 
 A common pattern of object owning another object is to have a field in the parent object to track the ID of the child object. It is important to ensure that we keep such a field's value consistent with the actual ownership relationship. For example, we do not end up in a situation where the parent's child field contains an ID pointing to object A, while in fact the parent owns object B. To ensure the consistency, we defined a custom type called `ChildRef` to represent object ownership. Whenever an object is transferred to another object, a `ChildRef` instance is created to uniquely identify the ownership. The library implementation ensures that the `ChildRef` goes side-by-side with the child object so that we never lose track or mix up objects.

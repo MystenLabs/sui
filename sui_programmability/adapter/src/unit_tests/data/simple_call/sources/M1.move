@@ -16,7 +16,7 @@ module Test::M1 {
         value1
     }
 
-    public fun create(value: u64, recipient: address, ctx: &mut TxContext) {
+    public(script) fun create(value: u64, recipient: address, ctx: &mut TxContext) {
         Transfer::transfer(
             Object { id: TxContext::new_id(ctx), value },
             recipient

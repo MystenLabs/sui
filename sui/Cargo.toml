@@ -30,7 +30,6 @@ tracing = { version = "0.1.31", features = ["log"] }
 tracing-subscriber = { version = "0.3.9", features = ["time", "registry", "env-filter"] }
 serde-value = "0.7.0"
 serde-name = "0.2.0"
-log = "0.4.14"
 dirs = "4.0.0"
 clap = { version = "3.1.8", features = ["derive"] }
 telemetry_subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a45af6dc28aa12c8cc13521d118c24aadd4c6adf" }
@@ -41,6 +40,7 @@ sui-adapter = { path = "../sui_programmability/adapter" }
 sui-framework = { path = "../sui_programmability/framework" }
 sui-network = { path = "../network_utils" }
 sui-types = { path = "../sui_types" }
+sui-verifier = { path = "../sui_programmability/verifier" }
 
 rustyline = "9.1.2"
 rustyline-derive = "0.6.0"
@@ -67,12 +67,8 @@ reqwest = { version = "0.11.10", features=["json","serde_json", "blocking"]}
 tracing-test = "0.2.1"
 
 [[bin]]
-name = "microbench"
-path = "src/microbench.rs"
-
-[[bin]]
-name = "microbench_latency"
-path = "src/microbench_latency.rs"
+name = "bench"
+path = "src/bench.rs"
 
 [[bin]]
 name = "wallet"

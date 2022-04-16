@@ -1,19 +1,26 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
-use move_core_types::{account_address::AccountAddress, identifier::Identifier};
+use anyhow::{anyhow, bail};
+use move_core_types::{
+    identifier::Identifier,
+    value::{MoveTypeLayout, MoveValue},
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use sui_types::{
     base_types::{decode_bytes_hex, ObjectID, SuiAddress},
-    move_package::is_primitive,
     object::Object,
 };
+use sui_verifier::entry_points_verifier::is_object;
 
 // Alias the type names for clarity
-use move_binary_format::normalized::{Function as MoveFunction, Type as NormalizedMoveType};
+use move_binary_format::{
+    access::ModuleAccess,
+    binary_views::BinaryIndexedView,
+    file_format::{SignatureToken, Visibility},
+};
 use serde_json::Value as JsonValue;
 
 const HEX_PREFIX: &str = "0x";
@@ -21,17 +28,6 @@ const HEX_PREFIX: &str = "0x";
 #[cfg(test)]
 #[path = "unit_tests/sui_json.rs"]
 mod base_types_tests;
-
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize)]
-pub enum IntermediateValue {
-    Bool(bool),
-    U8(u8),
-    U64(u64),
-    U128(u128),
-    Address(SuiAddress),
-    ObjectID(ObjectID),
-    Vector(Vec<IntermediateValue>),
-}
 
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct SuiJsonValue(JsonValue);
@@ -58,89 +54,37 @@ impl SuiJsonValue {
         Ok(Self(json_value))
     }
 
-    pub fn to_bcs_bytes(&self, typ: &NormalizedMoveType) -> Result<Vec<u8>, anyhow::Error> {
-        let intermediate_val = Self::to_intermediate_value(&self.0, typ)?;
-
-        fn inner_serialize(
-            inter_val: IntermediateValue,
-            ty: &NormalizedMoveType,
-        ) -> Result<Vec<u8>, anyhow::Error> {
-            let ser = match (inter_val.clone(), ty) {
-                (IntermediateValue::Bool(b), NormalizedMoveType::Bool) => bcs::to_bytes(&b)?,
-                (IntermediateValue::U8(n), NormalizedMoveType::U8) => bcs::to_bytes(&n)?,
-                (IntermediateValue::U64(n), NormalizedMoveType::U64) => bcs::to_bytes(&n)?,
-                (IntermediateValue::U128(n), NormalizedMoveType::U128) => bcs::to_bytes(&n)?,
-
-                (IntermediateValue::Address(a), NormalizedMoveType::Address) => {
-                    bcs::to_bytes(&AccountAddress::from(a))?
-                }
-
-                // Not currently used
-                // (IntermediateValue::ObjectID(a), NormalizedMoveType::Address) => {
-                //     bcs::to_bytes(&AccountAddress::from(a))?
-                // }
-                (IntermediateValue::Vector(v), NormalizedMoveType::Vector(move_type)) => {
-                    let mut inner_ser = vec![];
-                    let arr_len = v.len();
-                    for i in v {
-                        // Serialize each
-                        inner_ser.append(&mut inner_serialize(i, move_type)?);
-                    }
-                    // The data is already serialized, so ideally we just append
-                    // First serialize the types like they u8s
-                    // We use this to create the ULEB128 length prefix
-                    let u8vec = vec![0u8; arr_len];
-                    let mut ser_container = bcs::to_bytes::<Vec<u8>>(&u8vec)?;
-                    // Delete the zeroes
-                    ser_container.truncate(ser_container.len() - arr_len);
-                    // Append the actual data data
-                    ser_container.append(&mut inner_ser);
-
-                    ser_container
-                }
-                _ => {
-                    return Err(anyhow!(
-                        "Unable to serialize {:?}. Expected {}",
-                        inter_val,
-                        ty
-                    ))
-                }
-            };
-            Ok(ser)
-        }
-        inner_serialize(intermediate_val, typ)
+    pub fn to_bcs_bytes(&self, ty: &MoveTypeLayout) -> Result<Vec<u8>, anyhow::Error> {
+        let move_value = Self::to_move_value(&self.0, ty)?;
+        MoveValue::simple_serialize(&move_value)
+            .ok_or_else(|| anyhow!("Unable to serialize {:?}. Expected {}", move_value, ty))
     }
 
     pub fn to_json_value(&self) -> JsonValue {
         self.0.clone()
     }
 
-    fn to_intermediate_value(
-        val: &JsonValue,
-        typ: &NormalizedMoveType,
-    ) -> Result<IntermediateValue, anyhow::Error> {
-        let new_serde_value = match (val, typ.clone()) {
+    fn to_move_value(val: &JsonValue, ty: &MoveTypeLayout) -> Result<MoveValue, anyhow::Error> {
+        Ok(match (val, ty) {
             // Bool to Bool is simple
-            (JsonValue::Bool(b), NormalizedMoveType::Bool) => IntermediateValue::Bool(*b),
+            (JsonValue::Bool(b), MoveTypeLayout::Bool) => MoveValue::Bool(*b),
 
             // In constructor, we have already checked that the JSON number is unsigned int of at most U64
             // Hence it is okay to unwrap() numbers
-            (JsonValue::Number(n), NormalizedMoveType::U8) => {
-                IntermediateValue::U8(u8::try_from(n.as_u64().unwrap())?)
+            (JsonValue::Number(n), MoveTypeLayout::U8) => {
+                MoveValue::U8(u8::try_from(n.as_u64().unwrap())?)
             }
-            (JsonValue::Number(n), NormalizedMoveType::U64) => {
-                IntermediateValue::U64(n.as_u64().unwrap())
-            }
+            (JsonValue::Number(n), MoveTypeLayout::U64) => MoveValue::U64(n.as_u64().unwrap()),
 
             // u8, u64, u128 can be encoded as String
-            (JsonValue::String(s), NormalizedMoveType::U8) => {
-                IntermediateValue::U8(u8::try_from(convert_string_to_u128(s.as_str())?)?)
+            (JsonValue::String(s), MoveTypeLayout::U8) => {
+                MoveValue::U8(u8::try_from(convert_string_to_u128(s.as_str())?)?)
             }
-            (JsonValue::String(s), NormalizedMoveType::U64) => {
-                IntermediateValue::U64(u64::try_from(convert_string_to_u128(s.as_str())?)?)
+            (JsonValue::String(s), MoveTypeLayout::U64) => {
+                MoveValue::U64(u64::try_from(convert_string_to_u128(s.as_str())?)?)
             }
-            (JsonValue::String(s), NormalizedMoveType::U128) => {
-                IntermediateValue::U128(convert_string_to_u128(s.as_str())?)
+            (JsonValue::String(s), MoveTypeLayout::U128) => {
+                MoveValue::U128(convert_string_to_u128(s.as_str())?)
             }
 
             // U256 Not allowed for now
@@ -150,9 +94,9 @@ impl SuiJsonValue {
             // 2. If it does not start with 0x, we treat each character as an ASCII encoded byte
             // We have to support both for the convenience of the user. This is because sometime we need Strings as arg
             // Other times we need vec of hex bytes for address. Issue is both Address and Strings are represented as Vec<u8> in Move call
-            (JsonValue::String(s), NormalizedMoveType::Vector(t)) => {
-                if *t != NormalizedMoveType::U8 {
-                    return Err(anyhow!("Cannot convert string arg {s} to {typ}"));
+            (JsonValue::String(s), MoveTypeLayout::Vector(t)) => {
+                if !matches!(&**t, &MoveTypeLayout::U8) {
+                    return Err(anyhow!("Cannot convert string arg {s} to {ty}"));
                 }
                 let vec = if s.starts_with(HEX_PREFIX) {
                     // If starts with 0x, treat as hex vector
@@ -161,31 +105,29 @@ impl SuiJsonValue {
                     // Else raw bytes
                     s.as_bytes().to_vec()
                 };
-                IntermediateValue::Vector(vec.iter().map(|q| IntermediateValue::U8(*q)).collect())
+                MoveValue::Vector(vec.iter().copied().map(MoveValue::U8).collect())
             }
 
             // We have already checked that the array is homogeneous in the constructor
-            (JsonValue::Array(a), NormalizedMoveType::Vector(t)) => {
+            (JsonValue::Array(a), MoveTypeLayout::Vector(inner)) => {
                 // Recursively build an IntermediateValue array
-                IntermediateValue::Vector(
+                MoveValue::Vector(
                     a.iter()
-                        .map(|i| Self::to_intermediate_value(i, &t))
-                        .collect::<Result<Vec<IntermediateValue>, _>>()?,
+                        .map(|i| Self::to_move_value(i, inner))
+                        .collect::<Result<Vec<_>, _>>()?,
                 )
             }
 
-            (JsonValue::String(s), NormalizedMoveType::Address) => {
+            (JsonValue::String(s), MoveTypeLayout::Address) => {
                 let s = s.trim().to_lowercase();
                 if !s.starts_with(HEX_PREFIX) {
                     return Err(anyhow!("Address hex string must start with 0x.",));
                 }
                 let r: SuiAddress = decode_bytes_hex(s.trim_start_matches(HEX_PREFIX))?;
-                IntermediateValue::Address(r)
+                MoveValue::Address(r.into())
             }
-            _ => return Err(anyhow!("Unexpected arg {val} for expected type {typ}")),
-        };
-
-        Ok(new_serde_value)
+            _ => return Err(anyhow!("Unexpected arg {val} for expected type {ty}")),
+        })
     }
 }
 
@@ -254,35 +196,52 @@ fn is_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> bool {
     is_homogeneous_rec(&mut next_q)
 }
 
-fn check_and_serialize_pure_args(
-    args: &[SuiJsonValue],
-    start: usize,
-    end_exclusive: usize,
-    function_signature: MoveFunction,
+fn check_and_serialize_pure_args<'a>(
+    pure_args_and_params: impl IntoIterator<Item = (&'a SuiJsonValue, &'a SignatureToken)>,
 ) -> Result<Vec<Vec<u8>>, anyhow::Error> {
-    // The vector of serialized arguments
-    let mut pure_args_serialized = vec![];
-
-    // Iterate through the pure args
-    for (idx, curr) in args
-        .iter()
-        .enumerate()
-        .skip(start)
-        .take(end_exclusive - start)
-    {
-        // The type the function expects at this position
-        let expected_pure_arg_type = &function_signature.parameters[idx];
-
-        // Check that the args are what we expect or can be converted
-        // Then return the serialized bcs value
-        match curr.to_bcs_bytes(expected_pure_arg_type) {
-            Ok(a) => {
-                pure_args_serialized.push(a.clone());
+    pure_args_and_params
+        .into_iter()
+        .map(|(arg, param)| {
+            let move_type_layout = make_prim_move_type_layout(param)?;
+            // Check that the args are what we expect or can be converted
+            // Then return the serialized bcs value
+            match arg.to_bcs_bytes(&move_type_layout) {
+                Ok(a) => Ok(a),
+                Err(e) => {
+                    return Err(anyhow!(
+                        "Unable to parse arg at type {}. Got error: {:?}",
+                        move_type_layout,
+                        e
+                    ))
+                }
             }
-            Err(e) => return Err(anyhow!("Unable to parse arg at pos: {}, err: {:?}", idx, e)),
+        })
+        .collect()
+}
+
+fn make_prim_move_type_layout(param: &SignatureToken) -> Result<MoveTypeLayout, anyhow::Error> {
+    Ok(match param {
+        SignatureToken::Bool => MoveTypeLayout::Bool,
+        SignatureToken::U8 => MoveTypeLayout::U8,
+        SignatureToken::U64 => MoveTypeLayout::U64,
+        SignatureToken::U128 => MoveTypeLayout::U128,
+        SignatureToken::Address => MoveTypeLayout::Address,
+        SignatureToken::Signer => MoveTypeLayout::Signer,
+        SignatureToken::Vector(inner) => {
+            MoveTypeLayout::Vector(Box::new(make_prim_move_type_layout(inner)?))
         }
-    }
-    Ok(pure_args_serialized)
+        SignatureToken::Struct(_)
+        | SignatureToken::StructInstantiation(_, _)
+        | SignatureToken::Reference(_)
+        | SignatureToken::MutableReference(_)
+        | SignatureToken::TypeParameter(_) => {
+            debug_assert!(
+                false,
+                "Should be unreachable. Args should be primitive types only"
+            );
+            bail!("Could not serialize argument of type {:?}", param)
+        }
+    })
 }
 
 fn resolve_object_args(
@@ -327,19 +286,50 @@ fn resolve_object_args(
 /// This is because we have special types which we need to specify in other formats
 pub fn resolve_move_function_args(
     package: &Object,
-    module: Identifier,
+    module_ident: Identifier,
     function: Identifier,
     combined_args_json: Vec<SuiJsonValue>,
 ) -> Result<(Vec<ObjectID>, Vec<Vec<u8>>), anyhow::Error> {
     // Extract the expected function signature
-    let function_signature = package
+    let module = package
         .data
         .try_as_package()
         .ok_or_else(|| anyhow!("Cannot get package from object"))?
-        .get_function_signature(&module, &function)?;
+        .deserialize_module(&module_ident)?;
+    let function_str = function.as_ident_str();
+    let fdef = module
+        .function_defs
+        .iter()
+        .find(|fdef| {
+            module.identifier_at(module.function_handle_at(fdef.function).name) == function_str
+        })
+        .ok_or_else(|| {
+            anyhow!(
+                "Could not resolve function {} in module {}",
+                function,
+                module_ident
+            )
+        })?;
+    let function_signature = module.function_handle_at(fdef.function);
+    let parameters = &module.signature_at(function_signature.parameters).0;
+
+    if fdef.visibility != Visibility::Script {
+        bail!(
+            "{}::{} does not have public(script) visibility",
+            module.self_id(),
+            function,
+        )
+    }
+    if !function_signature.type_parameters.is_empty() {
+        bail!(
+            "{}::{} has type arguments, which are not yet supported in sui_json",
+            module.self_id(),
+            function,
+        )
+    }
 
     // Lengths have to match, less one, due to TxContext
-    let expected_len = function_signature.parameters.len() - 1;
+    let expected_len = parameters.len() - 1;
     if combined_args_json.len() != expected_len {
         return Err(anyhow!(
             "Expected {} args, found {}",
@@ -351,10 +341,15 @@ pub fn resolve_move_function_args(
     // Object args must always precede the pure/primitive args, so extract those first
     // Find the first non-object args, which marks the start of the pure args
     // Find the first pure/primitive type
-    let pure_args_start = function_signature
-        .parameters
+    let view = BinaryIndexedView::Module(&module);
+    let pessimistic_type_args = &function_signature.type_parameters;
+    debug_assert!(
+        pessimistic_type_args.is_empty(),
+        "TODO support type arguments"
+    );
+    let pure_args_start = parameters
         .iter()
-        .position(is_primitive)
+        .position(|t| !is_object(&view, pessimistic_type_args, t).unwrap())
         .unwrap_or(expected_len);
 
     // Everything to the left of pure args must be object args
@@ -363,12 +358,9 @@ pub fn resolve_move_function_args(
     let obj_args = resolve_object_args(&combined_args_json, 0, pure_args_start)?;
 
     // Check that the pure args are valid or can be made valid
-    let pure_args_serialized = check_and_serialize_pure_args(
-        &combined_args_json,
-        pure_args_start,
-        expected_len,
-        function_signature,
-    )?;
+    let pure_args = &combined_args_json[pure_args_start..expected_len];
+    let pure_params = &parameters[pure_args_start..expected_len];
+    let pure_args_serialized = check_and_serialize_pure_args(pure_args.iter().zip(pure_params))?;
 
     Ok((obj_args, pure_args_serialized))
 }

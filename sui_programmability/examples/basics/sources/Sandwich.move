@@ -41,6 +41,9 @@ module Basics::Sandwich {
     /// Not enough funds to pay for the good in question
     const EINSUFFICIENT_FUNDS: u64 = 0;
 
+    /// Nothing to withdraw
+    const ENO_PROFITS: u64 = 1;
+
     /// On module init, create a grocery
     fun init(ctx: &mut TxContext) {
         Transfer::share_object(Grocery { 
@@ -54,21 +57,31 @@ module Basics::Sandwich {
     }
 
     /// Exchange `c` for some ham
-    public fun buy_ham(grocery: &mut Grocery, c: Coin<SUI>, ctx: &mut TxContext): Ham {
+    public(script) fun buy_ham(
+        grocery: &mut Grocery, 
+        c: Coin<SUI>, 
+        ctx: &mut TxContext
+    ) {
         assert!(Coin::value(&c) == HAM_PRICE, EINSUFFICIENT_FUNDS);
         Coin::join(&mut grocery.profits, c);
-        Ham { id: TxContext::new_id(ctx) }
+        Transfer::transfer(Ham { id: TxContext::new_id(ctx) }, TxContext::sender(ctx))
     }
 
     /// Exchange `c` for some bread
-    public fun buy_bread(grocery: &mut Grocery, c: Coin<SUI>, ctx: &mut TxContext): Bread {
+    public(script) fun buy_bread(
+        grocery: &mut Grocery, 
+        c: Coin<SUI>, 
+        ctx: &mut TxContext
+    ) {
         assert!(Coin::value(&c) == BREAD_PRICE, EINSUFFICIENT_FUNDS);
         Coin::join(&mut grocery.profits, c);
-        Bread { id: TxContext::new_id(ctx) }
+        Transfer::transfer(Bread { id: TxContext::new_id(ctx) }, TxContext::sender(ctx))
     }
 
     /// Combine the `ham` and `bread` into a delicious sandwich
-    public fun make_sandwich(ham: Ham, bread: Bread, ctx: &mut TxContext) {
+    public(script) fun make_sandwich(
+        ham: Ham, bread: Bread, ctx: &mut TxContext
+    ) {
         let Ham { id: ham_id } = ham;
         let Bread { id: bread_id } = bread;
         ID::delete(ham_id);
@@ -82,10 +95,10 @@ module Basics::Sandwich {
     }
 
     /// Owner of the grocery can collect profits by passing his capability
-    public fun collect_profits(_cap: &GroceryOwnerCapability, grocery: &mut Grocery, ctx: &mut TxContext) {
+    public(script) fun collect_profits(_cap: &GroceryOwnerCapability, grocery: &mut Grocery, ctx: &mut TxContext) {
         let amount = Coin::value(&grocery.profits);
         
-        assert!(amount > 0, EINSUFFICIENT_FUNDS);
+        assert!(amount > 0, ENO_PROFITS);
 
         let coin = Coin::withdraw(&mut grocery.profits, amount, ctx);
         Transfer::transfer(coin, TxContext::sender(ctx));
@@ -99,13 +112,13 @@ module Basics::Sandwich {
 
 #[test_only]
 module Basics::TestSandwich {
-    use Basics::Sandwich::{Self, Grocery, GroceryOwnerCapability};
+    use Basics::Sandwich::{Self, Grocery, GroceryOwnerCapability, Bread, Ham};
     use Sui::TestScenario;
     use Sui::Coin::{Self};
     use Sui::SUI::SUI;
     
     #[test]
-    fun test_make_sandwich() {
+    public(script) fun test_make_sandwich() {
         let owner = @0x1;
         let the_guy = @0x2;
 
@@ -120,15 +133,26 @@ module Basics::TestSandwich {
             let grocery = TestScenario::take_object<Grocery>(scenario);
             let ctx = TestScenario::ctx(scenario);
             
-            let ham = {
-                let coin = Coin::mint_for_testing<SUI>(10, ctx);
-                Sandwich::buy_ham(&mut grocery, coin, ctx)
-            };
+            Sandwich::buy_ham(
+                &mut grocery, 
+                Coin::mint_for_testing<SUI>(10, ctx), 
+                ctx
+            );
+            
+            Sandwich::buy_bread(
+                &mut grocery, 
+                Coin::mint_for_testing<SUI>(2, ctx), 
+                ctx
+            );
+            
+            TestScenario::return_object(scenario, grocery);
+        };
 
-            let bread = {
-                let coin = Coin::mint_for_testing<SUI>(2, ctx);
-                Sandwich::buy_bread(&mut grocery, coin, ctx)
-            };
+        TestScenario::next_tx(scenario, &the_guy);
+        {
+            let grocery = TestScenario::take_object<Grocery>(scenario);
+            let ham = TestScenario::take_object<Ham>(scenario);
+            let bread = TestScenario::take_object<Bread>(scenario);
 
             Sandwich::make_sandwich(ham, bread, TestScenario::ctx(scenario));
             TestScenario::return_object(scenario, grocery);

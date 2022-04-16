@@ -3,7 +3,7 @@ title: Logging, Tracing, Metrics, and Observability
 ---
 
 Good observability facilities are key to the development and growth of Sui. This is made
-more challenging by the distributed and asynchronous nature of Sui, with multiple client and authority
+more challenging by the distributed and asynchronous nature of Sui, with multiple client and validator
 processes distributed over a potentially global network.
 
 The observability stack in Sui is based on the [Tokio tracing](https://tokio.rs/blog/2019-08-tracing) library.
@@ -11,7 +11,7 @@ The rest of this document highlights specific aspects of achieving good observab
 and metrics in Sui.
 
 NOTE: The output here is largely for the consumption of Sui operators, administrators, and developers. The
-content of logs and traces do not represent the authoritative, certified output of authorities and are subject
+content of logs and traces do not represent the authoritative, certified output of validators and are subject
 to potentially byzantine behavior.
 
 ## Contexts, scopes, and tracing transaction flow
@@ -38,10 +38,10 @@ Here is a table/summary of context information that we will want:
 - Certificate digest, if applicable
 - For Client HTTP endpoint: route, method, status
 - Epoch
-- Host information, for both clients and authorities
+- Host information, for both clients and validators
 
 Example output which shows both context (tx digests) and key-value pairs enhancing observability/filtering,
-and tracing a transaction across the gateway (`authority_aggregator`) as well as the authority:
+and tracing a transaction across the gateway (`authority_aggregator`) as well as the validator:
 
 ```
 7ab7774d1f7bd40848}: sui_core::authority_aggregator: Broadcasting transaction request to authorities quorum_threshold=3 validity_threshold=2 timeout_after_quorum=60s
@@ -54,7 +54,7 @@ and tracing a transaction across the gateway (`authority_aggregator`) as well as
 2022-03-05T01:35:03.395917Z DEBUG test_move_call_args_linter_command:process_cert{tx_digest=t#7e5f08ab09ec80e3372c101c5858c96965a25326c21af27ab7774d1f7bd40848}: sui_core::authority: Finished execution of transaction with status Success { gas_used: 7 } gas_used=7
 ```
 
-From the example above, we can see that `process_tx` is a span that covers handling the initial transaction request, and "Checked locks" is a single log message within the transaction handling method in the authority.
+From the example above, we can see that `process_tx` is a span that covers handling the initial transaction request, and "Checked locks" is a single log message within the transaction handling method in the validator.
 Every log message that occurs within the span inherits the key-value properties defined in the span, including the tx_digest and any other fields that are added.
 Log messages can set their own keys and values.
 The fact that logs inherit the span properties allows us to trace, for example, the flow of a transaction across thread and process boundaries.
@@ -68,18 +68,18 @@ and analyzed for tracing, performance analysis, etc.
 
 |           Name          |       Place        |                                    Meaning                                     |
 | ----------------------- | ------------------ | ------------------------------------------------------------------------------ |
-| process_tx              | Gateway, Authority | Send transaction request, get back 2f+1 signatures and make certificate        |
-| process_cert            | Gateway, Authority | Send certificate to authorities to execute transaction                         |
-| cert_check_signature    | Authority          | Check certificate signatures                                                   |
-| process_cert_inner      | Authority          | Inner function to process certificates in authority                            |
-| fetch_objects           | Authority          | Read objects from database                                                     |
-| tx_execute_to_effects   | Authority          | Execute Move call and create effects                                           |
-| tx_execute              | Authority          | Actual execution of transfer/Move call etc.                                    |
-| handle_cert             | Gateway            | Send to one authority for certificate processing                               |
-| quorum_map_auth         | Gateway            | Handle one network component with one authority                                |
-| sync_cert               | Gateway, Authority | Gateway-initiated sync of data to authority                                    |
-| db_set_transaction_lock | Authority          | Database set transaction locks on new transaction                              |
-| db_update_state         | Authority          | Update the database with certificate, effects after transaction Move execution |
+| process_tx              | Gateway, Validator | Send transaction request, get back 2f+1 signatures and make certificate        |
+| process_cert            | Gateway, Validator | Send certificate to validators to execute transaction                         |
+| cert_check_signature    | Validator          | Check certificate signatures                                                   |
+| process_cert_inner      | Validator          | Inner function to process certificates in validator                            |
+| fetch_objects           | Validator          | Read objects from database                                                     |
+| tx_execute_to_effects   | Validator          | Execute Move call and create effects                                           |
+| tx_execute              | Validator          | Actual execution of transfer/Move call etc.                                    |
+| handle_cert             | Gateway            | Send to one validator for certificate processing                               |
+| quorum_map_auth         | Gateway            | Handle one network component with one validator                                |
+| sync_cert               | Gateway, Validator | Gateway-initiated sync of data to validator                                    |
+| db_set_transaction_lock | Validator          | Database set transaction locks on new transaction                              |
+| db_update_state         | Validator          | Update the database with certificate, effects after transaction Move execution |
 |                         |                    |                                                                                |
 
 ### Tags - keys
@@ -89,18 +89,18 @@ These tags represent *fields* that can be analyzed and filtered by. For example,
 
 |         Key         |      Place(s)      |                                  Meaning                                   |
 | ------------------- | ------------------ | -------------------------------------------------------------------------- |
-| tx_digest           | Gateway, Authority | Hex digest of transaction                                                  |
-| tx_kind             | Gateway, Authority | Kind of transaction: Transfer/Publish/Call                                 |
+| tx_digest           | Gateway, Validator | Hex digest of transaction                                                  |
+| tx_kind             | Gateway, Validator | Kind of transaction: Transfer/Publish/Call                                 |
 | quorum_threshold    | Gateway            | Numeric threshold of quorum stake needed for a transaction                 |
 | validity_threshold  | Gateway            | Numeric threshold of maximum "bad stake" from errors that can be tolerated |
-| num_errors          | Gateway            | Number of errors from authorities broadcast                                |
-| good_stake          | Gateway            | Total amount of good stake from authorities who answered a broadcast       |
-| bad_stake           | Gateway            | Total amount of bad stake from authorities, including errors               |
-| num_signatures      | Gateway            | Number of signatures received from authorities broadcast                   |
-| num_unique_effects  | Gateway            | Number of unique effects responses from authorities                        |
-| num_inputs          | Authority          | Number of inputs for transaction processing                                |
-| num_mutable_objects | Authority          | Number of mutable objects for transaction processing                       |
-| gas_used            | Authority          | Amount of gas used by the transaction                                      |
+| num_errors          | Gateway            | Number of errors from validators broadcast                                |
+| good_stake          | Gateway            | Total amount of good stake from validators who answered a broadcast       |
+| bad_stake           | Gateway            | Total amount of bad stake from validators, including errors               |
+| num_signatures      | Gateway            | Number of signatures received from validators broadcast                   |
+| num_unique_effects  | Gateway            | Number of unique effects responses from validators                        |
+| num_inputs          | Validator          | Number of inputs for transaction processing                                |
+| num_mutable_objects | Validator          | Number of mutable objects for transaction processing                       |
+| gas_used            | Validator          | Amount of gas used by the transaction                                      |
 |                     |                    |                                                                            |
 
 ## Logging levels
@@ -112,7 +112,7 @@ This is always tricky, to balance the right amount of verbosity especially by de
 | Error | Process-level faults (not transaction-level errors, there could be a ton of those)                         |
 | Warn  | Unusual or byzantine activity                                                                              |
 | Info  | High level aggregate stats, major events related to data sync, epoch changes.                              |
-| Debug | High level tracing for individual transactions, eg Gateway/client side -> authority -> Move execution etc. |
+| Debug | High level tracing for individual transactions, eg Gateway/client side -> validator -> Move execution etc. |
 | Trace | Extremely detailed tracing for individual transactions                                                     |
 |       |                                                                                                            |
 
@@ -130,9 +130,9 @@ subscribers can be active at the same time.
 
 ```mermaid
 graph TB;
-Authority1 --> S1(open-telemetry)
-Authority1 --> S2(stdout logging)
-Authority1 --> S3(bunyan-formatter)
+Validator1 --> S1(open-telemetry)
+Validator1 --> S2(stdout logging)
+Validator1 --> S3(bunyan-formatter)
 S3 --> Vector
 Vector --> ElasticSearch
 S1 --> Jaeger
@@ -146,7 +146,7 @@ Vector2 --> ElasticSearch
 In the graph above, there are multiple subscribers, JSON logs can be for example fed via a local sidecar log forwarder such as
 [Vector](https://vector.dev), and then onwards to destinations such as ElasticSearch.
 
-The use of a log and metrics aggregator such as Vector allows for easy reconfiguration without interrupting the authority server,
+The use of a log and metrics aggregator such as Vector allows for easy reconfiguration without interrupting the validator server,
 as well as offloading observability traffic.
 
 ### Stdout (default)
@@ -191,4 +191,4 @@ NOTE: separate spans (which are not nested) are not connected as a single trace 
 2. Start Sui with `SUI_TOKIO_CONSOLE` set to 1.
 3. Clone the console repo and `cargo run` to launch the console.
 
-NOTE: Adding Tokio-console support may significantly slow down Sui authorities/gateways.
+NOTE: Adding Tokio-console support may significantly slow down Sui validators/gateways.

@@ -11,7 +11,7 @@ use tokio::net::{TcpListener, TcpStream};
 
 use async_trait::async_trait;
 
-use tracing::*;
+use tracing::info;
 
 use bytes::{Bytes, BytesMut};
 use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};

@@ -12,14 +12,14 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag},
     resolver::{ModuleResolver, ResourceResolver},
 };
-use move_vm_runtime::native_functions::NativeFunctionTable;
+use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use std::sync::atomic::AtomicUsize;
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     pin::Pin,
     sync::Arc,
 };
-use sui_adapter::adapter::{self, SuiMoveVM};
+use sui_adapter::adapter;
 use sui_types::{
     base_types::*,
     batch::UpdateItem,
@@ -33,7 +33,8 @@ use sui_types::{
     storage::{BackingPackageStore, DeleteKind, Storage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
-use tracing::*;
+use tracing::log;
+use tracing::{debug, instrument};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -82,7 +83,7 @@ pub struct AuthorityState {
 
     /// Move native functions that are available to invoke
     _native_functions: NativeFunctionTable,
-    move_vm: Arc<adapter::SuiMoveVM>,
+    move_vm: Arc<MoveVM>,
 
     /// The database
     pub(crate) _database: Arc<AuthorityStore>, // TODO: remove pub
@@ -601,8 +602,10 @@ impl AuthorityState {
             name,
             secret,
             _native_functions: native_functions.clone(),
-            move_vm: adapter::new_move_vm(native_functions)
-                .expect("We defined natives to not fail here"),
+            move_vm: Arc::new(
+                adapter::new_move_vm(native_functions)
+                    .expect("We defined natives to not fail here"),
+            ),
             _database: store.clone(),
             batch_channels: tx,
             batch_notifier: Arc::new(
@@ -679,8 +682,6 @@ impl AuthorityState {
             natives,
             &mut gas_status,
         )?;
-        let vm = SuiMoveVM::new(vm);
-
         adapter::store_package_and_init_modules(
             &mut temporary_store,
             &vm,

@@ -15,7 +15,7 @@ module Games::TicTacToeTests {
 
 
     #[test]
-    fun play_tictactoe() {
+    public(script) fun play_tictactoe() {
         let admin = @0x0;
         let player_x = @0x1;
         let player_o = @0x2;
@@ -84,7 +84,7 @@ module Games::TicTacToeTests {
 
 
     #[test]
-    fun play_tictactoe_draw() {
+    public(script) fun play_tictactoe_draw() {
         let admin = @0x0;
         let player_x = @0x1;
         let player_o = @0x2;
@@ -191,7 +191,7 @@ module Games::TicTacToeTests {
         assert!(!TestScenario::can_take_object<Trophy>(scenario), 1);
     }
 
-    fun place_mark(
+    public(script) fun place_mark(
         row: u64,
         col: u64,
         admin: &address,
