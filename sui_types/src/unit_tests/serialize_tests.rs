@@ -55,7 +55,7 @@ fn test_error() {
     let buf = serialize_error(&err);
     let result = deserialize_message(buf.as_slice());
     assert!(result.is_ok());
-    if let SerializedMessage::Error(o) = result.unwrap() {
+    if let SerializedMessage::Error(o) = result.unwrap().1 {
         assert!(*o == err);
     } else {
         panic!()
@@ -76,12 +76,12 @@ fn test_info_request() {
     assert!(result1.is_ok());
     assert!(result2.is_ok());
 
-    if let SerializedMessage::ObjectInfoReq(o) = result1.unwrap() {
+    if let SerializedMessage::ObjectInfoReq(o) = result1.unwrap().1 {
         assert_eq!(*o, req1);
     } else {
         panic!()
     }
-    if let SerializedMessage::ObjectInfoReq(o) = result2.unwrap() {
+    if let SerializedMessage::ObjectInfoReq(o) = result2.unwrap().1 {
         assert_eq!(*o, req2);
     } else {
         panic!()
@@ -106,7 +106,7 @@ fn test_transaction() {
     let buf = serialize_transaction(&transfer_transaction);
     let result = deserialize_message(buf.as_slice());
     assert!(result.is_ok());
-    if let SerializedMessage::Transaction(o) = result.unwrap() {
+    if let SerializedMessage::Transaction(o) = result.unwrap().1 {
         assert!(*o == transfer_transaction);
     } else {
         panic!()
@@ -127,7 +127,7 @@ fn test_transaction() {
     let buf = serialize_transaction(&transfer_transaction2);
     let result = deserialize_message(buf.as_slice());
     assert!(result.is_ok());
-    if let SerializedMessage::Transaction(o) = result.unwrap() {
+    if let SerializedMessage::Transaction(o) = result.unwrap().1 {
         assert!(*o == transfer_transaction2);
     } else {
         panic!()
@@ -158,7 +158,7 @@ fn test_vote() {
     let buf = serialize_vote(&vote);
     let result = deserialize_message(buf.as_slice());
     assert!(result.is_ok());
-    if let SerializedMessage::Vote(o) = result.unwrap() {
+    if let SerializedMessage::Vote(o) = result.unwrap().1 {
         assert!(*o == vote);
     } else {
         panic!()
@@ -191,7 +191,7 @@ fn test_cert() {
     let buf = serialize_cert(&cert);
     let result = deserialize_message(buf.as_slice());
     assert!(result.is_ok());
-    if let SerializedMessage::Cert(o) = result.unwrap() {
+    if let SerializedMessage::Cert(o) = result.unwrap().1 {
         compare_certified_transactions(o.as_ref(), &cert);
     } else {
         panic!()
@@ -243,7 +243,7 @@ fn test_info_response() {
         let buf = serialize_object_info_response(resp);
         let result = deserialize_message(buf.as_slice());
         assert!(result.is_ok());
-        if let SerializedMessage::ObjectInfoResp(o) = result.unwrap() {
+        if let SerializedMessage::ObjectInfoResp(o) = result.unwrap().1 {
             compare_object_info_responses(o.as_ref(), resp);
         } else {
             panic!()
@@ -278,7 +278,8 @@ fn test_time_transaction() {
     let mut buf2 = buf.as_slice();
     let now = Instant::now();
     for _ in 0..100 {
-        if let SerializedMessage::Transaction(transaction) = deserialize_message(&mut buf2).unwrap()
+        if let SerializedMessage::Transaction(transaction) =
+            deserialize_message(&mut buf2).unwrap().1
         {
             transaction.check_signature().unwrap();
         }
@@ -321,7 +322,7 @@ fn test_time_vote() {
     let mut buf2 = buf.as_slice();
     let now = Instant::now();
     for _ in 0..100 {
-        if let SerializedMessage::Vote(vote) = deserialize_message(&mut buf2).unwrap() {
+        if let SerializedMessage::Vote(vote) = deserialize_message(&mut buf2).unwrap().1 {
             vote.auth_signature
                 .signature
                 .check(&vote.data, vote.auth_signature.authority)
@@ -376,7 +377,7 @@ fn test_time_cert() {
     let now = Instant::now();
     let mut buf2 = buf.as_slice();
     for _ in 0..count {
-        if let SerializedMessage::Cert(cert) = deserialize_message(&mut buf2).unwrap() {
+        if let SerializedMessage::Cert(cert) = deserialize_message(&mut buf2).unwrap().1 {
             AuthoritySignature::verify_batch(&cert.transaction.data, &cert.signatures, &cache)
                 .unwrap();
         }

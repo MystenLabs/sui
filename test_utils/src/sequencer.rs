@@ -328,16 +328,17 @@ where
                 // Receive sync requests form the subscriber.
                 Some(buffer) = stream.stream().next() => match buffer {
                     Ok(buffer) => match deserialize_message(&*buffer) {
-                        Ok(SerializedMessage::ConsensusSync(sync)) => {
+                        Ok((_, SerializedMessage::ConsensusSync(sync))) => {
                             if let Err(e) = self.synchronize(sync.sequence_number, &mut stream).await {
                                 log::error!("{e}");
                                 break;
                             }
                         }
-                        Ok(_) => {
+                        Ok((_, _)) => {
                             log::warn!("{}", SuiError::UnexpectedMessage);
                             break;
                         }
+
                         Err(e) => {
                             log::warn!("Failed to deserialize consensus sync request {e}");
                             break;

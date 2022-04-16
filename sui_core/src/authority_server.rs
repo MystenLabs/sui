@@ -11,8 +11,10 @@ use sui_network::{
     transport::{spawn_server, MessageHandler, RwChannel, SpawnedServer},
 };
 use sui_types::{
-    batch::UpdateItem, crypto::VerificationObligation, error::*, messages::*, serialize::*,
+    batch::UpdateItem, crypto::VerificationObligation, error::*, message_headers::*, messages::*,
+    serialize::*,
 };
+use sui_utils::trace_utils::get_trace_tag_str;
 
 use futures::{SinkExt, StreamExt};
 
@@ -173,19 +175,22 @@ impl AuthorityServer {
 
     async fn handle_one_message<'a, 'b, A>(
         &'a self,
+        headers: Headers,
         message: SerializedMessage,
         channel: &mut A,
     ) -> Option<Vec<u8>>
     where
         A: RwChannel<'b>,
     {
+        let trace_id = &headers.get_trace_id();
+        let trace_tag = &headers.get_trace_tag();
+
         let reply = match message {
             SerializedMessage::Transaction(message) => {
-                let tx_digest = message.digest();
-                // Enable Trace Propagation across spans/processes using tx_digest
                 let span = tracing::debug_span!(
                     "process_tx",
-                    ?tx_digest,
+                    trace_id,
+                    trace_tag = get_trace_tag_str(*trace_tag),
                     tx_kind = message.data.kind_as_str()
                 );
                 // No allocations: it's a 'static str!
@@ -199,10 +204,10 @@ impl AuthorityServer {
                 let confirmation_transaction = ConfirmationTransaction {
                     certificate: message.as_ref().clone(),
                 };
-                let tx_digest = *message.digest();
                 let span = tracing::debug_span!(
                     "process_cert",
-                    ?tx_digest,
+                    trace_id,
+                    trace_tag = get_trace_tag_str(*trace_tag),
                     tx_kind = message.transaction.data.kind_as_str()
                 );
                 match self
@@ -265,37 +270,40 @@ impl AuthorityServer {
     /// For each Transaction and Certificate updates a verification
     /// obligation structure, and returns an error either if the collection in the
     /// obligation went wrong or the verification of the signatures went wrong.
+    #[allow(clippy::type_complexity)]
     fn batch_verify_one_chunk(
         &self,
-        one_chunk: Vec<Result<(SerializedMessage, BytesMut), SuiError>>,
-    ) -> Result<VecDeque<(SerializedMessage, BytesMut)>, SuiError> {
+        one_chunk: Vec<Result<(Option<Headers>, SerializedMessage, BytesMut), SuiError>>,
+    ) -> Result<VecDeque<(Option<Headers>, SerializedMessage, BytesMut)>, SuiError> {
         let one_chunk: Result<Vec<_>, _> = one_chunk.into_iter().collect();
         let one_chunk = one_chunk?;
 
         // Now create a verification obligation
         let mut obligation = VerificationObligation::default();
-        let load_verification: Result<VecDeque<(SerializedMessage, BytesMut)>, SuiError> =
-            one_chunk
-                .into_iter()
-                .map(|mut item| {
-                    let (message, _message_bytes) = &mut item;
-                    match message {
-                        SerializedMessage::Transaction(message) => {
-                            message.is_checked = true;
-                            message.add_to_verification_obligation(&mut obligation)?;
-                        }
-                        SerializedMessage::Cert(message) => {
-                            message.is_checked = true;
-                            message.add_to_verification_obligation(
-                                &self.state.committee,
-                                &mut obligation,
-                            )?;
-                        }
-                        _ => {}
-                    };
-                    Ok(item)
-                })
-                .collect();
+        let load_verification: Result<
+            VecDeque<(Option<Headers>, SerializedMessage, BytesMut)>,
+            SuiError,
+        > = one_chunk
+            .into_iter()
+            .map(|mut item| {
+                let (_headers, message, _message_bytes) = &mut item;
+                match message {
+                    SerializedMessage::Transaction(message) => {
+                        message.is_checked = true;
+                        message.add_to_verification_obligation(&mut obligation)?;
+                    }
+                    SerializedMessage::Cert(message) => {
+                        message.is_checked = true;
+                        message.add_to_verification_obligation(
+                            &self.state.committee,
+                            &mut obligation,
+                        )?;
+                    }
+                    _ => {}
+                };
+                Ok(item)
+            })
+            .collect();
 
         // Check the obligations and the verification is
         let one_chunk = load_verification?;
@@ -324,7 +332,7 @@ where
                     .and_then(|msg_bytes| {
                         deserialize_message(&msg_bytes[..])
                             .map_err(|_| SuiError::InvalidDecoding)
-                            .map(|msg| (msg, msg_bytes))
+                            .map(|(headers, msg)| (headers, msg, msg_bytes))
                     })
             })
             .ready_chunks(CHUNK_SIZE)
@@ -353,8 +361,11 @@ where
             let mut one_chunk = one_chunk.unwrap();
 
             // Process each message
-            while let Some((_message, _buffer)) = one_chunk.pop_front() {
-                if let Some(reply) = self.handle_one_message(_message, &mut channel).await {
+            while let Some((headers, message, _buffer)) = one_chunk.pop_front() {
+                if let Some(reply) = self
+                    .handle_one_message(headers.unwrap_or_default(), message, &mut channel)
+                    .await
+                {
                     let status = channel.sink().send(reply.into()).await;
                     if let Err(error) = status {
                         error!("Failed to send query response: {error}");

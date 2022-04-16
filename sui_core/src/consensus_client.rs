@@ -107,14 +107,14 @@ impl ConsensusClient {
         // we may be have a liveness issue. We stop processing of this certificate to
         // ensure safety, and the synchronizer will try again to ask for that certificate.
         let (consensus_message, consensus_index) = match deserialize_message(&*bytes) {
-            Ok(SerializedMessage::ConsensusOutput(value)) => {
+            Ok((_, SerializedMessage::ConsensusOutput(value))) => {
                 let ConsensusOutput {
                     message,
                     sequence_number,
                 } = *value;
                 (message, sequence_number)
             }
-            Ok(_) => {
+            Ok((_, _)) => {
                 error!("{}", SuiError::UnexpectedMessage);
                 return Err(SuiError::UnexpectedMessage);
             }
@@ -150,10 +150,10 @@ impl ConsensusClient {
         // certificate since all correct authorities will do the same. Remember that a
         // bad authority or client may input random bytes to the consensus.
         let confirmation = match deserialize_message(&*consensus_message) {
-            Ok(SerializedMessage::Cert(certificate)) => ConfirmationTransaction {
+            Ok((_, SerializedMessage::Cert(certificate))) => ConfirmationTransaction {
                 certificate: *certificate,
             },
-            Ok(_) => {
+            Ok((_, _)) => {
                 debug!("{}", SuiError::UnexpectedMessage);
                 return Err(SuiError::UnexpectedMessage);
             }

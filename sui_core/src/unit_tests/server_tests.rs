@@ -175,7 +175,7 @@ async fn test_subscription() {
 
     while let Some(data) = rx.next().await {
         match deserialize_message(&data[..]).expect("Bad response") {
-            SerializedMessage::BatchInfoResp(resp) => match *resp {
+            (_, SerializedMessage::BatchInfoResp(resp)) => match *resp {
                 BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
                     num_batches += 1;
                     if signed_batch.batch.next_sequence_number >= 34 {
@@ -186,7 +186,7 @@ async fn test_subscription() {
                     num_transactions += 1;
                 }
             },
-            _ => {
+            (_, _) => {
                 panic!("Bad response");
             }
         }
@@ -233,7 +233,7 @@ async fn test_subscription() {
 
     while let Some(data) = rx.next().await {
         match deserialize_message(&data[..]).expect("Bad response") {
-            SerializedMessage::BatchInfoResp(resp) => match *resp {
+            (_, SerializedMessage::BatchInfoResp(resp)) => match *resp {
                 BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
                     num_batches += 1;
                     if signed_batch.batch.next_sequence_number >= 112 {
@@ -245,7 +245,7 @@ async fn test_subscription() {
                     num_transactions += 1;
                 }
             },
-            _ => {
+            (_, _) => {
                 panic!("Bad response");
             }
         }

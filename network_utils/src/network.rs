@@ -73,8 +73,8 @@ impl NetworkClient {
             Ok(Some(response)) => {
                 // Parse reply
                 match deserialize_message(&response[..]) {
-                    Ok(SerializedMessage::Error(error)) => Err(*error),
-                    Ok(message) => Ok(message),
+                    Ok((_, SerializedMessage::Error(error))) => Err(*error),
+                    Ok((_, message)) => Ok(message),
                     Err(_) => Err(SuiError::InvalidDecoding),
                     // _ => Err(SuiError::UnexpectedMessage),
                 }
@@ -220,8 +220,8 @@ pub fn parse_recv_bytes(
         Ok(Some(response)) => {
             // Parse reply
             match deserialize_message(&response[..]) {
-                Ok(SerializedMessage::Error(error)) => Err(*error),
-                Ok(message) => Ok(message),
+                Ok((_, SerializedMessage::Error(error))) => Err(*error),
+                Ok((_, message)) => Ok(message),
                 Err(_) => Err(SuiError::InvalidDecoding),
             }
         }

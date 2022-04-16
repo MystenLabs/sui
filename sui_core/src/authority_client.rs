@@ -198,10 +198,10 @@ impl AuthorityClient {
                     })
                     // If no error try to deserialize
                     .and_then(|bytes| match deserialize_message(&bytes[..]) {
-                        Ok(SerializedMessage::Error(error)) => Err(SuiError::ClientIoError {
+                        Ok((_, SerializedMessage::Error(error))) => Err(SuiError::ClientIoError {
                             error: format!("io error: {:?}", error),
                         }),
-                        Ok(message) => Ok(message),
+                        Ok((_, message)) => Ok(message),
                         Err(_) => Err(SuiError::InvalidDecoding),
                     })
                     // If deserialized try to parse as Batch Item

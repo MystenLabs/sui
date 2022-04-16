@@ -22,6 +22,7 @@ pub mod event;
 pub mod gas;
 pub mod gas_coin;
 pub mod id;
+pub mod message_headers;
 pub mod messages;
 pub mod move_package;
 pub mod object;

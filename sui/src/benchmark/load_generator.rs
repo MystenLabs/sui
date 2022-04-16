@@ -17,24 +17,24 @@ use sui_core::authority::*;
 use sui_core::authority_server::AuthorityServer;
 use sui_network::network::{NetworkClient, NetworkServer};
 use sui_network::transport;
-use sui_types::{messages::*, serialize::*};
+use sui_types::{messages::*, message_headers::*, serialize::*};
 use tokio::sync::Notify;
 use tokio::time;
 use tracing::{error, info};
 
-pub fn check_transaction_response(reply_message: Result<SerializedMessage, Error>) {
+pub fn check_transaction_response(reply_message: Result<(Headers, SerializedMessage), Error>) {
     match reply_message {
-        Ok(SerializedMessage::TransactionResp(res)) => {
+        Ok((_, SerializedMessage::TransactionResp(res))) => {
             if let Some(e) = res.signed_effects {
                 if matches!(e.effects.status, ExecutionStatus::Failure { .. }) {
                     info!("Execution Error {:?}", e.effects.status);
                 }
             }
         }
+        Ok((_, q)) => error!("Received invalid response {:?}", q),
         Err(err) => {
             error!("Received Error {:?}", err);
         }
-        Ok(q) => error!("Received invalid response {:?}", q),
     };
 }
 

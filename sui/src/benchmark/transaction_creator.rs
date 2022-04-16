@@ -11,7 +11,7 @@ use sui_adapter::genesis;
 use sui_core::authority::*;
 use sui_types::crypto::{get_key_pair, AuthoritySignature, KeyPair, PublicKeyBytes, Signature};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-use sui_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
+use sui_types::{base_types::*, committee::*, messages::*, message_headers::*, object::Object, serialize::*};
 use tokio::runtime::Runtime;
 
 use tracing::info;
@@ -206,7 +206,7 @@ fn make_serialized_transactions(
             let transaction = Transaction::new(data, signature);
 
             // Serialize transaction
-            let serialized_transaction = serialize_transaction(&transaction);
+            let serialized_transaction = serialize_transaction(Default::default(), &transaction);
 
             assert!(!serialized_transaction.is_empty());
 

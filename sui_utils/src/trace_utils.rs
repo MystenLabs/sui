@@ -3,6 +3,8 @@
 
 pub use telemetry_subscribers::TelemetryConfig;
 
+use sui_types::message_headers::TraceTag;
+
 pub fn init_telemetry() -> telemetry_subscribers::TelemetryGuards {
     init_telemetry_with_config(telemetry_subscribers::TelemetryConfig {
         service_name: "sui".into(),
@@ -23,4 +25,13 @@ pub fn init_telemetry_with_config(config: telemetry_subscribers::TelemetryConfig
     };
 
     telemetry_subscribers::init(config)
+}
+
+pub fn get_trace_tag_str(tag: Option<&TraceTag>) -> &'static str {
+    match tag {
+        Some(tag) => match tag {
+            TraceTag::LatencyProbe => "latency_probe",
+        },
+        None => "",
+    }
 }
