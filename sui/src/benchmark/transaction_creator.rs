@@ -11,7 +11,9 @@ use sui_adapter::genesis;
 use sui_core::authority::*;
 use sui_types::crypto::{get_key_pair, AuthoritySignature, KeyPair, PublicKeyBytes, Signature};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-use sui_types::{base_types::*, committee::*, messages::*, message_headers::*, object::Object, serialize::*};
+use sui_types::{
+    base_types::*, committee::*, message_headers::*, messages::*, object::Object, serialize::*,
+};
 use tokio::runtime::Runtime;
 
 use tracing::info;
@@ -169,7 +171,12 @@ fn make_serialized_transactions(
     keys: &[(PublicKeyBytes, KeyPair)],
     batch_size: usize,
     use_move: bool,
+    trace_tag: Option<TraceTag>,
 ) -> Vec<Bytes> {
+    let mut tx_headers: SerializedHeaders = Default::default();
+    if let Some(trace_tag) = trace_tag {
+        tx_headers.headers.push(Header::TraceTag(trace_tag));
+    }
     // Make one transaction per account
     // Depending on benchmark_type, this could be the Order and/or Confirmation.
     account_gas_objects
@@ -206,7 +213,8 @@ fn make_serialized_transactions(
             let transaction = Transaction::new(data, signature);
 
             // Serialize transaction
-            let serialized_transaction = serialize_transaction(Default::default(), &transaction);
+            let serialized_transaction =
+                serialize_transaction_with_headers(&tx_headers, &transaction);
 
             assert!(!serialized_transaction.is_empty());
 
@@ -227,6 +235,7 @@ fn make_transactions(
     object_id_offset: usize,
     auth_keys: &[(PublicKeyBytes, KeyPair)],
     committee: &Committee,
+    trace_tag: Option<TraceTag>,
 ) -> (Vec<Bytes>, Vec<Object>) {
     let (address, keypair) = get_key_pair();
 
@@ -259,6 +268,7 @@ fn make_transactions(
         auth_keys,
         batch_size_per_conn,
         use_move,
+        trace_tag,
     );
 
     (serialized_txes, all_objects)
@@ -310,6 +320,7 @@ impl TransactionCreator {
         use_move: bool,
         chunk_size: usize,
         num_chunks: usize,
+        trace_tag: Option<TraceTag>,
     ) -> Vec<Bytes> {
         let load_gen_txes = make_transactions(
             chunk_size,
@@ -319,6 +330,7 @@ impl TransactionCreator {
             self.object_id_offset,
             &self.authority_keys,
             &self.committee,
+            trace_tag,
         );
 
         self.object_id_offset += chunk_size * num_chunks;

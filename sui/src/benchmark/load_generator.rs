@@ -17,12 +17,14 @@ use sui_core::authority::*;
 use sui_core::authority_server::AuthorityServer;
 use sui_network::network::{NetworkClient, NetworkServer};
 use sui_network::transport;
-use sui_types::{messages::*, message_headers::*, serialize::*};
+use sui_types::{message_headers::*, messages::*, serialize::*};
 use tokio::sync::Notify;
 use tokio::time;
 use tracing::{error, info};
 
-pub fn check_transaction_response(reply_message: Result<(Headers, SerializedMessage), Error>) {
+pub fn check_transaction_response(
+    reply_message: Result<(Option<Headers>, SerializedMessage), Error>,
+) {
     match reply_message {
         Ok((_, SerializedMessage::TransactionResp(res))) => {
             if let Some(e) = res.signed_effects {
