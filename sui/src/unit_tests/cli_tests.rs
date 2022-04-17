@@ -9,6 +9,7 @@ use std::str;
 use std::time::Duration;
 
 use crate::cli_tests::sui_network::start_test_network;
+use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use serde_json::{json, Value};
 use std::fmt::Write;
@@ -18,7 +19,7 @@ use sui::config::{
 };
 use sui::gateway::{GatewayConfig, GatewayType};
 use sui::keystore::KeystoreType;
-use sui::sui_commands::SuiCommand;
+use sui::sui_commands::{SuiCommand, SuiNetwork};
 use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
@@ -270,21 +271,7 @@ async fn airdrop_call_move_and_get_created_object(
 #[traced_test]
 #[tokio::test]
 async fn test_objects_command() -> Result<(), anyhow::Error> {
-    let working_dir = tempfile::tempdir()?;
-
-    let network = start_test_network(working_dir.path(), None).await?;
-
-    // Create Wallet context.
-    let mut context = WalletContext::new(&working_dir.path().join(SUI_WALLET_CONFIG))?;
-    let address = context.config.accounts.first().cloned().unwrap();
-
-    // Sync client to retrieve objects from the network.
-    WalletCommands::SyncClientState {
-        address: Some(address),
-    }
-    .execute(&mut context)
-    .await?
-    .print(true);
+    let (network, mut context, address) = setup_network_and_wallet().await?;
 
     // Print objects owned by `address`
     WalletCommands::Objects {
@@ -300,6 +287,39 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     for (object_id, _, _) in object_refs {
         assert!(logs_contain(format!("{object_id}").as_str()))
     }
+
+    network.kill().await?;
+    Ok(())
+}
+
+#[traced_test]
+#[tokio::test]
+async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
+    let (network, mut context, address) = setup_network_and_wallet().await?;
+
+    let result = WalletCommands::CreateExampleNFT {
+        name: Option::None,
+        description: Option::None,
+        url: Option::None,
+        gas: Option::None,
+        gas_budget: Option::None,
+    }
+    .execute(&mut context)
+    .await?;
+
+    let obj = match result {
+        WalletCommandResult::CreateExampleNFT(ObjectRead::Exists(_, obj, layout)) => {
+            assert_eq!(obj.owner, address);
+            assert_eq!(
+                obj.type_().unwrap().to_string(),
+                "0x2::ExampleNFT::ExampleNFT"
+            );
+            Ok(obj.to_json(&layout).unwrap_or_else(|_| json!("")))
+        }
+        _ => Err(anyhow!(
+            "WalletCommands::CreateExampleNFT returns wrong type"
+        )),
+    }?;
 
     network.kill().await?;
     Ok(())
@@ -401,22 +421,7 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
 #[traced_test]
 #[tokio::test]
 async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
-    let working_dir = tempfile::tempdir()?;
-
-    let network = start_test_network(working_dir.path(), None).await?;
-
-    // Create Wallet context.
-    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
-    let mut context = WalletContext::new(&wallet_conf)?;
-    let address = context.config.accounts.first().cloned().unwrap();
-
-    // Sync client to retrieve objects from the network.
-    WalletCommands::SyncClientState {
-        address: Some(address),
-    }
-    .execute(&mut context)
-    .await?
-    .print(true);
+    let (network, mut context, address) = setup_network_and_wallet().await?;
 
     let object_refs = context.gateway.get_owned_objects(address)?;
 
@@ -441,22 +446,8 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
 #[traced_test]
 #[tokio::test]
 async fn test_gas_command() -> Result<(), anyhow::Error> {
-    let working_dir = tempfile::tempdir()?;
-    let network = start_test_network(working_dir.path(), None).await?;
-
-    // Create Wallet context.
-    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
-    let mut context = WalletContext::new(&wallet_conf)?;
-    let address = context.config.accounts.first().cloned().unwrap();
+    let (network, mut context, address) = setup_network_and_wallet().await?;
     let recipient = context.config.accounts.get(1).cloned().unwrap();
-
-    // Sync client to retrieve objects from the network.
-    WalletCommands::SyncClientState {
-        address: Some(address),
-    }
-    .execute(&mut context)
-    .await?;
-
     let object_refs = context.gateway.get_owned_objects(address)?;
 
     let object_id = object_refs.first().unwrap().0;
@@ -631,23 +622,10 @@ async fn get_move_object(
 #[traced_test]
 #[tokio::test]
 async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
-    let working_dir = tempfile::tempdir()?;
-    let network = start_test_network(working_dir.path(), None).await?;
-
-    // Create Wallet context.
-    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
-
-    let mut context = WalletContext::new(&wallet_conf)?;
-    let address1 = context.config.accounts.first().cloned().unwrap();
+    let (network, mut context, address1) = setup_network_and_wallet().await?;
     let address2 = context.config.accounts.get(1).cloned().unwrap();
 
     // Sync client to retrieve objects from the network.
-    WalletCommands::SyncClientState {
-        address: Some(address1),
-    }
-    .execute(&mut context)
-    .await?
-    .print(true);
     WalletCommands::SyncClientState {
         address: Some(address2),
     }
@@ -816,22 +794,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 #[traced_test]
 #[tokio::test]
 async fn test_package_publish_command() -> Result<(), anyhow::Error> {
-    let working_dir = tempfile::tempdir()?;
-
-    let network = start_test_network(working_dir.path(), None).await?;
-
-    // Create Wallet context.
-    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
-    let mut context = WalletContext::new(&wallet_conf)?;
-    let address = context.config.accounts.first().cloned().unwrap();
-
-    // Sync client to retrieve objects from the network.
-    WalletCommands::SyncClientState {
-        address: Some(address),
-    }
-    .execute(&mut context)
-    .await?
-    .print(true);
+    let (network, mut context, address) = setup_network_and_wallet().await?;
 
     let object_refs = context.gateway.get_owned_objects(address)?;
 
@@ -897,23 +860,8 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
 #[traced_test]
 #[tokio::test]
 async fn test_native_transfer() -> Result<(), anyhow::Error> {
-    let working_dir = tempfile::tempdir()?;
-
-    let network = start_test_network(working_dir.path(), None).await?;
-
-    // Create Wallet context.
-    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
-
-    let mut context = WalletContext::new(&wallet_conf)?;
-    let address = context.config.accounts.first().cloned().unwrap();
+    let (network, mut context, address) = setup_network_and_wallet().await?;
     let recipient = context.config.accounts.get(1).cloned().unwrap();
-    // Sync client to retrieve objects from the network.
-    WalletCommands::SyncClientState {
-        address: Some(address),
-    }
-    .execute(&mut context)
-    .await?
-    .print(true);
 
     let object_refs = context.gateway.get_owned_objects(address)?;
 
@@ -1086,7 +1034,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     .execute(&mut context)
     .await?;
 
-    // Run a command with address ommited
+    // Run a command with address omitted
     let os = WalletCommands::Objects { address: None }
         .execute(&mut context)
         .await?;
@@ -1169,7 +1117,7 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
     .execute(&mut context)
     .await?;
 
-    // Run a command with address ommited
+    // Run a command with address omitted
     let os = WalletCommands::ActiveAddress {}
         .execute(&mut context)
         .await?;
@@ -1214,22 +1162,7 @@ async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<Object>
 #[traced_test]
 #[tokio::test]
 async fn test_merge_coin() -> Result<(), anyhow::Error> {
-    let working_dir = tempfile::tempdir()?;
-
-    let network = start_test_network(working_dir.path(), None).await?;
-
-    // Create Wallet context.
-    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
-
-    let mut context = WalletContext::new(&wallet_conf)?;
-    let address = context.config.accounts.first().cloned().unwrap();
-    // Sync client to retrieve objects from the network.
-    WalletCommands::SyncClientState {
-        address: Some(address),
-    }
-    .execute(&mut context)
-    .await?
-    .print(true);
+    let (network, mut context, address) = setup_network_and_wallet().await?;
 
     let object_refs = context.gateway.get_owned_objects(address)?;
 
@@ -1307,23 +1240,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
 #[traced_test]
 #[tokio::test]
 async fn test_split_coin() -> Result<(), anyhow::Error> {
-    let working_dir = tempfile::tempdir()?;
-
-    let network = start_test_network(working_dir.path(), None).await?;
-
-    // Create Wallet context.
-    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
-
-    let mut context = WalletContext::new(&wallet_conf)?;
-    let address = context.config.accounts.first().cloned().unwrap();
-    // Sync client to retrieve objects from the network.
-    WalletCommands::SyncClientState {
-        address: Some(address),
-    }
-    .execute(&mut context)
-    .await?
-    .print(true);
-
+    let (network, mut context, address) = setup_network_and_wallet().await?;
     let object_refs = context.gateway.get_owned_objects(address)?;
 
     // Check log output contains all object ids.
@@ -1392,4 +1309,24 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     assert!((get_gas_value(&g.new_coins[1]) == 1000) || (get_gas_value(&g.new_coins[1]) == 10));
     network.kill().await?;
     Ok(())
+}
+
+async fn setup_network_and_wallet() -> Result<(SuiNetwork, WalletContext, SuiAddress), anyhow::Error>
+{
+    let working_dir = tempfile::tempdir()?;
+
+    let network = start_test_network(working_dir.path(), None).await?;
+
+    // Create Wallet context.
+    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
+    let mut context = WalletContext::new(&wallet_conf)?;
+    let address = context.config.accounts.first().cloned().unwrap();
+
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState {
+        address: Some(address),
+    }
+    .execute(&mut context)
+    .await?;
+    Ok((network, context, address))
 }
