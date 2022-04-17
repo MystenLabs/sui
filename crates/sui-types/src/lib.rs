@@ -21,7 +21,6 @@ pub mod crypto;
 pub mod event;
 pub mod gas;
 pub mod gas_coin;
-pub mod iblt;
 pub mod id;
 pub mod messages;
 pub mod messages_checkpoint;
