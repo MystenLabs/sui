@@ -678,7 +678,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
         let r = match timeout(BATCH_RETRIEVE_TIMEOUT, batch_receiver).await {
             Ok(Ok(result)) => result.or(Err(BlockErrorType::BatchError)),
             Ok(Err(err)) => {
-                println!("Receiver error: {}", err);
+                println!("Receiver error: {err}");
                 Err(BlockErrorType::BatchError)
             }
             Err(_) => Err(BlockErrorType::BatchTimeout),

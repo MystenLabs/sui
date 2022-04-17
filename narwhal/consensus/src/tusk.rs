@@ -171,7 +171,7 @@ impl<PublicKey: VerifyingKey> Consensus<PublicKey> {
                     .expect("Failed to send certificate to primary");
 
                 if let Err(e) = self.tx_output.send(output).await {
-                    warn!("Failed to output certificate: {}", e);
+                    warn!("Failed to output certificate: {e}");
                 }
             }
         }

@@ -161,13 +161,13 @@ impl<PublicKey: VerifyingKey> SubscriberServer<PublicKey> {
             let (socket, peer) = match listener.accept().await {
                 Ok(value) => value,
                 Err(e) => {
-                    debug!("Failed to establish connection with subscriber {}", e);
+                    debug!("Failed to establish connection with subscriber {e}");
                     continue;
                 }
             };
 
             // TODO [issue #109]: Limit the number of subscribers here rather than in the core.
-            debug!("Incoming connection established with {}", peer);
+            debug!("Incoming connection established with {peer}");
             let core_channel = self.tx_subscriber.clone();
             let consensus_store = self.consensus_store.clone();
             let certificate_store = self.certificate_store.clone();
@@ -288,7 +288,7 @@ impl<PublicKey: VerifyingKey> SubscriberConnection<PublicKey> {
                 Some(buffer) = self.socket.next() => match buffer {
                     Ok(bytes) => match bincode::deserialize(&bytes) {
                         Ok(request) => if let Err(e) = self.synchronize(request).await {
-                            error!("{}", e);
+                            error!("{e}");
                         },
                         Err(e) => {
                             debug!("subscriber {} sent malformed sync request: {}", self.peer, e);
@@ -296,7 +296,7 @@ impl<PublicKey: VerifyingKey> SubscriberConnection<PublicKey> {
                         }
                     },
                     Err(e) => {
-                        debug!("Error while reading TCP stream: {}", e);
+                        debug!("Error while reading TCP stream: {e}");
                         break;
                     }
                 }
