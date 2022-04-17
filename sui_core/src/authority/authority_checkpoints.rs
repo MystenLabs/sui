@@ -11,9 +11,9 @@ use sui_types::{
     committee::Committee,
     error::SuiError,
     messages_checkpoint::{
-        AuthenticatedCheckpoint, AuthorityCheckpointInfo, CheckpointContents, CheckpointRequest,
-        CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber, CheckpointSummary,
-        SignedCheckpoint, SignedCheckpointProposal,
+        AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpoint, CheckpointContents,
+        CheckpointRequest, CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
+        CheckpointSummary, SignedCheckpoint, SignedCheckpointProposal,
     },
     waypoint::WaypointDiff,
 };
@@ -147,6 +147,20 @@ pub struct CheckpointStore {
 }
 
 impl CheckpointStore {
+    /* TODO: Crash recovery logic.
+
+    (1) When we open the checkpoint store, we need to check that the current
+    highest checkpoint available at other nodes, is also the highest
+    checkpoint recorded in the store. If not, then we should download the
+    checkpoints from other authorities and include them in the store, as
+    the consensus channel may not provide them.
+
+    (2) We also need to check that the highest batch processed, is the same
+    as within the authority store. If not we should also update the checkpoint
+    store with all the batches since the last batch processed.
+
+    */
+
     pub fn open<P: AsRef<Path>>(
         path: P,
         db_options: Option<Options>,
@@ -225,8 +239,9 @@ impl CheckpointStore {
             CheckpointRequestType::PastCheckpoint(seq) => {
                 self.handle_past_checkpoint(&request, *seq)
             }
+            CheckpointRequestType::SetCertificate(cert) => self.handle_checkpoint_certificate(cert),
             CheckpointRequestType::DEBUGSetCheckpoint(_box_checkpoint) => {
-                unimplemented!();
+                self.debug_handle_set_checkpoint(&**_box_checkpoint)
             }
         }
     }
@@ -375,8 +390,75 @@ impl CheckpointStore {
     }
 
     /// Handles the submission of a full checkpoint externally, and stores
-    /// the certificate.
-    pub fn handle_external_checkpoint() {}
+    /// the certificate. We only store certs for checkpoints that were internally
+    /// first received through the consensus system.
+    pub fn handle_checkpoint_certificate(
+        &self,
+        checkpoint: &CertifiedCheckpoint,
+    ) -> Result<CheckpointResponse, SuiError> {
+        // Check the certificate is valid
+        checkpoint.check_digest(&self.committee)?;
+        let current = self
+            .checkpoints
+            .get(&checkpoint.checkpoint.waypoint.sequence_number)?;
+
+        match &current {
+            // If cert exists, do nothing (idempotent)
+            Some(AuthenticatedCheckpoint::Certified(_current_cert)) => {}
+            // If no such checkpoint is known, then return an error
+            // NOTE: a checkpoint must first be confirmed internally before an external
+            // certificate is registered.
+            None => {
+                return Err(SuiError::GenericAuthorityError {
+                    error: "No checkpoint set at this sequence.".to_string(),
+                })
+            }
+            // In this case we have an internal signed checkpoint so we propote it to a
+            // full certificate.
+            _ => {
+                self.checkpoints.insert(
+                    &checkpoint.checkpoint.waypoint.sequence_number,
+                    &AuthenticatedCheckpoint::Certified(checkpoint.clone()),
+                )?;
+            }
+        };
+
+        Ok(CheckpointResponse {
+            info: AuthorityCheckpointInfo::Success,
+            detail: None,
+        })
+    }
+
+    /// NOTE: this is a hack to accept the checkpoint proposed by the first node
+    /// in the committee as the checkpoint that all will accept. This is a stop gap
+    /// until we have a proper consensus integrated in a short while. After that we
+    /// will use this consensus to get a checkpoint to be the union of 2f+1 proposals.
+    pub fn debug_handle_set_checkpoint(
+        &self,
+        _contents: &(SignedCheckpoint, CheckpointContents),
+    ) -> Result<CheckpointResponse, SuiError> {
+        let checkpoint = &_contents.0;
+        let trasnactions = &_contents.1;
+
+        // Check it is correct
+        checkpoint.check_transactions(trasnactions)?;
+        // Check it is from the special 'first' authority
+        let max_authority_name = self.committee.voting_rights.keys().max().unwrap();
+        if *max_authority_name != checkpoint.authority {
+            return Err(SuiError::GenericAuthorityError {
+                error: "Incorrect master authority.".to_string(),
+            });
+        }
+
+        // Call the otherwise internal code to update the checkpoint.
+        self.handle_internal_set_checkpoint(checkpoint.checkpoint.clone(), trasnactions)?;
+
+        // If no error so far repond with success.
+        Ok(CheckpointResponse {
+            info: AuthorityCheckpointInfo::Success,
+            detail: None,
+        })
+    }
 
     // Helper functions
 

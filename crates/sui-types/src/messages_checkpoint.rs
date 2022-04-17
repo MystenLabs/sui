@@ -81,12 +81,14 @@ pub enum CheckpointRequestType {
     LatestCheckpointProposal,
     // Requests a past checkpoint
     PastCheckpoint(CheckpointSequenceNumber),
+    // Set a certificate
+    SetCertificate(CertifiedCheckpoint),
 
     // DEVNET: until we have a consensus core to collectivelly decide
     // the checkpoint we allow a trusted client to just force a
     // checkpoint. This is for early testing and removal at Testnet
     // time.
-    DEBUGSetCheckpoint(Box<(AuthenticatedCheckpoint, CheckpointContents)>),
+    DEBUGSetCheckpoint(Box<(SignedCheckpoint, CheckpointContents)>),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -101,6 +103,8 @@ pub struct CheckpointResponse {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AuthorityCheckpointInfo {
+    // Denotes success of he operation with no return
+    Success,
     // Returns the current proposal if any, and
     // the previous checkpoint.
     Proposal {
@@ -235,7 +239,7 @@ impl SignedCheckpoint {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CertifiedCheckpoint {
-    checkpoint: CheckpointSummary,
+    pub checkpoint: CheckpointSummary,
     signatures: Vec<(AuthorityName, AuthoritySignature)>,
 }
 
