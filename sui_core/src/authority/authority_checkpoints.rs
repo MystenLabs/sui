@@ -239,7 +239,9 @@ impl CheckpointStore {
             CheckpointRequestType::PastCheckpoint(seq) => {
                 self.handle_past_checkpoint(&request, *seq)
             }
-            CheckpointRequestType::SetCertificate(cert) => self.handle_checkpoint_certificate(cert),
+            CheckpointRequestType::SetCertificate(cert, opt_contents) => {
+                self.handle_checkpoint_certificate(cert, opt_contents)
+            }
             CheckpointRequestType::DEBUGSetCheckpoint(_box_checkpoint) => {
                 self.debug_handle_set_checkpoint(&**_box_checkpoint)
             }
@@ -390,14 +392,19 @@ impl CheckpointStore {
     }
 
     /// Handles the submission of a full checkpoint externally, and stores
-    /// the certificate. We only store certs for checkpoints that were internally
-    /// first received through the consensus system.
+    /// the certificate. It may be used to upload a certificate, or induce
+    /// the authority to catch up with the latest checkpoints.
+    ///
+    /// A cert without contents is only stored if we have already processed
+    /// internally the checkpoint. A cert with contents is processed as if
+    /// it came from the internal consensus.
     pub fn handle_checkpoint_certificate(
         &self,
         checkpoint: &CertifiedCheckpoint,
+        contents: &Option<CheckpointContents>,
     ) -> Result<CheckpointResponse, SuiError> {
         // Check the certificate is valid
-        checkpoint.check_digest(&self.committee)?;
+
         let current = self
             .checkpoints
             .get(&checkpoint.checkpoint.waypoint.sequence_number)?;
@@ -409,13 +416,19 @@ impl CheckpointStore {
             // NOTE: a checkpoint must first be confirmed internally before an external
             // certificate is registered.
             None => {
-                return Err(SuiError::GenericAuthorityError {
-                    error: "No checkpoint set at this sequence.".to_string(),
-                })
+                if let &Some(contents) = &contents {
+                    checkpoint.check_transactions(&self.committee, contents)?;
+                    self.handle_internal_set_checkpoint(checkpoint.checkpoint.clone(), contents)?;
+                } else {
+                    return Err(SuiError::GenericAuthorityError {
+                        error: "No checkpoint set at this sequence.".to_string(),
+                    });
+                }
             }
             // In this case we have an internal signed checkpoint so we propote it to a
             // full certificate.
             _ => {
+                checkpoint.check_digest(&self.committee)?;
                 self.checkpoints.insert(
                     &checkpoint.checkpoint.waypoint.sequence_number,
                     &AuthenticatedCheckpoint::Certified(checkpoint.clone()),

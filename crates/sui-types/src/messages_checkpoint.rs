@@ -82,7 +82,7 @@ pub enum CheckpointRequestType {
     // Requests a past checkpoint
     PastCheckpoint(CheckpointSequenceNumber),
     // Set a certificate
-    SetCertificate(CertifiedCheckpoint),
+    SetCertificate(CertifiedCheckpoint, Option<CheckpointContents>),
 
     // DEVNET: until we have a consensus core to collectivelly decide
     // the checkpoint we allow a trusted client to just force a
