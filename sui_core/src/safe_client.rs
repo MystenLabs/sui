@@ -9,7 +9,7 @@ use std::io;
 use sui_types::crypto::PublicKeyBytes;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 
-use sui_types::batch::{AuthorityBatch, SignedBatch, UpdateItem};
+use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
 use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
@@ -174,6 +174,10 @@ impl<C> SafeClient<C> {
         &self,
         request: BatchInfoRequest,
         signed_batch: &SignedBatch,
+        transactions_and_last_batch: &Option<(
+            Vec<(TxSequenceNumber, TransactionDigest)>,
+            AuthorityBatch,
+        )>,
     ) -> SuiResult {
         // check the signature of the batch
         signed_batch
@@ -190,21 +194,20 @@ impl<C> SafeClient<C> {
             }
         );
 
-        // reconstruct the batch and make sure the constructed digest matches the provided one
-        let provided_digest = signed_batch.batch.transactions_digest;
+        // If we have seen a previous batch, use it to make sure the next batch
+        // is constructed correctly:
 
-        let reconstructed_batch = AuthorityBatch::make_next_with_previous_digest(
-            Some(provided_digest),
-            &signed_batch.batch.transaction_batch.0,
-        );
-        let computed_digest = reconstructed_batch.transactions_digest;
+        if let Some((transactions, prev_batch)) = transactions_and_last_batch {
+            let reconstructed_batch = AuthorityBatch::make_next(prev_batch, transactions)?;
 
-        fp_ensure!(
-            provided_digest == computed_digest,
-            SuiError::ByzantineAuthoritySuspicion {
-                authority: self.address
-            }
-        );
+            fp_ensure!(
+                reconstructed_batch == signed_batch.batch,
+                SuiError::ByzantineAuthoritySuspicion {
+                    authority: self.address
+                }
+            );
+        }
+
         Ok(())
     }
 
@@ -310,39 +313,61 @@ where
             .handle_batch_stream(request.clone())
             .await?;
 
-        let seq_requested = request.end - request.start;
-        let mut seq_to_be_returned = seq_requested as usize;
-        // check for overflow
-        if seq_requested > usize::MAX as u64 {
-            seq_to_be_returned = usize::MAX;
-        }
-
         let client = self.clone();
-        let stream = Box::pin(
-            batch_info_items
-                .then(move |batch_info_item| {
-                    let req_clone = request.clone();
-                    let client = client.clone();
-                    async move {
-                        match &batch_info_item {
-                            Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
-                                if let Err(err) =
-                                    client.check_update_item_batch_response(req_clone, signed_batch)
-                                {
-                                    client.report_client_error(err.clone());
-                                    return Err(err);
-                                }
-                                batch_info_item
-                            }
-                            Ok(BatchInfoResponseItem(UpdateItem::Transaction((_seq, _digest)))) => {
-                                batch_info_item
-                            }
-                            Err(e) => Err(e.clone()),
+        let address = self.address;
+        let stream = Box::pin(batch_info_items.scan(
+            (0u64, None),
+            move |(seq, txs_and_last_batch), batch_info_item| {
+                let req_clone = request.clone();
+                let client = client.clone();
+
+                // We check if we have exceeded the batch boundary for this request.
+                if !(*seq < request.end) {
+                    // If we exceed it return None to end stream
+                    return futures::future::ready(None);
+                }
+
+                let x = match &batch_info_item {
+                    Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
+                        println!("batch {:?}", signed_batch.batch);
+                        if let Err(err) = client.check_update_item_batch_response(
+                            req_clone,
+                            &signed_batch,
+                            &txs_and_last_batch,
+                        ) {
+                            client.report_client_error(err.clone());
+                            Some(Err(err))
+                        } else {
+                            // Save the seqeunce number of this batch
+                            *seq = signed_batch.batch.next_sequence_number;
+                            // Insert a fresh vector for the new batch of transactions
+                            let _ =
+                                txs_and_last_batch.insert((Vec::new(), signed_batch.batch.clone()));
+                            Some(batch_info_item)
                         }
                     }
-                })
-                .take(seq_to_be_returned),
-        );
+                    Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest)))) => {
+                        // A stream always starts with a batch, so the previous should have initialized it.
+                        // And here we insert the tuple into the batch.
+                        if txs_and_last_batch
+                            .as_mut()
+                            .map(|txs| txs.0.push((*seq, *digest)))
+                            .is_none()
+                        {
+                            let err = SuiError::ByzantineAuthoritySuspicion { authority: address };
+                            client.report_client_error(err.clone());
+                            Some(Err(err))
+                        } else {
+                            println!("Add transactions");
+                            Some(batch_info_item)
+                        }
+                    }
+                    Err(e) => Some(Err(e.clone())),
+                };
+
+                futures::future::ready(x)
+            },
+        ));
         Ok(Box::pin(stream))
     }
 }
