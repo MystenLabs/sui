@@ -497,11 +497,7 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         items.reverse();
 
         let stream = stream::unfold(items, |mut items| async move {
-            if let Some(item) = items.pop() {
-                Some((Ok(item), items))
-            } else {
-                None
-            }
+            items.pop().map(|item| (Ok(item), items))
         });
         Ok(Box::pin(stream))
     }
@@ -616,11 +612,7 @@ impl AuthorityAPI for ByzantineAuthorityClient {
         items.reverse();
 
         let stream = stream::unfold(items, |mut items| async move {
-            if let Some(item) = items.pop() {
-                Some((Ok(item), items))
-            } else {
-                None
-            }
+            items.pop().map(|item| (Ok(item), items))
         });
         Ok(Box::pin(stream))
     }
