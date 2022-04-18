@@ -302,7 +302,7 @@ where
             if local_object.is_none()
                 || &local_object.unwrap().compute_object_reference() != obj_ref
             {
-                self.store.insert_object_direct(*obj_ref, object)?;
+                self.store.insert_object_direct(*obj_ref, object).await?;
             }
         }
         Ok(result)
@@ -589,7 +589,8 @@ where
 
         for (object, _option_layout, _option_cert) in active_object_certs {
             self.store
-                .insert_object_direct(object.compute_object_reference(), &object)?;
+                .insert_object_direct(object.compute_object_reference(), &object)
+                .await?;
         }
 
         Ok(())

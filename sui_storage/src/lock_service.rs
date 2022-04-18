@@ -201,7 +201,8 @@ impl LockServiceImpl {
         Ok(())
     }
 
-    /// Loop to continuously process mutating commands in a single thread from async senders
+    /// Loop to continuously process mutating commands in a single thread from async senders.
+    /// It terminates when the sender drops, which usually is when the containing data store is dropped.
     fn command_loop(&self, receiver: Receiver<LockServiceCommands>) {
         info!("LockService command processing loop started");
         while let Ok(msg) = receiver.recv() {
@@ -212,15 +213,19 @@ impl LockServiceImpl {
                     resp,
                 } => {
                     let res = self.acquire_locks(&refs, tx_digest);
-                    resp.send(res).expect("Could not respond to sender!");
+                    if let Err(_e) = resp.send(res) {
+                        info!("Could not respond to sender, sender dropped!");
+                    }
                 }
                 LockServiceCommands::Initialize { refs, resp } => {
-                    resp.send(self.initialize_locks(&refs))
-                        .expect("Could not respond to sender!");
+                    if let Err(_e) = resp.send(self.initialize_locks(&refs)) {
+                        info!("Could not respond to sender, sender dropped!");
+                    }
                 }
                 LockServiceCommands::RemoveLocks { refs, resp } => {
-                    resp.send(self.delete_locks(&refs))
-                        .expect("Could not respond to sender!");
+                    if let Err(_e) = resp.send(self.delete_locks(&refs)) {
+                        info!("Could not respond to sender, sender dropped!");
+                    }
                 }
             }
         }

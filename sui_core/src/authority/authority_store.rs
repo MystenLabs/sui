@@ -356,15 +356,14 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         // We only side load objects with a genesis parent transaction.
         debug_assert!(object.previous_transaction == TransactionDigest::genesis());
         let object_ref = object.compute_object_reference();
-        self.lock_service.initialize_locks(vec![object_ref]).await?;
-        self.insert_object_direct(object_ref, &object)
+        self.insert_object_direct(object_ref, &object).await
     }
 
     /// Insert an object directly into the store, and also update relevant tables
     /// NOTE: does not handle transaction lock.
     /// This is used by the gateway to insert object directly.
     /// TODO: We need this today because we don't have another way to sync an account.
-    pub fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
+    pub async fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
         // Insert object
         self.objects.insert(&object_ref.0, object)?;
 
@@ -376,6 +375,8 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         // Update the parent
         self.parent_sync
             .insert(&object_ref, &object.previous_transaction)?;
+
+        self.lock_service.initialize_locks(vec![object_ref]).await?;
 
         Ok(())
     }
@@ -425,12 +426,14 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         tx_digest: TransactionDigest,
         transaction: TransactionEnvelope<S>,
     ) -> Result<(), SuiError> {
+        // Write transaction first as this is idempotent and then once we acquire lock we know the Tx
+        // will be present
+        self.transactions.insert(&tx_digest, &transaction)?;
+
         // Acquire the lock on input objects
         self.lock_service
             .acquire_locks(owned_input_objects.to_owned(), tx_digest)
             .await?;
-
-        self.transactions.insert(&tx_digest, &transaction)?;
 
         Ok(())
     }
