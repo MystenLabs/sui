@@ -272,12 +272,15 @@ pub enum SuiError {
     },
     #[error("Inconsistent results observed in the Gateway. This should not happen and typically means there is a bug in the Sui implementation. Details: {error:?}")]
     InconsistentGatewayResult { error: String },
-    #[error("Invalid transactiojn range query to the gateway: {:?}", error)]
+    #[error("Invalid transaction range query to the gateway: {:?}", error)]
     GatewayInvalidTxRangeQuery { error: String },
 
     // Errors related to the authority-consensus interface.
     #[error("Authority state can be modified by a single consensus client at the time")]
     OnlyOneConsensusClientPermitted,
+
+    #[error("Failed to connect with consensus node: {0}")]
+    ConsensusConnectionBroken(String),
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
