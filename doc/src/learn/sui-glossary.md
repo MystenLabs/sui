@@ -10,15 +10,6 @@ Find terms used in Sui defined below. Where possible, we link to a canonical def
 An *accumulator* makes sure the transaction is received by a quorum of validators, collects a quorum of votes, submits the certificate to the validators, and replies to the client. The accumulator enables transactions to be certified. Sui offers a Gateway service that can assume the role of accumulator and collect votes on transactions from validators in Sui, saving end-users bandwidth.
 
 
-### Validator
-
-A validator in Sui plays a passive role analogous to the more active role of validators and minors in other blockchains. In Sui,
-validators do not continuously participate in the consensus protocol but are called into action only when receiving a transaction or
-certificate.
-
-For more information, see [Validators vs validators/miners](sui-compared#validators-vs-validatorsminers).
-
-
 ### Causal order
 
 [Causal order](https://www.scattered-thoughts.net/writing/causal-ordering/) is a representation of the relationship between transactions
@@ -43,7 +34,7 @@ Equivocation in blockchains is the malicious action of dishonest actors giving c
 
 Operation of the Sui network is temporally partitioned into non-overlapping, fixed-duration *epochs*. During a particular epoch, the set of validators participating in the network is fixed.
 
-For more information, see [Epochs](../build/authorities.md#epochs).
+For more information, see [Epochs](architecture/validators.md#epochs).
 
 
 ### Eventual consistency
@@ -122,3 +113,13 @@ A transfer is switching the owner address of a token to a new one via command in
 available in the wallet.
 
 For more information, see [Transferring objects](../build/wallet.md#transferring-objects).
+
+
+### Validator
+
+A validator in Sui plays a passive role analogous to the more active role of validators and minors in other blockchains. In Sui,
+validators do not continuously participate in the consensus protocol but are called into action only when receiving a transaction or
+certificate.
+
+For more information, see [Validators](architecture/validators.md).
+
