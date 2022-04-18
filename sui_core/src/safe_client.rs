@@ -322,7 +322,7 @@ where
                 let client = client.clone();
 
                 // We check if we have exceeded the batch boundary for this request.
-                if !(*seq < request.end) {
+                if *seq >= request.end {
                     // If we exceed it return None to end stream
                     return futures::future::ready(None);
                 }
@@ -331,8 +331,8 @@ where
                     Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
                         if let Err(err) = client.check_update_item_batch_response(
                             req_clone,
-                            &signed_batch,
-                            &txs_and_last_batch,
+                            signed_batch,
+                            txs_and_last_batch,
                         ) {
                             client.report_client_error(err.clone());
                             Some(Err(err))
