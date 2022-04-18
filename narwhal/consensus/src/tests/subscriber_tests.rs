@@ -1,10 +1,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use super::*;
-use crate::{tusk::consensus_tests::*, Consensus};
-use bytes::BytesMut;
+use crate::{
+    tusk::consensus_tests::*, Consensus, ConsensusOutput, ConsensusSyncRequest, SubscriberHandler,
+};
 use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair, Hash};
+use primary::Certificate;
 use std::collections::{BTreeSet, VecDeque};
+use tokio::sync::mpsc::{channel, Receiver, Sender};
+
+#[cfg(any(test, feature = "benchmark"))]
+#[path = "tests/subscriber_tests.rs"]
+pub mod subscriber_tests;
 
 /// Make enough certificates to commit a leader.
 pub fn commit_certificates() -> VecDeque<Certificate<Ed25519PublicKey>> {
@@ -24,7 +30,11 @@ pub fn commit_certificates() -> VecDeque<Certificate<Ed25519PublicKey>> {
 
 /// Spawn the consensus core and the subscriber handler. Also add to storage enough certificates to
 /// commit a leader (as if they were added by the Primary).
-pub async fn spawn_validator(address: SocketAddr) -> Sender<Certificate<Ed25519PublicKey>> {
+pub async fn spawn_node(
+    rx_waiter: Receiver<Certificate<Ed25519PublicKey>>,
+    rx_client: Receiver<ConsensusSyncRequest>,
+    tx_client: Sender<ConsensusOutput<Ed25519PublicKey>>,
+) {
     // Make enough certificates to commit a leader.
     let certificates = commit_certificates();
 
@@ -43,7 +53,6 @@ pub async fn spawn_validator(address: SocketAddr) -> Sender<Certificate<Ed25519P
     certificate_store.write_all(to_store).await.unwrap();
 
     // Spawn the consensus engine and sink the primary channel.
-    let (tx_waiter, rx_waiter) = channel(1);
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, rx_output) = channel(1);
     Consensus::spawn(
@@ -58,33 +67,26 @@ pub async fn spawn_validator(address: SocketAddr) -> Sender<Certificate<Ed25519P
 
     // Spawn the subscriber handler.
     SubscriberHandler::spawn(
-        address,
         consensus_store,
         certificate_store,
         /* rx_sequence */ rx_output,
-        /* max_subscribers */ 1,
+        rx_client,
+        tx_client,
     );
-
-    // Return the channel to input certificates to consensus.
-    tx_waiter
 }
 
 /// Facility to read consensus outputs out of a stream and return them in the right order.
-pub async fn order_stream<Stream>(
-    reader: &mut Stream,
+pub async fn order_stream(
+    reader: &mut Receiver<ConsensusOutput<Ed25519PublicKey>>,
     last_known_client_index: u64,
     last_known_server_index: u64,
-) -> Vec<ConsensusOutput<Ed25519PublicKey>>
-where
-    Stream: StreamExt<Item = Result<BytesMut, std::io::Error>> + Unpin,
-{
+) -> Vec<ConsensusOutput<Ed25519PublicKey>> {
     let mut next_ordinary_sequence = last_known_server_index + 1;
     let mut next_catchup_sequence = last_known_client_index + 1;
     let mut buffer = Vec::new();
     let mut sequence = Vec::new();
     loop {
-        let bytes = reader.next().await.unwrap().unwrap();
-        let output: ConsensusOutput<Ed25519PublicKey> = bincode::deserialize(&bytes).unwrap();
+        let output = reader.recv().await.unwrap();
         let consensus_index = output.consensus_index;
 
         if consensus_index == next_ordinary_sequence {
@@ -108,21 +110,22 @@ where
 
 #[tokio::test]
 async fn subscribe() {
+    let (tx_consensus_input, rx_consensus_input) = channel(1);
+    let (tx_consensus_to_client, mut rx_consensus_to_client) = channel(1);
+    let (_tx_client_to_consensus, rx_client_to_consensus) = channel(1);
+
     // Make enough certificates to commit a leader.
     let mut certificates = commit_certificates();
 
     // Spawn the consensus and subscriber handler.
-    let address = "127.0.0.1:12000".parse::<SocketAddr>().unwrap();
-    let tx_consensus_input = spawn_validator(address).await;
-
-    // Spawn a subscriber.
-    tokio::task::yield_now().await;
-    let socket = TcpStream::connect(address).await.unwrap();
-    let (_writer, mut reader) = Framed::new(socket, LengthDelimitedCodec::new()).split();
+    spawn_node(
+        rx_consensus_input,
+        rx_client_to_consensus,
+        tx_consensus_to_client,
+    )
+    .await;
 
     // Feed all certificates to the consensus. Only the last certificate should trigger commits,
-    // so the task should not block.
-    tokio::task::yield_now().await;
     while let Some(certificate) = certificates.pop_front() {
         tx_consensus_input.send(certificate).await.unwrap();
     }
@@ -130,32 +133,32 @@ async fn subscribe() {
     // Ensure the first 4 ordered certificates are from round 1 (they are the parents of the committed
     // leader); then the leader's certificate should be committed.
     for i in 1..=4 {
-        let bytes = reader.next().await.unwrap().unwrap();
-        let output: ConsensusOutput<Ed25519PublicKey> = bincode::deserialize(&bytes).unwrap();
+        let output = rx_consensus_to_client.recv().await.unwrap();
         assert_eq!(output.consensus_index, i);
     }
-    let bytes = reader.next().await.unwrap().unwrap();
-    let output: ConsensusOutput<Ed25519PublicKey> = bincode::deserialize(&bytes).unwrap();
+    let output = rx_consensus_to_client.recv().await.unwrap();
     assert_eq!(output.consensus_index, 5);
 }
 
 #[tokio::test]
 async fn subscribe_sync() {
+    let (tx_consensus_input, rx_consensus_input) = channel(1);
+    let (tx_consensus_to_client, mut rx_consensus_to_client) = channel(1);
+    let (tx_client_to_consensus, rx_client_to_consensus) = channel(1);
+
     // Make enough certificates to commit a leader.
     let mut certificates = commit_certificates();
 
     // Spawn the consensus and subscriber handler.
-    let address = "127.0.0.1:12001".parse::<SocketAddr>().unwrap();
-    let tx_consensus_input = spawn_validator(address).await;
-
-    // Spawn a subscriber.
-    tokio::task::yield_now().await;
-    let socket = TcpStream::connect(address).await.unwrap();
-    let (mut writer, mut reader) = Framed::new(socket, LengthDelimitedCodec::new()).split();
+    spawn_node(
+        rx_consensus_input,
+        rx_client_to_consensus,
+        tx_consensus_to_client,
+    )
+    .await;
 
     // Feed all certificates to the consensus. Only the last certificate should trigger commits,
     // so the task should not block.
-    tokio::task::yield_now().await;
     while let Some(certificate) = certificates.pop_front() {
         tx_consensus_input.send(certificate).await.unwrap();
     }
@@ -163,8 +166,7 @@ async fn subscribe_sync() {
     // Read first 4 certificates. Then pretend we crashed after reading the first certificate and
     // try to sync to get up to speed.
     for i in 1..=4 {
-        let bytes = reader.next().await.unwrap().unwrap();
-        let output: ConsensusOutput<Ed25519PublicKey> = bincode::deserialize(&bytes).unwrap();
+        let output = rx_consensus_to_client.recv().await.unwrap();
         assert_eq!(output.consensus_index, i);
     }
 
@@ -174,12 +176,11 @@ async fn subscribe_sync() {
     let message = ConsensusSyncRequest {
         missing: (last_known_client_index + 1..=last_known_server_index),
     };
-    let serialized = bincode::serialize(&message).unwrap();
-    writer.send(Bytes::from(serialized)).await.unwrap();
+    tx_client_to_consensus.send(message).await.unwrap();
 
     // Check that we got the complete sequence of certificates in the right order.
     let ok = order_stream(
-        &mut reader,
+        &mut rx_consensus_to_client,
         last_known_client_index,
         last_known_server_index,
     )

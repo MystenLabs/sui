@@ -18,12 +18,15 @@ tracing = { version = "0.1.31", features = ["log"] }
 tracing-log = "0.1.2"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "808de09203d147b43d59114b8afd9e51cbcf5778"}
 tracing-subscriber = { version = "0.3.9", features = ["time", "env-filter"] }
+thiserror = "1.0.30"
+async-trait = "0.1.52"
 
 config = { path = "../config" }
 crypto = { path = "../crypto" }
 primary = { path = "../primary" }
 worker = { path = "../worker" }
 consensus = { path = "../consensus" }
+client = { path = "../client" }
 cfg-if = "1.0.0"
 
 [dev-dependencies]
