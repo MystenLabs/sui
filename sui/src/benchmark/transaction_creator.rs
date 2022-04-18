@@ -12,7 +12,6 @@ use sui_core::authority::*;
 use sui_types::crypto::{get_key_pair, AuthoritySignature, KeyPair, PublicKeyBytes, Signature};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
-use tokio::runtime::Runtime;
 
 use tracing::info;
 
@@ -88,7 +87,7 @@ fn make_serialized_cert(
     serialized_certificate
 }
 
-fn make_authority_state(
+async fn make_authority_state(
     store_path: &Path,
     db_cpus: i32,
     committee: &Committee,
@@ -113,17 +112,15 @@ fn make_authority_state(
 
     let store = Arc::new(AuthorityStore::open(store_path, Some(opts)));
     (
-        Runtime::new().unwrap().block_on(async {
-            AuthorityState::new(
-                committee.clone(),
-                *pubx,
-                Arc::pin(secx),
-                store.clone(),
-                genesis::clone_genesis_compiled_modules(),
-                &mut genesis::get_genesis_context(),
-            )
-            .await
-        }),
+        AuthorityState::new(
+            committee.clone(),
+            *pubx,
+            Arc::pin(secx),
+            store.clone(),
+            genesis::clone_genesis_compiled_modules(),
+            &mut genesis::get_genesis_context(),
+        )
+        .await,
         store,
     )
 }
@@ -274,7 +271,7 @@ pub struct TransactionCreator {
 }
 
 impl TransactionCreator {
-    pub fn new(committee_size: usize, db_cpus: usize) -> Self {
+    pub async fn new(committee_size: usize, db_cpus: usize) -> Self {
         let mut keys = Vec::new();
         for _ in 0..committee_size {
             let (_, key_pair) = get_key_pair();
@@ -294,7 +291,8 @@ impl TransactionCreator {
             &committee,
             &public_auth0,
             secret_auth0,
-        );
+        )
+        .await;
         Self {
             committee,
             authority_state: auth_state.0,
@@ -326,7 +324,8 @@ impl TransactionCreator {
         // Insert the objects
         self.authority_store
             .bulk_object_insert(&load_gen_txes.1[..].iter().collect::<Vec<&Object>>())
-            .await.unwrap();
+            .await
+            .unwrap();
 
         load_gen_txes.0
     }

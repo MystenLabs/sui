@@ -315,14 +315,16 @@ where
         let mutated_objects = self
             .download_objects_from_authorities(mutated_object_refs)
             .await?;
-        self.store.update_gateway_state(
-            &objects_by_kind,
-            mutated_objects,
-            new_certificate.clone(),
-            effects.clone(),
-            self.next_tx_seq_number
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-        ).await?;
+        self.store
+            .update_gateway_state(
+                &objects_by_kind,
+                mutated_objects,
+                new_certificate.clone(),
+                effects.clone(),
+                self.next_tx_seq_number
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+            )
+            .await?;
 
         Ok((new_certificate, effects))
     }

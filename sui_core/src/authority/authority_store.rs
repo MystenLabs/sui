@@ -538,7 +538,8 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             temporary_store,
             *transaction_digest,
             Some(sequence_number),
-        ).await
+        )
+        .await
     }
 
     /// Helper function for updating the objects in the state
