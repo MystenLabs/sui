@@ -1,6 +1,6 @@
 # Experimental Data
 
-This folder contains some raw data and plots obtained running a geo-replicated benchmark on AWS as explained in the [benchmark's readme file](https://github.com/asonnino/narwhal/tree/master/benchmark#readme). The results are taken running the code tagged as [v0.2.0](https://github.com/asonnino/narwhal/tree/v0.2.0).
+This folder contains some raw data and plots obtained running a geo-replicated benchmark on AWS as explained in the [benchmark's readme file](https://github.com/asonnino/narwhal/tree/main/benchmark#readme). The results are taken running the code tagged as [v0.2.0](https://github.com/asonnino/narwhal/tree/v0.2.0).
 
 ### Filename format
 The filename format of raw data is the following:
@@ -18,7 +18,7 @@ where:
 For instance, a file called `bench-0-50-1-True-100000-512.txt` indicates it contains results of a benchmark run with 50 nodes, 1 worker per node collocated on the same machine as the primary, 100K input rate, a transaction size of 512B, and 0 faulty nodes.
 
 ### Experimental step
-The content of our [settings.json](https://github.com/asonnino/narwhal/blob/master/benchmark/settings.json) file looks as follows:
+The content of our [settings.json](https://github.com/asonnino/narwhal/blob/main/benchmark/settings.json) file looks as follows:
 ```json
 {
     "key": {
@@ -37,7 +37,7 @@ The content of our [settings.json](https://github.com/asonnino/narwhal/blob/mast
     }
 }
 ```
-We set the following `node_params` in our [fabfile](https://github.com/asonnino/narwhal/blob/master/benchmark/fabfile.py):
+We set the following `node_params` in our [fabfile](https://github.com/asonnino/narwhal/blob/main/benchmark/fabfile.py):
 ```python
 node_params = {
     'header_size': 1_000,  # bytes
