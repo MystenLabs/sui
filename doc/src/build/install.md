@@ -12,7 +12,7 @@ version 1.59.0 or higher in order to build and install Sui on your machine.
 To develop in Sui, you will need the Sui binaries. After installing `cargo`, run:
 
 ```shell
-cargo install --git https://github.com/MystenLabs/sui.git
+$ cargo install --git https://github.com/MystenLabs/sui.git
 ```
 
 This will put three binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
@@ -44,7 +44,7 @@ See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [
 If you need to download and understand the Sui source code, clone the Sui repository:
 
 ```shell
-git clone https://github.com/MystenLabs/sui.git
+$ git clone https://github.com/MystenLabs/sui.git
 ```
 
 You can start exploring Sui's source code by looking into the following primary directories:
