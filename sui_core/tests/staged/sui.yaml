@@ -32,6 +32,8 @@ AuthorityBatch:
         TUPLEARRAY:
           CONTENT: U8
           SIZE: 32
+    - transaction_batch:
+        TYPENAME: TransactionBatch
 AuthoritySignInfo:
   STRUCT:
     - authority:
@@ -760,6 +762,12 @@ SuiError:
           - error: STR
     93:
       OnlyOneConsensusClientPermitted: UNIT
+TransactionBatch:
+  NEWTYPESTRUCT:
+    SEQ:
+      TUPLE:
+        - U64
+        - TYPENAME: TransactionDigest
 TransactionData:
   STRUCT:
     - kind:

@@ -79,8 +79,7 @@ impl crate::authority::AuthorityState {
         if !transactions.is_empty() {
             // Make a new batch, to put the old transactions not in a batch in.
             let last_signed_batch = SignedBatch::new(
-                // Unwrap safe due to check not empty
-                AuthorityBatch::make_next(&last_batch, &transactions[..])?,
+                AuthorityBatch::make_next(&last_batch, &transactions[..]),
                 &*self.secret,
                 self.name,
             );
@@ -156,15 +155,13 @@ impl crate::authority::AuthorityState {
 
             // Logic to make a batch
             if make_batch {
-                // Test it is not empty.
                 if current_batch.is_empty() {
                     continue;
                 }
 
                 // Make and store a new batch.
                 let new_batch = SignedBatch::new(
-                    // Unwrap safe since we tested above it is not empty
-                    AuthorityBatch::make_next(&prev_batch, &current_batch).unwrap(),
+                    AuthorityBatch::make_next(&prev_batch, &current_batch),
                     &*self.secret,
                     self.name,
                 );
