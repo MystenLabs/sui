@@ -14,11 +14,11 @@ $ git clone https://github.com/mystenlabs/narwhal.git
 $ cd narwhal/benchmark
 $ pip install -r requirements.txt
 ```
-You also need to install [Clang](https://clang.llvm.org/) (required by RocksDB) and [tmux](https://linuxize.com/post/getting-started-with-tmux/#installing-tmux) (which runs all nodes and clients in the background). Finally, run a local benchmark using fabric:
+You also need to install [Clang](https://clang.llvm.org/) (required by RocksDB) and [tmux](https://linuxize.com/post/getting-started-with-tmux/#installing-tmux) (which runs all nodes and clients in the background). Finally, run a local benchmark using [Fabric](http://www.fabfile.org/):
 ```
 $ fab local
 ```
-This command may take a long time the first time you run it (compiling rust code in `release` mode may be slow), and you can customize a number of benchmark parameters in `fabfile.py`. When the benchmark terminates, it displays a summary of the execution similarly to the one below.
+This command may take a long time the first time you run it (compiling rust code in `release` mode may be slow), and you can customize a number of benchmark parameters in [fabfile.py](https://github.com/mystenlabs/narwhal/blob/main/benchmark/fabfile.py). When the benchmark terminates, it displays a summary of the execution similarly to the one below.
 ```
 -----------------------------------------
  SUMMARY:
