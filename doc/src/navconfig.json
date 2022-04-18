@@ -71,7 +71,7 @@
         "fileName": "build/sui-json"
       },
       {
-        "label": "Understand Authorities",
+        "label": "Understand Validators",
         "fileName": "build/authorities"
       },
       {
@@ -108,6 +108,7 @@
         "label": "Frequently Asked Questions",
         "fileName": "contribute/faq"
       },
+      {
         "label": "Logging",
         "fileName": "contribute/observability"
       },

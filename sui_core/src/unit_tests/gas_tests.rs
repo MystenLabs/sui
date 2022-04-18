@@ -82,7 +82,8 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
     let effects = result.response.unwrap().signed_effects.unwrap().effects;
     let gas_cost = effects.status.gas_cost_summary();
     assert!(gas_cost.computation_cost > *MIN_GAS_BUDGET);
-    assert_eq!(gas_cost.storage_cost, 0);
+    assert!(gas_cost.storage_cost > 0);
+    // Removing genesis object does not have rebate.
     assert_eq!(gas_cost.storage_rebate, 0);
 
     let object = result
@@ -103,13 +104,14 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
 
     // Mimic the process of gas charging, to check that we are charging
     // exactly what we should be charging.
-    let mut gas_status = SuiGasStatus::new_with_budget(*MAX_GAS_BUDGET);
+    let mut gas_status = SuiGasStatus::new_with_budget(*MAX_GAS_BUDGET, 1, 1);
     gas_status.charge_min_tx_gas()?;
+    let obj_size = object.object_size_for_gas_metering();
+    let gas_size = gas_object.object_size_for_gas_metering();
 
-    gas_status.charge_storage_read(object.object_data_size() + gas_object.object_data_size())?;
-    gas_status.charge_storage_mutation(object.object_data_size(), object.object_data_size())?;
-    gas_status
-        .charge_storage_mutation(gas_object.object_data_size(), gas_object.object_data_size())?;
+    gas_status.charge_storage_read(obj_size + gas_size)?;
+    gas_status.charge_storage_mutation(obj_size, obj_size, 0)?;
+    gas_status.charge_storage_mutation(gas_size, gas_size, 0)?;
     assert_eq!(gas_cost, &gas_status.summary(true));
     Ok(())
 }
@@ -149,8 +151,8 @@ async fn test_native_transfer_insufficient_gas_execution() {
     let budget = total_gas - 1;
     let result = execute_transfer(budget, budget, true).await;
     let effects = result.response.unwrap().signed_effects.unwrap().effects;
-    // The gas balance should be drained.
-    assert_eq!(effects.status.gas_cost_summary().gas_used(), budget);
+    // We won't drain the entire budget because we don't charge for storage if tx failed.
+    assert!(effects.status.gas_cost_summary().gas_used() < budget);
     let gas_object = result
         .authority_state
         .get_object(&result.gas_object_id)
@@ -158,11 +160,14 @@ async fn test_native_transfer_insufficient_gas_execution() {
         .unwrap()
         .unwrap();
     let gas_coin = GasCoin::try_from(&gas_object).unwrap();
-    assert_eq!(gas_coin.value(), 0);
+    assert_eq!(
+        gas_coin.value(),
+        budget - effects.status.gas_cost_summary().gas_used()
+    );
     assert_eq!(
         effects.status.unwrap_err().1,
         SuiError::InsufficientGas {
-            error: "Ran out of gas while deducting computation cost".to_owned()
+            error: "Ran out of gas while deducting storage cost".to_owned()
         }
     );
 }
@@ -212,16 +217,24 @@ async fn test_publish_gas() -> SuiResult {
     };
 
     // Mimic the gas charge behavior and cross check the result with above.
-    let mut gas_status = SuiGasStatus::new_with_budget(*MAX_GAS_BUDGET);
+    let mut gas_status = SuiGasStatus::new_with_budget(*MAX_GAS_BUDGET, 1, 1);
     gas_status.charge_min_tx_gas()?;
-    gas_status.charge_storage_read(genesis_objects.iter().map(|o| o.object_data_size()).sum())?;
-    gas_status.charge_storage_read(gas_object.object_data_size())?;
+    gas_status.charge_storage_read(
+        genesis_objects
+            .iter()
+            .map(|o| o.object_size_for_gas_metering())
+            .sum(),
+    )?;
+    gas_status.charge_storage_read(gas_object.object_size_for_gas_metering())?;
     gas_status.charge_publish_package(publish_bytes.iter().map(|v| v.len()).sum())?;
-    gas_status.charge_storage_mutation(0, package.object_data_size())?;
+    gas_status.charge_storage_mutation(0, package.object_size_for_gas_metering(), 0)?;
     // Remember the gas used so far. We will use this to create another failure case latter.
     let gas_used_after_package_creation = gas_status.summary(true).gas_used();
-    gas_status
-        .charge_storage_mutation(gas_object.object_data_size(), gas_object.object_data_size())?;
+    gas_status.charge_storage_mutation(
+        gas_object.object_size_for_gas_metering(),
+        gas_object.object_size_for_gas_metering(),
+        0,
+    )?;
     assert_eq!(gas_cost, &gas_status.summary(true));
 
     // Create a transaction with budget DELTA less than the gas cost required.
@@ -245,16 +258,14 @@ async fn test_publish_gas() -> SuiResult {
     assert_eq!(
         err,
         SuiError::InsufficientGas {
-            error: "Ran out of gas while deducting computation cost".to_owned()
+            error: "Ran out of gas while deducting storage cost".to_owned()
         }
     );
 
     // Make sure that we are not charging storage cost at failure.
     assert_eq!(gas_cost.storage_cost, 0);
     // Upon failure, we should only be charging the expected computation cost.
-    // Since we failed when trying to charge the last piece of computation cost,
-    // the total cost will be DELTA less since it's not enough.
-    assert_eq!(gas_cost.gas_used(), computation_cost - DELTA);
+    assert_eq!(gas_cost.gas_used(), computation_cost);
 
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
     let expected_gas_balance = expected_gas_balance - gas_cost.gas_used();
@@ -336,39 +347,71 @@ async fn test_move_call_gas() -> SuiResult {
     );
 
     // Mimic the gas charge behavior and cross check the result with above.
-    let mut gas_status = SuiGasStatus::new_with_budget(*MAX_GAS_BUDGET);
+    let mut gas_status = SuiGasStatus::new_with_budget(GAS_VALUE_FOR_TESTING, 1, 1);
     gas_status.charge_min_tx_gas()?;
     let package_object = authority_state
         .get_object(&package_object_ref.0)
         .await?
         .unwrap();
-    gas_status.charge_storage_read(package_object.object_data_size())?;
-    gas_status.charge_storage_read(gas_object.object_data_size())?;
+    gas_status.charge_storage_read(
+        package_object.object_size_for_gas_metering() + gas_object.object_size_for_gas_metering(),
+    )?;
     let gas_used_before_vm_exec = gas_status.summary(true).gas_used();
     // The gas cost to execute the function in Move VM.
     // Hard code it here since it's difficult to mock that in test.
-    const MOVE_VM_EXEC_COST: u64 = 17;
-    gas_status
-        .charge_storage_mutation(gas_object.object_data_size(), gas_object.object_data_size())?;
+    const MOVE_VM_EXEC_COST: u64 = 17006;
+    gas_status.charge_vm_exec_test_only(MOVE_VM_EXEC_COST)?;
     let created_object = authority_state
         .get_object(&effects.created[0].0 .0)
         .await?
         .unwrap();
-    gas_status.charge_storage_mutation(0, created_object.object_data_size())?;
+    gas_status.charge_storage_mutation(0, created_object.object_size_for_gas_metering(), 0)?;
+    gas_status.charge_storage_mutation(
+        gas_object.object_size_for_gas_metering(),
+        gas_object.object_size_for_gas_metering(),
+        0,
+    )?;
 
     let new_cost = gas_status.summary(true);
-    assert_eq!(
-        gas_cost.computation_cost,
-        new_cost.computation_cost + MOVE_VM_EXEC_COST
-    );
+    assert_eq!(gas_cost.computation_cost, new_cost.computation_cost,);
     assert_eq!(gas_cost.storage_cost, new_cost.storage_cost);
+    // This is the total amount of storage cost paid. We will use this
+    // to check if we get back the same amount of rebate latter.
+    let prev_storage_cost = gas_cost.storage_cost;
 
-    // Create a transaction with gas budget that should run out during Move VM execution.
-    let budget = gas_used_before_vm_exec + 1;
+    // Execute object deletion, and make sure we have storage rebate.
     let data = TransactionData::new_move_call(
         sender,
         package_object_ref,
         module.clone(),
+        ident_str!("delete").to_owned(),
+        vec![],
+        gas_object.compute_object_reference(),
+        vec![created_object_ref],
+        vec![],
+        vec![],
+        expected_gas_balance,
+    );
+    let signature = Signature::new(&data, &sender_key);
+    let transaction = Transaction::new(data, signature);
+    let response = send_and_confirm_transaction(&authority_state, transaction).await?;
+    let effects = response.signed_effects.unwrap().effects;
+    assert!(effects.status.is_ok());
+    let gas_cost = effects.status.gas_cost_summary();
+    // storage_cost should be less than rebate because for object deletion, we only
+    // rebate without charging.
+    assert!(gas_cost.storage_cost > 0 && gas_cost.storage_cost < gas_cost.storage_rebate);
+    // Check that we have storage rebate that's the same as previous cost.
+    assert_eq!(gas_cost.storage_rebate, prev_storage_cost);
+    let expected_gas_balance = expected_gas_balance - gas_cost.gas_used() + gas_cost.storage_rebate;
+
+    // Create a transaction with gas budget that should run out during Move VM execution.
+    let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
+    let budget = gas_used_before_vm_exec + 1;
+    let data = TransactionData::new_move_call(
+        sender,
+        package_object_ref,
+        module,
         function,
         Vec::new(),
         gas_object.compute_object_reference(),
@@ -392,34 +435,28 @@ async fn test_move_call_gas() -> SuiResult {
         }
     );
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
-    let expected_gas_balance = expected_gas_balance - gas_cost.gas_used();
+    let expected_gas_balance = expected_gas_balance - gas_cost.gas_used() + gas_cost.storage_rebate;
     assert_eq!(
         GasCoin::try_from(&gas_object)?.value(),
         expected_gas_balance,
     );
+    Ok(())
+}
 
-    // Execute object deletion, and make sure we have storage rebate.
-    let data = TransactionData::new_move_call(
-        sender,
-        package_object_ref,
-        module,
-        ident_str!("delete").to_owned(),
-        vec![],
-        gas_object.compute_object_reference(),
-        vec![created_object_ref],
-        vec![],
-        vec![],
-        expected_gas_balance,
-    );
-    let signature = Signature::new(&data, &sender_key);
-    let transaction = Transaction::new(data, signature);
-    let response = send_and_confirm_transaction(&authority_state, transaction).await?;
-    let effects = response.signed_effects.unwrap().effects;
-    assert!(effects.status.is_ok());
-    let gas_cost = effects.status.gas_cost_summary();
-    assert_eq!(gas_cost.storage_cost, 0);
-    // Check that we have storage rebate after deletion.
-    assert!(gas_cost.storage_rebate > 0);
+#[tokio::test]
+async fn test_storage_gas_unit_price() -> SuiResult {
+    let mut gas_status1 = SuiGasStatus::new_with_budget(*MAX_GAS_BUDGET, 1, 1);
+    gas_status1.charge_storage_mutation(100, 200, 5)?;
+    let gas_cost1 = gas_status1.summary(true);
+    let mut gas_status2 = SuiGasStatus::new_with_budget(*MAX_GAS_BUDGET, 1, 3);
+    gas_status2.charge_storage_mutation(100, 200, 5)?;
+    let gas_cost2 = gas_status2.summary(true);
+    // Computation unit price is the same, hence computation cost should be the same.
+    assert_eq!(gas_cost1.computation_cost, gas_cost2.computation_cost);
+    // Storage unit prices is 3X, so will be the storage cost.
+    assert_eq!(gas_cost1.storage_cost * 3, gas_cost2.storage_cost);
+    // Storage rebate should not be affected by the price.
+    assert_eq!(gas_cost1.storage_rebate, gas_cost2.storage_rebate);
     Ok(())
 }
 

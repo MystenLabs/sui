@@ -13,8 +13,8 @@ use serde::Serialize;
 use serde_json::json;
 
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
-use sui_core::gateway_state::GatewayAPI;
-use sui_types::base_types::{encode_bytes_hex, ObjectID, ObjectRef, SuiAddress};
+use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
+use sui_types::base_types::{encode_bytes_hex, ObjectID, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 
@@ -207,6 +207,28 @@ impl GatewayAPI for RestGatewayClient {
             .map(NamedObjectRef::to_object_ref)
             .collect::<Result<Vec<_>, anyhow::Error>>()?;
         Ok(objects)
+    }
+
+    fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
+        // TODO: Implement this.
+        Ok(0)
+    }
+
+    fn get_transactions_in_range(
+        &self,
+        start: GatewayTxSeqNumber,
+        end: GatewayTxSeqNumber,
+    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
+        // TODO: Implement this.
+        Ok(vec![])
+    }
+
+    fn get_recent_transactions(
+        &self,
+        count: u64,
+    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
+        // TODO: Implement this.
+        Ok(vec![])
     }
 }
 

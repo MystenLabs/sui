@@ -41,7 +41,7 @@ module Basics::Lock {
 
     /// Lock some content inside a shared object. A Key is created and is
     /// sent to the transaction sender.
-    public fun create<T: store + key>(obj: T, ctx: &mut TxContext) {
+    public(script) fun create<T: store + key>(obj: T, ctx: &mut TxContext) {
         let id = TxContext::new_id(ctx);
         let for = *ID::inner(&id);
 
@@ -58,7 +58,7 @@ module Basics::Lock {
 
     /// Lock something inside a shared object using a Key. Aborts if
     /// lock is not empty or if key doesn't match the lock.
-    public fun lock<T: store + key>(
+    public(script) fun lock<T: store + key>(
         obj: T,
         lock: &mut Lock<T>,
         key: &Key<T>,
@@ -108,7 +108,7 @@ module Basics::LockTest {
     }
 
     #[test]
-    fun test_lock() {
+    public(script) fun test_lock() {
         let user1 = @0x1;
         let user2 = @0x2;
 
@@ -127,7 +127,7 @@ module Basics::LockTest {
         // key to User2, so that he can have access to the stored treasure.
         TestScenario::next_tx(scenario, &user1);
         {
-            let key = TestScenario::remove_object<Key<Treasure>>(scenario);
+            let key = TestScenario::take_object<Key<Treasure>>(scenario);
 
             Transfer::transfer(key, user2);
         };
@@ -135,8 +135,8 @@ module Basics::LockTest {
         // User2 is impatient and he decides to take the treasure.
         TestScenario::next_tx(scenario, &user2);
         {
-            let lock = TestScenario::remove_object<Lock<Treasure>>(scenario);
-            let key = TestScenario::remove_object<Key<Treasure>>(scenario);
+            let lock = TestScenario::take_object<Lock<Treasure>>(scenario);
+            let key = TestScenario::take_object<Key<Treasure>>(scenario);
             let ctx = TestScenario::ctx(scenario);
 
             Lock::take<Treasure>(&mut lock, &key, ctx);

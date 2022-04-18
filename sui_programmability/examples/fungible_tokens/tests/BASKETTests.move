@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module FungibleTokens::BASKETTests {    
+module FungibleTokens::BASKETTests {
     use FungibleTokens::BASKET::{Self, Reserve};
     use FungibleTokens::MANAGED::MANAGED;
     use Sui::Coin;
@@ -20,7 +20,7 @@ module FungibleTokens::BASKETTests {
         };
         TestScenario::next_tx(scenario, &user);
         {
-            let reserve = TestScenario::remove_object<Reserve>(scenario);
+            let reserve = TestScenario::take_object<Reserve>(scenario);
             let ctx = TestScenario::ctx(scenario);
             assert!(BASKET::total_supply(&reserve) == 0, 0);
 
@@ -29,7 +29,7 @@ module FungibleTokens::BASKETTests {
             let managed = Coin::mint_for_testing<MANAGED>(num_coins, ctx);
             let basket = BASKET::mint(&mut reserve, sui, managed, ctx);
             assert!(Coin::value(&basket) == num_coins, 1);
-            assert!(BASKET::total_supply(&reserve) == num_coins, 2);            
+            assert!(BASKET::total_supply(&reserve) == num_coins, 2);
 
             let (sui, managed) = BASKET::burn(&mut reserve, basket, ctx);
             assert!(Coin::value(&sui) == num_coins, 3);

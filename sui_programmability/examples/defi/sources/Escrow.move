@@ -51,7 +51,7 @@ module DeFi::Escrow {
     }
 
     /// Trusted third party can swap compatible objects
-    public fun swap<T1: key + store, T2: key + store>(
+    public(script) fun swap<T1: key + store, T2: key + store>(
         obj1: EscrowedObj<T1, T2>,
         obj2: EscrowedObj<T2, T1>,
         _ctx: &mut TxContext
@@ -84,7 +84,7 @@ module DeFi::Escrow {
     }
 
     /// Trusted third party can always return an escrowed object to its original owner
-    public fun return_to_sender<T: key + store, ExchangeForT: key + store>(
+    public(script) fun return_to_sender<T: key + store, ExchangeForT: key + store>(
         obj: EscrowedObj<T, ExchangeForT>,
         _ctx: &mut TxContext
     ) {

@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
+use crate::gateway_state::GatewayTxSeqNumber;
 
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -504,6 +505,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         mutated_objects: HashMap<ObjectRef, Object>,
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
+        sequence_number: GatewayTxSeqNumber,
     ) -> SuiResult {
         let transaction_digest = certificate.digest();
         let mut temporary_store =
@@ -519,13 +521,24 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         }
 
         let mut write_batch = self.certificates.batch();
+
+        // Store the certificate indexed by transaction digest
+        write_batch = write_batch.insert_batch(
+            &self.certificates,
+            std::iter::once((transaction_digest, &certificate)),
+        )?;
+
         // Once a transaction is done processing and effects committed, we no longer
         // need it in the transactions table. This also allows us to track pending
         // transactions.
         write_batch =
-            write_batch.delete_batch(&self.transactions, std::iter::once(certificate.digest()))?;
-        self.batch_update_objects(write_batch, temporary_store, *transaction_digest, None)
-            .await
+            write_batch.delete_batch(&self.transactions, std::iter::once(transaction_digest))?;
+        self.batch_update_objects(
+            write_batch,
+            temporary_store,
+            *transaction_digest,
+            Some(sequence_number),
+        ).await
     }
 
     /// Helper function for updating the objects in the state
@@ -766,6 +779,19 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         write_batch = write_batch.insert_batch(&self.schedule, schedule_to_write)?;
         write_batch = write_batch.insert_batch(&self.last_consensus_index, index_to_write)?;
         write_batch.write().map_err(SuiError::from)
+    }
+
+    pub fn transactions_in_seq_range(
+        &self,
+        start: GatewayTxSeqNumber,
+        end: GatewayTxSeqNumber,
+    ) -> SuiResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        Ok(self
+            .executed_sequence
+            .iter()
+            .skip_to(&start)?
+            .take_while(|(seq, _tx)| *seq < end)
+            .collect())
     }
 
     /// Retrieves batches including transactions within a range.

@@ -7,6 +7,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::anyhow;
+use clap::*;
 use dropshot::{endpoint, Query, TypedBody};
 use dropshot::{
     ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError,
@@ -20,7 +21,6 @@ use move_core_types::parser::parse_type_tag;
 use move_core_types::value::MoveStructLayout;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use structopt::StructOpt;
 
 use sui::config::PersistedConfig;
 use sui::gateway::GatewayConfig;
@@ -49,26 +49,26 @@ const DEFAULT_REST_SERVER_ADDR_IPV4: &str = "127.0.0.1";
 #[cfg(test)]
 mod rest_server_tests;
 
-#[derive(StructOpt)]
-#[structopt(
+#[derive(Parser)]
+#[clap(
     name = "Sui Rest Gateway",
     about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
     rename_all = "kebab-case"
 )]
 struct RestServerOpt {
-    #[structopt(long)]
+    #[clap(long)]
     config: Option<PathBuf>,
 
-    #[structopt(long, default_value = DEFAULT_REST_SERVER_PORT)]
+    #[clap(long, default_value = DEFAULT_REST_SERVER_PORT)]
     port: u16,
 
-    #[structopt(long, default_value = DEFAULT_REST_SERVER_ADDR_IPV4)]
+    #[clap(long, default_value = DEFAULT_REST_SERVER_ADDR_IPV4)]
     host: Ipv4Addr,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let options: RestServerOpt = RestServerOpt::from_args();
+    let options: RestServerOpt = RestServerOpt::parse();
 
     let config_dropshot: ConfigDropshot = ConfigDropshot {
         bind_address: SocketAddr::from((options.host, options.port)),
@@ -89,14 +89,21 @@ async fn main() -> Result<(), anyhow::Error> {
     let config_path = options
         .config
         .unwrap_or(sui_config_dir()?.join(SUI_GATEWAY_CONFIG));
-    let config: GatewayConfig = PersistedConfig::read(&config_path)?;
+
+    let config: GatewayConfig = PersistedConfig::read(&config_path).map_err(|e| {
+        anyhow!(
+            "Failed to read config file at {:?}: {}. Have you run `sui genesis` first?",
+            config_path,
+            e
+        )
+    })?;
     let committee = config.make_committee();
     let authority_clients = config.make_authority_clients();
     let gateway = Box::new(GatewayState::new(
         config.db_folder_path,
         committee,
         authority_clients,
-    ));
+    )?);
 
     let api_context = ServerContext::new(documentation, gateway);
     let server = HttpServerStarter::new(&config_dropshot, api, api_context, &log)?.start();

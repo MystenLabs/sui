@@ -273,6 +273,7 @@ Object:
         TYPENAME: Owner
     - previous_transaction:
         TYPENAME: TransactionDigest
+    - storage_rebate: U64
 ObjectDigest:
   NEWTYPESTRUCT: BYTES
 ObjectFormatOptions:
@@ -758,6 +759,10 @@ SuiError:
         STRUCT:
           - error: STR
     92:
+      GatewayInvalidTxRangeQuery:
+        STRUCT:
+          - error: STR
+    93:
       OnlyOneConsensusClientPermitted: UNIT
 TransactionData:
   STRUCT:

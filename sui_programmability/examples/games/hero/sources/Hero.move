@@ -114,7 +114,7 @@ module HeroGame::Hero {
 
     /// Slay the `boar` with the `hero`'s sword, get experience.
     /// Aborts if the hero has 0 HP or is not strong enough to slay the boar
-    public fun slay(hero: &mut Hero, boar: Boar, ctx: &mut TxContext) {
+    public(script) fun slay(hero: &mut Hero, boar: Boar, ctx: &mut TxContext) {
         let Boar { id: boar_id, strength: boar_strength, hp } = boar;
         let hero_strength = hero_strength(hero);
         let boar_hp = hp;
@@ -222,7 +222,7 @@ module HeroGame::Hero {
         }
     }
 
-    public fun acquire_hero(payment: Coin<GAS>, ctx: &mut TxContext) {
+    public(script) fun acquire_hero(payment: Coin<GAS>, ctx: &mut TxContext) {
         let sword = create_sword(payment, ctx);
         let hero = create_hero(sword, ctx);
         Transfer::transfer(hero, TxContext::sender(ctx))
@@ -240,7 +240,7 @@ module HeroGame::Hero {
     }
 
     /// Admin can create a potion with the given `potency` for `recipient`
-    public fun send_potion(
+    public(script) fun send_potion(
         potency: u64,
         player: address,
         admin: &mut GameAdmin,
@@ -255,7 +255,7 @@ module HeroGame::Hero {
     }
 
     /// Admin can create a boar with the given attributes for `recipient`
-    public fun send_boar(
+    public(script) fun send_boar(
         admin: &mut GameAdmin,
         hp: u64,
         strength: u64,
@@ -316,15 +316,15 @@ module HeroGame::Hero {
         // Admin sends a boar to the Player
         TestScenario::next_tx(scenario, &admin);
         {
-            let admin_cap = TestScenario::remove_object<GameAdmin>(scenario);
+            let admin_cap = TestScenario::take_object<GameAdmin>(scenario);
             send_boar(&mut admin_cap, 10, 10, player, TestScenario::ctx(scenario));
             TestScenario::return_object(scenario, admin_cap)
         };
         // Player slays the boar!
         TestScenario::next_tx(scenario, &player);
         {
-            let hero = TestScenario::remove_object<Hero>(scenario);
-            let boar = TestScenario::remove_object<Boar>(scenario);
+            let hero = TestScenario::take_object<Hero>(scenario);
+            let boar = TestScenario::take_object<Boar>(scenario);
             slay(&mut hero, boar, TestScenario::ctx(scenario));
             TestScenario::return_object(scenario, hero)
         };

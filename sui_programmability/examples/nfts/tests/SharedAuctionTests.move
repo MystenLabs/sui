@@ -39,7 +39,7 @@ module NFTs::SharedAuctionTests {
     }
 
     #[test]
-    public fun simple_auction_test() {
+    public(script) fun simple_auction_test() {
         let admin = @0xABBA; // needed only to initialize "state of the world"
         let owner = @0xACE;
         let bidder1 = @0xFACE;
@@ -68,8 +68,8 @@ module NFTs::SharedAuctionTests {
         // a transaction by the first bidder to put a bid
         TestScenario::next_tx(scenario, &bidder1);
         {
-            let coin = TestScenario::remove_object<Coin<SUI>>(scenario);
-            let auction = TestScenario::remove_object<Auction<SomeItemToSell>>(scenario);
+            let coin = TestScenario::take_object<Coin<SUI>>(scenario);
+            let auction = TestScenario::take_object<Auction<SomeItemToSell>>(scenario);
 
             SharedAuction::bid(coin, &mut auction, TestScenario::ctx(scenario));
 
@@ -81,8 +81,8 @@ module NFTs::SharedAuctionTests {
         // bidder's)
         TestScenario::next_tx(scenario, &bidder2);
         {
-            let coin = TestScenario::remove_object<Coin<SUI>>(scenario);
-            let auction = TestScenario::remove_object<Auction<SomeItemToSell>>(scenario);
+            let coin = TestScenario::take_object<Coin<SUI>>(scenario);
+            let auction = TestScenario::take_object<Auction<SomeItemToSell>>(scenario);
 
             SharedAuction::bid(coin, &mut auction, TestScenario::ctx(scenario));
 
@@ -93,7 +93,7 @@ module NFTs::SharedAuctionTests {
         // have been returned (as a result of the failed bid).
         TestScenario::next_tx(scenario, &bidder2);
         {
-            let coin = TestScenario::remove_object<Coin<SUI>>(scenario);
+            let coin = TestScenario::take_object<Coin<SUI>>(scenario);
 
             assert!(Coin::value(&coin) == COIN_VALUE, EWRONG_COIN_VALUE);
 
@@ -103,7 +103,7 @@ module NFTs::SharedAuctionTests {
         // a transaction by the owner to end auction
         TestScenario::next_tx(scenario, &owner);
         {
-            let auction = TestScenario::remove_object<Auction<SomeItemToSell>>(scenario);
+            let auction = TestScenario::take_object<Auction<SomeItemToSell>>(scenario);
 
             // pass auction as mutable reference as its a shared
             // object that cannot be deleted
@@ -116,7 +116,7 @@ module NFTs::SharedAuctionTests {
         // second bidder's bid was the same as that of the first one)
         TestScenario::next_tx(scenario, &bidder1);
         {
-            let acquired_item = TestScenario::remove_object<SomeItemToSell>(scenario);
+            let acquired_item = TestScenario::take_object<SomeItemToSell>(scenario);
 
             assert!(acquired_item.value == 42, EWRONG_ITEM_VALUE);
 

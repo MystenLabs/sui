@@ -5,7 +5,7 @@ import ast
 from string import Template
 
 cmd_template = Template(
-    "../target/release/microbench_latency --period-us $period_us --chunk-size $chunk_size --num-chunks $num_chunks")
+    "../target/release/bench microbench latency --period-us $period_us --chunk-size $chunk_size --num-chunks $num_chunks")
 
 def get_avg_latency(period_us, chunk_size, num_chunks):
     cmd = cmd_template.substitute(
@@ -15,11 +15,11 @@ def get_avg_latency(period_us, chunk_size, num_chunks):
     output, error = process.communicate()
 
     resp = output.decode("utf-8")
-    res = ast.literal_eval(resp)
+
+    # Example output: `Average Latency 6577.06 us @ 100000 tps`
+    res = float(resp.split(" ")[2])
     print(res)
-    # Pick upper half at steady state
-    res = res[len(res)//2:]
-    return sum(res)/len(res)
+    return res
 
 
 def plot(vals):
@@ -32,7 +32,7 @@ def plot(vals):
 lats = []
 for i in range(10):
     chunk_size = 200 * (i+1)
-    period_us = 10000
+    period_us = 1000
     num_chunks = 10
     thr = chunk_size*1000*1000/period_us
     avg_lat_ms = get_avg_latency(period_us, chunk_size, num_chunks)/1000

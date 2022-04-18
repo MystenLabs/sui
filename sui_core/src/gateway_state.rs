@@ -28,6 +28,7 @@ use tracing::{error, Instrument};
 use std::path::PathBuf;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -39,9 +40,19 @@ pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
 pub type GatewayClient = Box<dyn GatewayAPI + Sync + Send>;
 
+pub type GatewayTxSeqNumber = u64;
+
+const MAX_TX_RANGE_SIZE: u64 = 4096;
+
 pub struct GatewayState<A> {
     authorities: AuthorityAggregator<A>,
     store: Arc<GatewayStore>,
+    /// Every transaction committed in authorities (and hence also committed in the Gateway)
+    /// will have a unique sequence number. This number is specific to this gateway,
+    /// and hence will not be compatible with authorities or other gateways.
+    /// It's useful if we need some kind of ordering for transactions
+    /// from a gateway.
+    next_tx_seq_number: AtomicU64,
 }
 
 impl<A> GatewayState<A> {
@@ -50,11 +61,14 @@ impl<A> GatewayState<A> {
         path: PathBuf,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
-    ) -> Self {
-        Self {
-            store: Arc::new(GatewayStore::open(path, None)),
+    ) -> SuiResult<Self> {
+        let store = Arc::new(GatewayStore::open(path, None));
+        let next_tx_seq_number = AtomicU64::new(store.next_sequence_number()?);
+        Ok(Self {
+            store,
             authorities: AuthorityAggregator::new(committee, authority_clients),
-        }
+            next_tx_seq_number,
+        })
     }
 
     // Given a list of inputs from a transaction, fetch the objects
@@ -166,6 +180,23 @@ pub trait GatewayAPI {
         &mut self,
         account_addr: SuiAddress,
     ) -> Result<Vec<ObjectRef>, anyhow::Error>;
+
+    /// Get the total number of transactions ever happened in history.
+    fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error>;
+
+    /// Return the list of transactions with sequence number in range [`start`, end).
+    /// `start` is included, `end` is excluded.
+    fn get_transactions_in_range(
+        &self,
+        start: GatewayTxSeqNumber,
+        end: GatewayTxSeqNumber,
+    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error>;
+
+    /// Return the most recent `count` transactions.
+    fn get_recent_transactions(
+        &self,
+        count: u64,
+    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error>;
 }
 
 impl<A> GatewayState<A>
@@ -210,7 +241,8 @@ where
     ) -> SuiResult<(Object, SuiGasStatus<'_>)> {
         let gas_object = self.get_object(&gas_payment_id).await?;
         gas::check_gas_balance(&gas_object, gas_budget)?;
-        let gas_status = gas::start_gas_metering(gas_budget)?;
+        // TODO: Pass in real computation gas unit price and storage gas unit price.
+        let gas_status = gas::start_gas_metering(gas_budget, 1, 1)?;
         Ok((gas_object, gas_status))
     }
 
@@ -283,14 +315,14 @@ where
         let mutated_objects = self
             .download_objects_from_authorities(mutated_object_refs)
             .await?;
-        self.store
-            .update_gateway_state(
-                &objects_by_kind,
-                mutated_objects,
-                new_certificate.clone(),
-                effects.clone(),
-            )
-            .await?;
+        self.store.update_gateway_state(
+            &objects_by_kind,
+            mutated_objects,
+            new_certificate.clone(),
+            effects.clone(),
+            self.next_tx_seq_number
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+        ).await?;
 
         Ok((new_certificate, effects))
     }
@@ -708,5 +740,57 @@ where
         account_addr: SuiAddress,
     ) -> Result<Vec<ObjectRef>, anyhow::Error> {
         Ok(self.store.get_account_objects(account_addr)?)
+    }
+
+    fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
+        Ok(self.store.next_sequence_number()?)
+    }
+
+    fn get_transactions_in_range(
+        &self,
+        start: GatewayTxSeqNumber,
+        end: GatewayTxSeqNumber,
+    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
+        fp_ensure!(
+            start <= end,
+            SuiError::GatewayInvalidTxRangeQuery {
+                error: format!(
+                    "start must not exceed end, (start={}, end={}) given",
+                    start, end
+                ),
+            }
+            .into()
+        );
+        fp_ensure!(
+            end - start <= MAX_TX_RANGE_SIZE,
+            SuiError::GatewayInvalidTxRangeQuery {
+                error: format!(
+                    "Number of transactions queried must not exceed {}, {} queried",
+                    MAX_TX_RANGE_SIZE,
+                    end - start
+                ),
+            }
+            .into()
+        );
+        Ok(self.store.transactions_in_seq_range(start, end)?)
+    }
+
+    fn get_recent_transactions(
+        &self,
+        count: u64,
+    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
+        fp_ensure!(
+            count <= MAX_TX_RANGE_SIZE,
+            SuiError::GatewayInvalidTxRangeQuery {
+                error: format!(
+                    "Number of transactions queried must not exceed {}, {} queried",
+                    MAX_TX_RANGE_SIZE, count
+                ),
+            }
+            .into()
+        );
+        let end = self.get_total_transaction_number()?;
+        let start = if end >= count { end - count } else { 0 };
+        self.get_transactions_in_range(start, end)
     }
 }

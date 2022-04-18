@@ -26,19 +26,19 @@ module Sui::CrossChainAirdropTests {
     }
 
     #[test]
-    fun test_claim_airdrop() {
+    public(script) fun test_claim_airdrop() {
         let (scenario, oracle_address) = init();
 
         // claim a token
         claim_token(&mut scenario, &oracle_address, SOURCE_TOKEN_ID);
-        
+
         // verify that the recipient has received the nft
         assert!(owns_object(&mut scenario, &RECIPIENT_ADDRESS), EOBJECT_NOT_FOUND);
     }
 
     #[test]
-    #[expected_failure(abort_code = 0)] 
-    fun test_double_claim() {
+    #[expected_failure(abort_code = 0)]
+    public(script) fun test_double_claim() {
         let (scenario, oracle_address) = init();
 
         // claim a token
@@ -48,7 +48,7 @@ module Sui::CrossChainAirdropTests {
         claim_token(&mut scenario, &oracle_address, SOURCE_TOKEN_ID);
     }
 
-    fun init(): (Scenario, address) {
+    public(script) fun init(): (Scenario, address) {
         let scenario = TestScenario::begin(&ORACLE_ADDRESS);
         {
             let ctx = TestScenario::ctx(&mut scenario);
@@ -57,10 +57,10 @@ module Sui::CrossChainAirdropTests {
         (scenario, ORACLE_ADDRESS)
     }
 
-    fun claim_token(scenario: &mut Scenario, oracle_address: &address, token_id: u64) {
+    public(script) fun claim_token(scenario: &mut Scenario, oracle_address: &address, token_id: u64) {
         TestScenario::next_tx(scenario, oracle_address);
         {
-            let oracle = TestScenario::remove_object<CrossChainAirdropOracle>(scenario);
+            let oracle = TestScenario::take_object<CrossChainAirdropOracle>(scenario);
             let ctx = TestScenario::ctx(scenario);
             CrossChainAirdrop::claim(
                 &mut oracle,
@@ -75,9 +75,9 @@ module Sui::CrossChainAirdropTests {
         };
     }
 
-    fun owns_object(scenario: &mut Scenario, owner: &address): bool{
+    public(script) fun owns_object(scenario: &mut Scenario, owner: &address): bool{
         // Verify the token has been transfer to the recipient
         TestScenario::next_tx(scenario, owner);
-        TestScenario::can_remove_object<NFT<ERC721>>(scenario)
+        TestScenario::can_take_object<NFT<ERC721>>(scenario)
     }
 }

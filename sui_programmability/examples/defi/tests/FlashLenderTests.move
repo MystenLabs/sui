@@ -9,7 +9,7 @@ module DeFi::FlashLenderTests {
     use Sui::TestScenario;
 
     #[test]
-    fun flash_loan_example() {
+    public(script) fun flash_loan_example() {
         let admin = @0x1;
         let borrower = @0x2;
 
@@ -23,7 +23,7 @@ module DeFi::FlashLenderTests {
         // borrower requests and repays a loan of 10 coins + the fee
         TestScenario::next_tx(scenario, &borrower);
         {
-            let lender = TestScenario::remove_object<FlashLender<SUI>>(scenario);
+            let lender = TestScenario::take_object<FlashLender<SUI>>(scenario);
             let ctx = TestScenario::ctx(scenario);
 
             let (loan, receipt) = FlashLender::loan(&mut lender, 10, ctx);
@@ -40,8 +40,8 @@ module DeFi::FlashLenderTests {
         // admin withdraws the 1 coin profit from lending
         TestScenario::next_tx(scenario, &admin);
         {
-            let lender = TestScenario::remove_object<FlashLender<SUI>>(scenario);
-            let admin_cap = TestScenario::remove_object<AdminCap>(scenario);
+            let lender = TestScenario::take_object<FlashLender<SUI>>(scenario);
+            let admin_cap = TestScenario::take_object<AdminCap>(scenario);
             let ctx = TestScenario::ctx(scenario);
 
             // max loan size should have increased because of the fee payment

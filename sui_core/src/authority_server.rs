@@ -17,7 +17,7 @@ use sui_types::{
 use futures::{SinkExt, StreamExt};
 
 use std::time::Duration;
-use tracing::*;
+use tracing::{error, info, warn, Instrument};
 
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};

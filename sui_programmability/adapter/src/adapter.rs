@@ -5,7 +5,9 @@ use anyhow::Result;
 
 use crate::bytecode_rewriter::ModuleHandleRewriter;
 use move_binary_format::{
-    access::ModuleAccess, errors::PartialVMResult, file_format::CompiledModule,
+    access::ModuleAccess,
+    errors::PartialVMResult,
+    file_format::{CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
 };
 use sui_framework::EventType;
 use sui_types::{
@@ -16,16 +18,18 @@ use sui_types::{
     gas::SuiGasStatus,
     id::VersionedID,
     messages::CallResult,
-    move_package::*,
-    object::{MoveObject, Object, Owner},
+    object::{Data, MoveObject, Object, Owner},
     storage::{DeleteKind, Storage},
 };
-use sui_verifier::verifier;
+use sui_verifier::{
+    entry_points_verifier::{self, INIT_FN_NAME},
+    verifier,
+};
 
 use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
-    language_storage::{ModuleId, TypeTag},
+    language_storage::{ModuleId, StructTag, TypeTag},
     resolver::{ModuleResolver, ResourceResolver},
     value::MoveTypeLayout,
 };
@@ -35,7 +39,6 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     convert::TryFrom,
     fmt::Debug,
-    sync::Arc,
 };
 
 pub use move_vm_runtime::move_vm::MoveVM;
@@ -44,46 +47,8 @@ pub use move_vm_runtime::move_vm::MoveVM;
 #[path = "unit_tests/adapter_tests.rs"]
 mod adapter_tests;
 
-// This structure holds a VM and a cache of packages that contain
-// in turn caches of their Function entry points,
-// that involve re-computation / deserialization to otherwise get.
-pub struct SuiMoveVM {
-    movevm: MoveVM,
-
-    // TODO: change this to an LRU cache, to avoid running out of
-    //       memory.
-    package_cache: parking_lot::RwLock<HashMap<ObjectID, Arc<Object>>>,
-}
-
-impl SuiMoveVM {
-    /// Make a new struct from a VM
-    pub fn new(vm: MoveVM) -> SuiMoveVM {
-        SuiMoveVM {
-            movevm: vm,
-            package_cache: parking_lot::RwLock::new(HashMap::new()),
-        }
-    }
-
-    /// Returns an object from the cache if one is available
-    /// and otherwise caches a copy of this object.
-    pub fn get_package(&self, object: &Object) -> Arc<Object> {
-        let id = object.id();
-
-        if let Some(cached_object) = self.package_cache.read().get(&id) {
-            return cached_object.clone();
-        }
-
-        let arc_object = Arc::new(object.clone());
-        self.package_cache.write().insert(id, arc_object.clone());
-        arc_object
-    }
-}
-
-pub fn new_move_vm(natives: NativeFunctionTable) -> Result<Arc<SuiMoveVM>, SuiError> {
-    Ok(Arc::new(SuiMoveVM {
-        movevm: MoveVM::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)?,
-        package_cache: parking_lot::RwLock::new(HashMap::new()),
-    }))
+pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
+    MoveVM::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)
 }
 
 /// Execute `module::function<type_args>(object_args ++ pure_args)` as a call from `sender` with the given `gas_budget`.
@@ -97,11 +62,10 @@ pub fn new_move_vm(natives: NativeFunctionTable) -> Result<Arc<SuiMoveVM>, SuiEr
 /// TODO: Do we really need the two layers?
 #[allow(clippy::too_many_arguments)]
 pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
-    vm: &SuiMoveVM,
+    vm: &MoveVM,
     state_view: &mut S,
     _natives: &NativeFunctionTable,
-    package_object: &Object,
-    module: &Identifier,
+    module_id: ModuleId,
     function: &Identifier,
     type_args: Vec<TypeTag>,
     object_args: Vec<Object>,
@@ -119,22 +83,14 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             object_owner_map.insert(obj.id().into(), owner);
         }
     }
-    let cached_package = vm.get_package(package_object);
 
+    let module = vm.load_module(&module_id, state_view)?;
     let TypeCheckSuccess {
         module_id,
         args,
         mutable_ref_objects,
         by_value_objects,
-        return_types: _,
-    } = resolve_and_type_check(
-        &cached_package,
-        module,
-        function,
-        &type_args,
-        object_args,
-        pure_args,
-    )?;
+    } = resolve_and_type_check(&module, function, &type_args, object_args, pure_args)?;
 
     let mut args = args;
     args.push(ctx.to_vec());
@@ -160,19 +116,20 @@ fn execute_internal<
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
 >(
-    vm: &SuiMoveVM,
+    vm: &MoveVM,
     state_view: &mut S,
     module_id: &ModuleId,
     function: &Identifier,
     type_args: Vec<TypeTag>,
     args: Vec<Vec<u8>>,
-    mutable_ref_objects: Vec<Object>,
+    mut mutable_ref_objects: BTreeMap<LocalIndex, Object>,
     by_value_objects: BTreeMap<ObjectID, Object>,
     object_owner_map: HashMap<SuiAddress, SuiAddress>,
     gas_status: &mut SuiGasStatus, // gas status for the current call operation
     ctx: &mut TxContext,
 ) -> SuiResult<Vec<CallResult>> {
-    let mut session = vm.movevm.new_session(state_view);
+    let mut session = vm.new_session(state_view);
+    // script visibility checked manually for entry points
     let result = session
         .execute_function_bypass_visibility(
             module_id,
@@ -207,11 +164,13 @@ fn execute_internal<
             let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).unwrap();
             ctx.update_state(updated_ctx)?;
 
-            let mutable_refs = mutable_ref_objects.into_iter().zip(
+            let mutable_refs =
                 mutable_reference_outputs
                     .into_iter()
-                    .map(|(_local_idx, bytes, _layout)| bytes),
-            );
+                    .map(|(local_idx, bytes, _layout)| {
+                        let object = mutable_ref_objects.remove(&local_idx).unwrap();
+                        (object, bytes)
+                    });
             process_successful_execution(
                 state_view,
                 by_value_objects,
@@ -220,6 +179,8 @@ fn execute_internal<
                 ctx,
                 object_owner_map,
             )?;
+            // All mutable references should have been marked as updated
+            debug_assert!(mutable_ref_objects.is_empty());
             Ok(process_return_values(&return_values))
         }
         // charge for all computations so far
@@ -310,8 +271,6 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 
     let package_id = generate_package_id(&mut modules, ctx)?;
     let vm = verify_and_link(state_view, &modules, package_id, natives, gas_status)?;
-
-    let vm = SuiMoveVM::new(vm);
     store_package_and_init_modules(state_view, &vm, modules, ctx, gas_status)
 }
 
@@ -321,14 +280,14 @@ pub fn store_package_and_init_modules<
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
 >(
     state_view: &mut S,
-    vm: &SuiMoveVM,
+    vm: &MoveVM,
     modules: Vec<CompiledModule>,
     ctx: &mut TxContext,
     gas_status: &mut SuiGasStatus,
 ) -> SuiResult {
     let mut modules_to_init = Vec::new();
     for module in modules.iter() {
-        if module_has_init(module) {
+        if entry_points_verifier::module_has_init(module) {
             modules_to_init.push(module.self_id());
         }
     }
@@ -345,11 +304,12 @@ pub fn store_package_and_init_modules<
 /// Modules in module_ids_to_init must have the init method defined
 fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
     state_view: &mut S,
-    vm: &SuiMoveVM,
+    vm: &MoveVM,
     module_ids_to_init: Vec<ModuleId>,
     ctx: &mut TxContext,
     gas_status: &mut SuiGasStatus,
 ) -> SuiResult {
+    let init_ident = Identifier::new(INIT_FN_NAME.as_str()).unwrap();
     for module_id in module_ids_to_init {
         let args = vec![ctx.to_vec()];
 
@@ -357,10 +317,10 @@ fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error 
             vm,
             state_view,
             &module_id,
-            &Identifier::new(INIT_FN_NAME.as_str()).unwrap(),
+            &init_ident,
             Vec::new(),
             args,
-            Vec::new(),
+            BTreeMap::new(),
             BTreeMap::new(),
             HashMap::new(),
             gas_status,
@@ -498,7 +458,8 @@ fn process_successful_execution<
         match event_type {
             EventType::TransferToAddress
             | EventType::FreezeObject
-            | EventType::TransferToObject => {
+            | EventType::TransferToObject
+            | EventType::ShareObject => {
                 let new_owner = match event_type {
                     EventType::TransferToAddress => {
                         Owner::AddressOwner(SuiAddress::try_from(recipient.as_slice()).unwrap())
@@ -507,6 +468,7 @@ fn process_successful_execution<
                     EventType::TransferToObject => {
                         Owner::ObjectOwner(ObjectID::try_from(recipient.borrow()).unwrap().into())
                     }
+                    EventType::ShareObject => Owner::SharedMutable,
                     _ => unreachable!(),
                 };
                 handle_transfer(
@@ -520,7 +482,6 @@ fn process_successful_execution<
                     &newly_generated_ids,
                 )
             }
-            EventType::ShareObject => Err(SuiError::UnsupportedSharedObjectError),
             EventType::DeleteObjectID => {
                 // unwrap safe because this event can only be emitted from processing
                 // native call delete_id, which guarantees the type of the id.
@@ -673,4 +634,263 @@ fn check_transferred_object_invariants(new_object: &MoveObject, old_object: &Opt
         debug_assert_eq!(m.version(), new_object.version());
         debug_assert_eq!(m.type_, new_object.type_);
     }
+}
+
+pub struct TypeCheckSuccess {
+    pub module_id: ModuleId,
+    pub args: Vec<Vec<u8>>,
+    pub by_value_objects: BTreeMap<ObjectID, Object>,
+    pub mutable_ref_objects: BTreeMap<LocalIndex, Object>,
+}
+
+/// - Check that `package_object`, `module` and `function` are valid
+/// - Check that the the signature of `function` is well-typed w.r.t `type_args`, `object_args`, and `pure_args`
+/// - Return the ID of the resolved module, a vector of BCS encoded arguments to pass to the VM, and a partitioning
+/// of the input objects into objects passed by value vs by mutable reference
+pub fn resolve_and_type_check(
+    module: &CompiledModule,
+    function: &Identifier,
+    type_args: &[TypeTag],
+    object_args: Vec<Object>,
+    mut pure_args: Vec<Vec<u8>>,
+) -> Result<TypeCheckSuccess, SuiError> {
+    // Resolve the function we are calling
+    let function_str = function.as_ident_str();
+    let module_id = module.self_id();
+    let fdef_opt = module.function_defs.iter().find(|fdef| {
+        module.identifier_at(module.function_handle_at(fdef.function).name) == function_str
+    });
+    let fdef = match fdef_opt {
+        Some(fdef) => fdef,
+        None => {
+            return Err(SuiError::FunctionNotFound {
+                error: format!(
+                    "Could not resolve function '{}' in module {}",
+                    function, &module_id,
+                ),
+            })
+        }
+    };
+    let fhandle = module.function_handle_at(fdef.function);
+
+    // check arity of type and value arguments
+    if fhandle.type_parameters.len() != type_args.len() {
+        return Err(SuiError::InvalidFunctionSignature {
+            error: format!(
+                "Expected {:?} type arguments, but found {:?}",
+                fhandle.type_parameters.len(),
+                type_args.len()
+            ),
+        });
+    }
+
+    // total number of args is |objects| + |pure_args| + 1 for the the `TxContext` object
+    let num_args = object_args.len() + pure_args.len() + 1;
+    let parameters = &module.signature_at(fhandle.parameters).0;
+    if parameters.len() != num_args {
+        return Err(SuiError::InvalidFunctionSignature {
+            error: format!(
+                "Expected {:?} arguments calling function '{}', but found {:?}",
+                parameters.len(),
+                function,
+                num_args
+            ),
+        });
+    }
+
+    entry_points_verifier::verify_entry_function(module, fdef, type_args)?;
+
+    // type check object arguments passed in by value and by reference
+    let mut args = Vec::new();
+    let mut mutable_ref_objects = BTreeMap::new();
+    let mut by_value_objects = BTreeMap::new();
+    #[cfg(debug_assertions)]
+    let mut num_immutable_objects = 0;
+    #[cfg(debug_assertions)]
+    let num_objects = object_args.len();
+
+    for (idx, object) in object_args.into_iter().enumerate() {
+        let param_type = &parameters[idx];
+        let move_object = match &object.data {
+            Data::Move(m) => m,
+            Data::Package(_) => {
+                let error = format!(
+                    "Found module argument, but function expects {:?}",
+                    param_type
+                );
+                return Err(SuiError::TypeError { error });
+            }
+        };
+        args.push(move_object.contents().to_vec());
+        // check that m.type_ matches the parameter types of the function
+        let inner_param_type = match &param_type {
+            SignatureToken::MutableReference(inner_t) => {
+                if object.is_read_only() {
+                    let error = format!(
+                        "Argument {} is expected to be mutable, immutable object found",
+                        idx
+                    );
+                    return Err(SuiError::TypeError { error });
+                }
+                &**inner_t
+            }
+            SignatureToken::Reference(inner_t) => {
+                #[cfg(debug_assertions)]
+                {
+                    num_immutable_objects += 1;
+                }
+                &**inner_t
+            }
+            t @ SignatureToken::Struct(_)
+            | t @ SignatureToken::StructInstantiation(_, _)
+            | t @ SignatureToken::TypeParameter(_) => {
+                if object.is_shared() {
+                    // Forbid passing shared (both mutable and immutable) object by value.
+                    // This ensures that shared object cannot be transferred, deleted or wrapped.
+                    return Err(SuiError::TypeError {
+                        error: format!(
+                            "Shared object cannot be passed by-value, found in argument {}",
+                            idx
+                        ),
+                    });
+                }
+                t
+            }
+            t => {
+                return Err(SuiError::TypeError {
+                    error: format!(
+                        "Found object argument {}, but function expects {:?}",
+                        move_object.type_, t
+                    ),
+                })
+            }
+        };
+        type_check_struct(module, type_args, &move_object.type_, inner_param_type)?;
+        match &param_type {
+            SignatureToken::MutableReference(_) => {
+                let _prev = mutable_ref_objects.insert(idx as LocalIndex, object);
+                debug_assert!(_prev.is_none());
+            }
+            SignatureToken::Reference(_) => (),
+            _ => {
+                let _prev = by_value_objects.insert(object.id(), object);
+                // should always pass due to earlier "no duplicate ID's" check
+                debug_assert!(_prev.is_none());
+            }
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    debug_assert!(
+        by_value_objects.len() + mutable_ref_objects.len() + num_immutable_objects == num_objects
+    );
+    // verify_entry_function ensures that pure_args are all primitives
+    args.append(&mut pure_args);
+
+    Ok(TypeCheckSuccess {
+        module_id,
+        args,
+        by_value_objects,
+        mutable_ref_objects,
+    })
+}
+
+fn type_check_struct(
+    module: &CompiledModule,
+    function_type_arguments: &[TypeTag],
+    arg_type: &StructTag,
+    param_type: &SignatureToken,
+) -> Result<(), SuiError> {
+    if !struct_tag_equals_sig_token(module, function_type_arguments, arg_type, param_type) {
+        Err(SuiError::TypeError {
+            error: format!(
+                "Expected argument of type {}, but found type {}",
+                sui_verifier::format_signature_token(module, param_type),
+                arg_type
+            ),
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn type_tag_equals_sig_token(
+    module: &CompiledModule,
+    function_type_arguments: &[TypeTag],
+    arg_type: &TypeTag,
+    param_type: &SignatureToken,
+) -> bool {
+    match (arg_type, param_type) {
+        (TypeTag::Bool, SignatureToken::Bool)
+        | (TypeTag::U8, SignatureToken::U8)
+        | (TypeTag::U64, SignatureToken::U64)
+        | (TypeTag::U128, SignatureToken::U128)
+        | (TypeTag::Address, SignatureToken::Address)
+        | (TypeTag::Signer, SignatureToken::Signer) => true,
+
+        (TypeTag::Vector(inner_arg_type), SignatureToken::Vector(inner_param_type)) => {
+            type_tag_equals_sig_token(
+                module,
+                function_type_arguments,
+                inner_arg_type,
+                inner_param_type,
+            )
+        }
+
+        (TypeTag::Struct(arg_struct), SignatureToken::Struct(_))
+        | (TypeTag::Struct(arg_struct), SignatureToken::StructInstantiation(_, _)) => {
+            struct_tag_equals_sig_token(module, function_type_arguments, arg_struct, param_type)
+        }
+
+        (_, SignatureToken::TypeParameter(idx)) => {
+            arg_type == &function_type_arguments[*idx as usize]
+        }
+        _ => false,
+    }
+}
+
+fn struct_tag_equals_sig_token(
+    module: &CompiledModule,
+    function_type_arguments: &[TypeTag],
+    arg_type: &StructTag,
+    param_type: &SignatureToken,
+) -> bool {
+    match param_type {
+        SignatureToken::Struct(idx) => {
+            struct_tag_equals_struct_inst(module, function_type_arguments, arg_type, *idx, &[])
+        }
+        SignatureToken::StructInstantiation(idx, args) => {
+            struct_tag_equals_struct_inst(module, function_type_arguments, arg_type, *idx, args)
+        }
+        _ => false,
+    }
+}
+
+fn struct_tag_equals_struct_inst(
+    module: &CompiledModule,
+    function_type_arguments: &[TypeTag],
+    arg_type: &StructTag,
+    param_type: StructHandleIndex,
+    param_type_arguments: &[SignatureToken],
+) -> bool {
+    let (address, module_name, struct_name) = sui_verifier::resolve_struct(module, param_type);
+
+    // same address
+    &arg_type.address == address
+    // same module
+        && arg_type.module.as_ident_str() == module_name
+        // same struct name
+        && arg_type.name.as_ident_str() == struct_name
+        // same type parameters
+        && arg_type.type_params.len() == param_type_arguments.len()
+        && arg_type.type_params.iter().zip(param_type_arguments).all(
+            |(arg_type_arg, param_type_arg)| {
+                type_tag_equals_sig_token(
+                    module,
+                    function_type_arguments,
+                    arg_type_arg,
+                    param_type_arg,
+                )
+            },
+        )
 }

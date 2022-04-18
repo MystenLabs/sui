@@ -7,7 +7,7 @@ use thiserror::Error;
 use typed_store::rocks::TypedStoreError;
 
 use crate::base_types::*;
-use move_binary_format::errors::PartialVMError;
+use move_binary_format::errors::{PartialVMError, VMError};
 use serde::{Deserialize, Serialize};
 
 #[macro_export]
@@ -272,6 +272,8 @@ pub enum SuiError {
     },
     #[error("Inconsistent results observed in the Gateway. This should not happen and typically means there is a bug in the Sui implementation. Details: {error:?}")]
     InconsistentGatewayResult { error: String },
+    #[error("Invalid transactiojn range query to the gateway: {:?}", error)]
+    GatewayInvalidTxRangeQuery { error: String },
 
     // Errors related to the authority-consensus interface.
     #[error("Authority state can be modified by a single consensus client at the time")]
@@ -280,8 +282,17 @@ pub enum SuiError {
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
 
+// TODO these are both horribly wrong, categorization needs to be considered
 impl std::convert::From<PartialVMError> for SuiError {
     fn from(error: PartialVMError) -> Self {
+        SuiError::ModuleVerificationFailure {
+            error: error.to_string(),
+        }
+    }
+}
+
+impl std::convert::From<VMError> for SuiError {
+    fn from(error: VMError) -> Self {
         SuiError::ModuleVerificationFailure {
             error: error.to_string(),
         }

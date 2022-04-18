@@ -14,7 +14,7 @@ module Games::SharedTicTacToeTests {
     const DRAW: u8 = 3;
 
     #[test]
-    fun play_tictactoe() {
+    public(script) fun play_tictactoe() {
         let player_x = @0x0;
         let player_o = @0x1;
 
@@ -72,16 +72,16 @@ module Games::SharedTicTacToeTests {
 
         // X has the Trophy
         TestScenario::next_tx(scenario, &player_x);
-        assert!(TestScenario::can_remove_object<Trophy>(scenario), 1);
+        assert!(TestScenario::can_take_object<Trophy>(scenario), 1);
 
         TestScenario::next_tx(scenario, &player_o);
         // O has no Trophy
-        assert!(!TestScenario::can_remove_object<Trophy>(scenario), 2);
+        assert!(!TestScenario::can_take_object<Trophy>(scenario), 2);
     }
 
 
     #[test]
-    fun play_tictactoe_draw() {
+    public(script) fun play_tictactoe_draw() {
         let player_x = @0x0;
         let player_o = @0x1;
 
@@ -182,13 +182,13 @@ module Games::SharedTicTacToeTests {
 
         // No one has the trophy
         TestScenario::next_tx(scenario, &player_x);
-        assert!(!TestScenario::can_remove_object<Trophy>(scenario), 1);
+        assert!(!TestScenario::can_take_object<Trophy>(scenario), 1);
         TestScenario::next_tx(scenario, &player_o);
-        assert!(!TestScenario::can_remove_object<Trophy>(scenario), 1);
+        assert!(!TestScenario::can_take_object<Trophy>(scenario), 1);
     }
 
 
-    fun place_mark(
+    public(script) fun place_mark(
         row: u8,
         col: u8,
         player: &address,
@@ -199,7 +199,7 @@ module Games::SharedTicTacToeTests {
         TestScenario::next_tx(scenario, player);
         let status;
         {
-            let game = TestScenario::remove_object<TicTacToe>(scenario);
+            let game = TestScenario::take_object<TicTacToe>(scenario);
             SharedTicTacToe::place_mark(&mut game, row, col, TestScenario::ctx(scenario));
             status = SharedTicTacToe::get_status(&game);
             TestScenario::return_object(scenario, game);

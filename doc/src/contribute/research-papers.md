@@ -12,11 +12,11 @@ our latest design, inspired from previous works below.
 * **Link:** https://arxiv.org/abs/2003.11506
 * **Publication:** ACM Conference on Advances in Financial Technologies (AFT), 2020
 * **Relevance:** FastPay describes the core protocol at the heart of Sui.
-* **Summary:** FastPay allows a set of distributed authorities, some of which are Byzantine, to maintain a high-integrity and availability
+* **Summary:** FastPay allows a set of distributed validators, some of which are Byzantine, to maintain a high-integrity and availability
   settlement system for pre-funded payments. It can be used to settle payments in a native unit of value (crypto-currency), or as a financial
   side-infrastructure to support retail payments in fiat currencies. This is not the protocol Sui uses, yet it proposes the basic safety mechanism
   that Sui extends. FastPay is based on Byzantine Consistent Broadcast as its core primitive, foregoing the expenses of full atomic commit channels
-  (consensus). The resulting system has low-latency for both confirmation and payment finality. Remarkably, each authority can be sharded across many
+  (consensus). The resulting system has low-latency for both confirmation and payment finality. Remarkably, each validator can be sharded across many
   machines to allow unbounded horizontal scalability. 
 
 ## Narwhal and Tusk: A DAG-based Mempool and Efficient BFT Consensus
@@ -44,7 +44,7 @@ our latest design, inspired from previous works below.
   to add strong privacy to FastPay transactions (but Sui does not plan to do this).
 * **Summary:** We introduce Zef, the first Byzantine-Fault Tolerant (BFT) protocol to support payments in anonymous digital coins at arbitrary scale. Zef
   follows the communication and security model of FastPay: both protocols are asynchronous, low-latency, linearly-scalable, and powered by partially-trusted
-  sharded authorities. Zef further introduces opaque coins represented as off-chain certificates that are bound to user accounts. In order to hide the face
+  sharded validators. Zef further introduces opaque coins represented as off-chain certificates that are bound to user accounts. In order to hide the face
   values of coins when a payment operation consumes or creates them, Zef uses random commitments and NIZK proofs. Created coins are made unlinkable using the
   blind and randomizable threshold anonymous credentials of [Coconut](https://arxiv.org/pdf/1802.07344.pdf). To control storage costs associated with coin
   replay prevention, Zef accounts are designed so that data can be safely removed once an account is deactivated. Besides the specifications and a detailed
