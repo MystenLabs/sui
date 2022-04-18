@@ -49,14 +49,6 @@ Because Sui focuses on managing specific objects rather than a single aggregate 
 
 As a consequence, a Sui validator -- or any other validator with a copy of the state -- can exhibit a causal history of an object, showing its history since genesis. Sui explicitly makes the bet that in most cases, the ordering of that causal history with the causal history of another object is irrelevant; and in the few cases where this information is relevant, Sui makes this relationship explicit in the data.
 
-## Validators vs. validators/miners
-
-A validator plays a role similar to "validators" or "miners" in other blockchain systems. The key distinction between these roles (and the reason we insist on using a separate term) is that validators/miners are *active*, whereas validators are *passive* for the main type of Sui transaction involving single-writer objects. Broadly speaking, to deal with a transfer:
-
-* Miners/validators continuously participate in a global consensus protocol that requires multiple rounds of all-to-all communication between the participants. The goal is typically to agree on a *totally ordered* block of transactions and the result of their execution.
-
-* Validators do nothing until they receive a transaction or certificate from a user. Upon receiving a transaction or certificate, a validator need not communicate with other validators in order to take action and advance its internal state machine. It may wish to communicate with other validators to share certificates but need not do so.
-
 ## Causal order vs. total order
 
 Unlike most existing blockchain systems (and as the reader may have guessed from the description of write requests above), Sui does not always impose a total order on the transactions submitted by clients, with shared objects being the exception. Instead, most transactions are *causally* ordered--if a transaction `T1` produces output objects `O1` that are used as input objects in a transaction `T2`, a validator must execute `T1` before it executes `T2`. Note that `T2` need not use these objects directly for a causal relationship to exist--e.g., `T1` might produce output objects which are then used by `T3`, and `T2` might use `T3`'s output objects. However, transactions with no causal relationship can be processed by Sui validators in any order.
