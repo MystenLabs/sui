@@ -89,34 +89,6 @@ impl AuthorityBatch {
             transactions_digest,
         })
     }
-
-    /// Make a batch, containing some transactions, and following the previous
-    /// batch, using the digest of the previous batch.
-    pub fn make_next_with_previous_digest(
-        previous_batch_digest: Option<BatchDigest>,
-        transactions: &[(TxSequenceNumber, TransactionDigest)],
-    ) -> Result<AuthorityBatch, SuiError> {
-        let transaction_vec = transactions.to_vec();
-        if transaction_vec.is_empty() {
-            return Err(SuiError::GenericAuthorityError {
-                error: "Transaction number must be positive.".to_string(),
-            });
-        };
-
-        let initial_sequence_number = transaction_vec[0].0 as u64;
-        let next_sequence_number = (transaction_vec[transaction_vec.len() - 1].0 + 1) as u64;
-
-        let transaction_batch = TransactionBatch(transaction_vec);
-        let transactions_digest = sha3_hash(&transaction_batch);
-
-        Ok(AuthorityBatch {
-            next_sequence_number,
-            initial_sequence_number,
-            size: transactions.len() as u64,
-            previous_digest: previous_batch_digest,
-            transactions_digest,
-        })
-    }
 }
 
 /// An transaction signed by a single authority
