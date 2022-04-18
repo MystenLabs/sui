@@ -14,8 +14,8 @@ use sui::rpc_gateway::RpcGatewayImpl;
 use sui::rpc_gateway::RpcGatewayServer;
 use sui::sui_config_dir;
 
-const DEFAULT_REST_SERVER_PORT: &str = "5001";
-const DEFAULT_REST_SERVER_ADDR_IPV4: &str = "127.0.0.1";
+const DEFAULT_RPC_SERVER_PORT: &str = "5001";
+const DEFAULT_RPC_SERVER_ADDR_IPV4: &str = "127.0.0.1";
 
 #[cfg(test)]
 #[path = "unit_tests/rpc_server_tests.rs"]
@@ -31,10 +31,10 @@ struct RpcGatewayOpt {
     #[clap(long)]
     config: Option<PathBuf>,
 
-    #[clap(long, default_value = DEFAULT_REST_SERVER_PORT)]
+    #[clap(long, default_value = DEFAULT_RPC_SERVER_PORT)]
     port: u16,
 
-    #[clap(long, default_value = DEFAULT_REST_SERVER_ADDR_IPV4)]
+    #[clap(long, default_value = DEFAULT_RPC_SERVER_ADDR_IPV4)]
     host: Ipv4Addr,
 }
 
