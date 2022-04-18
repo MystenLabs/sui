@@ -329,7 +329,6 @@ where
 
                 let x = match &batch_info_item {
                     Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
-                        println!("batch {:?}", signed_batch.batch);
                         if let Err(err) = client.check_update_item_batch_response(
                             req_clone,
                             &signed_batch,
@@ -358,7 +357,6 @@ where
                             client.report_client_error(err.clone());
                             Some(Err(err))
                         } else {
-                            println!("Add transactions");
                             Some(batch_info_item)
                         }
                     }

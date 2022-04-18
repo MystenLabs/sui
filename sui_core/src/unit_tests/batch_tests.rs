@@ -380,7 +380,6 @@ async fn test_batch_store_retrieval() {
         .batches_and_transactions(94, 120)
         .expect("Retrieval failed!");
 
-    println!("{:?}", batches);
     assert_eq!(3, batches.len());
     assert_eq!(90, batches.first().unwrap().batch.next_sequence_number);
     assert_eq!(115, batches.last().unwrap().batch.next_sequence_number);
@@ -740,7 +739,6 @@ async fn test_safe_batch_stream() {
     let mut error_found = false;
     for item in items {
         if item.is_err() {
-            println!("!!!!!!!!!!!!!!!!!! {:?}", item);
             error_found = true;
         }
     }
