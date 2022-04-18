@@ -70,7 +70,9 @@ impl AuthorityBatch {
     ) -> Result<AuthorityBatch, SuiError> {
         let transaction_vec = transactions.to_vec();
         if transaction_vec.is_empty() {
-            return Err(SuiError::GenericAuthorityError{ error: "Transaction number must be positive.".to_string()});
+            return Err(SuiError::GenericAuthorityError {
+                error: "Transaction number must be positive.".to_string(),
+            });
         };
 
         let initial_sequence_number = transaction_vec[0].0 as u64;
@@ -93,10 +95,12 @@ impl AuthorityBatch {
     pub fn make_next_with_previous_digest(
         previous_batch_digest: Option<BatchDigest>,
         transactions: &[(TxSequenceNumber, TransactionDigest)],
-    ) ->  Result<AuthorityBatch, SuiError> {
+    ) -> Result<AuthorityBatch, SuiError> {
         let transaction_vec = transactions.to_vec();
         if transaction_vec.is_empty() {
-            return Err(SuiError::GenericAuthorityError{ error: "Transaction number must be positive.".to_string()});
+            return Err(SuiError::GenericAuthorityError {
+                error: "Transaction number must be positive.".to_string(),
+            });
         };
 
         let initial_sequence_number = transaction_vec[0].0 as u64;
