@@ -380,6 +380,7 @@ async fn test_batch_store_retrieval() {
         .batches_and_transactions(94, 120)
         .expect("Retrieval failed!");
 
+    println!("{:?}", batches);
     assert_eq!(3, batches.len());
     assert_eq!(90, batches.first().unwrap().batch.next_sequence_number);
     assert_eq!(115, batches.last().unwrap().batch.next_sequence_number);
@@ -470,39 +471,30 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         let name = self.0.lock().await.name;
         let batch_size = 3;
 
-        let mut items = Vec::new();
-        let mut last_batch = AuthorityBatch::initial();
-        items.push({
-            let item = SignedBatch::new(last_batch.clone(), &*secret, name);
-            BatchInfoResponseItem(UpdateItem::Batch(item))
-        });
-        let mut seq = 0;
-        while last_batch.next_sequence_number < request.end {
-            let mut transactions = Vec::new();
-            for _i in 0..batch_size {
-                let rnd = TransactionDigest::random();
-                transactions.push((seq, rnd));
-                items.push(BatchInfoResponseItem(UpdateItem::Transaction((seq, rnd))));
-                seq += 1;
-            }
+        let stream = stream::unfold(
+            (request.start, AuthorityBatch::initial()),
+            move |(seq, last_batch)| {
+                let auth_secret = secret.clone();
+                async move {
+                    if seq <= request.end {
+                        let mut transactions = Vec::new();
+                        for i in 0..batch_size {
+                            transactions.push((seq + i, TransactionDigest::random()));
+                        }
+                        let next = AuthorityBatch::make_next_with_previous_digest(
+                            Some(last_batch.digest()),
+                            &transactions,
+                        );
 
-            let new_batch = AuthorityBatch::make_next(&last_batch, &transactions).unwrap();
-            last_batch = new_batch;
-            items.push({
-                let item = SignedBatch::new(last_batch.clone(), &*secret, name);
-                BatchInfoResponseItem(UpdateItem::Batch(item))
-            });
-        }
-
-        items.reverse();
-
-        let stream = stream::unfold(items, |mut items| async move {
-            if let Some(item) = items.pop() {
-                Some((Ok(item), items))
-            } else {
-                None
-            }
-        });
+                        let item = SignedBatch::new(next.clone(), &*auth_secret, name);
+                        let response = BatchInfoResponseItem(UpdateItem::Batch(item));
+                        Some((Ok(response), (seq + batch_size, next)))
+                    } else {
+                        None
+                    }
+                }
+            },
+        );
         Ok(Box::pin(stream))
     }
 }
@@ -583,45 +575,57 @@ impl AuthorityAPI for ByzantineAuthorityClient {
         let name = self.0.lock().await.name;
         let batch_size = 3;
 
-        let mut items = Vec::new();
-        let mut last_batch = AuthorityBatch::initial();
-        items.push({
-            let item = SignedBatch::new(last_batch.clone(), &*secret, name);
-            BatchInfoResponseItem(UpdateItem::Batch(item))
-        });
-        let mut seq = 0;
-        while last_batch.next_sequence_number < request.end {
-            let mut transactions = Vec::new();
-            for _i in 0..batch_size {
-                let rnd = TransactionDigest::random();
-                transactions.push((seq, rnd));
-                items.push(BatchInfoResponseItem(UpdateItem::Transaction((seq, rnd))));
-                seq += 1;
-            }
+        let stream = stream::unfold(
+            (request.start, AuthorityBatch::initial()),
+            move |(seq, last_batch)| {
+                let auth_secret = secret.clone();
+                async move {
+                    if request.end % 2 == 0 {
+                        if seq <= request.end {
+                            let mut transactions = Vec::new();
+                            for i in 0..batch_size {
+                                transactions.push((seq + i, TransactionDigest::random()));
+                            }
+                            let next = AuthorityBatch::make_next_with_previous_digest(
+                                Some(last_batch.digest()),
+                                &transactions,
+                            );
 
-            // Introduce byzantine behaviour:
-            // Pop last transaction
-            let (seq, _) = transactions.pop().unwrap();
-            // Insert a different one
-            transactions.push((seq, TransactionDigest::random()));
+                            let mut item = SignedBatch::new(next.clone(), &*auth_secret, name);
+                            // Remove a transaction after creating the batch
+                            item.batch.transaction_batch.0.pop();
+                            // And then add in a fake transaction
+                            item.batch
+                                .transaction_batch
+                                .0
+                                .push((seq + batch_size, TransactionDigest::random()));
+                            let response = BatchInfoResponseItem(UpdateItem::Batch(item));
+                            Some((Ok(response), (seq + batch_size, next)))
+                        } else {
+                            None
+                        }
+                    } else {
+                        // Byzantine authority sends you too much, not what you asked for.
+                        if seq <= request.end * 100 {
+                            let mut transactions = Vec::new();
+                            for i in 0..batch_size {
+                                transactions.push((seq + i, TransactionDigest::random()));
+                            }
+                            let next = AuthorityBatch::make_next_with_previous_digest(
+                                Some(last_batch.digest()),
+                                &transactions,
+                            );
 
-            let new_batch = AuthorityBatch::make_next(&last_batch, &transactions).unwrap();
-            last_batch = new_batch;
-            items.push({
-                let item = SignedBatch::new(last_batch.clone(), &*secret, name);
-                BatchInfoResponseItem(UpdateItem::Batch(item))
-            });
-        }
-
-        items.reverse();
-
-        let stream = stream::unfold(items, |mut items| async move {
-            if let Some(item) = items.pop() {
-                Some((Ok(item), items))
-            } else {
-                None
-            }
-        });
+                            let item = SignedBatch::new(next.clone(), &*auth_secret, name);
+                            let response = BatchInfoResponseItem(UpdateItem::Batch(item));
+                            Some((Ok(response), (seq + batch_size, next)))
+                        } else {
+                            None
+                        }
+                    }
+                }
+            },
+        );
         Ok(Box::pin(stream))
     }
 }
@@ -674,9 +678,8 @@ async fn test_safe_batch_stream() {
         .collect::<Vec<Result<BatchInfoResponseItem, SuiError>>>()
         .await;
 
-    // Check length
-    assert!(!items.is_empty());
-    assert_eq!(items.len(), 15 + 6); // 15 items, and 6 batches (enclosing them)
+    // Length should be within sequenced range
+    assert!(items.len() <= (request.end - request.start) as usize && !items.is_empty());
 
     let mut error_found = false;
     for item in items {
@@ -719,9 +722,8 @@ async fn test_safe_batch_stream() {
         .collect::<Vec<Result<BatchInfoResponseItem, SuiError>>>()
         .await;
 
-    // Check length
-    assert!(!items.is_empty());
-    assert_eq!(items.len(), 15 + 6); // 15 items, and 6 batches (enclosing them)
+    // Length should be within sequenced range, despite authority that never stop sending
+    assert!(items.len() <= (request.end - request.start) as usize && !items.is_empty());
 
     let request_b = BatchInfoRequest { start: 0, end: 10 };
     batch_stream = safe_client_from_byzantine
