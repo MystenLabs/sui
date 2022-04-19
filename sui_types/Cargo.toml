@@ -38,6 +38,6 @@ move-core-types = { git = "https://github.com/move-language/move", rev = "2e7c37
 move-disassembler = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
 move-ir-types = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", branch = "output-tx", package = "executor" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "cf0cd2873e8e8d15c4e393f0a9b75a178d661069", package = "executor" }
 
 sha2 = "0.10.2"

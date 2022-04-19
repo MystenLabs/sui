@@ -1,6 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::config::{
+    AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
+};
+use crate::gateway::{GatewayConfig, GatewayType};
+use crate::keystore::{Keystore, KeystoreType, SuiKeystore};
+use crate::{sui_config_dir, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use anyhow::{anyhow, bail};
 use clap::*;
 use futures::future::join_all;
@@ -24,13 +30,6 @@ use sui_types::error::SuiResult;
 use sui_types::object::Object;
 use tokio::sync::mpsc::channel;
 use tracing::{error, info};
-
-use crate::config::{
-    AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
-};
-use crate::gateway::{GatewayConfig, GatewayType};
-use crate::keystore::{Keystore, KeystoreType, SuiKeystore};
-use crate::{sui_config_dir, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -420,6 +419,18 @@ async fn make_authority(
 
     // TODO [issue #633]: Spawn the consensus node of this authority.
     let _tx_consensus_to_sui = tx_consensus_to_sui;
+    /*
+    let consensus_store = consensus_node::NodeStorage::reopen(store_path);
+    consensus_node::spawn_primary(
+        keypair,
+        consensus_committee,
+        &consensus_store,
+        consensus_parameters,
+        /* consensus */ true, // Indicate that we want to run consensus.
+        Arc::new(state),
+        /* tx_confirmation */ tx_consensus_to_sui
+    )
+    */
 
     // Spawn a consensus listener. It listen for consensus outputs and notifies the
     // authority server when a sequenced transaction is ready for execution.
