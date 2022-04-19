@@ -590,8 +590,8 @@ async fn handle_move_call(
     for arg in call_params.arguments {
         arguments.push(match arg {
             CallRequestArg::Pure(arg) => CallArg::Pure(Base64::decode_vec(arg)?),
-            CallRequestArg::MutSharedObject(id) => CallArg::SharedObject(ObjectID::try_from(id)?),
-            CallRequestArg::Object(id) => {
+            CallRequestArg::SharedObject(id) => CallArg::SharedObject(ObjectID::try_from(id)?),
+            CallRequestArg::ImmOrOwnedObject(id) => {
                 let (object_ref, _, _) = get_object_info(gateway, ObjectID::try_from(id)?).await?;
                 CallArg::ImmOrOwnedObject(object_ref)
             }

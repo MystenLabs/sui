@@ -3,7 +3,8 @@
 
 use crate::rest_gateway::responses::ObjectResponse;
 use crate::rpc_gateway::{
-    Base64EncodedBytes, RpcGatewayClient as RpcGateway, SignedTransaction, TransactionBytes,
+    Base64EncodedBytes, RpcCallArg, RpcGatewayClient as RpcGateway, SignedTransaction,
+    TransactionBytes,
 };
 use anyhow::Error;
 use async_trait::async_trait;
@@ -13,7 +14,7 @@ use move_core_types::language_storage::TypeTag;
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
-use sui_types::messages::{CertifiedTransaction, Transaction, TransactionData};
+use sui_types::messages::{CallArg, CertifiedTransaction, Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 use tokio::runtime::Handle;
 
@@ -69,15 +70,16 @@ impl GatewayAPI for RpcGatewayClient {
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         gas_object_ref: ObjectRef,
-        object_arguments: Vec<ObjectRef>,
-        shared_object_arguments: Vec<ObjectID>,
-        pure_arguments: Vec<Vec<u8>>,
+        arguments: Vec<CallArg>,
         gas_budget: u64,
     ) -> Result<TransactionData, Error> {
-        let pure_arguments = pure_arguments.into_iter().map(Base64EncodedBytes).collect();
-        let object_arguments = object_arguments
+        let arguments = arguments
             .into_iter()
-            .map(|object_ref| object_ref.0)
+            .map(|arg| match arg {
+                CallArg::Pure(bytes) => RpcCallArg::Pure(Base64EncodedBytes(bytes)),
+                CallArg::ImmOrOwnedObject((id, _, _)) => RpcCallArg::ImmOrOwnedObject(id),
+                CallArg::SharedObject(id) => RpcCallArg::SharedObject(id),
+            })
             .collect();
 
         let bytes: TransactionBytes = self
@@ -88,11 +90,9 @@ impl GatewayAPI for RpcGatewayClient {
                 module,
                 function,
                 type_arguments,
-                pure_arguments,
+                arguments,
                 gas_object_ref.0,
                 gas_budget,
-                object_arguments,
-                shared_object_arguments,
             )
             .await?;
         bytes.to_data()

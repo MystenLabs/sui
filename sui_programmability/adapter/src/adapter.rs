@@ -17,7 +17,7 @@ use sui_types::{
     fp_ensure,
     gas::SuiGasStatus,
     id::VersionedID,
-    messages::CallArg,
+    messages::{CallArg, InputObjectKind},
     object::{self, Data, MoveObject, Object, Owner},
     storage::{DeleteKind, Storage},
 };
@@ -674,7 +674,7 @@ pub fn resolve_and_type_check(
         .enumerate()
         .map(|(idx, arg)| {
             let param_type = &parameters[idx];
-            match arg {
+            let object_kind = match arg {
                 CallArg::Pure(arg) => {
                     if !is_primitive(module, type_args, param_type) {
                         return Err(SuiError::TypeError {
@@ -685,76 +685,98 @@ pub fn resolve_and_type_check(
                             ),
                         });
                     }
-                    Ok(arg)
+                    return Ok(arg);
                 }
-                CallArg::ImmOrOwnedObject((id, _, _)) | CallArg::SharedObject(id) => {
-                    let object = match objects.get(&id) {
-                        Some(object) => object.borrow(),
-                        None => {
-                            debug_assert!(
-                                false,
-                                "Object map not populated for arg {} with id {}",
-                                idx, id
-                            );
-                            return Err(SuiError::ExecutionInvariantViolation);
-                        }
-                    };
-                    object_data.insert(id, (object.owner, object.version()));
-                    let move_object = match &object.data {
-                        Data::Move(m) => m,
-                        Data::Package(_) => {
-                            let error = format!(
-                                "Found module argument, but function expects {:?}",
-                                param_type
-                            );
-                            return Err(SuiError::TypeError { error });
-                        }
-                    };
-                    let object_arg = move_object.contents().to_vec();
-                    // check that m.type_ matches the parameter types of the function
-                    let inner_param_type = match &param_type {
-                        SignatureToken::Reference(inner_t) => &**inner_t,
-                        SignatureToken::MutableReference(inner_t) => {
-                            if object.is_immutable() {
-                                let error = format!(
-                                    "Argument {} is expected to be mutable, immutable object found",
-                                    idx
-                                );
-                                return Err(SuiError::TypeError { error });
-                            }
-                            mutable_ref_objects.insert(idx as LocalIndex, id);
-                            &**inner_t
-                        }
-                        t @ SignatureToken::Struct(_)
-                        | t @ SignatureToken::StructInstantiation(_, _)
-                        | t @ SignatureToken::TypeParameter(_) => {
-                            if !object.is_owned() {
-                                // Forbid passing shared (both mutable and immutable) object by value.
-                                // This ensures that shared object cannot be transferred, deleted or wrapped.
-                                return Err(SuiError::TypeError {
-                                    error: format!(
-                                        "Only owned object can be passed by-value, violation found \
-                                        in argument {}",
-                                        idx
-                                    ),
-                                });
-                            }
-                            by_value_objects.insert(id);
-                            t
-                        }
-                        t => {
-                            return Err(SuiError::TypeError {
-                                error: format!(
-                                    "Found object argument {}, but function expects {:?}",
-                                    move_object.type_, t
-                                ),
-                            })
-                        }
-                    };
-                    type_check_struct(module, type_args, &move_object.type_, inner_param_type)?;
-                    Ok(object_arg)
+                CallArg::ImmOrOwnedObject(ref_) => InputObjectKind::ImmOrOwnedMoveObject(ref_),
+                CallArg::SharedObject(id) => InputObjectKind::SharedMoveObject(id),
+            };
+
+            let id = object_kind.object_id();
+            let object = match objects.get(&id) {
+                Some(object) => object.borrow(),
+                None => {
+                    debug_assert!(
+                        false,
+                        "Object map not populated for arg {} with id {}",
+                        idx, id
+                    );
+                    return Err(SuiError::ExecutionInvariantViolation);
                 }
+            };
+            match object_kind {
+                InputObjectKind::ImmOrOwnedMoveObject(_) if object.is_shared() => {
+                    let error = format!(
+                        "Argument at index {} populated with shared object id {} \
+                        but an immutable or owned object was expected",
+                        idx, id
+                    );
+                    return Err(SuiError::TypeError { error });
+                }
+                InputObjectKind::SharedMoveObject(_) if !object.is_shared() => {
+                    let error = format!(
+                        "Argument at index {} populated with an immutable or owned object id {} \
+                        but an shared object was expected",
+                        idx, id
+                    );
+                    return Err(SuiError::TypeError { error });
+                }
+                _ => (),
             }
+
+            object_data.insert(id, (object.owner, object.version()));
+            let move_object = match &object.data {
+                Data::Move(m) => m,
+                Data::Package(_) => {
+                    let error = format!(
+                        "Found module argument, but function expects {:?}",
+                        param_type
+                    );
+                    return Err(SuiError::TypeError { error });
+                }
+            };
+            let object_arg = move_object.contents().to_vec();
+            // check that m.type_ matches the parameter types of the function
+            let inner_param_type = match &param_type {
+                SignatureToken::Reference(inner_t) => &**inner_t,
+                SignatureToken::MutableReference(inner_t) => {
+                    if object.is_immutable() {
+                        let error = format!(
+                            "Argument {} is expected to be mutable, immutable object found",
+                            idx
+                        );
+                        return Err(SuiError::TypeError { error });
+                    }
+                    mutable_ref_objects.insert(idx as LocalIndex, id);
+                    &**inner_t
+                }
+                t @ SignatureToken::Struct(_)
+                | t @ SignatureToken::StructInstantiation(_, _)
+                | t @ SignatureToken::TypeParameter(_) => {
+                    if !object.is_owned() {
+                        // Forbid passing shared (both mutable and immutable) object by value.
+                        // This ensures that shared object cannot be transferred, deleted or wrapped.
+                        return Err(SuiError::TypeError {
+                            error: format!(
+                                "Only owned object can be passed by-value, violation found \
+                                        in argument {}",
+                                idx
+                            ),
+                        });
+                    }
+                    by_value_objects.insert(id);
+                    t
+                }
+                t => {
+                    return Err(SuiError::TypeError {
+                        error: format!(
+                            "Found object argument {}, but function expects {:?}",
+                            move_object.type_, t
+                        ),
+                    })
+                }
+            };
+            type_check_struct(module, type_args, &move_object.type_, inner_param_type)?;
+            Ok(object_arg)
         })
         .collect::<SuiResult<Vec<_>>>()?;
 

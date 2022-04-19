@@ -54,9 +54,9 @@ pub enum CallRequestArg {
     /// Base64 encoded non-object argument
     Pure(String),
     /// Object arguments
-    Object(String),
+    ImmOrOwnedObject(String),
     /// Shared object arguments
-    MutSharedObject(String),
+    SharedObject(String),
 }
 
 /// Request containing the information required to create a move module call transaction.

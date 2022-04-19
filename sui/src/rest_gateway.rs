@@ -109,8 +109,10 @@ impl GatewayAPI for RestGatewayClient {
             .iter()
             .map(|arg| match arg {
                 CallArg::Pure(bytes) => CallRequestArg::Pure(Base64::encode_string(bytes)),
-                CallArg::ImmOrOwnedObject((id, _, _)) => CallRequestArg::Object(id.to_hex()),
-                CallArg::SharedObject(id) => CallRequestArg::MutSharedObject(id.to_hex()),
+                CallArg::ImmOrOwnedObject((id, _, _)) => {
+                    CallRequestArg::ImmOrOwnedObject(id.to_hex())
+                }
+                CallArg::SharedObject(id) => CallRequestArg::SharedObject(id.to_hex()),
             })
             .collect();
 

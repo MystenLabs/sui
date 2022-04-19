@@ -470,7 +470,7 @@ where
                 .into())
             }
         };
-        let split_amounts: Vec<u64> = bcs::from_bytes(&split_arg)?;
+        let split_amounts: Vec<u64> = bcs::from_bytes(split_arg)?;
 
         if let ExecutionStatus::Failure { gas_cost: _, error } = effects.status {
             return Err(error.into());
