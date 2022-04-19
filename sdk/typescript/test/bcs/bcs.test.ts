@@ -1,4 +1,4 @@
-import * as BCS from '../../src/bcs';
+import { MoveBCS as BCS } from '../../src/bcs';
 import { Base64DataBuffer as B64 } from '../../src';
 import { BN } from 'bn.js';
 

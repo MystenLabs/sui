@@ -334,7 +334,7 @@ interface TypeInterface {
 /**
  * BCS implementation for Move types and few additional built-ins.
  */
-class MoveBCS {
+export class MoveBCS {
 
     // Prefefined types constants
     static readonly U8: string = 'u8';
@@ -640,11 +640,6 @@ class MoveBCS {
         (str: string) => /^[\x00-\x7F]*$/.test(str)
     )
 })();
-
-
-
-
-
 
 export const util = {
     /**
