@@ -33,6 +33,7 @@ serde-name = "0.2.0"
 dirs = "4.0.0"
 clap = { version = "3.1.8", features = ["derive"] }
 telemetry_subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a45af6dc28aa12c8cc13521d118c24aadd4c6adf" }
+base64ct = { version = "1.5.0", features = ["alloc"] }
 
 bcs = "0.1.3"
 sui_core = { path = "../sui_core" }
@@ -89,3 +90,7 @@ path = "src/rest_server.rs"
 [[bin]]
 name = "validator"
 path = "src/validator.rs"
+
+[[bin]]
+name = "key_tool"
+path = "src/key_tool.rs"

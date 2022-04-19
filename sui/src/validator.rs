@@ -35,8 +35,8 @@ async fn main() -> Result<(), anyhow::Error> {
         json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
         ..Default::default()
     };
-    #[allow(unused)]
-    let guard = telemetry_subscribers::init(config);
+
+    let _guard = telemetry_subscribers::init(config);
 
     let cfg = ValidatorOpt::parse();
     let genesis_conf: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;

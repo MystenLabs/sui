@@ -1,9 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use anyhow::anyhow;
 use anyhow::Error;
 use base64ct::{Base64, Encoding};
 use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::str::FromStr;
 
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::error::{SuiError, SuiResult};
@@ -16,7 +18,6 @@ use serde::{Deserialize, Serialize};
 use sha3::Sha3_256;
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
-#[derive(Debug)]
 pub struct KeyPair {
     key_pair: dalek::Keypair,
     public_key_cell: OnceCell<PublicKeyBytes>,
@@ -67,6 +68,27 @@ impl<'de> Deserialize<'de> for KeyPair {
             key_pair: key,
             public_key_cell: OnceCell::new(),
         })
+    }
+}
+
+impl FromStr for KeyPair {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let value = Base64::decode_vec(s).map_err(|e| anyhow!("{}", e.to_string()))?;
+        let key = dalek::Keypair::from_bytes(&value).map_err(|e| anyhow!("{}", e.to_string()))?;
+        Ok(KeyPair {
+            key_pair: key,
+            public_key_cell: OnceCell::new(),
+        })
+    }
+}
+
+impl std::fmt::Debug for KeyPair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        let s = Base64::encode_string(&self.key_pair.to_bytes());
+        write!(f, "{}", s)?;
+        Ok(())
     }
 }
 
