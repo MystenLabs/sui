@@ -144,7 +144,7 @@
         "name": "See what's New",
         "sublist": [{
             "name": "Learn Sui Consensus",
-            "url": "/learn/architecture/consensus.md"
+            "url": "/learn/architecture/consensus"
           },
           {
             "name": "Publish Move modules via Rest",
