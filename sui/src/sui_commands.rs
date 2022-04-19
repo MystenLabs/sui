@@ -41,6 +41,13 @@ pub enum SuiCommand {
         #[clap(long)]
         config: Option<PathBuf>,
     },
+    #[clap(name = "network")]
+    Network {
+        #[clap(long)]
+        config: Option<PathBuf>,
+        #[clap(short, long, help = "Dump the public keys of all authorities")]
+        dump_addresses: bool,
+    },
     #[clap(name = "genesis")]
     Genesis {
         #[clap(long, help = "Start genesis with a given config file")]
@@ -78,6 +85,28 @@ impl SuiCommand {
                     .await?
                     .wait_for_completion()
                     .await
+            }
+            SuiCommand::Network {
+                config,
+                dump_addresses,
+            } => {
+                let config_path = config
+                    .clone()
+                    .unwrap_or(sui_config_dir()?.join(SUI_NETWORK_CONFIG));
+                let config: NetworkConfig = PersistedConfig::read(&config_path).map_err(|err| {
+                    err.context(format!(
+                        "Cannot open Sui network config file at {:?}",
+                        config_path
+                    ))
+                })?;
+
+                if *dump_addresses {
+                    for auth in config.authorities.iter() {
+                        let addr = SuiAddress::from(auth.key_pair.public_key_bytes());
+                        println!("{}:{} - {}", auth.host, auth.port, addr);
+                    }
+                }
+                Ok(())
             }
             SuiCommand::Genesis {
                 working_dir,
