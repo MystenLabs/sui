@@ -20,6 +20,7 @@ use serde_with::serde_as;
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
 use sui_types::crypto::SignableBytes;
 use sui_types::messages::TransactionData;
+use sui_types::object::ObjectRead;
 
 #[serde_as]
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -130,5 +131,48 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpResponse for HttpRes
 
     fn metadata() -> ApiEndpointResponse {
         dropshot::HttpResponseOk::<T>::metadata()
+    }
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectExistsResponse {
+    object_ref: NamedObjectRef,
+    object: Value,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectNotExistsResponse {
+    object_id: String,
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "status", content = "details")]
+pub enum GetObjectInfoResponse {
+    Exists(ObjectExistsResponse),
+    NotExists(ObjectNotExistsResponse),
+    Deleted(NamedObjectRef),
+}
+
+impl TryFrom<ObjectRead> for GetObjectInfoResponse {
+    type Error = HttpError;
+
+    fn try_from(obj: ObjectRead) -> Result<Self, Self::Error> {
+        match obj {
+            ObjectRead::Exists(object_ref, object, layout) => {
+                Ok(Self::Exists(ObjectExistsResponse {
+                    object_ref: NamedObjectRef::from(object_ref),
+                    object: object.to_json(&layout).map_err(|e| {
+                        custom_http_error(StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+                    })?,
+                }))
+            }
+            ObjectRead::NotExists(object_id) => Ok(Self::NotExists(ObjectNotExistsResponse {
+                object_id: object_id.to_hex(),
+            })),
+            ObjectRead::Deleted(obj_ref) => Ok(Self::Deleted(NamedObjectRef::from(obj_ref))),
+        }
     }
 }
