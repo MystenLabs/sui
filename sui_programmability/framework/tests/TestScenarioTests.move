@@ -4,8 +4,8 @@
 #[test_only]
 module Sui::TestScenarioTests {
     use Sui::ID;
-    use Sui::TestScenario;
-    use Sui::Transfer;
+    use Sui::TestScenario::{Self, Scenario};
+    use Sui::Transfer::{Self, ChildRef};
     use Sui::TxContext;
 
     const ID_BYTES_MISMATCH: u64 = 0;
@@ -20,6 +20,11 @@ module Sui::TestScenarioTests {
     struct Wrapper has key {
         id: ID::VersionedID,
         child: Object,
+    }
+
+    struct Parent has key {
+        id: ID::VersionedID,
+        child: ChildRef<Object>,
     }
 
     #[test]
@@ -264,43 +269,59 @@ module Sui::TestScenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 100 /* ETRANSFER_SHARED_OBJECT */)]
-    fun test_freeze_then_transfer() {
+    fun test_take_child_object() {
         let sender = @0x0;
         let scenario = TestScenario::begin(&sender);
-        {
-            let obj = Object { id: TestScenario::new_id(&mut scenario), value: 100 };
-            Transfer::freeze_object(obj);
-        };
+        create_parent_and_object(&mut scenario);
+
         TestScenario::next_tx(&mut scenario, &sender);
         {
-            let obj = TestScenario::take_object<Object>(&mut scenario);
-            // Transfer an immutable object, this won't fail right away.
-            Transfer::transfer(obj, copy sender);
-        };
-        TestScenario::next_tx(&mut scenario, &sender);
-        {
-            // while removing the object, test scenario will read the inventory,
-            // and discover that we transferred an immutable object.
-            let obj = TestScenario::take_object<Object>(&mut scenario);
-            TestScenario::return_object(&mut scenario, obj);
+            // sender cannot take object directly.
+            assert!(!TestScenario::can_take_object<Object>(&scenario), 0);
+            // sender can take parent, however.
+            assert!(TestScenario::can_take_object<Parent>(&scenario), 0);
+
+            let parent = TestScenario::take_object<Parent>(&mut scenario);
+            // Make sure we can take the child object with the parent object.
+            let child = TestScenario::take_child_object<Parent, Object>(&mut scenario, &parent);
+            TestScenario::return_object(&mut scenario, parent);
+            TestScenario::return_object(&mut scenario, child);
         };
     }
 
+    #[expected_failure(abort_code = 3 /* EMPTY_INVENTORY */)]
     #[test]
-    #[expected_failure(abort_code = 101 /* EMUTATING_IMMUTABLE_OBJECT */)]
-    fun test_freeze_then_mutate() {
+    fun test_take_child_object_incorrect_signer() {
         let sender = @0x0;
         let scenario = TestScenario::begin(&sender);
-        {
-            let obj = Object { id: TestScenario::new_id(&mut scenario), value: 100 };
-            Transfer::freeze_object(obj);
-        };
+        create_parent_and_object(&mut scenario);
+
         TestScenario::next_tx(&mut scenario, &sender);
-        {
-            let obj = TestScenario::take_object<Object>(&mut scenario);
-            obj.value = 200;
-            TestScenario::return_object(&mut scenario, obj);
+        let parent = TestScenario::take_object<Parent>(&mut scenario);
+
+        let another = @0x1;
+        TestScenario::next_tx(&mut scenario, &another);
+        // This should fail even though we have parent object here.
+        // Because the signer doesn't match.
+        let child = TestScenario::take_child_object<Parent, Object>(&mut scenario, &parent);
+        TestScenario::return_object(&mut scenario, child);
+
+        TestScenario::return_object(&mut scenario, parent);
+    }
+
+    /// Create object and parent. object is a child of parent.
+    /// parent is owned by sender of `scenario`.
+    fun create_parent_and_object(scenario: &mut Scenario) {
+        let parent_id = TestScenario::new_id(scenario);
+        let object = Object {
+            id: TestScenario::new_id(scenario),
+            value: 10,
         };
+        let (parent_id, child) = Transfer::transfer_to_object_id(object, parent_id);
+        let parent = Parent {
+            id: parent_id,
+            child,
+        };
+        Transfer::transfer(parent, TestScenario::sender(scenario));
     }
 }

@@ -135,14 +135,15 @@ module Basics::LockTest {
         // User2 is impatient and he decides to take the treasure.
         TestScenario::next_tx(scenario, &user2);
         {
-            let lock = TestScenario::take_object<Lock<Treasure>>(scenario);
+            let lock_wrapper = TestScenario::take_shared_object<Lock<Treasure>>(scenario);
+            let lock = TestScenario::borrow_mut(&mut lock_wrapper);
             let key = TestScenario::take_object<Key<Treasure>>(scenario);
             let ctx = TestScenario::ctx(scenario);
 
-            Lock::take<Treasure>(&mut lock, &key, ctx);
+            Lock::take<Treasure>(lock, &key, ctx);
 
-            TestScenario::return_object<Lock<Treasure>>(scenario, lock);
-            TestScenario::return_object<Key<Treasure>>(scenario, key);
+            TestScenario::return_shared_object(scenario, lock_wrapper);
+            TestScenario::return_object(scenario, key);
         };
     }
 }
