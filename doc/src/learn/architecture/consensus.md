@@ -37,42 +37,34 @@ The following figure represents five rounds of construction of such a DAG (1 to 
 
 ```mermaid
 flowchart TB
-
-subgraph A
-A5 --> A4 --> A3 --> A2 --> A1
-end
-
-subgraph B
-B5 -.-> B4 --> B3 --> B2 --> B1
-end 
-
-subgraph C
-C5 -.-> C4 --> C3 --> C2 --> C1
-end
-
-subgraph D
-D5 -.-> D4 -.-> D3 --> D2 --> D1
-end
-
-A5 --> B4 & C4
-A4 --> C3 & D3
-A3 --> B2 & C2
-A2 --> C1 & D1
-
-B5 -.-> A4 & C4
-B4 --> C3 & D3
-B3 --> A2 & C2
-B2 --> C1 & D1
-
-C5 -.-> A4 & B4
-C4 --> B3 & D3
-C3 --> A2 & B2
-C2 --> B1 & D1
-
-D5 -.-> A4 & B4
-D4 -.-> B3 & C3
-D3 --> A2 & B2
-D2 --> B1 & C1
+  subgraph A
+  A5 --> A4 --> A3 --> A2 --> A1
+  end
+  subgraph B
+  B5 -.-> B4 --> B3 --> B2 --> B1
+  end 
+  subgraph C
+  C5 -.-> C4 --> C3 --> C2 --> C1
+  end
+  subgraph D
+  D5 -.-> D4 -.-> D3 --> D2 --> D1
+  end
+  A5 --> B4 & C4
+  A4 --> C3 & D3
+  A3 --> B2 & C2
+  A2 --> C1 & D1
+  B5 -.-> A4 & C4
+  B4 --> C3 & D3
+  B3 --> A2 & C2
+  B2 --> C1 & D1
+  C5 -.-> A4 & B4
+  C4 --> B3 & D3
+  C3 --> A2 & B2
+  C2 --> B1 & D1
+  D5 -.-> A4 & B4
+  D4 -.-> B3 & C3
+  D3 --> A2 & B2
+  D2 --> B1 & C1
 ```
 
 ## How it works
