@@ -53,6 +53,7 @@ impl Display for KeystoreType {
 #[derive(Serialize, Deserialize, Default)]
 pub struct SuiKeystore {
     keys: BTreeMap<SuiAddress, KeyPair>,
+    path: Option<PathBuf>,
 }
 
 impl Keystore for SuiKeystore {
@@ -69,6 +70,7 @@ impl Keystore for SuiKeystore {
     fn add_random_key(&mut self) -> Result<SuiAddress, anyhow::Error> {
         let (address, keypair) = get_key_pair();
         self.keys.insert(address, keypair);
+        self.save()?;
         Ok(address)
     }
 }
@@ -87,12 +89,23 @@ impl SuiKeystore {
             .map(|key| (SuiAddress::from(key.public_key_bytes()), key))
             .collect();
 
-        Ok(Self { keys })
+        Ok(Self {
+            keys,
+            path: Some(path.to_path_buf()),
+        })
     }
 
-    pub fn save(&self, path: &Path) -> Result<(), anyhow::Error> {
-        let store = serde_json::to_string_pretty(&self.keys.values().collect::<Vec<_>>()).unwrap();
-        Ok(fs::write(path, store)?)
+    pub fn set_path(&mut self, path: &Path) {
+        self.path = Some(path.to_path_buf());
+    }
+
+    pub fn save(&self) -> Result<(), anyhow::Error> {
+        if let Some(path) = &self.path {
+            let store =
+                serde_json::to_string_pretty(&self.keys.values().collect::<Vec<_>>()).unwrap();
+            fs::write(path, store)?
+        }
+        Ok(())
     }
 
     pub fn add_key(&mut self, address: SuiAddress, keypair: KeyPair) -> Result<(), anyhow::Error> {
