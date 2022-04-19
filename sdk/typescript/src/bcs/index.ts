@@ -253,7 +253,7 @@ export class BcsWriter {
      */
     writeVec(vector: Array<any>, cb: (writer: BcsWriter, el: any, i: number, len: number) => {}): this {
         this.writeULEB(vector.length);
-        [...vector].forEach((el, i) => cb(this, el, i, vector.length));
+        Array.from(vector).forEach((el, i) => cb(this, el, i, vector.length));
         return this;
     }
     /**
@@ -264,15 +264,6 @@ export class BcsWriter {
         return new Uint8Array(this.dataView.buffer.slice(0, this.bytePosition));
     }
 }
-
-/**
- * The ReadVector callback.
- * @callback WriteVecCb
- * @param {BcsWriter} writer A writer instance to use.
- * @param {Any} el An element to write.
- * @param {Number} i An index of the element.
- * @param {Number} length Total length of the vector being read.
- */
 
 // Helper utility: write number as an ULEB array.
 // Original code is taken from: https://www.npmjs.com/package/uleb128 (no longer exists)
@@ -330,7 +321,6 @@ interface TypeInterface {
     _decodeRaw: (reader: BcsReader) => any
 }
 
-
 /**
  * BCS implementation for Move types and few additional built-ins.
  */
@@ -360,10 +350,10 @@ export class MoveBCS {
      *
      * console.assert(MoveBCS.util.toHex(serialized) === '06010203040506');
      *
-     * @param {String} type Name of the type to serialize (must be registered).
-     * @param {Uint8Array} data Data to serialize.
-     * @param {Number} [size = 1024] Serialization buffer size. Default 1024 = 1KB.
-     * @return {BcsReader} A BCS reader instance. Usually you'd want to call `.toBytes()`
+     * @param type Name of the type to serialize (must be registered).
+     * @param data Data to serialize.
+     * @param size Serialization buffer size. Default 1024 = 1KB.
+     * @return A BCS reader instance. Usually you'd want to call `.toBytes()`
      */
     public static ser(type: string, data: any, size: number = 1024): BcsWriter {
         return this.getTypeInterface(type).encode(data, size);
@@ -374,14 +364,12 @@ export class MoveBCS {
      *
      * @example
      * // use util to form an Uint8Array buffer
-     * let buffer = MoveBCS.util.fromHex('FFFFFFFF');
-     * let data = MoveBCS.de(BCS.U32, buffer);
-     *
-     * console.assert(data == '4294967295');
+     * let data = MoveBCS.de(BCS.U32, new Uint8Array([255, 255, 255, 255]));
+     * console.assert(data.toString() == '4294967295');
      *
      * @param type Name of the type to deserialize (must be registered).
      * @param data Data to deserialize.
-     * @return {Number|BN|Array<Any>|Object|Boolean} Deserialized data.
+     * @return Deserialized data.
      */
     public static de(type: string, data: Uint8Array): any {
         return this.getTypeInterface(type).decode(data);
@@ -411,12 +399,12 @@ export class MoveBCS {
      *    (reader) => reader.readVec((r) => r.read8()).join(''), // read each value as u8
      *    (value) => /[0-9]+/.test(value) // test that it has at least one digit
      * );
-     * console.assert(BCS.de('number_string', BCS.ser('number_string', '12345').hex()) === '12345');
+     * console.log(Array.from(BCS.ser('number_string', '12345').toBytes()) == [5,1,2,3,4,5]);
      *
-     * @param {String} name
-     * @param {Function} encodeCb Callback to encode a value.
-     * @param {Function} decodeCb Callback to decode a value.
-     * @param {?Function} validateCb Optional validator Callback to check type before serialization.
+     * @param name
+     * @param encodeCb Callback to encode a value.
+     * @param decodeCb Callback to decode a value.
+     * @param validateCb Optional validator Callback to check type before serialization.
      */
     public static registerType(
         name: string,
@@ -448,7 +436,7 @@ export class MoveBCS {
      *
      * @example
      * MoveBCS.registerVectorType('vector<u8>', 'u8');
-     * let array = MoveBCS.de('vector<u8>', MoveBCS.util.fromHex('06010203040506')); // [1,2,3,4,5,6];
+     * let array = MoveBCS.de('vector<u8>', new Uint8Array([6,1,2,3,4,5,6])); // [1,2,3,4,5,6];
      * let again = MoveBCS.ser('vector<u8>', [1,2,3,4,5,6]).toBytes();
      *
      * @param name Name of the type to register.
@@ -505,7 +493,13 @@ export class MoveBCS {
      * });
      *
      * // Created in Rust with diem/bcs
-     * let rust_bcs_str = '80d1b105600000000e4269672057616c6c65742047757900';
+     * // let rust_bcs_str = '80d1b105600000000e4269672057616c6c65742047757900';
+     * let rust_bcs_str = [ // using an Array here as MoveBCS works with Uint8Buffer
+     *  128, 209, 177,   5,  96,  0,  0,
+     *    0,  14,  66, 105, 103, 32, 87,
+     *   97, 108, 108, 101, 116, 32, 71,
+     *  117, 121,   0
+     * ];
      *
      * // Let's encode the value as well
      * let test_ser = BCS.ser('Coin', {
@@ -514,7 +508,7 @@ export class MoveBCS {
      *   is_locked: false,
      * });
      *
-     * console.assert(MoveBCS.util.toHex(test_ser.toArray()) === rust_bcs_str, 'Whoopsie, result mismatch');
+     * console.assert(Array.from(test_ser.toBytes()) === rust_bcs_str, 'Whoopsie, result mismatch');
      *
      * @param name Name of the type to register.
      * @param fields Fields of the struct. Must be in the correct order.
@@ -619,28 +613,3 @@ export class MoveBCS {
         (str: string) => /^[\x00-\x7F]*$/.test(str)
     )
 })();
-
-export const util = {
-    /**
-     * Turn a hex string into a Uint8Array.
-     *
-     * @param {String} hexString A hex string.
-     * @returns {Uint8Array} A buffer to use when deserializing.
-     */
-    fromHex(hexString: string): Uint8Array {
-        let search = hexString.match(/../g) || [];
-        return new Uint8Array(search.map((h) => parseInt(h, 16)));
-    },
-
-    /**
-     * Turn Uint8Array into a hex string (lowercased).
-     *
-     * @param {Uint8Array} buffer Uint8Array to encode as HEX.
-     * @returns {String} hex representation of BCS.
-     */
-    toHex(buffer: Uint8Array) {
-        return Array.from(buffer)
-            .map((b) => b.toString(16).padStart(2, '0'))
-            .join("");
-    }
-};

@@ -6,6 +6,7 @@ export * from './cryptography/keypair';
 export * from './cryptography/publickey';
 
 export * from './serialization/base64';
+export * from './serialization/hex';
 
 export * from './signers/txn-data-serializers/rpc-txn-data-serializer';
 export * from './signers/txn-data-serializers/txn-data-serializer';
