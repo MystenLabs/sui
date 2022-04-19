@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail};
+use base64ct::{Base64, Encoding};
 use clap::*;
 use futures::future::join_all;
 use move_binary_format::CompiledModule;
@@ -192,7 +193,8 @@ impl SuiCommand {
                 let keystore = SuiKeystore::load_or_create(&keystore_path)?;
                 info!("Data to sign : {}", data);
                 info!("Address : {}", address);
-                let signature = keystore.sign(address, &base64::decode(data)?)?;
+                let message = Base64::decode_vec(data).map_err(|e| anyhow!(e))?;
+                let signature = keystore.sign(address, &message)?;
                 // Separate pub key and signature string, signature and pub key are concatenated with an '@' symbol.
                 let signature_string = format!("{:?}", signature);
                 let sig_split = signature_string.split('@').collect::<Vec<_>>();

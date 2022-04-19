@@ -22,7 +22,7 @@ use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::crypto;
 use sui_types::crypto::SignableBytes;
-use sui_types::messages::{Transaction, TransactionData};
+use sui_types::messages::{CertifiedTransaction, Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 
 use crate::config::PersistedConfig;
@@ -115,6 +115,9 @@ pub trait RpcGateway {
         &self,
         count: u64,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
+
+    #[method(name = "getTransaction")]
+    async fn get_transaction(&self, digest: TransactionDigest) -> RpcResult<CertifiedTransaction>;
 }
 
 pub struct RpcGatewayImpl {
@@ -340,6 +343,10 @@ impl RpcGatewayServer for RpcGatewayImpl {
         count: u64,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
         Ok(self.gateway.get_recent_transactions(count)?)
+    }
+
+    async fn get_transaction(&self, digest: TransactionDigest) -> RpcResult<CertifiedTransaction> {
+        Ok(self.gateway.get_transaction(digest).await?)
     }
 }
 

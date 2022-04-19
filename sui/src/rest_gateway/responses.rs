@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
+use base64ct::{Base64, Encoding};
 use std::env;
 
 use dropshot::{ApiEndpointResponse, HttpError, HttpResponse, CONTENT_TYPE_JSON};
@@ -41,7 +43,7 @@ impl NamedObjectRef {
         Self {
             object_id: object_id.to_hex(),
             version: version.value(),
-            digest: base64::encode(digest),
+            digest: Base64::encode_string(digest.as_ref()),
         }
     }
 
@@ -49,7 +51,7 @@ impl NamedObjectRef {
         Ok((
             ObjectID::try_from(self.object_id)?,
             SequenceNumber::from(self.version),
-            ObjectDigest::try_from(&*base64::decode(self.digest)?)?,
+            ObjectDigest::try_from(&*Base64::decode_vec(&self.digest).map_err(|e| anyhow!(e))?)?,
         ))
     }
 }
@@ -84,12 +86,14 @@ pub struct TransactionBytes {
 impl TransactionBytes {
     pub fn new(data: TransactionData) -> Self {
         Self {
-            tx_bytes: base64::encode(data.to_bytes()),
+            tx_bytes: Base64::encode_string(&data.to_bytes()),
         }
     }
 
     pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
-        TransactionData::from_signable_bytes(&base64::decode(self.tx_bytes)?)
+        TransactionData::from_signable_bytes(
+            &Base64::decode_vec(&self.tx_bytes).map_err(|e| anyhow!(e))?,
+        )
     }
 }
 
