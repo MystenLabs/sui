@@ -1,17 +1,17 @@
 # Running Benchmarks
-This document explains how to benchmark the codebase and read benchmarks' results. It also provides a step-by-step tutorial to run benchmarks on [Amazon Web Services (AWS)](https://aws.amazon.com) accross multiple data centers (WAN).
+This document explains how to benchmark the codebase and read benchmark results. It also provides a step-by-step tutorial to run benchmarks on [Amazon Web Services (AWS)](https://aws.amazon.com) across multiple data centers (WAN).
 
-## Local Benchmarks
-When running benchmarks, the codebase is automatically compiled with the feature flag `benchmark`. This enables the node to print some special log entries that are then read by the python scripts and used to compute performance. These special log entries are clearly indicated with comments in the code: make sure to not alter them (otherwise the benchmark scripts will fail to interpret the logs).
+## Local benchmarks
+When running benchmarks, the codebase is automatically compiled with the feature flag `benchmark`. This enables the node to print special log entries that are then read by the Python scripts and used to compute performance. These special log entries are clearly indicated with comments in the code: make sure to not alter them. (Otherwise, the benchmark scripts will fail to interpret the logs.)
 
 ### Parametrize the benchmark
-After cloning the repo and [installing all dependencies](https://github.com/mystenlabs/narwhal#quick-start), you can use [Fabric](http://www.fabfile.org/) to run benchmarks on your local machine.  Locate the task called `local` in the file [fabfile.py](https://github.com/mystenlabs/narwhal/blob/main/benchmark/fabfile.py):
+After [cloning the repo and installing all dependencies](https://github.com/mystenlabs/narwhal#quick-start), you can use [Fabric](http://www.fabfile.org/) to run benchmarks on your local machine.  Locate the task called `local` in the file [fabfile.py](https://github.com/mystenlabs/narwhal/blob/main/benchmark/fabfile.py):
 ```python
 @task
 def local(ctx):
     ...
 ```
-The task specifies two types of parameters, the *benchmark parameters* and the *nodes parameters*. The benchmark parameters look as follows:
+The task specifies two types of parameters, the *benchmark parameters* and the *nodes parameters*. The benchmark parameters appear as follows:
 ```python
 bench_params = {
     'nodes': 4,
@@ -22,7 +22,9 @@ bench_params = {
     'duration': 20,
 }
 ```
-They specify the number of primaries (`nodes`) and workers per primary (`workers`) to deploy, the input rate (tx/s) at which the clients submits transactions to the system (`rate`), the size of each transaction in bytes (`tx_size`), the number of faulty nodes ('faults), and the duration of the benchmark in seconds (`duration`). The minimum transaction size is 9 bytes, this ensure that the transactions of a client are all different. The benchmarking script will deploy as many clients as workers and divide the input rate equally amongst each client. For instance, if you configure the testbed with 4 nodes, 1 worker per node, and an input rate of 1,000 tx/s (as in the example above), the scripts will deploy 4 clients each submitting transactions to one node at a rate of 250 tx/s. When the parameters `faults` is set to `f > 0`, the last `f` nodes and clients are not booted; the system will thus run with `n-f` nodes (and `n-f` clients).
+They specify the number of primaries (`nodes`) and workers per primary (`workers`) to deploy, the input rate (transactions per second, or tx/s) at which the clients submit transactions to the system (`rate`), the size of each transaction in bytes (`tx_size`), the number of faulty nodes ('faults`), and the duration of the benchmark in seconds (`duration`). The minimum transaction size is 9 bytes; this ensures the transactions of a client are all different.
+
+The benchmarking script will deploy as many clients as workers and divide the input rate equally amongst each client. For instance, if you configure the testbed with four nodes, one worker per node, and an input rate of 1,000 tx/s (as in the example above), the scripts will deploy four clients each submitting transactions to one node at a rate of 250 tx/s. When the parameter `faults` is set to `f > 0`, the last `f` nodes and clients are not booted; the system will thus run with `n-f` nodes (and `n-f` clients).
 
 The nodes parameters determine the configuration for the primaries and workers:
 ```python
@@ -38,10 +40,10 @@ node_params = {
 ```
 They are defined as follows:
 * `header_size`: The preferred header size. The primary creates a new header when it has enough parents and enough batches' digests to reach `header_size`. Denominated in bytes.
-* `max_header_delay`: The maximum delay that the primary waits between generating two headers, even if the header did not reach `max_header_size`. Denominated in ms.
-* `gc_depth`: The depth of the garbage collection (Denominated in number of rounds).
+* `max_header_delay`: The maximum delay that the primary waits between generating two headers, even if the header did not reach `max_header_size`. Denominated in milliseconds (ms).
+* `gc_depth`: The depth of the garbage collection. Denominated in number of rounds.
 * `sync_retry_delay`: The delay after which the synchronizer retries to send sync requests. Denominated in ms.
-* `sync_retry_nodes`: Determine with how many nodes to sync when re-trying to send sync-request. These nodes are picked at random from the committee.
+* `sync_retry_nodes`: How many nodes to sync when re-trying to send sync-request. These nodes are picked at random from the committee.
 * `batch_size`: The preferred batch size. The workers seal a batch of transactions when it reaches this size. Denominated in bytes.
 * `max_batch_delay`: The delay after which the workers seal a batch of transactions, even if `max_batch_size` is not reached. Denominated in ms.
 
@@ -50,7 +52,9 @@ Once you specified both `bench_params` and `node_params` as desired, run:
 ```
 $ fab local
 ```
-This command first recompiles your code in `release` mode (and with the `benchmark` feature flag activated), thus ensuring you always benchmark the latest version of your code. This may take a long time the first time you run it. It then generates the configuration files and keys for each node, and runs the benchmarks with the specified parameters. It finally parses the logs and displays a summary of the execution similarly to the one below. All the configuration and key files are hidden JSON files; i.e., their name starts with a dot (`.`), such as `.committee.json`.
+This command first recompiles your code in `release` mode (and with the `benchmark` feature flag activated), thus ensuring you always benchmark the latest version of your code. This may take a long time the first time you run it. The command then generates the configuration files and keys for each node, and runs the benchmarks with the specified parameters. Finally, `fab local` parses the logs and displays a summary of the execution resembling the one below. All the configuration and key files are hidden JSON files; i.e., their names start with a dot (`.`), such as `.committee.json`.
+
+Here is sample output:
 ```
 -----------------------------------------
  SUMMARY:
@@ -82,10 +86,10 @@ This command first recompiles your code in `release` mode (and with the `benchma
  End-to-end latency: 557 ms
 -----------------------------------------
 ```
-The 'Consensus TPS' and 'Consensus latency' respectively report the average throughput and latency without considering the client. The consensus latency thus refers to the time elapsed between the block's creation and its commit. In contrast, 'End-to-end TPS' and 'End-to-end latency' report the performance of the whole system, starting from when the client submits the transaction. The end-to-end latency is often called 'client-perceived latency'. To accurately measure this value without degrading performance, the client periodically submits 'sample' transactions that are tracked across all the modules until they get committed into a block; the benchmark scripts use sample transactions to estimate the end-to-end latency.
+The 'Consensus TPS' and 'Consensus latency' report the average throughput and latency without considering the client, respectively. The consensus latency thus refers to the time elapsed between the block's creation and its commit. In contrast, `End-to-end TPS` and `End-to-end latency` report the performance of the whole system, starting from when the client submits the transaction. The end-to-end latency is often called 'client-perceived latency'. To accurately measure this value without degrading performance, the client periodically submits 'sample' transactions that are tracked across all the modules until they get committed into a block; the benchmark scripts use sample transactions to estimate the end-to-end latency.
 
 ## AWS Benchmarks
-This repo integrates various python scripts to deploy and benchmark the codebase on [Amazon Web Services (AWS)](https://aws.amazon.com). They are particularly useful to run benchmarks in the WAN, across multiple data centers. This section provides a step-by-step tutorial explaining how to use them.
+This repo integrates various Python scripts to deploy and benchmark the codebase on [Amazon Web Services (AWS)](https://aws.amazon.com). They are particularly useful to run benchmarks in the WAN, across multiple data centers. This section provides a step-by-step tutorial explaining how to use them.
 
 ### Step 1. Set up your AWS credentials
 Set up your AWS credentials to enable programmatic access to your account from your local machine. These credentials will authorize your machine to create, delete, and edit instances on your AWS account programmatically. First of all, [find your 'access key id' and 'secret access key'](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html#cli-configure-quickstart-creds). Then, create a file `~/.aws/credentials` with the following content:
@@ -94,7 +98,7 @@ Set up your AWS credentials to enable programmatic access to your account from y
 aws_access_key_id = YOUR_ACCESS_KEY_ID
 aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 ```
-Do not specify any AWS region in that file as the python scripts will allow you to handle multiple regions programmatically.
+Do not specify any AWS region in that file as the Python scripts will allow you to handle multiple regions programmatically.
 
 ### Step 2. Add your SSH public key to your AWS account
 You must now [add your SSH public key to your AWS account](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html). This operation is manual (AWS exposes little APIs to manipulate keys) and needs to be repeated for each AWS region that you plan to use. Upon importing your key, AWS requires you to choose a 'name' for your key; ensure you set the same name on all AWS regions. This SSH key will be used by the python scripts to execute commands and upload/download files to your AWS instances.
