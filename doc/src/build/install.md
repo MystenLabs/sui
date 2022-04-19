@@ -12,7 +12,7 @@ version 1.59.0 or higher in order to build and install Sui on your machine.
 To develop in Sui, you will need the Sui binaries. After installing `cargo`, run:
 
 ```shell
-cargo install --git https://github.com/MystenLabs/sui.git
+$ cargo install --git https://github.com/MystenLabs/sui.git
 ```
 
 This will put three binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
@@ -28,15 +28,23 @@ $ echo $PATH
 
 And ensure the `.cargo/bin` directory appears.
 
-## IDE
-For Move development, we recommend the [Visual Studio Code (vscode)](https://code.visualstudio.com/) IDE with the [Move Analyzer](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer) plugin. See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [Awesome Move](https://github.com/MystenLabs/awesome-move) docs.
+## Integrated Development Environment
+For Move development, we recommend the [Visual Studio Code (vscode)](https://code.visualstudio.com/) IDE with the Move Analyzer language server plugin installed:
+
+```shell
+$ cargo install --git https://github.com/diem/move move-analyzer
+```
+
+Then follow the Visual Studio Marketplace instructions to install the [Move Analyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer). (The `cargo install` command for the language server is broken there; hence, we include the correct command above.)
+
+See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [Awesome Move](https://github.com/MystenLabs/awesome-move) docs.
 
 ## Source code
 
 If you need to download and understand the Sui source code, clone the Sui repository:
 
 ```shell
-git clone https://github.com/MystenLabs/sui.git
+$ git clone https://github.com/MystenLabs/sui.git
 ```
 
 You can start exploring Sui's source code by looking into the following primary directories:
