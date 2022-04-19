@@ -31,7 +31,7 @@ impl RpcGatewayClient {
 
 #[async_trait]
 impl GatewayAPI for RpcGatewayClient {
-    async fn execute_transaction(&mut self, tx: Transaction) -> Result<TransactionResponse, Error> {
+    async fn execute_transaction(&self, tx: Transaction) -> Result<TransactionResponse, Error> {
         let signature = tx.tx_signature.as_bytes();
         let pub_key = &signature[32..];
         let signature = &signature[..32];
@@ -46,7 +46,7 @@ impl GatewayAPI for RpcGatewayClient {
     }
 
     async fn transfer_coin(
-        &mut self,
+        &self,
         signer: SuiAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
@@ -66,7 +66,7 @@ impl GatewayAPI for RpcGatewayClient {
     }
 
     async fn move_call(
-        &mut self,
+        &self,
         signer: SuiAddress,
         package_object_ref: ObjectRef,
         module: Identifier,
@@ -103,7 +103,7 @@ impl GatewayAPI for RpcGatewayClient {
     }
 
     async fn publish(
-        &mut self,
+        &self,
         signer: SuiAddress,
         package_bytes: Vec<Vec<u8>>,
         gas_object_ref: ObjectRef,
@@ -118,7 +118,7 @@ impl GatewayAPI for RpcGatewayClient {
     }
 
     async fn split_coin(
-        &mut self,
+        &self,
         signer: SuiAddress,
         coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
@@ -139,7 +139,7 @@ impl GatewayAPI for RpcGatewayClient {
     }
 
     async fn merge_coins(
-        &mut self,
+        &self,
         signer: SuiAddress,
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
@@ -157,7 +157,7 @@ impl GatewayAPI for RpcGatewayClient {
         Ok(self.client.get_object_info(object_id).await?)
     }
 
-    fn get_owned_objects(&mut self, account_addr: SuiAddress) -> Result<Vec<ObjectRef>, Error> {
+    fn get_owned_objects(&self, account_addr: SuiAddress) -> Result<Vec<ObjectRef>, Error> {
         let handle = Handle::current();
         let _ = handle.enter();
         let object_response: ObjectResponse =

@@ -3,7 +3,6 @@
 
 use std::ops::Deref;
 use std::path::Path;
-use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -15,7 +14,6 @@ use move_core_types::language_storage::TypeTag;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::serde_as;
-use tokio::sync::Mutex;
 use tracing::debug;
 
 use serde_with::base64::Base64;
@@ -120,7 +118,7 @@ pub trait RpcGateway {
 }
 
 pub struct RpcGatewayImpl {
-    gateway: Arc<Mutex<GatewayClient>>,
+    gateway: GatewayClient,
 }
 
 impl RpcGatewayImpl {
@@ -139,9 +137,7 @@ impl RpcGatewayImpl {
             committee,
             authority_clients,
         )?);
-        Ok(Self {
-            gateway: Arc::new(Mutex::new(gateway)),
-        })
+        Ok(Self { gateway })
     }
 }
 
@@ -157,8 +153,6 @@ impl RpcGatewayServer for RpcGatewayImpl {
     ) -> RpcResult<TransactionBytes> {
         let data = self
             .gateway
-            .lock()
-            .await
             .transfer_coin(signer, object_id, gas_payment, gas_budget, recipient)
             .await?;
         Ok(TransactionBytes {
@@ -178,14 +172,15 @@ impl RpcGatewayServer for RpcGatewayImpl {
             .map(|data| data.to_vec())
             .collect::<Vec<_>>();
 
-        let mut gateway = self.gateway.lock().await;
-        let gas_obj_ref = gateway
+        let gas_obj_ref = self
+            .gateway
             .get_object_info(gas_object_id)
             .await?
             .reference()
             .map_err(|e| anyhow!(e))?;
 
-        let data = gateway
+        let data = self
+            .gateway
             .publish(sender, compiled_modules, gas_obj_ref, gas_budget)
             .await?;
 
@@ -204,8 +199,6 @@ impl RpcGatewayServer for RpcGatewayImpl {
     ) -> RpcResult<TransactionBytes> {
         let data = self
             .gateway
-            .lock()
-            .await
             .split_coin(
                 signer,
                 coin_object_id,
@@ -229,8 +222,6 @@ impl RpcGatewayServer for RpcGatewayImpl {
     ) -> RpcResult<TransactionBytes> {
         let data = self
             .gateway
-            .lock()
-            .await
             .merge_coins(signer, primary_coin, coin_to_merge, gas_payment, gas_budget)
             .await?;
         Ok(TransactionBytes {
@@ -242,8 +233,6 @@ impl RpcGatewayServer for RpcGatewayImpl {
         debug!("get_objects : {}", owner);
         let objects = self
             .gateway
-            .lock()
-            .await
             .get_owned_objects(owner)?
             .into_iter()
             .map(NamedObjectRef::from)
@@ -252,7 +241,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
     }
 
     async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<ObjectRead> {
-        Ok(self.gateway.lock().await.get_object_info(object_id).await?)
+        Ok(self.gateway.get_object_info(object_id).await?)
     }
 
     async fn execute_transaction(
@@ -265,8 +254,6 @@ impl RpcGatewayServer for RpcGatewayImpl {
                 .map_err(|e| anyhow!(e))?;
         Ok(self
             .gateway
-            .lock()
-            .await
             .execute_transaction(Transaction::new(data, signature))
             .await?)
     }
@@ -285,18 +272,22 @@ impl RpcGatewayServer for RpcGatewayImpl {
         shared_object_arguments: Vec<ObjectID>,
     ) -> RpcResult<TransactionBytes> {
         let data = async {
-            let mut gateway = self.gateway.lock().await;
-            let package_object_ref = gateway
+            let package_object_ref = self
+                .gateway
                 .get_object_info(package_object_id)
                 .await?
                 .reference()?;
             // Fetch the object info for the gas obj
-            let gas_obj_ref = gateway.get_object_info(gas_object_id).await?.reference()?;
+            let gas_obj_ref = self
+                .gateway
+                .get_object_info(gas_object_id)
+                .await?
+                .reference()?;
 
             // Fetch the objects for the object args
             let mut object_args_refs = Vec::new();
             for obj_id in object_arguments {
-                let object_ref = gateway.get_object_info(obj_id).await?.reference()?;
+                let object_ref = self.gateway.get_object_info(obj_id).await?.reference()?;
                 object_args_refs.push(object_ref);
             }
             let pure_arguments = pure_arguments
@@ -304,7 +295,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
                 .map(|arg| arg.to_vec())
                 .collect::<Vec<_>>();
 
-            gateway
+            self.gateway
                 .move_call(
                     signer,
                     package_object_ref,
@@ -327,16 +318,12 @@ impl RpcGatewayServer for RpcGatewayImpl {
 
     async fn sync_account_state(&self, address: SuiAddress) -> RpcResult<()> {
         debug!("sync_account_state : {}", address);
-        self.gateway
-            .lock()
-            .await
-            .sync_account_state(address)
-            .await?;
+        self.gateway.sync_account_state(address).await?;
         Ok(())
     }
 
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {
-        Ok(self.gateway.lock().await.get_total_transaction_number()?)
+        Ok(self.gateway.get_total_transaction_number()?)
     }
 
     async fn get_transactions_in_range(
@@ -344,18 +331,14 @@ impl RpcGatewayServer for RpcGatewayImpl {
         start: GatewayTxSeqNumber,
         end: GatewayTxSeqNumber,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(self
-            .gateway
-            .lock()
-            .await
-            .get_transactions_in_range(start, end)?)
+        Ok(self.gateway.get_transactions_in_range(start, end)?)
     }
 
     async fn get_recent_transactions(
         &self,
         count: u64,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(self.gateway.lock().await.get_recent_transactions(count)?)
+        Ok(self.gateway.get_recent_transactions(count)?)
     }
 }
 

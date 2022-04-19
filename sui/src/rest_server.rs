@@ -178,7 +178,7 @@ async fn get_objects(
     ctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectsRequest>,
 ) -> Result<HttpResponseOk<ObjectResponse>, HttpError> {
-    let mut gateway = ctx.context().gateway.lock().await;
+    let gateway = ctx.context().gateway.lock().await;
     let get_objects_params = query.into_inner();
     let address = get_objects_params.address;
     let address = &decode_bytes_hex(address.as_str()).map_err(|error| {
@@ -301,7 +301,7 @@ async fn new_transfer(
     ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<TransferTransactionRequest>,
 ) -> Result<HttpResponseOk<TransactionBytes>, HttpError> {
-    let mut gateway = ctx.context().gateway.lock().await;
+    let gateway = ctx.context().gateway.lock().await;
     let request = request.into_inner();
 
     let tx_data = async {
@@ -334,7 +334,7 @@ async fn split_coin(
     ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<SplitCoinRequest>,
 ) -> Result<HttpResponseOk<TransactionBytes>, HttpError> {
-    let mut gateway = ctx.context().gateway.lock().await;
+    let gateway = ctx.context().gateway.lock().await;
     let request = request.into_inner();
 
     let tx_data = async {
@@ -365,7 +365,7 @@ async fn merge_coin(
     ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<MergeCoinRequest>,
 ) -> Result<HttpResponseOk<TransactionBytes>, HttpError> {
-    let mut gateway = ctx.context().gateway.lock().await;
+    let gateway = ctx.context().gateway.lock().await;
     let request = request.into_inner();
 
     let tx_data = async {
@@ -489,7 +489,7 @@ async fn execute_transaction(
     response: TypedBody<SignedTransaction>,
 ) -> Result<HttpResponseOk<JsonResponse<TransactionResponse>>, HttpError> {
     let response = response.into_inner();
-    let mut gateway = ctx.context().gateway.lock().await;
+    let gateway = ctx.context().gateway.lock().await;
 
     let response: Result<_, anyhow::Error> = async {
         let data = base64::decode(response.tx_bytes)?;
