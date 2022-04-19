@@ -18,7 +18,7 @@
 use futures::channel::oneshot;
 use rocksdb::Options;
 use std::path::Path;
-use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::{debug, info};
 use typed_store::rocks::DBMap;
 use typed_store::{reopen, traits::Map};
@@ -28,6 +28,7 @@ use sui_types::error::{SuiError, SuiResult};
 
 /// Commands to send to the LockService (for mutating lock state)
 // TODO: use smallvec as an optimization
+#[derive(Debug)]
 enum LockServiceCommands {
     Acquire {
         refs: Vec<ObjectRef>,
@@ -47,6 +48,7 @@ enum LockServiceCommands {
 type SuiLockResult = Result<Option<Option<TransactionDigest>>, SuiError>;
 
 /// Queries to the LockService state
+#[derive(Debug)]
 enum LockServiceQueries {
     GetLock {
         object: ObjectRef,
@@ -203,9 +205,10 @@ impl LockServiceImpl {
 
     /// Loop to continuously process mutating commands in a single thread from async senders.
     /// It terminates when the sender drops, which usually is when the containing data store is dropped.
-    fn command_loop(&self, receiver: Receiver<LockServiceCommands>) {
+    fn command_loop(&self, mut receiver: Receiver<LockServiceCommands>) {
         info!("LockService command processing loop started");
-        while let Ok(msg) = receiver.recv() {
+        // NOTE: we use blocking_recv() as its faster than using regular async recv() with awaits in a loop
+        while let Some(msg) = receiver.blocking_recv() {
             match msg {
                 LockServiceCommands::Acquire {
                     refs,
@@ -233,13 +236,14 @@ impl LockServiceImpl {
     }
 
     /// Loop to continuously process queries in a single thread
-    fn queries_loop(&self, receiver: Receiver<LockServiceQueries>) {
+    fn queries_loop(&self, mut receiver: Receiver<LockServiceQueries>) {
         info!("LockService queries processing loop started");
-        while let Ok(msg) = receiver.recv() {
+        while let Some(msg) = receiver.blocking_recv() {
             match msg {
                 LockServiceQueries::GetLock { object, resp } => {
-                    resp.send(self.get_lock(object))
-                        .expect("Could not respond to sender!");
+                    if let Err(_e) = resp.send(self.get_lock(object)) {
+                        info!("Could not respond to sender!");
+                    }
                 }
             }
         }
@@ -254,8 +258,8 @@ const LOCKSERVICE_QUEUE_LEN: usize = 500;
 /// Atomicity relies on single threaded loop and only one instance per authority.
 #[derive(Clone)]
 pub struct LockService {
-    sender: SyncSender<LockServiceCommands>,
-    query_sender: SyncSender<LockServiceQueries>,
+    sender: Sender<LockServiceCommands>,
+    query_sender: Sender<LockServiceQueries>,
 }
 
 impl LockService {
@@ -265,13 +269,13 @@ impl LockService {
         let inner_service = LockServiceImpl::try_open_db(path, db_options)?;
 
         // Now, create a sync channel and spawn a thread
-        let (sender, receiver) = sync_channel(LOCKSERVICE_QUEUE_LEN);
+        let (sender, receiver) = channel(LOCKSERVICE_QUEUE_LEN);
         let inner2 = inner_service.clone();
         std::thread::spawn(move || {
             inner2.command_loop(receiver);
         });
 
-        let (q_sender, q_receiver) = sync_channel(LOCKSERVICE_QUEUE_LEN);
+        let (q_sender, q_receiver) = channel(LOCKSERVICE_QUEUE_LEN);
         std::thread::spawn(move || {
             inner_service.queries_loop(q_receiver);
         });
@@ -300,6 +304,7 @@ impl LockService {
                 tx_digest,
                 resp: os_sender,
             })
+            .await
             .expect("Could not send message to inner LockService");
         os_receiver
             .await
@@ -315,6 +320,7 @@ impl LockService {
                 refs,
                 resp: os_sender,
             })
+            .await
             .expect("Could not send message to inner LockService");
         os_receiver
             .await
@@ -329,6 +335,7 @@ impl LockService {
                 refs,
                 resp: os_sender,
             })
+            .await
             .expect("Could not send message to inner LockService");
         os_receiver
             .await
@@ -346,6 +353,7 @@ impl LockService {
                 object,
                 resp: os_sender,
             })
+            .await
             .expect("Could not send message to inner LockService");
         os_receiver
             .await
