@@ -66,10 +66,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     .await;
     assert!(matches!(start, Err(..)));
     // Genesis
-    SuiCommand::Genesis {
-        working_dir: Some(working_dir.to_path_buf()),
-        force: false,
-    }
+    SuiCommand::Genesis {working_dir:Some(working_dir.to_path_buf()),force:false, from_config: None }
     .execute()
     .await?;
     assert!(logs_contain("Network genesis completed."));
@@ -104,10 +101,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     assert_eq!(5, wallet_conf.accounts.len());
 
     // Genesis 2nd time should fail
-    let result = SuiCommand::Genesis {
-        working_dir: Some(working_dir.to_path_buf()),
-        force: false,
-    }
+    let result = SuiCommand::Genesis {working_dir:Some(working_dir.to_path_buf()),force:false, from_config: None }
     .execute()
     .await;
     assert!(matches!(result, Err(..)));

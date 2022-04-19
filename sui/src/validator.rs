@@ -56,7 +56,10 @@ async fn main() -> Result<(), anyhow::Error> {
             )
         })?;
 
-    info!("Started {:?} authority", net_cfg);
+    info!(
+        "Started {} authority on {}:{}",
+        address, net_cfg.host, net_cfg.port
+    );
 
     if let Err(e) = make_server(
         net_cfg,

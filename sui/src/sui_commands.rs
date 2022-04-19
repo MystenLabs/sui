@@ -79,7 +79,11 @@ impl SuiCommand {
                     .wait_for_completion()
                     .await
             }
-            SuiCommand::Genesis { working_dir, force, from_config } => {
+            SuiCommand::Genesis {
+                working_dir,
+                force,
+                from_config,
+            } => {
                 let sui_config_dir = &match working_dir {
                     // if a directory is specified, it must exist (it
                     // will not be created)
@@ -132,7 +136,7 @@ impl SuiCommand {
                 let gateway_db_folder_path = sui_config_dir.join("gateway_client_db");
 
                 let genesis_conf = match from_config {
-                    Some(q) =>  PersistedConfig::read(q)?,
+                    Some(q) => PersistedConfig::read(q)?,
                     None => GenesisConfig::default_genesis(sui_config_dir)?,
                 };
 
