@@ -201,11 +201,11 @@ impl Signature {
         secret.sign(&message)
     }
 
-    fn signature_bytes(&self) -> &[u8] {
+    pub fn signature_bytes(&self) -> &[u8] {
         &self.0[..ed25519_dalek::SIGNATURE_LENGTH]
     }
 
-    fn public_key_bytes(&self) -> &[u8] {
+    pub fn public_key_bytes(&self) -> &[u8] {
         &self.0[ed25519_dalek::SIGNATURE_LENGTH..]
     }
 

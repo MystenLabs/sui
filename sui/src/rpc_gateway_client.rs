@@ -7,7 +7,6 @@ use crate::rpc_gateway::{
 };
 use anyhow::Error;
 use async_trait::async_trait;
-use ed25519_dalek::ed25519::signature::Signature;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
@@ -32,14 +31,11 @@ impl RpcGatewayClient {
 #[async_trait]
 impl GatewayAPI for RpcGatewayClient {
     async fn execute_transaction(&self, tx: Transaction) -> Result<TransactionResponse, Error> {
-        let signature = tx.tx_signature.as_bytes();
-        let pub_key = &signature[32..];
-        let signature = &signature[..32];
-
+        let signature = tx.tx_signature;
         let signed_tx = SignedTransaction {
             tx_bytes: tx.data.to_bytes(),
-            signature: signature.to_vec(),
-            pub_key: pub_key.to_vec(),
+            signature: signature.signature_bytes().to_vec(),
+            pub_key: signature.public_key_bytes().to_vec(),
         };
 
         Ok(self.client.execute_transaction(signed_tx).await?)

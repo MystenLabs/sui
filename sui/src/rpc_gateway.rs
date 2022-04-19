@@ -356,11 +356,10 @@ pub struct SignedTransaction {
 
 impl SignedTransaction {
     pub fn new(tx_bytes: Vec<u8>, signature: crypto::Signature) -> Self {
-        let signature_bytes = signature.as_bytes();
         Self {
             tx_bytes,
-            signature: signature_bytes[..32].to_vec(),
-            pub_key: signature_bytes[32..].to_vec(),
+            signature: signature.signature_bytes().to_vec(),
+            pub_key: signature.public_key_bytes().to_vec(),
         }
     }
 }
