@@ -89,7 +89,7 @@ impl TransactionBytes {
     }
 
     pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
-        TransactionData::from_signable_bytes(base64::decode(self.tx_bytes)?)
+        TransactionData::from_signable_bytes(&base64::decode(self.tx_bytes)?)
     }
 }
 

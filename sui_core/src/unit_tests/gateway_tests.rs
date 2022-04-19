@@ -489,7 +489,7 @@ async fn test_initiating_valid_transfer() {
     ];
 
     let (sender, sender_key) = get_key_pair();
-    let mut client = init_local_client_and_fund_account(sender, authority_objects).await;
+    let client = init_local_client_and_fund_account(sender, authority_objects).await;
     assert_eq!(
         client.get_authorities().get_latest_owner(object_id_1).await,
         (sender, SequenceNumber::from(0))
@@ -546,7 +546,7 @@ async fn test_initiating_valid_transfer_despite_bad_authority() {
         vec![object_id, gas_object],
     ];
     let (sender, sender_key) = get_key_pair();
-    let mut client = init_local_client_and_fund_account_bad(sender, authority_objects).await;
+    let client = init_local_client_and_fund_account_bad(sender, authority_objects).await;
     let data = client
         .transfer_coin(sender, object_id, gas_object, 50000, recipient)
         .await
@@ -593,7 +593,7 @@ async fn test_initiating_transfer_low_funds() {
         vec![object_id_1, object_id_2, gas_object],
     ];
     let (sender, sender_key) = get_key_pair();
-    let mut client = init_local_client_and_fund_account_bad(sender, authority_objects).await;
+    let client = init_local_client_and_fund_account_bad(sender, authority_objects).await;
 
     let transfer = async {
         let data = client
@@ -773,7 +773,7 @@ async fn test_client_state_sync_with_transferred_object() {
     );
 
     // Confirm client 2 received the new object id
-    assert_eq!(1, client.get_owned_objects(addr2).unwrap().len());
+    assert_eq!(1, client.get_owned_objects(addr2).await.unwrap().len());
 }
 
 #[tokio::test]
@@ -1045,10 +1045,10 @@ async fn test_move_calls_freeze_object() {
     let transferred_obj = client_object(&mut client, new_obj_ref.0).await.1;
 
     // Confirm new owner
-    assert!(transferred_obj.owner == Owner::SharedImmutable);
+    assert!(transferred_obj.owner == Owner::Immutable);
 
     // Confirm read only
-    assert!(transferred_obj.is_read_only());
+    assert!(transferred_obj.is_immutable());
 }
 
 #[tokio::test]
@@ -1333,7 +1333,7 @@ async fn test_transfer_object_error() {
         .collect();
 
     let (sender, sender_key) = get_key_pair();
-    let mut client = init_local_client_and_fund_account(sender, authority_objects).await;
+    let client = init_local_client_and_fund_account(sender, authority_objects).await;
 
     let mut objects = objects.iter();
 
@@ -1944,7 +1944,7 @@ async fn test_transfer_pending_transactions() {
         .collect();
 
     let (sender, sender_key) = get_key_pair();
-    let mut client = init_local_client_and_fund_account(sender, authority_objects).await;
+    let client = init_local_client_and_fund_account(sender, authority_objects).await;
     let (recipient, _) = get_key_pair();
 
     let mut objects = objects.iter();

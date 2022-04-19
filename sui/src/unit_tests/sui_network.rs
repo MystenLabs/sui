@@ -7,7 +7,7 @@ use sui::config::{AuthorityPrivateInfo, Config, GenesisConfig, WalletConfig};
 use sui::gateway::{GatewayConfig, GatewayType};
 use sui::keystore::KeystoreType;
 use sui::sui_commands::{genesis, SuiNetwork};
-use sui::{SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
+use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use sui_types::base_types::SuiAddress;
 
 pub async fn start_test_network(
@@ -36,12 +36,13 @@ pub async fn start_test_network(
         .collect();
     genesis_config.authorities = authorities;
 
-    let (network_config, accounts, keystore) = genesis(genesis_config).await?;
+    let (network_config, accounts, mut keystore) = genesis(genesis_config).await?;
     let network = SuiNetwork::start(&network_config).await?;
 
     let network_config = network_config.persisted(&network_path);
     network_config.save()?;
-    keystore.save(&keystore_path)?;
+    keystore.set_path(&keystore_path);
+    keystore.save()?;
 
     let authorities = network_config.get_authority_infos();
     let authorities = authorities
@@ -51,8 +52,17 @@ pub async fn start_test_network(
             info.base_port = server.get_port();
             info
         })
-        .collect();
+        .collect::<Vec<_>>();
     let active_address = accounts.get(0).copied();
+
+    GatewayConfig {
+        db_folder_path: db_folder_path.clone(),
+        authorities: authorities.clone(),
+        ..Default::default()
+    }
+    .persisted(&working_dir.join(SUI_GATEWAY_CONFIG))
+    .save()?;
+
     // Create wallet config with stated authorities port
     WalletConfig {
         accounts,

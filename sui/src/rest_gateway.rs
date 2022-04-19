@@ -34,7 +34,7 @@ pub struct RestGatewayClient {
 #[allow(unused_variables)]
 impl GatewayAPI for RestGatewayClient {
     async fn execute_transaction(
-        &mut self,
+        &self,
         tx: Transaction,
     ) -> Result<TransactionResponse, anyhow::Error> {
         let url = format!("{}/api/", self.url);
@@ -54,7 +54,7 @@ impl GatewayAPI for RestGatewayClient {
     }
 
     async fn transfer_coin(
-        &mut self,
+        &self,
         signer: SuiAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
@@ -87,7 +87,7 @@ impl GatewayAPI for RestGatewayClient {
     }
 
     async fn move_call(
-        &mut self,
+        &self,
         signer: SuiAddress,
         package_object_ref: ObjectRef,
         module: Identifier,
@@ -133,7 +133,7 @@ impl GatewayAPI for RestGatewayClient {
     }
 
     async fn publish(
-        &mut self,
+        &self,
         signer: SuiAddress,
         package_bytes: Vec<Vec<u8>>,
         gas_object_ref: ObjectRef,
@@ -151,7 +151,7 @@ impl GatewayAPI for RestGatewayClient {
     }
 
     async fn split_coin(
-        &mut self,
+        &self,
         signer: SuiAddress,
         coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
@@ -170,7 +170,7 @@ impl GatewayAPI for RestGatewayClient {
     }
 
     async fn merge_coins(
-        &mut self,
+        &self,
         signer: SuiAddress,
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
@@ -194,13 +194,13 @@ impl GatewayAPI for RestGatewayClient {
             .await?)
     }
 
-    fn get_owned_objects(
-        &mut self,
+    async fn get_owned_objects(
+        &self,
         account_addr: SuiAddress,
     ) -> Result<Vec<ObjectRef>, anyhow::Error> {
         let url = format!("{}/api/objects?address={}", self.url, account_addr);
-        let response = reqwest::blocking::get(url)?;
-        let response: ObjectResponse = response.json()?;
+        let response = reqwest::get(url).await?;
+        let response: ObjectResponse = response.json().await?;
         let objects = response
             .objects
             .into_iter()

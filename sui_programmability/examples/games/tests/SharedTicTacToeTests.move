@@ -194,7 +194,7 @@ module Games::SharedTicTacToeTests {
         player: &address,
         scenario: &mut Scenario,
     ): u8  {
-        // The gameboard is now a shared mutable object.
+        // The gameboard is now a shared object.
         // Any player can place a mark on it directly.
         TestScenario::next_tx(scenario, player);
         let status;

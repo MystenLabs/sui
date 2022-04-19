@@ -62,7 +62,11 @@ move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "2e
 move-unit-test = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
 
 once_cell = "1.9.0"
-reqwest = { version = "0.11.10", features=["json","serde_json", "blocking"]}
+reqwest = { version = "0.11.10", features = ["json", "serde_json", "blocking"] }
+
+jsonrpsee = { version = "0.10.1", features = ["full"] }
+
+jsonrpsee-proc-macros = "0.10.1"
 
 [dev-dependencies]
 tracing-test = "0.2.1"
@@ -86,6 +90,10 @@ path = "src/sui-move.rs"
 [[bin]]
 name = "rest_server"
 path = "src/rest_server.rs"
+
+[[bin]]
+name = "rpc-server"
+path = "src/rpc_server.rs"
 
 [[bin]]
 name = "validator"
