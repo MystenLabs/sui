@@ -464,11 +464,11 @@ fn process_successful_execution<
                     EventType::TransferToAddress => {
                         Owner::AddressOwner(SuiAddress::try_from(recipient.as_slice()).unwrap())
                     }
-                    EventType::FreezeObject => Owner::SharedImmutable,
+                    EventType::FreezeObject => Owner::Immutable,
                     EventType::TransferToObject => {
                         Owner::ObjectOwner(ObjectID::try_from(recipient.borrow()).unwrap().into())
                     }
-                    EventType::ShareObject => Owner::SharedMutable,
+                    EventType::ShareObject => Owner::Shared,
                     _ => unreachable!(),
                 };
                 handle_transfer(
@@ -725,7 +725,7 @@ pub fn resolve_and_type_check(
         // check that m.type_ matches the parameter types of the function
         let inner_param_type = match &param_type {
             SignatureToken::MutableReference(inner_t) => {
-                if object.is_read_only() {
+                if object.is_immutable() {
                     let error = format!(
                         "Argument {} is expected to be mutable, immutable object found",
                         idx
@@ -744,12 +744,12 @@ pub fn resolve_and_type_check(
             t @ SignatureToken::Struct(_)
             | t @ SignatureToken::StructInstantiation(_, _)
             | t @ SignatureToken::TypeParameter(_) => {
-                if object.is_shared() {
+                if !object.is_owned() {
                     // Forbid passing shared (both mutable and immutable) object by value.
                     // This ensures that shared object cannot be transferred, deleted or wrapped.
                     return Err(SuiError::TypeError {
                         error: format!(
-                            "Shared object cannot be passed by-value, found in argument {}",
+                            "Only owned object can be passed by-value, violation found in argument {}",
                             idx
                         ),
                     });

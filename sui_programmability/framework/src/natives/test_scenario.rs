@@ -28,10 +28,10 @@ type Event = (Vec<u8>, u64, Type, MoveTypeLayout, Value);
 const WRAPPED_OBJECT_EVENT: u64 = 255;
 const UPDATE_OBJECT_EVENT: u64 = 254;
 
-/// Trying to transfer a shared object, which is not allowed.
+/// Trying to transfer an unowned object, which is not allowed.
 /// This won't be detected right away when a transfer is happening.
 /// Instead, it's detected when processing the inventory events.
-const ETRANSFER_SHARED_OBJECT: u64 = 100;
+const ETRANSFER_UNOWNED_OBJECT: u64 = 100;
 
 /// Trying to mutating an immutable object.
 /// This is detected when returning an immutable object back to
@@ -83,7 +83,7 @@ fn get_global_inventory(events: &[Event]) -> Result<Inventory, u64> {
             let obj_id = get_value_object_id(val, layout);
             if let Some(cur) = inventory.get_mut(&obj_id) {
                 let new_value = val.copy_value().unwrap();
-                if cur.owner == Owner::SharedImmutable && !cur.value.equals(&new_value).unwrap() {
+                if cur.owner == Owner::Immutable && !cur.value.equals(&new_value).unwrap() {
                     return Err(EMUTATING_IMMUTABLE_OBJECT);
                 }
                 // Update the object content since it may have been mutated.
@@ -132,14 +132,14 @@ fn get_new_owner(
     recipient: Vec<u8>,
 ) -> Result<Owner, u64> {
     if let Some(existing) = inventory.get(obj_id) {
-        if existing.owner.is_shared() {
-            // Shared objects are not allowed to be transferred.
-            return Err(ETRANSFER_SHARED_OBJECT);
+        if !existing.owner.is_owned() {
+            // Unowned objects are not allowed to be transferred.
+            return Err(ETRANSFER_UNOWNED_OBJECT);
         }
     }
     Ok(match event_type {
-        EventType::FreezeObject => Owner::SharedImmutable,
-        EventType::ShareObject => Owner::SharedMutable,
+        EventType::FreezeObject => Owner::Immutable,
+        EventType::ShareObject => Owner::Shared,
         EventType::TransferToAddress => {
             Owner::AddressOwner(SuiAddress::try_from(recipient).unwrap())
         }
@@ -166,7 +166,7 @@ fn get_inventory_for(
             // https://github.com/MystenLabs/sui/issues/673
             if (obj.owner == Owner::AddressOwner(sui_addr)
                 || obj.owner == Owner::ObjectOwner(sui_addr)
-                || obj.owner.is_shared())
+                || !obj.owner.is_owned())
                 && &obj.type_ == type_
             {
                 Some(obj.value)

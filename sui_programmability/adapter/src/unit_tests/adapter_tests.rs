@@ -502,7 +502,7 @@ fn test_freeze() {
     let id1 = storage.get_created_keys().pop().unwrap();
     storage.flush();
     let obj1 = storage.read_object(&id1).unwrap();
-    assert!(!obj1.is_read_only());
+    assert!(!obj1.is_immutable());
 
     // 2. Call freeze_object.
     call(
@@ -519,8 +519,8 @@ fn test_freeze() {
     assert_eq!(storage.updated().len(), 1);
     storage.flush();
     let obj1 = storage.read_object(&id1).unwrap();
-    assert!(obj1.is_read_only());
-    assert!(obj1.owner == Owner::SharedImmutable);
+    assert!(obj1.is_immutable());
+    assert!(obj1.owner == Owner::Immutable);
 
     // 3. Call transfer again and it should fail.
     let pure_args = vec![bcs::to_bytes(&AccountAddress::from(addr1)).unwrap()];
@@ -537,7 +537,7 @@ fn test_freeze() {
     let err = result.unwrap_err();
     assert!(err
         .to_string()
-        .contains("Shared object cannot be passed by-value, found in argument 0"));
+        .contains("Only owned object can be passed by-value, violation found in argument 0"));
 
     // 4. Call set_value (pass as mutable reference) should fail as well.
     let obj1 = storage.read_object(&id1).unwrap();

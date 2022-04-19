@@ -51,15 +51,13 @@ impl<S> AuthorityTemporaryStore<S> {
                 .filter_map(|(kind, object)| match kind {
                     InputObjectKind::MovePackage(_) => None,
                     InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
-                        if object.is_read_only() {
+                        if object.is_immutable() {
                             None
                         } else {
                             Some(*object_ref)
                         }
                     }
-                    InputObjectKind::MutSharedMoveObject(_) => {
-                        Some(object.compute_object_reference())
-                    }
+                    InputObjectKind::SharedMoveObject(_) => Some(object.compute_object_reference()),
                 })
                 .collect(),
             written: BTreeMap::new(),
@@ -147,7 +145,7 @@ impl<S> AuthorityTemporaryStore<S> {
                 object.object_size_for_gas_metering(),
                 storage_rebate,
             )?;
-            if !object.is_read_only() {
+            if !object.is_immutable() {
                 // We don't need to set storage rebate for immutable objects, as they will
                 // never be deleted.
                 object.storage_rebate = new_storage_rebate;
@@ -306,7 +304,7 @@ impl<S> Storage for AuthorityTemporaryStore<S> {
         // Check it is not read-only
         #[cfg(test)] // Movevm should ensure this
         if let Some(existing_object) = self.read_object(&object.id()) {
-            if existing_object.is_read_only() {
+            if existing_object.is_immutable() {
                 // This is an internal invariant violation. Move only allows us to
                 // mutate objects if they are &mut so they cannot be read-only.
                 panic!("Internal invariant violation: Mutating a read-only object.")
@@ -326,7 +324,7 @@ impl<S> Storage for AuthorityTemporaryStore<S> {
         // Check it is not read-only
         #[cfg(test)] // Movevm should ensure this
         if let Some(object) = self.read_object(id) {
-            if object.is_read_only() {
+            if object.is_immutable() {
                 // This is an internal invariant violation. Move only allows us to
                 // mutate objects if they are &mut so they cannot be read-only.
                 panic!("Internal invariant violation: Deleting a read-only object.")
@@ -382,7 +380,7 @@ impl<S> ResourceResolver for AuthorityTemporaryStore<S> {
             None => match self.read_object(&ObjectID::from(*address)) {
                 None => return Ok(None),
                 Some(x) => {
-                    if !x.is_read_only() {
+                    if !x.is_immutable() {
                         fp_bail!(SuiError::ExecutionInvariantViolation);
                     }
                     x
