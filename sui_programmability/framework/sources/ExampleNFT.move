@@ -6,16 +6,21 @@
 /// (https://docs.sui.io/build/wallet) to mint an NFT. For example,
 /// `wallet example-nft --name <Name> --description <Description> --url <URL>`
 module Sui::ExampleNFT {
+    use Sui::Url::{Self, Url};
+    use Sui::UTF8;
     use Sui::ID::VersionedID;
-    use Sui::TokenMetadata::{Self, TokenMetadata};
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
 
     /// An example NFT that can be minted by anybody
     struct ExampleNFT has key, store {
         id: VersionedID,
-        /// The metadata associated with this NFT
-        metadata: TokenMetadata,
+        /// Name for the token
+        name: UTF8::String,
+        /// Description of the token
+        description: UTF8::String,
+        /// URL for the token
+        url: Url,
         // TODO: allow custom attributes
     }
 
@@ -28,7 +33,9 @@ module Sui::ExampleNFT {
     ) {
         let nft = ExampleNFT {
             id: TxContext::new_id(ctx),
-            metadata: TokenMetadata::new(name, description, url)
+            name: UTF8::string_unsafe(name),
+            description: UTF8::string_unsafe(description),
+            url: Url::new_from_bytes_unsafe(url)
         };
         Transfer::transfer(nft, TxContext::sender(ctx))
     }
