@@ -404,7 +404,7 @@ fn test_signable_serde() -> Result<(), anyhow::Error> {
     // Serialize
     let bytes = data.to_bytes();
     // Deserialize
-    let deserialized_data = TransactionData::from_signable_bytes(bytes)?;
+    let deserialized_data = TransactionData::from_signable_bytes(&bytes)?;
     assert_eq!(data, deserialized_data);
     Ok(())
 }

@@ -97,13 +97,13 @@ impl<A> GatewayState<A> {
 #[async_trait]
 pub trait GatewayAPI {
     async fn execute_transaction(
-        &mut self,
+        &self,
         tx: Transaction,
     ) -> Result<TransactionResponse, anyhow::Error>;
 
     /// Send coin object to a Sui address.
     async fn transfer_coin(
-        &mut self,
+        &self,
         signer: SuiAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
@@ -118,7 +118,7 @@ pub trait GatewayAPI {
 
     /// Call move functions in the module in the given package, with args supplied
     async fn move_call(
-        &mut self,
+        &self,
         signer: SuiAddress,
         package_object_ref: ObjectRef,
         module: Identifier,
@@ -133,7 +133,7 @@ pub trait GatewayAPI {
 
     /// Publish Move modules
     async fn publish(
-        &mut self,
+        &self,
         signer: SuiAddress,
         package_bytes: Vec<Vec<u8>>,
         gas_object_ref: ObjectRef,
@@ -147,7 +147,7 @@ pub trait GatewayAPI {
     /// Note that the order of the new coins in SplitCoinResponse will
     /// not be the same as the order of `split_amounts`.
     async fn split_coin(
-        &mut self,
+        &self,
         signer: SuiAddress,
         coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
@@ -164,7 +164,7 @@ pub trait GatewayAPI {
     ///
     /// TODO: Support merging a vector of coins.
     async fn merge_coins(
-        &mut self,
+        &self,
         signer: SuiAddress,
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
@@ -177,7 +177,7 @@ pub trait GatewayAPI {
 
     /// Get refs of all objects we own from local cache.
     async fn get_owned_objects(
-        &mut self,
+        &self,
         account_addr: SuiAddress,
     ) -> Result<Vec<ObjectRef>, anyhow::Error>;
 
@@ -206,7 +206,7 @@ where
     // TODO: This is expensive and unnecessary.
     // We should make sure that the framework package exists in the gateway store and read it.
     // Or even better, we should cache the reference in GatewayState struct.
-    pub async fn get_framework_object_ref(&mut self) -> Result<ObjectRef, anyhow::Error> {
+    pub async fn get_framework_object_ref(&self) -> Result<ObjectRef, anyhow::Error> {
         let info = self
             .get_object_info(ObjectID::from(SUI_FRAMEWORK_ADDRESS))
             .await?;
@@ -555,7 +555,7 @@ where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
     async fn execute_transaction(
-        &mut self,
+        &self,
         tx: Transaction,
     ) -> Result<TransactionResponse, anyhow::Error> {
         let tx_kind = tx.data.kind.clone();
@@ -586,7 +586,7 @@ where
     }
 
     async fn transfer_coin(
-        &mut self,
+        &self,
         signer: SuiAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
@@ -627,7 +627,7 @@ where
     }
 
     async fn move_call(
-        &mut self,
+        &self,
         signer: SuiAddress,
         package_object_ref: ObjectRef,
         module: Identifier,
@@ -655,7 +655,7 @@ where
     }
 
     async fn publish(
-        &mut self,
+        &self,
         signer: SuiAddress,
         package_bytes: Vec<Vec<u8>>,
         gas_object_ref: ObjectRef,
@@ -666,7 +666,7 @@ where
     }
 
     async fn split_coin(
-        &mut self,
+        &self,
         signer: SuiAddress,
         coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
@@ -696,7 +696,7 @@ where
     }
 
     async fn merge_coins(
-        &mut self,
+        &self,
         signer: SuiAddress,
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
@@ -734,7 +734,7 @@ where
     }
 
     async fn get_owned_objects(
-        &mut self,
+        &self,
         account_addr: SuiAddress,
     ) -> Result<Vec<ObjectRef>, anyhow::Error> {
         Ok(self.store.get_account_objects(account_addr)?)
