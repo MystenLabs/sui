@@ -277,35 +277,32 @@ pub enum Owner {
     /// The object ID is converted to SuiAddress as SuiAddress is universal.
     ObjectOwner(SuiAddress),
     /// Object is shared, can be used by any address, and is mutable.
-    SharedMutable,
+    Shared,
     /// Object is immutable, and hence ownership doesn't matter.
-    SharedImmutable,
+    Immutable,
 }
 
 impl Owner {
     pub fn get_owner_address(&self) -> SuiResult<SuiAddress> {
         match self {
             Self::AddressOwner(address) | Self::ObjectOwner(address) => Ok(*address),
-            Self::SharedMutable | Self::SharedImmutable => Err(SuiError::UnexpectedOwnerType),
+            Self::Shared | Self::Immutable => Err(SuiError::UnexpectedOwnerType),
         }
     }
 
-    pub fn is_read_only(&self) -> bool {
+    pub fn is_immutable(&self) -> bool {
+        self == &Owner::Immutable
+    }
+
+    pub fn is_owned(&self) -> bool {
         match self {
-            Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::SharedMutable => false,
-            Owner::SharedImmutable => true,
+            Owner::AddressOwner(_) | Owner::ObjectOwner(_) => true,
+            Owner::Shared | Owner::Immutable => false,
         }
     }
 
     pub fn is_shared(&self) -> bool {
-        match self {
-            Owner::AddressOwner(_) | Owner::ObjectOwner(_) => false,
-            Owner::SharedMutable | Owner::SharedImmutable => true,
-        }
-    }
-
-    pub fn is_shared_mutable(&self) -> bool {
-        matches!(self, Owner::SharedMutable)
+        matches!(self, Owner::Shared)
     }
 }
 
@@ -313,7 +310,7 @@ impl std::cmp::PartialEq<SuiAddress> for Owner {
     fn eq(&self, other: &SuiAddress) -> bool {
         match self {
             Self::AddressOwner(address) => address == other,
-            Self::ObjectOwner(_) | Self::SharedMutable | Self::SharedImmutable => false,
+            Self::ObjectOwner(_) | Self::Shared | Self::Immutable => false,
         }
     }
 }
@@ -323,7 +320,7 @@ impl std::cmp::PartialEq<ObjectID> for Owner {
         let other_id: SuiAddress = (*other).into();
         match self {
             Self::ObjectOwner(id) => id == &other_id,
-            Self::AddressOwner(_) | Self::SharedMutable | Self::SharedImmutable => false,
+            Self::AddressOwner(_) | Self::Shared | Self::Immutable => false,
         }
     }
 }
@@ -361,14 +358,18 @@ impl Object {
     ) -> Self {
         Object {
             data: Data::Package(MovePackage::from(&modules)),
-            owner: Owner::SharedImmutable,
+            owner: Owner::Immutable,
             previous_transaction,
             storage_rebate: 0,
         }
     }
 
-    pub fn is_read_only(&self) -> bool {
-        self.owner.is_read_only()
+    pub fn is_immutable(&self) -> bool {
+        self.owner.is_immutable()
+    }
+
+    pub fn is_owned(&self) -> bool {
+        self.owner.is_owned()
     }
 
     pub fn is_shared(&self) -> bool {
@@ -453,7 +454,7 @@ impl Object {
             contents: GasCoin::new(id, SequenceNumber::new(), GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         Self {
-            owner: Owner::SharedImmutable,
+            owner: Owner::Immutable,
             data,
             previous_transaction: TransactionDigest::genesis(),
             storage_rebate: 0,
@@ -555,7 +556,7 @@ impl Object {
     }
 
     pub fn is_transfer_eligible(&self) -> SuiResult {
-        fp_ensure!(!self.is_shared(), SuiError::TransferSharedError);
+        fp_ensure!(self.is_owned(), SuiError::TransferUnownedError);
         let is_coin = match &self.data {
             Data::Move(m) => bcs::from_bytes::<Coin>(&m.contents).is_ok(),
             Data::Package(_) => false,
@@ -628,7 +629,7 @@ impl Display for Object {
             self.owner,
             self.version().value(),
             self.id(),
-            self.is_read_only(),
+            self.is_immutable(),
             type_string
         )
     }

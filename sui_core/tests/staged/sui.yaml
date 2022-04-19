@@ -334,9 +334,9 @@ Owner:
         NEWTYPE:
           TYPENAME: SuiAddress
     2:
-      SharedMutable: UNIT
+      Shared: UNIT
     3:
-      SharedImmutable: UNIT
+      Immutable: UNIT
 PublicKeyBytes:
   NEWTYPESTRUCT: BYTES
 SequenceNumber:
@@ -445,7 +445,7 @@ SuiError:
               SEQ:
                 TYPENAME: SuiError
     1:
-      TransferSharedError: UNIT
+      TransferUnownedError: UNIT
     2:
       TransferNonCoinError: UNIT
     3:

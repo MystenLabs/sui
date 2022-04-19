@@ -968,7 +968,7 @@ To make an object `obj` shared and immutable, one can call:
 ```
 Transfer::freeze_object(obj);
 ```
-After this call, `obj` becomes immutable which means it can never be mutated or deleted. This process is also irreversible: once an object is frozen, it will stay frozen forever. An shared immutable object can be used as reference by anyone in their Move call.
+After this call, `obj` becomes immutable which means it can never be mutated or deleted. This process is also irreversible: once an object is frozen, it will stay frozen forever. An immutable object can be used as reference by anyone in their Move call.
 
 #### Share an object (experimental)
 This feature is still in development. It only works in Move for demo purpose, and doesn't yet work in Sui.

@@ -5,14 +5,14 @@
 // In TicTacToe, since the game object is owned by the admin, the players are not
 // able to directly mutate the gameboard. Hence each marker placement takes
 // two transactions.
-// In this implementation, we make the game object a shared mutable object.
+// In this implementation, we make the game object a shared object.
 // Both players have access and can mutate the game object, and hence they
 // can place markers directly in one transaction.
-// In general, using shared mutable object has an extra cost due to the fact
+// In general, using shared object has an extra cost due to the fact
 // that Sui needs to sequence the operations that mutate the shared object from
 // different transactions. In this case however, since it is expected for players
 // to take turns to place the marker, there won't be a significant overhead in practice.
-// As we can see, by using shared mutable object, the implementation is much
+// As we can see, by using shared object, the implementation is much
 // simpler than the other implementation.
 module Games::SharedTicTacToe {
     use Std::Vector;
