@@ -34,12 +34,13 @@ pub async fn start_test_network(
         .collect();
     genesis_config.authorities = authorities;
 
-    let (network_config, accounts, keystore) = genesis(genesis_config).await?;
+    let (network_config, accounts, mut keystore) = genesis(genesis_config).await?;
     let network = SuiNetwork::start(&network_config).await?;
 
     let network_config = network_config.persisted(&network_path);
     network_config.save()?;
-    keystore.save(&keystore_path)?;
+    keystore.set_path(&keystore_path);
+    keystore.save()?;
 
     let authorities = network_config.get_authority_infos();
     let authorities = authorities
