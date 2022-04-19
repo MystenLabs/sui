@@ -16,7 +16,7 @@
         "onchange": "^7.1.0",
         "postcss": "^8.4.6",
         "prettier": "2.5.1",
-        "react-scripts": "5.0.0",
+        "react-scripts": "5.0.1",
         "stylelint": "^14.5.0",
         "stylelint-config-prettier": "^9.0.3",
         "stylelint-config-standard": "^25.0.0",
@@ -36,18 +36,20 @@
     },
     "scripts": {
         "start": "react-scripts start",
-        "start:dev": "concurrently \"npm:start\" \"npm:prettier:fix:watch\"",
         "build": "react-scripts build",
         "test": "REACT_APP_DATA=static react-scripts test",
         "eslint:check": "eslint --max-warnings=0 .eslintrc.js \"./src/**/*.{js,jsx,ts,tsx}\"",
-        "eslint:fix": "npm run eslint:check -- --fix",
+        "eslint:fix": "yarn eslint:check --fix",
         "prettier:check": "prettier -c --ignore-unknown .",
         "prettier:fix": "prettier -w --ignore-unknown .",
-        "prettier:fix:watch": "npm run prettier:fix && onchange '**' --exclude-path .gitignore -- prettier -w --ignore-unknown {{file}}",
         "stylelint:check": "stylelint \"**/*.{css,scss}\"",
-        "stylelint:fix": "npm run stylelint:check -- --fix",
-        "lint": "npm run eslint:check && npm run prettier:check && npm run stylelint:check",
-        "lint:fix": "npm run eslint:fix && npm run prettier:fix && npm run stylelint:fix"
+        "stylelint:fix": "yarn stylelint:check --fix",
+        "lint": "yarn eslint:check && yarn prettier:check && yarn stylelint:check",
+        "lint:fix": "yarn eslint:fix && yarn prettier:fix && yarn stylelint:fix"
+    },
+    "resolutions": {
+        "async": "3.2.2",
+        "nth-check": "2.0.1"
     },
     "browserslist": {
         "production": [

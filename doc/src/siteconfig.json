@@ -141,18 +141,32 @@
         ]
       },
       {
-        "name": "Take Tutorial",
+        "name": "See what's New",
         "sublist": [{
-          "name": "End-to-end guide for playing TicTacToe on Sui",
-          "url": "/explore/tutorials"
-        }]
+            "name": "Publish Move modules via Rest",
+            "url": "/build/rest-api#post-apipublish"
+          },
+          {
+            "name": "Use gas objects for transactions",
+            "url": "/build/wallet#paying-for-transactions-with-gas-objects"
+          },
+          {
+            "name": "Read the Sui FAQ",
+            "url": "/contribute/faq"
+          }
+        ]
       },
       {
-        "name": "Explore Prototypes",
+        "name": "See Sui in Action",
         "sublist": [{
-          "name": "Two games with mutable, expressive NFTs",
-          "url": "/explore/prototypes"
-        }]
+            "name": "Create and play Tic-Tac-Toe on Sui",
+            "url": "/explore/tutorials"
+          },
+          {
+            "name": "See two games with mutable, expressive NFTs",
+            "url": "/explore/prototypes"
+          }
+        ]
       },
       {
         "name": "Build with Examples",

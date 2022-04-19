@@ -13,6 +13,5 @@ export * from './signers/txn-data-serializers/txn-data-serializer';
 export * from './signers/raw-signer';
 export * from './signers/signer';
 
-
 import { MoveBCS } from './bcs';
 export { MoveBCS };

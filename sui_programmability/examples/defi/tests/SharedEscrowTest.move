@@ -118,7 +118,7 @@ module DeFi::SharedEscrowTests {
     fun cancel(scenario: &mut Scenario, initiator: &address) {
         TestScenario::next_tx(scenario, initiator);
         {
-            let escrow = TestScenario::remove_object<EscrowedObj<ItemA, ItemB>>(scenario);
+            let escrow = TestScenario::take_object<EscrowedObj<ItemA, ItemB>>(scenario);
             let ctx = TestScenario::ctx(scenario);
             SharedEscrow::cancel(&mut escrow, ctx);
             TestScenario::return_object(scenario, escrow);
@@ -128,7 +128,7 @@ module DeFi::SharedEscrowTests {
     fun exchange(scenario: &mut Scenario, bob: &address, item_b_verioned_id: VersionedID) {
         TestScenario::next_tx(scenario, bob);
         {
-            let escrow = TestScenario::remove_object<EscrowedObj<ItemA, ItemB>>(scenario);
+            let escrow = TestScenario::take_object<EscrowedObj<ItemA, ItemB>>(scenario);
             let item_b = ItemB {
                 id: item_b_verioned_id
             };
@@ -171,6 +171,6 @@ module DeFi::SharedEscrowTests {
 
     fun owns_object<T: key + store>(scenario: &mut Scenario, owner: &address): bool{
         TestScenario::next_tx(scenario, owner);
-        TestScenario::can_remove_object<T>(scenario)
+        TestScenario::can_take_object<T>(scenario)
     }
 }
