@@ -28,6 +28,7 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects};
 use sui_types::object::ObjectRead::Exists;
 use sui_types::object::{Object, ObjectRead};
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 use crate::config::{Config, PersistedConfig, WalletConfig};
 use crate::keystore::Keystore;
@@ -487,8 +488,8 @@ impl WalletCommands {
                     args.push(SuiJsonValue::new(a.clone()).unwrap());
                 }
                 let (_, effects) = call_move(
-                    &ObjectID::from_hex_literal("0x2").unwrap(),
-                    &Identifier::new("ExampleNFT").unwrap(),
+                    &ObjectID::from(SUI_FRAMEWORK_ADDRESS),
+                    &Identifier::new("DevNetNFT").unwrap(),
                     &Identifier::new("mint").unwrap(),
                     &[],
                     gas,
@@ -497,13 +498,11 @@ impl WalletCommands {
                     context,
                 )
                 .await?;
-                let nft_id = effects
+                let ((nft_id, _, _), _) = effects
                     .created
                     .first()
-                    .ok_or_else(|| anyhow!("Failed to create NFT"))?
-                    .0
-                     .0;
-                let object_read = context.gateway.get_object_info(nft_id).await?;
+                    .ok_or_else(|| anyhow!("Failed to create NFT"))?;
+                let object_read = context.gateway.get_object_info(*nft_id).await?;
                 WalletCommandResult::CreateExampleNFT(object_read)
             }
         });

@@ -307,12 +307,12 @@ async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
     .execute(&mut context)
     .await?;
 
-    let obj = match result {
+    match result {
         WalletCommandResult::CreateExampleNFT(ObjectRead::Exists(_, obj, layout)) => {
             assert_eq!(obj.owner, address);
             assert_eq!(
                 obj.type_().unwrap().to_string(),
-                "0x2::ExampleNFT::ExampleNFT"
+                "0x2::DevNetNFT::DevNetNFT"
             );
             Ok(obj.to_json(&layout).unwrap_or_else(|_| json!("")))
         }
