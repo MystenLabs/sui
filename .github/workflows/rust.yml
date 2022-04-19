@@ -35,6 +35,10 @@ jobs:
       isRust: ${{ steps.diff.outputs.isRust }}
     steps:
     - uses: actions/checkout@v2
+    - name: Configure Git
+        env:
+          TOKEN: ${{ secrets.NARWHAL_ACCESS_TOKEN }}
+        run: git config --global url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
     - name: Detect Changes
       uses: dorny/paths-filter@v2.10.2
       id: diff
