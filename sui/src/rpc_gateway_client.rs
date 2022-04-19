@@ -157,12 +157,8 @@ impl GatewayAPI for RpcGatewayClient {
         Ok(self.client.get_object_info(object_id).await?)
     }
 
-    fn get_owned_objects(&self, account_addr: SuiAddress) -> Result<Vec<ObjectRef>, Error> {
-        let handle = Handle::current();
-        let _ = handle.enter();
-        let object_response: ObjectResponse =
-            futures::executor::block_on(self.client.get_owned_objects(account_addr))?;
-
+    async fn get_owned_objects(&self, account_addr: SuiAddress) -> Result<Vec<ObjectRef>, Error> {
+        let object_response: ObjectResponse = self.client.get_owned_objects(account_addr).await?;
         let object_refs = object_response
             .objects
             .into_iter()

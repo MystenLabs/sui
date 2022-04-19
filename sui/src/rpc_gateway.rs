@@ -233,7 +233,8 @@ impl RpcGatewayServer for RpcGatewayImpl {
         debug!("get_objects : {}", owner);
         let objects = self
             .gateway
-            .get_owned_objects(owner)?
+            .get_owned_objects(owner)
+            .await?
             .into_iter()
             .map(NamedObjectRef::from)
             .collect();
