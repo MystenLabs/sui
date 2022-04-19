@@ -115,6 +115,7 @@ async fn listen_to_sequenced_transaction() {
     tx_sui_to_consensus.send(input).await.unwrap();
 
     // Notify the consensus listener that the transaction has been sequenced.
+    tokio::task::yield_now().await;
     let output = (Ok(()), transaction);
     tx_consensus_to_sui.send(output).await.unwrap();
 
