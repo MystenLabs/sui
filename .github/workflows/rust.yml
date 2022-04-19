@@ -114,6 +114,8 @@ jobs:
     - uses: EmbarkStudios/cargo-deny-action@v1
 
   cargo-udeps:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
