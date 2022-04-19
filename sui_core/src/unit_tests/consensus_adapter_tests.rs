@@ -72,7 +72,6 @@ async fn submit_transaction_to_consensus() {
     tokio::task::yield_now().await;
     let consensus_transaction = ConsensusTransaction::UserTransaction(certificate);
     let result = submitter.submit(&consensus_transaction).await;
-    println!("{:?}", result);
     assert!(result.is_ok());
 
     // Ensure the consensus node got the transaction.
