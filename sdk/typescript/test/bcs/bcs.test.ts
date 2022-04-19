@@ -8,6 +8,23 @@ describe('Move BCS', () => {
         expect(BCS.de('u8', new B64('AA==').getData())).toEqual(new BN(0));;
     });
 
+    it('should ser/de u64', () => {
+        const exp = 'AO/Nq3hWNBI=';
+        const num = BigInt('1311768467750121216');
+        const ser = BCS.ser('u64', num).toBytes();
+
+        expect(new B64(ser).toString()).toEqual(exp);
+        expect(BCS.de('u64', new B64(exp).getData())).toEqual(new BN('1311768467750121216'));
+    });
+
+    it('should ser/de u128', () => {
+        const sample = new B64('AO9ld3CFjD48AAAAAAAAAA==');
+        const num = BigInt('1111311768467750121216');
+
+        expect(BCS.de('u128', sample.getData()).toString(10)).toEqual('1111311768467750121216');
+        expect(new B64(BCS.ser('u128', num).toBytes()).toString()).toEqual(sample.toString())
+    });
+
     it('should de/ser custom objects', () => {
         BCS.registerStructType('Coin', {
             value: BCS.U64,
