@@ -38,7 +38,7 @@ move-vm-runtime = { git = "https://github.com/move-language/move", rev = "2e7c37
 move-vm-types = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
 
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "e44bca4513a6ff6c97399cd79e82e4bc00571ac3"}
-client = { git = "https://github.com/MystenLabs/narwhal", branch = "main" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", branch = "output-tx", package = "executor" }
 
 [dev-dependencies]
 fdlimit = "0.2.1"

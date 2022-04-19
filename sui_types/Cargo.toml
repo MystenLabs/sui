@@ -27,6 +27,7 @@ static_assertions = "1.1.0"
 opentelemetry = { version = "0.17", features = ["rt-tokio"] }
 parking_lot = "0.12.0"
 base64ct = { version = "1.5.0", features = ["alloc"] }
+async-trait = "0.1.53"
 
 name_variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "97a056f85555fa2afe497d6abb7cf6bf8faa63cf" }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "e44bca4513a6ff6c97399cd79e82e4bc00571ac3" }
@@ -37,5 +38,6 @@ move-core-types = { git = "https://github.com/move-language/move", rev = "2e7c37
 move-disassembler = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
 move-ir-types = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", branch = "output-tx", package = "executor" }
 
 sha2 = "0.10.2"

@@ -2,13 +2,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::base_types::*;
+use async_trait::async_trait;
+use move_binary_format::errors::{PartialVMError, VMError};
+use narwhal_executor::ExecutionStateError;
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use thiserror::Error;
 use typed_store::rocks::TypedStoreError;
-
-use crate::base_types::*;
-use move_binary_format::errors::{PartialVMError, VMError};
-use serde::{Deserialize, Serialize};
 
 #[macro_export]
 macro_rules! fp_bail {
@@ -253,7 +254,7 @@ pub enum SuiError {
 
     #[error(
     "Failed to achieve quorum between authorities, cause by : {:#?}",
-    errors.iter().map(| e | e.to_string()).collect::<Vec<String>>()
+    errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
     )]
     QuorumNotReached { errors: Vec<SuiError> },
 
@@ -299,5 +300,22 @@ impl std::convert::From<VMError> for SuiError {
         SuiError::ModuleVerificationFailure {
             error: error.to_string(),
         }
+    }
+}
+
+#[async_trait]
+impl ExecutionStateError for SuiError {
+    fn node_error(&self) -> bool {
+        matches!(
+            self,
+            Self::ObjectFetchFailed { .. }
+                | Self::ByzantineAuthoritySuspicion { .. }
+                | Self::StorageError(..)
+                | Self::GenericAuthorityError { .. }
+        )
+    }
+
+    fn to_string(&self) -> String {
+        ToString::to_string(&self)
     }
 }

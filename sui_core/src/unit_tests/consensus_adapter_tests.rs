@@ -1,12 +1,96 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
+use crate::authority::authority_tests::get_genesis_package_by_module;
 use crate::authority::authority_tests::init_state_with_objects;
-use crate::consensus_client::consensus_tests::test_certificates;
-use crate::consensus_client::consensus_tests::{test_gas_objects, test_shared_object};
+use crate::authority::AuthorityState;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::ident_str;
+use sui_adapter::genesis;
+use sui_types::base_types::SequenceNumber;
+use sui_types::base_types::{ObjectID, TransactionDigest};
+use sui_types::crypto::Signature;
+use sui_types::gas_coin::GasCoin;
+use sui_types::messages::{
+    CertifiedTransaction, SignatureAggregator, Transaction, TransactionData,
+};
+use sui_types::object::{MoveObject, Object, Owner};
 use sui_types::serialize::{deserialize_message, SerializedMessage};
 use test_utils::network::test_listener;
+use test_utils::test_keys;
 use tokio::sync::mpsc::channel;
+
+/// Default network buffer size.
+const NETWORK_BUFFER_SIZE: usize = 65_000;
+
+/// Fixture: a few test gas objects.
+pub fn test_gas_objects() -> Vec<Object> {
+    (0..4)
+        .map(|i| {
+            let seed = format!("0x555555555555555{i}");
+            let gas_object_id = ObjectID::from_hex_literal(&seed).unwrap();
+            let (sender, _) = test_keys().pop().unwrap();
+            Object::with_id_owner_for_testing(gas_object_id, sender)
+        })
+        .collect()
+}
+
+/// Fixture: a a test shared object.
+pub fn test_shared_object() -> Object {
+    let seed = "0x6666666666666660";
+    let shared_object_id = ObjectID::from_hex_literal(seed).unwrap();
+    let content = GasCoin::new(shared_object_id, SequenceNumber::new(), 10);
+    let obj = MoveObject::new(/* type */ GasCoin::type_(), content.to_bcs_bytes());
+    Object::new_move(obj, Owner::SharedMutable, TransactionDigest::genesis())
+}
+
+/// Fixture: a few test certificates containing a shared object.
+pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTransaction> {
+    let (sender, keypair) = test_keys().pop().unwrap();
+
+    let mut certificates = Vec::new();
+    let shared_object_id = test_shared_object().id();
+    for gas_object in test_gas_objects() {
+        // Make a sample transaction.
+        let module = "ObjectBasics";
+        let function = "create";
+        let genesis_package_objects = genesis::clone_genesis_packages();
+        let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
+
+        let data = TransactionData::new_move_call(
+            sender,
+            package_object_ref,
+            ident_str!(module).to_owned(),
+            ident_str!(function).to_owned(),
+            /* type_args */ vec![],
+            gas_object.compute_object_reference(),
+            /* object_args */ vec![],
+            vec![shared_object_id],
+            /* pure_args */
+            vec![
+                16u64.to_le_bytes().to_vec(),
+                bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
+            ],
+            /* max_gas */ 10_000,
+        );
+        let signature = Signature::new(&data, &keypair);
+        let transaction = Transaction::new(data, signature);
+
+        // Submit the transaction and assemble a certificate.
+        let response = authority
+            .handle_transaction(transaction.clone())
+            .await
+            .unwrap();
+        let vote = response.signed_transaction.unwrap();
+        let certificate = SignatureAggregator::try_new(transaction, &authority.committee)
+            .unwrap()
+            .append(vote.auth_signature.authority, vote.auth_signature.signature)
+            .unwrap()
+            .unwrap();
+        certificates.push(certificate);
+    }
+    certificates
+}
 
 #[tokio::test]
 async fn listen_to_sequenced_transaction() {
@@ -54,7 +138,7 @@ async fn submit_transaction_to_consensus() {
     // Make a new consensus submitter instance.
     let submitter = ConsensusSubmitter::new(
         consensus_address,
-        /* buffer_size */ 65000,
+        NETWORK_BUFFER_SIZE,
         authority.committee,
         tx_consensus_listener,
     );

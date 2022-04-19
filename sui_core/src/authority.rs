@@ -6,6 +6,7 @@ use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
     execution_engine, transaction_input_checker,
 };
+use async_trait::async_trait;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::ModuleCache;
 use move_core_types::{
@@ -13,6 +14,7 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use narwhal_executor::{ExecutionIndices, ExecutionState};
 use std::sync::atomic::AtomicUsize;
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
@@ -371,7 +373,7 @@ impl AuthorityState {
     pub async fn handle_consensus_certificate(
         &self,
         certificate: CertifiedTransaction,
-        last_consensus_index: SequenceNumber,
+        last_consensus_index: ExecutionIndices,
     ) -> SuiResult<()> {
         // Ensure it is a shared object certificate
         if !certificate.transaction.contains_shared_object() {
@@ -793,10 +795,6 @@ impl AuthorityState {
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
         self._database.get_latest_parent_entry(object_id)
     }
-
-    pub fn last_consensus_index(&self) -> SuiResult<SequenceNumber> {
-        self._database.last_consensus_index()
-    }
 }
 
 impl ModuleResolver for AuthorityState {
@@ -804,5 +802,29 @@ impl ModuleResolver for AuthorityState {
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         self._database.get_module(module_id)
+    }
+}
+
+#[async_trait]
+impl ExecutionState for AuthorityState {
+    type Transaction = String;
+    type Error = SuiError;
+
+    async fn handle_consensus_transaction(
+        &self,
+        _execution_indices: ExecutionIndices,
+        _transaction: Self::Transaction,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn ask_consensus_write_lock(&self) -> bool {
+        true
+    }
+
+    fn release_consensus_write_lock(&self) {}
+
+    async fn load_execution_indices(&self) -> Result<ExecutionIndices, Self::Error> {
+        Ok(ExecutionIndices::default())
     }
 }
