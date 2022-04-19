@@ -12,6 +12,8 @@
  */
 
 import * as BN from 'bn.js'
+import { HexDataBuffer as HEX } from '../serialization/hex';
+import { Base64DataBuffer as B64 } from '../serialization/base64';
 
 /**
  * Class used for reading BCS data chunk by chunk. Meant to be used
@@ -180,6 +182,17 @@ export class BcsWriter {
     constructor(size = 1024) {
         this.dataView = new DataView(new ArrayBuffer(size));
     }
+
+    /**
+     * Unify argument types by converting them to BN.
+     */
+    static toBN(number: number | BN | bigint | string): BN {
+        switch (typeof number) {
+            case 'bigint': return new BN.BN(number.toString());
+            default: return new BN.BN(number);
+        }
+    }
+
     /**
      * Shift current cursor position by `bytes`.
      *
@@ -196,7 +209,7 @@ export class BcsWriter {
      * @returns {this}
      */
     write8(value: number | bigint | BN): this {
-        this.dataView.setUint8(this.bytePosition, +this.toBN(value));
+        this.dataView.setUint8(this.bytePosition, +BcsWriter.toBN(value));
         return this.shift(1);
     }
     /**
@@ -205,7 +218,7 @@ export class BcsWriter {
      * @returns {this}
      */
     write16(value: number | bigint | BN): this {
-        this.dataView.setUint16(this.bytePosition, +this.toBN(value), true);
+        this.dataView.setUint16(this.bytePosition, +BcsWriter.toBN(value), true);
         return this.shift(2);
     }
     /**
@@ -214,7 +227,7 @@ export class BcsWriter {
      * @returns {this}
      */
     write32(value: number | bigint | BN): this {
-        this.dataView.setUint32(this.bytePosition, +this.toBN(value), true);
+        this.dataView.setUint32(this.bytePosition, +BcsWriter.toBN(value), true);
         return this.shift(4);
     }
     /**
@@ -223,7 +236,7 @@ export class BcsWriter {
      * @returns {this}
      */
     write64(value: bigint | BN): this {
-        this.toBN(value)
+        BcsWriter.toBN(value)
             .toArray('le', 8)
             .forEach((el) => this.write8(el));
 
@@ -237,7 +250,7 @@ export class BcsWriter {
      * @returns {this}
      */
     write128(value: bigint | BN): this {
-        this.toBN(value)
+        BcsWriter.toBN(value)
             .toArray('le', 16)
             .forEach((el) => this.write8(el));
 
@@ -266,6 +279,7 @@ export class BcsWriter {
         Array.from(vector).forEach((el, i) => cb(this, el, i, vector.length));
         return this;
     }
+
     /**
      * Get underlying buffer taking only value bytes (in case initial buffer size was bigger).
      * @returns {Uint8Array} Resulting BCS.
@@ -275,12 +289,14 @@ export class BcsWriter {
     }
 
     /**
-     * Unify argument types by converting them to BN.
+     * Represent data as 'hex' or 'base64'
+     * @param encoding Encoding to use: 'base64' or 'hex'
      */
-    toBN(number: number | BN | bigint | string): BN {
-        switch (typeof number) {
-            case 'bigint': return new BN.BN(number.toString());
-            default: return new BN.BN(number);
+    toString(encoding: string): string {
+        switch (encoding) {
+            case 'base64': return new B64(this.toBytes()).toString();
+            case 'hex': return new HEX(this.toBytes()).toString();
+            default: throw new Error('Unsupported encoding, supported values are: base64, hex');
         }
     }
 }
@@ -452,6 +468,26 @@ export class BCS {
     }
 
     /**
+     * Register an address type which is a sequence of U8s of specified length.
+     * @example
+     * BCS.registerAddressType('address', 20);
+     * let addr = BCS.de('address', 'ca27601ec5d915dd40d42e36c395d4a156b24026');
+     *
+     * @param name Name of the address type.
+     * @param length Byte length of the address.
+     * @returns
+     */
+    public static registerAddressType(
+        name: string,
+        length: number
+    ): ThisType<BCS> {
+        return this.registerType(name,
+            (writer, data) => new HEX(data).getData().reduce((writer, el) => writer.write8(el), writer),
+            (reader) => new HEX(reader.readBytes(length)).toString()
+        );
+    }
+
+    /**
      * Register custom vector type inside the BCS.
      *
      * @example
@@ -471,23 +507,14 @@ export class BCS {
             throw new Error(`Type ${elementType} is not registered`);
         }
 
-        this.types.set(name, {
-            encode(data, size = 1024) { return this._encodeRaw(new BcsWriter(size), data); },
-            decode(data) { return this._decodeRaw(new BcsReader(data)); },
-
-            _encodeRaw(writer, data) {
-                return writer.writeVec(data, (writer, el) => {
-                    return BCS.getTypeInterface(elementType)._encodeRaw(writer, el)
-                });
-            },
-            _decodeRaw(reader) {
-                return reader.readVec((reader) => {
-                    return BCS.getTypeInterface(elementType)._decodeRaw(reader)
-                });
-            },
-        });
-
-        return this;
+        return this.registerType(name,
+            (writer, data) => writer.writeVec(data, (writer, el) => {
+                return BCS.getTypeInterface(elementType)._encodeRaw(writer, el);
+            }),
+            (reader) => reader.readVec((reader) => {
+                return BCS.getTypeInterface(elementType)._decodeRaw(reader);
+            })
+        );
     }
 
     /**
@@ -550,26 +577,21 @@ export class BCS {
             }
         }
 
-        this.types.set(name, {
-            encode(data, size = 1024) { return this._encodeRaw(new BcsWriter(size), data); },
-            decode(data) { return this._decodeRaw(new BcsReader(data)); },
-
-            _encodeRaw(writer, data) {
+        return this.registerType(name,
+            (writer, data) => {
                 for (let key of canonicalOrder) {
                     BCS.getTypeInterface(struct[key])._encodeRaw(writer, data[key]);
                 }
                 return writer;
             },
-            _decodeRaw(reader) {
+            (reader) => {
                 let result: { [key: string]: any } = {};
                 for (let key of canonicalOrder) {
                     result[key] = BCS.getTypeInterface(struct[key])._decodeRaw(reader);
                 }
                 return result;
             }
-        });
-
-        return this;
+        );
     }
 
     /**
@@ -603,11 +625,9 @@ export class BCS {
         // IMPORTANT: enum is an ordered type and we have to preserve ordering in BCS
         let canonicalOrder = Object.keys(struct);
 
-        this.types.set(name, {
-            encode(data, size = 1024) { return this._encodeRaw(new BcsWriter(size), data) },
-            decode(data) { return this._decodeRaw(new BcsReader(data)) },
 
-            _encodeRaw(writer, data) {
+        return this.registerType(name,
+            (writer, data) => {
                 let key = Object.keys(data)[0];
                 if (key === undefined) {
                     throw new Error(`Unknown invariant of the enum ${name}`);
@@ -622,7 +642,7 @@ export class BCS {
                 writer.write8(orderByte); // write order byte
                 return BCS.getTypeInterface(struct[invariant])._encodeRaw(writer, data[key]);
             },
-            _decodeRaw(reader) {
+            (reader) => {
                 let orderByte = reader.readULEB();
                 let invariant = canonicalOrder[orderByte];
 
@@ -630,7 +650,7 @@ export class BCS {
                     [invariant]: BCS.getTypeInterface(struct[invariant])._decodeRaw(reader)
                 };
             }
-        });
+        );
     }
 
     static getTypeInterface(type: string): TypeInterface {

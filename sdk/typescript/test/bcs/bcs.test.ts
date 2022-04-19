@@ -3,6 +3,7 @@
 
 import { BCS } from '../../src/bcs';
 import { Base64DataBuffer as B64 } from '../../src';
+// import { HexDataBuffer as HEX } from '../../src';
 import { BN } from 'bn.js';
 
 describe('Move BCS', () => {
@@ -42,10 +43,10 @@ describe('Move BCS', () => {
             is_locked: false
         };
 
-        const serBytes = BCS.ser('Coin', expected).toBytes();
+        const serBytes = BCS.ser('Coin', expected);
 
         expect(BCS.de('Coin', rustBcs.getData())).toEqual(expected);
-        expect(new B64(serBytes).toString()).toEqual(rustBcs.toString());
+        expect(serBytes.toString('base64')).toEqual(rustBcs.toString());
     });
 
     it('should de/ser vectors', () => {
@@ -59,10 +60,10 @@ describe('Move BCS', () => {
 
         // create the same vec with 1000 elements
         let arr = Array.from(Array(1000)).map(() => 255);
-        const serialized = BCS.ser('vector<u8>', arr).toBytes();
+        const serialized = BCS.ser('vector<u8>', arr);
 
         expect(deserialized.length).toEqual(1000);
-        expect(new B64(serialized).toString()).toEqual(largeBCSVec());
+        expect(serialized.toString('base64')).toEqual(largeBCSVec());
     });
 
     it('should de/ser enums', () => {
@@ -84,10 +85,30 @@ describe('Move BCS', () => {
         // deserialize and compare results
         expect(BCS.de('Enum', example1.getData())).toEqual(BCS.de('Enum', ser1));
         expect(BCS.de('Enum', example2.getData())).toEqual(BCS.de('Enum', ser2));
+    });
 
+    it('should de/ser addresses', () => {
+        // Move Kitty example:
+        // Wallet { kitties: vector<Kitty>, owner: address }
+        // Kitty { id: 'u8' }
+
+        BCS.registerAddressType('address', 16); // Move has 16/20/32 byte addresses
+
+        BCS.registerStructType('Kitty', { id: 'u8' });
+        BCS.registerVectorType('vector<Kitty>', 'Kitty');
+        BCS.registerStructType('Wallet', {
+            kitties: 'vector<Kitty>',
+            owner: 'address'
+        });
+
+        // Generated with Move CLI i.e. on the Move side
+        let sample = 'AgECAAAAAAAAAAAAAAAAAMD/7g==';
+        let data = BCS.de('Wallet', new B64(sample).getData());
+
+        expect(data.kitties).toHaveLength(2);
+        expect(data.owner).toEqual('00000000000000000000000000c0ffee');
     });
 });
-
 
 function largeBCSVec(): string {
     return '6Af/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////';
