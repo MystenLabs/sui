@@ -15,13 +15,16 @@ describe('Move BCS', () => {
             is_locked: BCS.BOOL
         });
 
-        const rustBcs = new B64('gNGxBWAAAAAOQmlnIFdhbGxldCBHdXkA').getData();
+        const rustBcs = new B64('gNGxBWAAAAAOQmlnIFdhbGxldCBHdXkA');
         const expected = {
             owner: 'Big Wallet Guy',
             value: new BN('412412400000', 10),
             is_locked: false
         };
 
-        expect(BCS.de('Coin', rustBcs)).toEqual(expected);
+        const serBytes = BCS.ser('Coin', expected).toBytes();
+
+        expect(BCS.de('Coin', rustBcs.getData())).toEqual(expected);
+        expect(new B64(serBytes).toString()).toEqual(rustBcs.toString());
     });
 });

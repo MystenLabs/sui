@@ -366,12 +366,7 @@ export class MoveBCS {
      * @return {BcsReader} A BCS reader instance. Usually you'd want to call `.toBytes()`
      */
     public static ser(type: string, data: any, size: number = 1024): BcsWriter {
-        let typeInterface = MoveBCS.types.get(type);
-        if (typeInterface === undefined) {
-            throw new Error(`No implementation found for type ${type}`);
-        }
-
-        return typeInterface.encode(data, size);
+        return this.getTypeInterface(type).encode(data, size);
     }
 
     /**
@@ -389,14 +384,8 @@ export class MoveBCS {
      * @return {Number|BN|Array<Any>|Object|Boolean} Deserialized data.
      */
     public static de(type: string, data: Uint8Array): any {
-        let typeInterface = MoveBCS.types.get(type);
-        if (typeInterface === undefined) {
-            throw new Error(`No implementation found for type ${type}`);
-        }
-
-        return typeInterface.decode(data);
+        return this.getTypeInterface(type).decode(data);
     }
-
 
     /**
      * Check whether a TypeInferface has been loaded for the `Type`
@@ -480,21 +469,12 @@ export class MoveBCS {
 
             _encodeRaw(writer, data) {
                 return writer.writeVec(data, (writer, el) => {
-                    let typeInterface = MoveBCS.types.get(elementType);
-                    if (typeInterface === undefined) {
-                        throw new Error(`Type ${elementType} is not registered`);
-                    }
-
-                    return typeInterface._encodeRaw(writer, el)
+                    return MoveBCS.getTypeInterface(elementType)._encodeRaw(writer, el)
                 });
             },
             _decodeRaw(reader) {
                 return reader.readVec((reader) => {
-                    let typeInterface = MoveBCS.types.get(elementType);
-                    if (typeInterface === undefined) {
-                        throw new Error(`Type ${elementType} is not registered`);
-                    }
-                    return typeInterface._decodeRaw(reader)
+                    return MoveBCS.getTypeInterface(elementType)._decodeRaw(reader)
                 });
             },
         });
@@ -566,29 +546,28 @@ export class MoveBCS {
 
             _encodeRaw(writer: BcsWriter, data: { [key: string]: any }) {
                 for (let key of canonicalOrder) {
-                    let typeInterface = MoveBCS.types.get(struct[key]);
-                    if (typeInterface === undefined) {
-                        throw new Error(`Type ${struct[key]} is not registered`);
-                    }
-                    return typeInterface._encodeRaw(writer, data[key]);
+                    MoveBCS.getTypeInterface(struct[key])._encodeRaw(writer, data[key]);
                 }
                 return writer;
             },
             _decodeRaw(reader: BcsReader): { [key: string]: any } {
                 let result: { [key: string]: any } = {};
                 for (let key of canonicalOrder) {
-                    let typeInterface = MoveBCS.types.get(struct[key]);
-                    if (typeInterface === undefined) {
-                        throw new Error(`Type ${struct[key]} is not registered`);
-                    }
-
-                    result[key] = typeInterface._decodeRaw(reader);
+                    result[key] = MoveBCS.getTypeInterface(struct[key])._decodeRaw(reader);
                 }
                 return result;
             }
         });
 
         return this;
+    }
+
+    static getTypeInterface(type: string): TypeInterface {
+        let typeInterface = MoveBCS.types.get(type);
+        if (typeInterface === undefined) {
+            throw new Error(`Type ${type} is not registered`);
+        }
+        return typeInterface;
     }
 }
 
@@ -630,7 +609,7 @@ export class MoveBCS {
 
     MoveBCS.registerType(
         MoveBCS.STRING,
-        (writer, data) => writer.writeVec(data, (writer, el) => writer.write8(el.charCodeAt(0))),
+        (writer, data) => writer.writeVec(Array.from(data), (writer, el) => writer.write8(el.charCodeAt(0))),
         (reader) => {
             return reader
                 .readVec((reader) => reader.read8())
