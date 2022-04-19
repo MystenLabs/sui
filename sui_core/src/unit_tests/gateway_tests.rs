@@ -1045,10 +1045,10 @@ async fn test_move_calls_freeze_object() {
     let transferred_obj = client_object(&mut client, new_obj_ref.0).await.1;
 
     // Confirm new owner
-    assert!(transferred_obj.owner == Owner::SharedImmutable);
+    assert!(transferred_obj.owner == Owner::Immutable);
 
     // Confirm read only
-    assert!(transferred_obj.is_read_only());
+    assert!(transferred_obj.is_immutable());
 }
 
 #[tokio::test]

@@ -121,7 +121,7 @@ impl SingleTransactionKind {
                     c.shared_object_arguments
                         .iter()
                         .cloned()
-                        .map(InputObjectKind::MutSharedMoveObject)
+                        .map(InputObjectKind::SharedMoveObject)
                         .collect::<Vec<_>>(),
                 );
                 call_inputs.push(InputObjectKind::MovePackage(c.package.0));
@@ -150,9 +150,9 @@ impl SingleTransactionKind {
         // Ensure that there are no duplicate inputs. This cannot be removed because:
         // In [`AuthorityState::check_locks`], we check that there are no duplicate mutable
         // input objects, which would have made this check here unnecessary. However we
-        // do plan to allow mutable shared objects show up more than once in multiple single
+        // do plan to allow shared objects show up more than once in multiple single
         // transactions down the line. Once we have that, we need check here to make sure
-        // the same mutable shared object doesn't show up more than once in the same single
+        // the same shared object doesn't show up more than once in the same single
         // transaction.
         let mut used = HashSet::new();
         if !input_objects.iter().all(|o| used.insert(o.object_id())) {
@@ -1002,8 +1002,8 @@ pub enum InputObjectKind {
     MovePackage(ObjectID),
     // A Move object, either immutable, or owned mutable.
     ImmOrOwnedMoveObject(ObjectRef),
-    // A Move object that's shared mutable.
-    MutSharedMoveObject(ObjectID),
+    // A Move object that's shared and mutable.
+    SharedMoveObject(ObjectID),
 }
 
 impl InputObjectKind {
@@ -1011,7 +1011,7 @@ impl InputObjectKind {
         match self {
             Self::MovePackage(id) => *id,
             Self::ImmOrOwnedMoveObject((id, _, _)) => *id,
-            Self::MutSharedMoveObject(id) => *id,
+            Self::SharedMoveObject(id) => *id,
         }
     }
 
@@ -1019,7 +1019,7 @@ impl InputObjectKind {
         match self {
             Self::MovePackage(..) => OBJECT_START_VERSION,
             Self::ImmOrOwnedMoveObject((_, version, _)) => *version,
-            Self::MutSharedMoveObject(..) => OBJECT_START_VERSION,
+            Self::SharedMoveObject(..) => OBJECT_START_VERSION,
         }
     }
 
@@ -1027,7 +1027,7 @@ impl InputObjectKind {
         match *self {
             Self::MovePackage(package_id) => SuiError::DependentPackageNotFound { package_id },
             Self::ImmOrOwnedMoveObject((object_id, _, _)) => SuiError::ObjectNotFound { object_id },
-            Self::MutSharedMoveObject(object_id) => SuiError::ObjectNotFound { object_id },
+            Self::SharedMoveObject(object_id) => SuiError::ObjectNotFound { object_id },
         }
     }
 }

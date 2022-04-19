@@ -34,8 +34,8 @@ pub enum SuiError {
     // Object misuse issues
     #[error("Error acquiring lock for object(s): {:?}", errors)]
     LockErrors { errors: Vec<SuiError> },
-    #[error("Attempt to transfer a shared object.")]
-    TransferSharedError,
+    #[error("Attempt to transfer an object that's not owned.")]
+    TransferUnownedError,
     #[error("Attempt to transfer an object that's not a coin.")]
     TransferNonCoinError,
     #[error("A move package is expected, instead a move object is passed: {object_id}")]
