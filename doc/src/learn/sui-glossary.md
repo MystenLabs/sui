@@ -79,6 +79,21 @@ exchange of private keys, users can offload the bandwidth use of transaction sub
 Multi-writer objects are those owned by more than one account. Transactions affecting multi-writer objects require consensus in Sui. This contrasts with
 those affecting only single-writer objects, which require only a confirmation of the owner’s account contents.
 
+### Object
+
+The basic unit of storage in Sui is object. In contrast to many other blockchains where storage is centered around accounts and each account contains a key-value store, Sui's storage is centered around objects. Sui objects come in these primary states:
+
+* Immutable - the object cannot be modified.
+* Mutable - the object can be changed.
+
+Further, mutable objects are divided into these categories:
+
+* Owned - the object can be modified only by its owner.
+* Shared - the object can be modified by anyone.
+
+Immutable objects are always considered shared.
+
+For more information, see [Sui Objects](../build/objects.md).
 
 ### Proof-of-stake
 
