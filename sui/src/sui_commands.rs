@@ -52,6 +52,11 @@ pub enum SuiCommand {
     Genesis {
         #[clap(long, help = "Start genesis with a given config file")]
         from_config: Option<PathBuf>,
+        #[clap(
+            long,
+            help = "Build a genesis config, write it to the specified path, and exit"
+        )]
+        write_config: Option<PathBuf>,
         #[clap(long)]
         working_dir: Option<PathBuf>,
         #[clap(short, long, help = "Forces overwriting existing configuration")]
@@ -112,6 +117,7 @@ impl SuiCommand {
                 working_dir,
                 force,
                 from_config,
+                write_config,
             } => {
                 let sui_config_dir = &match working_dir {
                     // if a directory is specified, it must exist (it
@@ -130,14 +136,15 @@ impl SuiCommand {
                 // if Sui config dir is not empty then either clean it
                 // up (if --force/-f option was specified or report an
                 // error
-                if sui_config_dir
-                    .read_dir()
-                    .map_err(|err| {
-                        anyhow!(err)
-                            .context(format!("Cannot open Sui config dir {:?}", sui_config_dir))
-                    })?
-                    .next()
-                    .is_some()
+                if write_config.is_none()
+                    && sui_config_dir
+                        .read_dir()
+                        .map_err(|err| {
+                            anyhow!(err)
+                                .context(format!("Cannot open Sui config dir {:?}", sui_config_dir))
+                        })?
+                        .next()
+                        .is_some()
                 {
                     if *force {
                         fs::remove_dir_all(sui_config_dir).map_err(|err| {
@@ -169,8 +176,13 @@ impl SuiCommand {
                     None => GenesisConfig::default_genesis(sui_config_dir)?,
                 };
 
-                let (network_config, accounts, mut keystore) = genesis(genesis_conf).await?;
+                if let Some(path) = write_config {
+                    let persisted = genesis_conf.persisted(path);
+                    persisted.save()?;
+                    return Ok(());
+                }
 
+                let (network_config, accounts, mut keystore) = genesis(genesis_conf).await?;
                 info!("Network genesis completed.");
                 let network_config = network_config.persisted(&network_path);
                 network_config.save()?;
