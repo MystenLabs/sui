@@ -173,6 +173,7 @@ pub async fn spawn_authority_server(
         network_server.base_port,
         network_server.buffer_size,
         state,
+        /* ConsensusSubmitter */ None,
     );
     server.spawn().await.unwrap()
 }

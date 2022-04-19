@@ -399,6 +399,10 @@ SerializedMessage:
       ConsensusSync:
         NEWTYPE:
           TYPENAME: ConsensusSync
+    14:
+      ConsensusTransaction:
+        NEWTYPE:
+          TYPENAME: CertifiedTransaction
 Signature:
   NEWTYPESTRUCT: BYTES
 SignedBatch:
@@ -760,6 +764,9 @@ SuiError:
           - error: STR
     93:
       OnlyOneConsensusClientPermitted: UNIT
+    94:
+      ConsensusConnectionBroken:
+        NEWTYPE: STR
 TransactionData:
   STRUCT:
     - kind:

@@ -41,7 +41,7 @@ const MAX_DELAY_MILLIS: u64 = 5_000; // 5 sec
 pub struct AuthorityServer {
     server: NetworkServer,
     pub state: AuthorityState,
-    consensus_submitter: ConsensusSubmitter,
+    consensus_submitter: Option<ConsensusSubmitter>,
 }
 
 impl AuthorityServer {
@@ -50,7 +50,7 @@ impl AuthorityServer {
         base_port: u16,
         buffer_size: usize,
         state: AuthorityState,
-        consensus_submitter: ConsensusSubmitter,
+        consensus_submitter: Option<ConsensusSubmitter>,
     ) -> Self {
         Self {
             server: NetworkServer::new(base_address, base_port, buffer_size),
@@ -242,17 +242,23 @@ impl AuthorityServer {
                 .await
                 .map(|_| None),
             SerializedMessage::ConsensusTransaction(message) => {
-                match self.consensus_submitter.submit(&message).await {
-                    Ok(()) => {
-                        let confirmation_transaction = ConfirmationTransaction {
-                            certificate: message.as_ref().clone(),
-                        };
-                        self.state
-                            .handle_confirmation_transaction(confirmation_transaction)
-                            .await
-                            .map(|info| Some(serialize_transaction_info(&info)))
+                match self.consensus_submitter.as_ref() {
+                    Some(submitter) => match submitter.submit(&message).await {
+                        Ok(()) => {
+                            let confirmation_transaction = ConfirmationTransaction {
+                                certificate: message.as_ref().clone(),
+                            };
+                            self.state
+                                .handle_confirmation_transaction(confirmation_transaction)
+                                .await
+                                .map(|info| Some(serialize_transaction_info(&info)))
+                        }
+                        Err(e) => Err(e),
+                    },
+                    None => {
+                        tracing::warn!("Shared object not supported yet!");
+                        Err(SuiError::UnexpectedMessage)
                     }
-                    Err(e) => Err(e),
                 }
             }
 

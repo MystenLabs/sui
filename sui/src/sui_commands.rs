@@ -381,6 +381,7 @@ pub async fn make_server(
         authority.port,
         buffer_size,
         state,
+        /* ConsensusSubmitter */ None,
     ))
 }
 
@@ -414,5 +415,6 @@ async fn make_server_with_genesis_ctx(
         authority.port,
         buffer_size,
         state,
+        /* ConsensusSubmitter */ None,
     ))
 }

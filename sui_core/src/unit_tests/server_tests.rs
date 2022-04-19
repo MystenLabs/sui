@@ -25,6 +25,7 @@ async fn test_start_stop_batch_subsystem() {
         999,
         65000,
         authority_state,
+        /* ConsensusSubmitter */ None,
     ));
     let join = server
         .spawn_batch_subsystem(1000, Duration::from_secs(5))
@@ -100,6 +101,7 @@ async fn test_channel_infra() {
         999,
         65000,
         authority_state,
+        /* ConsensusSubmitter */ None,
     ));
 
     let (channel, (mut tx, mut rx)) = TestChannel::new();
@@ -134,6 +136,7 @@ async fn test_subscription() {
         998,
         65000,
         authority_state,
+        /* ConsensusSubmitter */ None,
     ));
 
     let db = server.state.db().clone();
