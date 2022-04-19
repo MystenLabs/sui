@@ -85,6 +85,7 @@ allow = [
     "CC0-1.0",
     # "LicenseRef-ring",
     "BSL-1.0",
+    "OpenSSL",
     #"Apache-2.0 WITH LLVM-exception",
 ]
 # List of explictly disallowed licenses
@@ -139,18 +140,19 @@ exceptions = [
     # Each entry is a crate relative path, and the (opaque) hash of its contents
     #{ path = "LICENSE", hash = 0xbd0eed23 }
 #]
-# [[licenses.clarify]]
-# name = "ring"
-# expression = "LicenseRef-ring"
-# license-files = [
-#     { path = "LICENSE", hash = 0xbd0eed23 },
-# ]
 [[licenses.clarify]]
 name = "encoding_rs"
 version = "*"
 expression = "(Apache-2.0 OR MIT) AND BSD-3-Clause"
 license-files = [
     { path = "COPYRIGHT", hash = 0x39f8ad31 }
+]
+
+[[licenses.clarify]]
+name = "ring"
+expression = "MIT AND ISC AND OpenSSL"
+license-files = [
+    { path = "LICENSE", hash = 0xbd0eed23 }
 ]
 
 [licenses.private]
