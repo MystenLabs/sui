@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::hex::Hex;
 use serde_with::serde_as;
+use sui_types::committee::Committee;
 use tracing::log::trace;
 
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
@@ -42,7 +43,7 @@ pub struct AuthorityInfo {
     pub base_port: u16,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct AuthorityPrivateInfo {
     pub key_pair: KeyPair,
     pub host: String,
@@ -150,6 +151,17 @@ impl NetworkConfig {
                 base_port: info.port,
             })
             .collect()
+    }
+}
+
+impl From<&NetworkConfig> for Committee {
+    fn from(network_config: &NetworkConfig) -> Committee {
+        let voting_rights = network_config
+            .authorities
+            .iter()
+            .map(|authority| (*authority.key_pair.public_key_bytes(), authority.stake))
+            .collect();
+        Committee::new(voting_rights)
     }
 }
 

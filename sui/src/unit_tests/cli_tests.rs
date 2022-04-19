@@ -69,6 +69,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     SuiCommand::Genesis {
         working_dir: Some(working_dir.to_path_buf()),
         force: false,
+        from_config: None,
     }
     .execute()
     .await?;
@@ -107,6 +108,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     let result = SuiCommand::Genesis {
         working_dir: Some(working_dir.to_path_buf()),
         force: false,
+        from_config: None,
     }
     .execute()
     .await;
