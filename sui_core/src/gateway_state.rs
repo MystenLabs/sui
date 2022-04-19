@@ -2,17 +2,19 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::transaction_input_checker;
-use crate::{
-    authority::GatewayStore, authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI,
-};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::path::PathBuf;
+use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
+use std::time::Duration;
+
+use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::future;
-
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
-use sui_types::crypto::EmptySignInfo;
+use tracing::{error, Instrument};
+
 use sui_types::gas::{self, SuiGasStatus};
 use sui_types::{
     base_types::*,
@@ -24,14 +26,12 @@ use sui_types::{
     object::{Object, ObjectRead},
     SUI_FRAMEWORK_ADDRESS,
 };
-use tracing::{error, Instrument};
 
-use std::path::PathBuf;
-
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::sync::atomic::AtomicU64;
-use std::sync::Arc;
-use std::time::Duration;
+use crate::transaction_input_checker;
+use crate::{
+    authority::GatewayStore, authority_aggregator::AuthorityAggregator,
+    authority_client::AuthorityAPI,
+};
 
 use self::gateway_responses::*;
 
@@ -203,7 +203,7 @@ pub trait GatewayAPI {
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<TransactionEnvelope<EmptySignInfo>, anyhow::Error>;
+    ) -> Result<CertifiedTransaction, anyhow::Error>;
 }
 
 impl<A> GatewayState<A>
@@ -802,16 +802,11 @@ where
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<TransactionEnvelope<EmptySignInfo>, anyhow::Error> {
-        match self.store.get_transaction(&digest) {
-            Ok(opt) => match opt {
-                Some(t) => Ok(t),
-                None => {
-                    let sui_err = SuiError::TransactionNotFound { digest };
-                    Err(anyhow::Error::new(sui_err))
-                }
-            },
-            Err(err) => Err(anyhow::Error::new(err)),
+    ) -> Result<CertifiedTransaction, anyhow::Error> {
+        let opt = self.store.get_certified_transaction(&digest)?;
+        match opt {
+            Some(t) => Ok(t),
+            None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
         }
     }
 }

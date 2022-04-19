@@ -3,6 +3,7 @@
 
 use anyhow::anyhow;
 use async_trait::async_trait;
+use base64ct::{Base64, Encoding};
 use dropshot::HttpErrorResponseBody;
 use http::StatusCode;
 use move_core_types::identifier::Identifier;
@@ -15,8 +16,7 @@ use serde_json::json;
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
 use sui_types::base_types::{encode_bytes_hex, ObjectID, ObjectRef, SuiAddress, TransactionDigest};
-use sui_types::crypto::EmptySignInfo;
-use sui_types::messages::{Transaction, TransactionData, TransactionEnvelope};
+use sui_types::messages::{CertifiedTransaction, Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 
 use crate::rest_gateway::requests::{
@@ -115,7 +115,10 @@ impl GatewayAPI for RestGatewayClient {
             .map(|object_id| object_id.to_hex())
             .collect();
 
-        let pure_arguments = pure_arguments.iter().map(base64::encode).collect();
+        let pure_arguments = pure_arguments
+            .iter()
+            .map(|s| Base64::encode_string(s))
+            .collect();
 
         let request = CallRequest {
             signer: encode_bytes_hex(&signer),
@@ -140,7 +143,10 @@ impl GatewayAPI for RestGatewayClient {
         gas_object_ref: ObjectRef,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        let package_bytes = package_bytes.iter().map(base64::encode).collect::<Vec<_>>();
+        let package_bytes = package_bytes
+            .iter()
+            .map(|s| Base64::encode_string(s))
+            .collect::<Vec<_>>();
         let request = PublishRequest {
             sender: encode_bytes_hex(&signer),
             compiled_modules: package_bytes,
@@ -235,8 +241,7 @@ impl GatewayAPI for RestGatewayClient {
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<TransactionEnvelope<EmptySignInfo>, anyhow::Error> {
-        // TODO: Implement this.
+    ) -> Result<CertifiedTransaction, anyhow::Error> {
         let hex_digest = encode_bytes_hex(&digest);
         let url = format!("{}/api/tx?digest={}", self.url, hex_digest);
         let response = reqwest::blocking::get(url)?;

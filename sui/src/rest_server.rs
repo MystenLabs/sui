@@ -7,6 +7,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::anyhow;
+use base64ct::{Base64, Encoding};
 use clap::*;
 use dropshot::{endpoint, Query, TypedBody};
 use dropshot::{
@@ -25,8 +26,9 @@ use serde::{Deserialize, Serialize};
 use sui::config::PersistedConfig;
 use sui::gateway::GatewayConfig;
 use sui::rest_gateway::requests::{
-    CallRequest, GetObjectInfoRequest, GetObjectSchemaRequest, GetObjectsRequest, MergeCoinRequest,
-    PublishRequest, SignedTransaction, SplitCoinRequest, SyncRequest, TransferTransactionRequest, GetTransactionDetailsRequest,
+    CallRequest, GetObjectInfoRequest, GetObjectSchemaRequest, GetObjectsRequest,
+    GetTransactionDetailsRequest, MergeCoinRequest, PublishRequest, SignedTransaction,
+    SplitCoinRequest, SyncRequest, TransferTransactionRequest,
 };
 use sui::rest_gateway::responses::{
     custom_http_error, HttpResponseOk, JsonResponse, NamedObjectRef, ObjectResponse,
@@ -36,9 +38,9 @@ use sui::{sui_config_dir, SUI_GATEWAY_CONFIG};
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::{GatewayClient, GatewayState};
 use sui_types::base_types::*;
-use sui_types::crypto::{self, EmptySignInfo};
 use sui_types::crypto::SignableBytes;
-use sui_types::messages::{Transaction, TransactionData, TransactionEnvelope};
+use sui_types::crypto::{self};
+use sui_types::messages::{CertifiedTransaction, Transaction, TransactionData};
 use sui_types::object::Object as SuiObject;
 use sui_types::object::ObjectRead;
 
@@ -493,11 +495,12 @@ async fn execute_transaction(
     let gateway = ctx.context().gateway.lock().await;
 
     let response: Result<_, anyhow::Error> = async {
-        let data = base64::decode(response.tx_bytes)?;
+        let data = Base64::decode_vec(&response.tx_bytes).map_err(|e| anyhow!(e))?;
         let data = TransactionData::from_signable_bytes(&data)?;
 
-        let mut signature_bytes = base64::decode(response.signature)?;
-        let mut pub_key_bytes = base64::decode(response.pub_key)?;
+        let mut signature_bytes =
+            Base64::decode_vec(&response.signature).map_err(|e| anyhow!(e))?;
+        let mut pub_key_bytes = Base64::decode_vec(&response.pub_key).map_err(|e| anyhow!(e))?;
         signature_bytes.append(&mut pub_key_bytes);
         let signature = crypto::Signature::from_bytes(&*signature_bytes)?;
         gateway
@@ -545,8 +548,9 @@ async fn handle_publish(
     let compiled_modules = publish_params
         .compiled_modules
         .iter()
-        .map(base64::decode)
-        .collect::<Result<Vec<_>, _>>()?;
+        .map(|s| Base64::decode_vec(s))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| anyhow!(e))?;
 
     let gas_budget = publish_params.gas_budget;
     let gas_object_id = ObjectID::try_from(publish_params.gas_object_id)?;
@@ -590,8 +594,9 @@ async fn handle_move_call(
     let pure_arguments = call_params
         .pure_arguments
         .iter()
-        .map(base64::decode)
-        .collect::<Result<_, _>>()?;
+        .map(|s| Base64::decode_vec(s))
+        .collect::<Result<_, _>>()
+        .map_err(|e| anyhow!(e))?;
 
     let shared_object_arguments = call_params
         .shared_object_arguments
@@ -623,15 +628,16 @@ async fn handle_move_call(
 }]
 async fn get_transaction_details(
     ctx: Arc<RequestContext<ServerContext>>,
-    query: Query<GetTransactionDetailsRequest>
-) -> Result<HttpResponseOk<JsonResponse<TransactionEnvelope<EmptySignInfo>>>, HttpError> {
-
+    query: Query<GetTransactionDetailsRequest>,
+) -> Result<HttpResponseOk<JsonResponse<CertifiedTransaction>>, HttpError> {
     let gateway = ctx.context().gateway.lock().await;
     let query: GetTransactionDetailsRequest = query.into_inner();
 
-    let digest_u8 = query.digest.as_bytes();
+    println!("{}", query.digest);
+    let digest = Base64::decode_vec(&query.digest)
+        .map_err(|e| custom_http_error(StatusCode::BAD_REQUEST, format!("{}", e)))?;
     let mut digest_fixu8 = [0u8; 32];
-    digest_fixu8.copy_from_slice(digest_u8);
+    digest_fixu8.copy_from_slice(digest.as_slice());
     let digest = TransactionDigest::new(digest_fixu8);
 
     let result = match get_transaction(&gateway, digest).await {
@@ -642,11 +648,10 @@ async fn get_transaction_details(
     Ok(HttpResponseOk(JsonResponse(result)))
 }
 
-
 async fn get_transaction(
     gateway: &GatewayClient,
     digest: TransactionDigest,
-) -> Result<TransactionEnvelope<EmptySignInfo>, HttpError> {
+) -> Result<CertifiedTransaction, HttpError> {
     match gateway.get_transaction(digest).await {
         Ok(tx_env) => Ok(tx_env),
         Err(err) => Err(custom_http_error(

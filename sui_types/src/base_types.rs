@@ -1,6 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use base64ct::{Base64, Encoding};
 use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
@@ -393,8 +394,8 @@ impl TryFrom<&[u8]> for ObjectDigest {
 
 impl std::fmt::Debug for TransactionDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = hex::encode(&self.0);
-        write!(f, "t#{}", s)?;
+        let s = Base64::encode_string(&self.0);
+        write!(f, "{}", s)?;
         Ok(())
     }
 }
