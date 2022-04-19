@@ -28,14 +28,14 @@ $ echo $PATH
 
 And ensure the `.cargo/bin` directory appears.
 
-## IDE
+## Integrated Development Environment
 For Move development, we recommend the [Visual Studio Code (vscode)](https://code.visualstudio.com/) IDE with the Move Analyzer language server plugin installed:
 
 ```shell
 $ cargo install --git https://github.com/diem/move move-analyzer
 ```
 
-Then follow the Visual Studio Marketplace instructions to install the [Move Analyzer](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer) extension.
+Then follow the Visual Studio Marketplace instructions to install the [Move Analyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer). (The `cargo install` command for the language server is broken there; hence, we include the correct command above.)
 
 See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [Awesome Move](https://github.com/MystenLabs/awesome-move) docs.
 
