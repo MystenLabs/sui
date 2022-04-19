@@ -91,7 +91,7 @@ Further, mutable objects are divided into these categories:
 * *Owned* - the object can be modified only by its owner.
 * *Shared* - the object can be modified by anyone.
 
-Immutable objects are always considered "shared", in the sense that they do not have an owner.
+Immutable objects do not need this distinction because they have no owner.
 
 For more information, see [Sui Objects](../build/objects.md).
 
