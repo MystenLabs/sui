@@ -117,7 +117,7 @@ pub struct ConsensusSubmitter {
 
 impl ConsensusSubmitter {
     /// Make a new Consensus submitter instance.
-    pub async fn new(
+    pub fn new(
         consensus_address: SocketAddr,
         buffer_size: usize,
         committee: Committee,

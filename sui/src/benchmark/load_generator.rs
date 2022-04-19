@@ -168,12 +168,17 @@ pub async fn spawn_authority_server(
     network_server: NetworkServer,
     state: AuthorityState,
 ) -> transport::SpawnedServer<AuthorityServer> {
+    // The following two fields are only needed for shared objects (not by this bench).
+    let consensus_address = "127.0.0.1:0".parse().unwrap();
+    let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
+
     let server = AuthorityServer::new(
         network_server.base_address,
         network_server.base_port,
         network_server.buffer_size,
         state,
-        /* ConsensusSubmitter */ None,
+        consensus_address,
+        tx_consensus_listener,
     );
     server.spawn().await.unwrap()
 }

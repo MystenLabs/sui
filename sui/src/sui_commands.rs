@@ -1,22 +1,20 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::fs;
-use std::path::PathBuf;
-use std::sync::Arc;
-
 use anyhow::{anyhow, bail};
 use clap::*;
 use futures::future::join_all;
 use move_binary_format::CompiledModule;
 use move_package::BuildConfig;
-use tracing::{error, info};
-
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::PathBuf;
+use std::sync::Arc;
 use sui_adapter::adapter::generate_package_id;
 use sui_adapter::genesis;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
+use sui_core::consensus_adapter::ConsensusListener;
 use sui_network::transport::SpawnedServer;
 use sui_network::transport::DEFAULT_MAX_DATAGRAM_SIZE;
 use sui_types::base_types::decode_bytes_hex;
@@ -24,6 +22,8 @@ use sui_types::base_types::{SequenceNumber, SuiAddress, TxContext};
 use sui_types::committee::Committee;
 use sui_types::error::SuiResult;
 use sui_types::object::Object;
+use tokio::sync::mpsc::channel;
+use tracing::{error, info};
 
 use crate::config::{
     AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
@@ -376,13 +376,8 @@ pub async fn make_server(
         store,
     )
     .await;
-    Ok(AuthorityServer::new(
-        authority.host.clone(),
-        authority.port,
-        buffer_size,
-        state,
-        /* ConsensusSubmitter */ None,
-    ))
+
+    make_authority(authority, buffer_size, state).await
 }
 
 async fn make_server_with_genesis_ctx(
@@ -410,11 +405,33 @@ async fn make_server_with_genesis_ctx(
         state.insert_genesis_object(object.clone()).await;
     }
 
+    make_authority(authority, buffer_size, state).await
+}
+
+/// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,
+/// and a consensus listener bridging the consensus node and the sui authority.
+async fn make_authority(
+    authority: &AuthorityPrivateInfo,
+    buffer_size: usize,
+    state: AuthorityState,
+) -> SuiResult<AuthorityServer> {
+    let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1_000);
+    let (tx_sui_to_consensus, rx_sui_to_consensus) = channel(1_000);
+
+    // TODO [issue #633]: Spawn the consensus node of this authority.
+    let _tx_consensus_to_sui = tx_consensus_to_sui;
+
+    // Spawn a consensus listener. It listen for consensus outputs and notifies the
+    // authority server when a sequenced transaction is ready for execution.
+    ConsensusListener::spawn(rx_sui_to_consensus, rx_consensus_to_sui);
+
+    // Return new authority server. It listen to users transactions and send back replies.
     Ok(AuthorityServer::new(
         authority.host.clone(),
         authority.port,
         buffer_size,
         state,
-        /* ConsensusSubmitter */ None,
+        authority.consensus_address,
+        /* tx_consensus_listener */ tx_sui_to_consensus,
     ))
 }

@@ -20,12 +20,17 @@ async fn test_start_stop_batch_subsystem() {
         .init_batches_from_database()
         .expect("Init batches failed!");
 
+    // The following two fields are only needed for shared objects (not by this bench).
+    let consensus_address = "127.0.0.1:0".parse().unwrap();
+    let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
+
     let server = Arc::new(AuthorityServer::new(
         "127.0.0.1".to_string(),
         999,
         65000,
         authority_state,
-        /* ConsensusSubmitter */ None,
+        consensus_address,
+        tx_consensus_listener,
     ));
     let join = server
         .spawn_batch_subsystem(1000, Duration::from_secs(5))
@@ -96,12 +101,17 @@ async fn test_channel_infra() {
     let object_id = dbg_object_id(1);
     let authority_state = init_state_with_object_id(sender, object_id).await;
 
+    // The following two fields are only needed for shared objects (not by this bench).
+    let consensus_address = "127.0.0.1:0".parse().unwrap();
+    let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
+
     let server = Arc::new(AuthorityServer::new(
         "127.0.0.1".to_string(),
         999,
         65000,
         authority_state,
-        /* ConsensusSubmitter */ None,
+        consensus_address,
+        tx_consensus_listener,
     ));
 
     let (channel, (mut tx, mut rx)) = TestChannel::new();
@@ -130,13 +140,18 @@ async fn test_subscription() {
     let object_id = dbg_object_id(1);
     let authority_state = init_state_with_object_id(sender, object_id).await;
 
+    // The following two fields are only needed for shared objects (not by this bench).
+    let consensus_address = "127.0.0.1:0".parse().unwrap();
+    let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
+
     // Start the batch server
     let server = Arc::new(AuthorityServer::new(
         "127.0.0.1".to_string(),
         998,
         65000,
         authority_state,
-        /* ConsensusSubmitter */ None,
+        consensus_address,
+        tx_consensus_listener,
     ));
 
     let db = server.state.db().clone();
