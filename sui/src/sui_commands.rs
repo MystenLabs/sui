@@ -130,13 +130,13 @@ impl SuiCommand {
                 let gateway_db_folder_path = sui_config_dir.join("gateway_client_db");
 
                 let genesis_conf = GenesisConfig::default_genesis(sui_config_dir)?;
-                let (network_config, accounts, keystore) = genesis(genesis_conf).await?;
+                let (network_config, accounts, mut keystore) = genesis(genesis_conf).await?;
                 info!("Network genesis completed.");
                 let network_config = network_config.persisted(&network_path);
                 network_config.save()?;
                 info!("Network config file is stored in {:?}.", network_path);
-
-                keystore.save(&keystore_path)?;
+                keystore.set_path(&keystore_path);
+                keystore.save()?;
                 info!("Wallet keystore is stored in {:?}.", keystore_path);
 
                 // Use the first address if any
