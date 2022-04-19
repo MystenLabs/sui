@@ -5,6 +5,7 @@ use futures::SinkExt;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
+use std::net::SocketAddr;
 use sui_network::transport;
 use sui_network::transport::{RwChannel, TcpDataStream};
 use sui_types::committee::Committee;
@@ -105,7 +106,7 @@ impl ConsensusListener {
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusSubmitter {
     /// The network address of the consensus node.
-    consensus_address: String,
+    consensus_address: SocketAddr,
     /// The network buffer size.
     buffer_size: usize,
     /// The Sui committee information.
@@ -117,7 +118,7 @@ pub struct ConsensusSubmitter {
 impl ConsensusSubmitter {
     /// Make a new Consensus submitter instance.
     pub async fn new(
-        consensus_address: String,
+        consensus_address: SocketAddr,
         buffer_size: usize,
         committee: Committee,
         tx_consensus_listener: Sender<ConsensusInput>,
@@ -131,8 +132,8 @@ impl ConsensusSubmitter {
     }
 
     /// Attempt to reconnect with a the consensus node.
-    async fn reconnect(address: String, buffer_size: usize) -> SuiResult<TcpDataStream> {
-        transport::connect(address, buffer_size)
+    async fn reconnect(address: SocketAddr, buffer_size: usize) -> SuiResult<TcpDataStream> {
+        transport::connect(address.to_string(), buffer_size)
             .await
             .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))
     }
@@ -147,7 +148,7 @@ impl ConsensusSubmitter {
         let bytes = Bytes::from(serialized.clone());
         // TODO [issue #1452]: We are re-creating a connection every time. This is wasteful but does not
         // require to take self as a mutable reference.
-        Self::reconnect(self.consensus_address.clone(), self.buffer_size)
+        Self::reconnect(self.consensus_address, self.buffer_size)
             .await?
             .sink()
             .send(bytes.clone())
