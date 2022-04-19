@@ -409,7 +409,7 @@ impl WalletCommands {
                     Some(a) => *a,
                     None => context.active_address()?,
                 };
-                WalletCommandResult::Objects(context.gateway.get_owned_objects(address)?)
+                WalletCommandResult::Objects(context.gateway.get_owned_objects(address).await?)
             }
 
             WalletCommands::SyncClientState { address } => {
@@ -586,7 +586,7 @@ impl WalletContext {
         &mut self,
         address: SuiAddress,
     ) -> Result<Vec<(u64, Object)>, anyhow::Error> {
-        let object_refs = self.gateway.get_owned_objects(address)?;
+        let object_refs = self.gateway.get_owned_objects(address).await?;
 
         // TODO: We should ideally fetch the objects from local cache
         let mut values_objects = Vec::new();

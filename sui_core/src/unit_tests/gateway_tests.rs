@@ -773,7 +773,7 @@ async fn test_client_state_sync_with_transferred_object() {
     );
 
     // Confirm client 2 received the new object id
-    assert_eq!(1, client.get_owned_objects(addr2).unwrap().len());
+    assert_eq!(1, client.get_owned_objects(addr2).await.unwrap().len());
 }
 
 #[tokio::test]

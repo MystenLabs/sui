@@ -194,13 +194,13 @@ impl GatewayAPI for RestGatewayClient {
             .await?)
     }
 
-    fn get_owned_objects(
+    async fn get_owned_objects(
         &mut self,
         account_addr: SuiAddress,
     ) -> Result<Vec<ObjectRef>, anyhow::Error> {
         let url = format!("{}/api/objects?address={}", self.url, account_addr);
-        let response = reqwest::blocking::get(url)?;
-        let response: ObjectResponse = response.json()?;
+        let response = reqwest::get(url).await?;
+        let response: ObjectResponse = response.json().await?;
         let objects = response
             .objects
             .into_iter()
