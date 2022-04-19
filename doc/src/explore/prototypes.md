@@ -69,7 +69,7 @@ POST `/call` with body:
        "function": "update_monster_stats",
        "args": [
            "0x{{player_id}}",
-           "0x{{farm_id}}", 
+           "0x{{farm_id}}",
            "0x{{pet_monsters}}",
            "0x{{monster_id}}",
            {{monster_level}},
@@ -107,11 +107,11 @@ GET /object_info?objectId={{monster_id}}
         // ID of the applied cosmetic at this slot
         applied_monster_cosmetic_0_id: Option<ID>,
         // ID of the applied cosmetic at this slot
-        applied_monster_cosmetic_1_id: Option<ID>,    
+        applied_monster_cosmetic_1_id: Option<ID>,
     }
 
     // Create a Monster and add it to the Farm's collection of Monsters
-    public fun create_monster(_player: &mut Player,
+    public(script) fun create_monster(_player: &mut Player,
                               farm: &mut Farm,
                               pet_monsters_c: &mut Collection::Collection,
                               monster_name: vector<u8>,
@@ -140,7 +140,7 @@ GET /object_info?objectId={{monster_id}}
     }
 
     // Creates a basic Monster object
-    public fun create_monster_(
+    public(script) fun create_monster_(
         monster_name: vector<u8>,
         monster_img_index: u64,
         breed: u8,
@@ -171,7 +171,7 @@ GET /object_info?objectId={{monster_id}}
 
 ```
     // Update the attributes of a monster
-    public fun update_monster_stats(
+    public(script) fun update_monster_stats(
         _player: &mut Player,
         _farm: &mut Farm,
         _pet_monsters: &mut Collection::Collection,

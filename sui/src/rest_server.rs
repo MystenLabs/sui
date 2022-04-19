@@ -190,6 +190,7 @@ async fn get_objects(
 
     let objects = gateway
         .get_owned_objects(*address)
+        .await
         .unwrap()
         .into_iter()
         .map(NamedObjectRef::from)

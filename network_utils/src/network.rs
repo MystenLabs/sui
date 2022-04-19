@@ -9,7 +9,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 use sui_types::{error::*, serialize::*};
-use tracing::*;
+use tracing::debug;
 
 use std::io;
 
@@ -19,7 +19,7 @@ use futures::StreamExt;
 use tokio::task::JoinError;
 use tokio::time;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NetworkClient {
     base_address: String,
     base_port: u16,

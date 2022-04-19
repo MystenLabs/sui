@@ -4,7 +4,8 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::authority::AuthorityTemporaryStore;
-use move_vm_runtime::native_functions::NativeFunctionTable;
+use move_core_types::language_storage::ModuleId;
+use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::adapter;
 use sui_types::{
     base_types::{SuiAddress, TransactionDigest, TxContext},
@@ -24,7 +25,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     transaction: Transaction,
     transaction_digest: TransactionDigest,
     objects_by_kind: Vec<(InputObjectKind, Object)>,
-    move_vm: &Arc<adapter::SuiMoveVM>,
+    move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     gas_status: SuiGasStatus,
 ) -> SuiResult<TransactionEffects> {
@@ -72,7 +73,7 @@ fn execute_transaction<S: BackingPackageStore>(
     transaction: Transaction,
     mut objects_by_kind: Vec<(InputObjectKind, Object)>,
     tx_ctx: &mut TxContext,
-    move_vm: &Arc<adapter::SuiMoveVM>,
+    move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     mut gas_status: SuiGasStatus,
 ) -> ExecutionStatus {
@@ -95,13 +96,14 @@ fn execute_transaction<S: BackingPackageStore>(
             SingleTransactionKind::Call(c) => {
                 let mut inputs: Vec<_> = object_input_iter.by_ref().take(input_size).collect();
                 // unwraps here are safe because we built `inputs`
-                let package = inputs.pop().unwrap();
+                // TODO don't load and push the package object here in the first place
+                let _package = inputs.pop().unwrap();
+                let module_id = ModuleId::new(c.package.0.into(), c.module.clone());
                 result = adapter::execute(
                     move_vm,
                     temporary_store,
                     native_functions,
-                    &package,
-                    &c.module,
+                    module_id,
                     &c.function,
                     c.type_arguments.clone(),
                     inputs,

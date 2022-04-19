@@ -114,7 +114,7 @@ module Examples::Hero {
 
     /// Slay the `boar` with the `hero`'s sword, get experience.
     /// Aborts if the hero has 0 HP or is not strong enough to slay the boar
-    public fun slay(hero: &mut Hero, boar: Boar, ctx: &mut TxContext) {
+    public(script) fun slay(hero: &mut Hero, boar: Boar, ctx: &mut TxContext) {
         let Boar { id: boar_id, strength: boar_strength, hp } = boar;
         let hero_strength = hero_strength(hero);
         let boar_hp = hp;
@@ -222,7 +222,7 @@ module Examples::Hero {
         }
     }
 
-    public fun acquire_hero(payment: Coin<EXAMPLE>, ctx: &mut TxContext) {
+    public(script) fun acquire_hero(payment: Coin<EXAMPLE>, ctx: &mut TxContext) {
         let sword = create_sword(payment, ctx);
         let hero = create_hero(sword, ctx);
         Transfer::transfer(hero, TxContext::sender(ctx))

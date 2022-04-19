@@ -7,7 +7,7 @@ use thiserror::Error;
 use typed_store::rocks::TypedStoreError;
 
 use crate::base_types::*;
-use move_binary_format::errors::PartialVMError;
+use move_binary_format::errors::{PartialVMError, VMError};
 use serde::{Deserialize, Serialize};
 
 #[macro_export]
@@ -34,8 +34,8 @@ pub enum SuiError {
     // Object misuse issues
     #[error("Error acquiring lock for object(s): {:?}", errors)]
     LockErrors { errors: Vec<SuiError> },
-    #[error("Attempt to transfer a shared object.")]
-    TransferSharedError,
+    #[error("Attempt to transfer an object that's not owned.")]
+    TransferUnownedError,
     #[error("Attempt to transfer an object that's not a coin.")]
     TransferNonCoinError,
     #[error("A move package is expected, instead a move object is passed: {object_id}")]
@@ -282,8 +282,17 @@ pub enum SuiError {
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
 
+// TODO these are both horribly wrong, categorization needs to be considered
 impl std::convert::From<PartialVMError> for SuiError {
     fn from(error: PartialVMError) -> Self {
+        SuiError::ModuleVerificationFailure {
+            error: error.to_string(),
+        }
+    }
+}
+
+impl std::convert::From<VMError> for SuiError {
+    fn from(error: VMError) -> Self {
         SuiError::ModuleVerificationFailure {
             error: error.to_string(),
         }

@@ -16,6 +16,7 @@ use move_core_types::parser::parse_type_tag;
 use serde::Serialize;
 use tracing::info;
 
+use sui_adapter::adapter::resolve_and_type_check;
 use sui_core::gateway_state::gateway_responses::{
     MergeCoinResponse, PublishResponse, SplitCoinResponse, SwitchResponse,
 };
@@ -24,7 +25,6 @@ use sui_framework::build_move_package_to_bytes;
 use sui_types::base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects};
-use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::ObjectRead::Exists;
 use sui_types::object::{Object, ObjectRead};
 
@@ -287,10 +287,13 @@ impl WalletCommands {
                 let sender = gas_object.owner.get_owner_address()?;
 
                 // Pass in the objects for a deeper check
-                // We can technically move this to impl MovePackage
+                let compiled_module = package_obj
+                    .data
+                    .try_as_package()
+                    .ok_or_else(|| anyhow!("Cannot get package from object"))?
+                    .deserialize_module(module)?;
                 resolve_and_type_check(
-                    package_obj,
-                    module,
+                    &compiled_module,
                     function,
                     type_args,
                     input_objs,
@@ -406,7 +409,7 @@ impl WalletCommands {
                     Some(a) => *a,
                     None => context.active_address()?,
                 };
-                WalletCommandResult::Objects(context.gateway.get_owned_objects(address)?)
+                WalletCommandResult::Objects(context.gateway.get_owned_objects(address).await?)
             }
 
             WalletCommands::SyncClientState { address } => {
@@ -583,7 +586,7 @@ impl WalletContext {
         &mut self,
         address: SuiAddress,
     ) -> Result<Vec<(u64, Object)>, anyhow::Error> {
-        let object_refs = self.gateway.get_owned_objects(address)?;
+        let object_refs = self.gateway.get_owned_objects(address).await?;
 
         // TODO: We should ideally fetch the objects from local cache
         let mut values_objects = Vec::new();

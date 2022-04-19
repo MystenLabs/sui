@@ -61,7 +61,7 @@ module HeroGame::SeaHeroHelper {
 
     /// Helper should call this if they are willing to help out and slay the
     /// monster.
-    public fun slay(
+    public(script) fun slay(
         hero: &Hero, wrapper: HelpMeSlayThisMonster, ctx: &mut TxContext,
     ): Coin<RUM> {
         let HelpMeSlayThisMonster {

@@ -16,7 +16,7 @@ module ObjectWrapping::ObjectWrapping {
         child: Option<Child>,
     }
 
-    public fun create_child(ctx: &mut TxContext) {
+    public(script) fun create_child(ctx: &mut TxContext) {
         Transfer::transfer(
             Child {
                 id: TxContext::new_id(ctx),
@@ -25,7 +25,7 @@ module ObjectWrapping::ObjectWrapping {
         )
     }
 
-    public fun create_parent(child: Child, ctx: &mut TxContext) {
+    public(script) fun create_parent(child: Child, ctx: &mut TxContext) {
         Transfer::transfer(
             Parent {
                 id: TxContext::new_id(ctx),
@@ -35,11 +35,11 @@ module ObjectWrapping::ObjectWrapping {
         )
     }
 
-    public fun set_child(parent: &mut Parent, child: Child, _ctx: &mut TxContext) {
+    public(script) fun set_child(parent: &mut Parent, child: Child, _ctx: &mut TxContext) {
         Option::fill(&mut parent.child, child)
     }
 
-    public fun extract_child(parent: &mut Parent, ctx: &mut TxContext) {
+    public(script) fun extract_child(parent: &mut Parent, ctx: &mut TxContext) {
         let child = Option::extract(&mut parent.child);
         Transfer::transfer(
             child,
@@ -47,7 +47,7 @@ module ObjectWrapping::ObjectWrapping {
         )
     }
 
-    public fun delete_parent(parent: Parent, _ctx: &mut TxContext) {
+    public(script) fun delete_parent(parent: Parent, _ctx: &mut TxContext) {
         let Parent { id: parent_id, child: child_opt } = parent;
         ID::delete(parent_id);
         if (Option::is_some(&child_opt)) {

@@ -92,7 +92,7 @@ module HeroGame::SeaHero {
 
     /// Game admin can reate a monster wrapping a coin worth `reward` and send
     /// it to `recipient`
-    public fun create_monster(
+    public(script) fun create_monster(
         admin: &mut SeaHeroAdmin,
         reward_amount: u64,
         recipient: address,

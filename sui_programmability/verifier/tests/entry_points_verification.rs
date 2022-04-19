@@ -15,7 +15,7 @@ use move_binary_format::{
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-use sui_verifier::entry_function_param_verifier::verify_module;
+use sui_verifier::entry_points_verifier::verify_module;
 
 fn add_function(
     builder: &mut ModuleBuilder,
@@ -30,7 +30,7 @@ fn add_function(
         parameters,
         ret,
         type_parameters,
-        Visibility::Public,
+        Visibility::Script,
         CodeUnit {
             locals: SignatureIndex(1), // module_builder has "void" signature at 0
             code: vec![Bytecode::Ret], // need some code otherwise will be considered native
@@ -94,8 +94,7 @@ fn single_param() {
     public foo<Ty0>(loc0: Ty0, loc1: &mut TxContext): u64 {
     }
 
-    it's a valid entry function and verification should FAIL due to
-    missing Key abilty on the generic type
+    it's a valid entry function, loc0 is assumed to be primitive
     */
     let (mut builder, _) = ModuleBuilder::default();
 
@@ -114,7 +113,7 @@ fn single_param() {
 
     let module = builder.get_module();
     assert!(
-        verify_module(module).is_err(),
+        verify_module(module).is_ok(),
         "{}",
         format_assert_msg(module)
     );
@@ -187,7 +186,7 @@ fn single_template_object_param() {
             tx_context_param(tx_context),
         ],
         vec![],
-        vec![AbilitySet::EMPTY],
+        vec![AbilitySet::EMPTY | Ability::Store],
     );
 
     let module = builder.get_module();
@@ -203,7 +202,7 @@ fn template_and_template_object_params() {
     /*
     struct ObjStruct<Ty0> has key
 
-    public foo<Ty0: key, Ty1>(loc0: Ty0, loc1: ObjStruct<Ty1>, loc2: &mut TxContext) {
+    public foo<Ty0: key, Ty1: store>(loc0: Ty0, loc1: ObjStruct<Ty1>, loc2: &mut TxContext) {
     }
 
     it's a valid entry function and verification should SUCCEED
@@ -235,7 +234,10 @@ fn template_and_template_object_params() {
             tx_context_param(tx_context),
         ],
         vec![],
-        vec![AbilitySet::EMPTY | Ability::Key, AbilitySet::EMPTY],
+        vec![
+            AbilitySet::EMPTY | Ability::Key,
+            AbilitySet::EMPTY | Ability::Store,
+        ],
     );
 
     let module = builder.get_module();
@@ -254,9 +256,7 @@ fn template_param_after_primitive() {
     public foo<Ty0>(loc0: ObjStruct, loc1: u64, loc2: Ty0, loc3: &mut TxContext) {
     }
 
-    it's not a valid entry function (an entry function cannot have
-    template parameter after the first primitive type parameter) and
-    verification should SUCCEED
+    it is a valid entry function and verification should SUCCEED
     */
     let (mut builder, _) = ModuleBuilder::default();
 
@@ -296,8 +296,7 @@ fn single_template_vector_param() {
     public foo<Ty0>(loc0: vector<Ty0>, loc1: &mut TxContext) {
     }
 
-    it's a valid entry function and verification should FAIL due to
-    missing Key abilty on the vector's generic type
+    it's a valid entry function, loc0 is assumed to be primitive
     */
     let (mut builder, _) = ModuleBuilder::default();
 
@@ -316,7 +315,7 @@ fn single_template_vector_param() {
 
     let module = builder.get_module();
     assert!(
-        verify_module(module).is_err(),
+        verify_module(module).is_ok(),
         "{}",
         format_assert_msg(module)
     );
@@ -328,8 +327,7 @@ fn nested_template_vector_param() {
     public foo<Ty0>(loc0: vector<vector<Ty0>>, loc1: &mut TxContext) {
     }
 
-    it's a valid entry function and verification should FAIL due to
-    missing Key abilty on the nested vector's generic type
+    it's a valid entry function. It is assumed loc0 will be primitives, not objects
     */
     let (mut builder, _) = ModuleBuilder::default();
 
@@ -350,7 +348,7 @@ fn nested_template_vector_param() {
 
     let module = builder.get_module();
     assert!(
-        verify_module(module).is_err(),
+        verify_module(module).is_ok(),
         "{}",
         format_assert_msg(module)
     );

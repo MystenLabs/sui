@@ -2,16 +2,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority_client::{AuthorityAPI, BUFFER_SIZE};
+use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use async_trait::async_trait;
-use futures::channel::mpsc::{channel, Receiver};
-use futures::{SinkExt, StreamExt};
+use futures::StreamExt;
 use std::io;
-use std::io::Error;
 use sui_types::crypto::PublicKeyBytes;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 
-use sui_types::batch::UpdateItem;
+use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
 use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
@@ -172,6 +170,47 @@ impl<C> SafeClient<C> {
         Ok(())
     }
 
+    fn check_update_item_batch_response(
+        &self,
+        request: BatchInfoRequest,
+        signed_batch: &SignedBatch,
+        transactions_and_last_batch: &Option<(
+            Vec<(TxSequenceNumber, TransactionDigest)>,
+            AuthorityBatch,
+        )>,
+    ) -> SuiResult {
+        // check the signature of the batch
+        signed_batch
+            .signature
+            .check(&signed_batch.batch, signed_batch.authority)?;
+
+        // ensure transactions enclosed match requested range
+        fp_ensure!(
+            signed_batch.batch.initial_sequence_number >= request.start
+                && signed_batch.batch.next_sequence_number
+                    <= (request.end + signed_batch.batch.size),
+            SuiError::ByzantineAuthoritySuspicion {
+                authority: self.address
+            }
+        );
+
+        // If we have seen a previous batch, use it to make sure the next batch
+        // is constructed correctly:
+
+        if let Some((transactions, prev_batch)) = transactions_and_last_batch {
+            let reconstructed_batch = AuthorityBatch::make_next(prev_batch, transactions)?;
+
+            fp_ensure!(
+                reconstructed_batch == signed_batch.batch,
+                SuiError::ByzantineAuthoritySuspicion {
+                    authority: self.address
+                }
+            );
+        }
+
+        Ok(())
+    }
+
     /// This function is used by the higher level authority logic to report an
     /// error that could be due to this authority.
     pub fn report_client_error(&self, _error: SuiError) {
@@ -265,63 +304,68 @@ where
     }
 
     /// Handle Batch information requests for this authority.
-    async fn handle_batch_streaming(
+    async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<Receiver<Result<BatchInfoResponseItem, SuiError>>, io::Error> {
-        let (mut tx_output, tr_output) = channel(BUFFER_SIZE);
-
-        let mut batch_info_items = self
+    ) -> Result<BatchInfoResponseItemStream, io::Error> {
+        let batch_info_items = self
             .authority_client
-            .handle_batch_streaming(request)
+            .handle_batch_stream(request.clone())
             .await?;
 
-        if let Some(next_data) = batch_info_items.next().await {
-            match next_data {
-                Ok(batch_info_response_item) => {
-                    // do security checks
-                    match batch_info_response_item.clone() {
-                        BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
-                            // check signature of batch
-                            let result = signed_batch
-                                .signature
-                                .check(&signed_batch, signed_batch.authority);
-                            // todo: ensure signature valid over the set of transactions in the batch
-                            // todo: ensure signature valid over the hash of the previous batch
-                            // todo: sequence numbers of the transactions enclosed need to match requested
-                            match result {
-                                Ok(_) => {
-                                    let _ = tx_output.send(Ok(batch_info_response_item)).await;
-                                }
-                                Err(e) => {
-                                    let _ = tx_output.send(Err(e)).await;
-                                }
-                            }
-                        }
-                        BatchInfoResponseItem(UpdateItem::Transaction((_seq, digest))) => {
-                            // make transaction info request which checks transaction certificate
-                            let transaction_info_request = TransactionInfoRequest {
-                                transaction_digest: digest,
-                            };
-                            let transaction_info_response = self
-                                .handle_transaction_info_request(transaction_info_request)
-                                .await;
-                            match transaction_info_response {
-                                Ok(_) => {
-                                    let _ = tx_output.send(Ok(batch_info_response_item)).await;
-                                }
-                                Err(e) => {
-                                    let _ = tx_output.send(Err(e)).await;
-                                }
-                            }
+        let client = self.clone();
+        let address = self.address;
+        let stream = Box::pin(batch_info_items.scan(
+            (0u64, None),
+            move |(seq, txs_and_last_batch), batch_info_item| {
+                let req_clone = request.clone();
+                let client = client.clone();
+
+                // We check if we have exceeded the batch boundary for this request.
+                if *seq >= request.end {
+                    // If we exceed it return None to end stream
+                    return futures::future::ready(None);
+                }
+
+                let x = match &batch_info_item {
+                    Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
+                        if let Err(err) = client.check_update_item_batch_response(
+                            req_clone,
+                            signed_batch,
+                            txs_and_last_batch,
+                        ) {
+                            client.report_client_error(err.clone());
+                            Some(Err(err))
+                        } else {
+                            // Save the seqeunce number of this batch
+                            *seq = signed_batch.batch.next_sequence_number;
+                            // Insert a fresh vector for the new batch of transactions
+                            let _ =
+                                txs_and_last_batch.insert((Vec::new(), signed_batch.batch.clone()));
+                            Some(batch_info_item)
                         }
                     }
-                }
-                Err(e) => {
-                    return Err(Error::new(std::io::ErrorKind::Other, e));
-                }
-            }
-        }
-        Ok(tr_output)
+                    Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest)))) => {
+                        // A stream always starts with a batch, so the previous should have initialized it.
+                        // And here we insert the tuple into the batch.
+                        if txs_and_last_batch
+                            .as_mut()
+                            .map(|txs| txs.0.push((*seq, *digest)))
+                            .is_none()
+                        {
+                            let err = SuiError::ByzantineAuthoritySuspicion { authority: address };
+                            client.report_client_error(err.clone());
+                            Some(Err(err))
+                        } else {
+                            Some(batch_info_item)
+                        }
+                    }
+                    Err(e) => Some(Err(e.clone())),
+                };
+
+                futures::future::ready(x)
+            },
+        ));
+        Ok(Box::pin(stream))
     }
 }

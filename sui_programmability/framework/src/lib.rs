@@ -29,7 +29,7 @@ pub enum EventType {
     TransferToObject,
     /// System event: freeze object
     FreezeObject,
-    /// System event: turn an object into a shared mutable object
+    /// System event: turn an object into a shared object
     ShareObject,
     /// System event: an object ID is deleted. This does not necessarily
     /// mean an object is being deleted. However whenever an object is being
@@ -235,7 +235,14 @@ fn run_framework_move_unit_tests() {
 
 #[test]
 fn run_examples_move_unit_tests() {
-    let examples = vec!["basics", "defi", "fungible_tokens", "games", "nfts"];
+    let examples = vec![
+        "basics",
+        "defi",
+        "fungible_tokens",
+        "games",
+        "nfts",
+        "objects_tutorial",
+    ];
     for example in examples {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../examples")

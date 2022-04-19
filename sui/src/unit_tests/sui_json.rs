@@ -3,8 +3,9 @@
 
 use std::path::Path;
 
-use move_binary_format::normalized::Type;
-use move_core_types::{account_address::AccountAddress, identifier::Identifier};
+use move_core_types::{
+    account_address::AccountAddress, identifier::Identifier, value::MoveTypeLayout,
+};
 use serde_json::{json, Value};
 use sui_adapter::{self, genesis::clone_genesis_packages};
 use sui_types::{
@@ -97,104 +98,104 @@ fn test_basic_args_linter_pure_args() {
         // Expected Bool match
         (
             Value::from(true),
-            Type::Bool,
+            MoveTypeLayout::Bool,
             Some(bcs::to_bytes(&true).unwrap()),
         ),
         // Expected U8 match
         (
             Value::from(9u8),
-            Type::U8,
+            MoveTypeLayout::U8,
             Some(bcs::to_bytes(&9u8).unwrap()),
         ),
         // U64 value less than 256 can be used as U8
         (
             Value::from(9u64),
-            Type::U8,
+            MoveTypeLayout::U8,
             Some(bcs::to_bytes(&9u8).unwrap()),
         ),
         // U8 value encoded as str
         (
             Value::from("89"),
-            Type::U8,
+            MoveTypeLayout::U8,
             Some(bcs::to_bytes(&89u8).unwrap()),
         ),
         // U8 value encoded as str promoted to U64
         (
             Value::from("89"),
-            Type::U64,
+            MoveTypeLayout::U64,
             Some(bcs::to_bytes(&89u64).unwrap()),
         ),
         // U64 value encoded as str
         (
             Value::from("890"),
-            Type::U64,
+            MoveTypeLayout::U64,
             Some(bcs::to_bytes(&890u64).unwrap()),
         ),
         // U128 value encoded as str
         (
             Value::from(format!("{u128_val}")),
-            Type::U128,
+            MoveTypeLayout::U128,
             Some(bcs::to_bytes(&u128_val).unwrap()),
         ),
         // U8 value encoded as hex str
         (
             Value::from("0x12"),
-            Type::U8,
+            MoveTypeLayout::U8,
             Some(bcs::to_bytes(&0x12u8).unwrap()),
         ),
         // U8 value encoded as hex str promoted to U64
         (
             Value::from("0x12"),
-            Type::U64,
+            MoveTypeLayout::U64,
             Some(bcs::to_bytes(&0x12u64).unwrap()),
         ),
         // U64 value encoded as hex str
         (
             Value::from("0x890"),
-            Type::U64,
+            MoveTypeLayout::U64,
             Some(bcs::to_bytes(&0x890u64).unwrap()),
         ),
         // U128 value encoded as hex str
         (
             Value::from(format!("0x{:02x}", u128_val)),
-            Type::U128,
+            MoveTypeLayout::U128,
             Some(bcs::to_bytes(&u128_val).unwrap()),
         ),
         // Space not allowed
-        (Value::from(" 9"), Type::U8, None),
+        (Value::from(" 9"), MoveTypeLayout::U8, None),
         // Hex must start with 0x
-        (Value::from("AB"), Type::U8, None),
+        (Value::from("AB"), MoveTypeLayout::U8, None),
         // Too large
-        (Value::from("123456789"), Type::U8, None),
+        (Value::from("123456789"), MoveTypeLayout::U8, None),
         // Too large
-        (Value::from("123456789123456789123456789123456789"), Type::U64, None),
+        (Value::from("123456789123456789123456789123456789"), MoveTypeLayout::U64, None),
         // Too large
-        (Value::from("123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789"), Type::U128, None),
+        (Value::from("123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789"), MoveTypeLayout::U128, None),
 
         // U64 value greater than 255 cannot be used as U8
-        (Value::from(900u64), Type::U8, None),
+        (Value::from(900u64), MoveTypeLayout::U8, None),
         // floats cannot be used as U8
-        (Value::from(0.4f32), Type::U8, None),
+        (Value::from(0.4f32), MoveTypeLayout::U8, None),
         // floats cannot be used as U64
-        (Value::from(3.4f32), Type::U64, None),
+        (Value::from(3.4f32), MoveTypeLayout::U64, None),
         // Negative cannot be used as Unsigned
-        (Value::from(-1), Type::U8, None),
+        (Value::from(-1), MoveTypeLayout::U8, None),
         // u8 vector can be gotten from string
         (
             Value::from(good_ascii_str),
-            Type::Vector(Box::new(Type::U8)),
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
             Some(bcs::to_bytes(&good_ascii_str.as_bytes()).unwrap()),
         ),
         // u8 vector from bad string
         (
             Value::from(good_utf8_str),
-            Type::Vector(Box::new(Type::U8)),
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
             Some(bcs::to_bytes(&good_utf8_str.as_bytes()).unwrap()),
         ),
         // u8 vector from hex repr
         (
             Value::from(good_hex_val),
-            Type::Vector(Box::new(Type::U8)),
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
             Some(
                 bcs::to_bytes(&hex::decode(&good_hex_val.trim_start_matches(HEX_PREFIX)).unwrap())
                     .unwrap(),
@@ -203,25 +204,25 @@ fn test_basic_args_linter_pure_args() {
         // u8 vector from bad hex repr
         (
             Value::from(bad_hex_val),
-            Type::Vector(Box::new(Type::U8)),
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
             None,
         ),
         // u8 vector from u8 array
         (
             json!([1, 2, 3, 4, 5, 6, 7]),
-            Type::Vector(Box::new(Type::U8)),
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
             Some(bcs::to_bytes(&vec![1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8]).unwrap()),
         ),
         // u8 vector from heterogenous array
         (
             json!([1, 2, 3, true, 5, 6, 7]),
-            Type::Vector(Box::new(Type::U8)),
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
             None,
         ),
         // Vector of vector of u8s
         (
             json!([[1, 2, 3], [], [3, 4, 5, 6, 7]]),
-            Type::Vector(Box::new(Type::Vector(Box::new(Type::U8)))),
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)))),
             Some(
                 bcs::to_bytes(&vec![
                     vec![1u8, 2u8, 3u8],
@@ -234,7 +235,7 @@ fn test_basic_args_linter_pure_args() {
         // U64 nest
         (
             json!([[1111, 2, 3], [], [300, 4, 5, 6, 7]]),
-            Type::Vector(Box::new(Type::Vector(Box::new(Type::U64)))),
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U64)))),
             Some(
                 bcs::to_bytes(&vec![
                     vec![1111u64, 2u64, 3u64],
@@ -247,14 +248,14 @@ fn test_basic_args_linter_pure_args() {
         // U64 deep nest, bad because heterogenous array
         (
             json!([[[9, 53, 434], [0], [300]], [], [300, 4, 5, 6, 7]]),
-            Type::Vector(Box::new(Type::Vector(Box::new(Type::U64)))),
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U64)))),
             None,
         ),
         // U64 deep nest, good
         (
             json!([[[9, 53, 434], [0], [300]], [], [[332], [4, 5, 6, 7]]]),
-            Type::Vector(Box::new(Type::Vector(Box::new(Type::Vector(Box::new(
-                Type::U64,
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(
+                MoveTypeLayout::U64,
             )))))),
             Some(
                 bcs::to_bytes(&vec![

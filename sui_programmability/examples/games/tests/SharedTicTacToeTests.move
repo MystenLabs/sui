@@ -14,7 +14,7 @@ module Games::SharedTicTacToeTests {
     const DRAW: u8 = 3;
 
     #[test]
-    fun play_tictactoe() {
+    public(script) fun play_tictactoe() {
         let player_x = @0x0;
         let player_o = @0x1;
 
@@ -81,7 +81,7 @@ module Games::SharedTicTacToeTests {
 
 
     #[test]
-    fun play_tictactoe_draw() {
+    public(script) fun play_tictactoe_draw() {
         let player_x = @0x0;
         let player_o = @0x1;
 
@@ -188,13 +188,13 @@ module Games::SharedTicTacToeTests {
     }
 
 
-    fun place_mark(
+    public(script) fun place_mark(
         row: u8,
         col: u8,
         player: &address,
         scenario: &mut Scenario,
     ): u8  {
-        // The gameboard is now a shared mutable object.
+        // The gameboard is now a shared object.
         // Any player can place a mark on it directly.
         TestScenario::next_tx(scenario, player);
         let status;

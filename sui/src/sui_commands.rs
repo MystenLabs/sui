@@ -43,6 +43,8 @@ pub enum SuiCommand {
     },
     #[clap(name = "genesis")]
     Genesis {
+        #[clap(long, help = "Start genesis with a given config file")]
+        from_config: Option<PathBuf>,
         #[clap(long)]
         working_dir: Option<PathBuf>,
         #[clap(short, long, help = "Forces overwriting existing configuration")]
@@ -77,7 +79,11 @@ impl SuiCommand {
                     .wait_for_completion()
                     .await
             }
-            SuiCommand::Genesis { working_dir, force } => {
+            SuiCommand::Genesis {
+                working_dir,
+                force,
+                from_config,
+            } => {
                 let sui_config_dir = &match working_dir {
                     // if a directory is specified, it must exist (it
                     // will not be created)
@@ -129,14 +135,19 @@ impl SuiCommand {
                 let db_folder_path = sui_config_dir.join("client_db");
                 let gateway_db_folder_path = sui_config_dir.join("gateway_client_db");
 
-                let genesis_conf = GenesisConfig::default_genesis(sui_config_dir)?;
-                let (network_config, accounts, keystore) = genesis(genesis_conf).await?;
+                let genesis_conf = match from_config {
+                    Some(q) => PersistedConfig::read(q)?,
+                    None => GenesisConfig::default_genesis(sui_config_dir)?,
+                };
+
+                let (network_config, accounts, mut keystore) = genesis(genesis_conf).await?;
+
                 info!("Network genesis completed.");
                 let network_config = network_config.persisted(&network_path);
                 network_config.save()?;
                 info!("Network config file is stored in {:?}.", network_path);
-
-                keystore.save(&keystore_path)?;
+                keystore.set_path(&keystore_path);
+                keystore.save()?;
                 info!("Wallet keystore is stored in {:?}.", keystore_path);
 
                 // Use the first address if any

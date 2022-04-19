@@ -50,7 +50,7 @@ module DeFi::SharedEscrow {
     }
 
     /// The `recipient` of the escrow can exchange `obj` with the escrowed item
-    public fun exchange<T: key + store, ExchangeForT: key + store>(
+    public(script) fun exchange<T: key + store, ExchangeForT: key + store>(
         obj: ExchangeForT,
         escrow: &mut EscrowedObj<T, ExchangeForT>,
         ctx: &mut TxContext
@@ -65,7 +65,7 @@ module DeFi::SharedEscrow {
     }
 
     /// The `creator` can cancel the escrow and get back the escrowed item
-    public fun cancel<T: key + store, ExchangeForT: key + store>(
+    public(script) fun cancel<T: key + store, ExchangeForT: key + store>(
         escrow: &mut EscrowedObj<T, ExchangeForT>,
         ctx: &mut TxContext
     ) {

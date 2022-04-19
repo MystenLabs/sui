@@ -5,14 +5,14 @@
 // In TicTacToe, since the game object is owned by the admin, the players are not
 // able to directly mutate the gameboard. Hence each marker placement takes
 // two transactions.
-// In this implementation, we make the game object a shared mutable object.
+// In this implementation, we make the game object a shared object.
 // Both players have access and can mutate the game object, and hence they
 // can place markers directly in one transaction.
-// In general, using shared mutable object has an extra cost due to the fact
+// In general, using shared object has an extra cost due to the fact
 // that Sui needs to sequence the operations that mutate the shared object from
 // different transactions. In this case however, since it is expected for players
 // to take turns to place the marker, there won't be a significant overhead in practice.
-// As we can see, by using shared mutable object, the implementation is much
+// As we can see, by using shared object, the implementation is much
 // simpler than the other implementation.
 module Games::SharedTicTacToe {
     use Std::Vector;
@@ -62,7 +62,7 @@ module Games::SharedTicTacToe {
     }
 
     /// `x_address` and `o_address` are the account address of the two players.
-    public fun create_game(x_address: address, o_address: address, ctx: &mut TxContext) {
+    public(script) fun create_game(x_address: address, o_address: address, ctx: &mut TxContext) {
         // TODO: Validate sender address, only GameAdmin can create games.
 
         let id = TxContext::new_id(ctx);
@@ -83,7 +83,7 @@ module Games::SharedTicTacToe {
         Transfer::share_object(game);
     }
 
-    public fun place_mark(game: &mut TicTacToe, row: u8, col: u8, ctx: &mut TxContext) {
+    public(script) fun place_mark(game: &mut TicTacToe, row: u8, col: u8, ctx: &mut TxContext) {
         assert!(row < 3 && col < 3, EINVALID_LOCATION);
         assert!(game.game_status == IN_PROGRESS, EGAME_ENDED);
         let addr = get_cur_turn_address(game);
@@ -107,12 +107,12 @@ module Games::SharedTicTacToe {
         }
     }
 
-    public fun delete_game(game: TicTacToe, _ctx: &mut TxContext) {
+    public(script) fun delete_game(game: TicTacToe, _ctx: &mut TxContext) {
         let TicTacToe { id, gameboard: _, cur_turn: _, game_status: _, x_address: _, o_address: _ } = game;
         ID::delete(id);
     }
 
-    public fun delete_trophy(trophy: Trophy, _ctx: &mut TxContext) {
+    public(script) fun delete_trophy(trophy: Trophy, _ctx: &mut TxContext) {
         let Trophy { id } = trophy;
         ID::delete(id);
     }

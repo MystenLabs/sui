@@ -48,7 +48,7 @@ fn test_shared_object() -> Object {
     let shared_object_id = ObjectID::from_hex_literal(seed).unwrap();
     let content = GasCoin::new(shared_object_id, SequenceNumber::new(), 10);
     let obj = MoveObject::new(/* type */ GasCoin::type_(), content.to_bcs_bytes());
-    Object::new_move(obj, Owner::SharedMutable, TransactionDigest::genesis())
+    Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
 }
 
 /// Fixture: a few test certificates containing a shared object.
