@@ -422,7 +422,7 @@ async fn make_authority(
     /*
     let consensus_store = consensus_node::NodeStorage::reopen(store_path);
     consensus_node::spawn_primary(
-        keypair,
+        authority.keypair.copy(),
         consensus_committee,
         &consensus_store,
         consensus_parameters,
