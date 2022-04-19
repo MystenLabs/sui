@@ -22,14 +22,6 @@ enum KeyToolOpt {
 }
 
 fn main() {
-    let config = telemetry_subscribers::TelemetryConfig {
-        service_name: "sui".into(),
-        enable_tracing: std::env::var("SUI_TRACING_ENABLE").is_ok(),
-        json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
-        ..Default::default()
-    };
-    let _guard = telemetry_subscribers::init(config);
-
     let res = match KeyToolOpt::parse() {
         KeyToolOpt::Generate {} => get_key_pair(),
         KeyToolOpt::Unpack { keypair } => (SuiAddress::from(keypair.public_key_bytes()), keypair),
