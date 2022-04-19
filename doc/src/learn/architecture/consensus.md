@@ -1,5 +1,5 @@
  ---
-title: Learn about Narwhal and Tusk
+title: Learn about Narwhal and Tusk, Sui's consensus engine.
 ---
 
 This is a brief introduction to Narwhal and Tusk, the high-throughput mempool and consensus offered by Mysten Labs. Sui runs consensus as needed to periodically checkpoint its state. And for those transactions that require a total ordering, Narwhal/Tusk is the consensus engine of Sui.
