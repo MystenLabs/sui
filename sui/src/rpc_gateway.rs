@@ -346,7 +346,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
     }
 
     async fn get_transaction(&self, digest: TransactionDigest) -> RpcResult<CertifiedTransaction> {
-        Ok(self.gateway.lock().await.get_transaction(digest).await?)
+        Ok(self.gateway.get_transaction(digest).await?)
     }
 }
 
