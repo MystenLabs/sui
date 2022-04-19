@@ -6,32 +6,29 @@ use crate::authority::authority_tests::get_genesis_package_by_module;
 use crate::authority::authority_tests::{init_state, init_state_with_objects};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
-use rand::rngs::StdRng;
-use rand::SeedableRng;
 use std::time::Duration;
 use sui_adapter::genesis;
 use sui_network::transport;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
-use sui_types::crypto::{get_key_pair_from_rng, KeyPair, Signature};
+use sui_types::crypto::{KeyPair, Signature};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CertifiedTransaction, SignatureAggregator, Transaction, TransactionData,
 };
 use sui_types::object::{MoveObject, Object, Owner};
 use sui_types::serialize::serialize_cert;
-use test_utils::sequencer::Sequencer;
+use test_utils::{sequencer::Sequencer, test_keys};
 
 /// Default network buffer size.
 const NETWORK_BUFFER_SIZE: usize = 65_000;
 
 /// Fixture: a test keypair.
-fn test_keypair() -> (SuiAddress, KeyPair) {
-    let mut rng = StdRng::from_seed([0; 32]);
-    get_key_pair_from_rng(&mut rng)
+pub fn test_keypair() -> (SuiAddress, KeyPair) {
+    test_keys().pop().unwrap()
 }
 
 /// Fixture: a few test gas objects.
-fn test_gas_objects() -> Vec<Object> {
+pub fn test_gas_objects() -> Vec<Object> {
     (0..4)
         .map(|i| {
             let seed = format!("0x555555555555555{i}");
@@ -43,7 +40,7 @@ fn test_gas_objects() -> Vec<Object> {
 }
 
 /// Fixture: a a test shared object.
-fn test_shared_object() -> Object {
+pub fn test_shared_object() -> Object {
     let seed = "0x6666666666666660";
     let shared_object_id = ObjectID::from_hex_literal(seed).unwrap();
     let content = GasCoin::new(shared_object_id, SequenceNumber::new(), 10);
@@ -52,7 +49,7 @@ fn test_shared_object() -> Object {
 }
 
 /// Fixture: a few test certificates containing a shared object.
-async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTransaction> {
+pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTransaction> {
     let (sender, keypair) = test_keypair();
 
     let mut certificates = Vec::new();

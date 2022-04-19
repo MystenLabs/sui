@@ -17,6 +17,10 @@ use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tracing::debug;
 
+#[cfg(test)]
+#[path = "unit_tests/consensus_adapter_tests.rs"]
+pub mod consensus_adapter_tests;
+
 /// A serialized consensus transaction.
 type SerializedConsensusTransaction = Vec<u8>;
 
