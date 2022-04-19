@@ -31,8 +31,8 @@ use sui::rest_gateway::requests::{
     SplitCoinRequest, SyncRequest, TransferTransactionRequest,
 };
 use sui::rest_gateway::responses::{
-    custom_http_error, GetObjectInfoResponse, HttpResponseOk, JsonResponse, NamedObjectRef,
-    ObjectResponse, ObjectSchemaResponse, TransactionBytes,
+    custom_http_error, HttpResponseOk, JsonResponse, NamedObjectRef, ObjectResponse,
+    ObjectSchemaResponse, TransactionBytes,
 };
 use sui::{sui_config_dir, SUI_GATEWAY_CONFIG};
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
@@ -265,24 +265,20 @@ async fn object_schema(
 async fn object_info(
     ctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectInfoRequest>,
-) -> Result<HttpResponseOk<GetObjectInfoResponse>, HttpError> {
+) -> Result<HttpResponseOk<JsonResponse<ObjectRead>>, HttpError> {
     let gateway = ctx.context().gateway.lock().await;
 
     let object_info_params = query.into_inner();
     let object_id = ObjectID::try_from(object_info_params.object_id)
         .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, format!("{error}")))?;
 
-    let object: GetObjectInfoResponse = gateway
-        .get_object_info(object_id)
-        .await
-        .map_err(|error| {
-            custom_http_error(
-                StatusCode::NOT_FOUND,
-                format!("Error while getting object info: {:?}", error),
-            )
-        })?
-        .try_into()?;
-    Ok(HttpResponseOk(object))
+    let object_read = gateway.get_object_info(object_id).await.map_err(|error| {
+        custom_http_error(
+            StatusCode::NOT_FOUND,
+            format!("Error while getting object info: {:?}", error),
+        )
+    })?;
+    Ok(HttpResponseOk(JsonResponse(object_read)))
 }
 
 /// Transfer object from one address to another. Gas will be paid using the gas

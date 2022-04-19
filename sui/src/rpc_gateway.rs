@@ -27,12 +27,13 @@ use sui_types::object::ObjectRead;
 
 use crate::config::PersistedConfig;
 use crate::gateway::GatewayConfig;
+use crate::rest_gateway::responses::GetObjectInfoResponse;
 use crate::rest_gateway::responses::{NamedObjectRef, ObjectResponse};
 
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcGateway {
-    #[method(name = "getObjectInfo")]
-    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<ObjectRead>;
+    #[method(name = "getObjectTypedInfo")]
+    async fn get_object_typed_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse>;
 
     #[method(name = "transferCoin")]
     async fn transfer_coin(
@@ -118,6 +119,11 @@ pub trait RpcGateway {
 
     #[method(name = "getTransaction")]
     async fn get_transaction(&self, digest: TransactionDigest) -> RpcResult<CertifiedTransaction>;
+
+    /// Low level API to get object info. Client Applications should prefer to use
+    /// `get_object_typed_info` instead.
+    #[method(name = "getObjectInfoRaw")]
+    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<ObjectRead>;
 }
 
 pub struct RpcGatewayImpl {
@@ -246,6 +252,15 @@ impl RpcGatewayServer for RpcGatewayImpl {
 
     async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<ObjectRead> {
         Ok(self.gateway.get_object_info(object_id).await?)
+    }
+
+    async fn get_object_typed_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse> {
+        Ok(self
+            .gateway
+            .get_object_info(object_id)
+            .await?
+            .try_into()
+            .map_err(|e| anyhow!("{}", e))?)
     }
 
     async fn execute_transaction(

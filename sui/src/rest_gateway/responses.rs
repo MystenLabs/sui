@@ -19,6 +19,7 @@ use serde_with::serde_as;
 
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
 use sui_types::crypto::SignableBytes;
+use sui_types::error::SuiError;
 use sui_types::messages::TransactionData;
 use sui_types::object::ObjectRead;
 
@@ -159,16 +160,14 @@ pub enum GetObjectInfoResponse {
 }
 
 impl TryFrom<ObjectRead> for GetObjectInfoResponse {
-    type Error = HttpError;
+    type Error = SuiError;
 
     fn try_from(obj: ObjectRead) -> Result<Self, Self::Error> {
         match obj {
             ObjectRead::Exists(object_ref, object, layout) => {
                 Ok(Self::Exists(ObjectExistsResponse {
                     object_ref: object_ref.into(),
-                    object: object.to_json(&layout).map_err(|e| {
-                        custom_http_error(StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-                    })?,
+                    object: object.to_json(&layout)?,
                 }))
             }
             ObjectRead::NotExists(object_id) => Ok(Self::NotExists(ObjectNotExistsResponse {
