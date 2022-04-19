@@ -1,31 +1,27 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use super::*;
 use crate::authority::authority_tests::get_genesis_package_by_module;
-use crate::authority::authority_tests::{init_state, init_state_with_objects};
+use crate::authority::authority_tests::init_state_with_objects;
+use crate::authority::AuthorityState;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
-use std::time::Duration;
 use sui_adapter::genesis;
-use sui_network::transport;
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
-use sui_types::crypto::{KeyPair, Signature};
+use sui_types::base_types::SequenceNumber;
+use sui_types::base_types::{ObjectID, TransactionDigest};
+use sui_types::crypto::Signature;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CertifiedTransaction, SignatureAggregator, Transaction, TransactionData,
 };
 use sui_types::object::{MoveObject, Object, Owner};
-use sui_types::serialize::serialize_cert;
-use test_utils::{sequencer::Sequencer, test_keys};
+use sui_types::serialize::{deserialize_message, SerializedMessage};
+use test_utils::network::test_listener;
+use test_utils::test_keys;
+use tokio::sync::mpsc::channel;
 
 /// Default network buffer size.
 const NETWORK_BUFFER_SIZE: usize = 65_000;
-
-/// Fixture: a test keypair.
-pub fn test_keypair() -> (SuiAddress, KeyPair) {
-    test_keys().pop().unwrap()
-}
 
 /// Fixture: a few test gas objects.
 pub fn test_gas_objects() -> Vec<Object> {
@@ -33,7 +29,7 @@ pub fn test_gas_objects() -> Vec<Object> {
         .map(|i| {
             let seed = format!("0x555555555555555{i}");
             let gas_object_id = ObjectID::from_hex_literal(&seed).unwrap();
-            let (sender, _) = test_keypair();
+            let (sender, _) = test_keys().pop().unwrap();
             Object::with_id_owner_for_testing(gas_object_id, sender)
         })
         .collect()
@@ -50,7 +46,7 @@ pub fn test_shared_object() -> Object {
 
 /// Fixture: a few test certificates containing a shared object.
 pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTransaction> {
-    let (sender, keypair) = test_keypair();
+    let (sender, keypair) = test_keys().pop().unwrap();
 
     let mut certificates = Vec::new();
     let shared_object_id = test_shared_object().id();
@@ -97,156 +93,76 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
 }
 
 #[tokio::test]
-async fn handle_consensus_output() {
-    // Initialize an authority with a (owned) gas object and a shared object.
-    let mut objects = test_gas_objects();
-    objects.push(test_shared_object());
-    let authority = init_state_with_objects(objects).await;
+async fn listen_to_sequenced_transaction() {
+    let (tx_sui_to_consensus, rx_sui_to_consensus) = channel(1);
+    let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1);
 
-    // Make a sample certificate.
-    let certificate = &test_certificates(&authority).await[0];
-    let serialized_certificate = serialize_cert(certificate);
+    // Make a sample (serialized) consensus transaction.
+    let transaction = vec![10u8, 11u8];
 
-    // Spawn a sequencer.
-    // TODO [issue #932]: Use a port allocator to avoid port conflicts.
-    let consensus_input_address = "127.0.0.1:1309".parse().unwrap();
-    let consensus_subscriber_address = "127.0.0.1:1310".parse().unwrap();
-    let sequencer = Sequencer {
-        input_address: consensus_input_address,
-        subscriber_address: consensus_subscriber_address,
-        buffer_size: NETWORK_BUFFER_SIZE,
-        consensus_delay: Duration::from_millis(0),
-    };
-    let store_path = temp_testdir::TempDir::default();
-    Sequencer::spawn(sequencer, store_path.as_ref())
-        .await
-        .unwrap();
-
-    // Spawn a consensus client.
-    let state = Arc::new(authority);
-    let consensus_client = ConsensusClient::new(state.clone()).unwrap();
-    ConsensusClient::spawn(
-        consensus_client,
-        consensus_subscriber_address,
-        NETWORK_BUFFER_SIZE,
+    // Spawn a consensus listener.
+    ConsensusListener::spawn(
+        /* rx_consensus_input */ rx_sui_to_consensus,
+        /* rx_consensus_output */ rx_consensus_to_sui,
     );
 
-    // Submit a certificate to the sequencer.
+    // Submit a sample consensus transaction.
+    let (sender, receiver) = oneshot::channel();
+    let input = ConsensusInput {
+        serialized: transaction.clone(),
+        replier: sender,
+    };
+    tx_sui_to_consensus.send(input).await.unwrap();
+
+    // Notify the consensus listener that the transaction has been sequenced.
     tokio::task::yield_now().await;
-    transport::connect(consensus_input_address.to_string(), NETWORK_BUFFER_SIZE)
-        .await
-        .unwrap()
-        .write_data(&serialized_certificate)
-        .await
-        .unwrap();
+    let output = (Ok(()), transaction);
+    tx_consensus_to_sui.send(output).await.unwrap();
 
-    // Wait for the certificate to be processed and ensure the last consensus index is correctly updated.
-    // (We need to wait on storage for that.)
-    while state.db().last_consensus_index().unwrap() != SequenceNumber::from(1) {
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-    }
-
-    // Cleanup the storage.
-    let _ = std::fs::remove_dir_all(store_path);
+    // Ensure the caller get notified from the consensus listener.
+    assert!(receiver.await.unwrap().is_ok());
 }
 
 #[tokio::test]
-async fn test_guardrail() {
-    let authority = init_state().await;
-    let state = Arc::new(authority);
+async fn submit_transaction_to_consensus() {
+    // TODO [issue #932]: Use a port allocator to avoid port conflicts.
+    let consensus_address = "127.0.0.1:12456".parse().unwrap();
+    let (tx_consensus_listener, mut rx_consensus_listener) = channel(1);
 
-    // Create a first consensus client.
-    let _consensus_client = ConsensusClient::new(state.clone()).unwrap();
-
-    // Create a second consensus client from the same state.
-    let result = ConsensusClient::new(state);
-    assert!(result.is_err());
-}
-
-#[tokio::test]
-async fn sync_with_consensus() {
-    // Initialize an authority with a (owned) gas object and a shared object.
+    // Initialize an authority with a (owned) gas object and a shared object; then
+    // make a test certificate.
     let mut objects = test_gas_objects();
     objects.push(test_shared_object());
     let authority = init_state_with_objects(objects).await;
+    let certificate = test_certificates(&authority).await.pop().unwrap();
 
-    // Make two certificates.
-    let certificate_0 = &test_certificates(&authority).await[0];
-    let serialized_certificate_0 = serialize_cert(certificate_0);
-    let certificate_1 = &test_certificates(&authority).await[1];
-    let serialized_certificate_1 = serialize_cert(certificate_1);
-
-    // Spawn a sequencer.
-    // TODO [issue #932]: Use a port allocator to avoid port conflicts.
-    let consensus_input_address = "127.0.0.1:13011".parse().unwrap();
-    let consensus_subscriber_address = "127.0.0.1:1312".parse().unwrap();
-    let sequencer = Sequencer {
-        input_address: consensus_input_address,
-        subscriber_address: consensus_subscriber_address,
-        buffer_size: NETWORK_BUFFER_SIZE,
-        consensus_delay: Duration::from_millis(0),
-    };
-    let store_path = temp_testdir::TempDir::default();
-    Sequencer::spawn(sequencer, store_path.as_ref())
-        .await
-        .unwrap();
-
-    // Submit a certificate to the sequencer.
-    tokio::task::yield_now().await;
-    transport::connect(consensus_input_address.to_string(), NETWORK_BUFFER_SIZE)
-        .await
-        .unwrap()
-        .write_data(&serialized_certificate_0)
-        .await
-        .unwrap();
-
-    // Spawn a consensus client.
-    let state = Arc::new(authority);
-    let consensus_client = ConsensusClient::new(state.clone()).unwrap();
-    ConsensusClient::spawn(
-        consensus_client,
-        consensus_subscriber_address,
+    // Make a new consensus submitter instance.
+    let submitter = ConsensusSubmitter::new(
+        consensus_address,
         NETWORK_BUFFER_SIZE,
+        authority.committee,
+        tx_consensus_listener,
     );
 
-    // Submit a second certificate to the sequencer. This will force the consensus client to sync.
-    transport::connect(consensus_input_address.to_string(), NETWORK_BUFFER_SIZE)
-        .await
-        .unwrap()
-        .write_data(&serialized_certificate_1)
-        .await
-        .unwrap();
+    // Spawn a network listener to receive the transaction (emulating the consensus node).
+    let handle = test_listener(consensus_address);
 
-    // Wait for the certificate to be processed and ensure the last consensus index is correctly updated.
-    // (We need to wait on storage for that.)
-    while state.db().last_consensus_index().unwrap() != SequenceNumber::from(2) {
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    // Notify the submitter when a consensus transaction has been sequenced.
+    tokio::spawn(async move {
+        let ConsensusInput { replier, .. } = rx_consensus_listener.recv().await.unwrap();
+        replier.send(Ok(())).unwrap();
+    });
+
+    // Submit the transaction and ensure the submitter reports success to the caller.
+    tokio::task::yield_now().await;
+    let consensus_transaction = ConsensusTransaction::UserTransaction(certificate);
+    let result = submitter.submit(&consensus_transaction).await;
+    assert!(result.is_ok());
+
+    // Ensure the consensus node got the transaction.
+    let bytes = handle.await.unwrap();
+    match deserialize_message(&bytes[..]).unwrap() {
+        SerializedMessage::ConsensusTransaction(..) => (),
+        _ => panic!("Unexpected protocol message"),
     }
-
-    // Ensure the version number of the shared object is correctly updated.
-    let shared_object_id = test_shared_object().id();
-    let version = state.db().get_schedule(&shared_object_id).unwrap().unwrap();
-    assert_eq!(version, SequenceNumber::from(2));
-
-    // Ensure the certificates are locked in the right order.
-    let certificate_0_sequence = state
-        .db()
-        .sequenced(certificate_0.digest(), vec![shared_object_id].iter())
-        .unwrap()
-        .pop()
-        .unwrap()
-        .unwrap();
-    assert_eq!(certificate_0_sequence, SequenceNumber::default());
-
-    let certificate_1_sequence = state
-        .db()
-        .sequenced(certificate_1.digest(), vec![shared_object_id].iter())
-        .unwrap()
-        .pop()
-        .unwrap()
-        .unwrap();
-    assert_eq!(certificate_1_sequence, SequenceNumber::from(1));
-
-    // Cleanup the storage.
-    let _ = std::fs::remove_dir_all(store_path);
 }

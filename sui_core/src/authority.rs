@@ -16,6 +16,7 @@ use move_core_types::{
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     pin::Pin,
@@ -807,24 +808,27 @@ impl ModuleResolver for AuthorityState {
 
 #[async_trait]
 impl ExecutionState for AuthorityState {
-    type Transaction = String;
+    type Transaction = CertifiedTransaction;
     type Error = SuiError;
 
     async fn handle_consensus_transaction(
         &self,
-        _execution_indices: ExecutionIndices,
-        _transaction: Self::Transaction,
+        execution_indices: ExecutionIndices,
+        transaction: Self::Transaction,
     ) -> Result<(), Self::Error> {
-        Ok(())
+        self.handle_consensus_certificate(transaction, execution_indices)
+            .await
     }
 
     fn ask_consensus_write_lock(&self) -> bool {
-        true
+        self.consensus_guardrail.fetch_add(1, Ordering::SeqCst) == 0
     }
 
-    fn release_consensus_write_lock(&self) {}
+    fn release_consensus_write_lock(&self) {
+        self.consensus_guardrail.fetch_sub(0, Ordering::SeqCst);
+    }
 
     async fn load_execution_indices(&self) -> Result<ExecutionIndices, Self::Error> {
-        Ok(ExecutionIndices::default())
+        self._database.last_consensus_index()
     }
 }
