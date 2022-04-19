@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * BCS implementation {@see https://github.com/diem/bcs } for JavaScript.
  * Intended to be used for Move applications; supports both NodeJS and browser.
@@ -341,7 +344,7 @@ interface TypeInterface {
 /**
  * BCS implementation for Move types and few additional built-ins.
  */
-export class MoveBCS {
+export class BCS {
 
     // Prefefined types constants
     static readonly U8: string = 'u8';
@@ -359,13 +362,13 @@ export class MoveBCS {
      * Serialize data into BCS.
      *
      * @example
-     * MoveBCS.registerVectorType('vector<u8>', 'u8');
+     * BCS.registerVectorType('vector<u8>', 'u8');
      *
-     * let serialized = MoveBCS
+     * let serialized = BCS
      *   .ser('vector<u8>', [1,2,3,4,5,6])
      *   .toBytes();
      *
-     * console.assert(MoveBCS.util.toHex(serialized) === '06010203040506');
+     * console.assert(BCS.util.toHex(serialized) === '06010203040506');
      *
      * @param type Name of the type to serialize (must be registered).
      * @param data Data to serialize.
@@ -381,7 +384,7 @@ export class MoveBCS {
      *
      * @example
      * // use util to form an Uint8Array buffer
-     * let data = MoveBCS.de(BCS.U32, new Uint8Array([255, 255, 255, 255]));
+     * let data = BCS.de(BCS.U32, new Uint8Array([255, 255, 255, 255]));
      * console.assert(data.toString() == '4294967295');
      *
      * @param type Name of the type to deserialize (must be registered).
@@ -428,7 +431,7 @@ export class MoveBCS {
         encodeCb: (writer: BcsWriter, data: any) => BcsWriter,
         decodeCb: (reader: BcsReader) => any,
         validateCb: (data: any) => boolean = () => true
-    ): ThisType<MoveBCS> {
+    ): ThisType<BCS> {
         this.types.set(name, {
             encode(data, size = 1024) { return this._encodeRaw(new BcsWriter(size), data); },
             decode(data) { return this._decodeRaw(new BcsReader(data)); },
@@ -449,12 +452,12 @@ export class MoveBCS {
     }
 
     /**
-     * Register custom vector type inside the MoveBCS.
+     * Register custom vector type inside the BCS.
      *
      * @example
-     * MoveBCS.registerVectorType('vector<u8>', 'u8');
-     * let array = MoveBCS.de('vector<u8>', new Uint8Array([6,1,2,3,4,5,6])); // [1,2,3,4,5,6];
-     * let again = MoveBCS.ser('vector<u8>', [1,2,3,4,5,6]).toBytes();
+     * BCS.registerVectorType('vector<u8>', 'u8');
+     * let array = BCS.de('vector<u8>', new Uint8Array([6,1,2,3,4,5,6])); // [1,2,3,4,5,6];
+     * let again = BCS.ser('vector<u8>', [1,2,3,4,5,6]).toBytes();
      *
      * @param name Name of the type to register.
      * @param elementType Name of the inner type of the vector.
@@ -463,8 +466,8 @@ export class MoveBCS {
     public static registerVectorType(
         name: string,
         elementType: string
-    ): ThisType<MoveBCS> {
-        if (!MoveBCS.hasType(elementType)) {
+    ): ThisType<BCS> {
+        if (!BCS.hasType(elementType)) {
             throw new Error(`Type ${elementType} is not registered`);
         }
 
@@ -474,12 +477,12 @@ export class MoveBCS {
 
             _encodeRaw(writer, data) {
                 return writer.writeVec(data, (writer, el) => {
-                    return MoveBCS.getTypeInterface(elementType)._encodeRaw(writer, el)
+                    return BCS.getTypeInterface(elementType)._encodeRaw(writer, el)
                 });
             },
             _decodeRaw(reader) {
                 return reader.readVec((reader) => {
-                    return MoveBCS.getTypeInterface(elementType)._decodeRaw(reader)
+                    return BCS.getTypeInterface(elementType)._decodeRaw(reader)
                 });
             },
         });
@@ -511,7 +514,7 @@ export class MoveBCS {
      *
      * // Created in Rust with diem/bcs
      * // let rust_bcs_str = '80d1b105600000000e4269672057616c6c65742047757900';
-     * let rust_bcs_str = [ // using an Array here as MoveBCS works with Uint8Buffer
+     * let rust_bcs_str = [ // using an Array here as BCS works with Uint8Buffer
      *  128, 209, 177,   5,  96,  0,  0,
      *    0,  14,  66, 105, 103, 32, 87,
      *   97, 108, 108, 101, 116, 32, 71,
@@ -529,13 +532,9 @@ export class MoveBCS {
      *
      * @param name Name of the type to register.
      * @param fields Fields of the struct. Must be in the correct order.
-     * @return Returns MoveBCS for chaining.
+     * @return Returns BCS for chaining.
      */
-    public static registerStructType(name: string, fields: { [key: string]: string }): ThisType<MoveBCS> {
-        if (fields.constructor !== Object) {
-            throw 'Struct description must be an instance of Object type';
-        }
-
+    public static registerStructType(name: string, fields: { [key: string]: string }): ThisType<BCS> {
         let struct = Object.freeze(fields); // Make sure the order doesn't get changed
 
         // IMPORTANT: we need to store canonical order of fields for each registered
@@ -552,19 +551,19 @@ export class MoveBCS {
         }
 
         this.types.set(name, {
-            encode(data: Uint8Array, size = 1024) { return this._encodeRaw(new BcsWriter(size), data); },
-            decode(data: Uint8Array) { return this._decodeRaw(new BcsReader(data)); },
+            encode(data, size = 1024) { return this._encodeRaw(new BcsWriter(size), data); },
+            decode(data) { return this._decodeRaw(new BcsReader(data)); },
 
-            _encodeRaw(writer: BcsWriter, data: { [key: string]: any }) {
+            _encodeRaw(writer, data) {
                 for (let key of canonicalOrder) {
-                    MoveBCS.getTypeInterface(struct[key])._encodeRaw(writer, data[key]);
+                    BCS.getTypeInterface(struct[key])._encodeRaw(writer, data[key]);
                 }
                 return writer;
             },
-            _decodeRaw(reader: BcsReader): { [key: string]: any } {
+            _decodeRaw(reader) {
                 let result: { [key: string]: any } = {};
                 for (let key of canonicalOrder) {
-                    result[key] = MoveBCS.getTypeInterface(struct[key])._decodeRaw(reader);
+                    result[key] = BCS.getTypeInterface(struct[key])._decodeRaw(reader);
                 }
                 return result;
             }
@@ -573,8 +572,69 @@ export class MoveBCS {
         return this;
     }
 
+    /**
+     * Safe method to register custom enum type where each invariant holds the value of another type.
+     * @example
+     * BCS.registerStructType('Coin', { value: 'u64' });
+     * BCS.registerVectorType('vector<Coin>', 'Coin');
+     * BCS.registerEnumType('MyEnum', {
+     *  single: 'Coin',
+     *  multi: 'vector<Coin>'
+     * });
+     *
+     * let example1 = Buffer.from('AICWmAAAAAAA', 'base64');
+     * let example2 = Buffer.from('AQIBAAAAAAAAAAIAAAAAAAAA', 'base64');
+     *
+     * console.log(
+     *  BCS.de('MyEnum', new Uint8Array(example1)), // { single: { value: 10000000 } }
+     *  BCS.de('MyEnum', new Uint8Array(example2))  // { multi: [ { value: 1 }, { value: 2 } ] }
+     * }
+     *
+     * // and serialization
+     * BCS.ser('MyEnum', { single: { value: 10000000 } }).toBytes();
+     * BCS.ser('MyEnum', { multi: [ { value: 1 }, { value: 2 } ] });
+     *
+     * @param name
+     * @param variants
+     */
+    public static registerEnumType(name: string, variants: { [key: string]: string }) {
+        let struct = Object.freeze(variants); // Make sure the order doesn't get changed
+
+        // IMPORTANT: enum is an ordered type and we have to preserve ordering in BCS
+        let canonicalOrder = Object.keys(struct);
+
+        this.types.set(name, {
+            encode(data, size = 1024) { return this._encodeRaw(new BcsWriter(size), data) },
+            decode(data) { return this._decodeRaw(new BcsReader(data)) },
+
+            _encodeRaw(writer, data) {
+                let key = Object.keys(data)[0];
+                if (key === undefined) {
+                    throw new Error(`Unknown invariant of the enum ${name}`);
+                }
+
+                let orderByte = canonicalOrder.indexOf(key);
+                if (orderByte === -1) {
+                    throw new Error(`Unknown invariant of the enum ${name}, allowed values: ${canonicalOrder}`);
+                }
+                let invariant = canonicalOrder[orderByte];
+
+                writer.write8(orderByte); // write order byte
+                return BCS.getTypeInterface(struct[invariant])._encodeRaw(writer, data[key]);
+            },
+            _decodeRaw(reader) {
+                let orderByte = reader.readULEB();
+                let invariant = canonicalOrder[orderByte];
+
+                return {
+                    [invariant]: BCS.getTypeInterface(struct[invariant])._decodeRaw(reader)
+                };
+            }
+        });
+    }
+
     static getTypeInterface(type: string): TypeInterface {
-        let typeInterface = MoveBCS.types.get(type);
+        let typeInterface = BCS.types.get(type);
         if (typeInterface === undefined) {
             throw new Error(`Type ${type} is not registered`);
         }
@@ -583,43 +643,43 @@ export class MoveBCS {
 }
 
 (function registerPrimitives(): void {
-    MoveBCS.registerType(
-        MoveBCS.U8,
+    BCS.registerType(
+        BCS.U8,
         (writer, data) => writer.write8(data),
         (reader) => reader.read8(),
         (u8) => (u8 < 256)
     );
 
-    MoveBCS.registerType(
-        MoveBCS.U32,
+    BCS.registerType(
+        BCS.U32,
         (writer, data) => writer.write32(data),
         (reader) => reader.read32(),
         (u32) => (u32 < 4294967296)
     );
 
-    MoveBCS.registerType(
-        MoveBCS.U64,
+    BCS.registerType(
+        BCS.U64,
         (writer, data) => writer.write64(data),
         (reader) => reader.read64(),
         (_u64) => true
     );
 
-    MoveBCS.registerType(
-        MoveBCS.U128,
+    BCS.registerType(
+        BCS.U128,
         (writer, data) => writer.write128(data),
         (reader) => reader.read128(),
         (_u128) => true
     );
 
-    MoveBCS.registerType(
-        MoveBCS.BOOL,
+    BCS.registerType(
+        BCS.BOOL,
         (writer, data) => writer.write8(data),
         (reader) => reader.read8().toString(10) == '1',
         (_bool: boolean) => true
     );
 
-    MoveBCS.registerType(
-        MoveBCS.STRING,
+    BCS.registerType(
+        BCS.STRING,
         (writer, data) => writer.writeVec(Array.from(data), (writer, el) => writer.write8(el.charCodeAt(0))),
         (reader) => {
             return reader

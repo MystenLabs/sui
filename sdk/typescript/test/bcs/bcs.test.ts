@@ -1,4 +1,7 @@
-import { MoveBCS as BCS } from '../../src/bcs';
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import { BCS } from '../../src/bcs';
 import { Base64DataBuffer as B64 } from '../../src';
 import { BN } from 'bn.js';
 
@@ -61,9 +64,35 @@ describe('Move BCS', () => {
         expect(deserialized.length).toEqual(1000);
         expect(new B64(serialized).toString()).toEqual(largeBCSVec());
     });
+
+    it('should de/ser enums', () => {
+        BCS.registerStructType('Coin', { value: 'u64' });
+        BCS.registerVectorType('vector<Coin>', 'Coin');
+        BCS.registerEnumType('Enum', {
+            single: 'Coin',
+            multi: 'vector<Coin>'
+        });
+
+        // prepare 2 examples from Rust BCS
+        let example1 = new B64('AICWmAAAAAAA');
+        let example2 = new B64('AQIBAAAAAAAAAAIAAAAAAAAA');
+
+        // serialize 2 objects with the same data and signature
+        let ser1 = BCS.ser('Enum', { single: { value: 10000000 } }).toBytes();
+        let ser2 = BCS.ser('Enum', { multi: [ { value: 1 }, { value: 2 } ] }).toBytes();
+
+        // deserialize and compare results
+        expect(BCS.de('Enum', example1.getData())).toEqual(BCS.de('Enum', ser1));
+        expect(BCS.de('Enum', example2.getData())).toEqual(BCS.de('Enum', ser2));
+
+    });
 });
 
 
 function largeBCSVec(): string {
     return '6Af/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////';
 }
+
+// function transactionData(): string {
+//     return 'VHJhbnNhY3Rpb25EYXRhOjoAAQLbA6Ec6wsFAAAACQEACAIIFAMcNwRTCgVdcgfPAXQIwwIoCusCBQzwAkIAAAEBAQIBAwAAAgABBAwBAAEBAQwBAAEDAwIAAAUAAQAABgIBAAAHAwQAAAgFAQABBQcBAQABCgkKAQIDCwsMAAIMDQEBCAEHDg8BAAEIEAEBAAQGBQYHCAgGCQYDBwsBAQgACwIBCAAHCAMAAQcIAwMHCwEBCAADBwgDAQsCAQgAAwsBAQgABQcIAwEIAAILAgEJAAcLAQEJAAELAQEIAAIJAAcIAwELAQEJAAEGCAMBBQIJAAUDAwcLAQEJAAcIAwELAgEJAAILAQEJAAUHTUFOQUdFRARDb2luCFRyYW5zZmVyCVR4Q29udGV4dAtUcmVhc3VyeUNhcARidXJuBGluaXQEbWludAx0cmFuc2Zlcl9jYXALZHVtbXlfZmllbGQPY3JlYXRlX2N1cnJlbmN5BnNlbmRlcgh0cmFuc2ZlcgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAgEJAQABAAABBAsBCwA4AAIBAAAACAsJEgAKADgBDAELAQsALhEGOAICAgEAAAEFCwELAAsCOAMCAwEAAAEECwALATgEAgD5BqEc6wsFAAAACwEADgIOJAMyWQSLARwFpwGrAQfSAukBCLsEKAbjBAoK7QQdDIoFswENvQYGAAAAAQECAQMBBAEFAQYAAAIAAAcIAAICDAEAAQQEAgABAQIABgYCAAMQBAACEgwBAAEACAABAAAJAgMAAAoEBQAACwYHAAAMBAUAAA0EBQACFQoFAQACCAsDAQACFg0OAQACFxESAQIGGAITAAIZAg4BAAUaFQMBCAIbFgMBAAILFw4BAAINGAUBAAYJBwkIDAgPCQkLDAsPDBQGDwYMDQwNDw4JDwkDBwgBCwIBCAAHCAUCCwIBCAMLA';
+// }
