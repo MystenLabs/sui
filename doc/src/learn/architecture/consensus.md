@@ -1,4 +1,4 @@
- ---
+---
 title: Learn about Narwhal and Tusk, Sui's Consensus Engine
 ---
 
