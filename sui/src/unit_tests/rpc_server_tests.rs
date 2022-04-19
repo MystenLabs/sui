@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::net::SocketAddr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use move_core_types::identifier::Identifier;
 
@@ -16,11 +16,12 @@ use sui::rpc_gateway::RpcGatewayServer;
 use sui::rpc_gateway::TransactionBytes;
 use sui::rpc_gateway::{Base64EncodedBytes, RpcGatewayClient};
 use sui::rpc_gateway::{RpcGatewayImpl, SignedTransaction};
+use sui::sui_commands::SuiNetwork;
 use sui::sui_json::{resolve_move_function_args, SuiJsonValue};
 use sui::{SUI_GATEWAY_CONFIG, SUI_WALLET_CONFIG};
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_framework::build_move_package_to_bytes;
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::object::ObjectRead;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
@@ -30,14 +31,9 @@ mod sui_network;
 
 #[tokio::test]
 async fn test_get_objects() -> Result<(), anyhow::Error> {
-    let temp_dir = tempfile::tempdir()?;
-    let working_dir = temp_dir.path();
-    let _network = start_test_network(working_dir, None).await?;
-    let (server_addr, _handle) = start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;
-    let wallet_conf: WalletConfig = PersistedConfig::read(&working_dir.join(SUI_WALLET_CONFIG))?;
-    let address = wallet_conf.accounts.first().unwrap();
-
-    let http_client = HttpClientBuilder::default().build(format!("http://{}", server_addr))?;
+    let test_network = setup_test_network().await?;
+    let http_client = test_network.http_client;
+    let address = test_network.accounts.first().unwrap();
 
     http_client.sync_account_state(*address).await?;
     let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
@@ -53,13 +49,9 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_transfer_coin() -> Result<(), anyhow::Error> {
-    let temp_dir = tempfile::tempdir()?;
-    let working_dir = temp_dir.path();
-    let _network = start_test_network(working_dir, None).await?;
-    let (server_addr, _handle) = start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;
-    let wallet_conf: WalletConfig = PersistedConfig::read(&working_dir.join(SUI_WALLET_CONFIG))?;
-    let http_client = HttpClientBuilder::default().build(format!("http://{}", server_addr))?;
-    let address = wallet_conf.accounts.first().unwrap();
+    let test_network = setup_test_network().await?;
+    let http_client = test_network.http_client;
+    let address = test_network.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
     let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
     let objects = result
@@ -78,7 +70,7 @@ async fn test_transfer_coin() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let keystore = SuiKeystore::load_or_create(&working_dir.join("wallet.key"))?;
+    let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;
     let signature = keystore.sign(address, &tx_data.tx_bytes)?;
 
     let tx_response: TransactionResponse = http_client
@@ -93,13 +85,9 @@ async fn test_transfer_coin() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_publish() -> Result<(), anyhow::Error> {
-    let temp_dir = tempfile::tempdir()?;
-    let working_dir = temp_dir.path();
-    let _network = start_test_network(working_dir, None).await?;
-    let (server_addr, _handle) = start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;
-    let wallet_conf: WalletConfig = PersistedConfig::read(&working_dir.join(SUI_WALLET_CONFIG))?;
-    let http_client = HttpClientBuilder::default().build(format!("http://{}", server_addr))?;
-    let address = wallet_conf.accounts.first().unwrap();
+    let test_network = setup_test_network().await?;
+    let http_client = test_network.http_client;
+    let address = test_network.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
     let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
     let objects = result
@@ -122,7 +110,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         .publish(*address, compiled_modules, gas.0, 10000)
         .await?;
 
-    let keystore = SuiKeystore::load_or_create(&working_dir.join("wallet.key"))?;
+    let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;
     let signature = keystore.sign(address, &tx_data.tx_bytes)?;
 
     let tx_response: TransactionResponse = http_client
@@ -136,13 +124,9 @@ async fn test_publish() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_move_call() -> Result<(), anyhow::Error> {
-    let temp_dir = tempfile::tempdir()?;
-    let working_dir = temp_dir.path();
-    let _network = start_test_network(working_dir, None).await?;
-    let (server_addr, _handle) = start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;
-    let wallet_conf: WalletConfig = PersistedConfig::read(&working_dir.join(SUI_WALLET_CONFIG))?;
-    let http_client = HttpClientBuilder::default().build(format!("http://{}", server_addr))?;
-    let address = wallet_conf.accounts.first().unwrap();
+    let test_network = setup_test_network().await?;
+    let http_client = test_network.http_client;
+    let address = test_network.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
     let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
     let objects = result
@@ -189,7 +173,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let keystore = SuiKeystore::load_or_create(&working_dir.join("wallet.key"))?;
+    let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;
     let signature = keystore.sign(address, &tx_data.tx_bytes)?;
 
     let tx_response: TransactionResponse = http_client
@@ -201,7 +185,31 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-pub async fn start_rpc_gateway(
+async fn setup_test_network() -> Result<TestNetwork, anyhow::Error> {
+    let working_dir = tempfile::tempdir()?.path().to_path_buf();
+    let _network = start_test_network(&working_dir, None).await?;
+    let (server_addr, rpc_server_handle) =
+        start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;
+    let wallet_conf: WalletConfig = PersistedConfig::read(&working_dir.join(SUI_WALLET_CONFIG))?;
+    let http_client = HttpClientBuilder::default().build(format!("http://{}", server_addr))?;
+    Ok(TestNetwork {
+        _network,
+        _rpc_server: rpc_server_handle,
+        accounts: wallet_conf.accounts,
+        http_client,
+        working_dir,
+    })
+}
+
+struct TestNetwork {
+    _network: SuiNetwork,
+    _rpc_server: HttpServerHandle,
+    accounts: Vec<SuiAddress>,
+    http_client: HttpClient,
+    working_dir: PathBuf,
+}
+
+async fn start_rpc_gateway(
     config_path: &Path,
 ) -> Result<(SocketAddr, HttpServerHandle), anyhow::Error> {
     let server = HttpServerBuilder::default().build("127.0.0.1:0").await?;
