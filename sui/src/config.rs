@@ -18,13 +18,13 @@ use serde_with::hex::Hex;
 use serde_with::serde_as;
 use tracing::log::trace;
 
+use crate::gateway::GatewayType;
+use crate::keystore::KeystoreType;
+use std::net::SocketAddr;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_network::network::PortAllocator;
 use sui_types::base_types::*;
 use sui_types::crypto::{get_key_pair, KeyPair};
-
-use crate::gateway::GatewayType;
-use crate::keystore::KeystoreType;
 
 const DEFAULT_WEIGHT: usize = 1;
 const DEFAULT_GAS_AMOUNT: u64 = 100000;
@@ -49,6 +49,7 @@ pub struct AuthorityPrivateInfo {
     pub port: u16,
     pub db_path: PathBuf,
     pub stake: usize,
+    pub consensus_address: SocketAddr,
 }
 
 // Custom deserializer with optional default fields
@@ -91,6 +92,16 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
         } else {
             DEFAULT_WEIGHT
         };
+        let consensus_address = if let Some(val) = json.get("consensus_address") {
+            SocketAddr::deserialize(val).map_err(serde::de::Error::custom)?
+        } else {
+            let port = PORT_ALLOCATOR
+                .lock()
+                .map_err(serde::de::Error::custom)?
+                .next_port()
+                .ok_or_else(|| serde::de::Error::custom("No available port."))?;
+            format!("127.0.0.1:{port}").parse().unwrap()
+        };
 
         Ok(AuthorityPrivateInfo {
             key_pair,
@@ -98,6 +109,7 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
             port,
             db_path,
             stake,
+            consensus_address,
         })
     }
 }

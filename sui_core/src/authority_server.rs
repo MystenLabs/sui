@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
-
+use futures::{SinkExt, StreamExt};
 use std::collections::VecDeque;
+use std::net::SocketAddr;
 use std::{io, sync::Arc};
 use sui_network::{
     network::NetworkServer,
@@ -13,13 +14,12 @@ use sui_network::{
 use sui_types::{
     batch::UpdateItem, crypto::VerificationObligation, error::*, messages::*, serialize::*,
 };
-
-use futures::{SinkExt, StreamExt};
+use tokio::sync::mpsc::Sender;
 
 use std::time::Duration;
 use tracing::{error, info, warn, Instrument};
 
-use crate::consensus_adapter::ConsensusSubmitter;
+use crate::consensus_adapter::{ConsensusInput, ConsensusSubmitter};
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use tokio::sync::broadcast::error::RecvError;
@@ -41,9 +41,7 @@ const MAX_DELAY_MILLIS: u64 = 5_000; // 5 sec
 pub struct AuthorityServer {
     server: NetworkServer,
     pub state: AuthorityState,
-    // TODO [issue #1450]: Consensus adapter won't be optional and will be spawn by
-    // the top-level SuiCommand module.
-    consensus_submitter: Option<ConsensusSubmitter>,
+    consensus_submitter: ConsensusSubmitter,
 }
 
 impl AuthorityServer {
@@ -52,8 +50,15 @@ impl AuthorityServer {
         base_port: u16,
         buffer_size: usize,
         state: AuthorityState,
-        consensus_submitter: Option<ConsensusSubmitter>,
+        consensus_address: SocketAddr,
+        tx_consensus_listener: Sender<ConsensusInput>,
     ) -> Self {
+        let consensus_submitter = ConsensusSubmitter::new(
+            consensus_address,
+            buffer_size,
+            state.committee.clone(),
+            tx_consensus_listener,
+        );
         Self {
             server: NetworkServer::new(base_address, base_port, buffer_size),
             state,
@@ -244,26 +249,17 @@ impl AuthorityServer {
                 .await
                 .map(|_| None),
             SerializedMessage::ConsensusTransaction(message) => {
-                match self.consensus_submitter.as_ref() {
-                    Some(submitter) => match submitter.submit(&message).await {
-                        Ok(()) => match *message {
-                            ConsensusTransaction::UserTransaction(certificate) => {
-                                let confirmation_transaction =
-                                    ConfirmationTransaction { certificate };
-                                self.state
-                                    .handle_confirmation_transaction(confirmation_transaction)
-                                    .await
-                                    .map(|info| Some(serialize_transaction_info(&info)))
-                            }
-                        },
-                        Err(e) => Err(e),
+                match self.consensus_submitter.submit(&message).await {
+                    Ok(()) => match *message {
+                        ConsensusTransaction::UserTransaction(certificate) => {
+                            let confirmation_transaction = ConfirmationTransaction { certificate };
+                            self.state
+                                .handle_confirmation_transaction(confirmation_transaction)
+                                .await
+                                .map(|info| Some(serialize_transaction_info(&info)))
+                        }
                     },
-                    None => {
-                        // TODO [issue #1450]: Consensus adapter won't be optional and will be spawn by
-                        // the top-level SuiCommand module.
-                        tracing::warn!("Shared object not supported yet!");
-                        Err(SuiError::UnexpectedMessage)
-                    }
+                    Err(e) => Err(e),
                 }
             }
 

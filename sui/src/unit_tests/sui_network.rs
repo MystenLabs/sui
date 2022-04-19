@@ -30,6 +30,7 @@ pub async fn start_test_network(
             port: 0,
             db_path: info.db_path.clone(),
             stake: info.stake,
+            consensus_address: info.consensus_address,
         })
         .collect();
     genesis_config.authorities = authorities;
