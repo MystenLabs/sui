@@ -8,6 +8,7 @@ use sui::gateway::{GatewayConfig, GatewayType};
 use sui::keystore::KeystoreType;
 use sui::sui_commands::{genesis, SuiNetwork};
 use sui::{SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
+use sui_types::base_types::SuiAddress;
 
 pub async fn start_test_network(
     working_dir: &Path,
@@ -30,6 +31,7 @@ pub async fn start_test_network(
             port: 0,
             db_path: info.db_path.clone(),
             stake: info.stake,
+            address: SuiAddress::from(info.key_pair.public_key_bytes()),
         })
         .collect();
     genesis_config.authorities = authorities;
