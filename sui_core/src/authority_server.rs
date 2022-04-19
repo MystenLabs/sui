@@ -41,6 +41,8 @@ const MAX_DELAY_MILLIS: u64 = 5_000; // 5 sec
 pub struct AuthorityServer {
     server: NetworkServer,
     pub state: AuthorityState,
+    // TODO [issue #1450]: Consensus adapter won't be optional and will be spawn by
+    // the top-level SuiCommand module.
     consensus_submitter: Option<ConsensusSubmitter>,
 }
 
@@ -244,18 +246,21 @@ impl AuthorityServer {
             SerializedMessage::ConsensusTransaction(message) => {
                 match self.consensus_submitter.as_ref() {
                     Some(submitter) => match submitter.submit(&message).await {
-                        Ok(()) => {
-                            let confirmation_transaction = ConfirmationTransaction {
-                                certificate: message.as_ref().clone(),
-                            };
-                            self.state
-                                .handle_confirmation_transaction(confirmation_transaction)
-                                .await
-                                .map(|info| Some(serialize_transaction_info(&info)))
-                        }
+                        Ok(()) => match *message {
+                            ConsensusTransaction::UserTransaction(certificate) => {
+                                let confirmation_transaction =
+                                    ConfirmationTransaction { certificate };
+                                self.state
+                                    .handle_confirmation_transaction(confirmation_transaction)
+                                    .await
+                                    .map(|info| Some(serialize_transaction_info(&info)))
+                            }
+                        },
                         Err(e) => Err(e),
                     },
                     None => {
+                        // TODO [issue #1450]: Consensus adapter won't be optional and will be spawn by
+                        // the top-level SuiCommand module.
                         tracing::warn!("Shared object not supported yet!");
                         Err(SuiError::UnexpectedMessage)
                     }

@@ -9,7 +9,7 @@ use sui_network::transport;
 use sui_network::transport::{RwChannel, TcpDataStream};
 use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::CertifiedTransaction;
+use sui_types::messages::ConsensusTransaction;
 use sui_types::serialize::serialize_consensus_transaction;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::oneshot;
@@ -138,15 +138,15 @@ impl ConsensusSubmitter {
     }
 
     /// Submit a transaction to consensus, wait for its processing, and notify the caller.
-    pub async fn submit(&self, certificate: &CertifiedTransaction) -> SuiResult<()> {
+    pub async fn submit(&self, certificate: &ConsensusTransaction) -> SuiResult<()> {
         // Check the Sui certificate (submitted by the user).
         certificate.check(&self.committee)?;
 
         // Send certificate to consensus
         let serialized = serialize_consensus_transaction(certificate);
         let bytes = Bytes::from(serialized.clone());
-        // TODO: We are re-creating a connection every time. This is wasteful but does not require
-        // to take self as a mutable reference.
+        // TODO [issue #1452]: We are re-creating a connection every time. This is wasteful but does not
+        // require to take self as a mutable reference.
         Self::reconnect(self.consensus_address.clone(), self.buffer_size)
             .await?
             .sink()

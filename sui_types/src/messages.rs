@@ -1223,3 +1223,17 @@ pub struct ConsensusOutput {
 pub struct ConsensusSync {
     pub sequence_number: SequenceNumber,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum ConsensusTransaction {
+    UserTransaction(CertifiedTransaction),
+    // NOTE: Other data types (e.g., for reconfiguration) go here
+}
+
+impl ConsensusTransaction {
+    pub fn check(&self, committee: &Committee) -> SuiResult<()> {
+        match self {
+            Self::UserTransaction(certificate) => certificate.check(committee),
+        }
+    }
+}

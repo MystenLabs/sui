@@ -28,7 +28,7 @@ pub enum SerializedMessage {
     BatchInfoResp(Box<BatchInfoResponseItem>),
     ConsensusOutput(Box<ConsensusOutput>),
     ConsensusSync(Box<ConsensusSync>),
-    ConsensusTransaction(Box<CertifiedTransaction>),
+    ConsensusTransaction(Box<ConsensusTransaction>),
 }
 
 // This helper structure is only here to avoid cloning while serializing commands.
@@ -51,7 +51,7 @@ enum ShallowSerializedMessage<'a> {
     BatchInfoResp(&'a BatchInfoResponseItem),
     ConsensusOutput(&'a ConsensusOutput),
     ConsensusSync(&'a ConsensusSync),
-    ConsensusTransaction(&'a CertifiedTransaction),
+    ConsensusTransaction(&'a ConsensusTransaction),
 }
 
 fn serialize_into<T, W>(writer: W, msg: &T) -> Result<(), anyhow::Error>
@@ -158,7 +158,7 @@ where
     serialize_into(writer, &ShallowSerializedMessage::TransactionResp(value))
 }
 
-pub fn serialize_consensus_transaction(value: &CertifiedTransaction) -> Vec<u8> {
+pub fn serialize_consensus_transaction(value: &ConsensusTransaction) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::ConsensusTransaction(value))
 }
 

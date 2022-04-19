@@ -132,6 +132,12 @@ ConsensusSync:
   STRUCT:
     - sequence_number:
         TYPENAME: SequenceNumber
+ConsensusTransaction:
+  ENUM:
+    0:
+      UserTransaction:
+        NEWTYPE:
+          TYPENAME: CertifiedTransaction
 Data:
   ENUM:
     0:
@@ -402,7 +408,7 @@ SerializedMessage:
     14:
       ConsensusTransaction:
         NEWTYPE:
-          TYPENAME: CertifiedTransaction
+          TYPENAME: ConsensusTransaction
 Signature:
   NEWTYPESTRUCT: BYTES
 SignedBatch:
