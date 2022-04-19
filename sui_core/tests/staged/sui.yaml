@@ -676,11 +676,16 @@ SuiError:
     72:
       TransactionLockReset: UNIT
     73:
+      TransactionNotFound:
+        STRUCT:
+          - digest:
+              TYPENAME: TransactionDigest
+    74:
       ObjectNotFound:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
-    74:
+    75:
       ObjectDeleted:
         STRUCT:
           - object_ref:
@@ -688,26 +693,26 @@ SuiError:
                 - TYPENAME: ObjectID
                 - TYPENAME: SequenceNumber
                 - TYPENAME: ObjectDigest
-    75:
+    76:
       BadObjectType:
         STRUCT:
           - error: STR
-    76:
-      MoveExecutionFailure: UNIT
     77:
-      ObjectInputArityViolation: UNIT
+      MoveExecutionFailure: UNIT
     78:
-      ExecutionInvariantViolation: UNIT
+      ObjectInputArityViolation: UNIT
     79:
-      AuthorityInformationUnavailable: UNIT
+      ExecutionInvariantViolation: UNIT
     80:
-      AuthorityUpdateFailure: UNIT
+      AuthorityInformationUnavailable: UNIT
     81:
+      AuthorityUpdateFailure: UNIT
+    82:
       ByzantineAuthoritySuspicion:
         STRUCT:
           - authority:
               TYPENAME: PublicKeyBytes
-    82:
+    83:
       PairwiseSyncFailed:
         STRUCT:
           - xsource:
@@ -718,31 +723,31 @@ SuiError:
               TYPENAME: TransactionDigest
           - error:
               TYPENAME: SuiError
-    83:
+    84:
       StorageError:
         NEWTYPE:
           TYPENAME: TypedStoreError
-    84:
-      BatchErrorSender: UNIT
     85:
+      BatchErrorSender: UNIT
+    86:
       GenericAuthorityError:
         STRUCT:
           - error: STR
-    86:
+    87:
       QuorumNotReached:
         STRUCT:
           - errors:
               SEQ:
                 TYPENAME: SuiError
-    87:
+    88:
       ObjectSerializationError:
         STRUCT:
           - error: STR
-    88:
-      ConcurrentTransactionError: UNIT
     89:
-      IncorrectRecipientError: UNIT
+      ConcurrentTransactionError: UNIT
     90:
+      IncorrectRecipientError: UNIT
+    91:
       TooManyIncorrectAuthorities:
         STRUCT:
           - errors:
@@ -750,15 +755,15 @@ SuiError:
                 TUPLE:
                   - TYPENAME: PublicKeyBytes
                   - TYPENAME: SuiError
-    91:
+    92:
       InconsistentGatewayResult:
         STRUCT:
           - error: STR
-    92:
+    93:
       GatewayInvalidTxRangeQuery:
         STRUCT:
           - error: STR
-    93:
+    94:
       OnlyOneConsensusClientPermitted: UNIT
 TransactionData:
   STRUCT:

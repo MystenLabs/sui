@@ -20,7 +20,7 @@ toml = "0.5.8"
 strum = "0.24.0"
 strum_macros = "0.24.0"
 num_cpus = "1.13.1"
-base64 = "0.13.0"
+base64ct = { version = "1.5.0", features = ["alloc"] }
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 rocksdb = "0.18.0"
 hex = "0.4.3"
