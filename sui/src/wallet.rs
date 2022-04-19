@@ -64,10 +64,9 @@ async fn main() -> Result<(), anyhow::Error> {
         .clone()
         .unwrap_or(sui_config_dir()?.join(SUI_WALLET_CONFIG));
 
-
     let mut context = WalletContext::new(&wallet_conf_path)
-        .context(format!("Unable to open wallet. Are you in a sui directory? (hint: run 'sui genesis' in this directory)"))?;
-    
+        .context("Unable to open wallet. Are you in a sui directory? (hint: run 'sui genesis' in this directory)".to_string())?;
+
     // Sync all accounts on start up.
     for address in context.config.accounts.clone() {
         WalletCommands::SyncClientState {
