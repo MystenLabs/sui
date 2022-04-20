@@ -17,7 +17,7 @@ runs:
     with:
       filters: |
         isRust:
-          - '!(explorer|doc|.github)/**'
+          - '!(explorer|doc|.github|sdk)/**'
           - '.github/workflows/bench.yml'
           - '.github/workflows/codecov.yml'
           - '.github/workflows/rust.yml'
