@@ -5,7 +5,6 @@
 module NFTs::DiscountCouponTests {
     use NFTs::DiscountCoupon::{Self, DiscountCoupon};
     use Sui::Coin::{Self, Coin};
-    use Sui::NFT::{Self, NFT};
     use Sui::SUI::SUI;
     use Sui::TestScenario::Self;
     use Sui::TxContext::TxContext;
@@ -41,9 +40,9 @@ module NFTs::DiscountCouponTests {
 
         TestScenario::next_tx(scenario, &USER1_ADDRESS);
         {
-            assert!(TestScenario::can_take_object<NFT<DiscountCoupon>>(scenario), 0);
-            let nft_coupon = TestScenario::take_object<NFT<DiscountCoupon>>(scenario); // if can remove, object exists
-            assert!(DiscountCoupon::issuer(NFT::data(&nft_coupon)) == ISSUER_ADDRESS, 0);
+            assert!(TestScenario::can_take_object<DiscountCoupon>(scenario), 0);
+            let nft_coupon = TestScenario::take_object<DiscountCoupon>(scenario); // if can remove, object exists
+            assert!(DiscountCoupon::issuer(&nft_coupon) == ISSUER_ADDRESS, 0);
             TestScenario::return_object(scenario, nft_coupon);
         }
     }

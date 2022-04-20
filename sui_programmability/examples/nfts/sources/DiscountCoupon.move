@@ -3,8 +3,8 @@
 
 module NFTs::DiscountCoupon {
     use Sui::Coin;
-    use Sui::NFT::{Self, NFT};
-    use Sui::SUI::SUI;
+    use Sui::ID::{Self, VersionedID};
+    use Sui::SUI::{Self, SUI};
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
 
@@ -15,7 +15,8 @@ module NFTs::DiscountCoupon {
     const EOUT_OF_RANGE_DISCOUNT: u64 = 1;
 
     /// Discount coupon NFT.
-    struct DiscountCoupon has store {
+    struct DiscountCoupon has key, store {
+        id: VersionedID,
         // coupon issuer
         issuer: address,
         // percentage discount [1-100]
@@ -38,27 +39,27 @@ module NFTs::DiscountCoupon {
         ctx: &mut TxContext,
     ) {
         assert!(discount > 0 && discount <= 100, EOUT_OF_RANGE_DISCOUNT);
-        let nft = NFT::mint(
-                DiscountCoupon {
-                    issuer: TxContext::sender(ctx),
-                    discount,
-                    expiration,
-                },
-                ctx);
-        Transfer::transfer(nft, recipient);
-        Sui::SUI::transfer(coin, recipient, ctx);
+        let coupon = DiscountCoupon {
+            id: TxContext::new_id(ctx),
+            issuer: TxContext::sender(ctx),
+            discount,
+            expiration,
+        };
+        Transfer::transfer(coupon, recipient);
+        SUI::transfer(coin, recipient, ctx);
     }
 
     /// Burn DiscountCoupon.
-    public(script) fun burn(nft: NFT<DiscountCoupon>, _ctx: &mut TxContext) {
-        let DiscountCoupon { issuer: _, discount: _, expiration: _ } = NFT::burn(nft);
+    public(script) fun burn(nft: DiscountCoupon, _ctx: &mut TxContext) {
+        let DiscountCoupon { id, issuer: _, discount: _, expiration: _ } = nft;
+        ID::delete(id);
     }
 
     /// Transfer DiscountCoupon to issuer only.
     //  TODO: Consider adding more valid recipients.
     //      If we stick with issuer-as-receiver only, then `recipient` input won't be required).
-    public(script) fun transfer(nft: NFT<DiscountCoupon>, recipient: address, _ctx: &mut TxContext) {
-        assert!(NFT::data(&nft).issuer == recipient, EWRONG_RECIPIENT);
-        NFT::transfer(nft, recipient)
+    public(script) fun transfer(coupon: DiscountCoupon, recipient: address, _ctx: &mut TxContext) {
+        assert!(&coupon.issuer == &recipient, EWRONG_RECIPIENT);
+        Transfer::transfer(coupon, recipient);
     }
 }
