@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module NFTs::Num {
-    use Sui::ID::VersionedID;
-    use Sui::NFT::{Self, NFT};
+    use Sui::ID::{Self, VersionedID};
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
 
     /// Very silly NFT: a natural number!
-    struct Num has store {
+    struct Num has key, store {
+        id: VersionedID,
         n: u64
     }
 
@@ -39,12 +39,12 @@ module NFTs::Num {
     }
 
     /// Create a new `Num` NFT. Aborts if `MAX_SUPPLY` NFT's have already been issued
-    public fun mint(cap: &mut NumIssuerCap, ctx: &mut TxContext): NFT<Num> {
+    public fun mint(cap: &mut NumIssuerCap, ctx: &mut TxContext): Num {
         let n = cap.issued_counter;
         cap.issued_counter = n + 1;
         cap.supply = cap.supply + 1;
         assert!(n <= MAX_SUPPLY, ETOO_MANY_NUMS);
-        NFT::mint(Num { n }, ctx)
+        Num { id: TxContext::new_id(ctx), n }
     }
 
     /// Burn `nft`. This reduces the supply.
@@ -52,8 +52,9 @@ module NFTs::Num {
     /// no Num with the value 7 can exist again! But if the supply
     /// is maxed out, burning will allow us to mint new Num's with
     /// higher values.
-    public fun burn(cap: &mut NumIssuerCap, nft: NFT<Num>) {
-        let Num { n: _ } = NFT::burn(nft);
+    public fun burn(cap: &mut NumIssuerCap, nft: Num) {
+        let Num { id, n: _ } = nft;
         cap.supply = cap.supply - 1;
+        ID::delete(id);
     }
 }
