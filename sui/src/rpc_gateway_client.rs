@@ -13,7 +13,7 @@ use move_core_types::language_storage::TypeTag;
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
-use sui_types::messages::{Transaction, TransactionData};
+use sui_types::messages::{CertifiedTransaction, Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 use tokio::runtime::Handle;
 
@@ -192,5 +192,12 @@ impl GatewayAPI for RpcGatewayClient {
         Ok(futures::executor::block_on(
             self.client.get_recent_transactions(count),
         )?)
+    }
+
+    async fn get_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<CertifiedTransaction, Error> {
+        Ok(self.client.get_transaction(digest).await?)
     }
 }

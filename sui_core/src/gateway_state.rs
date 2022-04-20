@@ -2,16 +2,19 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::transaction_input_checker;
-use crate::{
-    authority::GatewayStore, authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI,
-};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::path::PathBuf;
+use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
+use std::time::Duration;
+
+use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::future;
-
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
+use tracing::{error, Instrument};
+
 use sui_types::gas::{self, SuiGasStatus};
 use sui_types::{
     base_types::*,
@@ -23,14 +26,12 @@ use sui_types::{
     object::{Object, ObjectRead},
     SUI_FRAMEWORK_ADDRESS,
 };
-use tracing::{error, Instrument};
 
-use std::path::PathBuf;
-
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::sync::atomic::AtomicU64;
-use std::sync::Arc;
-use std::time::Duration;
+use crate::transaction_input_checker;
+use crate::{
+    authority::GatewayStore, authority_aggregator::AuthorityAggregator,
+    authority_client::AuthorityAPI,
+};
 
 use self::gateway_responses::*;
 
@@ -197,6 +198,12 @@ pub trait GatewayAPI {
         &self,
         count: u64,
     ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error>;
+
+    // return transaction details by digest
+    async fn get_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<CertifiedTransaction, anyhow::Error>;
 }
 
 impl<A> GatewayState<A>
@@ -790,5 +797,16 @@ where
         let end = self.get_total_transaction_number()?;
         let start = if end >= count { end - count } else { 0 };
         self.get_transactions_in_range(start, end)
+    }
+
+    async fn get_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<CertifiedTransaction, anyhow::Error> {
+        let opt = self.store.get_certified_transaction(&digest)?;
+        match opt {
+            Some(t) => Ok(t),
+            None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
+        }
     }
 }

@@ -986,6 +986,14 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         Ok(transaction)
     }
 
+    pub fn get_certified_transaction(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<CertifiedTransaction>> {
+        let transaction = self.certificates.get(transaction_digest)?;
+        Ok(transaction)
+    }
+
     #[cfg(test)]
     /// Provide read access to the `schedule` table (useful for testing).
     pub fn get_schedule(&self, object_id: &ObjectID) -> SuiResult<Option<SequenceNumber>> {

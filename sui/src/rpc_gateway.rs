@@ -22,17 +22,18 @@ use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::crypto;
 use sui_types::crypto::SignableBytes;
-use sui_types::messages::{Transaction, TransactionData};
+use sui_types::messages::{CertifiedTransaction, Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 
 use crate::config::PersistedConfig;
 use crate::gateway::GatewayConfig;
+use crate::rest_gateway::responses::GetObjectInfoResponse;
 use crate::rest_gateway::responses::{NamedObjectRef, ObjectResponse};
 
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcGateway {
-    #[method(name = "getObjectInfo")]
-    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<ObjectRead>;
+    #[method(name = "getObjectTypedInfo")]
+    async fn get_object_typed_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse>;
 
     #[method(name = "transferCoin")]
     async fn transfer_coin(
@@ -115,6 +116,14 @@ pub trait RpcGateway {
         &self,
         count: u64,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
+
+    #[method(name = "getTransaction")]
+    async fn get_transaction(&self, digest: TransactionDigest) -> RpcResult<CertifiedTransaction>;
+
+    /// Low level API to get object info. Client Applications should prefer to use
+    /// `get_object_typed_info` instead.
+    #[method(name = "getObjectInfoRaw")]
+    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<ObjectRead>;
 }
 
 pub struct RpcGatewayImpl {
@@ -245,6 +254,15 @@ impl RpcGatewayServer for RpcGatewayImpl {
         Ok(self.gateway.get_object_info(object_id).await?)
     }
 
+    async fn get_object_typed_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse> {
+        Ok(self
+            .gateway
+            .get_object_info(object_id)
+            .await?
+            .try_into()
+            .map_err(|e| anyhow!("{}", e))?)
+    }
+
     async fn execute_transaction(
         &self,
         signed_tx: SignedTransaction,
@@ -340,6 +358,10 @@ impl RpcGatewayServer for RpcGatewayImpl {
         count: u64,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
         Ok(self.gateway.get_recent_transactions(count)?)
+    }
+
+    async fn get_transaction(&self, digest: TransactionDigest) -> RpcResult<CertifiedTransaction> {
+        Ok(self.gateway.get_transaction(digest).await?)
     }
 }
 
