@@ -619,7 +619,7 @@ export class BCS {
      * @param name
      * @param variants
      */
-    public static registerEnumType(name: string, variants: { [key: string]: string }) {
+    public static registerEnumType(name: string, variants: { [key: string]: string|null }) {
         let struct = Object.freeze(variants); // Make sure the order doesn't get changed
 
         // IMPORTANT: enum is an ordered type and we have to preserve ordering in BCS
@@ -638,16 +638,29 @@ export class BCS {
                     throw new Error(`Unknown invariant of the enum ${name}, allowed values: ${canonicalOrder}`);
                 }
                 let invariant = canonicalOrder[orderByte];
+                let invariantType = struct[invariant];
 
                 writer.write8(orderByte); // write order byte
-                return BCS.getTypeInterface(struct[invariant])._encodeRaw(writer, data[key]);
+
+
+                // Allow empty Enum values!
+                return (invariantType !== null)
+                    ? BCS.getTypeInterface(invariantType)._encodeRaw(writer, data[key])
+                    : writer;
             },
             (reader) => {
                 let orderByte = reader.readULEB();
                 let invariant = canonicalOrder[orderByte];
+                let invariantType = struct[invariant];
+
+                if (orderByte === -1) {
+                    throw new Error(`Decoding type mismatch, expected enum ${name} invariant index, received ${orderByte}`);
+                }
 
                 return {
-                    [invariant]: BCS.getTypeInterface(struct[invariant])._decodeRaw(reader)
+                    [invariant]: invariantType !== null
+                        ? BCS.getTypeInterface(invariantType)._decodeRaw(reader)
+                        : true
                 };
             }
         );
