@@ -16,7 +16,7 @@ rand = "0.7.3"
 serde = { version = "1.0.136", features = ["derive"] }
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 serde-name = "0.2.0"
-sha3 = "0.9"
+sha3 = "0.9.1"
 thiserror = "1.0.30"
 hex = "0.4.3"
 serde_bytes = "0.11.5"
@@ -37,5 +37,3 @@ move-core-types = { git = "https://github.com/move-language/move", rev = "2e7c37
 move-disassembler = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
 move-ir-types = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
-
-sha2 = "0.10.2"
