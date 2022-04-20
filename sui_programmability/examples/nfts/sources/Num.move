@@ -29,7 +29,7 @@ module NFTs::Num {
     const ETOO_MANY_NUMS: u64 = 0;
 
     /// Create a unique issuer cap and give it to the transaction sender
-    public fun init(ctx: &mut TxContext) {
+    fun init(ctx: &mut TxContext) {
         let issuer_cap = NumIssuerCap {
             id: TxContext::new_id(ctx),
             supply: 0,
