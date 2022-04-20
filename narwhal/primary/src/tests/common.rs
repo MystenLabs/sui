@@ -309,7 +309,9 @@ pub fn create_db_stores() -> (
     )
 }
 
-// helper method to get a name and a committee
+// helper method to get a name and a committee. Special care should be given on
+// the base_port parameter to not collide between tests. It is advisable to
+// provide unique base_port numbers across the tests.
 pub fn resolve_name_and_committee(
     base_port: u16,
 ) -> (Ed25519PublicKey, Committee<Ed25519PublicKey>) {

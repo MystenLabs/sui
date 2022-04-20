@@ -129,7 +129,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let (_, certificate_store, _) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(13000);
+    let (name, committee) = resolve_name_and_committee(13001);
 
     let key = keys().pop().unwrap();
     let mut block_ids = Vec::new();
@@ -265,7 +265,7 @@ async fn test_one_pending_request_for_block_at_time() {
     let (_, certificate_store, _) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(13000);
+    let (name, committee) = resolve_name_and_committee(13002);
 
     // AND store certificate
     let header = common::fixture_header_with_payload(2);
@@ -333,7 +333,7 @@ async fn test_unlocking_pending_get_block_request_after_response() {
     let (_, certificate_store, _) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(13000);
+    let (name, committee) = resolve_name_and_committee(13003);
 
     // AND store certificate
     let header = common::fixture_header_with_payload(2);
@@ -392,7 +392,7 @@ async fn test_batch_timeout() {
     let (_, certificate_store, _) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(13000);
+    let (name, committee) = resolve_name_and_committee(13004);
 
     // AND store certificate
     let header = common::fixture_header_with_payload(2);
@@ -448,7 +448,7 @@ async fn test_batch_timeout() {
 async fn test_return_error_when_certificate_is_missing() {
     // GIVEN
     let (_, certificate_store, _) = create_db_stores();
-    let (name, committee) = resolve_name_and_committee(13000);
+    let (name, committee) = resolve_name_and_committee(13005);
 
     // AND create a certificate but don't store it
     let certificate = Certificate::<Ed25519PublicKey>::default();
