@@ -38,7 +38,7 @@ move-core-types = { git = "https://github.com/move-language/move", rev = "2e7c37
 move-disassembler = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
 move-ir-types = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", branch = "output-tx", package = "executor" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", branch = "output-tx", package = "crypto" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "3b8545531175241a803945af254ce78f3b1b3a6d", package = "executor" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "3b8545531175241a803945af254ce78f3b1b3a6d", package = "crypto" }
 
 sha2 = "0.10.2"

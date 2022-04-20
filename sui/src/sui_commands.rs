@@ -10,11 +10,11 @@ use crate::keystore::{Keystore, KeystoreType, SuiKeystore};
 use crate::{sui_config_dir, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use anyhow::{anyhow, bail};
 use clap::*;
-use consensus_config::{Committee as ConsensusCommittee, Parameters as ConsensusParameters};
-use consensus_crypto::ed25519::Ed25519PublicKey;
 use futures::future::join_all;
 use move_binary_format::CompiledModule;
 use move_package::BuildConfig;
+use narwhal_config::{Committee as ConsensusCommittee, Parameters as ConsensusParameters};
+use narwhal_crypto::ed25519::Ed25519PublicKey;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
@@ -465,8 +465,8 @@ async fn make_authority(
     // Spawn the consensus node of this authority.
     let consensus_keypair = authority.key_pair.make_narwhal_keypair();
     let consensus_name = consensus_keypair.name.clone();
-    let consensus_store = consensus_node::NodeStorage::reopen(consensus_store_path);
-    consensus_node::Node::spawn_primary(
+    let consensus_store = narwhal_node::NodeStorage::reopen(consensus_store_path);
+    narwhal_node::Node::spawn_primary(
         consensus_keypair,
         consensus_committee.clone(),
         &consensus_store,
@@ -476,7 +476,7 @@ async fn make_authority(
         /* tx_confirmation */ tx_consensus_to_sui,
     )
     .await?;
-    consensus_node::Node::spawn_workers(
+    narwhal_node::Node::spawn_workers(
         consensus_name,
         /* ids */ vec![0], // We run a single worker with id '0'.
         consensus_committee.clone(),

@@ -4,9 +4,9 @@
 
 use crate::gateway::GatewayType;
 use crate::keystore::KeystoreType;
-use consensus_config::Committee as ConsensusCommittee;
-use consensus_config::{Authority, PrimaryAddresses, Stake, WorkerAddresses};
-use consensus_crypto::ed25519::Ed25519PublicKey;
+use narwhal_config::Committee as ConsensusCommittee;
+use narwhal_config::{Authority, PrimaryAddresses, Stake, WorkerAddresses};
+use narwhal_crypto::ed25519::Ed25519PublicKey;
 use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
