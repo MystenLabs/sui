@@ -54,6 +54,10 @@ enum LockServiceQueries {
         object: ObjectRef,
         resp: oneshot::Sender<SuiLockResult>,
     },
+    CheckLocksExist {
+        objects: Vec<ObjectRef>,
+        resp: oneshot::Sender<SuiResult>,
+    },
 }
 
 /// Inner LockService implementation that does single threaded database accesses.  Cannot be
@@ -114,6 +118,18 @@ impl LockServiceImpl {
         self.transaction_lock
             .get(&object)
             .map_err(SuiError::StorageError)
+    }
+
+    /// Checks multiple object locks exist.
+    /// Returns Err(TransactionLockDoesNotExist) if at least one object lock is not initialized at least.
+    fn locks_exist(&self, objects: &[ObjectRef]) -> SuiResult {
+        let locks = self.transaction_lock.multi_get(objects)?;
+        let all_exists = locks.iter().all(|l| matches!(*l, Some(_x)));
+        if all_exists {
+            Ok(())
+        } else {
+            Err(SuiError::TransactionLockDoesNotExist)
+        }
     }
 
     /// Acquires a lock for a transaction on the given objects if they have all been initialized previously
@@ -245,6 +261,11 @@ impl LockServiceImpl {
                         info!("Could not respond to sender!");
                     }
                 }
+                LockServiceQueries::CheckLocksExist { objects, resp } => {
+                    if let Err(_e) = resp.send(self.locks_exist(&objects)) {
+                        info!("Could not respond to sender, sender dropped!");
+                    }
+                }
             }
         }
         info!("LockService queries loop stopped, the sender on other end hung up/dropped");
@@ -359,6 +380,22 @@ impl LockService {
             .await
             .expect("Response from lockservice was cancelled, should not happen!")
     }
+
+    /// Checks multiple object locks exist.
+    /// Returns Err(TransactionLockDoesNotExist) if at least one object lock is not initialized.
+    pub async fn locks_exist(&self, objects: Vec<ObjectRef>) -> SuiResult {
+        let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
+        self.query_sender
+            .send(LockServiceQueries::CheckLocksExist {
+                objects,
+                resp: os_sender,
+            })
+            .await
+            .expect("Could not send message to inner LockService");
+        os_receiver
+            .await
+            .expect("Response from lockservice was cancelled, should not happen!")
+    }
 }
 
 #[cfg(test)]
@@ -408,6 +445,7 @@ mod tests {
         // Initialize 2 locks
         ls.initialize_locks(&[ref1, ref2]).unwrap();
         assert_eq!(ls.get_lock(ref2), Ok(Some(None)));
+        assert_eq!(ls.locks_exist(&[ref1, ref2]), Ok(()));
 
         // Should not be able to acquire lock if not all objects initialized
         assert_eq!(
@@ -418,6 +456,13 @@ mod tests {
         // Should be able to acquire lock if all objects initialized
         ls.acquire_locks(&[ref1, ref2], tx1).unwrap();
         assert_eq!(ls.get_lock(ref2), Ok(Some(Some(tx1))));
+
+        // Should be able to check locks exist for ref1 and ref2, but not others
+        assert_eq!(ls.locks_exist(&[ref1, ref2]), Ok(()));
+        assert_eq!(
+            ls.locks_exist(&[ref2, ref3]),
+            Err(SuiError::TransactionLockDoesNotExist)
+        );
 
         // Should get TransactionLockExists if try to initialize already locked object
         assert!(matches!(
@@ -483,6 +528,7 @@ mod tests {
 
         let lock_state = ls.get_lock(ref1).await;
         assert_eq!(lock_state, Ok(Some(None)));
+        assert_eq!(ls.locks_exist(vec![ref1, ref2]).await, Ok(()));
 
         // only one party should be able to successfully acquire the lock.  Use diff tx for each one
         let futures = txdigests.iter().map(|tx| {
@@ -494,6 +540,8 @@ mod tests {
         let inner_res: Vec<_> = results.into_iter().map(|r| r.unwrap()).collect();
         let num_oks = inner_res.iter().filter(|r| r.is_ok()).count();
         assert_eq!(num_oks, 1);
+
+        assert_eq!(ls.locks_exist(vec![ref1, ref2]).await, Ok(()));
 
         // All other results should be ConflictingTransaction
         assert!(inner_res
