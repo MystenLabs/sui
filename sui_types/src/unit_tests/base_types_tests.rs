@@ -185,8 +185,8 @@ fn test_address_serde_not_human_readable() {
     let serialized = bincode::serialize(&address).unwrap();
     let bcs_serialized = bcs::to_bytes(&address).unwrap();
     // bincode use 8 bytes for BYTES len and bcs use 1 byte
-    assert_eq!(serialized[8..], bcs_serialized[1..]);
-    assert_eq!(address.0, serialized[8..]);
+    assert_eq!(serialized, bcs_serialized);
+    assert_eq!(address.0, serialized[..]);
     let deserialized: SuiAddress = bincode::deserialize(&serialized).unwrap();
     assert_eq!(deserialized, address);
 }
@@ -268,7 +268,7 @@ fn test_move_object_size_for_gas_metering() {
     // all the metadata data needed for serializing various types.
     // If the following assertion breaks, it's likely you have changed MoveObject's fields.
     // Make sure to adjust `object_size_for_gas_metering()` to include those changes.
-    assert_eq!(size + 16, serialized.len());
+    assert_eq!(size + 3, serialized.len());
 }
 
 #[test]

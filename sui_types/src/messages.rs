@@ -2,14 +2,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature, BcsSignable,
     EmptySignInfo, Signable, Signature, VerificationObligation,
 };
 use crate::gas::GasCostSummary;
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
-use crate::readable_serde::Base64OrDefault;
-use base64ct::{Base64, Encoding};
+use crate::readable_serde::encoding::Base64;
+use crate::readable_serde::Readable;
+use base64ct::Encoding;
 use itertools::Either;
 use move_binary_format::{access::ModuleAccess, CompiledModule};
 use move_core_types::{
@@ -21,15 +23,13 @@ use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
 use serde_with::serde_as;
+use serde_with::Bytes;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::{
     collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
 };
-
-use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
-
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
@@ -59,7 +59,7 @@ pub struct MoveCall {
 #[serde_as]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveModulePublish {
-    #[serde_as(as = "Vec<Base64OrDefault>")]
+    #[serde_as(as = "Vec<Readable<Base64, Bytes>>")]
     pub modules: Vec<Vec<u8>>,
 }
 
@@ -319,7 +319,7 @@ where
     }
 
     pub fn to_base64(&self) -> String {
-        Base64::encode_string(&self.to_bytes())
+        base64ct::Base64::encode_string(&self.to_bytes())
     }
 }
 
