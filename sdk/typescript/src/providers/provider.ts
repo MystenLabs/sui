@@ -43,6 +43,13 @@ export abstract class Provider {
   abstract getObjectInfo(objectId: string): Promise<GetObjectInfoResponse>;
 
   // Transactions
+
+  /**
+   * Get total number of transactions
+   * NOTE: this method may get deprecated after DevNet
+   */
+  abstract getTotalTransactionNumber(): Promise<number>;
+
   abstract executeTransaction(
     txn: SignedTransaction
   ): Promise<TransactionResponse>;

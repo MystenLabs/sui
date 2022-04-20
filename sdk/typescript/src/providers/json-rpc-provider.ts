@@ -9,7 +9,7 @@ import {
   GetObjectInfoResponse,
 } from './provider';
 import { JsonRpcClient } from '../rpc/client';
-import { array, type as pick } from 'superstruct';
+import { array, number, type as pick } from 'superstruct';
 
 export class JsonRpcProvider extends Provider {
   private client: JsonRpcClient;
@@ -58,6 +58,19 @@ export class JsonRpcProvider extends Provider {
     _txn: SignedTransaction
   ): Promise<TransactionResponse> {
     throw new Error('Method not implemented.');
+  }
+
+  async getTotalTransactionNumber(): Promise<number> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getTotalTransactionNumber',
+        [],
+        number()
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error fetching total transaction number: ${err}`);
+    }
   }
 
   // TODO: add more interface methods

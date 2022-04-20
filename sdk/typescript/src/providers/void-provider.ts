@@ -26,6 +26,10 @@ export class VoidProvider extends Provider {
     throw this.newError('executeTransaction');
   }
 
+  async getTotalTransactionNumber(): Promise<number> {
+    throw this.newError('getTotalTransactionNumber');
+  }
+
   private newError(operation: string): Error {
     return new Error(`Please use a valid provider for ${operation}`);
   }
