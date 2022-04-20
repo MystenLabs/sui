@@ -57,14 +57,14 @@ CallArg:
         NEWTYPE:
           SEQ: U8
     1:
-      Object:
+      ImmOrOwnedObject:
         NEWTYPE:
           TUPLE:
             - TYPENAME: ObjectID
             - TYPENAME: SequenceNumber
             - TYPENAME: ObjectDigest
     2:
-      MutSharedObject:
+      SharedObject:
         NEWTYPE:
           TYPENAME: ObjectID
 CertifiedTransaction:
