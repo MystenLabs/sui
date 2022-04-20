@@ -1,6 +1,5 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use crate::config::{make_default_narwhal_committee, CONSENSUS_DB_NAME};
 use crate::config::{
     AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
@@ -18,6 +17,7 @@ use narwhal_config::{Committee as ConsensusCommittee, Parameters as ConsensusPar
 use narwhal_crypto::ed25519::Ed25519PublicKey;
 use std::collections::BTreeMap;
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_adapter::adapter::generate_package_id;
@@ -441,7 +441,7 @@ pub async fn make_server(
     committee: &Committee,
     buffer_size: usize,
     consensus_committee: &ConsensusCommittee<Ed25519PublicKey>,
-    consensus_store_path: &PathBuf,
+    consensus_store_path: &Path,
     consensus_parameters: &ConsensusParameters,
 ) -> SuiResult<AuthorityServer> {
     let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
@@ -508,7 +508,7 @@ async fn make_authority(
     buffer_size: usize,
     state: AuthorityState,
     consensus_committee: &ConsensusCommittee<Ed25519PublicKey>,
-    consensus_store_path: &PathBuf,
+    consensus_store_path: &Path,
     consensus_parameters: &ConsensusParameters,
 ) -> SuiResult<AuthorityServer> {
     let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1_000);

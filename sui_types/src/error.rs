@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::*;
-use async_trait::async_trait;
 use move_binary_format::errors::{PartialVMError, VMError};
 use narwhal_executor::ExecutionStateError;
 use narwhal_executor::SubscriberError;
@@ -315,7 +314,6 @@ impl std::convert::From<SubscriberError> for SuiError {
     }
 }
 
-#[async_trait]
 impl ExecutionStateError for SuiError {
     fn node_error(&self) -> bool {
         matches!(
