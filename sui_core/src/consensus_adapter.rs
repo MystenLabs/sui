@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
 use futures::SinkExt;
+use narwhal_executor::SubscriberResult;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
@@ -29,7 +30,7 @@ type ConsensusTransactionDigest = u64;
 
 /// The message returned by the consensus to notify that a Sui certificate has been sequenced
 /// and all its shared objects are locked.
-type ConsensusOutput = (SuiResult<()>, SerializedConsensusTransaction);
+type ConsensusOutput = (SubscriberResult<()>, ConsensusTransactionDigest);
 
 /// Channel to notify the called when the Sui certificate has been sequenced.
 type Replier = oneshot::Sender<SuiResult<()>>;
@@ -84,12 +85,12 @@ impl ConsensusListener {
 
                 Some(output) = self.rx_consensus_output.recv() => {
                     // Notify the caller that the transaction has been sequenced.
-                    let (outcome, transaction) = output;
-                    let digest = Self::hash(&transaction);
-                    if let Some(repliers) = self.pending.get_mut(&digest) {
+                    let (result, transaction_digest) = output;
+                    let outcome = result.map_err(SuiError::from);
+                    if let Some(repliers) = self.pending.get_mut(&transaction_digest) {
                         if let Some(replier) = repliers.pop_front() {
                             if replier.send(outcome).is_err() {
-                                debug!("No replier to listen to consensus output {digest}");
+                                debug!("No replier to listen to consensus output {transaction_digest}");
                             }
                         }
                     }
@@ -100,7 +101,7 @@ impl ConsensusListener {
 
     /// Hash serialized consensus transactions. We do not need specific cryptographic properties except
     /// only collision resistance.
-    fn hash(serialized: &SerializedConsensusTransaction) -> ConsensusTransactionDigest {
+    pub fn hash(serialized: &SerializedConsensusTransaction) -> ConsensusTransactionDigest {
         let mut hasher = DefaultHasher::new();
         serialized.hash(&mut hasher);
         hasher.finish()

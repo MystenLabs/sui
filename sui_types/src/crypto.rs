@@ -1,19 +1,19 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use anyhow::Error;
-use base64ct::{Base64, Encoding};
-use std::borrow::Borrow;
-use std::collections::HashMap;
-
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::error::{SuiError, SuiResult};
 use crate::readable_serde::BytesOrBase64;
+use anyhow::Error;
+use base64ct::{Base64, Encoding};
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Digest, PublicKey, Verifier};
+use narwhal_crypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use sha3::Sha3_256;
+use std::borrow::Borrow;
+use std::collections::HashMap;
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
 #[derive(Debug)]
@@ -40,6 +40,15 @@ impl KeyPair {
                 public: dalek::PublicKey::from_bytes(self.public_key_bytes().as_ref()).unwrap(),
             },
             public_key_cell: OnceCell::new(),
+        }
+    }
+
+    /// Make a Narwhal-compatible key pair from a Sui keypair.
+    pub fn make_narwhal_keypair(&self) -> Ed25519KeyPair {
+        let key = self.copy();
+        Ed25519KeyPair {
+            name: Ed25519PublicKey(key.key_pair.public),
+            secret: Ed25519PrivateKey(key.key_pair.secret),
         }
     }
 }

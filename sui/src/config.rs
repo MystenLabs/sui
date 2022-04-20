@@ -2,34 +2,36 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::Write;
-use std::fmt::{Display, Formatter};
-use std::fs::{self, File};
-use std::io::BufReader;
-use std::ops::{Deref, DerefMut};
-use std::path::{Path, PathBuf};
-use std::sync::Mutex;
-
+use crate::gateway::GatewayType;
+use crate::keystore::KeystoreType;
+use consensus_config::Committee as ConsensusCommittee;
+use consensus_config::{Authority, PrimaryAddresses, Stake, WorkerAddresses};
+use consensus_crypto::ed25519::Ed25519PublicKey;
 use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::hex::Hex;
 use serde_with::serde_as;
-use tracing::log::trace;
-
-use crate::gateway::GatewayType;
-use crate::keystore::KeystoreType;
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
+use std::fs::{self, File};
+use std::io::BufReader;
 use std::net::SocketAddr;
+use std::ops::{Deref, DerefMut};
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_network::network::PortAllocator;
 use sui_types::base_types::*;
 use sui_types::crypto::{get_key_pair, KeyPair};
+use tracing::log::trace;
 
 const DEFAULT_WEIGHT: usize = 1;
 const DEFAULT_GAS_AMOUNT: u64 = 100000;
 pub const AUTHORITIES_DB_NAME: &str = "authorities_db";
 pub const DEFAULT_STARTING_PORT: u16 = 10000;
+pub const CONSENSUS_DB_NAME: &str = "consensus_db";
 
 static PORT_ALLOCATOR: Lazy<Mutex<PortAllocator>> =
     Lazy::new(|| Mutex::new(PortAllocator::new(DEFAULT_STARTING_PORT)));
@@ -313,4 +315,56 @@ impl<C> DerefMut for PersistedConfig<C> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
+}
+
+/// Make a default Narwhal-compatible committee.
+pub fn make_default_narwhal_committee(
+    authorities: &[AuthorityPrivateInfo],
+) -> Result<ConsensusCommittee<Ed25519PublicKey>, anyhow::Error> {
+    let mut ports = Vec::new();
+    for _ in authorities {
+        let mut authority_ports = Vec::new();
+        for _ in 0..5 {
+            let port = PORT_ALLOCATOR
+                .lock()
+                .map_err(|e| anyhow::anyhow!("{e}"))?
+                .next_port()
+                .ok_or_else(|| anyhow::anyhow!("No available ports"))?;
+            authority_ports.push(port);
+        }
+        ports.push(authority_ports);
+    }
+
+    Ok(ConsensusCommittee {
+        authorities: authorities
+            .iter()
+            .enumerate()
+            .map(|(i, x)| {
+                let name = x.key_pair.make_narwhal_keypair().name;
+
+                let primary = PrimaryAddresses {
+                    primary_to_primary: format!("127.0.0.1:{}", ports[i][0]).parse().unwrap(),
+                    worker_to_primary: format!("127.0.0.1:{}", ports[i][1]).parse().unwrap(),
+                };
+                let workers = [(
+                    /* worker_id */ 0,
+                    WorkerAddresses {
+                        primary_to_worker: format!("127.0.0.1:{}", ports[i][2]).parse().unwrap(),
+                        transactions: format!("127.0.0.1:{}", ports[i][3]).parse().unwrap(),
+                        worker_to_worker: format!("127.0.0.1:{}", ports[i][4]).parse().unwrap(),
+                    },
+                )]
+                .iter()
+                .cloned()
+                .collect();
+
+                let authority = Authority {
+                    stake: x.stake as Stake,
+                    primary,
+                    workers,
+                };
+                (name, authority)
+            })
+            .collect(),
+    })
 }

@@ -773,6 +773,9 @@ SuiError:
     94:
       ConsensusConnectionBroken:
         NEWTYPE: STR
+    95:
+      SharedObjectLockingFailure:
+        NEWTYPE: STR
 TransactionData:
   STRUCT:
     - kind:

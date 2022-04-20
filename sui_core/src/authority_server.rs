@@ -40,7 +40,7 @@ const MAX_DELAY_MILLIS: u64 = 5_000; // 5 sec
 
 pub struct AuthorityServer {
     server: NetworkServer,
-    pub state: AuthorityState,
+    pub state: Arc<AuthorityState>,
     consensus_submitter: ConsensusSubmitter,
 }
 
@@ -49,7 +49,7 @@ impl AuthorityServer {
         base_address: String,
         base_port: u16,
         buffer_size: usize,
-        state: AuthorityState,
+        state: Arc<AuthorityState>,
         consensus_address: SocketAddr,
         tx_consensus_listener: Sender<ConsensusInput>,
     ) -> Self {

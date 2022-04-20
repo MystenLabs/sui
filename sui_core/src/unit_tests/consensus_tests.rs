@@ -99,6 +99,7 @@ async fn listen_to_sequenced_transaction() {
 
     // Make a sample (serialized) consensus transaction.
     let transaction = vec![10u8, 11u8];
+    let transaction_digest = ConsensusListener::hash(&transaction);
 
     // Spawn a consensus listener.
     ConsensusListener::spawn(
@@ -116,7 +117,7 @@ async fn listen_to_sequenced_transaction() {
 
     // Notify the consensus listener that the transaction has been sequenced.
     tokio::task::yield_now().await;
-    let output = (Ok(()), transaction);
+    let output = (Ok(()), transaction_digest);
     tx_consensus_to_sui.send(output).await.unwrap();
 
     // Ensure the caller get notified from the consensus listener.
