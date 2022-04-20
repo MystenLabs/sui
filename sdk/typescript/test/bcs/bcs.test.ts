@@ -3,7 +3,6 @@
 
 import { BCS } from '../../src/bcs';
 import { Base64DataBuffer as B64 } from '../../src';
-// import { HexDataBuffer as HEX } from '../../src';
 import * as BN from 'bn.js';
 
 describe('Move BCS', () => {
@@ -133,16 +132,13 @@ describe('Move BCS', () => {
     it('should de/ser TransactionData::MoveCall', () => {
         registerSuiCoreTypes(BCS);
 
-        // Buffer size in this example is increased to 20KB
-        // See BCS.ser(type, data, [SIZE=1024]);
-
-        {
+        { // Test Move Call tx
             let sample = transactionData().move_call;
             let de = BCS.de('TransactionData', sample.getData());
-            expect(BCS.ser('TransactionData', de, 1024 * 20).toString('base64')).toEqual(sample.toString());
-            // console.log(JSON.stringify(de, null, 2));
-            // let de = BCS.de('TransactionData', transactionData().move_call.getData());
 
+            // Buffer size in this example is increased to 20KB
+            // @see BCS.ser(type, data, [SIZE=1024]);
+            expect(BCS.ser('TransactionData', de, 1024 * 20).toString('base64')).toEqual(sample.toString());
         };
     });
 });
