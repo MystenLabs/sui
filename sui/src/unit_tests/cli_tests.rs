@@ -16,7 +16,7 @@ use sui::config::{
     AccountConfig, Config, GenesisConfig, NetworkConfig, ObjectConfig, PersistedConfig,
     WalletConfig, AUTHORITIES_DB_NAME,
 };
-use sui::gateway::{GatewayConfig, GatewayType};
+use sui::gateway_config::{GatewayConfig, GatewayType};
 use sui::keystore::KeystoreType;
 use sui::sui_commands::SuiCommand;
 use sui::sui_json::SuiJsonValue;

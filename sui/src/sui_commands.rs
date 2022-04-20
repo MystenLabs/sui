@@ -4,7 +4,7 @@ use crate::config::{make_default_narwhal_committee, CONSENSUS_DB_NAME};
 use crate::config::{
     AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
 };
-use crate::gateway::{GatewayConfig, GatewayType};
+use crate::gateway_config::{GatewayConfig, GatewayType};
 use crate::keystore::{Keystore, KeystoreType, SuiKeystore};
 use crate::{sui_config_dir, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use anyhow::{anyhow, bail};

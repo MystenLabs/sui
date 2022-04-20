@@ -10,7 +10,7 @@ use anyhow::bail;
 
 pub mod benchmark;
 pub mod config;
-pub mod gateway;
+pub mod gateway_config;
 pub mod keystore;
 pub mod rest_gateway;
 pub mod rpc_gateway;
