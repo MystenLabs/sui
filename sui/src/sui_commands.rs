@@ -234,7 +234,7 @@ impl SuiNetwork {
 
         let mut spawned_authorities = Vec::new();
         for authority in &config.authorities {
-            let consensus_store_path = PathBuf::from(".")
+            let consensus_store_path = sui_config_dir()?
                 .join(CONSENSUS_DB_NAME)
                 .join(encode_bytes_hex(authority.key_pair.public_key_bytes()));
 
