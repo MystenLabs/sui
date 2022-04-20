@@ -1,0 +1,26 @@
+name: Detect Changes
+description: Defines variables indicating the parts of the code that changed
+outputs:
+  isRust:
+    description: True when changes happened to the rust code
+    value: "${{ steps.diff.outputs.isRust }}"
+  isExplorerClient:
+    description: True when there are changes to files related to explorer client
+    value: "${{ steps.diff.outputs.isExplorerClient }}"
+runs:
+  using: composite
+  steps:
+  - uses: actions/checkout@v3
+  - name: Detect Changes
+    uses: dorny/paths-filter@v2.10.2
+    id: diff
+    with:
+      filters: |
+        isRust:
+          - '!(explorer|doc|.github)/**'
+          - '.github/workflows/bench.yml'
+          - '.github/workflows/codecov.yml'
+          - '.github/workflows/rust.yml'
+        isExplorerClient:
+          - 'explorer/client/**'
+          - '.github/workflows/explorer-client-prs.yml'

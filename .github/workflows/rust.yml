@@ -34,21 +34,16 @@ jobs:
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Detect Changes
-      uses: dorny/paths-filter@v2.10.2
+      uses: './.github/actions/diffs'
       id: diff
-      with:
-        filters: |
-          isRust:
-            - '!(explorer|doc|.github)/**'
-            - '.github/workflows/rust.yml'
 
   license-check:
     name: license-check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - run: scripts/license_check.sh
 
   test:
@@ -58,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
       # Enable caching of the 'librocksdb-sys' crate by additionally caching the
       # 'librocksdb-sys' src directory which is managed by cargo
@@ -76,7 +71,7 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           components: clippy
@@ -94,7 +89,7 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           components: rustfmt
@@ -110,7 +105,7 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: EmbarkStudios/cargo-deny-action@v1
 
   cargo-udeps:
@@ -118,7 +113,7 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
       # Enable caching of the 'librocksdb-sys' crate by additionally caching the
       # 'librocksdb-sys' src directory which is managed by cargo
