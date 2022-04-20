@@ -26,11 +26,11 @@ where
 /// R : serde_as SerializeAs/DeserializeAs delegation
 ///
 /// # Example:
-/// ```
+///
 /// #[serde_as]
 /// #[derive(Deserialize, Serialize)]
 /// struct Example(#[serde_as(as = "Readable(Hex, _)")] [u8; 20]);
-/// ```
+///
 /// The above example will encode the byte array to Hex string for human-readable serializer
 /// and array tuple (default) for non-human-readable serializer.
 ///
