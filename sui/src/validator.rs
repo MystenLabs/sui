@@ -5,7 +5,9 @@ use anyhow::anyhow;
 use clap::*;
 use std::path::PathBuf;
 use sui::{
-    config::{GenesisConfig, PersistedConfig},
+    sui_config_dir,
+    SUI_NETWORK_CONFIG,
+    config::{GenesisConfig, NetworkConfig, PersistedConfig},
     sui_commands::{genesis, make_server},
 };
 use sui_types::base_types::{decode_bytes_hex, SuiAddress};
@@ -22,6 +24,11 @@ struct ValidatorOpt {
     /// The genesis config file location
     #[clap(long)]
     pub genesis_config_path: PathBuf,
+    #[clap(long, help = "If set, run genesis even if network.conf already exists")]
+    pub force_genesis: bool,
+
+    #[clap(long)]
+    pub network_config_path: Option<PathBuf>,
     /// Public key/address of the validator to start
     #[clap(long, parse(try_from_str = decode_bytes_hex))]
     address: SuiAddress,
@@ -41,10 +48,21 @@ async fn main() -> Result<(), anyhow::Error> {
     let guard = telemetry_subscribers::init(config);
 
     let cfg = ValidatorOpt::parse();
-    let genesis_conf: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
-    let address = cfg.address;
 
-    let (network_config, _, _) = genesis(genesis_conf).await?;
+    let network_config_path = sui_config_dir()?.join(SUI_NETWORK_CONFIG);
+
+    let network_config = match (network_config_path.exists(), cfg.force_genesis) {
+        (true, false) => PersistedConfig::<NetworkConfig>::read(&network_config_path)?,
+
+        // If network.conf is missing, or if --force-genesis is true, we run genesis.
+        _ => {
+            let genesis_conf: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
+            let (network_config, _, _) = genesis(genesis_conf).await?;
+            network_config
+        }
+    };
+
+    let address = cfg.address;
 
     // Find the network config for this validator
     let net_cfg = network_config
