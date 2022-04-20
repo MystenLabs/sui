@@ -36,30 +36,32 @@ impl<S> AuthorityTemporaryStore<S> {
     /// initial objects.
     pub fn new(
         package_store: Arc<S>,
-        input_objects: &[(InputObjectKind, Object)],
+        input_objects: Vec<(InputObjectKind, Object)>,
         tx_digest: TransactionDigest,
     ) -> Self {
+        let active_inputs = input_objects
+            .iter()
+            .filter_map(|(kind, object)| match kind {
+                InputObjectKind::MovePackage(_) => None,
+                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
+                    if object.is_immutable() {
+                        None
+                    } else {
+                        Some(*object_ref)
+                    }
+                }
+                InputObjectKind::SharedMoveObject(_) => Some(object.compute_object_reference()),
+            })
+            .collect();
+        let objects = input_objects
+            .iter()
+            .map(|(_, object)| (object.id(), object.clone()))
+            .collect();
         Self {
             package_store,
             tx_digest,
-            objects: input_objects
-                .iter()
-                .map(|(_, object)| (object.id(), object.clone()))
-                .collect(),
-            active_inputs: input_objects
-                .iter()
-                .filter_map(|(kind, object)| match kind {
-                    InputObjectKind::MovePackage(_) => None,
-                    InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
-                        if object.is_immutable() {
-                            None
-                        } else {
-                            Some(*object_ref)
-                        }
-                    }
-                    InputObjectKind::SharedMoveObject(_) => Some(object.compute_object_reference()),
-                })
-                .collect(),
+            objects,
+            active_inputs,
             written: BTreeMap::new(),
             deleted: BTreeMap::new(),
             events: Vec::new(),

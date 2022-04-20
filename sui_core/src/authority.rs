@@ -344,15 +344,15 @@ impl AuthorityState {
             "Read inputs for transaction from DB"
         );
 
-        let mut temporary_store = AuthorityTemporaryStore::new(
-            self._database.clone(),
-            &objects_by_kind,
-            transaction_digest,
-        );
         let transaction_dependencies = objects_by_kind
             .iter()
             .map(|(_, obj)| obj.previous_transaction)
             .collect();
+        let mut temporary_store = AuthorityTemporaryStore::new(
+            self._database.clone(),
+            objects_by_kind,
+            transaction_digest,
+        );
         let effects = execution_engine::execute_transaction_to_effects(
             &mut temporary_store,
             transaction.clone(),
@@ -681,7 +681,7 @@ impl AuthorityState {
 
         debug_assert!(ctx.digest() == TransactionDigest::genesis());
         let mut temporary_store =
-            AuthorityTemporaryStore::new(self._database.clone(), &filtered, ctx.digest());
+            AuthorityTemporaryStore::new(self._database.clone(), filtered, ctx.digest());
         let package_id = ObjectID::from(*modules[0].self_id().address());
         let natives = self._native_functions.clone();
         let mut gas_status = SuiGasStatus::new_unmetered();

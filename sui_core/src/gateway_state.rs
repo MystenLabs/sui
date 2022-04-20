@@ -331,7 +331,7 @@ where
             .download_objects_from_authorities(mutated_object_refs)
             .await?;
         self.store.update_gateway_state(
-            &objects_by_kind,
+            objects_by_kind,
             mutated_objects,
             new_certificate.clone(),
             effects.clone(),
