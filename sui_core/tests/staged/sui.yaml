@@ -208,13 +208,12 @@ MoveFieldLayout:
 MoveModulePublish:
   STRUCT:
     - modules:
-        SEQ:
-          SEQ: U8
+        SEQ: BYTES
 MoveObject:
   STRUCT:
     - type_:
         TYPENAME: StructTag
-    - contents: STR
+    - contents: BYTES
 MovePackage:
   STRUCT:
     - id:
@@ -435,7 +434,10 @@ StructTag:
         SEQ:
           TYPENAME: TypeTag
 SuiAddress:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 20
 SuiError:
   ENUM:
     0:
