@@ -68,6 +68,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     // Genesis
     SuiCommand::Genesis {
         working_dir: Some(working_dir.to_path_buf()),
+        write_config: None,
         force: false,
         from_config: None,
     }
@@ -107,6 +108,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     // Genesis 2nd time should fail
     let result = SuiCommand::Genesis {
         working_dir: Some(working_dir.to_path_buf()),
+        write_config: None,
         force: false,
         from_config: None,
     }

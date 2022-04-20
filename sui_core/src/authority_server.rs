@@ -77,6 +77,13 @@ impl AuthorityServer {
 
     pub async fn spawn(self) -> Result<SpawnedServer<AuthorityServer>, io::Error> {
         let address = format!("{}:{}", self.server.base_address, self.server.base_port);
+        self.spawn_with_bind_address(&address).await
+    }
+
+    pub async fn spawn_with_bind_address(
+        self,
+        address: &str,
+    ) -> Result<SpawnedServer<AuthorityServer>, io::Error> {
         let buffer_size = self.server.buffer_size;
         let guarded_state = Arc::new(self);
 
@@ -85,7 +92,7 @@ impl AuthorityServer {
             .spawn_batch_subsystem(MIN_BATCH_SIZE, Duration::from_millis(MAX_DELAY_MILLIS))
             .await;
 
-        spawn_server(&address, guarded_state, buffer_size).await
+        spawn_server(address, guarded_state, buffer_size).await
     }
 
     async fn handle_batch_streaming<'a, 'b, A>(
