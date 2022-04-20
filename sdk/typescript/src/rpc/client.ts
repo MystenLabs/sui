@@ -13,6 +13,7 @@ import {
   any,
   is,
 } from 'superstruct';
+import fetch from 'cross-fetch';
 
 /**
  * An object defining headers to be passed to the RPC server
