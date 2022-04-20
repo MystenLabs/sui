@@ -1,7 +1,7 @@
 ## Chapter 3: Immutable Objects
 In chapters 1 and 2, we learned how to create and use objects owned by an account address. In this chapter, we will demonstrate how to create and use immutable objects.
 
-Objects in Sui can have different types of [ownership](../objects.md#object-ownership), with two broad categories: owned objects and shared objects. And there are two types of shared objects: shared immutable and shared mutable. A shared immutable object is an object that can **never** be mutated, transferred or deleted. Because of this immutability, the object is not owned by anyone, and hence it can be used by anyone (thus shared). We will call this type of object an "*immutable object*" for short. In a latter chapter, we discuss shared mutable objects, which is what we call *shared objects* for short.
+Objects in Sui can have different types of [ownership](../objects.md#object-ownership), with two broad categories: immutable objects and mutable objects. An immutable object is an object that can **never** be mutated, transferred or deleted. Because of this immutability, the object is not owned by anyone, and hence it can be used by anyone.
 
 ### Create immutable object
 
