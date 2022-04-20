@@ -1,14 +1,23 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
+use crate::config::{make_default_narwhal_committee, CONSENSUS_DB_NAME};
+use crate::config::{
+    AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
+};
+use crate::gateway::{GatewayConfig, GatewayType};
+use crate::keystore::{Keystore, KeystoreType, SuiKeystore};
+use crate::{sui_config_dir, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use anyhow::{anyhow, bail};
 use base64ct::{Base64, Encoding};
 use clap::*;
 use futures::future::join_all;
 use move_binary_format::CompiledModule;
 use move_package::BuildConfig;
+use narwhal_config::{Committee as ConsensusCommittee, Parameters as ConsensusParameters};
+use narwhal_crypto::ed25519::Ed25519PublicKey;
 use std::collections::BTreeMap;
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_adapter::adapter::generate_package_id;
@@ -19,19 +28,13 @@ use sui_core::consensus_adapter::ConsensusListener;
 use sui_network::transport::SpawnedServer;
 use sui_network::transport::DEFAULT_MAX_DATAGRAM_SIZE;
 use sui_types::base_types::decode_bytes_hex;
+use sui_types::base_types::encode_bytes_hex;
 use sui_types::base_types::{SequenceNumber, SuiAddress, TxContext};
 use sui_types::committee::Committee;
 use sui_types::error::SuiResult;
 use sui_types::object::Object;
 use tokio::sync::mpsc::channel;
 use tracing::{error, info};
-
-use crate::config::{
-    AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
-};
-use crate::gateway::{GatewayConfig, GatewayType};
-use crate::keystore::{Keystore, KeystoreType, SuiKeystore};
-use crate::{sui_config_dir, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -78,6 +81,7 @@ impl SuiCommand {
     pub async fn execute(&self) -> Result<(), anyhow::Error> {
         match self {
             SuiCommand::Start { config } => {
+                // Load the config of the Sui authority.
                 let config_path = config
                     .clone()
                     .unwrap_or(sui_config_dir()?.join(SUI_NETWORK_CONFIG));
@@ -87,6 +91,8 @@ impl SuiCommand {
                         config_path
                     ))
                 })?;
+
+                // Start a sui validator (including its consensus node).
                 SuiNetwork::start(&config)
                     .await?
                     .wait_for_completion()
@@ -277,9 +283,24 @@ impl SuiNetwork {
                 .collect(),
         );
 
+        let consensus_committee = make_default_narwhal_committee(&config.authorities)?;
+        let consensus_parameters = ConsensusParameters::default();
+
         let mut spawned_authorities = Vec::new();
         for authority in &config.authorities {
-            let server = make_server(authority, &committee, config.buffer_size).await?;
+            let consensus_store_path = sui_config_dir()?
+                .join(CONSENSUS_DB_NAME)
+                .join(encode_bytes_hex(authority.key_pair.public_key_bytes()));
+
+            let server = make_server(
+                authority,
+                &committee,
+                config.buffer_size,
+                &consensus_committee,
+                &consensus_store_path,
+                &consensus_parameters,
+            )
+            .await?;
             spawned_authorities.push(server.spawn().await?);
         }
         info!("Started {} authorities", spawned_authorities.len());
@@ -325,7 +346,6 @@ pub async fn genesis(
         loaded_move_packages: vec![],
     };
     let mut voting_right = BTreeMap::new();
-
     for authority in genesis_conf.authorities {
         voting_right.insert(*authority.key_pair.public_key_bytes(), authority.stake);
         network_config.authorities.push(authority);
@@ -420,6 +440,9 @@ pub async fn make_server(
     authority: &AuthorityPrivateInfo,
     committee: &Committee,
     buffer_size: usize,
+    consensus_committee: &ConsensusCommittee<Ed25519PublicKey>,
+    consensus_store_path: &Path,
+    consensus_parameters: &ConsensusParameters,
 ) -> SuiResult<AuthorityServer> {
     let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
     let name = *authority.key_pair.public_key_bytes();
@@ -431,7 +454,15 @@ pub async fn make_server(
     )
     .await;
 
-    make_authority(authority, buffer_size, state).await
+    make_authority(
+        authority,
+        buffer_size,
+        state,
+        consensus_committee,
+        consensus_store_path,
+        consensus_parameters,
+    )
+    .await
 }
 
 async fn make_server_with_genesis_ctx(
@@ -459,7 +490,15 @@ async fn make_server_with_genesis_ctx(
         state.insert_genesis_object(object.clone()).await;
     }
 
-    make_authority(authority, buffer_size, state).await
+    let (tx_sui_to_consensus, _rx_sui_to_consensus) = channel(1);
+    Ok(AuthorityServer::new(
+        authority.host.clone(),
+        authority.port,
+        buffer_size,
+        Arc::new(state),
+        authority.consensus_address,
+        /* tx_consensus_listener */ tx_sui_to_consensus,
+    ))
 }
 
 /// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,
@@ -468,12 +507,36 @@ async fn make_authority(
     authority: &AuthorityPrivateInfo,
     buffer_size: usize,
     state: AuthorityState,
+    consensus_committee: &ConsensusCommittee<Ed25519PublicKey>,
+    consensus_store_path: &Path,
+    consensus_parameters: &ConsensusParameters,
 ) -> SuiResult<AuthorityServer> {
     let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1_000);
     let (tx_sui_to_consensus, rx_sui_to_consensus) = channel(1_000);
 
-    // TODO [issue #633]: Spawn the consensus node of this authority.
-    let _tx_consensus_to_sui = tx_consensus_to_sui;
+    let authority_state = Arc::new(state);
+
+    // Spawn the consensus node of this authority.
+    let consensus_keypair = authority.key_pair.make_narwhal_keypair();
+    let consensus_name = consensus_keypair.name.clone();
+    let consensus_store = narwhal_node::NodeStorage::reopen(consensus_store_path);
+    narwhal_node::Node::spawn_primary(
+        consensus_keypair,
+        consensus_committee.clone(),
+        &consensus_store,
+        consensus_parameters.clone(),
+        /* consensus */ true, // Indicate that we want to run consensus.
+        /* execution_state */ authority_state.clone(),
+        /* tx_confirmation */ tx_consensus_to_sui,
+    )
+    .await?;
+    narwhal_node::Node::spawn_workers(
+        consensus_name,
+        /* ids */ vec![0], // We run a single worker with id '0'.
+        consensus_committee.clone(),
+        &consensus_store,
+        consensus_parameters.clone(),
+    );
 
     // Spawn a consensus listener. It listen for consensus outputs and notifies the
     // authority server when a sequenced transaction is ready for execution.
@@ -484,7 +547,7 @@ async fn make_authority(
         authority.host.clone(),
         authority.port,
         buffer_size,
-        state,
+        authority_state,
         authority.consensus_address,
         /* tx_consensus_listener */ tx_sui_to_consensus,
     ))

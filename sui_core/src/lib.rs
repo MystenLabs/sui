@@ -8,7 +8,6 @@ pub mod authority_batch;
 pub mod authority_client;
 pub mod authority_server;
 pub mod consensus_adapter;
-pub mod consensus_client;
 pub mod execution_engine;
 pub mod gateway_state;
 pub mod safe_client;
