@@ -68,7 +68,9 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     // Genesis
     SuiCommand::Genesis {
         working_dir: Some(working_dir.to_path_buf()),
+        write_config: None,
         force: false,
+        from_config: None,
     }
     .execute()
     .await?;
@@ -106,7 +108,9 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     // Genesis 2nd time should fail
     let result = SuiCommand::Genesis {
         working_dir: Some(working_dir.to_path_buf()),
+        write_config: None,
         force: false,
+        from_config: None,
     }
     .execute()
     .await;
@@ -294,7 +298,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     .await?
     .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address)?;
+    let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
     for (object_id, _, _) in object_refs {
@@ -418,7 +422,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     .await?
     .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address)?;
+    let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
     let object_id = object_refs.first().unwrap().0;
@@ -457,7 +461,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     .execute(&mut context)
     .await?;
 
-    let object_refs = context.gateway.get_owned_objects(address)?;
+    let object_refs = context.gateway.get_owned_objects(address).await?;
 
     let object_id = object_refs.first().unwrap().0;
     let object_to_send = object_refs.get(1).unwrap().0;
@@ -664,7 +668,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     .print(true);
     tokio::time::sleep(Duration::from_millis(2000)).await;
 
-    let object_refs = context.gateway.get_owned_objects(address1)?;
+    let object_refs = context.gateway.get_owned_objects(address1).await?;
 
     // Check log output contains all object ids.
     for (object_id, _, _) in &object_refs {
@@ -833,7 +837,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     .await?
     .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address)?;
+    let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
     let gas_obj_id = object_refs.first().unwrap().0;
@@ -915,7 +919,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     .await?
     .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address)?;
+    let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
     let gas_obj_id = object_refs.first().unwrap().0;
@@ -1010,7 +1014,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     .await?
     .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address)?;
+    let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
     let obj_id = object_refs.get(1).unwrap().0;
@@ -1086,7 +1090,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     .execute(&mut context)
     .await?;
 
-    // Run a command with address ommited
+    // Run a command with address omitted
     let os = WalletCommands::Objects { address: None }
         .execute(&mut context)
         .await?;
@@ -1098,7 +1102,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     };
 
     // Check that we indeed fetched for addr1
-    let mut actual_objs = context.gateway.get_owned_objects(addr1).unwrap();
+    let mut actual_objs = context.gateway.get_owned_objects(addr1).await.unwrap();
     cmd_objs.sort();
     actual_objs.sort();
     assert_eq!(cmd_objs, actual_objs);
@@ -1169,7 +1173,7 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
     .execute(&mut context)
     .await?;
 
-    // Run a command with address ommited
+    // Run a command with address omitted
     let os = WalletCommands::ActiveAddress {}
         .execute(&mut context)
         .await?;
@@ -1231,7 +1235,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     .await?
     .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address)?;
+    let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
     let gas = object_refs.first().unwrap().0;
@@ -1269,7 +1273,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     }
     .execute(&mut context)
     .await?;
-    let object_refs = context.gateway.get_owned_objects(address)?;
+    let object_refs = context.gateway.get_owned_objects(address).await?;
 
     let primary_coin = object_refs.get(1).unwrap().0;
     let coin_to_merge = object_refs.get(2).unwrap().0;
@@ -1324,7 +1328,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .await?
     .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address)?;
+    let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
     let gas = object_refs.first().unwrap().0;
@@ -1360,7 +1364,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .await?
     .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address)?;
+    let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Get another coin
     for c in object_refs {

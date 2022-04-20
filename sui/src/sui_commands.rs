@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, bail};
+use base64ct::{Base64, Encoding};
 use clap::*;
 use futures::future::join_all;
 use move_binary_format::CompiledModule;
@@ -41,8 +42,22 @@ pub enum SuiCommand {
         #[clap(long)]
         config: Option<PathBuf>,
     },
+    #[clap(name = "network")]
+    Network {
+        #[clap(long)]
+        config: Option<PathBuf>,
+        #[clap(short, long, help = "Dump the public keys of all authorities")]
+        dump_addresses: bool,
+    },
     #[clap(name = "genesis")]
     Genesis {
+        #[clap(long, help = "Start genesis with a given config file")]
+        from_config: Option<PathBuf>,
+        #[clap(
+            long,
+            help = "Build a genesis config, write it to the specified path, and exit"
+        )]
+        write_config: Option<PathBuf>,
         #[clap(long)]
         working_dir: Option<PathBuf>,
         #[clap(short, long, help = "Forces overwriting existing configuration")]
@@ -77,7 +92,34 @@ impl SuiCommand {
                     .wait_for_completion()
                     .await
             }
-            SuiCommand::Genesis { working_dir, force } => {
+            SuiCommand::Network {
+                config,
+                dump_addresses,
+            } => {
+                let config_path = config
+                    .clone()
+                    .unwrap_or(sui_config_dir()?.join(SUI_NETWORK_CONFIG));
+                let config: NetworkConfig = PersistedConfig::read(&config_path).map_err(|err| {
+                    err.context(format!(
+                        "Cannot open Sui network config file at {:?}",
+                        config_path
+                    ))
+                })?;
+
+                if *dump_addresses {
+                    for auth in config.authorities.iter() {
+                        let addr = SuiAddress::from(auth.key_pair.public_key_bytes());
+                        println!("{}:{} - {}", auth.host, auth.port, addr);
+                    }
+                }
+                Ok(())
+            }
+            SuiCommand::Genesis {
+                working_dir,
+                force,
+                from_config,
+                write_config,
+            } => {
                 let sui_config_dir = &match working_dir {
                     // if a directory is specified, it must exist (it
                     // will not be created)
@@ -95,14 +137,15 @@ impl SuiCommand {
                 // if Sui config dir is not empty then either clean it
                 // up (if --force/-f option was specified or report an
                 // error
-                if sui_config_dir
-                    .read_dir()
-                    .map_err(|err| {
-                        anyhow!(err)
-                            .context(format!("Cannot open Sui config dir {:?}", sui_config_dir))
-                    })?
-                    .next()
-                    .is_some()
+                if write_config.is_none()
+                    && sui_config_dir
+                        .read_dir()
+                        .map_err(|err| {
+                            anyhow!(err)
+                                .context(format!("Cannot open Sui config dir {:?}", sui_config_dir))
+                        })?
+                        .next()
+                        .is_some()
                 {
                     if *force {
                         fs::remove_dir_all(sui_config_dir).map_err(|err| {
@@ -129,14 +172,24 @@ impl SuiCommand {
                 let db_folder_path = sui_config_dir.join("client_db");
                 let gateway_db_folder_path = sui_config_dir.join("gateway_client_db");
 
-                let genesis_conf = GenesisConfig::default_genesis(sui_config_dir)?;
-                let (network_config, accounts, keystore) = genesis(genesis_conf).await?;
+                let genesis_conf = match from_config {
+                    Some(q) => PersistedConfig::read(q)?,
+                    None => GenesisConfig::default_genesis(sui_config_dir)?,
+                };
+
+                if let Some(path) = write_config {
+                    let persisted = genesis_conf.persisted(path);
+                    persisted.save()?;
+                    return Ok(());
+                }
+
+                let (network_config, accounts, mut keystore) = genesis(genesis_conf).await?;
                 info!("Network genesis completed.");
                 let network_config = network_config.persisted(&network_path);
                 network_config.save()?;
                 info!("Network config file is stored in {:?}.", network_path);
-
-                keystore.save(&keystore_path)?;
+                keystore.set_path(&keystore_path);
+                keystore.save()?;
                 info!("Wallet keystore is stored in {:?}.", keystore_path);
 
                 // Use the first address if any
@@ -181,7 +234,8 @@ impl SuiCommand {
                 let keystore = SuiKeystore::load_or_create(&keystore_path)?;
                 info!("Data to sign : {}", data);
                 info!("Address : {}", address);
-                let signature = keystore.sign(address, &base64::decode(data)?)?;
+                let message = Base64::decode_vec(data).map_err(|e| anyhow!(e))?;
+                let signature = keystore.sign(address, &message)?;
                 // Separate pub key and signature string, signature and pub key are concatenated with an '@' symbol.
                 let signature_string = format!("{:?}", signature);
                 let sig_split = signature_string.split('@').collect::<Vec<_>>();

@@ -6,6 +6,7 @@ module Sui::TestScenarioTests {
     use Sui::ID;
     use Sui::TestScenario;
     use Sui::Transfer;
+    use Sui::TxContext;
 
     const ID_BYTES_MISMATCH: u64 = 0;
     const VALUE_MISMATCH: u64 = 1;
@@ -245,6 +246,20 @@ module Sui::TestScenarioTests {
             TestScenario::return_object(&mut scenario, obj1);
             TestScenario::return_object(&mut scenario, obj2);
             TestScenario::return_object(&mut scenario, obj3);
+        };
+    }
+
+    #[test]
+    fun test_get_last_created_object_id() {
+        let sender = @0x0;
+        let scenario = TestScenario::begin(&sender);
+        {
+            let versioned_id = TestScenario::new_id(&mut scenario);
+            let id = *ID::inner(&versioned_id);
+            let obj = Object { id: versioned_id, value: 10 };
+            Transfer::transfer(obj, copy sender);
+            let ctx = TestScenario::ctx(&mut scenario);
+            assert!(id == TxContext::get_last_created_object_id(ctx), 0);
         };
     }
 

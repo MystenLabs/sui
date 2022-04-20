@@ -1,6 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use base64ct::{Base64, Encoding};
 use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
@@ -101,10 +102,9 @@ impl TryFrom<Vec<u8>> for SuiAddress {
 
 impl From<&PublicKeyBytes> for SuiAddress {
     fn from(key: &PublicKeyBytes) -> SuiAddress {
-        use sha2::Digest;
-        let mut sha2 = sha2::Sha256::new();
-        sha2.update(key.as_ref());
-        let g_arr = sha2.finalize();
+        let mut hasher = Sha3_256::default();
+        hasher.update(key.as_ref());
+        let g_arr = hasher.finalize();
 
         let mut res = [0u8; SUI_ADDRESS_LENGTH];
         res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
@@ -240,6 +240,12 @@ impl TransactionDigest {
     pub fn random() -> Self {
         let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
         Self::new(random_bytes)
+    }
+}
+
+impl AsRef<[u8]> for TransactionDigest {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
     }
 }
 
@@ -387,8 +393,8 @@ impl TryFrom<&[u8]> for ObjectDigest {
 
 impl std::fmt::Debug for TransactionDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = hex::encode(&self.0);
-        write!(f, "t#{}", s)?;
+        let s = Base64::encode_string(&self.0);
+        write!(f, "{}", s)?;
         Ok(())
     }
 }

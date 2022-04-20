@@ -143,3 +143,10 @@ pub struct SyncRequest {
     /// Required; Hex code as string representing the address
     pub address: String,
 }
+
+/// Query string containing the digest of the transaction to be retrieved.
+#[derive(Deserialize, Serialize, JsonSchema)]
+pub struct GetTransactionDetailsRequest {
+    /// Required; hex string encoding a 32 byte transaction digest
+    pub digest: String,
+}

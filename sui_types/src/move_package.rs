@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::readable_serde::Base64OrDefault;
 use crate::{
     base_types::ObjectID,
     error::{SuiError, SuiResult},
@@ -9,17 +10,19 @@ use move_binary_format::file_format::CompiledModule;
 use move_core_types::identifier::Identifier;
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
+use serde_with::serde_as;
 use std::collections::BTreeMap;
-
 // TODO: robust MovePackage tests
 // #[cfg(test)]
 // #[path = "unit_tests/move_package.rs"]
 // mod base_types_tests;
 
 // serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
+#[serde_as]
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MovePackage {
     id: ObjectID,
+    #[serde_as(as = "BTreeMap<_, Base64OrDefault>")]
     // TODO use session cache
     module_map: BTreeMap<String, ByteBuf>,
 }

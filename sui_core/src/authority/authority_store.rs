@@ -686,7 +686,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         write_batch = write_batch.insert_batch(
             &self.transaction_lock,
             written.iter().filter_map(|(_, (object_ref, new_object))| {
-                if !new_object.is_read_only() {
+                if !new_object.is_immutable() {
                     Some((object_ref, None))
                 } else {
                     None
@@ -983,6 +983,14 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<Option<TransactionEnvelope<S>>> {
         let transaction = self.transactions.get(transaction_digest)?;
+        Ok(transaction)
+    }
+
+    pub fn get_certified_transaction(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<CertifiedTransaction>> {
+        let transaction = self.certificates.get(transaction_digest)?;
         Ok(transaction)
     }
 

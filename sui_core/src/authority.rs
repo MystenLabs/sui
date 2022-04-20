@@ -253,7 +253,7 @@ impl AuthorityState {
         let shared_ids: HashSet<_> = inputs
             .iter()
             .filter_map(|(kind, obj)| match kind {
-                InputObjectKind::MutSharedMoveObject(..) if obj.owner.is_shared_mutable() => {
+                InputObjectKind::SharedMoveObject(..) if obj.owner.is_shared() => {
                     Some((obj.id(), obj.version()))
                 }
                 _ => None,
@@ -465,7 +465,7 @@ impl AuthorityState {
             ObjectInfoRequestKind::LatestObjectInfo(request_layout) => {
                 match self.get_object(&request.object_id).await {
                     Ok(Some(object)) => {
-                        let lock = if object.is_read_only() {
+                        let lock = if object.is_immutable() {
                             // Read only objects have no locks.
                             None
                         } else {
