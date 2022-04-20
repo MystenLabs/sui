@@ -212,7 +212,6 @@ async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
         token["contents"]["type"],
         ("0x2::CrossChainAirdrop::ERC721")
     );
-    // let nft_data = &token["contents"]["fields"]["data"];
     let erc721_metadata = &token["contents"]["fields"]["metadata"];
     assert_eq!(
         erc721_metadata["fields"]["token_id"]["fields"]["id"],
