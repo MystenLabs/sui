@@ -132,6 +132,12 @@ ConsensusSync:
   STRUCT:
     - sequence_number:
         TYPENAME: SequenceNumber
+ConsensusTransaction:
+  ENUM:
+    0:
+      UserTransaction:
+        NEWTYPE:
+          TYPENAME: CertifiedTransaction
 Data:
   ENUM:
     0:
@@ -398,6 +404,10 @@ SerializedMessage:
       ConsensusSync:
         NEWTYPE:
           TYPENAME: ConsensusSync
+    14:
+      ConsensusTransaction:
+        NEWTYPE:
+          TYPENAME: ConsensusTransaction
 Signature:
   NEWTYPESTRUCT: BYTES
 SignedBatch:
@@ -767,6 +777,9 @@ SuiError:
           - error: STR
     94:
       OnlyOneConsensusClientPermitted: UNIT
+    95:
+      ConsensusConnectionBroken:
+        NEWTYPE: STR
 TransactionData:
   STRUCT:
     - kind:
