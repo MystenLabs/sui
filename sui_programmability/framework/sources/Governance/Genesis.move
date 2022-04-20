@@ -20,10 +20,13 @@ module Sui::Genesis {
     /// Initial value of the upper-bound on the amount of stake allowed to become a validator.
     const INIT_MAX_VALIDATOR_STAKE: u64 = 100000000000000000;
 
-    /// Basic information of Validator1, as an example.
+    /// Initial value of the upper-bound on the number of validators.
+    const INIT_MAX_VALIDATOR_COUNT: u64 = 100;
+
+    /// Basic information of Validator1, as an example, all dummy values.
     const VALIDATOR1_SUI_ADDRESS: address = @0x1234;
     const VALIDATOR1_NAME: vector<u8> = b"Validator1";
-    const VALIDATOR1_IP_ADDRESS: u128 = 0xFF;
+    const VALIDATOR1_IP_ADDRESS: vector<u8> = x"00FF00FF";
     const VALIDATOR1_STAKE: u64 = 100000000000000;
 
     /// This is a module initializer that runs during module publishing.
@@ -44,6 +47,7 @@ module Sui::Genesis {
             validators,
             treasury_cap,
             storage_fund,
+            INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
             INIT_MAX_VALIDATOR_STAKE,
             ctx,

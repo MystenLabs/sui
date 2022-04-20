@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Sui::ValidatorSet {
+    use Std::Option::{Self, Option};
     use Std::Vector;
 
     use Sui::Coin::Coin;
     use Sui::SUI::SUI;
-    use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
     use Sui::Validator::{Self, Validator};
 
@@ -23,25 +23,41 @@ module Sui::ValidatorSet {
     const ENOT_ENOUGH_VALIDATORS: u64 = 4;
 
     struct ValidatorSet has store {
+        /// Total amount of stake from all active validators, at the beginning of the epoch.
+        total_stake: u64,
+
+        /// Percentage of stake required to achieve quorum among validators.
+        /// This value is recaculated every epoch, based on the current number of active validators.
+        quorum_threshold_pct: u8,
+
         /// The current list of active validators.
-        /// The stake amount is sorted, with highest stake first.
         active_validators: vector<Validator>,
 
         /// List of new validator candidates added during the current epoch.
         /// They will be processed at the end of the epoch.
         pending_validators: vector<Validator>,
 
-        /// Withdraw requests from the validators. Each element is an index
+        /// Removal requests from the validators. Each element is an index
         /// pointing to `active_validators`.
-        pending_withdraws: vector<u64>,
+        pending_removals: vector<u64>,
     }
 
     public(friend) fun new(init_active_validators: vector<Validator>): ValidatorSet {
+        let quorum_threshold_pct = calculate_quorum_threshold(&init_active_validators);
         ValidatorSet {
+            total_stake: 0,
+            quorum_threshold_pct,
             active_validators: init_active_validators,
             pending_validators: Vector::empty(),
-            pending_withdraws: Vector::empty(),
+            pending_removals: Vector::empty(),
         }
+    }
+
+    /// Get the total number of candidates that might become validators in the next epoch.
+    public(friend) fun get_total_validator_candidate_count(self: &ValidatorSet): u64 {
+        Vector::length(&self.active_validators)
+            + Vector::length(&self.pending_validators)
+            - Vector::length(&self.pending_removals)
     }
 
     /// Called by `SuiSystem`, add a new validator to `pending_validators`, which will be
@@ -55,68 +71,68 @@ module Sui::ValidatorSet {
         Vector::push_back(&mut self.pending_validators, validator);
     }
 
-    /// Called by `SuiSystem`, to withdraw a validator.
-    /// If the validator to be withdrawn is a pending one, it's removed immediately and returned
-    /// to the validator's sui_address; otherwise the index is added to `pending_withdraws` and
+    /// Called by `SuiSystem`, to remove a validator.
+    /// The index of the validator is added to `pending_removals` and
     /// will be processed at the end of epoch.
-    public(friend) fun request_withdraw_validator(
+    /// Only an active validator can request to be removed.
+    public(friend) fun request_remove_validator(
         self: &mut ValidatorSet,
-        validator_address: address,
+        ctx: &TxContext,
     ) {
-        let (found, validator_index) = find_validator(&self.pending_validators, validator_address);
-        if (found) {
-            let v = Vector::remove(&mut self.pending_validators, validator_index);
-            Transfer::transfer(v, validator_address);
-            return
-        };
-        let (found, validator_index) = find_validator(&self.active_validators, validator_address);
-        assert!(found, EVALIDATOR_NOT_FOUND);
+        let validator_address = TxContext::sender(ctx);
+        let validator_index_opt = find_validator(&self.active_validators, validator_address);
+        assert!(Option::is_some(&validator_index_opt), EVALIDATOR_NOT_FOUND);
+        let validator_index = Option::extract(&mut validator_index_opt);
         assert!(
-            !Vector::contains(&self.pending_withdraws, &validator_index),
+            !Vector::contains(&self.pending_removals, &validator_index),
             EDUPLICATE_WITHDRAW
         );
-        Vector::push_back(&mut self.pending_withdraws, validator_index);
+        Vector::push_back(&mut self.pending_removals, validator_index);
     }
 
     /// Called by `SuiSystem`, to add more stake to a validator.
-    /// If the validator is a pending one, we add stake to it directly; otherwise we send a request
-    /// to add the extra stake at the end of epoch.
+    /// The new stake will be added to the validator's pending stake, which will be processed
+    /// at the end of epoch.
+    /// We allow adding stake to both pending validators and active validators.
+    /// In either case, the total stake of the validator cannot exceed `max_validator_stake`
+    /// with the `new_stake`.
     public(friend) fun request_add_stake(
         self: &mut ValidatorSet,
         new_stake: Coin<SUI>,
-        validator_address: address,
+        max_validator_stake: u64,
+        ctx: &TxContext,
     ) {
-        let (found, validator_index) = find_validator(&self.pending_validators, validator_address);
-        if (found) {
+        let validator_address = TxContext::sender(ctx);
+        let validator_index_opt = find_validator(&self.pending_validators, validator_address);
+        if (Option::is_some(&validator_index_opt)) {
+            let validator_index = Option::extract(&mut validator_index_opt);
             let validator = Vector::borrow_mut(&mut self.pending_validators, validator_index);
-            Validator::add_stake_to_pending_validator(validator, new_stake);
+            Validator::request_add_stake(validator, new_stake, max_validator_stake);
         } else {
-            let (found, validator_index) = find_validator(&self.active_validators, validator_address);
-            assert!(found, EVALIDATOR_NOT_FOUND);
+            let validator_index_opt = find_validator(&self.active_validators, validator_address);
+            assert!(Option::is_some(&validator_index_opt), EVALIDATOR_NOT_FOUND);
+            let validator_index = Option::extract(&mut validator_index_opt);
             let validator = Vector::borrow_mut(&mut self.active_validators, validator_index);
-            Validator::request_add_stake_to_active_validator(validator, new_stake);
+            Validator::request_add_stake(validator, new_stake, max_validator_stake);
         }
     }
 
     /// Called by `SuiSystem`, to withdraw stake from a validator.
-    /// If the validator is a pending one, we withdraw from it and send back the coins immediately;
-    /// otherwise we send a withdraw request which will be processed at the end of epoch.
+    /// Only an active validator can be requested to withdraw stake.
+    /// We send a withdraw request to the validator which will be processed at the end of epoch.
+    /// The remaining stake of the validator cannot be lower than `min_validator_stake`.
     public(friend) fun request_withdraw_stake(
         self: &mut ValidatorSet,
         withdraw_amount: u64,
+        min_validator_stake: u64,
         ctx: &mut TxContext,
     ) {
         let validator_address = TxContext::sender(ctx);
-        let (found, validator_index) = find_validator(&self.pending_validators, validator_address);
-        if (found) {
-            let validator = Vector::borrow_mut(&mut self.pending_validators, validator_index);
-            Validator::withdraw_stake_from_pending_validator(validator, withdraw_amount, ctx);
-        } else {
-            let (found, validator_index) = find_validator(&self.active_validators, validator_address);
-            assert!(found, EVALIDATOR_NOT_FOUND);
-            let validator = Vector::borrow_mut(&mut self.active_validators, validator_index);
-            Validator::request_withdraw_stake_from_active_validator(validator, withdraw_amount);
-        }
+        let validator_index_opt = find_validator(&self.active_validators, validator_address);
+        assert!(Option::is_some(&validator_index_opt), EVALIDATOR_NOT_FOUND);
+        let validator_index = Option::extract(&mut validator_index_opt);
+        let validator = Vector::borrow_mut(&mut self.active_validators, validator_index);
+        Validator::request_withdraw_stake(validator, withdraw_amount, min_validator_stake);
     }
 
     /// Update the validator set at the end of epoch.
@@ -124,27 +140,20 @@ module Sui::ValidatorSet {
     ///   1. Distribute stake award.
     ///   2. Process pending stake deposits and withdraws for each validator (`adjust_stake`).
     ///   3. Process pending validator application and withdraws.
-    ///   4. At the end, we decide which validators will form the validator set for the next epoch.
+    ///   4. At the end, we calculate the total stake for the new epoch.
     public(friend) fun advance_epoch(
         self: &mut ValidatorSet,
-        new_validator_set_size: u64,
-        new_min_validator_stake: u64,
-        new_max_validator_stake: u64,
         ctx: &mut TxContext,
     ) {
         // TODO: Distribute stake rewards.
 
         adjust_stake(&mut self.active_validators, ctx);
 
-        process_pending_withdraws(&mut self.active_validators, &mut self.pending_withdraws);
+        process_pending_removals(&mut self.active_validators, &mut self.pending_removals);
         process_pending_validators(&mut self.active_validators, &mut self.pending_validators);
 
-        decide_new_active_validators(
-            &mut self.active_validators,
-            new_validator_set_size,
-            new_min_validator_stake,
-            new_max_validator_stake,
-        );
+        self.total_stake = calculate_total_stake(&self.active_validators);
+        self.quorum_threshold_pct = calculate_quorum_threshold(&self.active_validators);
     }
 
     /// Checks whether a duplicate of `new_validator` is already in `validators`.
@@ -154,7 +163,7 @@ module Sui::ValidatorSet {
         let i = 0;
         while (i < len) {
             let v = Vector::borrow(validators, i);
-            if (Validator::duplicates_with(v, new_validator)) {
+            if (Validator::is_duplicate(v, new_validator)) {
                 return true
             };
             i = i + 1;
@@ -165,23 +174,23 @@ module Sui::ValidatorSet {
     /// Find validator by `validator_address`, in `validators`.
     /// Returns (true, index) if the validator is found, and the index is its index in the list.
     /// If not found, returns (false, 0).
-    fun find_validator(validators: &vector<Validator>, validator_address: address): (bool, u64) {
+    fun find_validator(validators: &vector<Validator>, validator_address: address): Option<u64> {
         let length = Vector::length(validators);
         let i = 0;
         while (i < length) {
             let v = Vector::borrow(validators, i);
             if (Validator::get_sui_address(v) == validator_address) {
-                return (true, i)
+                return Option::some(i)
             };
             i = i + 1;
         };
-        (false, 0)
+        Option::none()
     }
 
     /// Process the pending withdraw requests. For each pending request, the validator
     /// is removed from `validators` and sent back to the address of the validator.
-    fun process_pending_withdraws(validators: &mut vector<Validator>, withdraw_list: &mut vector<u64>) {
-        sort_withdraw_list(withdraw_list);
+    fun process_pending_removals(validators: &mut vector<Validator>, withdraw_list: &mut vector<u64>) {
+        sort_removal_list(withdraw_list);
         while (!Vector::is_empty(withdraw_list)) {
             let index = Vector::pop_back(withdraw_list);
             let validator = Vector::remove(validators, index);
@@ -197,51 +206,8 @@ module Sui::ValidatorSet {
         }
     }
 
-    /// Given a list of all `validators`, each with stake updated properly, decide
-    /// who could become a validator in the next epoch.
-    /// A validator is chosen if its stake is in the range of min/max stake specified,
-    /// and is among the top `new_validator_set_size` in terms of stake amount.
-    fun decide_new_active_validators(
-        validators: &mut vector<Validator>,
-        new_validator_set_size: u64,
-        new_min_validator_stake: u64,
-        new_max_validator_stake: u64,
-    ) {
-        sort_validators_by_stake(validators);
-        let removed_validators = Vector::empty();
-        while (!Vector::is_empty(validators)) {
-            let v = Vector::borrow(validators, 0);
-            if (Validator::get_stake_amount(v) > new_max_validator_stake) {
-                Vector::push_back(&mut removed_validators, Vector::remove(validators, 0));
-            } else {
-                break
-            }
-        };
-        while (!Vector::is_empty(validators)) {
-            let length = Vector::length(validators);
-            let v = Vector::borrow(validators, length - 1);
-            if (Validator::get_stake_amount(v) < new_min_validator_stake) {
-                Vector::push_back(&mut removed_validators, Vector::pop_back(validators));
-            } else {
-                break
-            }
-        };
-        let length = Vector::length(validators);
-        // Note: This may cause epoch advancement to fail, if we don't
-        // have enough validators for the next epoch.
-        assert!(
-            length >= new_validator_set_size,
-            ENOT_ENOUGH_VALIDATORS
-        );
-        while (!Vector::is_empty(&removed_validators)) {
-            let v = Vector::pop_back(&mut removed_validators);
-            Validator::send_back(v)
-        };
-        Vector::destroy_empty(removed_validators)
-    }
-
-    /// Sort all the pending withdraw indexes.
-    fun sort_withdraw_list(withdraw_list: &mut vector<u64>) {
+    /// Sort all the pending removal indexes.
+    fun sort_removal_list(withdraw_list: &mut vector<u64>) {
         let length = Vector::length(withdraw_list);
         let i = 1;
         while (i < length) {
@@ -259,28 +225,26 @@ module Sui::ValidatorSet {
         };
     }
 
-    /// Sort `validators` by their stake amount, largest first.
-    /// The list should already be almost sorted. This is because we sort them
-    /// at the end of each epoch. Newly added ones as well as stake adjustments
-    /// can change order, but not significantly.
-    /// For the above reason, we use insertion sort as it's most efficient.
-    fun sort_validators_by_stake(validators: &mut vector<Validator>) {
+    /// Calculate the total active stake.
+    fun calculate_total_stake(validators: &vector<Validator>): u64 {
+        let total = 0;
         let length = Vector::length(validators);
-        let i = 1;
+        let i = 0;
         while (i < length) {
-            let next = Validator::get_stake_amount(Vector::borrow(validators, i));
-            let j = i;
-            while (j > 0) {
-                j = j - 1;
-                let prev: u64 = Validator::get_stake_amount(Vector::borrow(validators, j));
-                if (prev < next) {
-                    Vector::swap(validators, j, j + 1);
-                } else {
-                    break
-                };
-            };
+            let v = Vector::borrow(validators, i);
+            total = total + Validator::get_stake_amount(v);
             i = i + 1;
         };
+        total
+    }
+
+    /// Calculate the required percentage threshold to reach quorum.
+    /// With 3f + 1 validators, we can tolerate up to f byzantine ones.
+    /// Hence (2f + 1) / total is our threshold.
+    fun calculate_quorum_threshold(validators: &vector<Validator>): u8 {
+        let count = Vector::length(validators);
+        let threshold = (2 * count / 3 + 1) * 100 / count;
+        (threshold as u8)
     }
 
     /// Process the pending stake changes for each validator.

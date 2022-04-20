@@ -20,16 +20,23 @@ module Sui::SuiSystem {
     /// stake amount does not meet the requirement.
     const EINVALID_STAKE_AMOUNT: u64 = 1;
 
+    /// This happens when the number of validator candidate exceeds the limit.
+    const EMAX_VALIDATOR_EXCEEDED: u64 = 2;
+
+    const EVALIDATOR_ADDRESS_MISMATCH: u64 = 3;
+
     /// A list of config parameters that may change from epoch to epoch.
     struct SystemParameters has store {
         /// Lower-bound on the amount of stake required to become a validator.
         min_validator_stake: u64,
-
         /// Upper-bound on the amount of stake allowed to become a validator.
         max_validator_stake: u64,
+        /// Maximum number of validator candidates at any moment.
+        /// We do not allow the number of validators in any epoch to go above this.
+        max_validator_candidate_count: u64,
     }
 
-    /// The to-level object containing all information of the Sui system.
+    /// The top-level object containing all information of the Sui system.
     struct SuiSystemState has key {
         id: VersionedID,
         /// The current epoch ID, starting from 0.
@@ -50,6 +57,7 @@ module Sui::SuiSystem {
         validators: vector<Validator>,
         treasury_cap: TreasuryCap<SUI>,
         storage_fund: Coin<SUI>,
+        max_validator_candidate_count: u64,
         min_validator_stake: u64,
         max_validator_stake: u64,
         ctx: &mut TxContext,
@@ -63,6 +71,7 @@ module Sui::SuiSystem {
             parameters: SystemParameters {
                 min_validator_stake,
                 max_validator_stake,
+                max_validator_candidate_count,
             },
         };
         Transfer::share_object(state);
@@ -78,8 +87,16 @@ module Sui::SuiSystem {
     public(script) fun request_add_validator(
         self: &mut SuiSystemState,
         validator: Validator,
-        _ctx: &mut TxContext,
+        ctx: &mut TxContext,
     ) {
+        assert!(
+            ValidatorSet::get_total_validator_candidate_count(&self.validators) < self.parameters.max_validator_candidate_count,
+            EMAX_VALIDATOR_EXCEEDED
+        );
+        assert!(
+            TxContext::sender(ctx) == Validator::get_sui_address(&validator),
+            EVALIDATOR_ADDRESS_MISMATCH
+        );
         let stake_amount = Validator::get_stake_amount(&validator);
         assert!(
             stake_amount >= self.parameters.min_validator_stake
@@ -89,18 +106,18 @@ module Sui::SuiSystem {
         ValidatorSet::request_add_validator(&mut self.validators, validator);
     }
 
-    /// A validator can call this function to request a withdraw in the next epoch.
+    /// A validator can call this function to request a removal in the next epoch.
     /// We use the sender of `ctx` to look up the validator
     /// (i.e. sender must match the sui_address in the validator).
     /// At the end of the epoch, the `validator` object will be returned to the sui_address
     /// of the validator.
-    public(script) fun request_withdraw_validator(
+    public(script) fun request_remove_validator(
         self: &mut SuiSystemState,
         ctx: &mut TxContext,
     ) {
-        ValidatorSet::request_withdraw_validator(
+        ValidatorSet::request_remove_validator(
             &mut self.validators,
-            TxContext::sender(ctx),
+            ctx,
         )
     }
 
@@ -113,7 +130,8 @@ module Sui::SuiSystem {
         ValidatorSet::request_add_stake(
             &mut self.validators,
             new_stake,
-            TxContext::sender(ctx),
+            self.parameters.max_validator_stake,
+            ctx,
         )
     }
 
@@ -130,6 +148,7 @@ module Sui::SuiSystem {
         ValidatorSet::request_withdraw_stake(
             &mut self.validators,
             withdraw_amount,
+            self.parameters.min_validator_stake,
             ctx,
         )
     }
@@ -141,9 +160,6 @@ module Sui::SuiSystem {
     public(script) fun advance_epoch(
         self: &mut SuiSystemState,
         new_epoch: u64,
-        new_active_validator_count: u64,
-        new_min_validator_stake: u64,
-        new_max_validator_stake: u64,
         ctx: &mut TxContext,
     ) {
         self.epoch = self.epoch + 1;
@@ -151,12 +167,7 @@ module Sui::SuiSystem {
         assert!(new_epoch == self.epoch, EINVALID_EPOCH);
         ValidatorSet::advance_epoch(
             &mut self.validators,
-            new_active_validator_count,
-            new_min_validator_stake,
-            new_max_validator_stake,
             ctx,
-        );
-        self.parameters.min_validator_stake = new_min_validator_stake;
-        self.parameters.max_validator_stake = new_max_validator_stake;
+        )
     }
 }
