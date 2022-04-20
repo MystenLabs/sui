@@ -6,6 +6,7 @@ import {
   ObjectRef,
   SignedTransaction,
   TransactionResponse,
+  GetObjectInfoResponse,
 } from './provider';
 import { JsonRpcClient } from '../rpc/client';
 import { array, type as pick } from 'superstruct';
@@ -36,6 +37,19 @@ export class JsonRpcProvider extends Provider {
       throw new Error(
         `Error fetching owned object refs: ${err} for address ${address}`
       );
+    }
+  }
+
+  async getObjectInfo(objectId: string): Promise<GetObjectInfoResponse> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getObjectTypedInfo',
+        [objectId],
+        GetObjectInfoResponse
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error fetching object info: ${err} for id ${objectId}`);
     }
   }
 
