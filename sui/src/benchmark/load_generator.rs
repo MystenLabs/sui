@@ -176,7 +176,7 @@ pub async fn spawn_authority_server(
         network_server.base_address,
         network_server.base_port,
         network_server.buffer_size,
-        state,
+        Arc::new(state),
         consensus_address,
         tx_consensus_listener,
     );

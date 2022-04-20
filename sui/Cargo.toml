@@ -60,6 +60,10 @@ move-binary-format = { git = "https://github.com/move-language/move", rev = "6a8
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
 move-unit-test = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
 
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "aad875a157ba1897b7f277dae7d9cb1deef7955c", package = "node" }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "aad875a157ba1897b7f277dae7d9cb1deef7955c", package = "config" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "aad875a157ba1897b7f277dae7d9cb1deef7955c", package = "crypto" }
+
 once_cell = "1.9.0"
 reqwest = { version = "0.11.10", features = ["json", "serde_json", "blocking"] }
 

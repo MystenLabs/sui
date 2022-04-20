@@ -4,12 +4,12 @@
 
 use super::*;
 use bcs;
-
 use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
 };
 use move_core_types::{account_address::AccountAddress, ident_str, language_storage::TypeTag};
+use narwhal_executor::ExecutionIndices;
 use sui_adapter::genesis;
 use sui_types::{
     base_types::dbg_addr,
@@ -1471,7 +1471,7 @@ async fn shared_object() {
     authority
         .handle_consensus_certificate(
             certificate,
-            /* last_consensus_index */ SequenceNumber::new(),
+            /* last_consensus_index */ ExecutionIndices::default(),
         )
         .await
         .unwrap();

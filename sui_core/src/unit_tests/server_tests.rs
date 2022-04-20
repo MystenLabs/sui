@@ -28,7 +28,7 @@ async fn test_start_stop_batch_subsystem() {
         "127.0.0.1".to_string(),
         999,
         65000,
-        authority_state,
+        Arc::new(authority_state),
         consensus_address,
         tx_consensus_listener,
     ));
@@ -109,7 +109,7 @@ async fn test_channel_infra() {
         "127.0.0.1".to_string(),
         999,
         65000,
-        authority_state,
+        Arc::new(authority_state),
         consensus_address,
         tx_consensus_listener,
     ));
@@ -149,7 +149,7 @@ async fn test_subscription() {
         "127.0.0.1".to_string(),
         998,
         65000,
-        authority_state,
+        Arc::new(authority_state),
         consensus_address,
         tx_consensus_listener,
     ));

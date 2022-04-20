@@ -3,12 +3,17 @@
 
 use anyhow::anyhow;
 use clap::*;
+use narwhal_config::Parameters as ConsensusParameters;
 use std::path::PathBuf;
+use sui::config::make_default_narwhal_committee;
+use sui::config::CONSENSUS_DB_NAME;
+use sui::sui_config_dir;
 use sui::{
     config::{GenesisConfig, NetworkConfig, PersistedConfig},
     sui_commands::{genesis, make_server},
     sui_config_dir, SUI_NETWORK_CONFIG,
 };
+use sui_types::base_types::encode_bytes_hex;
 use sui_types::base_types::{decode_bytes_hex, SuiAddress};
 use sui_types::committee::Committee;
 use tracing::{error, info};
@@ -97,10 +102,19 @@ async fn main() -> Result<(), anyhow::Error> {
         net_cfg.port
     );
 
+    let consensus_committee = make_default_narwhal_committee(&network_config.authorities)?;
+    let consensus_parameters = ConsensusParameters::default();
+    let consensus_store_path = sui_config_dir()?
+        .join(CONSENSUS_DB_NAME)
+        .join(encode_bytes_hex(net_cfg.key_pair.public_key_bytes()));
+
     if let Err(e) = make_server(
         net_cfg,
         &Committee::from(&network_config),
         network_config.buffer_size,
+        &consensus_committee,
+        &consensus_store_path,
+        &consensus_parameters,
     )
     .await
     .unwrap()

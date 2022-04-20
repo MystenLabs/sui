@@ -6,6 +6,7 @@ use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
     execution_engine, transaction_input_checker,
 };
+use async_trait::async_trait;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::ModuleCache;
 use move_core_types::{
@@ -13,7 +14,9 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use narwhal_executor::{ExecutionIndices, ExecutionState};
 use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     pin::Pin,
@@ -371,7 +374,7 @@ impl AuthorityState {
     pub async fn handle_consensus_certificate(
         &self,
         certificate: CertifiedTransaction,
-        last_consensus_index: SequenceNumber,
+        last_consensus_index: ExecutionIndices,
     ) -> SuiResult<()> {
         // Ensure it is a shared object certificate
         if !certificate.transaction.contains_shared_object() {
@@ -793,10 +796,6 @@ impl AuthorityState {
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
         self._database.get_latest_parent_entry(object_id)
     }
-
-    pub fn last_consensus_index(&self) -> SuiResult<SequenceNumber> {
-        self._database.last_consensus_index()
-    }
 }
 
 impl ModuleResolver for AuthorityState {
@@ -804,5 +803,32 @@ impl ModuleResolver for AuthorityState {
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         self._database.get_module(module_id)
+    }
+}
+
+#[async_trait]
+impl ExecutionState for AuthorityState {
+    type Transaction = CertifiedTransaction;
+    type Error = SuiError;
+
+    async fn handle_consensus_transaction(
+        &self,
+        execution_indices: ExecutionIndices,
+        transaction: Self::Transaction,
+    ) -> Result<(), Self::Error> {
+        self.handle_consensus_certificate(transaction, execution_indices)
+            .await
+    }
+
+    fn ask_consensus_write_lock(&self) -> bool {
+        self.consensus_guardrail.fetch_add(1, Ordering::SeqCst) == 0
+    }
+
+    fn release_consensus_write_lock(&self) {
+        self.consensus_guardrail.fetch_sub(0, Ordering::SeqCst);
+    }
+
+    async fn load_execution_indices(&self) -> Result<ExecutionIndices, Self::Error> {
+        self._database.last_consensus_index()
     }
 }
