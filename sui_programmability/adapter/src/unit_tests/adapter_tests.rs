@@ -589,29 +589,20 @@ fn test_move_call_args_type_mismatch() {
         .to_string()
         .contains("Expected 3 arguments calling function 'create', but found 2"));
 
-    /*
-    // Need to fix https://github.com/MystenLabs/sui/issues/211
-    // in order to enable the following test.
-    let pure_args = vec![
-        10u64.to_le_bytes().to_vec(),
-        10u64.to_le_bytes().to_vec(),
-    ];
-    let status = call(
+    // Make a call with wrong argument types.
+    let pure_args = vec![10u64.to_le_bytes().to_vec(), 10u64.to_le_bytes().to_vec()];
+    let err = call(
         &mut storage,
         &native_functions,
         "ObjectBasics",
         "create",
-        gas_object.clone(),
         GAS_BUDGET,
         Vec::new(),
         Vec::new(),
         pure_args,
     )
-    .unwrap();
-    let (gas_used, err) = status.unwrap_err();
-    assert_eq!(gas_used, gas::MIN_MOVE);
-    // Assert on the error message as well.
-    */
+    .unwrap_err();
+    assert!(matches!(err, SuiError::AbortedExecution { .. }));
 }
 
 #[test]
