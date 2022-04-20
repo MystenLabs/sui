@@ -5,7 +5,7 @@
 /// on Sui. The user should be able to use the wallet command line tool
 /// (https://docs.sui.io/build/wallet) to mint an NFT. For example,
 /// `wallet example-nft --name <Name> --description <Description> --url <URL>`
-module Sui::ExampleNFT {
+module Sui::DevNetNFT {
     use Sui::Url::{Self, Url};
     use Sui::UTF8;
     use Sui::ID::VersionedID;
@@ -13,7 +13,7 @@ module Sui::ExampleNFT {
     use Sui::TxContext::{Self, TxContext};
 
     /// An example NFT that can be minted by anybody
-    struct ExampleNFT has key, store {
+    struct DevNetNFT has key, store {
         id: VersionedID,
         /// Name for the token
         name: UTF8::String,
@@ -24,18 +24,18 @@ module Sui::ExampleNFT {
         // TODO: allow custom attributes
     }
 
-    /// Create a new ExampleNFT
+    /// Create a new DevNetNFT
     public(script) fun mint(
         name: vector<u8>,
         description: vector<u8>,
         url: vector<u8>,
         ctx: &mut TxContext
     ) {
-        let nft = ExampleNFT {
+        let nft = DevNetNFT {
             id: TxContext::new_id(ctx),
             name: UTF8::string_unsafe(name),
             description: UTF8::string_unsafe(description),
-            url: Url::new_from_bytes_unsafe(url)
+            url: Url::new_unsafe_from_bytes(url)
         };
         Transfer::transfer(nft, TxContext::sender(ctx))
     }

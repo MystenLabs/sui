@@ -38,7 +38,7 @@ module Sui::Url {
 
     /// Create a `Url` with no validation from bytes
     /// Note: this will abort if `bytes` is not valid ASCII
-    public fun new_from_bytes_unsafe(bytes: vector<u8>): Url {
+    public fun new_unsafe_from_bytes(bytes: vector<u8>): Url {
         let url = ASCII::string(bytes);
         Url { url }
     }
