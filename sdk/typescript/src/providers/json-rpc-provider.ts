@@ -7,7 +7,7 @@ import {
   SignedTransaction,
   TransactionResponse,
   GetObjectInfoResponse,
-  GetTransactionDigestInRange,
+  GetTxnDigestsResponse,
   GatewayTxSeqNumber,
 } from './provider';
 import { JsonRpcClient } from '../rpc/client';
@@ -78,17 +78,30 @@ export class JsonRpcProvider extends Provider {
   async getTransactionDigestsInRange(
     start: GatewayTxSeqNumber,
     end: GatewayTxSeqNumber
-  ): Promise<GetTransactionDigestInRange> {
+  ): Promise<GetTxnDigestsResponse> {
     try {
-      const resp = await this.client.requestWithType(
+      return await this.client.requestWithType(
         'sui_getTransactionsInRange',
         [start, end],
-        GetTransactionDigestInRange
+        GetTxnDigestsResponse
       );
-      return resp;
     } catch (err) {
       throw new Error(
         `Error fetching transaction digests in range: ${err} for range ${start}-${end}`
+      );
+    }
+  }
+
+  async getRecentTransactions(count: number): Promise<GetTxnDigestsResponse> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getRecentTransactions',
+        [count],
+        GetTxnDigestsResponse
+      );
+    } catch (err) {
+      throw new Error(
+        `Error fetching recent transactions: ${err} for count ${count}`
       );
     }
   }

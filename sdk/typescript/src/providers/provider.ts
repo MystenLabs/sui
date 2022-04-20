@@ -22,9 +22,7 @@ export type ObjectStatus = Infer<typeof ObjectStatus>;
 export type GetObjectInfoResponse = Infer<typeof GetObjectInfoResponse>;
 export type GatewayTxSeqNumber = Infer<typeof GatewayTxSeqNumber>;
 export type TransactionDigest = Infer<typeof TransactionDigest>;
-export type GetTransactionDigestInRange = Infer<
-  typeof GetTransactionDigestInRange
->;
+export type GetTxnDigestsResponse = Infer<typeof GetTxnDigestsResponse>;
 
 export interface SignedTransaction {
   txBytes: string;
@@ -58,7 +56,14 @@ export abstract class Provider {
   abstract getTransactionDigestsInRange(
     start: GatewayTxSeqNumber,
     end: GatewayTxSeqNumber
-  ): Promise<GetTransactionDigestInRange>;
+  ): Promise<GetTxnDigestsResponse>;
+
+  /**
+   * Get the latest `count` transactions
+   *
+   * NOTE: this method may get deprecated after DevNet
+   */
+  abstract getRecentTransactions(count: number): Promise<GetTxnDigestsResponse>;
 
   /**
    * Get total number of transactions
@@ -98,6 +103,6 @@ export const GetObjectInfoResponse = pick({
   details: union([ObjectExistsInfo, ObjectNotExistsInfo, ObjectRef]),
 });
 
-export const GetTransactionDigestInRange = array(
+export const GetTxnDigestsResponse = array(
   tuple([GatewayTxSeqNumber, TransactionDigest])
 );

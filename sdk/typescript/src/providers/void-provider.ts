@@ -7,7 +7,7 @@ import {
   SignedTransaction,
   TransactionResponse,
   GetObjectInfoResponse,
-  GetTransactionDigestInRange,
+  GetTxnDigestsResponse,
   GatewayTxSeqNumber,
 } from './provider';
 
@@ -35,8 +35,12 @@ export class VoidProvider extends Provider {
   async getTransactionDigestsInRange(
     _start: GatewayTxSeqNumber,
     _end: GatewayTxSeqNumber
-  ): Promise<GetTransactionDigestInRange> {
+  ): Promise<GetTxnDigestsResponse> {
     throw this.newError('getTransactionDigestsInRange');
+  }
+
+  async getRecentTransactions(_count: number): Promise<GetTxnDigestsResponse> {
+    throw this.newError('getRecentTransactions');
   }
 
   private newError(operation: string): Error {
