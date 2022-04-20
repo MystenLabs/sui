@@ -180,6 +180,20 @@ fn test_object_id_serde_not_human_readable() {
 }
 
 #[test]
+fn test_object_id_serde_with_expected_value() {
+    let object_id_vec = vec![
+        71, 183, 32, 230, 10, 187, 253, 56, 195, 142, 30, 23, 38, 201, 102, 0, 130, 240, 199, 52,
+    ];
+    let object_id = ObjectID::try_from(object_id_vec.clone()).unwrap();
+    let json_serialized = serde_json::to_string(&object_id).unwrap();
+    let bcs_serialized = bcs::to_bytes(&object_id).unwrap();
+
+    let expected_json_address = "\"47b720e60abbfd38c38e1e1726c9660082f0c734\"";
+    assert_eq!(expected_json_address, json_serialized);
+    assert_eq!(object_id_vec, bcs_serialized);
+}
+
+#[test]
 fn test_address_serde_not_human_readable() {
     let address = SuiAddress::random_for_testing_only();
     let serialized = bincode::serialize(&address).unwrap();
@@ -198,6 +212,20 @@ fn test_address_serde_human_readable() {
     assert_eq!(format!("\"{}\"", hex::encode(address)), serialized);
     let deserialized: SuiAddress = serde_json::from_str(&serialized).unwrap();
     assert_eq!(deserialized, address);
+}
+
+#[test]
+fn test_address_serde_with_expected_value() {
+    let address_vec = vec![
+        42, 202, 201, 60, 233, 75, 103, 251, 224, 56, 148, 252, 58, 57, 61, 244, 92, 124, 211, 191,
+    ];
+    let address = SuiAddress::try_from(address_vec.clone()).unwrap();
+    let json_serialized = serde_json::to_string(&address).unwrap();
+    let bcs_serialized = bcs::to_bytes(&address).unwrap();
+
+    let expected_json_address = "\"2acac93ce94b67fbe03894fc3a393df45c7cd3bf\"";
+    assert_eq!(expected_json_address, json_serialized);
+    assert_eq!(address_vec, bcs_serialized);
 }
 
 #[test]
