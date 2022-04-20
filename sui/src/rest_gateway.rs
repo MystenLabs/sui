@@ -3,6 +3,7 @@
 
 use anyhow::anyhow;
 use async_trait::async_trait;
+use base64ct::{Base64, Encoding};
 use dropshot::HttpErrorResponseBody;
 use http::StatusCode;
 use move_core_types::identifier::Identifier;
@@ -15,7 +16,7 @@ use serde_json::json;
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
 use sui_types::base_types::{encode_bytes_hex, ObjectID, ObjectRef, SuiAddress, TransactionDigest};
-use sui_types::messages::{Transaction, TransactionData};
+use sui_types::messages::{CertifiedTransaction, Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 
 use crate::rest_gateway::requests::{
@@ -34,7 +35,7 @@ pub struct RestGatewayClient {
 #[allow(unused_variables)]
 impl GatewayAPI for RestGatewayClient {
     async fn execute_transaction(
-        &mut self,
+        &self,
         tx: Transaction,
     ) -> Result<TransactionResponse, anyhow::Error> {
         let url = format!("{}/api/", self.url);
@@ -54,7 +55,7 @@ impl GatewayAPI for RestGatewayClient {
     }
 
     async fn transfer_coin(
-        &mut self,
+        &self,
         signer: SuiAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
@@ -87,7 +88,7 @@ impl GatewayAPI for RestGatewayClient {
     }
 
     async fn move_call(
-        &mut self,
+        &self,
         signer: SuiAddress,
         package_object_ref: ObjectRef,
         module: Identifier,
@@ -114,7 +115,10 @@ impl GatewayAPI for RestGatewayClient {
             .map(|object_id| object_id.to_hex())
             .collect();
 
-        let pure_arguments = pure_arguments.iter().map(base64::encode).collect();
+        let pure_arguments = pure_arguments
+            .iter()
+            .map(|s| Base64::encode_string(s))
+            .collect();
 
         let request = CallRequest {
             signer: encode_bytes_hex(&signer),
@@ -133,13 +137,16 @@ impl GatewayAPI for RestGatewayClient {
     }
 
     async fn publish(
-        &mut self,
+        &self,
         signer: SuiAddress,
         package_bytes: Vec<Vec<u8>>,
         gas_object_ref: ObjectRef,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        let package_bytes = package_bytes.iter().map(base64::encode).collect::<Vec<_>>();
+        let package_bytes = package_bytes
+            .iter()
+            .map(|s| Base64::encode_string(s))
+            .collect::<Vec<_>>();
         let request = PublishRequest {
             sender: encode_bytes_hex(&signer),
             compiled_modules: package_bytes,
@@ -151,7 +158,7 @@ impl GatewayAPI for RestGatewayClient {
     }
 
     async fn split_coin(
-        &mut self,
+        &self,
         signer: SuiAddress,
         coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
@@ -170,7 +177,7 @@ impl GatewayAPI for RestGatewayClient {
     }
 
     async fn merge_coins(
-        &mut self,
+        &self,
         signer: SuiAddress,
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
@@ -195,7 +202,7 @@ impl GatewayAPI for RestGatewayClient {
     }
 
     async fn get_owned_objects(
-        &mut self,
+        &self,
         account_addr: SuiAddress,
     ) -> Result<Vec<ObjectRef>, anyhow::Error> {
         let url = format!("{}/api/objects?address={}", self.url, account_addr);
@@ -229,6 +236,16 @@ impl GatewayAPI for RestGatewayClient {
     ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
         // TODO: Implement this.
         Ok(vec![])
+    }
+
+    async fn get_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<CertifiedTransaction, anyhow::Error> {
+        let hex_digest = encode_bytes_hex(&digest);
+        let url = format!("{}/api/tx?digest={}", self.url, hex_digest);
+        let response = reqwest::blocking::get(url)?;
+        Ok(response.json()?)
     }
 }
 

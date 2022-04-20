@@ -181,9 +181,7 @@ describe('Move BCS', () => {
         });
 
         let de = BCS.de('TransactionData', new B64(transactionData().transfer).getData());
-
         expect(BCS.ser('TransactionData', de).toString('base64')).toEqual(transactionData().transfer);
-
 
         // console.log(
         //     JSON.stringify(

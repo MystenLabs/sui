@@ -35,7 +35,7 @@ pub const DEFAULT_STARTING_PORT: u16 = 10000;
 static PORT_ALLOCATOR: Lazy<Mutex<PortAllocator>> =
     Lazy::new(|| Mutex::new(PortAllocator::new(DEFAULT_STARTING_PORT)));
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AuthorityInfo {
     #[serde(serialize_with = "bytes_as_hex", deserialize_with = "bytes_from_hex")]
     pub name: AuthorityName,

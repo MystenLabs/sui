@@ -1,5 +1,5 @@
- ---
-title: Learn about Narwhal and Tusk, Sui's Consensus Engine
+---
+title: Narwhal and Tusk, Sui's Consensus Engine
 ---
 
 This is a brief introduction to Narwhal and Tusk, the high-throughput mempool and consensus offered by Mysten Labs. Sui runs consensus as needed to periodically checkpoint its state. And for those transactions that require a total ordering, Narwhal/Tusk is the consensus engine of Sui.
@@ -29,50 +29,42 @@ The [Tusk consensus](https://github.com/MystenLabs/narwhal/tree/main/consensus) 
 
 A Narwhal instance sets up a message-passing system comprised of a set of $3f+1$ units of stake divided amongst a set of nodes, and assumes a computationally bounded adversary that controls the network and can corrupt parties holding up to f units of stake. The validators collaborate in forming a leaderless graph of batches of transactions - which the literature (in the context of DAG-based consensus) designates as _blocks_ and that we label as _collections_ - to emphasize we're in a context where the mempool data is used by an unspecified consensus algorithm.
 
-The graph's *vertices* consist of certified collections. Each valid collection signed by its validator-author must contain a round number and must itself be signed by a quorum ($2f+1$) of validator stake. We call those $2f+1$ signatures a _certificate of availability_. Furthermore, that collection must contain hash pointers to a quorum of valid certificates (that is, certificates from validators with $2f+1$ units of stake) from the previous round (see Danezis & al. Fig 2), which constitute the *edges* of the graph.
+The graph's *vertices* consist of certified collections. Each valid collection signed by its validator-author must contain a round number and must itself be signed by a quorum (2f+1) of validator stake. We call those 2f+1 signatures a _certificate of availability_. Furthermore, that collection must contain hash pointers to a quorum of valid certificates (that is, certificates from validators with 2f + 1 units of stake) from the previous round (see Danezis & al. Fig 2), which constitute the *edges* of the graph.
 
-Each collection is formed in the following way: each validator _reliably broadcasts_ a collection for each round. Subject to specified validity conditions, if validators with $2f+ 1$ stake receive a collection, they acknowledge it with a signature each. Signatures from $2f + 1$ validators by stake form a certificate of availability that is then shared and potentially included in collections at round $r + 1$.
+Each collection is formed in the following way: each validator _reliably broadcasts_ a collection for each round. Subject to specified validity conditions, if validators with 2f + 1 stake receive a collection, they acknowledge it with a signature each. Signatures from 2f + 1 validators by stake form a certificate of availability that is then shared and potentially included in collections at round r + 1.
 
 The following figure represents five rounds of construction of such a DAG (1 to 5), with authorities A, B, C and D participating. For simplicity, each validator holds 1 unit of stake. The collections transitively acknowledged by A's latest round in A5 are represented in full lines in the graph.
 
 ```mermaid
 flowchart TB
-
-subgraph A
-A5 --> A4 --> A3 --> A2 --> A1
-end
-
-subgraph B
-B5 -.-> B4 --> B3 --> B2 --> B1
-end 
-
-subgraph C
-C5 -.-> C4 --> C3 --> C2 --> C1
-end
-
-subgraph D
-D5 -.-> D4 -.-> D3 --> D2 --> D1
-end
-
-A5 --> B4 & C4
-A4 --> C3 & D3
-A3 --> B2 & C2
-A2 --> C1 & D1
-
-B5 -.-> A4 & C4
-B4 --> C3 & D3
-B3 --> A2 & C2
-B2 --> C1 & D1
-
-C5 -.-> A4 & B4
-C4 --> B3 & D3
-C3 --> A2 & B2
-C2 --> B1 & D1
-
-D5 -.-> A4 & B4
-D4 -.-> B3 & C3
-D3 --> A2 & B2
-D2 --> B1 & C1
+  subgraph A
+  A5 --> A4 --> A3 --> A2 --> A1
+  end
+  subgraph B
+  B5 -.-> B4 --> B3 --> B2 --> B1
+  end 
+  subgraph C
+  C5 -.-> C4 --> C3 --> C2 --> C1
+  end
+  subgraph D
+  D5 -.-> D4 -.-> D3 --> D2 --> D1
+  end
+  A5 --> B4 & C4
+  A4 --> C3 & D3
+  A3 --> B2 & C2
+  A2 --> C1 & D1
+  B5 -.-> A4 & C4
+  B4 --> C3 & D3
+  B3 --> A2 & C2
+  B2 --> C1 & D1
+  C5 -.-> A4 & B4
+  C4 --> B3 & D3
+  C3 --> A2 & B2
+  C2 --> B1 & D1
+  D5 -.-> A4 & B4
+  D4 -.-> B3 & C3
+  D3 --> A2 & B2
+  D2 --> B1 & C1
 ```
 
 ## How it works

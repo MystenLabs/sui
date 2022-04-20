@@ -16,16 +16,17 @@ use sui_network::network::NetworkClient;
 use sui_network::transport;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::Committee;
-use sui_types::error::SuiResult;
 
 use crate::config::{AuthorityInfo, Config};
 use crate::rest_gateway::RestGatewayClient;
+use crate::rpc_gateway_client::RpcGatewayClient;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum GatewayType {
     Embedded(GatewayConfig),
     Rest(String),
+    RPC(String),
 }
 
 impl Display for GatewayType {
@@ -54,13 +55,17 @@ impl Display for GatewayType {
                 writeln!(writer, "Gateway Type : RestAPI")?;
                 writeln!(writer, "Gateway URL : {}", url)?;
             }
+            GatewayType::RPC(url) => {
+                writeln!(writer, "Gateway Type : JSON-RPC")?;
+                writeln!(writer, "Gateway URL : {}", url)?;
+            }
         }
         write!(f, "{}", writer)
     }
 }
 
 impl GatewayType {
-    pub fn init(&self) -> SuiResult<GatewayClient> {
+    pub fn init(&self) -> Result<GatewayClient, anyhow::Error> {
         Ok(match self {
             GatewayType::Embedded(config) => {
                 let path = config.db_folder_path.clone();
@@ -69,6 +74,7 @@ impl GatewayType {
                 Box::new(GatewayState::new(path, committee, authority_clients)?)
             }
             GatewayType::Rest(url) => Box::new(RestGatewayClient { url: url.clone() }),
+            GatewayType::RPC(url) => Box::new(RpcGatewayClient::new(url.clone())?),
         })
     }
 }
