@@ -25,6 +25,8 @@ struct ValidatorOpt {
     /// Public key/address of the validator to start
     #[clap(long, parse(try_from_str = decode_bytes_hex))]
     address: SuiAddress,
+    #[clap(long, help = "Specify host:port to listen on")]
+    listen_address: Option<String>,
 }
 
 #[tokio::main]
@@ -56,9 +58,13 @@ async fn main() -> Result<(), anyhow::Error> {
             )
         })?;
 
+    let listen_address = cfg
+        .listen_address
+        .unwrap_or(format!("{}:{}", net_cfg.host, net_cfg.port));
+
     info!(
-        "Started {} authority on {}:{}",
-        address, net_cfg.host, net_cfg.port
+        "authority {} listening on {} (public addr: {}:{})",
+        address, listen_address, net_cfg.host, net_cfg.port
     );
 
     if let Err(e) = make_server(
@@ -68,7 +74,7 @@ async fn main() -> Result<(), anyhow::Error> {
     )
     .await
     .unwrap()
-    .spawn()
+    .spawn_with_bind_address(&listen_address)
     .await
     .unwrap()
     .join()
