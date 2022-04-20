@@ -1,7 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::readable_serde::Base64OrDefault;
+use crate::readable_serde::encoding::Base64;
+use crate::readable_serde::Readable;
 use crate::{
     base_types::ObjectID,
     error::{SuiError, SuiResult},
@@ -9,9 +10,10 @@ use crate::{
 use move_binary_format::file_format::CompiledModule;
 use move_core_types::identifier::Identifier;
 use serde::{Deserialize, Serialize};
-use serde_bytes::ByteBuf;
 use serde_with::serde_as;
+use serde_with::Bytes;
 use std::collections::BTreeMap;
+
 // TODO: robust MovePackage tests
 // #[cfg(test)]
 // #[path = "unit_tests/move_package.rs"]
@@ -22,13 +24,13 @@ use std::collections::BTreeMap;
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MovePackage {
     id: ObjectID,
-    #[serde_as(as = "BTreeMap<_, Base64OrDefault>")]
     // TODO use session cache
-    module_map: BTreeMap<String, ByteBuf>,
+    #[serde_as(as = "BTreeMap<_, Readable<Base64, Bytes>>")]
+    module_map: BTreeMap<String, Vec<u8>>,
 }
 
 impl MovePackage {
-    pub fn new(id: ObjectID, module_map: &BTreeMap<String, ByteBuf>) -> Self {
+    pub fn new(id: ObjectID, module_map: &BTreeMap<String, Vec<u8>>) -> Self {
         Self {
             id,
             module_map: module_map.clone(),
@@ -39,7 +41,7 @@ impl MovePackage {
         self.id
     }
 
-    pub fn serialized_module_map(&self) -> &BTreeMap<String, ByteBuf> {
+    pub fn serialized_module_map(&self) -> &BTreeMap<String, Vec<u8>> {
         &self.module_map
     }
 
@@ -67,7 +69,7 @@ impl From<&Vec<CompiledModule>> for MovePackage {
                 .map(|module| {
                     let mut bytes = Vec::new();
                     module.serialize(&mut bytes).unwrap();
-                    (module.self_id().name().to_string(), ByteBuf::from(bytes))
+                    (module.self_id().name().to_string(), bytes)
                 })
                 .collect(),
         )

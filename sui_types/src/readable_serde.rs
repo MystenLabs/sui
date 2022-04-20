@@ -1,206 +1,167 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
-use std::fmt::Display;
+use move_core_types::account_address::AccountAddress;
+use std::fmt::Debug;
+use std::marker::PhantomData;
 
-use base64ct::{Base64, Encoding as _};
 use serde;
 use serde::de::{Deserialize, Deserializer, Error};
 use serde::ser::Serializer;
 use serde::Serialize;
-use serde_bytes::ByteBuf;
-use serde_with::{Bytes, DeserializeAs, SerializeAs};
+use serde_with::{DeserializeAs, SerializeAs};
 
-/// Encode bytes to hex for human-readable serializer and deserializer,
-/// serde to bytes for non-human-readable serializer and deserializer.
-pub trait BytesOrHex<'de>: Sized {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-        Self: AsRef<[u8]>,
-    {
-        serialize_to_bytes_or_encode(serializer, self.as_ref(), Encoding::Hex)
-    }
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>;
-}
-
-/// Encode bytes to Base64 for human-readable serializer and deserializer,
-/// serde to array tuple for non-human-readable serializer and deserializer.
-pub trait BytesOrBase64<'de>: Sized {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-        Self: AsRef<[u8]>,
-    {
-        serialize_to_bytes_or_encode(serializer, self.as_ref(), Encoding::Base64)
-    }
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>;
-}
-
-fn deserialize_from_bytes_or_decode<'de, D>(
-    deserializer: D,
-    encoding: Encoding,
-) -> Result<Vec<u8>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    if deserializer.is_human_readable() {
-        let s = String::deserialize(deserializer)?;
-        encoding.decode(s).map_err(to_custom_error::<'de, D, _>)
-    } else {
-        Bytes::deserialize_as(deserializer)
-    }
-}
-
-fn serialize_to_bytes_or_encode<S>(
-    serializer: S,
-    data: &[u8],
-    encoding: Encoding,
-) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    if serializer.is_human_readable() {
-        encoding.encode(data).serialize(serializer)
-    } else {
-        Bytes::serialize_as(&data, serializer)
-    }
-}
-
-impl<'de> BytesOrBase64<'de> for ed25519_dalek::Signature {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-        Self: AsRef<[u8]>,
-    {
-        if serializer.is_human_readable() {
-            Encoding::Base64.encode(self.as_ref()).serialize(serializer)
-        } else {
-            <Self as Serialize>::serialize(self, serializer)
-        }
-    }
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        if deserializer.is_human_readable() {
-            let s = String::deserialize(deserializer)?;
-            let value = Encoding::Base64
-                .decode(s)
-                .map_err(to_custom_error::<'de, D, _>)?;
-            Self::try_from(value.as_slice()).map_err(to_custom_error::<'de, D, _>)
-        } else {
-            <Self as Deserialize>::deserialize(deserializer)
-        }
-    }
-}
+use crate::readable_serde::encoding::Encoding;
 
 fn to_custom_error<'de, D, E>(e: E) -> D::Error
 where
-    E: Display,
+    E: Debug,
     D: Deserializer<'de>,
 {
-    D::Error::custom(format!("byte deserialization failed, cause by: {}", e))
+    D::Error::custom(format!("byte deserialization failed, cause by: {:?}", e))
 }
 
-impl<'de, const N: usize> BytesOrHex<'de> for [u8; N] {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = deserialize_from_bytes_or_decode(deserializer, Encoding::Hex)?;
-        let mut array = [0u8; N];
-        array.copy_from_slice(&value[..N]);
-        Ok(array)
-    }
+/// Use with serde_as to encode/decode bytes to/from Base64/Hex for human-readable serializer and deserializer
+/// E : Encoding of the human readable output
+/// R : serde_as SerializeAs/DeserializeAs delegation
+///
+/// # Example:
+///
+/// #[serde_as]
+/// #[derive(Deserialize, Serialize)]
+/// struct Example(#[serde_as(as = "Readable(Hex, _)")] [u8; 20]);
+///
+/// The above example will encode the byte array to Hex string for human-readable serializer
+/// and array tuple (default) for non-human-readable serializer.
+///
+pub struct Readable<E, R> {
+    element: PhantomData<R>,
+    encoding: PhantomData<E>,
 }
 
-impl<'de, const N: usize> BytesOrBase64<'de> for [u8; N] {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = deserialize_from_bytes_or_decode(deserializer, Encoding::Base64)?;
-        let mut array = [0u8; N];
-        array.copy_from_slice(&value[..N]);
-        Ok(array)
-    }
-}
-
-enum Encoding {
-    Base64,
-    Hex,
-}
-
-impl Encoding {
-    fn decode(&self, s: String) -> Result<Vec<u8>, anyhow::Error> {
-        Ok(match self {
-            Encoding::Base64 => Base64::decode_vec(&s).map_err(|e| anyhow!(e))?,
-            Encoding::Hex => hex::decode(s)?,
-        })
-    }
-
-    fn encode<T: AsRef<[u8]>>(&self, data: T) -> String {
-        match self {
-            Encoding::Base64 => Base64::encode_string(data.as_ref()),
-            Encoding::Hex => hex::encode(data),
-        }
-    }
-}
-
-pub struct Base64OrDefault;
-
-impl<T> SerializeAs<T> for Base64OrDefault
+impl<T, R, E> SerializeAs<T> for Readable<E, R>
 where
-    T: AsRef<[u8]> + Serialize,
+    T: AsRef<[u8]>,
+    R: SerializeAs<T>,
+    E: Encoding,
 {
     fn serialize_as<S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         if serializer.is_human_readable() {
-            Encoding::Base64.encode(value).serialize(serializer)
+            E::encode(value).serialize(serializer)
         } else {
-            <T as Serialize>::serialize(value, serializer)
+            R::serialize_as(value, serializer)
         }
     }
 }
-
-impl<'de> DeserializeAs<'de, Vec<u8>> for Base64OrDefault {
+/// DeserializeAs support for Arrays
+impl<'de, R, E, const N: usize> DeserializeAs<'de, [u8; N]> for Readable<E, R>
+where
+    R: DeserializeAs<'de, [u8; N]>,
+    E: Encoding,
+{
+    fn deserialize_as<D>(deserializer: D) -> Result<[u8; N], D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            let value = E::decode(s).map_err(to_custom_error::<'de, D, _>)?;
+            let mut array = [0u8; N];
+            array.copy_from_slice(&value[..N]);
+            Ok(array)
+        } else {
+            R::deserialize_as(deserializer)
+        }
+    }
+}
+/// DeserializeAs support for Vec
+impl<'de, R, E> DeserializeAs<'de, Vec<u8>> for Readable<E, R>
+where
+    R: DeserializeAs<'de, Vec<u8>>,
+    E: Encoding,
+{
     fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
     where
         D: Deserializer<'de>,
     {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            Encoding::Base64
-                .decode(s)
-                .map_err(to_custom_error::<'de, D, _>)
+            E::decode(s).map_err(to_custom_error::<'de, D, _>)
         } else {
-            <Vec<u8> as Deserialize>::deserialize(deserializer)
+            R::deserialize_as(deserializer)
         }
     }
 }
-
-impl<'de> DeserializeAs<'de, ByteBuf> for Base64OrDefault {
-    fn deserialize_as<D>(deserializer: D) -> Result<ByteBuf, D::Error>
+/// DeserializeAs support for Signature
+impl<'de, R, E> DeserializeAs<'de, ed25519_dalek::Signature> for Readable<E, R>
+where
+    R: DeserializeAs<'de, ed25519_dalek::Signature>,
+    E: Encoding,
+{
+    fn deserialize_as<D>(deserializer: D) -> Result<ed25519_dalek::Signature, D::Error>
     where
         D: Deserializer<'de>,
     {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            Ok(ByteBuf::from(
-                Encoding::Base64
-                    .decode(s)
-                    .map_err(to_custom_error::<'de, D, _>)?,
-            ))
+            let value = E::decode(s).map_err(to_custom_error::<'de, D, _>)?;
+            ed25519_dalek::Signature::from_bytes(&value).map_err(to_custom_error::<'de, D, _>)
         } else {
-            <ByteBuf as Deserialize>::deserialize(deserializer)
+            R::deserialize_as(deserializer)
+        }
+    }
+}
+
+/// DeserializeAs support for AccountAddress
+impl<'de, R, E> DeserializeAs<'de, AccountAddress> for Readable<E, R>
+where
+    R: DeserializeAs<'de, AccountAddress>,
+    E: Encoding,
+{
+    fn deserialize_as<D>(deserializer: D) -> Result<AccountAddress, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            let value = E::decode(s).map_err(to_custom_error::<'de, D, _>)?;
+            AccountAddress::from_bytes(&value).map_err(to_custom_error::<'de, D, _>)
+        } else {
+            R::deserialize_as(deserializer)
+        }
+    }
+}
+
+pub mod encoding {
+    use anyhow::anyhow;
+    use base64ct::Encoding as _;
+
+    pub trait Encoding {
+        fn decode(s: String) -> Result<Vec<u8>, anyhow::Error>;
+        fn encode<T: AsRef<[u8]>>(data: T) -> String;
+    }
+    pub struct Hex;
+    pub struct Base64;
+
+    impl Encoding for Hex {
+        fn decode(s: String) -> Result<Vec<u8>, anyhow::Error> {
+            Ok(hex::decode(s)?)
+        }
+
+        fn encode<T: AsRef<[u8]>>(data: T) -> String {
+            hex::encode(data)
+        }
+    }
+    impl Encoding for Base64 {
+        fn decode(s: String) -> Result<Vec<u8>, anyhow::Error> {
+            base64ct::Base64::decode_vec(&s).map_err(|e| anyhow!(e))
+        }
+
+        fn encode<T: AsRef<[u8]>>(data: T) -> String {
+            base64ct::Base64::encode_string(data.as_ref())
         }
     }
 }

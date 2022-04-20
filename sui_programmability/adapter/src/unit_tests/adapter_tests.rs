@@ -160,11 +160,9 @@ impl ModuleResolver for InMemoryStorage {
         Ok(self
             .read_object(&ObjectID::from(*module_id.address()))
             .and_then(|o| match &o.data {
-                Data::Package(m) => Some(
-                    m.serialized_module_map()[module_id.name().as_str()]
-                        .clone()
-                        .into_vec(),
-                ),
+                Data::Package(m) => {
+                    Some(m.serialized_module_map()[module_id.name().as_str()].clone())
+                }
                 Data::Move(_) => None,
             }))
     }
