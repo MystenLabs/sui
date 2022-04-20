@@ -102,10 +102,9 @@ impl TryFrom<Vec<u8>> for SuiAddress {
 
 impl From<&PublicKeyBytes> for SuiAddress {
     fn from(key: &PublicKeyBytes) -> SuiAddress {
-        use sha2::Digest;
-        let mut sha2 = sha2::Sha256::new();
-        sha2.update(key.as_ref());
-        let g_arr = sha2.finalize();
+        let mut hasher = Sha3_256::default();
+        hasher.update(key.as_ref());
+        let g_arr = hasher.finalize();
 
         let mut res = [0u8; SUI_ADDRESS_LENGTH];
         res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
