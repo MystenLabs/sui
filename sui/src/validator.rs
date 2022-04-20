@@ -91,7 +91,10 @@ async fn main() -> Result<(), anyhow::Error> {
 
     info!(
         "authority {:?} listening on {} (public addr: {}:{})",
-        net_cfg.key_pair.public_key_bytes(), listen_address, net_cfg.host, net_cfg.port
+        net_cfg.key_pair.public_key_bytes(),
+        listen_address,
+        net_cfg.host,
+        net_cfg.port
     );
 
     if let Err(e) = make_server(

@@ -32,6 +32,6 @@ pub fn sui_config_dir() -> Result<PathBuf, anyhow::Error> {
         None => match dirs::home_dir() {
             Some(v) => Ok(v.join(SUI_DIR).join(SUI_CONFIG_DIR)),
             None => bail!("Cannot obtain home directory path"),
-        }
+        },
     }
 }
