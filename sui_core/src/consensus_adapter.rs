@@ -83,15 +83,12 @@ impl ConsensusListener {
                     self.pending.entry(digest).or_insert_with(VecDeque::new).push_back(replier);
                 },
 
-                Some(output) = self.rx_consensus_output.recv() => {
+                Some((result, transaction_digest)) = self.rx_consensus_output.recv() => {
                     // Notify the caller that the transaction has been sequenced.
-                    let (result, transaction_digest) = output;
                     let outcome = result.map_err(SuiError::from);
-                    if let Some(repliers) = self.pending.get_mut(&transaction_digest) {
-                        if let Some(replier) = repliers.pop_front() {
-                            if replier.send(outcome).is_err() {
-                                debug!("No replier to listen to consensus output {transaction_digest}");
-                            }
+                    if let Some(replier) = self.pending.get_mut(&transaction_digest).and_then(|r| r.pop_front()) {
+                        if replier.send(outcome).is_err() {
+                            debug!("No replier to listen to consensus output {transaction_digest}");
                         }
                     }
                 }
