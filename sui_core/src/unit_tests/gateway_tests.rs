@@ -475,6 +475,21 @@ async fn init_local_client_and_fund_account_bad(
     client
 }
 
+#[cfg(test)]
+const ADMIN_SENTINEL: &str = "ee0437cf625b77af4d12bff98af1a88332b00638";
+
+// Required to capture address creation algorithm updates that break some tests.
+#[test]
+fn test_admin_address_consistency() {
+    use hex;
+    let (admin_address, _) = make_admin_account();
+    assert_eq!(admin_address.to_vec(), hex::decode(ADMIN_SENTINEL).expect("Decoding failed"),
+               "If this test broke, then the algorithm for deriving addresses from public keys has \
+               changed. Please compute the new admin address in hex format from `make_admin_account`\
+               and update both the ADMIN_SENTINEL const above, but also the ADMIN address to \
+               Hero.move with the new admin account hex value.");
+}
+
 #[tokio::test]
 async fn test_initiating_valid_transfer() {
     let recipient = get_new_address();
