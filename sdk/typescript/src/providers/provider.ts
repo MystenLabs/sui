@@ -9,6 +9,8 @@ import {
   enums,
   unknown,
   union,
+  array,
+  tuple,
 } from 'superstruct';
 
 ///////////////////////////////
@@ -18,6 +20,11 @@ export type ObjectExistsInfo = Infer<typeof ObjectExistsInfo>;
 export type ObjectNotExistsInfo = Infer<typeof ObjectNotExistsInfo>;
 export type ObjectStatus = Infer<typeof ObjectStatus>;
 export type GetObjectInfoResponse = Infer<typeof GetObjectInfoResponse>;
+export type GatewayTxSeqNumber = Infer<typeof GatewayTxSeqNumber>;
+export type TransactionDigest = Infer<typeof TransactionDigest>;
+export type GetTransactionDigestInRange = Infer<
+  typeof GetTransactionDigestInRange
+>;
 
 export interface SignedTransaction {
   txBytes: string;
@@ -43,6 +50,15 @@ export abstract class Provider {
   abstract getObjectInfo(objectId: string): Promise<GetObjectInfoResponse>;
 
   // Transactions
+  /**
+   * Get transaction digests for a given range
+   *
+   * NOTE: this method may get deprecated after DevNet
+   */
+  abstract getTransactionDigestsInRange(
+    start: GatewayTxSeqNumber,
+    end: GatewayTxSeqNumber
+  ): Promise<GetTransactionDigestInRange>;
 
   /**
    * Get total number of transactions
@@ -57,8 +73,11 @@ export abstract class Provider {
   // TODO: add more interface methods
 }
 
+export const TransactionDigest = string();
+export const GatewayTxSeqNumber = number();
+
 export const ObjectRef = pick({
-  digest: string(),
+  digest: TransactionDigest,
   objectId: string(),
   version: number(),
 });
@@ -78,3 +97,7 @@ export const GetObjectInfoResponse = pick({
   status: ObjectStatus,
   details: union([ObjectExistsInfo, ObjectNotExistsInfo, ObjectRef]),
 });
+
+export const GetTransactionDigestInRange = array(
+  tuple([GatewayTxSeqNumber, TransactionDigest])
+);

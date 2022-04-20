@@ -7,6 +7,8 @@ import {
   SignedTransaction,
   TransactionResponse,
   GetObjectInfoResponse,
+  GetTransactionDigestInRange,
+  GatewayTxSeqNumber,
 } from './provider';
 import { JsonRpcClient } from '../rpc/client';
 import { array, number, type as pick } from 'superstruct';
@@ -70,6 +72,24 @@ export class JsonRpcProvider extends Provider {
       return resp;
     } catch (err) {
       throw new Error(`Error fetching total transaction number: ${err}`);
+    }
+  }
+
+  async getTransactionDigestsInRange(
+    start: GatewayTxSeqNumber,
+    end: GatewayTxSeqNumber
+  ): Promise<GetTransactionDigestInRange> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getTransactionsInRange',
+        [start, end],
+        GetTransactionDigestInRange
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(
+        `Error fetching transaction digests in range: ${err} for range ${start}-${end}`
+      );
     }
   }
 
