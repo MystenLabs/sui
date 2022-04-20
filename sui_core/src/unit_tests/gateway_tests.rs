@@ -3,24 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::same_item_push)] // get_key_pair returns random elements
 
-use std::collections::VecDeque;
-use std::fs;
 use std::path::Path;
 use std::{
     collections::{BTreeMap, HashMap},
-    convert::TryInto,
-    env, io,
-    sync::Arc,
+    env,
 };
 
-use async_trait::async_trait;
-use futures::lock::Mutex;
-use futures::stream;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
 use signature::Signer;
 use typed_store::Map;
 
-use sui_adapter::genesis;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::crypto::Signature;
 use sui_types::crypto::{get_key_pair, KeyPair};
@@ -29,8 +21,7 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::messages::Transaction;
 use sui_types::object::{Data, Object, Owner, GAS_VALUE_FOR_TESTING};
 
-use crate::authority::{AuthorityState, AuthorityStore};
-use crate::authority_client::BatchInfoResponseItemStream;
+use crate::authority_client::LocalAuthorityClient;
 use crate::gateway_state::{GatewayAPI, GatewayState};
 
 use super::*;
@@ -40,106 +31,6 @@ fn compare_certified_transactions(o1: &CertifiedTransaction, o2: &CertifiedTrans
     assert_eq!(o1.transaction.digest(), o2.transaction.digest());
     // in this ser/de context it's relevant to compare signatures
     assert_eq!(o1.signatures, o2.signatures);
-}
-
-pub fn system_maxfiles() -> usize {
-    fdlimit::raise_fd_limit().unwrap_or(256u64) as usize
-}
-
-fn max_files_client_tests() -> i32 {
-    (system_maxfiles() / 8).try_into().unwrap()
-}
-
-#[derive(Clone)]
-struct LocalAuthorityClient(Arc<Mutex<AuthorityState>>);
-
-#[async_trait]
-impl AuthorityAPI for LocalAuthorityClient {
-    async fn handle_transaction(
-        &self,
-        transaction: Transaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        let state = self.0.clone();
-        let result = state.lock().await.handle_transaction(transaction).await;
-        result
-    }
-
-    async fn handle_confirmation_transaction(
-        &self,
-        transaction: ConfirmationTransaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        let state = self.0.clone();
-        let result = state
-            .lock()
-            .await
-            .handle_confirmation_transaction(transaction)
-            .await;
-        result
-    }
-
-    async fn handle_account_info_request(
-        &self,
-        request: AccountInfoRequest,
-    ) -> Result<AccountInfoResponse, SuiError> {
-        let state = self.0.clone();
-
-        let result = state
-            .lock()
-            .await
-            .handle_account_info_request(request)
-            .await;
-        result
-    }
-
-    async fn handle_object_info_request(
-        &self,
-        request: ObjectInfoRequest,
-    ) -> Result<ObjectInfoResponse, SuiError> {
-        let state = self.0.clone();
-        let x = state.lock().await.handle_object_info_request(request).await;
-        x
-    }
-
-    /// Handle Object information requests for this account.
-    async fn handle_transaction_info_request(
-        &self,
-        request: TransactionInfoRequest,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        let state = self.0.clone();
-
-        let result = state
-            .lock()
-            .await
-            .handle_transaction_info_request(request)
-            .await;
-        result
-    }
-
-    /// Handle Batch information requests for this authority.
-    async fn handle_batch_stream(
-        &self,
-        request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, io::Error> {
-        let state = self.0.clone();
-
-        let update_items = state.lock().await.handle_batch_info_request(request).await;
-
-        let (items, _): (VecDeque<_>, VecDeque<_>) = update_items.into_iter().unzip();
-        let stream = stream::iter(items.into_iter()).then(|mut item| async move {
-            let i = item.pop_front();
-            match i {
-                Some(i) => Ok(BatchInfoResponseItem(i)),
-                None => Result::Err(SuiError::BatchErrorSender),
-            }
-        });
-        Ok(Box::pin(stream))
-    }
-}
-
-impl LocalAuthorityClient {
-    fn new(state: AuthorityState) -> Self {
-        Self(Arc::new(Mutex::new(state)))
-    }
 }
 
 #[cfg(test)]
@@ -318,33 +209,16 @@ async fn init_local_authorities(
     let mut voting_rights = BTreeMap::new();
     for _ in 0..count {
         let (_, key_pair) = get_key_pair();
-        voting_rights.insert(*key_pair.public_key_bytes(), 1);
-        key_pairs.push(key_pair);
+        let authority_name = *key_pair.public_key_bytes();
+        voting_rights.insert(authority_name, 1);
+        key_pairs.push((authority_name, key_pair));
     }
     let committee = Committee::new(voting_rights);
 
     let mut clients = BTreeMap::new();
-    for secret in key_pairs {
-        // Random directory for the DB
-        let dir = env::temp_dir();
-        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
-        fs::create_dir(&path).unwrap();
-
-        let mut opts = rocksdb::Options::default();
-        opts.set_max_open_files(max_files_client_tests());
-        let store = Arc::new(AuthorityStore::open(path, Some(opts)));
-        let authority_name = *secret.public_key_bytes();
-
-        let state = AuthorityState::new(
-            committee.clone(),
-            authority_name,
-            Arc::pin(secret),
-            store,
-            genesis::clone_genesis_compiled_modules(),
-            &mut genesis::get_genesis_context(),
-        )
-        .await;
-        clients.insert(authority_name, LocalAuthorityClient::new(state));
+    for (authority_name, secret) in key_pairs {
+        let client = LocalAuthorityClient::new(committee.clone(), authority_name, secret).await;
+        clients.insert(authority_name, client);
     }
     (clients, committee)
 }
@@ -373,25 +247,9 @@ async fn init_local_authorities_bad(
     let committee = Committee::new(voting_rights);
 
     let mut clients = BTreeMap::new();
-    for (address, secret) in key_pairs {
-        // Random directory
-        let dir = env::temp_dir();
-        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
-        fs::create_dir(&path).unwrap();
-
-        let mut opts = rocksdb::Options::default();
-        opts.set_max_open_files(max_files_client_tests());
-        let store = Arc::new(AuthorityStore::open(path, Some(opts)));
-        let state = AuthorityState::new(
-            committee.clone(),
-            address,
-            Arc::pin(secret),
-            store,
-            genesis::clone_genesis_compiled_modules(),
-            &mut genesis::get_genesis_context(),
-        )
-        .await;
-        clients.insert(address, LocalAuthorityClient::new(state));
+    for (authority_name, secret) in key_pairs {
+        let client = LocalAuthorityClient::new(committee.clone(), authority_name, secret).await;
+        clients.insert(authority_name, client);
     }
     (clients, committee)
 }
