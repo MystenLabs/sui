@@ -35,6 +35,13 @@ module Tutorial::ColorObject {
 
     // == Functions covered in Chapter 2 ==
 
+    /// Copies the values of `from_object` into `into_object`.
+    public(script) fun copy_into(from_object: &ColorObject, into_object: &mut ColorObject, _ctx: &mut TxContext) {
+        into_object.red = from_object.red;
+        into_object.green = from_object.green;
+        into_object.blue = from_object.blue;
+    }
+
     public(script) fun delete(object: ColorObject, _ctx: &mut TxContext) {
         let ColorObject { id, red: _, green: _, blue: _ } = object;
         ID::delete(id);
@@ -42,6 +49,27 @@ module Tutorial::ColorObject {
 
     public(script) fun transfer(object: ColorObject, recipient: address, _ctx: &mut TxContext) {
         Transfer::transfer(object, recipient)
+    }
+
+    // == Functions covered in Chapter 3 ==
+
+    public(script) fun freeze_object(object: ColorObject, _ctx: &mut TxContext) {
+        Transfer::freeze_object(object)
+    }
+
+    public(script) fun create_immutable(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
+        let color_object = new(red, green, blue, ctx);
+        Transfer::freeze_object(color_object)
+    }
+
+    public(script) fun update(
+        object: &mut ColorObject,
+        red: u8, green: u8, blue: u8,
+        _ctx: &mut TxContext,
+    ) {
+        object.red = red;
+        object.green = green;
+        object.blue = blue;
     }
 }
 
@@ -129,6 +157,45 @@ module Tutorial::ColorObjectTests {
         TestScenario::next_tx(scenario, &recipient);
         {
             assert!(TestScenario::can_take_object<ColorObject>(scenario), 0);
+        };
+    }
+
+    // == Tests covered in Chapter 3 ==
+
+    #[test]
+    public(script) fun test_immutable() {
+        let sender1 = @0x1;
+        let scenario = &mut TestScenario::begin(&sender1);
+        {
+            let ctx = TestScenario::ctx(scenario);
+            ColorObject::create_immutable(255, 0, 255, ctx);
+        };
+        TestScenario::next_tx(scenario, &sender1);
+        {
+            assert!(TestScenario::can_take_object<ColorObject>(scenario), 0);
+        };
+        let sender2 = @0x2;
+        TestScenario::next_tx(scenario, &sender2);
+        {
+            assert!(TestScenario::can_take_object<ColorObject>(scenario), 0);
+        };
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 101)]
+    public(script) fun test_mutate_immutable() {
+        let sender1 = @0x1;
+        let scenario = &mut TestScenario::begin(&sender1);
+        {
+            let ctx = TestScenario::ctx(scenario);
+            ColorObject::create_immutable(255, 0, 255, ctx);
+        };
+        TestScenario::next_tx(scenario, &sender1);
+        {
+            let object = TestScenario::take_object<ColorObject>(scenario);
+            let ctx = TestScenario::ctx(scenario);
+            ColorObject::update(&mut object, 0, 0, 0, ctx);
+            TestScenario::return_object(scenario, object);
         };
     }
 }

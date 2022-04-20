@@ -19,7 +19,7 @@ struct ColorObject has key {
 Now let's add this function:
 ```rust
 /// Copies the values of `from_object` into `into_object`.
-public(script) fun copy_into(from_object: &ColorObject, into_object, &mut ColorObject, _ctx: &mut TxContext) {
+public(script) fun copy_into(from_object: &ColorObject, into_object: &mut ColorObject, _ctx: &mut TxContext) {
     into_object.red = from_object.red;
     into_object.green = from_object.green;
     into_object.blue = from_object.blue;
