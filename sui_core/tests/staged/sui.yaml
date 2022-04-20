@@ -775,7 +775,7 @@ SuiError:
           - error: STR
     94:
       OnlyOneConsensusClientPermitted: UNIT
-    94:
+    95:
       ConsensusConnectionBroken:
         NEWTYPE: STR
 TransactionData:
