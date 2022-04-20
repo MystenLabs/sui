@@ -17,7 +17,7 @@ public(script) fun freeze_object(object: ColorObject, _ctx: &mut TxContext) {
     Transfer::freeze_object(object)
 }
 ```
-In the above function, one must already own a `ColorObject` to be able to pass it in. At the end of this call, this object is *frozen*, and can never be mutated. It is also no longer owned by anyone.
+In the above function, one must already own a `ColorObject` to be able to pass it in. At the end of this call, this object is *frozen* and can never be mutated. It is also no longer owned by anyone.
 > :bulb: Note the `Transfer::freeze_object` API requires passing the object by value. Had we allowed passing the object by a mutable reference, we would then still be able to mutate the object after the `freeze_object` call; this contradicts the fact that it should have become immutable.
 
 Alternatively, you can also provide an API that creates an immutable object at birth:
@@ -31,10 +31,8 @@ In this function, a fresh new `ColorObject` is created and immediately turned in
 
 ### Use immutable object
 Once an object becomes immutable, the rules of who could use this object in Move calls change:
-1. An immutable object can only be passed as read-only reference to Move entry functions as `&T`.
+1. An immutable object can be passed only as a read-only reference to Move entry functions as `&T`.
 2. Anyone can use immutable objects. Immutable objects are considered shared.
-
-TODO: If immutable objects are considered shared by default, I'm not sure we can call shared mutable objects *shared objects* for short as we say above since both immutable and mutable can be shared.
 
 Recall that we defined a function that copies the value of one object to another:
 ```rust
