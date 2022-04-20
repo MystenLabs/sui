@@ -6,10 +6,8 @@ use clap::*;
 use narwhal_config::Parameters as ConsensusParameters;
 use std::path::PathBuf;
 use sui::config::make_default_narwhal_committee;
-use sui::config::CONSENSUS_DB_NAME;
-use sui::sui_config_dir;
 use sui::{
-    config::{GenesisConfig, NetworkConfig, PersistedConfig},
+    config::{GenesisConfig, NetworkConfig, PersistedConfig, CONSENSUS_DB_NAME},
     sui_commands::{genesis, make_server},
     sui_config_dir, SUI_NETWORK_CONFIG,
 };
