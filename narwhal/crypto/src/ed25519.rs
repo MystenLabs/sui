@@ -159,8 +159,8 @@ impl Default for Ed25519Signature {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")] // necessary so as not to deser under a != type
 pub struct Ed25519KeyPair {
-    name: Ed25519PublicKey,
-    secret: Ed25519PrivateKey,
+    pub name: Ed25519PublicKey,
+    pub secret: Ed25519PrivateKey,
 }
 
 impl KeyPair for Ed25519KeyPair {

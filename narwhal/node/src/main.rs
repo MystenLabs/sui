@@ -11,11 +11,12 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
-use client::{
-    ExecutionIndices, ExecutionState, ExecutionStateError, SerializedTransaction, SubscriberResult,
-};
 use config::{Committee, Import, Parameters, WorkerId};
 use crypto::{ed25519::Ed25519KeyPair, generate_production_keypair, traits::KeyPair};
+use executor::{
+    ExecutionIndices, ExecutionState, ExecutionStateError, SerializedTransactionDigest,
+    SubscriberResult,
+};
 use node::{Node, NodeStorage};
 use std::sync::Arc;
 use thiserror::Error;
@@ -161,7 +162,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
 }
 
 /// Receives an ordered list of certificates and apply any application-specific logic.
-async fn analyze(mut rx_output: Receiver<SubscriberResult<SerializedTransaction>>) {
+async fn analyze(mut rx_output: Receiver<(SubscriberResult<()>, SerializedTransactionDigest)>) {
     while let Some(_message) = rx_output.recv().await {
         // NOTE: Notify the user that its transaction has been processed.
     }
