@@ -13,6 +13,8 @@ use crate::readable_serde::encoding::Base64;
 use crate::readable_serde::Readable;
 use base64ct::Encoding;
 use itertools::Either;
+use move_binary_format::access::ModuleAccess;
+use move_binary_format::CompiledModule;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
     value::MoveStructLayout,
@@ -26,7 +28,7 @@ use serde_with::Bytes;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::{
-    collections::HashSet,
+    collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
 };
 #[cfg(test)]
@@ -84,7 +86,7 @@ pub enum SingleTransactionKind {
 
 impl SingleTransactionKind {
     pub fn contains_shared_object(&self) -> bool {
-        self.shared_input_objects().peekable().peek().is_some()
+        self.shared_input_objects().next().is_some()
     }
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
@@ -108,7 +110,9 @@ impl SingleTransactionKind {
             Self::Transfer(Transfer { object_ref, .. }) => {
                 vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
             }
-            Self::Call(MoveCall { arguments, .. }) => arguments
+            Self::Call(MoveCall {
+                arguments, package, ..
+            }) => arguments
                 .iter()
                 .filter_map(|arg| match arg {
                     CallArg::Pure(_) => None,
@@ -117,9 +121,25 @@ impl SingleTransactionKind {
                     }
                     CallArg::SharedObject(id) => Some(InputObjectKind::SharedMoveObject(*id)),
                 })
+                .chain([InputObjectKind::MovePackage(package.0)])
                 .collect(),
-            Self::Publish(_) => {
-                vec![]
+            Self::Publish(MoveModulePublish { modules }) => {
+                // For module publishing, all the dependent packages are implicit input objects
+                // because they must all be on-chain in order for the package to publish.
+                // All authorities must have the same view of those dependencies in order
+                // to achieve consistent publish results.
+                let compiled_modules = modules
+                    .iter()
+                    .filter_map(|bytes| match CompiledModule::deserialize(bytes) {
+                        Ok(m) => Some(m),
+                        // We will ignore this error here and simply let latter execution
+                        // to discover this error again and fail the transaction.
+                        // It's preferable to let transaction fail and charge gas when
+                        // malformed package is provided.
+                        Err(_) => None,
+                    })
+                    .collect::<Vec<_>>();
+                Transaction::input_objects_in_compiled_modules(&compiled_modules)
             }
         };
         // Ensure that there are no duplicate inputs. This cannot be removed because:
@@ -130,10 +150,7 @@ impl SingleTransactionKind {
         // the same shared object doesn't show up more than once in the same single
         // transaction.
         let mut used = HashSet::new();
-        if input_objects.iter().any(|o| {
-            let was_newly_inserted = used.insert(o.object_id());
-            !was_newly_inserted
-        }) {
+        if !input_objects.iter().all(|o| used.insert(o.object_id())) {
             return Err(SuiError::DuplicateObjectRefInput);
         }
         Ok(input_objects)
@@ -357,7 +374,7 @@ impl<S: AuthoritySignInfoTrait> TransactionEnvelope<S> {
     }
 
     pub fn contains_shared_object(&self) -> bool {
-        self.shared_input_objects().peekable().peek().is_some()
+        self.shared_input_objects().next().is_some()
     }
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
@@ -411,6 +428,27 @@ impl<S: AuthoritySignInfoTrait> TransactionEnvelope<S> {
     // Derive a cryptographic hash of the transaction.
     pub fn digest(&self) -> TransactionDigest {
         TransactionDigest::new(sha3_hash(&self.data))
+    }
+
+    pub fn input_objects_in_compiled_modules(
+        compiled_modules: &[CompiledModule],
+    ) -> Vec<InputObjectKind> {
+        let mut dependent_packages = BTreeSet::new();
+        for module in compiled_modules.iter() {
+            for handle in module.module_handles.iter() {
+                let address = ObjectID::from(*module.address_identifier_at(handle.address));
+                if address != ObjectID::ZERO {
+                    dependent_packages.insert(address);
+                }
+            }
+        }
+
+        // We don't care about the digest of the dependent packages.
+        // They are all read-only on-chain and their digest never changes.
+        dependent_packages
+            .into_iter()
+            .map(InputObjectKind::MovePackage)
+            .collect::<Vec<_>>()
     }
 }
 
@@ -942,6 +980,8 @@ impl PartialEq for SignedTransactionEffects {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InputObjectKind {
+    // A Move package, must be immutable.
+    MovePackage(ObjectID),
     // A Move object, either immutable, or owned mutable.
     ImmOrOwnedMoveObject(ObjectRef),
     // A Move object that's shared and mutable.
@@ -951,6 +991,7 @@ pub enum InputObjectKind {
 impl InputObjectKind {
     pub fn object_id(&self) -> ObjectID {
         match self {
+            Self::MovePackage(id) => *id,
             Self::ImmOrOwnedMoveObject((id, _, _)) => *id,
             Self::SharedMoveObject(id) => *id,
         }
@@ -958,6 +999,7 @@ impl InputObjectKind {
 
     pub fn version(&self) -> SequenceNumber {
         match self {
+            Self::MovePackage(..) => OBJECT_START_VERSION,
             Self::ImmOrOwnedMoveObject((_, version, _)) => *version,
             Self::SharedMoveObject(..) => OBJECT_START_VERSION,
         }
@@ -965,6 +1007,7 @@ impl InputObjectKind {
 
     pub fn object_not_found_error(&self) -> SuiError {
         match *self {
+            Self::MovePackage(package_id) => SuiError::DependentPackageNotFound { package_id },
             Self::ImmOrOwnedMoveObject((object_id, _, _)) => SuiError::ObjectNotFound { object_id },
             Self::SharedMoveObject(object_id) => SuiError::ObjectNotFound { object_id },
         }

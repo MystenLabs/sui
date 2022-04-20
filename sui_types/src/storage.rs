@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::HashSet;
 
 use crate::{
     base_types::{ObjectID, SequenceNumber},
@@ -29,7 +29,7 @@ pub trait Storage {
 
     // Specify the list of object IDs created during the transaction.
     // This is needed to determine unwrapped objects at the end.
-    fn set_create_object_ids(&mut self, ids: BTreeSet<ObjectID>);
+    fn set_create_object_ids(&mut self, ids: HashSet<ObjectID>);
 
     fn write_object(&mut self, object: Object);
 

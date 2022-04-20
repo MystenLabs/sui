@@ -29,7 +29,7 @@ struct ScratchPad {
     created: BTreeMap<ObjectID, Object>,
     deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     events: Vec<Event>,
-    created_object_ids: BTreeSet<ObjectID>,
+    created_object_ids: HashSet<ObjectID>,
 }
 
 // TODO: We should use AuthorityTemporaryStore instead.
@@ -124,7 +124,7 @@ impl Storage for InMemoryStorage {
         })
     }
 
-    fn set_create_object_ids(&mut self, ids: BTreeSet<ObjectID>) {
+    fn set_create_object_ids(&mut self, ids: HashSet<ObjectID>) {
         self.temporary.created_object_ids = ids;
     }
 

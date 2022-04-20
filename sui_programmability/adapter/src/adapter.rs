@@ -35,7 +35,7 @@ use move_core_types::{
 use move_vm_runtime::{native_functions::NativeFunctionTable, session::SerializedReturnValues};
 use std::{
     borrow::Borrow,
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     convert::TryFrom,
     fmt::Debug,
 };
@@ -250,7 +250,7 @@ pub fn store_package_and_init_modules<
     // wrap the modules in an object, write it to the store
     // The call to unwrap() will go away once we remove address owner from Immutable objects.
     let package_object = Object::new_package(modules, ctx.digest());
-    state_view.set_create_object_ids(BTreeSet::from([package_object.id()]));
+    state_view.set_create_object_ids(HashSet::from([package_object.id()]));
     state_view.write_object(package_object);
 
     init_modules(state_view, vm, modules_to_init, ctx, gas_status)
@@ -523,7 +523,7 @@ fn handle_transfer<
     by_value_objects: &mut BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
     state_view: &mut S,
     object_owner_map: &mut BTreeMap<SuiAddress, SuiAddress>,
-    newly_generated_ids: &BTreeSet<ObjectID>,
+    newly_generated_ids: &HashSet<ObjectID>,
 ) -> SuiResult {
     match type_ {
         TypeTag::Struct(s_type) => {

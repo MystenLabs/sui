@@ -95,6 +95,7 @@ pub fn filter_owned_objects(all_objects: &[(InputObjectKind, Object)]) -> Vec<Ob
     let owned_objects: Vec<_> = all_objects
         .iter()
         .filter_map(|(object_kind, object)| match object_kind {
+            InputObjectKind::MovePackage(_) => None,
             InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
                 if object.is_immutable() {
                     None
@@ -123,6 +124,14 @@ fn check_one_lock(
     owned_object_authenticators: &HashSet<SuiAddress>,
 ) -> SuiResult {
     match object_kind {
+        InputObjectKind::MovePackage(package_id) => {
+            fp_ensure!(
+                object.data.try_as_package().is_some(),
+                SuiError::MoveObjectAsPackage {
+                    object_id: package_id
+                }
+            );
+        }
         InputObjectKind::ImmOrOwnedMoveObject((object_id, sequence_number, object_digest)) => {
             fp_ensure!(
                 !object.is_package(),

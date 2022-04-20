@@ -1,8 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use move_core_types::account_address::AccountAddress;
-use std::collections::BTreeSet;
 use sui_types::{event::Event, gas::SuiGasStatus};
 
 use super::*;
@@ -30,7 +28,7 @@ pub struct AuthorityTemporaryStore<S> {
     events: Vec<Event>,
     // New object IDs created during the transaction, needed for
     // telling apart unwrapped objects.
-    created_object_ids: BTreeSet<ObjectID>,
+    created_object_ids: HashSet<ObjectID>,
 }
 
 impl<S> AuthorityTemporaryStore<S> {
@@ -51,6 +49,7 @@ impl<S> AuthorityTemporaryStore<S> {
             active_inputs: input_objects
                 .iter()
                 .filter_map(|(kind, object)| match kind {
+                    InputObjectKind::MovePackage(_) => None,
                     InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
                         if object.is_immutable() {
                             None
@@ -64,7 +63,7 @@ impl<S> AuthorityTemporaryStore<S> {
             written: BTreeMap::new(),
             deleted: BTreeMap::new(),
             events: Vec::new(),
-            created_object_ids: BTreeSet::new(),
+            created_object_ids: HashSet::new(),
         }
     }
 
@@ -289,7 +288,7 @@ impl<S> Storage for AuthorityTemporaryStore<S> {
         }
     }
 
-    fn set_create_object_ids(&mut self, ids: BTreeSet<ObjectID>) {
+    fn set_create_object_ids(&mut self, ids: HashSet<ObjectID>) {
         self.created_object_ids = ids;
     }
 
