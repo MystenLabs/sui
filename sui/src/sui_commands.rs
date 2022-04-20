@@ -292,10 +292,6 @@ pub async fn genesis(
         loaded_move_packages: vec![],
     };
     let mut voting_right = BTreeMap::new();
-
-    let consensus_committee = make_default_narwhal_committee(&genesis_conf.authorities)?;
-    let consensus_parameters = ConsensusParameters::default();
-
     for authority in genesis_conf.authorities {
         voting_right.insert(*authority.key_pair.public_key_bytes(), authority.stake);
         network_config.authorities.push(authority);
@@ -372,10 +368,6 @@ pub async fn genesis(
 
     let committee = Committee::new(voting_right);
     for authority in &network_config.authorities {
-        let consensus_store_path = PathBuf::from(".")
-            .join(CONSENSUS_DB_NAME)
-            .join(encode_bytes_hex(authority.key_pair.public_key_bytes()));
-
         make_server_with_genesis_ctx(
             authority,
             &committee,
@@ -383,9 +375,6 @@ pub async fn genesis(
             &preload_objects,
             network_config.buffer_size,
             &mut genesis_ctx.clone(),
-            &consensus_committee,
-            &consensus_store_path,
-            &consensus_parameters,
         )
         .await?;
     }
@@ -429,9 +418,6 @@ async fn make_server_with_genesis_ctx(
     preload_objects: &[Object],
     buffer_size: usize,
     genesis_ctx: &mut TxContext,
-    consensus_committee: &ConsensusCommittee<Ed25519PublicKey>,
-    consensus_store_path: &PathBuf,
-    consensus_parameters: &ConsensusParameters,
 ) -> SuiResult<AuthorityServer> {
     let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
     let name = *authority.key_pair.public_key_bytes();
@@ -450,15 +436,15 @@ async fn make_server_with_genesis_ctx(
         state.insert_genesis_object(object.clone()).await;
     }
 
-    make_authority(
-        authority,
+    let (tx_sui_to_consensus, _rx_sui_to_consensus) = channel(1);
+    Ok(AuthorityServer::new(
+        authority.host.clone(),
+        authority.port,
         buffer_size,
-        state,
-        consensus_committee,
-        consensus_store_path,
-        consensus_parameters,
-    )
-    .await
+        Arc::new(state),
+        authority.consensus_address,
+        /* tx_consensus_listener */ tx_sui_to_consensus,
+    ))
 }
 
 /// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,

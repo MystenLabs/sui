@@ -324,7 +324,7 @@ pub fn make_default_narwhal_committee(
     let mut ports = Vec::new();
     for _ in authorities {
         let mut authority_ports = Vec::new();
-        for _ in 0..5 {
+        for _ in 0..4 {
             let port = PORT_ALLOCATOR
                 .lock()
                 .map_err(|e| anyhow::anyhow!("{e}"))?
@@ -350,8 +350,8 @@ pub fn make_default_narwhal_committee(
                     /* worker_id */ 0,
                     WorkerAddresses {
                         primary_to_worker: format!("127.0.0.1:{}", ports[i][2]).parse().unwrap(),
-                        transactions: format!("127.0.0.1:{}", ports[i][3]).parse().unwrap(),
-                        worker_to_worker: format!("127.0.0.1:{}", ports[i][4]).parse().unwrap(),
+                        transactions: x.consensus_address,
+                        worker_to_worker: format!("127.0.0.1:{}", ports[i][3]).parse().unwrap(),
                     },
                 )]
                 .iter()
