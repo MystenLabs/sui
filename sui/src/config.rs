@@ -24,6 +24,7 @@ use std::sync::Mutex;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_network::network::PortAllocator;
 use sui_types::base_types::*;
+use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, KeyPair};
 use tracing::log::trace;
 
@@ -36,7 +37,7 @@ pub const CONSENSUS_DB_NAME: &str = "consensus_db";
 static PORT_ALLOCATOR: Lazy<Mutex<PortAllocator>> =
     Lazy::new(|| Mutex::new(PortAllocator::new(DEFAULT_STARTING_PORT)));
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AuthorityInfo {
     #[serde(serialize_with = "bytes_as_hex", deserialize_with = "bytes_from_hex")]
     pub name: AuthorityName,
@@ -44,7 +45,7 @@ pub struct AuthorityInfo {
     pub base_port: u16,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct AuthorityPrivateInfo {
     pub key_pair: KeyPair,
     pub host: String,
@@ -164,6 +165,17 @@ impl NetworkConfig {
                 base_port: info.port,
             })
             .collect()
+    }
+}
+
+impl From<&NetworkConfig> for Committee {
+    fn from(network_config: &NetworkConfig) -> Committee {
+        let voting_rights = network_config
+            .authorities
+            .iter()
+            .map(|authority| (*authority.key_pair.public_key_bytes(), authority.stake))
+            .collect();
+        Committee::new(voting_rights)
     }
 }
 

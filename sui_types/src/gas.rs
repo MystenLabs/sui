@@ -283,7 +283,7 @@ impl<'a> SuiGasStatus<'a> {
 /// 4. If the gas_object actually has enough balance to pay for the budget.
 pub fn check_gas_balance(gas_object: &Object, gas_budget: u64) -> SuiResult {
     ok_or_gas_error!(
-        !gas_object.is_shared(),
+        gas_object.is_owned(),
         "Gas object must be owned Move object".to_owned()
     )?;
     ok_or_gas_error!(

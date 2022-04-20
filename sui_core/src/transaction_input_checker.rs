@@ -28,12 +28,12 @@ pub async fn check_locks(
     // duplicate objects in the same SingleTransactionKind. However for a Batch
     // Transaction, we still need to make sure that the same mutable object don't show
     // up in more than one SingleTransactionKind.
-    // TODO: We should be able to allow the same shared mutable object to show up
+    // TODO: We should be able to allow the same shared object to show up
     // in more than one SingleTransactionKind. We need to ensure that their
     // version number only increases once at the end of the Batch execution.
     let mut owned_object_authenticators: HashSet<SuiAddress> = HashSet::new();
     for object in objects.iter().flatten() {
-        if !object.is_read_only() {
+        if !object.is_immutable() {
             fp_ensure!(
                 owned_object_authenticators.insert(object.id().into()),
                 SuiError::InvalidBatchTransaction {
@@ -97,13 +97,13 @@ pub fn filter_owned_objects(all_objects: &[(InputObjectKind, Object)]) -> Vec<Ob
         .filter_map(|(object_kind, object)| match object_kind {
             InputObjectKind::MovePackage(_) => None,
             InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
-                if object.is_read_only() {
+                if object.is_immutable() {
                     None
                 } else {
                     Some(*object_ref)
                 }
             }
-            InputObjectKind::MutSharedMoveObject(..) => None,
+            InputObjectKind::SharedMoveObject(..) => None,
         })
         .collect();
 
@@ -162,7 +162,7 @@ fn check_one_lock(
             );
 
             match object.owner {
-                Owner::SharedImmutable => {
+                Owner::Immutable => {
                     // Nothing else to check for SharedImmutable.
                 }
                 Owner::AddressOwner(owner) => {
@@ -187,14 +187,14 @@ fn check_one_lock(
                         }
                     );
                 }
-                Owner::SharedMutable => {
+                Owner::Shared => {
                     // This object is a mutable shared object. However the transaction
                     // specifies it as an owned object. This is inconsistent.
                     return Err(SuiError::NotSharedObjectError);
                 }
             };
         }
-        InputObjectKind::MutSharedMoveObject(..) => {
+        InputObjectKind::SharedMoveObject(..) => {
             // When someone locks an object as shared it must be shared already.
             fp_ensure!(object.is_shared(), SuiError::NotSharedObjectError);
         }

@@ -36,8 +36,8 @@ pub enum SuiError {
     // Object misuse issues
     #[error("Error acquiring lock for object(s): {:?}", errors)]
     LockErrors { errors: Vec<SuiError> },
-    #[error("Attempt to transfer a shared object.")]
-    TransferSharedError,
+    #[error("Attempt to transfer an object that's not owned.")]
+    TransferUnownedError,
     #[error("Attempt to transfer an object that's not a coin.")]
     TransferNonCoinError,
     #[error("A move package is expected, instead a move object is passed: {object_id}")]
@@ -217,6 +217,8 @@ pub enum SuiError {
     TransactionLockDoesNotExist,
     #[error("Attempt to reset a set transaction lock to a different value.")]
     TransactionLockReset,
+    #[error("Could not find the referenced transaction [{:?}].", digest)]
+    TransactionNotFound { digest: TransactionDigest },
     #[error("Could not find the referenced object {:?}.", object_id)]
     ObjectNotFound { object_id: ObjectID },
     #[error("Object deleted at reference {:?}.", object_ref)]

@@ -1,0 +1,101 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use anyhow::anyhow;
+use clap::*;
+use narwhal_config::Parameters as ConsensusParameters;
+use std::path::PathBuf;
+use sui::config::make_default_narwhal_committee;
+use sui::config::CONSENSUS_DB_NAME;
+use sui::sui_config_dir;
+use sui::{
+    config::{GenesisConfig, PersistedConfig},
+    sui_commands::{genesis, make_server},
+};
+use sui_types::base_types::encode_bytes_hex;
+use sui_types::base_types::{decode_bytes_hex, SuiAddress};
+use sui_types::committee::Committee;
+use tracing::{error, info};
+
+#[derive(Parser)]
+#[clap(
+    name = "Sui Validator",
+    about = "Validator for Sui Network",
+    rename_all = "kebab-case"
+)]
+struct ValidatorOpt {
+    /// The genesis config file location
+    #[clap(long)]
+    pub genesis_config_path: PathBuf,
+    /// Public key/address of the validator to start
+    #[clap(long, parse(try_from_str = decode_bytes_hex))]
+    address: SuiAddress,
+    #[clap(long, help = "Specify host:port to listen on")]
+    listen_address: Option<String>,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), anyhow::Error> {
+    let config = telemetry_subscribers::TelemetryConfig {
+        service_name: "sui".into(),
+        enable_tracing: std::env::var("SUI_TRACING_ENABLE").is_ok(),
+        json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
+        ..Default::default()
+    };
+    #[allow(unused)]
+    let guard = telemetry_subscribers::init(config);
+
+    let cfg = ValidatorOpt::parse();
+    let genesis_conf: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
+    let address = cfg.address;
+
+    let (network_config, _, _) = genesis(genesis_conf).await?;
+
+    // Find the network config for this validator
+    let net_cfg = network_config
+        .authorities
+        .iter()
+        .find(|x| SuiAddress::from(x.key_pair.public_key_bytes()) == address)
+        .ok_or_else(|| {
+            anyhow!(
+                "Network configs must include config for address {}",
+                address
+            )
+        })?;
+
+    let listen_address = cfg
+        .listen_address
+        .unwrap_or(format!("{}:{}", net_cfg.host, net_cfg.port));
+
+    info!(
+        "authority {} listening on {} (public addr: {}:{})",
+        address, listen_address, net_cfg.host, net_cfg.port
+    );
+
+    let consensus_committee = make_default_narwhal_committee(&network_config.authorities)?;
+    let consensus_parameters = ConsensusParameters::default();
+    let consensus_store_path = sui_config_dir()?
+        .join(CONSENSUS_DB_NAME)
+        .join(encode_bytes_hex(net_cfg.key_pair.public_key_bytes()));
+
+    if let Err(e) = make_server(
+        net_cfg,
+        &Committee::from(&network_config),
+        network_config.buffer_size,
+        &consensus_committee,
+        &consensus_store_path,
+        &consensus_parameters,
+    )
+    .await
+    .unwrap()
+    .spawn_with_bind_address(&listen_address)
+    .await
+    .unwrap()
+    .join()
+    .await
+    {
+        error!("Validator server ended with an error: {e}");
+    }
+
+    Ok(())
+}

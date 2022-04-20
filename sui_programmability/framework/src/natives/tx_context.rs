@@ -15,7 +15,7 @@ use smallvec::smallvec;
 use std::{collections::VecDeque, convert::TryFrom};
 use sui_types::base_types::TransactionDigest;
 
-pub fn fresh_id(
+pub fn derive_id(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,

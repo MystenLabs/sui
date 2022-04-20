@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::same_item_push)] // get_key_pair returns random elements
 
+use std::collections::VecDeque;
 use std::fs;
 use std::path::Path;
 use std::{
@@ -13,9 +14,8 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::channel::mpsc::{channel, Receiver};
 use futures::lock::Mutex;
-use futures::SinkExt;
+use futures::stream;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
 use signature::Signer;
 use typed_store::Map;
@@ -30,7 +30,7 @@ use sui_types::messages::Transaction;
 use sui_types::object::{Data, Object, Owner, GAS_VALUE_FOR_TESTING};
 
 use crate::authority::{AuthorityState, AuthorityStore};
-use crate::authority_client::BUFFER_SIZE;
+use crate::authority_client::BatchInfoResponseItemStream;
 use crate::gateway_state::{GatewayAPI, GatewayState};
 
 use super::*;
@@ -116,29 +116,23 @@ impl AuthorityAPI for LocalAuthorityClient {
     }
 
     /// Handle Batch information requests for this authority.
-    async fn handle_batch_streaming(
+    async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<Receiver<Result<BatchInfoResponseItem, SuiError>>, io::Error> {
+    ) -> Result<BatchInfoResponseItemStream, io::Error> {
         let state = self.0.clone();
-        let (mut tx_output, tr_output) = channel(BUFFER_SIZE);
 
         let update_items = state.lock().await.handle_batch_info_request(request).await;
 
-        match update_items {
-            Ok(t) => {
-                let mut deq = t.0;
-                while let Some(update_item) = deq.pop_front() {
-                    let batch_info_response_item = BatchInfoResponseItem(update_item.clone());
-                    let _ = tx_output.send(Ok(batch_info_response_item)).await;
-                }
+        let (items, _): (VecDeque<_>, VecDeque<_>) = update_items.into_iter().unzip();
+        let stream = stream::iter(items.into_iter()).then(|mut item| async move {
+            let i = item.pop_front();
+            match i {
+                Some(i) => Ok(BatchInfoResponseItem(i)),
+                None => Result::Err(SuiError::BatchErrorSender),
             }
-            Err(e) => {
-                let err = std::io::Error::new(std::io::ErrorKind::Other, e);
-                return Err(err);
-            }
-        }
-        Ok(tr_output)
+        });
+        Ok(Box::pin(stream))
     }
 }
 
@@ -481,6 +475,21 @@ async fn init_local_client_and_fund_account_bad(
     client
 }
 
+#[cfg(test)]
+const ADMIN_SENTINEL: &str = "ee0437cf625b77af4d12bff98af1a88332b00638";
+
+// Required to capture address creation algorithm updates that break some tests.
+#[test]
+fn test_admin_address_consistency() {
+    use hex;
+    let (admin_address, _) = make_admin_account();
+    assert_eq!(admin_address.to_vec(), hex::decode(ADMIN_SENTINEL).expect("Decoding failed"),
+               "If this test broke, then the algorithm for deriving addresses from public keys has \
+               changed. Please compute the new admin address in hex format from `make_admin_account`\
+               and update both the ADMIN_SENTINEL const above, but also the ADMIN address to \
+               Hero.move with the new admin account hex value.");
+}
+
 #[tokio::test]
 async fn test_initiating_valid_transfer() {
     let recipient = get_new_address();
@@ -495,7 +504,7 @@ async fn test_initiating_valid_transfer() {
     ];
 
     let (sender, sender_key) = get_key_pair();
-    let mut client = init_local_client_and_fund_account(sender, authority_objects).await;
+    let client = init_local_client_and_fund_account(sender, authority_objects).await;
     assert_eq!(
         client.get_authorities().get_latest_owner(object_id_1).await,
         (sender, SequenceNumber::from(0))
@@ -552,7 +561,7 @@ async fn test_initiating_valid_transfer_despite_bad_authority() {
         vec![object_id, gas_object],
     ];
     let (sender, sender_key) = get_key_pair();
-    let mut client = init_local_client_and_fund_account_bad(sender, authority_objects).await;
+    let client = init_local_client_and_fund_account_bad(sender, authority_objects).await;
     let data = client
         .transfer_coin(sender, object_id, gas_object, 50000, recipient)
         .await
@@ -599,7 +608,7 @@ async fn test_initiating_transfer_low_funds() {
         vec![object_id_1, object_id_2, gas_object],
     ];
     let (sender, sender_key) = get_key_pair();
-    let mut client = init_local_client_and_fund_account_bad(sender, authority_objects).await;
+    let client = init_local_client_and_fund_account_bad(sender, authority_objects).await;
 
     let transfer = async {
         let data = client
@@ -779,7 +788,7 @@ async fn test_client_state_sync_with_transferred_object() {
     );
 
     // Confirm client 2 received the new object id
-    assert_eq!(1, client.get_owned_objects(addr2).unwrap().len());
+    assert_eq!(1, client.get_owned_objects(addr2).await.unwrap().len());
 }
 
 #[tokio::test]
@@ -1051,10 +1060,10 @@ async fn test_move_calls_freeze_object() {
     let transferred_obj = client_object(&mut client, new_obj_ref.0).await.1;
 
     // Confirm new owner
-    assert!(transferred_obj.owner == Owner::SharedImmutable);
+    assert!(transferred_obj.owner == Owner::Immutable);
 
     // Confirm read only
-    assert!(transferred_obj.is_read_only());
+    assert!(transferred_obj.is_immutable());
 }
 
 #[tokio::test]
@@ -1339,7 +1348,7 @@ async fn test_transfer_object_error() {
         .collect();
 
     let (sender, sender_key) = get_key_pair();
-    let mut client = init_local_client_and_fund_account(sender, authority_objects).await;
+    let client = init_local_client_and_fund_account(sender, authority_objects).await;
 
     let mut objects = objects.iter();
 
@@ -1950,7 +1959,7 @@ async fn test_transfer_pending_transactions() {
         .collect();
 
     let (sender, sender_key) = get_key_pair();
-    let mut client = init_local_client_and_fund_account(sender, authority_objects).await;
+    let client = init_local_client_and_fund_account(sender, authority_objects).await;
     let (recipient, _) = get_key_pair();
 
     let mut objects = objects.iter();

@@ -7,7 +7,7 @@ use futures::{join, StreamExt};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::thread;
 use std::{thread::sleep, time::Duration};
-use sui_core::authority_client::AuthorityClient;
+use sui_core::authority_client::{AuthorityAPI, AuthorityClient};
 use sui_network::network::{NetworkClient, NetworkServer};
 use sui_types::batch::UpdateItem;
 use sui_types::messages::{BatchInfoRequest, BatchInfoResponseItem};
@@ -223,7 +223,7 @@ async fn run_follower(network_client: NetworkClient) {
 
         loop {
             let receiver = authority_client
-                .handle_batch_streaming_as_stream(BatchInfoRequest {
+                .handle_batch_stream(BatchInfoRequest {
                     start,
                     end: start + FOLLOWER_BATCH_SIZE,
                 })
