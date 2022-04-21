@@ -8,7 +8,7 @@
 import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignedTransaction, TransactionResponse, TransferTransaction, TxnDataSerializer, ObjectRef, ObjectExistsInfo, ObjectNotExistsInfo, ObjectStatus, GetOwnedObjectRefsResponse, GetObjectInfoResponse, ObjectDigest, ObjectId, SequenceNumber, RawObjectRef, Transfer, RawAuthoritySignInfo, SingleTransactionKind, TransactionKind, TransactionData, Transaction, CertifiedTransaction, TransactionDigest, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveModulePublish, MoveTypeTag, MoveCall, EmptySignInfo, AuthorityName, AuthoritySignature } from "./index";
 import { BN } from "bn.js";
 
-export function isEd25519KeypairData(obj: any, _argumentName?: string): obj is Ed25519KeypairData {
+export function isEd25519KeypairData(obj: any): obj is Ed25519KeypairData {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -18,7 +18,7 @@ export function isEd25519KeypairData(obj: any, _argumentName?: string): obj is E
     )
 }
 
-export function isKeypair(obj: any, _argumentName?: string): obj is Keypair {
+export function isKeypair(obj: any): obj is Keypair {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -28,7 +28,7 @@ export function isKeypair(obj: any, _argumentName?: string): obj is Keypair {
     )
 }
 
-export function isPublicKeyInitData(obj: any, _argumentName?: string): obj is PublicKeyInitData {
+export function isPublicKeyInitData(obj: any): obj is PublicKeyInitData {
     return (
         (isTransactionResponse(obj) as boolean ||
             isSequenceNumber(obj) as boolean ||
@@ -42,7 +42,7 @@ export function isPublicKeyInitData(obj: any, _argumentName?: string): obj is Pu
     )
 }
 
-export function isPublicKeyData(obj: any, _argumentName?: string): obj is PublicKeyData {
+export function isPublicKeyData(obj: any): obj is PublicKeyData {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -51,7 +51,7 @@ export function isPublicKeyData(obj: any, _argumentName?: string): obj is Public
     )
 }
 
-export function isSignedTransaction(obj: any, _argumentName?: string): obj is SignedTransaction {
+export function isSignedTransaction(obj: any): obj is SignedTransaction {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -62,13 +62,13 @@ export function isSignedTransaction(obj: any, _argumentName?: string): obj is Si
     )
 }
 
-export function isTransactionResponse(obj: any, _argumentName?: string): obj is TransactionResponse {
+export function isTransactionResponse(obj: any): obj is TransactionResponse {
     return (
         typeof obj === "string"
     )
 }
 
-export function isTransferTransaction(obj: any, _argumentName?: string): obj is TransferTransaction {
+export function isTransferTransaction(obj: any): obj is TransferTransaction {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -81,7 +81,7 @@ export function isTransferTransaction(obj: any, _argumentName?: string): obj is 
     )
 }
 
-export function isTxnDataSerializer(obj: any, _argumentName?: string): obj is TxnDataSerializer {
+export function isTxnDataSerializer(obj: any): obj is TxnDataSerializer {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -90,7 +90,7 @@ export function isTxnDataSerializer(obj: any, _argumentName?: string): obj is Tx
     )
 }
 
-export function isObjectRef(obj: any, _argumentName?: string): obj is ObjectRef {
+export function isObjectRef(obj: any): obj is ObjectRef {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -101,7 +101,7 @@ export function isObjectRef(obj: any, _argumentName?: string): obj is ObjectRef 
     )
 }
 
-export function isObjectExistsInfo(obj: any, _argumentName?: string): obj is ObjectExistsInfo {
+export function isObjectExistsInfo(obj: any): obj is ObjectExistsInfo {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -110,7 +110,7 @@ export function isObjectExistsInfo(obj: any, _argumentName?: string): obj is Obj
     )
 }
 
-export function isObjectNotExistsInfo(obj: any, _argumentName?: string): obj is ObjectNotExistsInfo {
+export function isObjectNotExistsInfo(obj: any): obj is ObjectNotExistsInfo {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -118,7 +118,7 @@ export function isObjectNotExistsInfo(obj: any, _argumentName?: string): obj is 
     )
 }
 
-export function isObjectStatus(obj: any, _argumentName?: string): obj is ObjectStatus {
+export function isObjectStatus(obj: any): obj is ObjectStatus {
     return (
         (obj === "Exists" ||
             obj === "NotExists" ||
@@ -126,7 +126,7 @@ export function isObjectStatus(obj: any, _argumentName?: string): obj is ObjectS
     )
 }
 
-export function isGetOwnedObjectRefsResponse(obj: any, _argumentName?: string): obj is GetOwnedObjectRefsResponse {
+export function isGetOwnedObjectRefsResponse(obj: any): obj is GetOwnedObjectRefsResponse {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -138,7 +138,7 @@ export function isGetOwnedObjectRefsResponse(obj: any, _argumentName?: string): 
     )
 }
 
-export function isGetObjectInfoResponse(obj: any, _argumentName?: string): obj is GetObjectInfoResponse {
+export function isGetObjectInfoResponse(obj: any): obj is GetObjectInfoResponse {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -150,25 +150,25 @@ export function isGetObjectInfoResponse(obj: any, _argumentName?: string): obj i
     )
 }
 
-export function isObjectDigest(obj: any, _argumentName?: string): obj is ObjectDigest {
+export function isObjectDigest(obj: any): obj is ObjectDigest {
     return (
         typeof obj === "string"
     )
 }
 
-export function isObjectId(obj: any, _argumentName?: string): obj is ObjectId {
+export function isObjectId(obj: any): obj is ObjectId {
     return (
         typeof obj === "string"
     )
 }
 
-export function isSequenceNumber(obj: any, _argumentName?: string): obj is SequenceNumber {
+export function isSequenceNumber(obj: any): obj is SequenceNumber {
     return (
         typeof obj === "number"
     )
 }
 
-export function isRawObjectRef(obj: any, _argumentName?: string): obj is RawObjectRef {
+export function isRawObjectRef(obj: any): obj is RawObjectRef {
     return (
         Array.isArray(obj) &&
         isTransactionResponse(obj[0]) as boolean &&
@@ -177,7 +177,7 @@ export function isRawObjectRef(obj: any, _argumentName?: string): obj is RawObje
     )
 }
 
-export function isTransfer(obj: any, _argumentName?: string): obj is Transfer {
+export function isTransfer(obj: any): obj is Transfer {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -187,7 +187,7 @@ export function isTransfer(obj: any, _argumentName?: string): obj is Transfer {
     )
 }
 
-export function isRawAuthoritySignInfo(obj: any, _argumentName?: string): obj is RawAuthoritySignInfo {
+export function isRawAuthoritySignInfo(obj: any): obj is RawAuthoritySignInfo {
     return (
         Array.isArray(obj) &&
         isTransactionResponse(obj[0]) as boolean &&
@@ -195,7 +195,7 @@ export function isRawAuthoritySignInfo(obj: any, _argumentName?: string): obj is
     )
 }
 
-export function isSingleTransactionKind(obj: any, _argumentName?: string): obj is SingleTransactionKind {
+export function isSingleTransactionKind(obj: any): obj is SingleTransactionKind {
     return (
         ((obj !== null &&
             typeof obj === "object" ||
@@ -212,7 +212,7 @@ export function isSingleTransactionKind(obj: any, _argumentName?: string): obj i
     )
 }
 
-export function isTransactionKind(obj: any, _argumentName?: string): obj is TransactionKind {
+export function isTransactionKind(obj: any): obj is TransactionKind {
     return (
         ((obj !== null &&
             typeof obj === "object" ||
@@ -228,7 +228,7 @@ export function isTransactionKind(obj: any, _argumentName?: string): obj is Tran
     )
 }
 
-export function isTransactionData(obj: any, _argumentName?: string): obj is TransactionData {
+export function isTransactionData(obj: any): obj is TransactionData {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -240,7 +240,7 @@ export function isTransactionData(obj: any, _argumentName?: string): obj is Tran
     )
 }
 
-export function isTransaction(obj: any, _argumentName?: string): obj is Transaction {
+export function isTransaction(obj: any): obj is Transaction {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -251,7 +251,7 @@ export function isTransaction(obj: any, _argumentName?: string): obj is Transact
     )
 }
 
-export function isCertifiedTransaction(obj: any, _argumentName?: string): obj is CertifiedTransaction {
+export function isCertifiedTransaction(obj: any): obj is CertifiedTransaction {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -264,19 +264,19 @@ export function isCertifiedTransaction(obj: any, _argumentName?: string): obj is
     )
 }
 
-export function isTransactionDigest(obj: any, _argumentName?: string): obj is TransactionDigest {
+export function isTransactionDigest(obj: any): obj is TransactionDigest {
     return (
         typeof obj === "string"
     )
 }
 
-export function isGatewayTxSeqNumber(obj: any, _argumentName?: string): obj is GatewayTxSeqNumber {
+export function isGatewayTxSeqNumber(obj: any): obj is GatewayTxSeqNumber {
     return (
         typeof obj === "number"
     )
 }
 
-export function isGetTxnDigestsResponse(obj: any, _argumentName?: string): obj is GetTxnDigestsResponse {
+export function isGetTxnDigestsResponse(obj: any): obj is GetTxnDigestsResponse {
     return (
         Array.isArray(obj) &&
         obj.every((e: any) =>
@@ -287,7 +287,7 @@ export function isGetTxnDigestsResponse(obj: any, _argumentName?: string): obj i
     )
 }
 
-export function isMoveModulePublish(obj: any, _argumentName?: string): obj is MoveModulePublish {
+export function isMoveModulePublish(obj: any): obj is MoveModulePublish {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -295,7 +295,7 @@ export function isMoveModulePublish(obj: any, _argumentName?: string): obj is Mo
     )
 }
 
-export function isMoveTypeTag(obj: any, _argumentName?: string): obj is MoveTypeTag {
+export function isMoveTypeTag(obj: any): obj is MoveTypeTag {
     return (
         (obj === "bool" ||
             obj === "u8" ||
@@ -308,7 +308,7 @@ export function isMoveTypeTag(obj: any, _argumentName?: string): obj is MoveType
     )
 }
 
-export function isMoveCall(obj: any, _argumentName?: string): obj is MoveCall {
+export function isMoveCall(obj: any): obj is MoveCall {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -332,19 +332,19 @@ export function isMoveCall(obj: any, _argumentName?: string): obj is MoveCall {
     )
 }
 
-export function isEmptySignInfo(obj: any, _argumentName?: string): obj is EmptySignInfo {
+export function isEmptySignInfo(obj: any): obj is EmptySignInfo {
     return (
         typeof obj === "object"
     )
 }
 
-export function isAuthorityName(obj: any, _argumentName?: string): obj is AuthorityName {
+export function isAuthorityName(obj: any): obj is AuthorityName {
     return (
         typeof obj === "string"
     )
 }
 
-export function isAuthoritySignature(obj: any, _argumentName?: string): obj is AuthoritySignature {
+export function isAuthoritySignature(obj: any): obj is AuthoritySignature {
     return (
         typeof obj === "string"
     )
