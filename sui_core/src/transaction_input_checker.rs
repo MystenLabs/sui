@@ -103,7 +103,7 @@ pub fn filter_owned_objects(all_objects: &[(InputObjectKind, Object)]) -> Vec<Ob
                     Some(*object_ref)
                 }
             }
-            InputObjectKind::SharedMoveObject(..) => None,
+            InputObjectKind::SharedMoveObject(_) => None,
         })
         .collect();
 

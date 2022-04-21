@@ -7,7 +7,7 @@ use move_binary_format::{
     file_format::{AbilitySet, FunctionDefinition, SignatureToken, Visibility},
     CompiledModule,
 };
-use move_core_types::{ident_str, identifier::IdentStr, language_storage::TypeTag};
+use move_core_types::{ident_str, identifier::IdentStr};
 use sui_types::{
     base_types::{TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
     error::{SuiError, SuiResult},
@@ -47,8 +47,7 @@ pub fn verify_module(module: &CompiledModule) -> SuiResult {
             // cannot be called from Sui
             continue;
         }
-        let is_entrypoint_execution = false;
-        verify_entry_function_impl(module, func_def, None, is_entrypoint_execution)
+        verify_entry_function_impl(module, func_def)
             .map_err(|error| SuiError::ModuleVerificationFailure { error })?;
     }
     Ok(())
@@ -88,35 +87,16 @@ pub fn module_has_init(module: &CompiledModule) -> bool {
     is_tx_context(&view, &parameters[0])
 }
 
-pub fn verify_entry_function(
-    module: &CompiledModule,
-    func_def: &FunctionDefinition,
-    function_type_args: &[TypeTag],
-) -> SuiResult {
-    let is_entrypoint_execution = true;
-    verify_entry_function_impl(
-        module,
-        func_def,
-        Some(function_type_args),
-        is_entrypoint_execution,
-    )
-    .map_err(|error| SuiError::InvalidFunctionSignature { error })
-}
-
 fn verify_entry_function_impl(
     module: &CompiledModule,
     func_def: &FunctionDefinition,
-    function_type_args: Option<&[TypeTag]>,
-    _is_entrypoint_execution: bool,
 ) -> Result<(), String> {
     let view = BinaryIndexedView::Module(module);
     let handle = view.function_handle_at(func_def.function);
     let params = view.signature_at(handle.parameters);
-    let pessimistic_type_args = &handle.type_parameters;
 
     // must have at least on &mut TxContext param
     if params.is_empty() {
-        debug_assert!(!_is_entrypoint_execution);
         return Err(format!(
             "No parameters in entry function {}",
             view.identifier_at(handle.name)
@@ -124,7 +104,6 @@ fn verify_entry_function_impl(
     }
     let last_param = params.0.last().unwrap();
     if !is_tx_context(&view, last_param) {
-        debug_assert!(!_is_entrypoint_execution);
         return Err(format!(
             "{}::{}. Expected last parameter of function signature to be &mut {}::{}::{}, but found {}",
             module.self_id(),
@@ -136,45 +115,12 @@ fn verify_entry_function_impl(
         ));
     }
 
-    let last_idx = params.0.len() - 1;
-    let all_but_last = &params.0[..last_idx];
-    let mut first_prim_idx_opt = None;
-    for (idx, param_sig_token) in all_but_last.iter().enumerate() {
-        if !is_object(&view, pessimistic_type_args, param_sig_token)? {
-            first_prim_idx_opt = Some(idx);
-            break;
-        }
-    }
-    // if none, using last_idx will result in prim_suffix being empty
-    let first_prim_idx = first_prim_idx_opt.unwrap_or(last_idx);
-    let prim_suffix = &all_but_last[first_prim_idx..];
-    for (pos, t) in prim_suffix
-        .iter()
-        .enumerate()
-        .map(|(idx, s)| (idx + first_prim_idx, s))
-    {
-        if !is_primitive(function_type_args, pessimistic_type_args, t) {
-            return Err(format!(
-                "{}::{}. Expected primitive parameter after object parameters for function {} at \
-                        position {}",
-                module.self_id(),
-                view.identifier_at(handle.name),
-                view.identifier_at(handle.name),
-                pos,
-            ));
-        }
-    }
-
-    for (pos, ret_t) in view.signature_at(handle.return_).0.iter().enumerate() {
-        if !is_entry_ret_type(function_type_args, pessimistic_type_args, ret_t) {
-            return Err(format!(
-                "{}::{}. Expected primitive return type for function {} at position {}",
-                module.self_id(),
-                view.identifier_at(handle.name),
-                view.identifier_at(handle.name),
-                pos,
-            ));
-        }
+    let return_ = view.signature_at(handle.return_);
+    if !return_.is_empty() {
+        return Err(format!(
+            "Entry function {} cannot have return values",
+            view.identifier_at(handle.name)
+        ));
     }
 
     Ok(())
@@ -239,87 +185,5 @@ fn is_object_struct(
                 .map_err(|vm_err| vm_err.to_string())?;
             Ok(abilities.has_key())
         }
-    }
-}
-
-/// Checks if a given parameter is of a primitive type. It's a mirror
-/// of the is_primitive function in the adapter module that operates
-/// on Type-s.
-fn is_primitive(
-    type_args: Option<&[TypeTag]>,
-    function_type_constraints: &[AbilitySet],
-    t: &SignatureToken,
-) -> bool {
-    // nested vectors of primitive types are OK to arbitrary nesting
-    // level
-    is_primitive_with_depth(type_args, function_type_constraints, t, 0, u32::MAX)
-}
-
-// Checks if a given type is the correct entry function return type. It's a mirror
-/// of the is_entry_ret_type function in the adapter module that
-/// operates on Type-s.
-fn is_entry_ret_type(
-    type_args: Option<&[TypeTag]>,
-    function_type_constraints: &[AbilitySet],
-    t: &SignatureToken,
-) -> bool {
-    // allow vectors of vectors but no deeper nesting
-    is_primitive_with_depth(type_args, function_type_constraints, t, 0, 2)
-}
-
-fn is_primitive_with_depth(
-    type_args: Option<&[TypeTag]>,
-    function_type_constraints: &[AbilitySet],
-    t: &SignatureToken,
-    depth: u32,
-    max_depth: u32,
-) -> bool {
-    use SignatureToken as S;
-    match t {
-        S::Bool | S::U8 | S::U64 | S::U128 | S::Address => true,
-
-        // type parameters are optimistically considered primitives if no type args are given
-        // if the type argument is out of bounds, that will be an error elsewhere
-        S::TypeParameter(idx) => {
-            let idx = *idx as usize;
-            let constrained_by_key = function_type_constraints
-                .get(idx)
-                .map(|abs| abs.has_key())
-                .unwrap_or(false);
-            constrained_by_key
-                || type_args
-                    .and_then(|type_args| {
-                        type_args
-                            .get(idx)
-                            .map(|tt| is_primitive_vm_type_with_depth(tt, depth, max_depth))
-                    })
-                    .unwrap_or(true)
-        }
-
-        S::Vector(inner) if depth < max_depth => is_primitive_with_depth(
-            type_args,
-            function_type_constraints,
-            inner,
-            depth + 1,
-            max_depth,
-        ),
-
-        S::Vector(_)
-        | S::Signer
-        | S::Struct(_)
-        | S::StructInstantiation(..)
-        | S::Reference(_)
-        | S::MutableReference(_) => false,
-    }
-}
-
-fn is_primitive_vm_type_with_depth(tt: &TypeTag, depth: u32, max_depth: u32) -> bool {
-    use TypeTag as T;
-    match tt {
-        T::Bool | T::U8 | T::U64 | T::U128 | T::Address => true,
-        T::Vector(inner) if depth < max_depth => {
-            is_primitive_vm_type_with_depth(inner, depth + 1, max_depth)
-        }
-        T::Vector(_) | T::Struct(_) | T::Signer => false,
     }
 }

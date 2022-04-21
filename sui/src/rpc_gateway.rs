@@ -14,6 +14,7 @@ use move_core_types::language_storage::TypeTag;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::serde_as;
+use sui_types::messages::CallArg;
 use tracing::debug;
 
 use serde_with::base64::Base64;
@@ -29,6 +30,13 @@ use crate::config::PersistedConfig;
 use crate::gateway_config::GatewayConfig;
 use crate::rest_gateway::responses::GetObjectInfoResponse;
 use crate::rest_gateway::responses::{NamedObjectRef, ObjectResponse};
+
+#[derive(Serialize, Deserialize)]
+pub enum RpcCallArg {
+    Pure(Base64EncodedBytes),
+    ImmOrOwnedObject(ObjectID),
+    SharedObject(ObjectID),
+}
 
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcGateway {
@@ -53,11 +61,9 @@ pub trait RpcGateway {
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
-        pure_arguments: Vec<Base64EncodedBytes>,
+        arguments: Vec<RpcCallArg>,
         gas_object_id: ObjectID,
         gas_budget: u64,
-        object_arguments: Vec<ObjectID>,
-        shared_object_arguments: Vec<ObjectID>,
     ) -> RpcResult<TransactionBytes>;
 
     #[method(name = "publish")]
@@ -284,11 +290,9 @@ impl RpcGatewayServer for RpcGatewayImpl {
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
-        pure_arguments: Vec<Base64EncodedBytes>,
+        rpc_arguments: Vec<RpcCallArg>,
         gas_object_id: ObjectID,
         gas_budget: u64,
-        object_arguments: Vec<ObjectID>,
-        shared_object_arguments: Vec<ObjectID>,
     ) -> RpcResult<TransactionBytes> {
         let data = async {
             let package_object_ref = self
@@ -304,15 +308,17 @@ impl RpcGatewayServer for RpcGatewayImpl {
                 .reference()?;
 
             // Fetch the objects for the object args
-            let mut object_args_refs = Vec::new();
-            for obj_id in object_arguments {
-                let object_ref = self.gateway.get_object_info(obj_id).await?.reference()?;
-                object_args_refs.push(object_ref);
+            let mut arguments = Vec::with_capacity(rpc_arguments.len());
+            for rpc_arg in rpc_arguments {
+                arguments.push(match rpc_arg {
+                    RpcCallArg::Pure(arg) => CallArg::Pure(arg.to_vec()),
+                    RpcCallArg::SharedObject(id) => CallArg::SharedObject(id),
+                    RpcCallArg::ImmOrOwnedObject(id) => {
+                        let object_ref = self.gateway.get_object_info(id).await?.reference()?;
+                        CallArg::ImmOrOwnedObject(object_ref)
+                    }
+                })
             }
-            let pure_arguments = pure_arguments
-                .iter()
-                .map(|arg| arg.to_vec())
-                .collect::<Vec<_>>();
 
             self.gateway
                 .move_call(
@@ -322,9 +328,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
                     function,
                     type_arguments,
                     gas_obj_ref,
-                    object_args_refs,
-                    shared_object_arguments,
-                    pure_arguments,
+                    arguments,
                     gas_budget,
                 )
                 .await

@@ -7,7 +7,7 @@ use futures::{join, StreamExt};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::thread;
 use std::{thread::sleep, time::Duration};
-use sui_core::authority_client::{AuthorityAPI, AuthorityClient};
+use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_network::network::{NetworkClient, NetworkServer};
 use sui_types::batch::UpdateItem;
 use sui_types::messages::{BatchInfoRequest, BatchInfoResponseItem};
@@ -217,7 +217,7 @@ fn run_latency_microbench(
 async fn run_follower(network_client: NetworkClient) {
     // We spawn a second client that listens to the batch interface
     let _batch_client_handle = tokio::task::spawn(async move {
-        let authority_client = AuthorityClient::new(network_client);
+        let authority_client = NetworkAuthorityClient::new(network_client);
 
         let mut start = 0;
 

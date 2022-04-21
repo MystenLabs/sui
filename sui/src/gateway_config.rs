@@ -10,7 +10,7 @@ use std::time::Duration;
 use serde::Deserialize;
 use serde::Serialize;
 
-use sui_core::authority_client::AuthorityClient;
+use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::gateway_state::{GatewayClient, GatewayState};
 use sui_network::network::NetworkClient;
 use sui_network::transport;
@@ -100,10 +100,10 @@ impl GatewayConfig {
         Committee::new(voting_rights)
     }
 
-    pub fn make_authority_clients(&self) -> BTreeMap<AuthorityName, AuthorityClient> {
+    pub fn make_authority_clients(&self) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
         let mut authority_clients = BTreeMap::new();
         for authority in &self.authorities {
-            let client = AuthorityClient::new(NetworkClient::new(
+            let client = NetworkAuthorityClient::new(NetworkClient::new(
                 authority.host.clone(),
                 authority.base_port,
                 self.buffer_size,
