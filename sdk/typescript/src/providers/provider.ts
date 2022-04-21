@@ -15,6 +15,7 @@ import {
 
 ///////////////////////////////
 // Exported Types
+/*
 export type ObjectRef = Infer<typeof ObjectRef>;
 export type ObjectExistsInfo = Infer<typeof ObjectExistsInfo>;
 export type ObjectNotExistsInfo = Infer<typeof ObjectNotExistsInfo>;
@@ -23,6 +24,7 @@ export type GetObjectInfoResponse = Infer<typeof GetObjectInfoResponse>;
 export type GatewayTxSeqNumber = Infer<typeof GatewayTxSeqNumber>;
 export type TransactionDigest = Infer<typeof TransactionDigest>;
 export type GetTxnDigestsResponse = Infer<typeof GetTxnDigestsResponse>;
+*/
 
 export interface SignedTransaction {
   txBytes: string;
@@ -78,31 +80,29 @@ export abstract class Provider {
   // TODO: add more interface methods
 }
 
-export const TransactionDigest = string();
-export const GatewayTxSeqNumber = number();
+export type TransactionDigest = string;
+export type GatewayTxSeqNumber = number;
 
-export const ObjectRef = pick({
+export type ObjectRef = {
   digest: TransactionDigest,
-  objectId: string(),
-  version: number(),
-});
+  objectId: string,
+  version: number,
+};
 
-export const ObjectExistsInfo = pick({
+export type ObjectExistsInfo = {
   objectRef: ObjectRef,
-  object: unknown(),
-});
+  object: any,
+};
 
-export const ObjectNotExistsInfo = pick({
-  objectId: string(),
-});
+export type ObjectNotExistsInfo = {
+  objectId: any,
+};
 
-export const ObjectStatus = enums(['Exists', 'NotExists', 'Deleted']);
+export type ObjectStatus = 'Exists' | 'NotExists' | 'Deleted';
 
-export const GetObjectInfoResponse = pick({
+export type GetObjectInfoResponse = {
   status: ObjectStatus,
-  details: union([ObjectExistsInfo, ObjectNotExistsInfo, ObjectRef]),
-});
+  details: ObjectExistsInfo | ObjectNotExistsInfo | ObjectRef,
+};
 
-export const GetTxnDigestsResponse = array(
-  tuple([GatewayTxSeqNumber, TransactionDigest])
-);
+export type GetTxnDigestsResponse = [GatewayTxSeqNumber, TransactionDigest];
