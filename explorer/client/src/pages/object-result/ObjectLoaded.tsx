@@ -15,6 +15,60 @@ import { GetObjectInfoResponse } from 'sui.js';
 import { checkIsIDType, hasBytesField, hasVecField, checkVecOfSingleID, isSuiPropertyType } from '../../utils/typeChecks';
 
 
+function renderConnectedEntity(key: string, value: any, index1: number): JSX.Element {
+    return (
+    <div key={`ConnectedEntity-${index1}`}>
+        <div>{_toSpace(key)}</div>
+        {hasBytesField(value) && (
+            <Longtext
+                text={value.bytes}
+                category="objects"
+            />
+        )}
+        {hasVecField(value) && (
+            <div>
+                {value?.vec.map(
+                    (
+                        value2: {
+                            bytes: string;
+                        },
+                        index2: number
+                    ) => (
+                        <Longtext
+                            text={
+                                value2.bytes
+                            }
+                            category="objects"
+                            key={`ConnectedEntity-${index1}-${index2}`}
+                        />
+                    )
+                )}
+            </div>
+        )}
+        {checkVecOfSingleID(value) && (
+            <div>
+                {value.map(
+                    (
+                        value2: {
+                            bytes: string;
+                        },
+                        index2: number
+                    ) => (
+                        <Longtext
+                            text={
+                                value2.bytes
+                            }
+                            category="objects"
+                            key={`ConnectedEntity-${index1}-${index2}`}
+                        />
+                    )
+                )}
+            </div>
+        )}
+    </div>
+    )
+}
+
 function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
 
     // TODO - remove all '@ts-ignore' when type defs are fixed
@@ -46,7 +100,6 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
         () => setShowConnectedEntities(!showConnectedEntities),
         [showConnectedEntities]
     );
-    const prepLabel = _toSpace;
 
 
     const suiObjName = suiObj['name'];
@@ -184,7 +237,7 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
                                 <div className={styles.propertybox}>
                                     {properties.map(([key, value], index) => (
                                         <div key={`property-${index}`}>
-                                            <p>{prepLabel(key)}</p>
+                                            <p>{_toSpace(key)}</p>
                                             <p>{value}</p>
                                         </div>
                                     ))}
@@ -204,57 +257,7 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
                                 <div className={theme.textresults}>
                                     {ownedObjects.map(
                                         ([key, value], index1) => (
-                                            <div
-                                                key={`ConnectedEntity-${index1}`}
-                                            >
-                                                <div>{prepLabel(key)}</div>
-                                                {hasBytesField(value) && (
-                                                    <Longtext
-                                                        text={value.bytes}
-                                                        category="objects"
-                                                    />
-                                                )}
-                                                {hasVecField(value) && (
-                                                    <div>
-                                                        {value?.vec.map(
-                                                            (
-                                                                value2: {
-                                                                    bytes: string;
-                                                                },
-                                                                index2: number
-                                                            ) => (
-                                                                <Longtext
-                                                                    text={
-                                                                        value2.bytes
-                                                                    }
-                                                                    category="objects"
-                                                                    key={`ConnectedEntity-${index1}-${index2}`}
-                                                                />
-                                                            )
-                                                        )}
-                                                    </div>
-                                                )}
-                                                {checkVecOfSingleID(value) && (
-                                                    <div>
-                                                        {value.map(
-                                                            (
-                                                                value2: {
-                                                                    bytes: string;
-                                                                },
-                                                                index2: number
-                                                            ) => (
-                                                                <Longtext
-                                                                    text={
-                                                                        value2.bytes
-                                                                    }
-                                                                    category="objects"
-                                                                    key={`ConnectedEntity-${index1}-${index2}`}
-                                                                />
-                                                            )
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
+                                            renderConnectedEntity(key, value, index1)
                                         )
                                     )}
                                 </div>
