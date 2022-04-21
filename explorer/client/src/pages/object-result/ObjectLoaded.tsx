@@ -112,40 +112,7 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
         return asciiFromNumberBytes(addrOwner);
     };
 
-    function toHexString(byteArray: number[]): string {
-        return (
-            '0x' +
-            Array.prototype.map
-                .call(byteArray, (byte) => {
-                    return ('0' + (byte & 0xff).toString(16)).slice(-2);
-                })
-                .join('')
-        );
-    }
-
-    function processOwner(owner: any) {
-        if (typeof owner === 'object' && 'AddressOwner' in owner) {
-            return toHexString(owner.AddressOwner);
-        }
-
-        return owner;
-    }
-
-    const viewedData = {
-        ...data,
-        objType: trimStdLibPrefix(suiObj.objType),
-        name: suiObj.name,
-        //tx_digest:
-        //    data.data.tx_digest && typeof data.data.tx_digest === 'object'
-        //        ? toHexString(data.data.tx_digest as number[])
-        //        : data.data.tx_digest,
-        owner: processOwner(suiObj),
-    };
-
-    //TO DO remove when have distinct name field under Description
-    const nameKeyValue = Object.entries(suiObj)
-        .filter(([key, _]) => /name/i.test(key))
-        .map(([_, value]) => value);
+    const suiObjName = suiObj['name'];
 
     const ownedObjects: [string, any][] = Object.entries(suiObj).filter(
         ([key, value]) => checkIsIDType(key, value)
@@ -172,8 +139,8 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
                     }`}
                 >
                     {suiObj.name && <h1>{suiObj.name}</h1>} {' '}
-                    {typeof nameKeyValue[0] === 'string' && (
-                        <h1>{nameKeyValue}</h1>
+                    {typeof suiObjName === 'string' && (
+                        <h1>{suiObjName}</h1>
                     )}
                     <h2
                         className={styles.clickableheader}
