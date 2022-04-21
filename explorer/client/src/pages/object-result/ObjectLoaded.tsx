@@ -1,23 +1,93 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
+<<<<<<< HEAD
 import { type AddressOwner } from '../../utils/api/SuiRpcClient';
+=======
+>>>>>>> explorer-jsonrpc
 import {
-    asciiFromNumberBytes,
-    trimStdLibPrefix,
+    extractOwnerData, trimStdLibPrefix, _toSpace,
 } from '../../utils/stringUtils';
+<<<<<<< HEAD
 import { type DataType } from './ObjectResultType';
+=======
+import DisplayBox from './DisplayBox';
+>>>>>>> explorer-jsonrpc
 
 import styles from './ObjectResult.module.css';
+import { GetObjectInfoResponse } from 'sui.js';
+import { checkIsIDType, hasBytesField, hasVecField, checkVecOfSingleID, isSuiPropertyType } from '../../utils/typeChecks';
 
-function ObjectLoaded({ data }: { data: DataType }) {
-    // TODO - restore or remove this functionality
+
+function renderConnectedEntity(key: string, value: any, index1: number): JSX.Element {
+    return (
+    <div key={`ConnectedEntity-${index1}`}>
+        <div>{_toSpace(key)}</div>
+        {hasBytesField(value) && (
+            <Longtext
+                text={value.bytes}
+                category="objects"
+            />
+        )}
+        {hasVecField(value) && (
+            <div>
+                {value?.vec.map(
+                    (
+                        value2: {
+                            bytes: string;
+                        },
+                        index2: number
+                    ) => (
+                        <Longtext
+                            text={
+                                value2.bytes
+                            }
+                            category="objects"
+                            key={`ConnectedEntity-${index1}-${index2}`}
+                        />
+                    )
+                )}
+            </div>
+        )}
+        {checkVecOfSingleID(value) && (
+            <div>
+                {value.map(
+                    (
+                        value2: {
+                            bytes: string;
+                        },
+                        index2: number
+                    ) => (
+                        <Longtext
+                            text={
+                                value2.bytes
+                            }
+                            category="objects"
+                            key={`ConnectedEntity-${index1}-${index2}`}
+                        />
+                    )
+                )}
+            </div>
+        )}
+    </div>
+    )
+}
+
+function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
+
+    // TODO - remove all '@ts-ignore' when type defs are fixed
+    //@ts-ignore
+    const suiObj = data.details.object;
+    //@ts-ignore
+    const objRef = data.details.objectRef;
+    const objID = objRef.objectId;
+
     const [showDescription, setShowDescription] = useState(true);
     const [showProperties, setShowProperties] = useState(false);
     const [showConnectedEntities, setShowConnectedEntities] = useState(false);
@@ -40,6 +110,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
         () => setShowConnectedEntities(!showConnectedEntities),
         [showConnectedEntities]
     );
+<<<<<<< HEAD
     const prepLabel = (label: string) => label.split('_').join(' ');
     const checkIsPropertyType = (value: any) =>
         ['number', 'string'].includes(typeof value);
@@ -165,23 +236,14 @@ function ObjectLoaded({ data }: { data: DataType }) {
 
         return owner;
     }
+=======
+>>>>>>> explorer-jsonrpc
 
-    const viewedData = {
-        ...data,
-        objType: trimStdLibPrefix(data.objType),
-        name: processName(data.name),
-        tx_digest:
-            data.data.tx_digest && typeof data.data.tx_digest === 'object'
-                ? toHexString(data.data.tx_digest as number[])
-                : data.data.tx_digest,
-        owner: processOwner(data.owner),
-    };
 
-    //TO DO remove when have distinct name field under Description
-    const nameKeyValue = Object.entries(viewedData.data?.contents)
-        .filter(([key, _]) => /name/i.test(key))
-        .map(([_, value]) => value);
+    const suiObjName = suiObj['name'];
+    const nonNameEntries = Object.entries(suiObj).filter(([k, _]) => k === 'name');
 
+<<<<<<< HEAD
     const ownedObjects = Object.entries(viewedData.data?.contents)
         .filter(([key, value]) => checkIsIDType(key, value))
         .map(([key, value]) => {
@@ -201,17 +263,21 @@ function ObjectLoaded({ data }: { data: DataType }) {
 
             return [key, []];
         });
+=======
+    const ownedObjects: [string, any][] = nonNameEntries.filter(
+        ([key, value]) => checkIsIDType(key, value)
+    );
+>>>>>>> explorer-jsonrpc
 
-    const properties = Object.entries(viewedData.data?.contents)
-        //TO DO: remove when have distinct 'name' field in Description
-        .filter(([key, _]) => !/name/i.test(key))
-        .filter(([_, value]) => checkIsPropertyType(value))
+    const properties: [string, any][] = nonNameEntries
+        .filter(([_, value]) => isSuiPropertyType(value))
         // TODO: 'display' is a object property added during demo, replace with metadata ptr?
         .filter(([key, _]) => key !== 'display');
 
     return (
         <>
             <div className={styles.resultbox}>
+<<<<<<< HEAD
                 {viewedData.data?.contents?.display && (
                     <div className={styles.display}>
                         <DisplayBox
@@ -219,17 +285,21 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             tag="imageURL"
                         />
                     </div>
+=======
+                {suiObj?.display && (
+                    <DisplayBox data={data} />
+>>>>>>> explorer-jsonrpc
                 )}
                 <div
                     className={`${styles.textbox} ${
-                        data?.data.contents.display
+                        suiObj?.display
                             ? styles.accommodate
                             : styles.noaccommodate
                     }`}
                 >
-                    {data.name && <h1>{data.name}</h1>} {' '}
-                    {typeof nameKeyValue[0] === 'string' && (
-                        <h1>{nameKeyValue}</h1>
+                    {suiObj.name && <h1>{suiObj.name}</h1>} {' '}
+                    {typeof suiObjName === 'string' && (
+                        <h1>{suiObjName}</h1>
                     )}
                     <h2
                         className={styles.clickableheader}
@@ -246,7 +316,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                 <div>Object ID</div>
                                 <div id="objectID">
                                     <Longtext
-                                        text={data.id}
+                                        text={objID}
                                         category="objects"
                                         isLink={false}
                                     />
@@ -255,13 +325,13 @@ function ObjectLoaded({ data }: { data: DataType }) {
 
                             <div>
                                 <div>Version</div>
-                                <div>{data.version}</div>
+                                <div>{objRef.version}</div>
                             </div>
 
-                            {data.readonly && (
+                            {suiObj.readonly && (
                                 <div>
                                     <div>Read Only?</div>
-                                    {data.readonly === 'true' ? (
+                                    {suiObj.readonly === 'true' ? (
                                         <div
                                             id="readOnlyStatus"
                                             className={styles.immutable}
@@ -281,10 +351,11 @@ function ObjectLoaded({ data }: { data: DataType }) {
 
                             <div>
                                 <div>Type</div>
-                                <div>{prepObjTypeValue(data.objType)}</div>
+                                <div>{trimStdLibPrefix(suiObj.objType)}</div>
                             </div>
                             <div>
                                 <div>Owner</div>
+<<<<<<< HEAD
                                 <div id="owner">
                                     <Longtext
                                         text={extractOwnerData(data.owner)}
@@ -292,36 +363,43 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                         isLink={true}
                                     />
                                 </div>
+=======
+                                <Longtext
+                                    text={extractOwnerData(suiObj.owner)}
+                                    category="unknown"
+                                    isLink={true}
+                                />
+>>>>>>> explorer-jsonrpc
                             </div>
-                            {data.contract_id && (
+                            {suiObj.contract_id && (
                                 <div>
                                     <div>Contract ID</div>
                                     <Longtext
-                                        text={data.contract_id.bytes}
+                                        text={suiObj.contract_id.bytes}
                                         category="objects"
                                         isLink={true}
                                     />
                                 </div>
                             )}
 
-                            {data.ethAddress && (
+                            {suiObj.ethAddress && (
                                 <div>
                                     <div>Ethereum Contract Address</div>
                                     <div>
                                         <Longtext
-                                            text={data.ethAddress}
+                                            text={suiObj.ethAddress}
                                             category="ethAddress"
                                             isLink={true}
                                         />
                                     </div>
                                 </div>
                             )}
-                            {data.ethTokenId && (
+                            {suiObj.ethTokenId && (
                                 <div>
                                     <div>Ethereum Token ID</div>
                                     <div>
                                         <Longtext
-                                            text={data.ethTokenId}
+                                            text={suiObj.ethTokenId}
                                             category="addresses"
                                             isLink={false}
                                         />
@@ -338,11 +416,11 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             >
                                 Properties {showProperties ? '' : '+'}
                             </h2>
-                            {showProperties && (
+                            {showProperties &&  (
                                 <div className={styles.propertybox}>
                                     {properties.map(([key, value], index) => (
                                         <div key={`property-${index}`}>
-                                            <p>{prepLabel(key)}</p>
+                                            <p>{_toSpace(key)}</p>
                                             <p>{value}</p>
                                         </div>
                                     ))}
@@ -362,12 +440,16 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                 <div className={theme.textresults}>
                                     {ownedObjects.map(
                                         ([key, value], index1) => (
+<<<<<<< HEAD
                                             <div
                                                 key={`ConnectedEntity-${index1}`}
                                             >
                                                 <div>{prepLabel(key)}</div>
                                                 <OwnedObjects objects={value} />
                                             </div>
+=======
+                                            renderConnectedEntity(key, value, index1)
+>>>>>>> explorer-jsonrpc
                                         )
                                     )}
                                 </div>

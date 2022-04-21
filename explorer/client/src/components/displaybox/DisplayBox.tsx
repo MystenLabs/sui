@@ -1,9 +1,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+<<<<<<< HEAD:explorer/client/src/components/displaybox/DisplayBox.tsx
 import { useState, useCallback, useEffect } from 'react';
 
 import { processDisplayValue } from '../../utils/stringUtils';
+=======
+import { useState, useCallback } from 'react';
+import { GetObjectInfoResponse } from 'sui.js';
+
+import { asciiFromNumberBytes } from '../../utils/stringUtils';
+>>>>>>> explorer-jsonrpc:explorer/client/src/pages/object-result/DisplayBox.tsx
 
 import styles from './DisplayBox.module.css';
 
@@ -11,11 +18,15 @@ import styles from './DisplayBox.module.css';
 //import 'ace-builds/src-noconflict/theme-github';
 //import AceEditor from 'react-ace';
 
+<<<<<<< HEAD:explorer/client/src/components/displaybox/DisplayBox.tsx
 function SmartContractBox({
     display,
 }: {
     display: string | { bytes: number[] };
 }) {
+=======
+function SmartContractBox({ data }: { data: GetObjectInfoResponse }) {
+>>>>>>> explorer-jsonrpc:explorer/client/src/pages/object-result/DisplayBox.tsx
     return (
         <div className={styles.imagebox}>
             Displaying Smart Contracts Not yet Supported
@@ -37,6 +48,7 @@ function SmartContractBox({
                      */
 }
 
+<<<<<<< HEAD:explorer/client/src/components/displaybox/DisplayBox.tsx
 function DisplayBox({
     display,
     tag,
@@ -47,6 +59,15 @@ function DisplayBox({
     const [hasDisplayLoaded, setHasDisplayLoaded] = useState(false);
     const [hasFailedToLoad, setHasFailedToLoad] = useState(false);
 
+=======
+function DisplayBox({ data }: { data: GetObjectInfoResponse }) {
+    const [hasDisplayLoaded, setHasDisplayLoaded] = useState(false);
+    const [hasFailedToLoad, setHasFailedToLoad] = useState(false);
+
+    // @ts-ignore
+    const contents = data.details.object;
+
+>>>>>>> explorer-jsonrpc:explorer/client/src/pages/object-result/DisplayBox.tsx
     const imageStyle = hasDisplayLoaded ? {} : { display: 'none' };
     const handleImageLoad = useCallback(
         () => setHasDisplayLoaded(true),

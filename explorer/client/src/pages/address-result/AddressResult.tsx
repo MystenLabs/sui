@@ -8,13 +8,22 @@ import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
+<<<<<<< HEAD
 import { DefaultRpcClient as rpc } from '../../utils/api/SuiRpcClient';
+=======
+import { DefaultRpcClient as rpc } from '../../utils/internetapi/DefaultRpcClient';
+import { Loadable } from '../../utils/loadState';
+>>>>>>> explorer-jsonrpc
 
-type DataType = {
+
+type PageData = {
     id: string;
-    objects: ResponseType;
-    loadState?: 'loaded' | 'pending' | 'fail';
-};
+    objects: {
+        objectId: string;
+    }[];
+}
+
+type DataType = Loadable<PageData>;
 
 type ResponseType = {
     objectId: string;
@@ -92,11 +101,11 @@ function AddressResultAPI({ addressID }: { addressID: string | undefined }) {
     useEffect(() => {
         if (addressID === undefined) return;
 
-        rpc.getAddressObjects(addressID as string)
-            .then((json) => {
+        rpc.getOwnedObjectRefs(addressID)
+            .then(objRefs => {
                 setData({
                     id: addressID,
-                    objects: json,
+                    objects: objRefs,
                     loadState: 'loaded',
                 });
             })
@@ -123,6 +132,7 @@ function AddressResultAPI({ addressID }: { addressID: string | undefined }) {
 
 function AddressResult() {
     const { id: addressID } = useParams();
+    // TODO - why are we using the location object as state ?
     const { state } = useLocation();
 
     if (instanceOfResponseType(state)) {

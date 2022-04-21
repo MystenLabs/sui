@@ -1,31 +1,31 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
+import { GetObjectInfoResponse } from 'sui.js';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/SuiRpcClient';
+import { Loadable } from '../../utils/loadState';
 import ObjectLoaded from './ObjectLoaded';
-import { type DataType } from './ObjectResultType';
 
-const DATATYPE_DEFAULT: DataType = {
-    id: '',
-    category: '',
-    owner: '',
-    version: '',
-    objType: '',
-    data: {
-        contents: {},
-        owner: { ObjectOwner: [] },
-        tx_digest: [],
-    },
+const DATATYPE_DEFAULT: Loadable<GetObjectInfoResponse> = {
     loadState: 'pending',
+    status: 'NotExists',
+    details: {
+        object: undefined,
+        objectRef: {
+            digest: '',
+            objectId: '',
+            version: 0
+        }
+    }
 };
 
-function instanceOfDataType(object: any): object is DataType {
-    return object && ['id', 'version', 'objType'].every((x) => x in object);
+function instanceOfDataType(object: any): object is GetObjectInfoResponse {
+    return GetObjectInfoResponse.is(object);
 }
 
 const Fail = ({ objID }: { objID: string | undefined }): JSX.Element => {
@@ -43,18 +43,21 @@ const ObjectResultAPI = ({ objID }: { objID: string }): JSX.Element => {
         rpc.getObjectInfo(objID as string)
             .then((objState) => {
                 setObjectState({
-                    ...(objState as DataType),
-                    loadState: 'loaded',
+                    ...objState,
+                    loadState: 'loaded'
                 });
             })
             .catch((error) => {
                 console.log(error);
-                setObjectState({ ...DATATYPE_DEFAULT, loadState: 'fail' });
+                setObjectState({
+                    ...DATATYPE_DEFAULT,
+                    loadState: 'fail'
+                });
             });
     }, [objID]);
 
     if (showObjectState.loadState === 'loaded') {
-        return <ObjectLoaded data={showObjectState as DataType} />;
+        return <ObjectLoaded data={showObjectState as Loadable<GetObjectInfoResponse>} />;
     }
     if (showObjectState.loadState === 'pending') {
         return (
@@ -81,6 +84,7 @@ const ObjectResultStatic = ({ objID }: { objID: string }): JSX.Element => {
 
 const ObjectResult = (): JSX.Element => {
     const { id: objID } = useParams();
+    // TODO - why are we using the location object as state ?
     const { state } = useLocation();
 
     if (instanceOfDataType(state)) {
@@ -99,4 +103,3 @@ const ObjectResult = (): JSX.Element => {
 };
 
 export { ObjectResult };
-export type { DataType };
