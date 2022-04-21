@@ -11,15 +11,14 @@
     "node": ">=10"
   },
   "scripts": {
-    "start": "tsdx watch",
-    "build": "tsdx build",
+    "start": "./type_guards.sh; tsdx watch",
+    "build": "./type_guards.sh; tsdx build",
     "test": "tsdx test",
     "lint": "tsdx lint",
     "prepare": "tsdx build",
     "size": "size-limit",
     "analyze": "size-limit --why"
   },
-  "peerDependencies": {},
   "husky": {
     "hooks": {
       "pre-commit": "tsdx lint"
@@ -47,9 +46,11 @@
   "devDependencies": {
     "@size-limit/preset-small-lib": "^7.0.8",
     "@types/bn.js": "^5.1.0",
+    "@types/mocha": "^9.1.0",
     "husky": "^7.0.4",
     "mockttp": "^2.7.0",
     "size-limit": "^7.0.8",
+    "ts-auto-guard": "^2.4.1",
     "tsdx": "^0.14.1",
     "tslib": "^2.3.1",
     "typescript": "^4.6.3"
@@ -59,7 +60,6 @@
     "buffer": "^6.0.3",
     "cross-fetch": "^3.1.5",
     "jayson": "^3.6.6",
-    "superstruct": "^0.15.4",
     "tweetnacl": "^1.0.3",
     "util": "^0.12.4"
   },

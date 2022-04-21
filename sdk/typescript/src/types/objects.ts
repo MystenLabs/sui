@@ -1,64 +1,42 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-  type as pick,
-  string,
-  Infer,
-  number,
-  enums,
-  unknown,
-  union,
-  tuple,
-  object,
-} from 'superstruct';
+import { ObjectExistsInfo, ObjectNotExistsInfo, ObjectRef, ObjectStatus } from "../providers/provider";
 
-export type ObjectDigest = Infer<typeof ObjectDigestSchema>;
-export type ObjectId = Infer<typeof ObjectIdSchema>;
-export type SequenceNumber = Infer<typeof SequenceNumberSchema>;
-export type ObjectRef = Infer<typeof ObjectRefSchema>;
-export type RawObjectRef = [ObjectId, SequenceNumber, ObjectDigest];
-export type ObjectExistsInfo = Infer<typeof ObjectExistsInfoSchema>;
-export type ObjectNotExistsInfo = Infer<typeof ObjectNotExistsInfoSchema>;
-export type ObjectStatus = Infer<typeof ObjectStatusSchema>;
 export type GetObjectInfoResponse = {
   status: ObjectStatus;
   details: ObjectExistsInfo | ObjectNotExistsInfo | ObjectRef;
 };
 
-export const ObjectDigestSchema = string();
-export const ObjectIdSchema = string();
-export const SequenceNumberSchema = number();
+export type ObjectDigestSchema = string;
+export type ObjectIdSchema = string;
+export type SequenceNumberSchema = number;
 
-export const ObjectRefSchema = pick({
+export type ObjectRefSchema = {
   digest: ObjectDigestSchema,
   objectId: ObjectIdSchema,
   version: SequenceNumberSchema,
-});
+};
 
 // TODO: get rid of this by implementing some conversion logic from ObjectRef
-export const RawObjectRefSchema = tuple([
+export type RawObjectRefSchema = [
   ObjectIdSchema,
   SequenceNumberSchema,
   ObjectDigestSchema,
-]);
+];
 
-export const ObjectExistsInfoSchema = pick({
+export type ObjectExistsInfoSchema = {
   objectRef: ObjectRefSchema,
-  object: unknown(),
-});
+  object: any,
+};
 
-export const ObjectNotExistsInfoSchema = object({
-  objectId: string(),
-});
+export type ObjectNotExistsInfoSchema = {
+  objectId: string,
+};
 
-export const ObjectStatusSchema = enums(['Exists', 'NotExists', 'Deleted']);
+export type ObjectStatusSchema = 'Exists' | 'NotExists' | 'Deleted';
 
-export const GetObjectInfoResponseSchema = pick({
+export type GetObjectInfoResponseSchema = {
   status: ObjectStatusSchema,
-  details: union([
-    ObjectExistsInfoSchema,
-    ObjectNotExistsInfoSchema,
-    ObjectRefSchema,
-  ]),
-});
+  details: ObjectExistsInfoSchema | ObjectNotExistsInfoSchema | ObjectRefSchema
+};

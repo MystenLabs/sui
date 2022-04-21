@@ -2,18 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import RpcClient from 'jayson/lib/client/browser';
-import {
-  literal,
-  type as pick,
-  string,
-  Struct,
-  unknown,
-  assert,
-  optional,
-  any,
-  is,
-} from 'superstruct';
 import fetch from 'cross-fetch';
+import { isErrorResponse, isValidResponse } from './client.guard';
 
 /**
  * An object defining headers to be passed to the RPC server
@@ -28,7 +18,7 @@ export class JsonRpcClient {
   }
 
   private createRpcClient(url: string, httpHeaders?: HttpHeaders): RpcClient {
-    const client = new RpcClient(async (request, callback) => {
+    const client = new RpcClient(async (request: any, callback: (arg0: Error | null, arg1?: string | undefined) => void) => {
       const options = {
         method: 'POST',
         body: request,
@@ -56,17 +46,19 @@ export class JsonRpcClient {
     return client;
   }
 
-  async requestWithValidation<T, S>(
+  async requestWithType<T>(
     method: string,
     args: Array<any>,
-    schema: Struct<T, S>
-  ): Promise<any> {
+    isT: (val: any) => val is T
+  ): Promise<T> {
     const response = await this.request(method, args);
-    if (is(response, ErrorResponse)) {
+    if (isErrorResponse(response)) {
       throw new Error(`RPC Error: ${response.error.message}`);
-    } else if (is(response, ValidResponse)) {
-      assert(response.result, schema);
-      return response.result;
+    } else if (isValidResponse(response)) {
+      if (isT(response.result))
+        return response.result;
+      else
+        throw new Error(`RPC Error: result not of expected type`)
     }
     throw new Error(`Unexpected RPC Response: ${response}`);
   }
@@ -84,18 +76,18 @@ export class JsonRpcClient {
   }
 }
 
-const ValidResponse = pick({
-  jsonrpc: literal('2.0'),
-  id: string(),
-  result: unknown(),
-});
+export type ValidResponse = {
+  jsonrpc: '2.0',
+  id: string,
+  result: any,
+};
 
-const ErrorResponse = pick({
-  jsonrpc: literal('2.0'),
-  id: string(),
-  error: pick({
-    code: unknown(),
-    message: string(),
-    data: optional(any()),
-  }),
-});
+export type ErrorResponse = {
+  jsonrpc: '2.0',
+  id: string,
+  error: {
+    code: any,
+    message: string,
+    data?: any,
+  }
+}
