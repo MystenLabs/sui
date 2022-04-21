@@ -79,6 +79,7 @@ export class Ed25519Keypair implements Keypair {
     return new Ed25519Keypair(nacl.sign.keyPair.fromSeed(seed));
   }
 
+  //ts-auto-guard-suppress function-type
   /**
    * The public key for this keypair
    */
@@ -86,9 +87,11 @@ export class Ed25519Keypair implements Keypair {
     return new PublicKey(this.keypair.publicKey);
   }
 
+  //ts-auto-guard-suppress function-type
   /**
    * Return the signature for the provided data.
    */
+  //ts-auto-guard-suppress function-type
   signData(data: Base64DataBuffer): Base64DataBuffer {
     return new Base64DataBuffer(
       nacl.sign.detached(data.getData(), this.keypair.secretKey)
