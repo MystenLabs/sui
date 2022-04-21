@@ -63,15 +63,6 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
         Array.isArray(value) && value.length > 0 && value[0]?.bytes;
 
 
-    //TODO - improve move code handling:
-    // const isMoveVecType = (value: { vec?: [] }) => Array.isArray(value?.vec);
-
-
-
-    const extractAddressOwner = (addrOwner: number[]): string | null => {
-        return asciiFromNumberBytes(addrOwner);
-    };
-
     const suiObjName = suiObj['name'];
 
     const ownedObjects: [string, any][] = Object.entries(suiObj).filter(
