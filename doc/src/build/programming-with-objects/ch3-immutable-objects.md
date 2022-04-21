@@ -32,7 +32,7 @@ In this function, a fresh new `ColorObject` is created and immediately turned in
 ### Use immutable object
 Once an object becomes immutable, the rules of who could use this object in Move calls change:
 1. An immutable object can be passed only as a read-only reference to Move entry functions as `&T`.
-2. Anyone can use immutable objects. Immutable objects are considered shared.
+2. Anyone can use immutable objects.
 
 Recall that we defined a function that copies the value of one object to another:
 ```rust
@@ -40,7 +40,7 @@ public(script) fun copy_into(from_object: &ColorObject, into_object: &mut ColorO
 ```
 In this function, anyone can pass an immutable object as the first argument `from_object`, but not the second argument.
 
-Since immutable objects can never be mutated, there will never be a data race even when multiple transactions are using the same immutable object at the same time. Hence, the existence of shared immutable objects does not pose any requirement on consensus.
+Since immutable objects can never be mutated, there will never be a data race even when multiple transactions are using the same immutable object at the same time. Hence, the existence of immutable objects does not pose any requirement on consensus.
 
 ### Test immutable object
 Let's take a look at how we interact with immutable objects in unit tests.
@@ -68,7 +68,7 @@ public(script) fun test_immutable() {
     };
 }
 ```
-In this test, we submit a transaction as `sender1`, which would create an immutable object. To show that this object is indeed shared and can be used by anyone, we start two new transactions, one with `sender1` and another with `sender2`. In both transactions, we are able to take the object.
+In this test, we submit a transaction as `sender1`, which would create an immutable object. To show that this object can indeed be used by anyone, we start two new transactions, one with `sender1` and another with `sender2`. In both transactions, we are able to take the object.
 
 Next let's examine if this object is indeed immutable. To test this, let's first introduce a function that would mutate a `ColorObject`:
 ```rust
@@ -140,7 +140,7 @@ $ wallet objects --address=$ADDR
 `$OBJECT` is no longer there. It's no longer owned by anyone. You can see that it's now immutable by querying the object information:
 ```
 $ wallet object --id $OBJECT
-Owner: SharedImmutable
+Owner: Immutable
 ...
 ```
 If we try to mutate it:
