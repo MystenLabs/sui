@@ -6,37 +6,37 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.55"
+async-trait = "0.1.52"
+bincode = "1.3.3"
+bytes = "1.1.0"
+cfg-if = "1.0.0"
+clap = "2.34"
+futures = "0.3.21"
+rand = "0.7.3"
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "808de09203d147b43d59114b8afd9e51cbcf5778" }
+thiserror = "1.0.30"
 tokio = { version = "1.17.0", features = ["full"] }
 tokio-util = { version = "0.7.0", features = ["codec"] }
-clap = "2.34"
-bytes = "1.1.0"
-bincode = "1.3.3"
-anyhow = "1.0.55"
-rand = "0.7.3"
-futures = "0.3.21"
 tracing = { version = "0.1.31", features = ["log"] }
 tracing-log = "0.1.2"
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "808de09203d147b43d59114b8afd9e51cbcf5778"}
 tracing-subscriber = { version = "0.3.9", features = ["time", "env-filter"] }
-thiserror = "1.0.30"
-async-trait = "0.1.52"
 
 config = { path = "../config" }
-crypto = { path = "../crypto" }
-primary = { path = "../primary" }
-worker = { path = "../worker" }
 consensus = { path = "../consensus" }
+crypto = { path = "../crypto" }
 executor = { path = "../executor" }
+primary = { path = "../primary" }
 types = { path = "../types" }
-cfg-if = "1.0.0"
+worker = { path = "../worker" }
 
 [dev-dependencies]
-structopt = "0.3.26"
-pretty_assertions = "1.2.0"
-serde_yaml = "0.8.23"
 ed25519-dalek = "1.0.1"
 hex = "0.4.3"
+pretty_assertions = "1.2.0"
 serde-reflection = "0.3.5"
+serde_yaml = "0.8.23"
+structopt = "0.3.26"
 
 [features]
 benchmark = ["worker/benchmark", "primary/benchmark", "consensus/benchmark"]
@@ -45,7 +45,6 @@ benchmark = ["worker/benchmark", "primary/benchmark", "consensus/benchmark"]
 name = "benchmark_client"   
 path = "src/benchmark_client.rs" 
 required-features = ["benchmark"] 
-
 
 [[example]]
 name = "generate-format"
