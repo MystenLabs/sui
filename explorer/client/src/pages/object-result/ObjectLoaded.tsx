@@ -1,14 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
 import { type AddressOwner } from '../../utils/internetapi/SuiRpcClient';
 import {
     asciiFromNumberBytes,
-    trimStdLibPrefix,
 } from '../../utils/stringUtils';
 import DisplayBox from './DisplayBox';
 
