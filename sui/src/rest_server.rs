@@ -24,7 +24,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use sui::config::PersistedConfig;
-use sui::gateway::GatewayConfig;
+use sui::gateway_config::GatewayConfig;
 use sui::rest_gateway::requests::{
     CallRequest, GetObjectInfoRequest, GetObjectSchemaRequest, GetObjectsRequest,
     GetTransactionDetailsRequest, MergeCoinRequest, PublishRequest, SignedTransaction,

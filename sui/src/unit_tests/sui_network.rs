@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use sui::config::{AuthorityPrivateInfo, Config, GenesisConfig, WalletConfig};
-use sui::gateway::{GatewayConfig, GatewayType};
+use sui::gateway_config::{GatewayConfig, GatewayType};
 use sui::keystore::KeystoreType;
 use sui::sui_commands::{genesis, SuiNetwork};
 use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};

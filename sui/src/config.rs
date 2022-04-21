@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::gateway::GatewayType;
+use crate::gateway_config::GatewayType;
 use crate::keystore::KeystoreType;
 use narwhal_config::Committee as ConsensusCommittee;
 use narwhal_config::{Authority, PrimaryAddresses, Stake, WorkerAddresses};
