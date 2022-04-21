@@ -2,17 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  GetObjectInfoResponse,
-  GetObjectInfoResponseSchema,
-  ObjectRef,
   SignedTransaction,
   TransactionResponse,
-  GetObjectInfoResponse,
-  GetTxnDigestsResponse,
-  GatewayTxSeqNumber,
+  Provider,
 } from './provider';
 import { JsonRpcClient } from '../rpc/client';
-import { isGetObjectInfoResponse, isGetOwnedObjectRefsResponse, isGetTxnDigestsResponse } from '../index.guard';
+import { isGetObjectInfoResponse, isGetOwnedObjectRefsResponse, isGetTxnDigestsResponse, isCertifiedTransaction } from '../index.guard';
+import { CertifiedTransaction, GatewayTxSeqNumber, GetTxnDigestsResponse, TransactionDigest } from '../types/transactions';
+import { GetObjectInfoResponse, ObjectRef } from '../types/objects';
 
 const isNumber = (val: any): val is number => typeof(val) === 'number';
 
@@ -63,10 +60,10 @@ export class JsonRpcProvider extends Provider {
     digest: TransactionDigest
   ): Promise<CertifiedTransaction> {
     try {
-      const resp = await this.client.requestWithValidation(
+      const resp = await this.client.requestWithType(
         'sui_getTransaction',
         [digest],
-        CertifiedTransactionSchema
+        isCertifiedTransaction
       );
       return resp;
     } catch (err) {

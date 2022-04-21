@@ -1,42 +1,42 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ObjectExistsInfo, ObjectNotExistsInfo, ObjectRef, ObjectStatus } from "../providers/provider";
+import { TransactionDigest } from "./transactions";
+
+export type ObjectRef = {
+  digest: TransactionDigest,
+  objectId: string,
+  version: number,
+};
+
+export type ObjectExistsInfo = {
+  objectRef: ObjectRef,
+  object: any,
+};
+
+export type ObjectNotExistsInfo = {
+  objectId: any,
+};
+
+export type ObjectStatus = 'Exists' | 'NotExists' | 'Deleted';
+
+
+export type GetOwnedObjectRefsResponse = {
+  objects: ObjectRef[]
+};
 
 export type GetObjectInfoResponse = {
   status: ObjectStatus;
   details: ObjectExistsInfo | ObjectNotExistsInfo | ObjectRef;
 };
 
-export type ObjectDigestSchema = string;
-export type ObjectIdSchema = string;
-export type SequenceNumberSchema = number;
-
-export type ObjectRefSchema = {
-  digest: ObjectDigestSchema,
-  objectId: ObjectIdSchema,
-  version: SequenceNumberSchema,
-};
+export type ObjectDigest = string;
+export type ObjectId = string;
+export type SequenceNumber = number;
 
 // TODO: get rid of this by implementing some conversion logic from ObjectRef
-export type RawObjectRefSchema = [
-  ObjectIdSchema,
-  SequenceNumberSchema,
-  ObjectDigestSchema,
+export type RawObjectRef = [
+  ObjectId,
+  SequenceNumber,
+  ObjectDigest,
 ];
-
-export type ObjectExistsInfoSchema = {
-  objectRef: ObjectRefSchema,
-  object: any,
-};
-
-export type ObjectNotExistsInfoSchema = {
-  objectId: string,
-};
-
-export type ObjectStatusSchema = 'Exists' | 'NotExists' | 'Deleted';
-
-export type GetObjectInfoResponseSchema = {
-  status: ObjectStatusSchema,
-  details: ObjectExistsInfoSchema | ObjectNotExistsInfoSchema | ObjectRefSchema
-};

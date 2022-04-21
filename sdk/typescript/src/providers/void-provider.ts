@@ -1,16 +1,21 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { CertifiedTransaction, TransactionDigest } from '../types/transactions';
+import {
+  CertifiedTransaction,
+  TransactionDigest,
+  GetTxnDigestsResponse,
+  GatewayTxSeqNumber
+} from '../types/transactions';
 import {
   Provider,
-  ObjectRef,
   SignedTransaction,
   TransactionResponse,
-  GetObjectInfoResponse,
-  GetTxnDigestsResponse,
-  GatewayTxSeqNumber,
 } from './provider';
+import {
+  ObjectRef,
+  GetObjectInfoResponse,
+} from '../types/objects';
 
 export class VoidProvider extends Provider {
   // Objects
