@@ -99,11 +99,11 @@ pub struct DeleteBatchMessage {
 /// # use crypto::ed25519::Ed25519PublicKey;
 /// # use config::Committee;
 /// # use std::collections::BTreeMap;
-/// # use primary::Certificate;
+/// # use types::Certificate;
 /// # use config::WorkerId;
 /// # use tempfile::tempdir;
-/// # use primary::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage, Header, PayloadToken};
-/// # use primary::{BatchDigest, CertificateDigest, HeaderDigest};
+/// # use primary::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage, PayloadToken};
+/// # use types::{BatchDigest, CertificateDigest, HeaderDigest, Header};
 ///
 /// #[tokio::main(flavor = "current_thread")]
 /// # async fn main() {

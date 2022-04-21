@@ -157,9 +157,10 @@ type RequestKey = Vec<u8>;
 /// # use crypto::ed25519::Ed25519PublicKey;
 /// # use config::Committee;
 /// # use std::collections::BTreeMap;
-/// # use primary::Certificate;
+/// # use types::Certificate;
 /// # use tempfile::tempdir;
-/// # use primary::{BatchMessage, BlockWaiter, BlockCommand,BatchDigest, CertificateDigest, Batch};
+/// # use primary::{BatchMessage, BlockWaiter, BlockCommand};
+/// # use types::{BatchDigest, CertificateDigest, Batch};
 ///
 /// #[tokio::main(flavor = "current_thread")]
 /// # async fn main() {
