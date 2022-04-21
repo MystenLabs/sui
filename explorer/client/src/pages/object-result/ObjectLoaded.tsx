@@ -63,14 +63,13 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
 
 
     const suiObjName = suiObj['name'];
+    const nonNameEntries = Object.entries(suiObj).filter(([k, _]) => k === 'name');
 
-    const ownedObjects: [string, any][] = Object.entries(suiObj).filter(
+    const ownedObjects: [string, any][] = nonNameEntries.filter(
         ([key, value]) => checkIsIDType(key, value)
     );
 
-    const properties: [string, any][] = Object.entries(suiObj)
-        //TO DO: remove when have distinct 'name' field in Description
-        .filter(([key, _]) => key === 'name')
+    const properties: [string, any][] = nonNameEntries
         .filter(([_, value]) => checkIsPropertyType(value))
         // TODO: 'display' is a object property added during demo, replace with metadata ptr?
         .filter(([key, _]) => key !== 'display');
