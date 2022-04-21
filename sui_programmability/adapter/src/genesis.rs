@@ -6,8 +6,9 @@ use once_cell::sync::Lazy;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use sui_framework::{self, DEFAULT_FRAMEWORK_PATH};
-use sui_types::base_types::{SuiAddress, TxContext};
+use sui_types::base_types::{ObjectRef, SuiAddress, TxContext};
 use sui_types::error::SuiResult;
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{base_types::TransactionDigest, object::Object};
 
 static GENESIS: Lazy<Mutex<Genesis>> = Lazy::new(|| {
@@ -27,6 +28,16 @@ pub fn clone_genesis_compiled_modules() -> Vec<Vec<CompiledModule>> {
 pub fn clone_genesis_packages() -> Vec<Object> {
     let genesis = GENESIS.lock().unwrap();
     genesis.objects.clone()
+}
+
+pub fn get_framework_object_ref() -> ObjectRef {
+    let genesis = GENESIS.lock().unwrap();
+    genesis
+        .objects
+        .iter()
+        .find(|o| o.id() == SUI_FRAMEWORK_ADDRESS.into())
+        .unwrap()
+        .compute_object_reference()
 }
 
 pub fn get_genesis_context() -> TxContext {

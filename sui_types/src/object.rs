@@ -486,6 +486,10 @@ impl Object {
         Self::with_id_owner_gas_for_testing(id, SequenceNumber::new(), owner, GAS_VALUE_FOR_TESTING)
     }
 
+    pub fn with_owner_for_testing(owner: SuiAddress) -> Self {
+        Self::with_id_owner_for_testing(ObjectID::random(), owner)
+    }
+
     /// Create Coin object for use in Move object operation
     pub fn with_id_owner_gas_coin_object_for_testing(
         id: ObjectID,
