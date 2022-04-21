@@ -10,7 +10,7 @@ interface, *Wallet CLI*.
 
 ## Set up
 
-Follow the instructions to [install Sui binaries](install.md).
+Follow the instructions to [install Sui binaries](install.md#binaries).
 
 ## Genesis
 
