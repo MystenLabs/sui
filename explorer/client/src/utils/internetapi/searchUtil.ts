@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { DefaultRpcClient as rpc } from './SuiRpcClient';
+import { DefaultRpcClient as rpc } from './DefaultRpcClient';
 
 export const navigateWithUnknown = async (
     input: string,
