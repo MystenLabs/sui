@@ -8,24 +8,17 @@ h1.title {
 
 /* Display Box CSS */
 
-.display-container {
-    @apply ml-[5vw];
+.display {
+    @apply ml-[5vw] mx-auto mt-[1vh] 
+    w-[88vw] lg:w-[35vw] min-h-[88vw] lg:min-h-[35vw];
 }
 
-.imagebox {
-    @apply border-solid border-stone-300
-    rounded-lg p-[1vw] mx-auto mt-[1vh] 
-    w-[88vw] h-[88vw] lg:w-[35vw] lg:h-[35vw] mb-[10vh];
+.display > div > img {
+    @apply border-solid border-stone-300 rounded-lg p-[1vw];
 }
 
-img.imagebox {
-    @apply object-scale-down;
-}
-
-.codebox {
-    @apply overflow-hidden 
-    border-solid border-stone-300 rounded-lg mt-[1vh] w-[88vw]
-    w-[88vw] h-[88vw] lg:w-[35vw] lg:h-[35vw] mb-[10vh];
+.display > div > div {
+    @apply p-1 pt-10;
 }
 
 /* Text Box CSS */

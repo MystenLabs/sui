@@ -3,14 +3,15 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 
+import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
+import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
-import { type AddressOwner } from '../../utils/internetapi/SuiRpcClient';
+import { type AddressOwner } from '../../utils/api/SuiRpcClient';
 import {
     asciiFromNumberBytes,
     trimStdLibPrefix,
 } from '../../utils/stringUtils';
-import DisplayBox from './DisplayBox';
 import { type DataType } from './ObjectResultType';
 
 import styles from './ObjectResult.module.css';
@@ -50,8 +51,6 @@ function ObjectLoaded({ data }: { data: DataType }) {
         (/_id/.test(key) && value?.bytes) ||
         value?.vec ||
         key === 'objects';
-    const checkSingleID = (value: any) => value?.bytes;
-    const checkVecIDs = (value: any) => value?.vec;
     const checkVecOfSingleID = (value: any) =>
         Array.isArray(value) && value.length > 0 && value[0]?.bytes;
     const addrOwnerPattern = /^AddressOwner\(k#/;
@@ -183,9 +182,25 @@ function ObjectLoaded({ data }: { data: DataType }) {
         .filter(([key, _]) => /name/i.test(key))
         .map(([_, value]) => value);
 
-    const ownedObjects = Object.entries(viewedData.data?.contents).filter(
-        ([key, value]) => checkIsIDType(key, value)
-    );
+    const ownedObjects = Object.entries(viewedData.data?.contents)
+        .filter(([key, value]) => checkIsIDType(key, value))
+        .map(([key, value]) => {
+            if (value?.bytes !== undefined) return [key, [value.bytes]];
+
+            if (checkVecOfSingleID(value.vec))
+                return [
+                    key,
+                    value.vec.map((value2: { bytes: string }) => value2?.bytes),
+                ];
+
+            if (checkVecOfSingleID(value))
+                return [
+                    key,
+                    value.map((value2: { bytes: string }) => value2?.bytes),
+                ];
+
+            return [key, []];
+        });
 
     const properties = Object.entries(viewedData.data?.contents)
         //TO DO: remove when have distinct 'name' field in Description
@@ -198,7 +213,12 @@ function ObjectLoaded({ data }: { data: DataType }) {
         <>
             <div className={styles.resultbox}>
                 {viewedData.data?.contents?.display && (
-                    <DisplayBox data={data} />
+                    <div className={styles.display}>
+                        <DisplayBox
+                            display={viewedData.data.contents.display}
+                            tag="imageURL"
+                        />
+                    </div>
                 )}
                 <div
                     className={`${styles.textbox} ${
@@ -218,10 +238,13 @@ function ObjectLoaded({ data }: { data: DataType }) {
                         Description {showDescription ? '' : '+'}
                     </h2>
                     {showDescription && (
-                        <div className={theme.textresults}>
+                        <div
+                            className={theme.textresults}
+                            id="descriptionResults"
+                        >
                             <div>
                                 <div>Object ID</div>
-                                <div>
+                                <div id="objectID">
                                     <Longtext
                                         text={data.id}
                                         category="objects"
@@ -240,14 +263,14 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     <div>Read Only?</div>
                                     {data.readonly === 'true' ? (
                                         <div
-                                            data-testid="read-only-text"
+                                            id="readOnlyStatus"
                                             className={styles.immutable}
                                         >
                                             True
                                         </div>
                                     ) : (
                                         <div
-                                            data-testid="read-only-text"
+                                            id="readOnlyStatus"
                                             className={styles.mutable}
                                         >
                                             False
@@ -262,11 +285,13 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             </div>
                             <div>
                                 <div>Owner</div>
-                                <Longtext
-                                    text={extractOwnerData(data.owner)}
-                                    category="unknown"
-                                    isLink={true}
-                                />
+                                <div id="owner">
+                                    <Longtext
+                                        text={extractOwnerData(data.owner)}
+                                        category="unknown"
+                                        isLink={true}
+                                    />
+                                </div>
                             </div>
                             {data.contract_id && (
                                 <div>
@@ -341,52 +366,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                                 key={`ConnectedEntity-${index1}`}
                                             >
                                                 <div>{prepLabel(key)}</div>
-                                                {checkSingleID(value) && (
-                                                    <Longtext
-                                                        text={value.bytes}
-                                                        category="objects"
-                                                    />
-                                                )}
-                                                {checkVecIDs(value) && (
-                                                    <div>
-                                                        {value?.vec.map(
-                                                            (
-                                                                value2: {
-                                                                    bytes: string;
-                                                                },
-                                                                index2: number
-                                                            ) => (
-                                                                <Longtext
-                                                                    text={
-                                                                        value2.bytes
-                                                                    }
-                                                                    category="objects"
-                                                                    key={`ConnectedEntity-${index1}-${index2}`}
-                                                                />
-                                                            )
-                                                        )}
-                                                    </div>
-                                                )}
-                                                {checkVecOfSingleID(value) && (
-                                                    <div>
-                                                        {value.map(
-                                                            (
-                                                                value2: {
-                                                                    bytes: string;
-                                                                },
-                                                                index2: number
-                                                            ) => (
-                                                                <Longtext
-                                                                    text={
-                                                                        value2.bytes
-                                                                    }
-                                                                    category="objects"
-                                                                    key={`ConnectedEntity-${index1}-${index2}`}
-                                                                />
-                                                            )
-                                                        )}
-                                                    </div>
-                                                )}
+                                                <OwnedObjects objects={value} />
                                             </div>
                                         )
                                     )}

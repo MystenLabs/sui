@@ -6,7 +6,7 @@ import { useLocation, useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import theme from '../../styles/theme.module.css';
-import { DefaultRpcClient as rpc } from '../../utils/internetapi/SuiRpcClient';
+import { DefaultRpcClient as rpc } from '../../utils/api/SuiRpcClient';
 import ObjectLoaded from './ObjectLoaded';
 import { type DataType } from './ObjectResultType';
 
@@ -37,7 +37,7 @@ const Fail = ({ objID }: { objID: string | undefined }): JSX.Element => {
     );
 };
 
-const ObjectResultInternetAPI = ({ objID }: { objID: string }): JSX.Element => {
+const ObjectResultAPI = ({ objID }: { objID: string }): JSX.Element => {
     const [showObjectState, setObjectState] = useState(DATATYPE_DEFAULT);
     useEffect(() => {
         rpc.getObjectInfo(objID as string)
@@ -89,7 +89,7 @@ const ObjectResult = (): JSX.Element => {
 
     if (objID !== undefined) {
         if (process.env.REACT_APP_DATA !== 'static') {
-            return <ObjectResultInternetAPI objID={objID} />;
+            return <ObjectResultAPI objID={objID} />;
         } else {
             return <ObjectResultStatic objID={objID} />;
         }
