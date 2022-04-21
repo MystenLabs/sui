@@ -79,12 +79,11 @@ fn execute_transaction<S: BackingPackageStore>(
         .expect("We constructed the object map so it should always have the gas object id")
         .clone();
 
-    // unwraps here are safe because we built `inputs`
     let mut result = Ok(());
     // TODO: Since we require all mutable objects to not show up more than
     // once across single tx, we should be able to run them in parallel.
     for single_tx in transaction.into_single_transactions() {
-        match single_tx {
+        result = match single_tx {
             SingleTransactionKind::Transfer(Transfer {
                 recipient,
                 object_ref,
@@ -95,10 +94,7 @@ fn execute_transaction<S: BackingPackageStore>(
                     .get(&object_ref.0)
                     .unwrap()
                     .clone();
-                if let Err(err) = transfer(temporary_store, object, recipient) {
-                    result = Err(err);
-                    break;
-                }
+                transfer(temporary_store, object, recipient)
             }
             SingleTransactionKind::Call(MoveCall {
                 package,
@@ -108,7 +104,7 @@ fn execute_transaction<S: BackingPackageStore>(
                 arguments,
             }) => {
                 let module_id = ModuleId::new(package.0.into(), module);
-                result = adapter::execute(
+                adapter::execute(
                     move_vm,
                     temporary_store,
                     module_id,
@@ -117,24 +113,19 @@ fn execute_transaction<S: BackingPackageStore>(
                     arguments,
                     &mut gas_status,
                     tx_ctx,
-                );
-                if result.is_err() {
-                    break;
-                }
+                )
             }
-            SingleTransactionKind::Publish(MoveModulePublish { modules }) => {
-                if let Err(err) = adapter::publish(
-                    temporary_store,
-                    native_functions.clone(),
-                    modules,
-                    tx_ctx,
-                    &mut gas_status,
-                ) {
-                    result = Err(err);
-                    break;
-                }
-            }
+            SingleTransactionKind::Publish(MoveModulePublish { modules }) => adapter::publish(
+                temporary_store,
+                native_functions.clone(),
+                modules,
+                tx_ctx,
+                &mut gas_status,
+            ),
         };
+        if result.is_err() {
+            break;
+        }
     }
     if result.is_err() {
         // Roll back the temporary store if execution failed.

@@ -124,6 +124,10 @@ fn execute_internal<
     gas_status: &mut SuiGasStatus, // gas status for the current call operation
     ctx: &mut TxContext,
 ) -> SuiResult<()> {
+    // object_owner_map maps from object ID to its exclusive object owner.
+    // This map will be used for detecting circular ownership among
+    // objects, which can only happen to objects exclusively owned
+    // by objects.
     let object_owner_map: BTreeMap<SuiAddress, SuiAddress> = object_data
         .iter()
         .filter_map(|(id, (owner, _))| match owner {
@@ -599,10 +603,6 @@ fn check_transferred_object_invariants(
 
 pub struct TypeCheckSuccess {
     pub module_id: ModuleId,
-    // object_owner_map maps from object ID to its exclusive object owner.
-    // This map will be used for detecting circular ownership among
-    // objects, which can only happen to objects exclusively owned
-    // by objects.
     pub object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
     pub by_value_objects: BTreeSet<ObjectID>,
     pub mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,

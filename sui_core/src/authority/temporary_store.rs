@@ -54,8 +54,8 @@ impl<S> AuthorityTemporaryStore<S> {
             })
             .collect();
         let objects = input_objects
-            .iter()
-            .map(|(_, object)| (object.id(), object.clone()))
+            .into_iter()
+            .map(|(_, object)| (object.id(), object))
             .collect();
         Self {
             package_store,
