@@ -28,6 +28,7 @@ function instanceOfDataType(object: any): object is DataType {
 }
 
 function TransactionResult() {
+    // TODO - why are we using the location object as state ?
     const { state } = useLocation();
     const { id: txID } = useParams();
 

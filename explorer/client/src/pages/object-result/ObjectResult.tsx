@@ -84,6 +84,7 @@ const ObjectResultStatic = ({ objID }: { objID: string }): JSX.Element => {
 
 const ObjectResult = (): JSX.Element => {
     const { id: objID } = useParams();
+    // TODO - why are we using the location object as state ?
     const { state } = useLocation();
 
     if (instanceOfDataType(state)) {
