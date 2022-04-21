@@ -7,18 +7,39 @@ import {
   Infer,
   number,
   enums,
-  unknown,
   union,
   tuple,
   object,
+  any,
+  literal,
 } from 'superstruct';
+import {
+  SuiAddress,
+  SuiAddressSchema,
+  TransactionDigest,
+  TransactionDigestSchema,
+} from './common';
 
 export type ObjectDigest = Infer<typeof ObjectDigestSchema>;
 export type ObjectId = Infer<typeof ObjectIdSchema>;
 export type SequenceNumber = Infer<typeof SequenceNumberSchema>;
 export type ObjectRef = Infer<typeof ObjectRefSchema>;
+export type ObjectContent = Infer<typeof ObjectContentSchema>;
+export type ObjectOwner =
+  | { AddressOwner: SuiAddress }
+  | { ObjectOwner: SuiAddress }
+  | 'Shared'
+  | 'Immutable';
+export type SuiObject = {
+  contents: ObjectContent;
+  owner: ObjectOwner;
+  tx_digest: TransactionDigest;
+};
 export type RawObjectRef = [ObjectId, SequenceNumber, ObjectDigest];
-export type ObjectExistsInfo = Infer<typeof ObjectExistsInfoSchema>;
+export type ObjectExistsInfo = {
+  objectRef: ObjectRef;
+  object: SuiObject;
+};
 export type ObjectNotExistsInfo = Infer<typeof ObjectNotExistsInfoSchema>;
 export type ObjectStatus = Infer<typeof ObjectStatusSchema>;
 export type GetObjectInfoResponse = {
@@ -43,13 +64,25 @@ export const RawObjectRefSchema = tuple([
   ObjectDigestSchema,
 ]);
 
+export const ObjectContentSchema = any();
+export const ObjectOwnerSchema = union([
+  pick({ AddressOwner: SuiAddressSchema }),
+  pick({ ObjectOwner: SuiAddressSchema }),
+  literal('Shared'),
+  literal('Immutable'),
+]);
+export const SuiObjectSchema = pick({
+  contents: ObjectContentSchema,
+  owner: ObjectOwnerSchema,
+  tx_digest: TransactionDigestSchema,
+});
 export const ObjectExistsInfoSchema = pick({
   objectRef: ObjectRefSchema,
-  object: unknown(),
+  object: SuiObjectSchema,
 });
 
 export const ObjectNotExistsInfoSchema = object({
-  objectId: string(),
+  objectId: ObjectIdSchema,
 });
 
 export const ObjectStatusSchema = enums(['Exists', 'NotExists', 'Deleted']);

@@ -9,15 +9,13 @@ import {
   GetObjectInfoResponseSchema,
   ObjectRef,
   ObjectRefSchema,
-} from '../types/objects';
-import {
   CertifiedTransaction,
   CertifiedTransactionSchema,
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
   GetTxnDigestsResponseSchema,
   TransactionDigest,
-} from '../types/transactions';
+} from '../types';
 
 export class JsonRpcProvider extends Provider {
   private client: JsonRpcClient;

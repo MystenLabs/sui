@@ -1,16 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+
 import type {
   GetObjectInfoResponse,
   ObjectRef,
-} from '../types/objects';
-import type {
   CertifiedTransaction,
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
-  TransactionDigest,
-} from '../types/transactions';
+  TransactionDigest
+} from '../types';
 
 ///////////////////////////////
 // Exported Types

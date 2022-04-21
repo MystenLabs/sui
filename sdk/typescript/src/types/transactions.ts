@@ -7,19 +7,24 @@ import {
   Infer,
   number,
   enums,
-  unknown,
+  any,
   union,
   array,
   tuple,
   object,
 } from 'superstruct';
+import {
+  SuiAddress,
+  SuiAddressSchema,
+  TransactionDigest,
+  TransactionDigestSchema,
+} from './common';
 import { RawObjectRef, RawObjectRefSchema } from './objects';
 
-export type TransactionDigest = Infer<typeof TransactionDigestSchema>;
 export type GatewayTxSeqNumber = Infer<typeof GatewayTxSeqNumberSchema>;
 export type GetTxnDigestsResponse = [GatewayTxSeqNumber, TransactionDigest][];
 export type Transfer = {
-  recipient: string;
+  recipient: SuiAddress;
   object_ref: RawObjectRef;
 };
 export type MoveModulePublish = Infer<typeof MoveModulePublishSchema>;
@@ -38,7 +43,7 @@ export type TransactionKind =
   | { Batch: SingleTransactionKind[] };
 export type TransactionData = {
   kind: TransactionKind;
-  sender: string;
+  sender: SuiAddress;
   gas_payment: RawObjectRef;
   gas_budget: number;
 };
@@ -53,7 +58,6 @@ export type CertifiedTransaction = {
   signatures: RawAuthoritySignInfo[];
 };
 
-export const TransactionDigestSchema = string();
 export const GatewayTxSeqNumberSchema = number();
 
 export const GetTxnDigestsResponseSchema = array(
@@ -61,12 +65,12 @@ export const GetTxnDigestsResponseSchema = array(
 );
 
 export const TransferSchema = pick({
-  recipient: string(),
+  recipient: SuiAddressSchema,
   object_ref: RawObjectRefSchema,
 });
 
 export const MoveModulePublishSchema = pick({
-  modules: unknown(),
+  modules: any(),
 });
 
 export const MoveTypeTagSchema = enums([
@@ -87,7 +91,7 @@ export const MoveCallSchema = pick({
   type_arguments: array(MoveTypeTagSchema),
   object_arguments: array(RawObjectRefSchema),
   shared_object_arguments: array(string()),
-  pure_arguments: array(unknown()),
+  pure_arguments: array(any()),
 });
 
 export const SingleTransactionKindSchema = union([
@@ -103,7 +107,7 @@ export const TransactionKindSchema = union([
 
 export const TransactionDataSchema = pick({
   kind: TransactionKindSchema,
-  sender: string(),
+  sender: SuiAddressSchema,
   gas_payment: RawObjectRefSchema,
   gas_budget: number(),
 });
