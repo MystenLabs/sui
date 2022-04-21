@@ -7,7 +7,7 @@ import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
 import { type AddressOwner } from '../../utils/internetapi/DefaultRpcClient';
 import {
-    asciiFromNumberBytes,
+    asciiFromNumberBytes, trimStdLibPrefix,
 } from '../../utils/stringUtils';
 import DisplayBox from './DisplayBox';
 
@@ -66,10 +66,6 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
 
     //TODO - improve move code handling:
     // const isMoveVecType = (value: { vec?: [] }) => Array.isArray(value?.vec);
-    // TODO - merge / replace with other version of same thing
-    const stdLibRe = /0x2::/;
-    const prepObjTypeValue = (typeString: string) =>
-        typeString.replace(stdLibRe, '');
 
     const extractOwnerData = (owner: string | AddressOwner): string => {
         switch (typeof owner) {
@@ -183,7 +179,7 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
 
                             <div>
                                 <div>Type</div>
-                                <div>{prepObjTypeValue(suiObj.objType)}</div>
+                                <div>{trimStdLibPrefix(suiObj.objType)}</div>
                             </div>
                             <div>
                                 <div>Owner</div>
