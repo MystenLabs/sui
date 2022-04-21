@@ -1,19 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type {
-  GetObjectInfoResponse,
-  ObjectRef,
-} from '../types/objects';
-import type {
-  CertifiedTransaction,
-  GatewayTxSeqNumber,
-  GetTxnDigestsResponse,
-  TransactionDigest,
-} from '../types/transactions';
+import { GetObjectInfoResponse, ObjectRef } from "../types/objects";
+import { GatewayTxSeqNumber, GetTxnDigestsResponse } from "../types/transactions";
 
-///////////////////////////////
-// Exported Types
 
 export interface SignedTransaction {
   txBytes: string;
@@ -39,14 +29,6 @@ export abstract class Provider {
   abstract getObjectInfo(objectId: string): Promise<GetObjectInfoResponse>;
 
   // Transactions
-
-  /**
-   * Get Transaction Details from a digest
-   */
-  abstract getTransaction(
-    digest: TransactionDigest
-  ): Promise<CertifiedTransaction>;
-
   /**
    * Get transaction digests for a given range
    *
