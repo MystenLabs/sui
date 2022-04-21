@@ -447,7 +447,7 @@ export class BCS {
         encodeCb: (writer: BcsWriter, data: any) => BcsWriter,
         decodeCb: (reader: BcsReader) => any,
         validateCb: (data: any) => boolean = () => true
-    ): ThisType<BCS> {
+    ): typeof BCS {
         this.types.set(name, {
             encode(data, size = 1024) { return this._encodeRaw(new BcsWriter(size), data); },
             decode(data) { return this._decodeRaw(new BcsReader(data)); },
@@ -480,7 +480,7 @@ export class BCS {
     public static registerAddressType(
         name: string,
         length: number
-    ): ThisType<BCS> {
+    ): typeof BCS {
         return this.registerType(name,
             (writer, data) => new HEX(data).getData().reduce((writer, el) => writer.write8(el), writer),
             (reader) => new HEX(reader.readBytes(length)).toString()
@@ -502,10 +502,11 @@ export class BCS {
     public static registerVectorType(
         name: string,
         elementType: string
-    ): ThisType<BCS> {
-        if (!BCS.hasType(elementType)) {
-            throw new Error(`Type ${elementType} is not registered`);
-        }
+    ): typeof BCS {
+        // OMITTING SAFETY CHECK TO ALLOW RECURSIVE DEFINITIONS
+        // if (!BCS.hasType(elementType)) {
+        //     throw new Error(`Type ${elementType} is not registered`);
+        // }
 
         return this.registerType(name,
             (writer, data) => writer.writeVec(data, (writer, el) => {
@@ -561,7 +562,7 @@ export class BCS {
      * @param fields Fields of the struct. Must be in the correct order.
      * @return Returns BCS for chaining.
      */
-    public static registerStructType(name: string, fields: { [key: string]: string }): ThisType<BCS> {
+    public static registerStructType(name: string, fields: { [key: string]: string }): typeof BCS {
         let struct = Object.freeze(fields); // Make sure the order doesn't get changed
 
         // IMPORTANT: we need to store canonical order of fields for each registered
@@ -571,11 +572,11 @@ export class BCS {
 
         // Make sure all the types in the fields description are already known
         // and that all the field types are strings.
-        for (let type of Object.values(struct)) {
-            if (!this.hasType(type)) {
-                throw new Error(`Type ${type} is not registered`);
-            }
-        }
+        // OMITTING this check to allow recursive definitions and dynamic typing.
+        // for (let type of Object.values(struct)) {
+        //         throw new Error(`Type ${type} is not registered`);
+        //     }
+        // }
 
         return this.registerType(name,
             (writer, data) => {
@@ -619,7 +620,7 @@ export class BCS {
      * @param name
      * @param variants
      */
-    public static registerEnumType(name: string, variants: { [key: string]: string }) {
+    public static registerEnumType(name: string, variants: { [key: string]: string|null }) {
         let struct = Object.freeze(variants); // Make sure the order doesn't get changed
 
         // IMPORTANT: enum is an ordered type and we have to preserve ordering in BCS
@@ -638,16 +639,29 @@ export class BCS {
                     throw new Error(`Unknown invariant of the enum ${name}, allowed values: ${canonicalOrder}`);
                 }
                 let invariant = canonicalOrder[orderByte];
+                let invariantType = struct[invariant];
 
                 writer.write8(orderByte); // write order byte
-                return BCS.getTypeInterface(struct[invariant])._encodeRaw(writer, data[key]);
+
+
+                // Allow empty Enum values!
+                return (invariantType !== null)
+                    ? BCS.getTypeInterface(invariantType)._encodeRaw(writer, data[key])
+                    : writer;
             },
             (reader) => {
                 let orderByte = reader.readULEB();
                 let invariant = canonicalOrder[orderByte];
+                let invariantType = struct[invariant];
+
+                if (orderByte === -1) {
+                    throw new Error(`Decoding type mismatch, expected enum ${name} invariant index, received ${orderByte}`);
+                }
 
                 return {
-                    [invariant]: BCS.getTypeInterface(struct[invariant])._decodeRaw(reader)
+                    [invariant]: invariantType !== null
+                        ? BCS.getTypeInterface(invariantType)._decodeRaw(reader)
+                        : true
                 };
             }
         );
