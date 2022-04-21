@@ -9,6 +9,7 @@ use move_core_types::ident_str;
 use sui_adapter::genesis;
 use sui_types::base_types::ObjectRef;
 use sui_types::crypto::Signature;
+use sui_types::messages::CallArg;
 use sui_types::messages::{
     CertifiedTransaction, SignatureAggregator, SignedTransaction, Transaction, TransactionData,
 };
@@ -52,12 +53,11 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
             ident_str!(function).to_owned(),
             /* type_args */ vec![],
             gas_object.compute_object_reference(),
-            /* object_args */ vec![],
-            vec![shared_object_id],
-            /* pure_args */
+            /* args */
             vec![
-                16u64.to_le_bytes().to_vec(),
-                bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
+                CallArg::SharedObject(shared_object_id),
+                CallArg::Pure(16u64.to_le_bytes().to_vec()),
+                CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
             ],
             /* max_gas */ 10_000,
         );
