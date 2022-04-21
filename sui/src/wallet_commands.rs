@@ -743,21 +743,28 @@ async fn call_move(
 
     // These steps can potentially be condensed and moved into the client/manager level
     // Extract the input args
-    let (object_ids, pure_args) =
+    let json_args =
         resolve_move_function_args(package_obj, module.clone(), function.clone(), args.to_vec())?;
 
     // Fetch all the objects needed for this call
-    let mut input_objs = vec![];
-    for obj_id in object_ids.clone() {
-        input_objs.push(
-            context
-                .gateway
-                .get_object_info(obj_id)
-                .await?
-                .into_object()?,
-        );
+    let mut objects = BTreeMap::new();
+    let mut args = Vec::with_capacity(json_args.len());
+    for json_arg in json_args {
+        args.push(match json_arg {
+            SuiJsonCallArg::Object(id) => {
+                let obj = context.gateway.get_object_info(id).await?.into_object()?;
+                let arg = if obj.is_shared() {
+                    CallArg::SharedObject(id)
+                } else {
+                    CallArg::ImmOrOwnedObject(obj.compute_object_reference())
+                };
+                objects.insert(id, obj);
+                arg
+            }
+            SuiJsonCallArg::Pure(bytes) => CallArg::Pure(bytes),
+        })
     }
-    let forbidden_gas_objects = BTreeSet::from_iter(object_ids.clone().into_iter());
+    let forbidden_gas_objects = objects.keys().copied().collect();
     let gas_object = context
         .choose_gas_for_wallet(*gas, *gas_budget, forbidden_gas_objects)
         .await?;
@@ -770,22 +777,15 @@ async fn call_move(
         .ok_or_else(|| anyhow!("Cannot get package from object"))?
         .deserialize_module(module)?;
     resolve_and_type_check(
+        &objects,
         &compiled_module,
         function,
         type_args,
-        input_objs,
-        pure_args.clone(),
+        args.clone(),
     )?;
 
     // Fetch the object info for the gas obj
     let gas_obj_ref = gas_object.compute_object_reference();
-
-    // Fetch the objects for the object args
-    let mut object_args_refs = Vec::new();
-    for obj_id in object_ids {
-        let obj_info = context.gateway.get_object_info(obj_id).await?;
-        object_args_refs.push(obj_info.object()?.compute_object_reference());
-    }
 
     let data = context
         .gateway
@@ -794,11 +794,9 @@ async fn call_move(
             package_obj_ref,
             module.to_owned(),
             function.to_owned(),
-            type_args.to_vec(),
+            type_args.to_owned(),
             gas_obj_ref,
-            object_args_refs,
-            vec![],
-            pure_args,
+            args,
             *gas_budget,
         )
         .await?;
