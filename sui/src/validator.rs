@@ -5,7 +5,6 @@ use anyhow::anyhow;
 use clap::*;
 use narwhal_config::Parameters as ConsensusParameters;
 use std::path::PathBuf;
-use sui::config::make_default_narwhal_committee;
 use sui::{
     config::{GenesisConfig, NetworkConfig, PersistedConfig, CONSENSUS_DB_NAME},
     sui_commands::{genesis, make_server},
@@ -100,7 +99,7 @@ async fn main() -> Result<(), anyhow::Error> {
         net_cfg.port
     );
 
-    let consensus_committee = make_default_narwhal_committee(&network_config.authorities)?;
+    let consensus_committee = network_config.make_narwhal_committee();
     let consensus_parameters = ConsensusParameters::default();
     let consensus_store_path = sui_config_dir()?
         .join(CONSENSUS_DB_NAME)

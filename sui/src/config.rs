@@ -166,6 +166,41 @@ impl NetworkConfig {
             })
             .collect()
     }
+
+    pub fn make_narwhal_committee(&self) -> ConsensusCommittee<Ed25519PublicKey> {
+        ConsensusCommittee {
+            authorities: self
+                .authorities
+                .iter()
+                .map(|x| {
+                    let name = x.key_pair.make_narwhal_keypair().name;
+                    let primary = PrimaryAddresses {
+                        primary_to_primary: format!("{}:{}", x.host, x.port + 1).parse().unwrap(),
+                        worker_to_primary: format!("{}:{}", x.host, x.port + 2).parse().unwrap(),
+                    };
+                    let workers = [(
+                        /* worker_id */ 0,
+                        WorkerAddresses {
+                            primary_to_worker: format!("{}:{}", x.host, x.port + 3)
+                                .parse()
+                                .unwrap(),
+                            transactions: x.consensus_address,
+                            worker_to_worker: format!("{}:{}", x.host, x.port + 4).parse().unwrap(),
+                        },
+                    )]
+                    .iter()
+                    .cloned()
+                    .collect();
+                    let authority = Authority {
+                        stake: x.stake as Stake,
+                        primary,
+                        workers,
+                    };
+                    (name, authority)
+                })
+                .collect(),
+        }
+    }
 }
 
 impl From<&NetworkConfig> for Committee {
