@@ -6,8 +6,9 @@ import { useLocation, useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
+import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
-import { DefaultRpcClient as rpc } from '../../utils/internetapi/SuiRpcClient';
+import { DefaultRpcClient as rpc } from '../../utils/api/SuiRpcClient';
 
 type DataType = {
     id: string;
@@ -29,10 +30,10 @@ function instanceOfResponseType(input: any): input is ResponseType {
 
 function Loaded({ data }: { data: DataType }) {
     return (
-        <div className={theme.textresults}>
+        <div className={theme.textresults} id="textResults">
             <div>
                 <div>Address ID</div>
-                <div>
+                <div id="addressID">
                     <Longtext
                         text={data.id}
                         category="addresses"
@@ -43,16 +44,13 @@ function Loaded({ data }: { data: DataType }) {
             <div>
                 <div>Owned Objects</div>
                 <div>
-                    {data.objects.map(
-                        (objectID: { objectId: string }, index: any) => (
-                            <div key={`object-${index}`}>
-                                <Longtext
-                                    text={objectID.objectId}
-                                    category="objects"
-                                />
-                            </div>
-                        )
-                    )}
+                    {
+                        <OwnedObjects
+                            objects={data.objects.map(
+                                ({ objectId }) => objectId
+                            )}
+                        />
+                    }
                 </div>
             </div>
         </div>
@@ -67,7 +65,7 @@ function Fail({ id }: { id: string | undefined }) {
     return (
         <ErrorResult
             id={id}
-            errorMsg="There was an issue with the data on the following address"
+            errorMsg="No objects were found for the queried address value"
         />
     );
 }
@@ -76,18 +74,14 @@ function AddressResultStatic({ addressID }: { addressID: string | undefined }) {
     const { findDataFromID } = require('../../utils/static/searchUtil');
     const data = findDataFromID(addressID, undefined);
 
-    if (instanceOfDataType(data)) {
+    if (instanceOfDataType(data) && instanceOfResponseType(data.objects)) {
         return <Loaded data={data} />;
     } else {
         return <Fail id={addressID} />;
     }
 }
 
-function AddressResultInternetAPI({
-    addressID,
-}: {
-    addressID: string | undefined;
-}) {
+function AddressResultAPI({ addressID }: { addressID: string | undefined }) {
     const defaultData = (addressID: string | undefined) => ({
         id: addressID,
         objects: [{}],
@@ -112,7 +106,11 @@ function AddressResultInternetAPI({
             });
     }, [addressID]);
 
-    if (instanceOfDataType(data) && data.loadState === 'loaded') {
+    if (
+        instanceOfDataType(data) &&
+        instanceOfResponseType(data.objects) &&
+        data.loadState === 'loaded'
+    ) {
         return <Loaded data={data} />;
     }
 
@@ -141,7 +139,7 @@ function AddressResult() {
     }
 
     if (process.env.REACT_APP_DATA !== 'static') {
-        return <AddressResultInternetAPI addressID={addressID} />;
+        return <AddressResultAPI addressID={addressID} />;
     } else {
         return <AddressResultStatic addressID={addressID} />;
     }

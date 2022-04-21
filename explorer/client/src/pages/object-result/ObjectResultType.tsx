@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type AddressOwner } from '../../utils/internetapi/SuiRpcClient';
+import { type AddressOwner } from '../../utils/api/SuiRpcClient';
 
 export type DataType = {
     id: string;
