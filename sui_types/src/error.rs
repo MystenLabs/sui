@@ -287,6 +287,14 @@ pub enum SuiError {
 
     #[error("Failed to lock shared objects: {0}")]
     SharedObjectLockingFailure(String),
+
+    // Cryptography errors.
+    #[error("Signature seed invalid length, input byte size was: {0}")]
+    SignatureSeedInvalidLength(usize),
+    #[error("HKDF error: {0}")]
+    HkdfError(String),
+    #[error("Signature key generation error: {0}")]
+    SignatureKeyGenError(String),
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
