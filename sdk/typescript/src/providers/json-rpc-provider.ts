@@ -1,23 +1,17 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Provider, SignedTransaction, TransactionResponse } from './provider';
+import {
+  SignedTransaction,
+  TransactionResponse,
+  Provider,
+} from './provider';
 import { JsonRpcClient } from '../rpc/client';
-import { array, number, type as pick } from 'superstruct';
-import {
-  GetObjectInfoResponse,
-  GetObjectInfoResponseSchema,
-  ObjectRef,
-  ObjectRefSchema,
-} from '../types/objects';
-import {
-  CertifiedTransaction,
-  CertifiedTransactionSchema,
-  GatewayTxSeqNumber,
-  GetTxnDigestsResponse,
-  GetTxnDigestsResponseSchema,
-  TransactionDigest,
-} from '../types/transactions';
+import { isGetObjectInfoResponse, isGetOwnedObjectRefsResponse, isGetTxnDigestsResponse, isCertifiedTransaction } from '../index.guard';
+import { CertifiedTransaction, GatewayTxSeqNumber, GetTxnDigestsResponse, TransactionDigest } from '../types/transactions';
+import { GetObjectInfoResponse, ObjectRef } from '../types/objects';
+
+const isNumber = (val: any): val is number => typeof(val) === 'number';
 
 export class JsonRpcProvider extends Provider {
   private client: JsonRpcClient;
@@ -35,10 +29,10 @@ export class JsonRpcProvider extends Provider {
   // Objects
   async getOwnedObjectRefs(address: string): Promise<ObjectRef[]> {
     try {
-      const resp = await this.client.requestWithValidation(
+      const resp = await this.client.requestWithType(
         'sui_getOwnedObjects',
         [address],
-        pick({ objects: array(ObjectRefSchema) })
+        isGetOwnedObjectRefsResponse
       );
       return resp.objects;
     } catch (err) {
@@ -50,10 +44,10 @@ export class JsonRpcProvider extends Provider {
 
   async getObjectInfo(objectId: string): Promise<GetObjectInfoResponse> {
     try {
-      const resp = await this.client.requestWithValidation(
+      const resp = await this.client.requestWithType(
         'sui_getObjectTypedInfo',
         [objectId],
-        GetObjectInfoResponseSchema
+        isGetObjectInfoResponse
       );
       return resp;
     } catch (err) {
@@ -66,10 +60,10 @@ export class JsonRpcProvider extends Provider {
     digest: TransactionDigest
   ): Promise<CertifiedTransaction> {
     try {
-      const resp = await this.client.requestWithValidation(
+      const resp = await this.client.requestWithType(
         'sui_getTransaction',
         [digest],
-        CertifiedTransactionSchema
+        isCertifiedTransaction
       );
       return resp;
     } catch (err) {
@@ -85,10 +79,10 @@ export class JsonRpcProvider extends Provider {
 
   async getTotalTransactionNumber(): Promise<number> {
     try {
-      const resp = await this.client.requestWithValidation(
+      const resp = await this.client.requestWithType(
         'sui_getTotalTransactionNumber',
         [],
-        number()
+        isNumber
       );
       return resp;
     } catch (err) {
@@ -101,10 +95,10 @@ export class JsonRpcProvider extends Provider {
     end: GatewayTxSeqNumber
   ): Promise<GetTxnDigestsResponse> {
     try {
-      return await this.client.requestWithValidation(
+      return await this.client.requestWithType(
         'sui_getTransactionsInRange',
         [start, end],
-        GetTxnDigestsResponseSchema
+        isGetTxnDigestsResponse
       );
     } catch (err) {
       throw new Error(
@@ -115,10 +109,10 @@ export class JsonRpcProvider extends Provider {
 
   async getRecentTransactions(count: number): Promise<GetTxnDigestsResponse> {
     try {
-      return await this.client.requestWithValidation(
+      return await this.client.requestWithType(
         'sui_getRecentTransactions',
         [count],
-        GetTxnDigestsResponseSchema
+        isGetTxnDigestsResponse
       );
     } catch (err) {
       throw new Error(

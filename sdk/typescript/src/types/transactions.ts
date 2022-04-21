@@ -1,33 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-  type as pick,
-  string,
-  Infer,
-  number,
-  enums,
-  unknown,
-  union,
-  array,
-  tuple,
-  object,
-} from 'superstruct';
-import { RawObjectRef, RawObjectRefSchema } from './objects';
 
-export type TransactionDigest = Infer<typeof TransactionDigestSchema>;
-export type GatewayTxSeqNumber = Infer<typeof GatewayTxSeqNumberSchema>;
-export type GetTxnDigestsResponse = [GatewayTxSeqNumber, TransactionDigest][];
+import { RawObjectRef } from './objects';
+
 export type Transfer = {
   recipient: string;
   object_ref: RawObjectRef;
 };
-export type MoveModulePublish = Infer<typeof MoveModulePublishSchema>;
-export type MoveCall = Infer<typeof MoveCallSchema>;
-export type MoveTypeTag = Infer<typeof MoveTypeTagSchema>;
-export type EmptySignInfo = Infer<typeof EmptySignInfoSchema>;
-export type AuthorityName = Infer<typeof AuthorityNameSchema>;
-export type AuthoritySignature = Infer<typeof AuthoritySignatureSchema>;
 export type RawAuthoritySignInfo = [AuthorityName, AuthoritySignature];
 export type SingleTransactionKind =
   | { Transfer: Transfer }
@@ -53,76 +33,35 @@ export type CertifiedTransaction = {
   signatures: RawAuthoritySignInfo[];
 };
 
-export const TransactionDigestSchema = string();
-export const GatewayTxSeqNumberSchema = number();
+export type TransactionDigest = string;
+export type GatewayTxSeqNumber = number;
 
-export const GetTxnDigestsResponseSchema = array(
-  tuple([GatewayTxSeqNumberSchema, TransactionDigestSchema])
-);
+export type GetTxnDigestsResponse = [GatewayTxSeqNumber, TransactionDigest][];
 
-export const TransferSchema = pick({
-  recipient: string(),
-  object_ref: RawObjectRefSchema,
-});
+export type MoveModulePublish = {
+  modules: any,
+};
 
-export const MoveModulePublishSchema = pick({
-  modules: unknown(),
-});
+export type MoveTypeTag =
+  'bool' |
+  'u8' |
+  'u64' |
+  'u128' |
+  'address' |
+  'signer' |
+  'vector' |
+  'struct';
 
-export const MoveTypeTagSchema = enums([
-  'bool',
-  'u8',
-  'u64',
-  'u128',
-  'address',
-  'signer',
-  'vector',
-  'struct',
-]);
+export type MoveCall = {
+  packages: RawObjectRef,
+  module: string,
+  function: string,
+  type_arguments: MoveTypeTag[],
+  object_arguments: RawObjectRef[],
+  shared_object_arguments: string[],
+  pure_arguments: any[],
+};
 
-export const MoveCallSchema = pick({
-  packages: RawObjectRefSchema,
-  module: string(),
-  function: string(),
-  type_arguments: array(MoveTypeTagSchema),
-  object_arguments: array(RawObjectRefSchema),
-  shared_object_arguments: array(string()),
-  pure_arguments: array(unknown()),
-});
-
-export const SingleTransactionKindSchema = union([
-  pick({ Transfer: TransferSchema }),
-  pick({ Publish: MoveModulePublishSchema }),
-  pick({ Call: MoveCallSchema }),
-]);
-
-export const TransactionKindSchema = union([
-  pick({ Single: SingleTransactionKindSchema }),
-  pick({ Batch: array(SingleTransactionKindSchema) }),
-]);
-
-export const TransactionDataSchema = pick({
-  kind: TransactionKindSchema,
-  sender: string(),
-  gas_payment: RawObjectRefSchema,
-  gas_budget: number(),
-});
-
-export const EmptySignInfoSchema = object({});
-export const AuthorityNameSchema = string();
-export const AuthoritySignatureSchema = string();
-export const RawAuthoritySignInfoSchema = tuple([
-  AuthorityNameSchema,
-  AuthoritySignatureSchema,
-]);
-
-export const TransactionSchema = pick({
-  data: TransactionDataSchema,
-  tx_signature: string(),
-  auth_signature: EmptySignInfoSchema,
-});
-
-export const CertifiedTransactionSchema = pick({
-  transaction: TransactionSchema,
-  signatures: array(RawAuthoritySignInfoSchema),
-});
+export type EmptySignInfo = object;
+export type AuthorityName = string;
+export type AuthoritySignature = string;
