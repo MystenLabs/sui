@@ -11,7 +11,7 @@ use crate::error::SuiError;
 use crate::readable_serde::encoding::Base64;
 use crate::readable_serde::encoding::Hex;
 use crate::readable_serde::Readable;
-use ed25519_dalek::Digest;
+use digest::Digest;
 use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 use sha3::Sha3_256;
+
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
 mod base_types_tests;
