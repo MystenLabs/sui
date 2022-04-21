@@ -17,8 +17,8 @@ use sui_types::{
     fp_ensure,
     gas::SuiGasStatus,
     id::VersionedID,
-    messages::CallResult,
-    object::{Data, MoveObject, Object, Owner},
+    messages::{CallArg, InputObjectKind},
+    object::{self, Data, MoveObject, Object, Owner},
     storage::{DeleteKind, Storage},
 };
 use sui_verifier::{
@@ -31,12 +31,11 @@ use move_core_types::{
     identifier::Identifier,
     language_storage::{ModuleId, StructTag, TypeTag},
     resolver::{ModuleResolver, ResourceResolver},
-    value::MoveTypeLayout,
 };
 use move_vm_runtime::{native_functions::NativeFunctionTable, session::SerializedReturnValues};
 use std::{
     borrow::Borrow,
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     convert::TryFrom,
     fmt::Debug,
 };
@@ -64,33 +63,30 @@ pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
 pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
     vm: &MoveVM,
     state_view: &mut S,
-    _natives: &NativeFunctionTable,
     module_id: ModuleId,
     function: &Identifier,
     type_args: Vec<TypeTag>,
-    object_args: Vec<Object>,
-    pure_args: Vec<Vec<u8>>,
+    args: Vec<CallArg>,
     gas_status: &mut SuiGasStatus,
     ctx: &mut TxContext,
-) -> SuiResult<Vec<CallResult>> {
-    // object_owner_map maps from object ID to its exclusive object owner.
-    // This map will be used for detecting circular ownership among
-    // objects, which can only happen to objects exclusively owned
-    // by objects.
-    let mut object_owner_map = HashMap::new();
-    for obj in &object_args {
-        if let Owner::ObjectOwner(owner) = obj.owner {
-            object_owner_map.insert(obj.id().into(), owner);
-        }
-    }
-
+) -> SuiResult<()> {
+    let objects = args
+        .iter()
+        .filter_map(|arg| match arg {
+            CallArg::Pure(_) => None,
+            CallArg::ImmOrOwnedObject((id, _, _)) | CallArg::SharedObject(id) => {
+                Some((*id, state_view.read_object(id)?))
+            }
+        })
+        .collect();
     let module = vm.load_module(&module_id, state_view)?;
     let TypeCheckSuccess {
         module_id,
         args,
-        mutable_ref_objects,
+        object_data,
         by_value_objects,
-    } = resolve_and_type_check(&module, function, &type_args, object_args, pure_args)?;
+        mutable_ref_objects,
+    } = resolve_and_type_check(&objects, &module, function, &type_args, args)?;
 
     let mut args = args;
     args.push(ctx.to_vec());
@@ -101,9 +97,9 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         function,
         type_args,
         args,
-        mutable_ref_objects,
+        object_data,
         by_value_objects,
-        object_owner_map,
+        mutable_ref_objects,
         gas_status,
         ctx,
     )
@@ -122,12 +118,24 @@ fn execute_internal<
     function: &Identifier,
     type_args: Vec<TypeTag>,
     args: Vec<Vec<u8>>,
-    mut mutable_ref_objects: BTreeMap<LocalIndex, Object>,
-    by_value_objects: BTreeMap<ObjectID, Object>,
-    object_owner_map: HashMap<SuiAddress, SuiAddress>,
+    object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
+    by_value_objects: BTreeSet<ObjectID>,
+    mut mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
     gas_status: &mut SuiGasStatus, // gas status for the current call operation
     ctx: &mut TxContext,
-) -> SuiResult<Vec<CallResult>> {
+) -> SuiResult<()> {
+    // object_owner_map maps from object ID to its exclusive object owner.
+    // This map will be used for detecting circular ownership among
+    // objects, which can only happen to objects exclusively owned
+    // by objects.
+    let object_owner_map: BTreeMap<SuiAddress, SuiAddress> = object_data
+        .iter()
+        .filter_map(|(id, (owner, _))| match owner {
+            Owner::ObjectOwner(owner) => Some(((*id).into(), *owner)),
+            _ => None,
+        })
+        .collect();
+
     let mut session = vm.new_session(state_view);
     // script visibility checked manually for entry points
     let result = session
@@ -164,86 +172,37 @@ fn execute_internal<
             let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).unwrap();
             ctx.update_state(updated_ctx)?;
 
-            let mutable_refs =
-                mutable_reference_outputs
-                    .into_iter()
-                    .map(|(local_idx, bytes, _layout)| {
-                        let object = mutable_ref_objects.remove(&local_idx).unwrap();
-                        (object, bytes)
-                    });
+            let mutable_refs = mutable_reference_outputs
+                .into_iter()
+                .map(|(local_idx, bytes, _layout)| {
+                    let object_id = mutable_ref_objects.remove(&local_idx).unwrap();
+                    debug_assert!(!by_value_objects.contains(&object_id));
+                    (object_id, bytes)
+                })
+                .collect();
+            // All mutable references should have been marked as updated
+            debug_assert!(mutable_ref_objects.is_empty());
+            let by_value_object_map = object_data
+                .into_iter()
+                .filter(|(id, _obj)| by_value_objects.contains(id))
+                .collect();
             process_successful_execution(
                 state_view,
-                by_value_objects,
+                by_value_object_map,
                 mutable_refs,
                 events,
                 ctx,
                 object_owner_map,
             )?;
-            // All mutable references should have been marked as updated
-            debug_assert!(mutable_ref_objects.is_empty());
-            Ok(process_return_values(&return_values))
+
+            debug_assert!(return_values.is_empty());
+            Ok(())
         }
         // charge for all computations so far
         Err(error) => Err(SuiError::AbortedExecution {
             error: error.to_string(),
         }),
     }
-}
-
-fn process_return_values(return_values: &[(Vec<u8>, MoveTypeLayout)]) -> Vec<CallResult> {
-    return_values
-        .iter()
-        .filter_map(|(bytes, ty_layout)| {
-            Some(match ty_layout {
-                // debug_assert-s for missing arms should be OK here as we
-                // already checked in
-                // MovePackage::check_and_get_entry_function that no other
-                // types can exist in the signature
-
-                // see CallResults struct comments for why this is
-                // implemented the way it is
-                MoveTypeLayout::Bool => CallResult::Bool(bcs::from_bytes(bytes).unwrap()),
-                MoveTypeLayout::U8 => CallResult::U8(bcs::from_bytes(bytes).unwrap()),
-                MoveTypeLayout::U64 => CallResult::U64(bcs::from_bytes(bytes).unwrap()),
-                MoveTypeLayout::U128 => CallResult::U128(bcs::from_bytes(bytes).unwrap()),
-                MoveTypeLayout::Address => CallResult::Address(bcs::from_bytes(bytes).unwrap()),
-                MoveTypeLayout::Vector(t) => match &**t {
-                    MoveTypeLayout::Bool => CallResult::BoolVec(bcs::from_bytes(bytes).unwrap()),
-                    MoveTypeLayout::U8 => CallResult::U8Vec(bcs::from_bytes(bytes).unwrap()),
-                    MoveTypeLayout::U64 => CallResult::U64Vec(bcs::from_bytes(bytes).unwrap()),
-                    MoveTypeLayout::U128 => CallResult::U128Vec(bcs::from_bytes(bytes).unwrap()),
-                    MoveTypeLayout::Address => CallResult::AddrVec(bcs::from_bytes(bytes).unwrap()),
-                    MoveTypeLayout::Vector(inner_t) => match &**inner_t {
-                        MoveTypeLayout::Bool => {
-                            CallResult::BoolVecVec(bcs::from_bytes(bytes).unwrap())
-                        }
-                        MoveTypeLayout::U8 => CallResult::U8VecVec(bcs::from_bytes(bytes).unwrap()),
-                        MoveTypeLayout::U64 => {
-                            CallResult::U64VecVec(bcs::from_bytes(bytes).unwrap())
-                        }
-                        MoveTypeLayout::U128 => {
-                            CallResult::U128VecVec(bcs::from_bytes(bytes).unwrap())
-                        }
-                        MoveTypeLayout::Address => {
-                            CallResult::AddrVecVec(bcs::from_bytes(bytes).unwrap())
-                        }
-                        _ => {
-                            debug_assert!(false);
-                            return None;
-                        }
-                    },
-                    _ => {
-                        debug_assert!(false);
-                        return None;
-                    }
-                },
-                _ => {
-                    debug_assert!(false);
-                    return None;
-                }
-            })
-        })
-        .collect()
 }
 
 pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
@@ -321,8 +280,8 @@ fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error 
             Vec::new(),
             args,
             BTreeMap::new(),
+            BTreeSet::new(),
             BTreeMap::new(),
-            HashMap::new(),
             gas_status,
             ctx,
         )?;
@@ -432,14 +391,18 @@ fn process_successful_execution<
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
 >(
     state_view: &mut S,
-    mut by_value_objects: BTreeMap<ObjectID, Object>,
-    mutable_refs: impl Iterator<Item = (Object, Vec<u8>)>,
+    mut by_value_objects: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
+    mutable_refs: Vec<(ObjectID, Vec<u8>)>,
     events: Vec<MoveEvent>,
     ctx: &TxContext,
-    mut object_owner_map: HashMap<SuiAddress, SuiAddress>,
+    mut object_owner_map: BTreeMap<SuiAddress, SuiAddress>,
 ) -> SuiResult {
-    for (mut obj, new_contents) in mutable_refs {
+    for (obj_id, new_contents) in mutable_refs {
         // update contents and increment sequence number
+        let mut obj = state_view
+            .read_object(&obj_id)
+            .expect("We previously checked all input objects exist")
+            .clone();
         obj.data
             .try_as_move_mut()
             .expect("We previously checked that mutable ref inputs are Move objects")
@@ -490,10 +453,8 @@ fn process_successful_execution<
                 // We don't care about IDs that are generated in this same transaction
                 // but only to be deleted.
                 if !newly_generated_ids.contains(obj_id) {
-                    if let Some(object) = by_value_objects.remove(id.object_id()) {
-                        // This object was in the input, and is being deleted. A normal deletion.
-                        debug_assert_eq!(object.version(), id.version());
-                        if matches!(object.owner, Owner::ObjectOwner { .. }) {
+                    match by_value_objects.remove(id.object_id()) {
+                        Some((Owner::ObjectOwner { .. }, _)) => {
                             // If an object is owned by another object, we are not allowed to directly delete the child
                             // object because this could lead to a dangling reference of the ownership. Such
                             // dangling reference can never be dropped. To delete this object, one must either first transfer
@@ -502,20 +463,23 @@ fn process_successful_execution<
                             // and emit the DeleteChildObject event. These child objects can be safely deleted.
                             return Err(SuiError::DeleteObjectOwnedObject);
                         }
-                        state_view.delete_object(obj_id, id.version(), DeleteKind::Normal);
-                    } else {
-                        // This object wasn't in the input, and is being deleted. It must
-                        // be unwrapped in this transaction and then get deleted.
-                        // When an object was wrapped at version `v`, we added an record into `parent_sync`
-                        // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
-                        // it will also have version `v+1`, leading to a violation of the invariant that any
-                        // object_id and version pair must be unique. Hence for any object that's just unwrapped,
-                        // we force incrementing its version number again to make it `v+2` before writing to the store.
-                        state_view.delete_object(
-                            obj_id,
-                            id.version().increment(),
-                            DeleteKind::UnwrapThenDelete,
-                        );
+                        Some(_) => {
+                            state_view.delete_object(obj_id, id.version(), DeleteKind::Normal)
+                        }
+                        None => {
+                            // This object wasn't in the input, and is being deleted. It must
+                            // be unwrapped in this transaction and then get deleted.
+                            // When an object was wrapped at version `v`, we added an record into `parent_sync`
+                            // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
+                            // it will also have version `v+1`, leading to a violation of the invariant that any
+                            // object_id and version pair must be unique. Hence for any object that's just unwrapped,
+                            // we force incrementing its version number again to make it `v+2` before writing to the store.
+                            state_view.delete_object(
+                                obj_id,
+                                id.version().increment(),
+                                DeleteKind::UnwrapThenDelete,
+                            )
+                        }
                     }
                 }
                 Ok(())
@@ -525,8 +489,8 @@ fn process_successful_execution<
                 let obj_id: ObjectID = id_bytes.into();
                 // unwrap safe since to delete a child object, this child object
                 // must be passed by value in the input.
-                let object = by_value_objects.remove(&obj_id).unwrap();
-                state_view.delete_object(&obj_id, object.version(), DeleteKind::Normal);
+                let (_owner, version) = by_value_objects.remove(&obj_id).unwrap();
+                state_view.delete_object(&obj_id, version, DeleteKind::Normal);
                 Ok(())
             }
             EventType::User => {
@@ -544,8 +508,8 @@ fn process_successful_execution<
     // any object left in `by_value_objects` is an input passed by value that was not transferred or frozen.
     // this means that either the object was (1) deleted from the Sui system altogether, or
     // (2) wrapped inside another object that is in the Sui object pool
-    for (id, object) in by_value_objects.iter() {
-        state_view.delete_object(id, object.version(), DeleteKind::Wrap);
+    for (id, (_owner, version)) in by_value_objects {
+        state_view.delete_object(&id, version, DeleteKind::Wrap);
     }
 
     Ok(())
@@ -560,9 +524,9 @@ fn handle_transfer<
     type_: TypeTag,
     contents: Vec<u8>,
     tx_digest: TransactionDigest,
-    by_value_objects: &mut BTreeMap<ObjectID, Object>,
+    by_value_objects: &mut BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
     state_view: &mut S,
-    object_owner_map: &mut HashMap<SuiAddress, SuiAddress>,
+    object_owner_map: &mut BTreeMap<SuiAddress, SuiAddress>,
     newly_generated_ids: &HashSet<ObjectID>,
 ) -> SuiResult {
     match type_ {
@@ -625,22 +589,24 @@ fn handle_transfer<
 }
 
 #[cfg(debug_assertions)]
-fn check_transferred_object_invariants(new_object: &MoveObject, old_object: &Option<Object>) {
-    if let Some(o) = old_object {
+fn check_transferred_object_invariants(
+    new_object: &MoveObject,
+    old_object: &Option<(object::Owner, SequenceNumber)>,
+) {
+    if let Some((_owner, old_version)) = old_object {
         // check consistency between the transferred object `new_object` and the tx input `o`
         // specifically, the object id, type, and version should be unchanged
-        let m = o.data.try_as_move().unwrap();
-        debug_assert_eq!(m.id(), new_object.id());
-        debug_assert_eq!(m.version(), new_object.version());
-        debug_assert_eq!(m.type_, new_object.type_);
+        // we can only check the version here
+        debug_assert_eq!(*old_version, new_object.version());
     }
 }
 
 pub struct TypeCheckSuccess {
     pub module_id: ModuleId,
+    pub object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
+    pub by_value_objects: BTreeSet<ObjectID>,
+    pub mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
     pub args: Vec<Vec<u8>>,
-    pub by_value_objects: BTreeMap<ObjectID, Object>,
-    pub mutable_ref_objects: BTreeMap<LocalIndex, Object>,
 }
 
 /// - Check that `package_object`, `module` and `function` are valid
@@ -648,11 +614,11 @@ pub struct TypeCheckSuccess {
 /// - Return the ID of the resolved module, a vector of BCS encoded arguments to pass to the VM, and a partitioning
 /// of the input objects into objects passed by value vs by mutable reference
 pub fn resolve_and_type_check(
+    objects: &BTreeMap<ObjectID, impl Borrow<Object>>,
     module: &CompiledModule,
     function: &Identifier,
     type_args: &[TypeTag],
-    object_args: Vec<Object>,
-    mut pure_args: Vec<Vec<u8>>,
+    args: Vec<CallArg>,
 ) -> Result<TypeCheckSuccess, SuiError> {
     // Resolve the function we are calling
     let function_str = function.as_ident_str();
@@ -684,8 +650,8 @@ pub fn resolve_and_type_check(
         });
     }
 
-    // total number of args is |objects| + |pure_args| + 1 for the the `TxContext` object
-    let num_args = object_args.len() + pure_args.len() + 1;
+    // total number of args is (|objects| + |pure_args|) + 1 for the the `TxContext` object
+    let num_args = args.len() + 1;
     let parameters = &module.signature_at(fhandle.parameters).0;
     if parameters.len() != num_args {
         return Err(SuiError::InvalidFunctionSignature {
@@ -698,101 +664,164 @@ pub fn resolve_and_type_check(
         });
     }
 
-    entry_points_verifier::verify_entry_function(module, fdef, type_args)?;
-
     // type check object arguments passed in by value and by reference
-    let mut args = Vec::new();
+    let mut object_data = BTreeMap::new();
     let mut mutable_ref_objects = BTreeMap::new();
-    let mut by_value_objects = BTreeMap::new();
-    #[cfg(debug_assertions)]
-    let mut num_immutable_objects = 0;
-    #[cfg(debug_assertions)]
-    let num_objects = object_args.len();
+    let mut by_value_objects = BTreeSet::new();
 
-    for (idx, object) in object_args.into_iter().enumerate() {
-        let param_type = &parameters[idx];
-        let move_object = match &object.data {
-            Data::Move(m) => m,
-            Data::Package(_) => {
-                let error = format!(
-                    "Found module argument, but function expects {:?}",
-                    param_type
-                );
-                return Err(SuiError::TypeError { error });
-            }
-        };
-        args.push(move_object.contents().to_vec());
-        // check that m.type_ matches the parameter types of the function
-        let inner_param_type = match &param_type {
-            SignatureToken::MutableReference(inner_t) => {
-                if object.is_immutable() {
+    let bcs_args = args
+        .into_iter()
+        .enumerate()
+        .map(|(idx, arg)| {
+            let param_type = &parameters[idx];
+            let object_kind = match arg {
+                CallArg::Pure(arg) => {
+                    if !is_primitive(module, type_args, param_type) {
+                        return Err(SuiError::TypeError {
+                            error: format!(
+                                "Non-primitive argument at index {}. If it is an object, it must \
+                                be populated by an object ID",
+                                idx
+                            ),
+                        });
+                    }
+                    return Ok(arg);
+                }
+                CallArg::ImmOrOwnedObject(ref_) => InputObjectKind::ImmOrOwnedMoveObject(ref_),
+                CallArg::SharedObject(id) => InputObjectKind::SharedMoveObject(id),
+            };
+
+            let id = object_kind.object_id();
+            let object = match objects.get(&id) {
+                Some(object) => object.borrow(),
+                None => {
+                    debug_assert!(
+                        false,
+                        "Object map not populated for arg {} with id {}",
+                        idx, id
+                    );
+                    return Err(SuiError::ExecutionInvariantViolation);
+                }
+            };
+            match object_kind {
+                InputObjectKind::ImmOrOwnedMoveObject(_) if object.is_shared() => {
                     let error = format!(
-                        "Argument {} is expected to be mutable, immutable object found",
-                        idx
+                        "Argument at index {} populated with shared object id {} \
+                        but an immutable or owned object was expected",
+                        idx, id
                     );
                     return Err(SuiError::TypeError { error });
                 }
-                &**inner_t
-            }
-            SignatureToken::Reference(inner_t) => {
-                #[cfg(debug_assertions)]
-                {
-                    num_immutable_objects += 1;
+                InputObjectKind::SharedMoveObject(_) if !object.is_shared() => {
+                    let error = format!(
+                        "Argument at index {} populated with an immutable or owned object id {} \
+                        but an shared object was expected",
+                        idx, id
+                    );
+                    return Err(SuiError::TypeError { error });
                 }
-                &**inner_t
+                _ => (),
             }
-            t @ SignatureToken::Struct(_)
-            | t @ SignatureToken::StructInstantiation(_, _)
-            | t @ SignatureToken::TypeParameter(_) => {
-                if !object.is_owned() {
-                    // Forbid passing shared (both mutable and immutable) object by value.
-                    // This ensures that shared object cannot be transferred, deleted or wrapped.
+
+            object_data.insert(id, (object.owner, object.version()));
+            let move_object = match &object.data {
+                Data::Move(m) => m,
+                Data::Package(_) => {
+                    let error = format!(
+                        "Found module argument, but function expects {:?}",
+                        param_type
+                    );
+                    return Err(SuiError::TypeError { error });
+                }
+            };
+            let object_arg = move_object.contents().to_vec();
+            // check that m.type_ matches the parameter types of the function
+            let inner_param_type = match &param_type {
+                SignatureToken::Reference(inner_t) => &**inner_t,
+                SignatureToken::MutableReference(inner_t) => {
+                    if object.is_immutable() {
+                        let error = format!(
+                            "Argument {} is expected to be mutable, immutable object found",
+                            idx
+                        );
+                        return Err(SuiError::TypeError { error });
+                    }
+                    mutable_ref_objects.insert(idx as LocalIndex, id);
+                    &**inner_t
+                }
+                t @ SignatureToken::Struct(_)
+                | t @ SignatureToken::StructInstantiation(_, _)
+                | t @ SignatureToken::TypeParameter(_) => {
+                    if !object.is_owned() {
+                        // Forbid passing shared (both mutable and immutable) object by value.
+                        // This ensures that shared object cannot be transferred, deleted or wrapped.
+                        return Err(SuiError::TypeError {
+                            error: format!(
+                                "Only owned object can be passed by-value, violation found \
+                                        in argument {}",
+                                idx
+                            ),
+                        });
+                    }
+                    by_value_objects.insert(id);
+                    t
+                }
+                t => {
                     return Err(SuiError::TypeError {
                         error: format!(
-                            "Only owned object can be passed by-value, violation found in argument {}",
-                            idx
+                            "Found object argument {}, but function expects {:?}",
+                            move_object.type_, t
                         ),
-                    });
+                    })
                 }
-                t
-            }
-            t => {
-                return Err(SuiError::TypeError {
-                    error: format!(
-                        "Found object argument {}, but function expects {:?}",
-                        move_object.type_, t
-                    ),
-                })
-            }
-        };
-        type_check_struct(module, type_args, &move_object.type_, inner_param_type)?;
-        match &param_type {
-            SignatureToken::MutableReference(_) => {
-                let _prev = mutable_ref_objects.insert(idx as LocalIndex, object);
-                debug_assert!(_prev.is_none());
-            }
-            SignatureToken::Reference(_) => (),
-            _ => {
-                let _prev = by_value_objects.insert(object.id(), object);
-                // should always pass due to earlier "no duplicate ID's" check
-                debug_assert!(_prev.is_none());
-            }
-        }
-    }
-
-    #[cfg(debug_assertions)]
-    debug_assert!(
-        by_value_objects.len() + mutable_ref_objects.len() + num_immutable_objects == num_objects
-    );
-    // verify_entry_function ensures that pure_args are all primitives
-    args.append(&mut pure_args);
+            };
+            type_check_struct(module, type_args, &move_object.type_, inner_param_type)?;
+            Ok(object_arg)
+        })
+        .collect::<SuiResult<Vec<_>>>()?;
 
     Ok(TypeCheckSuccess {
         module_id,
-        args,
+        object_data,
         by_value_objects,
         mutable_ref_objects,
+        args: bcs_args,
     })
+}
+
+fn is_primitive(
+    module: &CompiledModule,
+    function_type_arguments: &[TypeTag],
+    t: &SignatureToken,
+) -> bool {
+    match t {
+        SignatureToken::Bool
+        | SignatureToken::U8
+        | SignatureToken::U64
+        | SignatureToken::U128
+        | SignatureToken::Address => true,
+
+        SignatureToken::Vector(inner) => is_primitive(module, function_type_arguments, inner),
+
+        SignatureToken::TypeParameter(idx) => function_type_arguments
+            .get(*idx as usize)
+            .map(is_primitive_type_tag)
+            .unwrap_or(false),
+
+        SignatureToken::Signer
+        | SignatureToken::Struct(_)
+        | SignatureToken::StructInstantiation(_, _)
+        | SignatureToken::Reference(_)
+        | SignatureToken::MutableReference(_) => false,
+    }
+}
+
+fn is_primitive_type_tag(t: &TypeTag) -> bool {
+    match t {
+        TypeTag::Bool | TypeTag::U8 | TypeTag::U64 | TypeTag::U128 | TypeTag::Address => true,
+        TypeTag::Vector(inner) => is_primitive_type_tag(inner),
+        TypeTag::Signer | TypeTag::Struct(_) => false,
+    }
 }
 
 fn type_check_struct(
@@ -875,13 +904,10 @@ fn struct_tag_equals_struct_inst(
 ) -> bool {
     let (address, module_name, struct_name) = sui_verifier::resolve_struct(module, param_type);
 
-    // same address
+    // same address, module, name, and type parameters
     &arg_type.address == address
-    // same module
         && arg_type.module.as_ident_str() == module_name
-        // same struct name
         && arg_type.name.as_ident_str() == struct_name
-        // same type parameters
         && arg_type.type_params.len() == param_type_arguments.len()
         && arg_type.type_params.iter().zip(param_type_arguments).all(
             |(arg_type_arg, param_type_arg)| {

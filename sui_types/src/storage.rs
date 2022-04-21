@@ -25,7 +25,7 @@ pub enum DeleteKind {
 pub trait Storage {
     fn reset(&mut self);
 
-    fn read_object(&self, id: &ObjectID) -> Option<Object>;
+    fn read_object(&self, id: &ObjectID) -> Option<&Object>;
 
     // Specify the list of object IDs created during the transaction.
     // This is needed to determine unwrapped objects at the end.

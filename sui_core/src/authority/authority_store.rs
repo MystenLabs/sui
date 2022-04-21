@@ -572,7 +572,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     /// need to recreate the temporary store based on the inputs and effects to update it properly.
     pub fn update_gateway_state(
         &self,
-        active_inputs: &[(InputObjectKind, Object)],
+        active_inputs: Vec<(InputObjectKind, Object)>,
         mutated_objects: HashMap<ObjectRef, Object>,
         certificate: CertifiedTransaction,
         effects: TransactionEffects,

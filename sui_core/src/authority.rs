@@ -328,7 +328,10 @@ impl AuthorityState {
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
-        if transaction.contains_shared_object() {
+        let has_shared_object = objects_by_kind
+            .iter()
+            .any(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)));
+        if has_shared_object {
             // If the transaction contains shared objects, we need to ensure they have been scheduled
             // for processing by the consensus protocol.
             self.check_shared_locks(&transaction_digest, &objects_by_kind)
@@ -341,16 +344,20 @@ impl AuthorityState {
             "Read inputs for transaction from DB"
         );
 
+        let transaction_dependencies = objects_by_kind
+            .iter()
+            .map(|(_, obj)| obj.previous_transaction)
+            .collect();
         let mut temporary_store = AuthorityTemporaryStore::new(
             self._database.clone(),
-            &objects_by_kind,
+            objects_by_kind,
             transaction_digest,
         );
         let effects = execution_engine::execute_transaction_to_effects(
             &mut temporary_store,
             transaction.clone(),
             transaction_digest,
-            objects_by_kind,
+            transaction_dependencies,
             &self.move_vm,
             &self._native_functions,
             gas_status,
@@ -645,7 +652,6 @@ impl AuthorityState {
         ctx: &mut TxContext,
         modules: Vec<CompiledModule>,
     ) -> SuiResult {
-        debug_assert!(ctx.digest() == TransactionDigest::genesis());
         let inputs = Transaction::input_objects_in_compiled_modules(&modules);
         let input_objects = self.fetch_objects(&inputs, None).await?;
         // When publishing genesis packages, since the std framework packages all have
@@ -673,8 +679,9 @@ impl AuthorityState {
             .filter_map(|(input, object_opt)| object_opt.map(|object| (input, object)))
             .collect::<Vec<_>>();
 
+        debug_assert!(ctx.digest() == TransactionDigest::genesis());
         let mut temporary_store =
-            AuthorityTemporaryStore::new(self._database.clone(), &filtered, ctx.digest());
+            AuthorityTemporaryStore::new(self._database.clone(), filtered, ctx.digest());
         let package_id = ObjectID::from(*modules[0].self_id().address());
         let natives = self._native_functions.clone();
         let mut gas_status = SuiGasStatus::new_unmetered();

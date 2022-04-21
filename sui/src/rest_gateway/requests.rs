@@ -48,6 +48,17 @@ pub struct SignedTransaction {
     pub pub_key: String,
 }
 
+/// Byte representation of the arguments
+#[derive(Deserialize, Serialize, JsonSchema)]
+pub enum CallRequestArg {
+    /// Base64 encoded non-object argument
+    Pure(String),
+    /// Object arguments
+    ImmOrOwnedObject(String),
+    /// Shared object arguments
+    SharedObject(String),
+}
+
 /// Request containing the information required to create a move module call transaction.
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -62,16 +73,12 @@ pub struct CallRequest {
     pub function: String,
     /// Optional; The argument types to be parsed
     pub type_arguments: Option<Vec<String>>,
-    /// Required; Byte representation of the arguments, Base64 encoded
-    pub pure_arguments: Vec<String>,
+    /// Required; Encoded representation of the arguments, both object and non-object
+    pub arguments: Vec<CallRequestArg>,
     /// Required; Hex code as string representing the gas object id
     pub gas_object_id: String,
     /// Required; Gas budget required as a cap for gas usage
     pub gas_budget: u64,
-    /// Required; Object arguments
-    pub object_arguments: Vec<String>,
-    /// Required; Share object arguments
-    pub shared_object_arguments: Vec<String>,
 }
 
 /// Request containing the address of which object are to be retrieved.

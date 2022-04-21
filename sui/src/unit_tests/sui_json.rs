@@ -14,7 +14,7 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
+use crate::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 
 use super::{is_homogeneous, HEX_PREFIX};
 
@@ -352,28 +352,31 @@ fn test_basic_args_linter_top_level() {
     .map(|q| SuiJsonValue::new(q.clone()).unwrap())
     .collect();
 
-    let (object_args, pure_args) =
+    let json_args =
         resolve_move_function_args(&example_package, module.clone(), function.clone(), args)
             .unwrap();
 
-    assert!(!object_args.is_empty());
+    assert!(!json_args.is_empty());
 
     assert_eq!(
-        pure_args[0],
-        bcs::to_bytes(&monster_name_raw.as_bytes().to_vec()).unwrap()
+        json_args[3],
+        SuiJsonCallArg::Pure(bcs::to_bytes(&monster_name_raw.as_bytes().to_vec()).unwrap())
     );
     assert_eq!(
-        pure_args[1],
-        bcs::to_bytes(&(monster_img_id_raw as u64)).unwrap()
-    );
-    assert_eq!(pure_args[2], bcs::to_bytes(&(breed_raw as u8)).unwrap());
-    assert_eq!(
-        pure_args[3],
-        bcs::to_bytes(&(monster_affinity_raw as u8)).unwrap()
+        json_args[4],
+        SuiJsonCallArg::Pure(bcs::to_bytes(&(monster_img_id_raw as u64)).unwrap()),
     );
     assert_eq!(
-        pure_args[4],
-        bcs::to_bytes(&monster_description_raw.as_bytes().to_vec()).unwrap()
+        json_args[5],
+        SuiJsonCallArg::Pure(bcs::to_bytes(&(breed_raw as u8)).unwrap())
+    );
+    assert_eq!(
+        json_args[6],
+        SuiJsonCallArg::Pure(bcs::to_bytes(&(monster_affinity_raw as u8)).unwrap()),
+    );
+    assert_eq!(
+        json_args[7],
+        SuiJsonCallArg::Pure(bcs::to_bytes(&monster_description_raw.as_bytes().to_vec()).unwrap()),
     );
 
     // Breed is u8 so too large
@@ -417,17 +420,18 @@ fn test_basic_args_linter_top_level() {
         .map(|q| SuiJsonValue::new(q.clone()).unwrap())
         .collect();
 
-    let (object_args, pure_args) =
-        resolve_move_function_args(framework_pkg, module, function, args).unwrap();
+    let args = resolve_move_function_args(framework_pkg, module, function, args).unwrap();
 
-    assert!(object_args.is_empty());
-    assert_eq!(pure_args[0], bcs::to_bytes(&(value_raw as u64)).unwrap());
+    assert_eq!(
+        args[0],
+        SuiJsonCallArg::Pure(bcs::to_bytes(&(value_raw as u64)).unwrap())
+    );
 
     // Need to verify this specially
     // BCS serialzes addresses like vectors so there's a length prefix, which makes the vec longer by 1
     assert_eq!(
-        pure_args[1],
-        bcs::to_bytes(&AccountAddress::from(address)).unwrap()
+        args[1],
+        SuiJsonCallArg::Pure(bcs::to_bytes(&AccountAddress::from(address)).unwrap()),
     );
 
     // Test with object args
@@ -452,19 +456,19 @@ fn test_basic_args_linter_top_level() {
         .map(|q| SuiJsonValue::new(q.clone()).unwrap())
         .collect();
 
-    let (object_args, pure_args) =
-        resolve_move_function_args(framework_pkg, module, function, args).unwrap();
+    let args = resolve_move_function_args(framework_pkg, module, function, args).unwrap();
 
-    assert!(!object_args.is_empty());
     assert_eq!(
-        object_args[0],
-        ObjectID::from_hex_literal(&format!("0x{:02x}", object_id_raw)).unwrap()
+        args[0],
+        SuiJsonCallArg::Object(
+            ObjectID::from_hex_literal(&format!("0x{:02x}", object_id_raw)).unwrap()
+        )
     );
 
     // Need to verify this specially
     // BCS serialzes addresses like vectors so there's a length prefix, which makes the vec longer by 1
     assert_eq!(
-        pure_args[0],
-        bcs::to_bytes(&AccountAddress::from(address)).unwrap()
+        args[1],
+        SuiJsonCallArg::Pure(bcs::to_bytes(&AccountAddress::from(address)).unwrap())
     );
 }

@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 use sui::config::PersistedConfig;
 use sui::gateway_config::GatewayConfig;
 use sui::rest_gateway::requests::{
-    CallRequest, GetObjectInfoRequest, GetObjectSchemaRequest, GetObjectsRequest,
+    CallRequest, CallRequestArg, GetObjectInfoRequest, GetObjectSchemaRequest, GetObjectsRequest,
     GetTransactionDetailsRequest, MergeCoinRequest, PublishRequest, SignedTransaction,
     SplitCoinRequest, SyncRequest, TransferTransactionRequest,
 };
@@ -40,7 +40,7 @@ use sui_core::gateway_state::{GatewayClient, GatewayState};
 use sui_types::base_types::*;
 use sui_types::crypto::SignableBytes;
 use sui_types::crypto::{self};
-use sui_types::messages::{CertifiedTransaction, Transaction, TransactionData};
+use sui_types::messages::{CallArg, CertifiedTransaction, Transaction, TransactionData};
 use sui_types::object::Object as SuiObject;
 use sui_types::object::ObjectRead;
 
@@ -586,23 +586,19 @@ async fn handle_move_call(
     let (gas_obj_ref, _, _) = get_object_info(gateway, gas_object_id).await?;
 
     // Fetch the objects for the object args
-    let mut object_args_refs = Vec::new();
-    for obj_id in call_params.object_arguments {
-        let (object_ref, _, _) = get_object_info(gateway, ObjectID::try_from(obj_id)?).await?;
-        object_args_refs.push(object_ref);
+    let mut arguments = Vec::with_capacity(call_params.arguments.len());
+    for arg in call_params.arguments {
+        arguments.push(match arg {
+            CallRequestArg::Pure(arg) => {
+                CallArg::Pure(Base64::decode_vec(&arg).map_err(|e| anyhow!(e))?)
+            }
+            CallRequestArg::SharedObject(id) => CallArg::SharedObject(ObjectID::try_from(id)?),
+            CallRequestArg::ImmOrOwnedObject(id) => {
+                let (object_ref, _, _) = get_object_info(gateway, ObjectID::try_from(id)?).await?;
+                CallArg::ImmOrOwnedObject(object_ref)
+            }
+        })
     }
-    let pure_arguments = call_params
-        .pure_arguments
-        .iter()
-        .map(|s| Base64::decode_vec(s))
-        .collect::<Result<_, _>>()
-        .map_err(|e| anyhow!(e))?;
-
-    let shared_object_arguments = call_params
-        .shared_object_arguments
-        .into_iter()
-        .map(ObjectID::try_from)
-        .collect::<Result<_, _>>()?;
 
     gateway
         .move_call(
@@ -612,9 +608,7 @@ async fn handle_move_call(
             function.to_owned(),
             type_args.clone(),
             gas_obj_ref,
-            object_args_refs,
-            shared_object_arguments,
-            pure_arguments,
+            arguments,
             gas_budget,
         )
         .await
