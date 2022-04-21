@@ -14,12 +14,12 @@ import DisplayBox from './DisplayBox';
 
 import styles from './ObjectResult.module.css';
 import { GetObjectInfoResponse } from 'sui.js';
-import { Loadable } from '../../utils/loadState';
-
-type DataType = Loadable<GetObjectInfoResponse>;
 
 
-function ObjectLoaded({ data }: { data: DataType }) {
+function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
+
+    const suiObj = data.details.object;
+
     // TODO - restore or remove this functionality
     const [showDescription, setShowDescription] = useState(true);
     const [showProperties, setShowProperties] = useState(false);
@@ -155,7 +155,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
         // hardcode a friendly name for gas for now
         const gasTokenTypeStr = 'Coin::Coin<0x2::GAS::GAS>';
         const gasTokenId = '0000000000000000000000000000000000000003';
-        if (data.objType === gasTokenTypeStr && data.id === gasTokenId)
+        if (data.details.object.objType === gasTokenTypeStr && data.id === gasTokenId)
             return 'GAS';
 
         if (!name) {
