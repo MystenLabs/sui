@@ -8,7 +8,7 @@ export const navigateWithUnknown = async (
     navigate: Function
 ) => {
     // TODO - replace multi-request search with backend function when ready
-    const addrPromise = rpc.getAddressObjects(input).then((data) => {
+    const addrPromise = rpc.getOwnedObjectRefs(input).then((data) => {
         if (data.length <= 0) throw new Error('No objects for Address');
 
         return {
