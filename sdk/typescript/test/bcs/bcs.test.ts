@@ -3,12 +3,16 @@
 
 import { BCS } from '../../src/bcs';
 import { Base64DataBuffer as B64 } from '../../src';
-import * as BN from 'bn.js';
+import { BN } from 'bn.js';
 
 describe('Move BCS', () => {
+    beforeEach(() => {
+        registerSuiCoreTypes(BCS);
+    });
+
     it('should de/ser primitives: u8', () => {
-        expect(BCS.de(BCS.U8, new B64('AQ==').getData())).toEqual(new BN.BN(1));;
-        expect(BCS.de('u8', new B64('AA==').getData())).toEqual(new BN.BN(0));;
+        expect(BCS.de(BCS.U8, new B64('AQ==').getData())).toEqual(new BN(1));;
+        expect(BCS.de('u8', new B64('AA==').getData())).toEqual(new BN(0));;
     });
 
     it('should ser/de u64', () => {
@@ -17,7 +21,7 @@ describe('Move BCS', () => {
         const ser = BCS.ser('u64', num).toBytes();
 
         expect(new B64(ser).toString()).toEqual(exp);
-        expect(BCS.de('u64', new B64(exp).getData())).toEqual(new BN.BN('1311768467750121216'));
+        expect(BCS.de('u64', new B64(exp).getData())).toEqual(new BN('1311768467750121216'));
     });
 
     it('should ser/de u128', () => {
@@ -38,7 +42,7 @@ describe('Move BCS', () => {
         const rustBcs = new B64('gNGxBWAAAAAOQmlnIFdhbGxldCBHdXkA');
         const expected = {
             owner: 'Big Wallet Guy',
-            value: new BN.BN('412412400000', 10),
+            value: new BN('412412400000', 10),
             is_locked: false
         };
 
@@ -109,8 +113,6 @@ describe('Move BCS', () => {
     });
 
     it('should de/ser TransactionData::Transfer', () => {
-        registerSuiCoreTypes(BCS);
-
         { // Test Transfer tx
             let sample = transactionData().transfer;
             let de = BCS.de('TransactionData', sample.getData());
@@ -119,9 +121,6 @@ describe('Move BCS', () => {
     });
 
     it('should de/ser TransactionData::ModulePublish', () => {
-
-        registerSuiCoreTypes(BCS);
-
         { // Test Module publish tx
             let sample = transactionData().module_publish;
             let de = BCS.de('TransactionData', sample.getData());
@@ -130,8 +129,6 @@ describe('Move BCS', () => {
     });
 
     it('should de/ser TransactionData::MoveCall', () => {
-        registerSuiCoreTypes(BCS);
-
         { // Test Move Call tx
             let sample = transactionData().move_call;
             let de = BCS.de('TransactionData', sample.getData());
