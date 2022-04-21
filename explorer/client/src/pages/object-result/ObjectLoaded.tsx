@@ -12,6 +12,7 @@ import DisplayBox from './DisplayBox';
 
 import styles from './ObjectResult.module.css';
 import { GetObjectInfoResponse } from 'sui.js';
+import { checkIsIDType, hasBytesField, hasVecField, checkVecOfSingleID, isSuiPropertyType } from '../../utils/typeChecks';
 
 
 function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
@@ -46,20 +47,6 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
         [showConnectedEntities]
     );
     const prepLabel = _toSpace;
-    const checkIsPropertyType = (value: any) =>
-        ['number', 'string'].includes(typeof value);
-
-    //TODO - a backend convention on how owned objects are labelled and how values are stored
-    //This would facilitate refactoring the below and stopping bugs when a variant is missed:
-    const checkIsIDType = (key: string, value: any) =>
-        /owned/.test(key) ||
-        (/_id/.test(key) && value?.bytes) ||
-        value?.vec ||
-        key === 'objects';
-    const checkSingleID = (value: any) => value?.bytes;
-    const checkVecIDs = (value: any) => value?.vec;
-    const checkVecOfSingleID = (value: any) =>
-        Array.isArray(value) && value.length > 0 && value[0]?.bytes;
 
 
     const suiObjName = suiObj['name'];
@@ -70,7 +57,7 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
     );
 
     const properties: [string, any][] = nonNameEntries
-        .filter(([_, value]) => checkIsPropertyType(value))
+        .filter(([_, value]) => isSuiPropertyType(value))
         // TODO: 'display' is a object property added during demo, replace with metadata ptr?
         .filter(([key, _]) => key !== 'display');
 
@@ -221,13 +208,13 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
                                                 key={`ConnectedEntity-${index1}`}
                                             >
                                                 <div>{prepLabel(key)}</div>
-                                                {checkSingleID(value) && (
+                                                {hasBytesField(value) && (
                                                     <Longtext
                                                         text={value.bytes}
                                                         category="objects"
                                                     />
                                                 )}
-                                                {checkVecIDs(value) && (
+                                                {hasVecField(value) && (
                                                     <div>
                                                         {value?.vec.map(
                                                             (
