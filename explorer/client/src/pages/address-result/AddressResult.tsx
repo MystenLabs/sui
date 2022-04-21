@@ -8,12 +8,17 @@ import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/internetapi/DefaultRpcClient';
+import { Loadable } from '../../utils/loadState';
 
-type DataType = {
+
+type PageData = {
     id: string;
-    objects: ResponseType;
-    loadState?: 'loaded' | 'pending' | 'fail';
-};
+    objects: {
+        objectId: string;
+    }[];
+}
+
+type DataType = Loadable<PageData>;
 
 type ResponseType = {
     objectId: string;
@@ -125,6 +130,7 @@ function AddressResultInternetAPI({
 
 function AddressResult() {
     const { id: addressID } = useParams();
+    // TODO - why are we using the location object as state ?
     const { state } = useLocation();
 
     if (instanceOfResponseType(state)) {
