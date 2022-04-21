@@ -6,6 +6,9 @@ import {
   ObjectRef,
   SignedTransaction,
   TransactionResponse,
+  GetObjectInfoResponse,
+  GetTxnDigestsResponse,
+  GatewayTxSeqNumber,
 } from './provider';
 
 export class VoidProvider extends Provider {
@@ -14,11 +17,30 @@ export class VoidProvider extends Provider {
     throw this.newError('getOwnedObjectRefs');
   }
 
+  async getObjectInfo(_objectId: string): Promise<GetObjectInfoResponse> {
+    throw this.newError('getObjectInfo');
+  }
+
   // Transactions
   async executeTransaction(
     _txn: SignedTransaction
   ): Promise<TransactionResponse> {
     throw this.newError('executeTransaction');
+  }
+
+  async getTotalTransactionNumber(): Promise<number> {
+    throw this.newError('getTotalTransactionNumber');
+  }
+
+  async getTransactionDigestsInRange(
+    _start: GatewayTxSeqNumber,
+    _end: GatewayTxSeqNumber
+  ): Promise<GetTxnDigestsResponse> {
+    throw this.newError('getTransactionDigestsInRange');
+  }
+
+  async getRecentTransactions(_count: number): Promise<GetTxnDigestsResponse> {
+    throw this.newError('getRecentTransactions');
   }
 
   private newError(operation: string): Error {

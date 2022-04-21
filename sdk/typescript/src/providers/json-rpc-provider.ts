@@ -6,9 +6,12 @@ import {
   ObjectRef,
   SignedTransaction,
   TransactionResponse,
+  GetObjectInfoResponse,
+  GetTxnDigestsResponse,
+  GatewayTxSeqNumber,
 } from './provider';
 import { JsonRpcClient } from '../rpc/client';
-import { array, type as pick } from 'superstruct';
+import { array, number, type as pick } from 'superstruct';
 
 export class JsonRpcProvider extends Provider {
   private client: JsonRpcClient;
@@ -39,11 +42,68 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
+  async getObjectInfo(objectId: string): Promise<GetObjectInfoResponse> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getObjectTypedInfo',
+        [objectId],
+        GetObjectInfoResponse
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error fetching object info: ${err} for id ${objectId}`);
+    }
+  }
+
   // Transactions
   async executeTransaction(
     _txn: SignedTransaction
   ): Promise<TransactionResponse> {
     throw new Error('Method not implemented.');
+  }
+
+  async getTotalTransactionNumber(): Promise<number> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getTotalTransactionNumber',
+        [],
+        number()
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error fetching total transaction number: ${err}`);
+    }
+  }
+
+  async getTransactionDigestsInRange(
+    start: GatewayTxSeqNumber,
+    end: GatewayTxSeqNumber
+  ): Promise<GetTxnDigestsResponse> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getTransactionsInRange',
+        [start, end],
+        GetTxnDigestsResponse
+      );
+    } catch (err) {
+      throw new Error(
+        `Error fetching transaction digests in range: ${err} for range ${start}-${end}`
+      );
+    }
+  }
+
+  async getRecentTransactions(count: number): Promise<GetTxnDigestsResponse> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getRecentTransactions',
+        [count],
+        GetTxnDigestsResponse
+      );
+    } catch (err) {
+      throw new Error(
+        `Error fetching recent transactions: ${err} for count ${count}`
+      );
+    }
   }
 
   // TODO: add more interface methods
