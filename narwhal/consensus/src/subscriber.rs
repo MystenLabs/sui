@@ -5,13 +5,13 @@ use crate::{
     ConsensusOutput, ConsensusSyncRequest,
 };
 use crypto::traits::VerifyingKey;
-use primary::{Certificate, CertificateDigest};
 use std::sync::Arc;
 use tokio::{
     sync::mpsc::{Receiver, Sender},
     task::JoinHandle,
 };
 use tracing::{debug, error};
+use types::{Certificate, CertificateDigest};
 
 /// Convenience alias indicating the persistent storage holding certificates.
 type CertificateStore<PublicKey> = store::Store<CertificateDigest, Certificate<PublicKey>>;

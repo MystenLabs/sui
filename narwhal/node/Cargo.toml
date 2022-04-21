@@ -27,6 +27,7 @@ primary = { path = "../primary" }
 worker = { path = "../worker" }
 consensus = { path = "../consensus" }
 executor = { path = "../executor" }
+types = { path = "../types" }
 cfg-if = "1.0.0"
 
 [dev-dependencies]

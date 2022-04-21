@@ -6,15 +6,13 @@ use crate::{
     block_waiter::{BatchMessage, BatchMessageError, BatchResult, BlockWaiter},
     certificate_waiter::CertificateWaiter,
     core::Core,
-    error::DagError,
     garbage_collector::GarbageCollector,
     header_waiter::HeaderWaiter,
     helper::Helper,
-    messages::{BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Vote},
     payload_receiver::PayloadReceiver,
     proposer::Proposer,
     synchronizer::Synchronizer,
-    Batch, BlockRemover, DeleteBatchMessage,
+    BlockRemover, DeleteBatchMessage,
 };
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -35,12 +33,13 @@ use store::Store;
 use thiserror::Error;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
+use types::{
+    error::DagError, Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest,
+    Round, Vote,
+};
 
 /// The default channel capacity for each channel of the primary.
 pub const CHANNEL_CAPACITY: usize = 1_000;
-
-/// The round number.
-pub type Round = u64;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(bound(deserialize = "PublicKey: VerifyingKey"))]

@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{messages::Certificate, primary::PrimaryWorkerMessage};
+use crate::primary::PrimaryWorkerMessage;
 use bytes::Bytes;
 use config::Committee;
 use crypto::traits::VerifyingKey;
@@ -14,6 +14,7 @@ use std::{
     },
 };
 use tokio::sync::mpsc::Receiver;
+use types::Certificate;
 
 /// Receives the highest round reached by consensus and update it for all tasks.
 pub struct GarbageCollector<PublicKey: VerifyingKey> {

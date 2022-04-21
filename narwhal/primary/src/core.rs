@@ -3,9 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     aggregators::{CertificatesAggregator, VotesAggregator},
-    error::{DagError, DagResult},
-    messages::{Certificate, CertificateDigest, Header, HeaderDigest, Vote},
-    primary::{PrimaryMessage, Round},
+    primary::PrimaryMessage,
     synchronizer::Synchronizer,
 };
 use async_recursion::async_recursion;
@@ -23,6 +21,11 @@ use std::{
 use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{debug, error, warn};
+use types::{
+    ensure,
+    error::{DagError, DagResult},
+    Certificate, CertificateDigest, Header, HeaderDigest, Round, Vote,
+};
 
 #[cfg(test)]
 #[path = "tests/core_tests.rs"]

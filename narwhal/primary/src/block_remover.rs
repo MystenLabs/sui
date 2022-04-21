@@ -3,10 +3,7 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use crate::{
-    block_remover::BlockErrorType::Failed, BatchDigest, Certificate, CertificateDigest, Header,
-    HeaderDigest, PayloadToken, PrimaryWorkerMessage,
-};
+use crate::{block_remover::BlockErrorType::Failed, PayloadToken, PrimaryWorkerMessage};
 use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::{traits::VerifyingKey, Digest, Hash};
@@ -30,6 +27,7 @@ use tracing::{
     error,
     log::{debug, warn},
 };
+use types::{BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest};
 
 const BATCH_DELETE_TIMEOUT: Duration = Duration::from_secs(2);
 

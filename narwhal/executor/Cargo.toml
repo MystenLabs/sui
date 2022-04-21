@@ -25,6 +25,7 @@ crypto = { path = "../crypto" }
 config = { path = "../config" }
 primary = { path = "../primary" }
 consensus = { path = "../consensus" }
+types = { path = "../types" }
 
 [dev-dependencies]
 rand = "0.7.3"

@@ -8,10 +8,8 @@ use crypto::{
 };
 
 use pretty_assertions::assert_str_eq;
-use primary::{
-    Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, PrimaryWorkerMessage,
-    WorkerPrimaryError, WorkerPrimaryMessage,
-};
+use primary::{PrimaryWorkerMessage, WorkerPrimaryError, WorkerPrimaryMessage};
+use types::{Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest};
 
 use rand::{prelude::StdRng, SeedableRng};
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};

@@ -6,10 +6,10 @@ use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::traits::VerifyingKey;
 use network::SimpleSender;
-use primary::BatchDigest;
 use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{error, warn};
+use types::BatchDigest;
 
 #[cfg(test)]
 #[path = "tests/helper_tests.rs"]

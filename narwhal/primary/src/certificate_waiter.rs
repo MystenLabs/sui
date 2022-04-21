@@ -1,11 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    error::{DagError, DagResult},
-    messages::{Certificate, CertificateDigest, HeaderDigest},
-    primary::Round,
-};
+
 use crypto::traits::VerifyingKey;
 use futures::{
     future::try_join_all,
@@ -21,6 +17,10 @@ use std::{
 use store::Store;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::error;
+use types::{
+    error::{DagError, DagResult},
+    Certificate, CertificateDigest, HeaderDigest, Round,
+};
 
 /// Waits to receive all the ancestors of a certificate before looping it back to the `Core`
 /// for further processing.

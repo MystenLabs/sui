@@ -10,7 +10,6 @@ use crypto::{
     traits::{EncodeDecodeBase64, VerifyingKey},
     Hash,
 };
-use primary::{Certificate, CertificateDigest, Round};
 use std::{
     cmp::max,
     collections::{HashMap, HashSet},
@@ -21,6 +20,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::{debug, info, warn};
+use types::{Certificate, CertificateDigest, Round};
 
 #[cfg(any(test, feature = "benchmark"))]
 #[path = "tests/consensus_tests.rs"]
@@ -398,9 +398,9 @@ impl<PublicKey: VerifyingKey> Consensus<PublicKey> {
 mod tests {
     use super::{consensus_tests::*, *};
     use crypto::traits::KeyPair;
-    use primary::Certificate;
     use rand::Rng;
     use std::collections::BTreeSet;
+    use types::Certificate;
 
     #[test]
     fn state_limits_test() {

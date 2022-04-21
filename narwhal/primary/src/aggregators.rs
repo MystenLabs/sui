@@ -1,16 +1,18 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    error::{DagError, DagResult},
-    messages::{Certificate, CertificateDigest, Header, Vote},
-};
+
 use config::{Committee, Stake};
 use crypto::{
     traits::{EncodeDecodeBase64, VerifyingKey},
     Hash as _,
 };
 use std::collections::HashSet;
+use types::{
+    ensure,
+    error::{DagError, DagResult},
+    Certificate, CertificateDigest, Header, Vote,
+};
 
 /// Aggregates votes for a particular header into a certificate.
 pub struct VotesAggregator<PublicKey: VerifyingKey> {

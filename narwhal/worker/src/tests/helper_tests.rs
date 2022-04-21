@@ -5,9 +5,9 @@ use super::*;
 use crate::common::{
     batch_digest, committee_with_base_port, keys, listener, serialized_batch, temp_dir,
 };
-use primary::BatchDigest;
 use store::rocks;
 use tokio::sync::mpsc::channel;
+use types::BatchDigest;
 
 #[tokio::test]
 async fn worker_batch_reply() {

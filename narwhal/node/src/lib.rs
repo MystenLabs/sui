@@ -4,9 +4,7 @@ use config::{Committee, Parameters, WorkerId};
 use consensus::{dag::Dag, Consensus, ConsensusStore, SequenceNumber, SubscriberHandler};
 use crypto::traits::{KeyPair, Signer, VerifyingKey};
 use executor::{ExecutionState, Executor, SerializedTransactionDigest, SubscriberResult};
-use primary::{
-    BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, PayloadToken, Primary, Round,
-};
+use primary::{PayloadToken, Primary};
 use std::sync::Arc;
 use store::{
     reopen,
@@ -15,6 +13,7 @@ use store::{
 };
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::debug;
+use types::{BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Round};
 use worker::{SerializedBatchMessage, Worker};
 
 /// All the data stores of the node.

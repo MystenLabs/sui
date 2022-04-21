@@ -10,7 +10,6 @@ use config::WorkerId;
 use consensus::ConsensusOutput;
 use crypto::traits::VerifyingKey;
 use futures::{stream::StreamExt, SinkExt};
-use primary::BatchDigest;
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
@@ -25,6 +24,7 @@ use tokio::{
 };
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::warn;
+use types::BatchDigest;
 use worker::{SerializedBatchMessage, WorkerMessage};
 
 /// Download transactions data from the consensus workers and notifies the called when the job is done.

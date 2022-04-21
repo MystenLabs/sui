@@ -9,8 +9,8 @@ use criterion::{
 };
 use crypto::{traits::KeyPair, Hash};
 use pprof::criterion::{Output, PProfProfiler};
-use primary::{Certificate, Round};
 use std::collections::BTreeSet;
+use types::{Certificate, Round};
 
 pub fn process_certificates(c: &mut Criterion) {
     let mut consensus_group = c.benchmark_group("processing certificates");

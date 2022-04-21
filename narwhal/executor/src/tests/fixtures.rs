@@ -3,7 +3,6 @@
 use blake2::digest::Update;
 use config::WorkerId;
 use crypto::ed25519::Ed25519PublicKey;
-use primary::{Batch, BatchDigest, Certificate, Header};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -12,6 +11,7 @@ use store::{
     rocks::{open_cf, DBMap},
     Store,
 };
+use types::{Batch, BatchDigest, Certificate, Header};
 use worker::{SerializedBatchMessage, WorkerMessage};
 
 /// A test batch containing specific transactions.

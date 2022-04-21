@@ -7,12 +7,12 @@ use bytes::Bytes;
 use config::{Authority, Committee, PrimaryAddresses, WorkerAddresses};
 use crypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
 use futures::{sink::SinkExt as _, stream::StreamExt as _};
-use primary::{Batch, BatchDigest, Transaction};
 use rand::{rngs::StdRng, SeedableRng as _};
 use std::net::SocketAddr;
 use store::{rocks, Store};
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use types::{Batch, BatchDigest, Transaction};
 
 pub fn temp_dir() -> std::path::PathBuf {
     tempfile::tempdir()

@@ -7,7 +7,7 @@ use config::{Committee, WorkerId};
 use crypto::traits::VerifyingKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::SimpleSender;
-use primary::{BatchDigest, PrimaryWorkerMessage, WorkerPrimaryError, WorkerPrimaryMessage};
+use primary::{PrimaryWorkerMessage, WorkerPrimaryError, WorkerPrimaryMessage};
 use std::{
     collections::HashMap,
     time::{SystemTime, UNIX_EPOCH},
@@ -18,6 +18,7 @@ use tokio::{
     time::{sleep, Duration, Instant},
 };
 use tracing::{debug, error};
+use types::BatchDigest;
 
 #[cfg(test)]
 #[path = "tests/synchronizer_tests.rs"]

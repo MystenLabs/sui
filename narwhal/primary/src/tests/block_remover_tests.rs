@@ -5,11 +5,8 @@ use crate::{
         BlockErrorType, BlockRemover, BlockRemoverCommand, BlockRemoverResult, DeleteBatchMessage,
         DeleteBatchResult, RemoveBlocksResponse, RequestKey,
     },
-    common::{
-        certificate, create_db_stores, fixture_batch_with_transactions, fixture_header_builder,
-        keys, resolve_name_and_committee,
-    },
-    BatchDigest, PrimaryWorkerMessage,
+    common::create_db_stores,
+    PrimaryWorkerMessage,
 };
 use bincode::deserialize;
 use config::WorkerId;
@@ -28,6 +25,13 @@ use tokio::{
     time::{sleep, timeout},
 };
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use types::{
+    test_utils::{
+        certificate, fixture_batch_with_transactions, fixture_header_builder, keys,
+        resolve_name_and_committee,
+    },
+    BatchDigest,
+};
 
 #[tokio::test]
 async fn test_successful_blocks_delete() {

@@ -1,21 +1,28 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    error::{DagError, DagResult},
-    primary::Round,
-};
+use crate::error::{DagError, DagResult};
 use blake2::{digest::Update, VarBlake2b};
 use config::{Committee, WorkerId};
 use crypto::{
     traits::{EncodeDecodeBase64, VerifyingKey},
     Digest, Hash, SignatureService, DIGEST_LEN,
 };
+use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     fmt,
 };
+
+#[cfg(feature = "test")]
+pub mod test_utils;
+// Error types
+#[macro_use]
+pub mod error;
+
+/// The round number.
+pub type Round = u64;
 
 pub type Transaction = Vec<u8>;
 #[derive(Clone, Serialize, Deserialize, Default, Debug, PartialEq, Eq)]

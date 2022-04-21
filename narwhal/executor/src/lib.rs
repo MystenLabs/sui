@@ -26,7 +26,6 @@ use async_trait::async_trait;
 use config::Committee;
 use consensus::{ConsensusOutput, ConsensusSyncRequest};
 use crypto::traits::VerifyingKey;
-use primary::BatchDigest;
 use serde::de::DeserializeOwned;
 use std::{fmt::Debug, sync::Arc};
 use store::Store;
@@ -35,6 +34,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::info;
+use types::BatchDigest;
 use worker::SerializedBatchMessage;
 
 /// Default inter-task channel size.

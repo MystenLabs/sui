@@ -6,9 +6,9 @@ use crate::{
     fixtures::{test_batch, test_certificate, test_store, test_u64_certificates},
 };
 use crypto::ed25519::Ed25519PublicKey;
-use primary::Certificate;
 use std::sync::Arc;
 use tokio::sync::mpsc::channel;
+use types::Certificate;
 
 #[tokio::test]
 async fn execute_transactions() {

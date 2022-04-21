@@ -7,12 +7,12 @@ use crypto::{
     ed25519::{Ed25519KeyPair, Ed25519PublicKey},
     traits::KeyPair,
 };
-use primary::{CertificateDigest, Header};
 use rand::{rngs::StdRng, Rng, SeedableRng as _};
 use std::collections::{BTreeSet, VecDeque};
 use store::{reopen, rocks, rocks::DBMap};
 #[allow(unused_imports)] // WT*?
 use tokio::sync::mpsc::channel;
+use types::{CertificateDigest, Header};
 
 // Fixture
 pub fn keys() -> Vec<Ed25519KeyPair> {

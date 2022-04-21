@@ -9,9 +9,6 @@ use crypto::traits::VerifyingKey;
 use blake2::digest::Update;
 use network::ReliableSender;
 #[cfg(feature = "benchmark")]
-use primary::BatchDigest;
-use primary::{Batch, Transaction};
-#[cfg(feature = "benchmark")]
 use std::convert::TryInto as _;
 use std::net::SocketAddr;
 use tokio::{
@@ -20,6 +17,9 @@ use tokio::{
 };
 #[cfg(feature = "benchmark")]
 use tracing::info;
+#[cfg(feature = "benchmark")]
+use types::BatchDigest;
+use types::{Batch, Transaction};
 
 #[cfg(test)]
 #[path = "tests/batch_maker_tests.rs"]

@@ -10,7 +10,6 @@ use futures::{
     future::try_join_all,
     stream::{FuturesOrdered, StreamExt},
 };
-use primary::BatchDigest;
 use std::cmp::Ordering;
 use store::Store;
 use tokio::{
@@ -18,6 +17,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::debug;
+use types::BatchDigest;
 use worker::SerializedBatchMessage;
 
 #[cfg(test)]

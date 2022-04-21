@@ -6,8 +6,8 @@ use crate::{
     sequencer::MockSequencer,
 };
 use crypto::ed25519::Ed25519PublicKey;
-use primary::Certificate;
 use tokio::sync::mpsc::{channel, Sender};
+use types::Certificate;
 
 /// Spawn a mock consensus core and a test subscriber.
 async fn spawn_consensus_and_subscriber(

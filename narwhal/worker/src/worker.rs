@@ -11,7 +11,7 @@ use config::{Committee, Parameters, WorkerId};
 use crypto::traits::VerifyingKey;
 use futures::sink::SinkExt as _;
 use network::{MessageHandler, Receiver, Writer};
-use primary::{Batch, BatchDigest, PrimaryWorkerMessage, Transaction};
+use primary::PrimaryWorkerMessage;
 use serde::{Deserialize, Serialize};
 use std::{
     error::Error,
@@ -20,6 +20,7 @@ use std::{
 use store::Store;
 use tokio::sync::mpsc::{channel, Sender};
 use tracing::{error, info, warn};
+use types::{Batch, BatchDigest, Transaction};
 
 #[cfg(test)]
 #[path = "tests/worker_tests.rs"]

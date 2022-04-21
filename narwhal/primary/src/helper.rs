@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{messages::CertificateDigest, primary::PrimaryMessage, Certificate};
+use crate::primary::PrimaryMessage;
 use bytes::Bytes;
 use config::Committee;
 use crypto::traits::VerifyingKey;
@@ -9,6 +9,7 @@ use network::SimpleSender;
 use store::Store;
 use tokio::sync::mpsc::Receiver;
 use tracing::{error, warn};
+use types::{Certificate, CertificateDigest};
 
 /// A task dedicated to help other authorities by replying to their certificates requests.
 pub struct Helper<PublicKey: VerifyingKey> {

@@ -8,7 +8,6 @@ use crate::{
 };
 use consensus::{ConsensusOutput, SequenceNumber};
 use crypto::traits::VerifyingKey;
-use primary::{Batch, BatchDigest};
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
@@ -20,6 +19,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::debug;
+use types::{Batch, BatchDigest};
 use worker::{SerializedBatchMessage, WorkerMessage};
 
 #[cfg(test)]

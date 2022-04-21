@@ -2,7 +2,7 @@
 name = "primary"
 version = "0.1.0"
 license = "Apache-2.0"
-authors = ["Libra <oncall+libra@xmail.facebook.com>"]
+authors = ["Mysten Labs <build@mystenlabs.com>"]
 publish = false
 edition = "2021"
 
@@ -23,6 +23,8 @@ tracing = { version = "0.1.31", features = ["log"] }
 crypto = { path = "../crypto" }
 config = { path = "../config" }
 network = { path = "../network" }
+types = { path = "../types" }
+
 base64 = "0.13.0"
 derive_builder = "0.11.1"
 blake2 = "0.9"
@@ -30,6 +32,7 @@ blake2 = "0.9"
 [dev-dependencies]
 rand = "0.7.3"
 tempfile = "3.3.0"
+types = { path = "../types", features = ["test"]}
 
 [features]
 benchmark = []

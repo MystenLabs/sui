@@ -1,12 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    error::{DagError, DagResult},
-    messages::{BatchDigest, CertificateDigest, Header, HeaderDigest},
-    primary::{PayloadToken, PrimaryMessage, PrimaryWorkerMessage, Round},
-    Certificate,
-};
+use crate::primary::{PayloadToken, PrimaryMessage, PrimaryWorkerMessage};
 use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::traits::VerifyingKey;
@@ -30,6 +25,10 @@ use tokio::{
     time::{sleep, Duration, Instant},
 };
 use tracing::{debug, error};
+use types::{
+    error::{DagError, DagResult},
+    BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Round,
+};
 
 /// The resolution of the timer that checks whether we received replies to our sync requests, and triggers
 /// new sync requests if we didn't.

@@ -1,10 +1,6 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    messages::{BatchDigest, Certificate, CertificateDigest, Header},
-    primary::Round,
-};
 use config::{Committee, WorkerId};
 use crypto::{traits::VerifyingKey, Digest, Hash as _, SignatureService};
 use tokio::{
@@ -14,6 +10,7 @@ use tokio::{
 use tracing::debug;
 #[cfg(feature = "benchmark")]
 use tracing::info;
+use types::{BatchDigest, Certificate, CertificateDigest, Header, Round};
 
 #[cfg(test)]
 #[path = "tests/proposer_tests.rs"]

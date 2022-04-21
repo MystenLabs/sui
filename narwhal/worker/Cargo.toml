@@ -16,12 +16,13 @@ futures = "0.3.21"
 async-trait = "0.1.52"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev="808de09203d147b43d59114b8afd9e51cbcf5778"}
 tracing = { version = "0.1.31", features = ["log"] }
+blake2 = "0.9"
 
 crypto = { path = "../crypto" }
 config = { path = "../config" }
 network = { path = "../network" }
 primary = { path = "../primary" }
-blake2 = "0.9"
+types = { path = "../types" }
 
 [dev-dependencies]
 rand = "0.7.3"

@@ -1,17 +1,13 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    error::DagResult,
-    header_waiter::WaiterMessage,
-    messages::{BatchDigest, Certificate, CertificateDigest, Header},
-    primary::PayloadToken,
-};
+use crate::{header_waiter::WaiterMessage, primary::PayloadToken};
 use config::{Committee, WorkerId};
 use crypto::{traits::VerifyingKey, Hash as _};
 use std::collections::HashMap;
 use store::Store;
 use tokio::sync::mpsc::Sender;
+use types::{error::DagResult, BatchDigest, Certificate, CertificateDigest, Header};
 
 /// The `Synchronizer` checks if we have all batches and parents referenced by a header. If we don't, it sends
 /// a command to the `Waiter` to request the missing data.

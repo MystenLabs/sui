@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 use consensus::{ConsensusOutput, ConsensusSyncRequest, SequenceNumber};
 use crypto::traits::VerifyingKey;
-use primary::Certificate;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::warn;
+use types::Certificate;
 
 pub struct MockSequencer<PublicKey: VerifyingKey> {
     rx_sequence: Receiver<Certificate<PublicKey>>,

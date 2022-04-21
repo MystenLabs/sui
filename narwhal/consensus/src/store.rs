@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::SequenceNumber;
 use crypto::traits::VerifyingKey;
-use primary::{CertificateDigest, Round};
 use std::{collections::HashMap, ops::RangeInclusive};
 use store::{
     rocks::{DBMap, TypedStoreError},
     traits::Map,
 };
+use types::{CertificateDigest, Round};
 
 /// Convenience type to propagate store errors.
 pub type StoreResult<T> = Result<T, TypedStoreError>;

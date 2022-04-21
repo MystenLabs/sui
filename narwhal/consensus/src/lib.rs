@@ -15,9 +15,9 @@ pub mod tusk;
 pub use crate::{store::ConsensusStore, subscriber::SubscriberHandler, tusk::Consensus};
 
 use crypto::traits::VerifyingKey;
-use primary::Certificate;
 use serde::{Deserialize, Serialize};
 use std::ops::RangeInclusive;
+use types::Certificate;
 
 /// The default channel size used in the consensus and subscriber logic.
 pub const DEFAULT_CHANNEL_SIZE: usize = 1_000;

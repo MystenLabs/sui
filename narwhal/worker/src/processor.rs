@@ -4,9 +4,10 @@
 use crate::worker::{SerializedBatchMessage, SerializedWorkerPrimaryMessage};
 use blake2::digest::Update;
 use config::WorkerId;
-use primary::{BatchDigest, WorkerPrimaryMessage};
+use primary::WorkerPrimaryMessage;
 use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};
+use types::BatchDigest;
 
 #[cfg(test)]
 #[path = "tests/processor_tests.rs"]

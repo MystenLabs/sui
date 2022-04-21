@@ -2,9 +2,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::common::{committee, keys};
 use crypto::traits::KeyPair;
 use tokio::sync::mpsc::channel;
+use types::test_utils::{committee, keys};
 
 #[tokio::test]
 async fn propose_empty() {

@@ -1,9 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    messages::{BatchDigest, CertificateDigest, Header},
-    Batch, Certificate, PrimaryWorkerMessage,
-};
+use crate::PrimaryWorkerMessage;
 use bytes::Bytes;
 use config::Committee;
 use crypto::{traits::VerifyingKey, Digest};
@@ -25,6 +22,7 @@ use tokio::{
     time::timeout,
 };
 use tracing::{error, log::debug};
+use types::{Batch, BatchDigest, Certificate, CertificateDigest, Header};
 use Result::*;
 
 const BATCH_RETRIEVE_TIMEOUT: Duration = Duration::from_secs(1);
