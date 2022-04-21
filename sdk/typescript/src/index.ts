@@ -17,7 +17,6 @@ export * from './signers/txn-data-serializers/txn-data-serializer';
 export * from './signers/raw-signer';
 export * from './signers/signer-with-provider';
 
-// these files already export, this blocked compilation
 export * from './types/objects';
 export * from './types/transactions';
 
