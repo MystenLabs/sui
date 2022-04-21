@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { AddressOwner } from "./internetapi/DefaultRpcClient";
+import { AddressOwner } from './internetapi/DefaultRpcClient';
 
 export function asciiFromNumberBytes(bytes: number[]) {
     return bytes.map((n) => String.fromCharCode(n)).join('');
@@ -27,8 +27,7 @@ export const extractOwnerData = (owner: string | AddressOwner): string => {
     switch (typeof owner) {
         case 'string':
             const addrExec = addrOwnerPattern.exec(owner);
-            if (addrExec !== null)
-                return addrExec[1];
+            if (addrExec !== null) return addrExec[1];
 
             const result = singleOwnerPattern.exec(owner);
             return result ? result[1] : '';
@@ -48,7 +47,12 @@ const extractAddressOwner = (addrOwner: number[]): string | null => {
     return asciiFromNumberBytes(addrOwner);
 };
 
-export const _toSpace = (str: string) => str.split('_').join(' ')
+export const processDisplayValue = (display: { bytes: number[] } | string) =>
+    typeof display === 'object' && 'bytes' in display
+        ? asciiFromNumberBytes(display.bytes)
+        : display;
+
+export const _toSpace = (str: string) => str.split('_').join(' ');
 
 /* Currently unused but potentially useful:
  *

@@ -19,9 +19,9 @@ const DATATYPE_DEFAULT: Loadable<GetObjectInfoResponse> = {
         objectRef: {
             digest: '',
             objectId: '',
-            version: 0
-        }
-    }
+            version: 0,
+        },
+    },
 };
 
 function instanceOfDataType(object: any): object is GetObjectInfoResponse {
@@ -44,20 +44,24 @@ const ObjectResultAPI = ({ objID }: { objID: string }): JSX.Element => {
             .then((objState) => {
                 setObjectState({
                     ...objState,
-                    loadState: 'loaded'
+                    loadState: 'loaded',
                 });
             })
             .catch((error) => {
                 console.log(error);
                 setObjectState({
                     ...DATATYPE_DEFAULT,
-                    loadState: 'fail'
+                    loadState: 'fail',
                 });
             });
     }, [objID]);
 
     if (showObjectState.loadState === 'loaded') {
-        return <ObjectLoaded data={showObjectState as Loadable<GetObjectInfoResponse>} />;
+        return (
+            <ObjectLoaded
+                data={showObjectState as Loadable<GetObjectInfoResponse>}
+            />
+        );
     }
     if (showObjectState.loadState === 'pending') {
         return (

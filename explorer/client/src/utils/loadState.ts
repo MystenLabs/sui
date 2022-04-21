@@ -8,7 +8,4 @@ export interface ILoadState {
 }
 
 // abstraction to help transition explorer from the prototype data model
-export type Loadable<T> = T & ILoadState
-
-
-
+export type Loadable<T> = T & ILoadState;

@@ -5,7 +5,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignedTransaction, TransactionResponse, TransferTransaction, TxnDataSerializer, GetOwnedObjectRefsResponse, ObjectDigest, ObjectId, SequenceNumber, RawObjectRef, Transfer, RawAuthoritySignInfo, SingleTransactionKind, TransactionKind, TransactionData, Transaction, CertifiedTransaction, MoveModulePublish, MoveTypeTag, MoveCall, EmptySignInfo, AuthorityName, AuthoritySignature } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignedTransaction, TransactionResponse, TransferTransaction, TxnDataSerializer, ObjectRef, ObjectExistsInfo, ObjectNotExistsInfo, ObjectStatus, GetOwnedObjectRefsResponse, GetObjectInfoResponse, ObjectDigest, ObjectId, SequenceNumber, RawObjectRef, Transfer, RawAuthoritySignInfo, SingleTransactionKind, TransactionKind, TransactionData, Transaction, CertifiedTransaction, TransactionDigest, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveModulePublish, MoveTypeTag, MoveCall, EmptySignInfo, AuthorityName, AuthoritySignature } from "./index";
 import { BN } from "bn.js";
 
 export function isEd25519KeypairData(obj: any, _argumentName?: string): obj is Ed25519KeypairData {
@@ -90,6 +90,42 @@ export function isTxnDataSerializer(obj: any, _argumentName?: string): obj is Tx
     )
 }
 
+export function isObjectRef(obj: any, _argumentName?: string): obj is ObjectRef {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionResponse(obj.digest) as boolean &&
+        isTransactionResponse(obj.objectId) as boolean &&
+        isSequenceNumber(obj.version) as boolean
+    )
+}
+
+export function isObjectExistsInfo(obj: any, _argumentName?: string): obj is ObjectExistsInfo {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isObjectRef(obj.objectRef) as boolean
+    )
+}
+
+export function isObjectNotExistsInfo(obj: any, _argumentName?: string): obj is ObjectNotExistsInfo {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function")
+    )
+}
+
+export function isObjectStatus(obj: any, _argumentName?: string): obj is ObjectStatus {
+    return (
+        (obj === "Exists" ||
+            obj === "NotExists" ||
+            obj === "Deleted")
+    )
+}
+
 export function isGetOwnedObjectRefsResponse(obj: any, _argumentName?: string): obj is GetOwnedObjectRefsResponse {
     return (
         (obj !== null &&
@@ -97,13 +133,20 @@ export function isGetOwnedObjectRefsResponse(obj: any, _argumentName?: string): 
             typeof obj === "function") &&
         Array.isArray(obj.objects) &&
         obj.objects.every((e: any) =>
-            (e !== null &&
-                typeof e === "object" ||
-                typeof e === "function") &&
-            isTransactionResponse(e.digest) as boolean &&
-            isTransactionResponse(e.objectId) as boolean &&
-            isSequenceNumber(e.version) as boolean
+            isObjectRef(e) as boolean
         )
+    )
+}
+
+export function isGetObjectInfoResponse(obj: any, _argumentName?: string): obj is GetObjectInfoResponse {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isObjectStatus(obj.status) as boolean &&
+        (isObjectRef(obj.details) as boolean ||
+            isObjectExistsInfo(obj.details) as boolean ||
+            isObjectNotExistsInfo(obj.details) as boolean)
     )
 }
 
@@ -217,6 +260,29 @@ export function isCertifiedTransaction(obj: any, _argumentName?: string): obj is
         Array.isArray(obj.signatures) &&
         obj.signatures.every((e: any) =>
             isRawAuthoritySignInfo(e) as boolean
+        )
+    )
+}
+
+export function isTransactionDigest(obj: any, _argumentName?: string): obj is TransactionDigest {
+    return (
+        typeof obj === "string"
+    )
+}
+
+export function isGatewayTxSeqNumber(obj: any, _argumentName?: string): obj is GatewayTxSeqNumber {
+    return (
+        typeof obj === "number"
+    )
+}
+
+export function isGetTxnDigestsResponse(obj: any, _argumentName?: string): obj is GetTxnDigestsResponse {
+    return (
+        Array.isArray(obj) &&
+        obj.every((e: any) =>
+            Array.isArray(e) &&
+            isSequenceNumber(e[0]) as boolean &&
+            isTransactionResponse(e[1]) as boolean
         )
     )
 }

@@ -4,7 +4,6 @@
 import { tryGetRpcSetting } from './rpcSetting';
 import { JsonRpcProvider } from 'sui.js';
 
-
 export type AddressBytes = number[];
 export type AddressOwner = { AddressOwner: AddressBytes };
 
