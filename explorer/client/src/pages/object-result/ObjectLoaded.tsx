@@ -125,14 +125,12 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
         // TODO: 'display' is a object property added during demo, replace with metadata ptr?
         .filter(([key, _]) => key !== 'display');
 
-
-
     return (
         <>
             <div className={styles.resultbox}>
                 {(suiObj?.display && isString(suiObj.display))(
                     // TODO - remove MoveScript tag, don't use Displaybox for Move contracts
-                    <DisplayBox display={suiObj.display} tag="imageURL"/>
+                    <DisplayBox display={suiObj.display} tag="imageURL" />
                 )}
                 <div
                     className={`${styles.textbox} ${

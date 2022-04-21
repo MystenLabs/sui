@@ -50,18 +50,22 @@ function OwnedObjectAPI({ objects }: { objects: string[] }) {
     const [isLoaded, setIsLoaded] = useState(false);
 
     useEffect(() => {
-        Promise.all(objects.map((objID) =>
-            new Promise<IdResultsPair>((resolve, reject) => {
-                rpc.getObjectInfo(objID).then(res => {
-                    resolve([objID, res]);
-                }).catch(err => {
-                    reject(err);
-                });
-            })
-        ))
-        .then(pairs => {
+        Promise.all(
+            objects.map(
+                (objID) =>
+                    new Promise<IdResultsPair>((resolve, reject) => {
+                        rpc.getObjectInfo(objID)
+                            .then((res) => {
+                                resolve([objID, res]);
+                            })
+                            .catch((err) => {
+                                reject(err);
+                            });
+                    })
+            )
+        ).then((pairs) => {
             console.log('pairs', pairs);
-            const results = pairs.map(pair => {
+            const results = pairs.map((pair) => {
                 const result = pair[1];
                 return {
                     id: pair[0],
@@ -71,13 +75,12 @@ function OwnedObjectAPI({ objects }: { objects: string[] }) {
                     Version: result.details.version,
                     // @ts-ignore
                     display: processDisplayValue(data.contents?.display),
-                }
+                };
             });
 
             setResults(results);
             setIsLoaded(true);
         });
-
     }, [objects]);
 
     if (isLoaded) {

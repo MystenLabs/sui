@@ -3,7 +3,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-import { asciiFromNumberBytes, processDisplayValue } from '../../utils/stringUtils';
+import {
+    asciiFromNumberBytes,
+    processDisplayValue,
+} from '../../utils/stringUtils';
 
 import styles from './DisplayBox.module.css';
 

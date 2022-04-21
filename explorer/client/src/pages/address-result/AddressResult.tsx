@@ -11,13 +11,12 @@ import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { Loadable } from '../../utils/loadState';
 
-
 type PageData = {
     id: string;
     objects: {
         objectId: string;
     }[];
-}
+};
 
 type DataType = Loadable<PageData>;
 
@@ -98,7 +97,7 @@ function AddressResultAPI({ addressID }: { addressID: string | undefined }) {
         if (addressID === undefined) return;
 
         rpc.getOwnedObjectRefs(addressID)
-            .then(objRefs => {
+            .then((objRefs) => {
                 setData({
                     id: addressID,
                     objects: objRefs,
