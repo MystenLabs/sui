@@ -6,8 +6,9 @@ use crate::readable_serde::encoding::Base64;
 use crate::readable_serde::Readable;
 use anyhow::Error;
 use base64ct::Encoding;
+use digest::Digest;
 use ed25519_dalek as dalek;
-use ed25519_dalek::{Digest, PublicKey, Verifier};
+use ed25519_dalek::{Keypair as DalekKeypair, PublicKey, Verifier};
 use narwhal_crypto::ed25519::Ed25519KeyPair;
 use narwhal_crypto::ed25519::Ed25519PrivateKey;
 use narwhal_crypto::ed25519::Ed25519PublicKey;
@@ -23,7 +24,7 @@ use std::collections::HashMap;
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
 #[derive(Debug)]
 pub struct KeyPair {
-    key_pair: dalek::Keypair,
+    key_pair: DalekKeypair,
     public_key_cell: OnceCell<PublicKeyBytes>,
 }
 
@@ -40,7 +41,7 @@ impl KeyPair {
     #[must_use]
     pub fn copy(&self) -> KeyPair {
         KeyPair {
-            key_pair: dalek::Keypair {
+            key_pair: DalekKeypair {
                 secret: dalek::SecretKey::from_bytes(self.key_pair.secret.as_bytes()).unwrap(),
                 public: dalek::PublicKey::from_bytes(self.public_key_bytes().as_ref()).unwrap(),
             },
@@ -54,6 +55,15 @@ impl KeyPair {
         Ed25519KeyPair {
             name: Ed25519PublicKey(key.key_pair.public),
             secret: Ed25519PrivateKey(key.key_pair.secret),
+        }
+    }
+}
+
+impl From<DalekKeypair> for KeyPair {
+    fn from(dalek_keypair: DalekKeypair) -> Self {
+        Self {
+            key_pair: dalek_keypair,
+            public_key_cell: OnceCell::new(),
         }
     }
 }
@@ -75,7 +85,7 @@ impl<'de> Deserialize<'de> for KeyPair {
         let s = String::deserialize(deserializer)?;
         let value = base64ct::Base64::decode_vec(&s)
             .map_err(|err| serde::de::Error::custom(err.to_string()))?;
-        let key = dalek::Keypair::from_bytes(&value)
+        let key = DalekKeypair::from_bytes(&value)
             .map_err(|err| serde::de::Error::custom(err.to_string()))?;
         Ok(KeyPair {
             key_pair: key,
@@ -161,7 +171,7 @@ pub fn get_key_pair_from_rng<R>(csprng: &mut R) -> (SuiAddress, KeyPair)
 where
     R: rand::CryptoRng + rand::RngCore,
 {
-    let kp = dalek::Keypair::generate(csprng);
+    let kp = DalekKeypair::generate(csprng);
     let keypair = KeyPair {
         key_pair: kp,
         public_key_cell: OnceCell::new(),
@@ -172,7 +182,7 @@ where
 // TODO: C-GETTER
 pub fn get_key_pair_from_bytes(bytes: &[u8]) -> (SuiAddress, KeyPair) {
     let keypair = KeyPair {
-        key_pair: dalek::Keypair::from_bytes(bytes).unwrap(),
+        key_pair: DalekKeypair::from_bytes(bytes).unwrap(),
         public_key_cell: OnceCell::new(),
     };
     (SuiAddress::from(keypair.public_key_bytes()), keypair)
