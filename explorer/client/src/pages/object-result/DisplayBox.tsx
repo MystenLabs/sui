@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useState, useCallback } from 'react';
+import { GetObjectInfoResponse } from 'sui.js';
 
 import { asciiFromNumberBytes } from '../../utils/stringUtils';
-import { type DataType } from './ObjectResultType';
 
 import styles from './ObjectResult.module.css';
 
@@ -12,7 +12,7 @@ import styles from './ObjectResult.module.css';
 //import 'ace-builds/src-noconflict/theme-github';
 //import AceEditor from 'react-ace';
 
-function SmartContractBox({ data }: { data: DataType }) {
+function SmartContractBox({ data }: { data: GetObjectInfoResponse }) {
     return (
         <div className={styles.imagebox}>
             Displaying Smart Contracts Not yet Supported
@@ -34,11 +34,12 @@ function SmartContractBox({ data }: { data: DataType }) {
                      */
 }
 
-function DisplayBox({ data }: { data: DataType }) {
+function DisplayBox({ data }: { data: GetObjectInfoResponse }) {
     const [hasDisplayLoaded, setHasDisplayLoaded] = useState(false);
     const [hasFailedToLoad, setHasFailedToLoad] = useState(false);
 
-    const contents = data.data.contents;
+    // @ts-ignore
+    const contents = data.details.object;
 
     const imageStyle = hasDisplayLoaded ? {} : { display: 'none' };
     const handleImageLoad = useCallback(
