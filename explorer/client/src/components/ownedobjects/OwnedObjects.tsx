@@ -3,6 +3,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { GetObjectInfoResponse } from 'sui.js';
 
 import { DefaultRpcClient as rpc } from '../../utils/api/SuiRpcClient';
 import { navigateWithUnknown } from '../../utils/searchUtil';
@@ -42,24 +43,41 @@ function OwnedObjectStatic({ objects }: { objects: string[] }) {
     return <OwnedObjectView results={results} />;
 }
 
+type IdResultsPair = [string, GetObjectInfoResponse];
+
 function OwnedObjectAPI({ objects }: { objects: string[] }) {
     const [results, setResults] = useState(DATATYPE_DEFAULT);
     const [isLoaded, setIsLoaded] = useState(false);
 
     useEffect(() => {
-        Promise.all(objects.map((objID) => rpc.getObjectInfo(objID))).then(
-            (results) => {
-                setResults(
-                    results.map(({ id, objType, version, data }) => ({
-                        id: id,
-                        Type: objType,
-                        Version: version,
-                        display: processDisplayValue(data.contents?.display),
-                    }))
-                );
-                setIsLoaded(true);
-            }
-        );
+        Promise.all(objects.map((objID) =>
+            new Promise<IdResultsPair>((resolve, reject) => {
+                rpc.getObjectInfo(objID).then(res => {
+                    resolve([objID, res]);
+                }).catch(err => {
+                    reject(err);
+                });
+            })
+        ))
+        .then(pairs => {
+            console.log('pairs', pairs);
+            const results = pairs.map(pair => {
+                const result = pair[1];
+                return {
+                    id: pair[0],
+                    // @ts-ignore
+                    Type: result.deatails.objType,
+                    // @ts-ignore
+                    Version: result.details.version,
+                    // @ts-ignore
+                    display: processDisplayValue(data.contents?.display),
+                }
+            });
+
+            setResults(results);
+            setIsLoaded(true);
+        });
+
     }, [objects]);
 
     if (isLoaded) {

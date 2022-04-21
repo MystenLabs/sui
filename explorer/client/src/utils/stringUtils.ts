@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { AddressOwner } from './internetapi/DefaultRpcClient';
+import { AddressOwner } from './api/DefaultRpcClient';
 
 export function asciiFromNumberBytes(bytes: number[]) {
     return bytes.map((n) => String.fromCharCode(n)).join('');

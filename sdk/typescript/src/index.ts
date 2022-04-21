@@ -21,3 +21,5 @@ export * from './types/objects';
 export * from './types/transactions';
 
 export * as BCS from './bcs';
+
+export * from './index.guard';

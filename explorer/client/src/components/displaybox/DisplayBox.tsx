@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useState, useEffect, useCallback } from 'react';
-import { GetObjectInfoResponse } from 'sui.js';
 
-import { asciiFromNumberBytes } from '../../utils/stringUtils';
+import { asciiFromNumberBytes, processDisplayValue } from '../../utils/stringUtils';
 
 import styles from './DisplayBox.module.css';
 

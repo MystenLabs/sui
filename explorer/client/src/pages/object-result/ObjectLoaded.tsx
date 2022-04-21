@@ -24,7 +24,6 @@ import {
     checkVecOfSingleID,
     isSuiPropertyType,
 } from '../../utils/typeChecks';
-import { isString } from 'util';
 
 function isString(obj: any): obj is string {
     return typeof obj === 'string';
@@ -126,11 +125,14 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
         // TODO: 'display' is a object property added during demo, replace with metadata ptr?
         .filter(([key, _]) => key !== 'display');
 
+
+
     return (
         <>
             <div className={styles.resultbox}>
                 {(suiObj?.display && isString(suiObj.display))(
-                    <DisplayBox data={suiObj as { display: string }} />
+                    // TODO - remove MoveScript tag, don't use Displaybox for Move contracts
+                    <DisplayBox display={suiObj.display} tag="imageURL"/>
                 )}
                 <div
                     className={`${styles.textbox} ${
@@ -197,7 +199,7 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
                                 <div>Owner</div>
                                 <div id="owner">
                                     <Longtext
-                                        text={extractOwnerData(data.owner)}
+                                        text={extractOwnerData(suiObj.owner)}
                                         category="unknown"
                                         isLink={true}
                                     />

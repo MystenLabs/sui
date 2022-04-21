@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
-import { GetObjectInfoResponse } from 'sui.js';
+import { GetObjectInfoResponse, isGetObjectInfoResponse } from 'sui.js';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import theme from '../../styles/theme.module.css';
@@ -25,7 +25,7 @@ const DATATYPE_DEFAULT: Loadable<GetObjectInfoResponse> = {
 };
 
 function instanceOfDataType(object: any): object is GetObjectInfoResponse {
-    return GetObjectInfoResponse.is(object);
+    return isGetObjectInfoResponse(object);
 }
 
 const Fail = ({ objID }: { objID: string | undefined }): JSX.Element => {

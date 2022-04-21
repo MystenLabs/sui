@@ -8,12 +8,8 @@ import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
-<<<<<<< HEAD
-import { DefaultRpcClient as rpc } from '../../utils/api/SuiRpcClient';
-=======
-import { DefaultRpcClient as rpc } from '../../utils/internetapi/DefaultRpcClient';
+import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { Loadable } from '../../utils/loadState';
->>>>>>> explorer-jsonrpc
 
 
 type PageData = {
