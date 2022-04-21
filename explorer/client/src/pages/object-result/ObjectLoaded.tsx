@@ -103,11 +103,6 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
     };
 
     const extractAddressOwner = (addrOwner: number[]): string | null => {
-        if (addrOwner.length !== 20) {
-            console.log('address owner byte length must be 20');
-            return null;
-        }
-
         return asciiFromNumberBytes(addrOwner);
     };
 
