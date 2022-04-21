@@ -163,7 +163,7 @@ fn check_one_lock(
 
             match object.owner {
                 Owner::Immutable => {
-                    // Nothing else to check for SharedImmutable.
+                    // Nothing else to check for Immutable.
                 }
                 Owner::AddressOwner(owner) => {
                     // Check the owner is the transaction sender.
