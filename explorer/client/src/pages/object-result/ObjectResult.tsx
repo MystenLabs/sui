@@ -7,7 +7,7 @@ import { GetObjectInfoResponse } from 'sui.js';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import theme from '../../styles/theme.module.css';
-import { DefaultRpcClient as rpc } from '../../utils/internetapi/SuiRpcClient';
+import { DefaultRpcClient as rpc } from '../../utils/internetapi/DefaultRpcClient';
 import { Loadable } from '../../utils/loadState';
 import ObjectLoaded from './ObjectLoaded';
 

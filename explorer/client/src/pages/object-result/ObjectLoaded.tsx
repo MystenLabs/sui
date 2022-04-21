@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback } from 'react';
 
 import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
-import { type AddressOwner } from '../../utils/internetapi/SuiRpcClient';
+import { type AddressOwner } from '../../utils/internetapi/DefaultRpcClient';
 import {
     asciiFromNumberBytes,
 } from '../../utils/stringUtils';
