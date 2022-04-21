@@ -10,8 +10,8 @@ import {
 
 export class VoidProvider extends Provider {
   // Objects
-  async getObjectRefs(_address: string): Promise<ObjectRef[]> {
-    throw this.newError('getObjectRefs');
+  async getOwnedObjectRefs(_address: string): Promise<ObjectRef[]> {
+    throw this.newError('getOwnedObjectRefs');
   }
 
   // Transactions

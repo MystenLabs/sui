@@ -1,13 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type as pick, string, Infer, number } from 'superstruct';
+
 ///////////////////////////////
 // Exported Types
-export interface ObjectRef {
-  objectDigest: string;
-  objectId: string;
-  version: string;
-}
+export type ObjectRef = Infer<typeof ObjectRef>;
 
 export interface SignedTransaction {
   txBytes: string;
@@ -22,7 +20,7 @@ export type TransactionResponse = string;
 // Exported Abstracts
 export abstract class Provider {
   // Objects
-  abstract getObjectRefs(address: string): Promise<ObjectRef[]>;
+  abstract getOwnedObjectRefs(address: string): Promise<ObjectRef[]>;
 
   // Transactions
   abstract executeTransaction(
@@ -31,3 +29,9 @@ export abstract class Provider {
 
   // TODO: add more interface methods
 }
+
+export const ObjectRef = pick({
+  digest: string(),
+  objectId: string(),
+  version: number(),
+});

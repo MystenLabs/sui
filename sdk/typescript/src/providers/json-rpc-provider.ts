@@ -7,10 +7,11 @@ import {
   SignedTransaction,
   TransactionResponse,
 } from './provider';
+import { JsonRpcClient } from '../rpc/client';
+import { array, type as pick } from 'superstruct';
 
 export class JsonRpcProvider extends Provider {
-  //@ts-ignore
-  private endpointURL: string;
+  private client: JsonRpcClient;
 
   /**
    * Establish a connection to a Sui Gateway endpoint
@@ -19,13 +20,23 @@ export class JsonRpcProvider extends Provider {
    */
   constructor(endpoint: string) {
     super();
-    this.endpointURL = endpoint;
+    this.client = new JsonRpcClient(endpoint);
   }
 
   // Objects
-  async getObjectRefs(_address: string): Promise<ObjectRef[]> {
-    // TODO: implement the function with a RPC client
-    return [];
+  async getOwnedObjectRefs(address: string): Promise<ObjectRef[]> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getOwnedObjects',
+        [address],
+        pick({ objects: array(ObjectRef) })
+      );
+      return resp.objects;
+    } catch (err) {
+      throw new Error(
+        `Error fetching owned object refs: ${err} for address ${address}`
+      );
+    }
   }
 
   // Transactions
