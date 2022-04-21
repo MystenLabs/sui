@@ -9,11 +9,22 @@ use sui_types::crypto::KeyPair;
 use super::*;
 use crate::authority::authority_tests::*;
 use crate::authority::*;
+use crate::safe_client::SafeClient;
 
+use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
+use async_trait::async_trait;
+use futures::lock::Mutex;
+use futures::stream;
 use std::collections::BTreeMap;
-use std::env;
 use std::fs;
 use std::sync::Arc;
+use std::{env, io};
+use sui_types::messages::{
+    AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
+    ConfirmationTransaction, ObjectInfoRequest, ObjectInfoResponse, Transaction,
+    TransactionInfoRequest, TransactionInfoResponse,
+};
+use sui_types::object::Object;
 
 fn init_state_parameters() -> (Committee, SuiAddress, KeyPair) {
     let (authority_address, authority_key) = get_key_pair();
@@ -238,8 +249,6 @@ async fn test_batch_manager_out_of_order() {
     _join.await.expect("No errors in task").expect("ok");
 }
 
-use sui_types::object::Object;
-
 #[tokio::test]
 async fn test_handle_move_order_with_batch() {
     let (sender, sender_key) = get_key_pair();
@@ -371,7 +380,6 @@ async fn test_batch_store_retrieval() {
         .batches_and_transactions(94, 120)
         .expect("Retrieval failed!");
 
-    println!("{:?}", batches);
     assert_eq!(3, batches.len());
     assert_eq!(90, batches.first().unwrap().batch.next_sequence_number);
     assert_eq!(115, batches.last().unwrap().batch.next_sequence_number);
@@ -391,4 +399,340 @@ async fn test_batch_store_retrieval() {
     // When we close the sending channel we also also end the service task
     authority_state.batch_notifier.close();
     _join.await.expect("No errors in task").expect("ok");
+}
+
+#[derive(Clone)]
+struct TrustworthyAuthorityClient(Arc<Mutex<AuthorityState>>);
+
+#[async_trait]
+impl AuthorityAPI for TrustworthyAuthorityClient {
+    async fn handle_transaction(
+        &self,
+        _transaction: Transaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        Ok(TransactionInfoResponse {
+            signed_transaction: None,
+            certified_transaction: None,
+            signed_effects: None,
+        })
+    }
+
+    async fn handle_confirmation_transaction(
+        &self,
+        _transaction: ConfirmationTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        Ok(TransactionInfoResponse {
+            signed_transaction: None,
+            certified_transaction: None,
+            signed_effects: None,
+        })
+    }
+
+    async fn handle_account_info_request(
+        &self,
+        _request: AccountInfoRequest,
+    ) -> Result<AccountInfoResponse, SuiError> {
+        Ok(AccountInfoResponse {
+            object_ids: vec![],
+            owner: Default::default(),
+        })
+    }
+
+    async fn handle_object_info_request(
+        &self,
+        _request: ObjectInfoRequest,
+    ) -> Result<ObjectInfoResponse, SuiError> {
+        Ok(ObjectInfoResponse {
+            parent_certificate: None,
+            requested_object_reference: None,
+            object_and_lock: None,
+        })
+    }
+
+    /// Handle Object information requests for this account.
+    async fn handle_transaction_info_request(
+        &self,
+        _request: TransactionInfoRequest,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        Ok(TransactionInfoResponse {
+            signed_transaction: None,
+            certified_transaction: None,
+            signed_effects: None,
+        })
+    }
+
+    /// Handle Batch information requests for this authority.
+    async fn handle_batch_stream(
+        &self,
+        request: BatchInfoRequest,
+    ) -> Result<BatchInfoResponseItemStream, io::Error> {
+        let secret = self.0.lock().await.secret.clone();
+        let name = self.0.lock().await.name;
+        let batch_size = 3;
+
+        let mut items = Vec::new();
+        let mut last_batch = AuthorityBatch::initial();
+        items.push({
+            let item = SignedBatch::new(last_batch.clone(), &*secret, name);
+            BatchInfoResponseItem(UpdateItem::Batch(item))
+        });
+        let mut seq = 0;
+        while last_batch.next_sequence_number < request.end {
+            let mut transactions = Vec::new();
+            for _i in 0..batch_size {
+                let rnd = TransactionDigest::random();
+                transactions.push((seq, rnd));
+                items.push(BatchInfoResponseItem(UpdateItem::Transaction((seq, rnd))));
+                seq += 1;
+            }
+
+            let new_batch = AuthorityBatch::make_next(&last_batch, &transactions).unwrap();
+            last_batch = new_batch;
+            items.push({
+                let item = SignedBatch::new(last_batch.clone(), &*secret, name);
+                BatchInfoResponseItem(UpdateItem::Batch(item))
+            });
+        }
+
+        items.reverse();
+
+        let stream = stream::unfold(items, |mut items| async move {
+            items.pop().map(|item| (Ok(item), items))
+        });
+        Ok(Box::pin(stream))
+    }
+}
+
+impl TrustworthyAuthorityClient {
+    fn new(state: AuthorityState) -> Self {
+        Self(Arc::new(Mutex::new(state)))
+    }
+}
+
+#[derive(Clone)]
+struct ByzantineAuthorityClient(Arc<Mutex<AuthorityState>>);
+
+#[async_trait]
+impl AuthorityAPI for ByzantineAuthorityClient {
+    async fn handle_transaction(
+        &self,
+        _transaction: Transaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        Ok(TransactionInfoResponse {
+            signed_transaction: None,
+            certified_transaction: None,
+            signed_effects: None,
+        })
+    }
+
+    async fn handle_confirmation_transaction(
+        &self,
+        _transaction: ConfirmationTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        Ok(TransactionInfoResponse {
+            signed_transaction: None,
+            certified_transaction: None,
+            signed_effects: None,
+        })
+    }
+
+    async fn handle_account_info_request(
+        &self,
+        _request: AccountInfoRequest,
+    ) -> Result<AccountInfoResponse, SuiError> {
+        Ok(AccountInfoResponse {
+            object_ids: vec![],
+            owner: Default::default(),
+        })
+    }
+
+    async fn handle_object_info_request(
+        &self,
+        _request: ObjectInfoRequest,
+    ) -> Result<ObjectInfoResponse, SuiError> {
+        Ok(ObjectInfoResponse {
+            parent_certificate: None,
+            requested_object_reference: None,
+            object_and_lock: None,
+        })
+    }
+
+    /// Handle Object information requests for this account.
+    async fn handle_transaction_info_request(
+        &self,
+        _request: TransactionInfoRequest,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        Ok(TransactionInfoResponse {
+            signed_transaction: None,
+            certified_transaction: None,
+            signed_effects: None,
+        })
+    }
+
+    /// Handle Batch information requests for this authority.
+    /// This function comes from a byzantine authority that has incorrect behavior.
+    async fn handle_batch_stream(
+        &self,
+        request: BatchInfoRequest,
+    ) -> Result<BatchInfoResponseItemStream, io::Error> {
+        let secret = self.0.lock().await.secret.clone();
+        let name = self.0.lock().await.name;
+        let batch_size = 3;
+
+        let mut items = Vec::new();
+        let mut last_batch = AuthorityBatch::initial();
+        items.push({
+            let item = SignedBatch::new(last_batch.clone(), &*secret, name);
+            BatchInfoResponseItem(UpdateItem::Batch(item))
+        });
+        let mut seq = 0;
+        while last_batch.next_sequence_number < request.end {
+            let mut transactions = Vec::new();
+            for _i in 0..batch_size {
+                let rnd = TransactionDigest::random();
+                transactions.push((seq, rnd));
+                items.push(BatchInfoResponseItem(UpdateItem::Transaction((seq, rnd))));
+                seq += 1;
+            }
+
+            // Introduce byzantine behaviour:
+            // Pop last transaction
+            let (seq, _) = transactions.pop().unwrap();
+            // Insert a different one
+            transactions.push((seq, TransactionDigest::random()));
+
+            let new_batch = AuthorityBatch::make_next(&last_batch, &transactions).unwrap();
+            last_batch = new_batch;
+            items.push({
+                let item = SignedBatch::new(last_batch.clone(), &*secret, name);
+                BatchInfoResponseItem(UpdateItem::Batch(item))
+            });
+        }
+
+        items.reverse();
+
+        let stream = stream::unfold(items, |mut items| async move {
+            items.pop().map(|item| (Ok(item), items))
+        });
+        Ok(Box::pin(stream))
+    }
+}
+
+impl ByzantineAuthorityClient {
+    fn new(state: AuthorityState) -> Self {
+        Self(Arc::new(Mutex::new(state)))
+    }
+}
+
+#[tokio::test]
+async fn test_safe_batch_stream() {
+    // Create a random directory to store the DB
+    let dir = env::temp_dir();
+    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    fs::create_dir(&path).unwrap();
+
+    let (_, authority_key) = get_key_pair();
+    let mut authorities = BTreeMap::new();
+    let public_key_bytes = *authority_key.public_key_bytes();
+    println!("init public key {:?}", public_key_bytes);
+
+    authorities.insert(public_key_bytes, 1);
+    let committee = Committee::new(authorities);
+    // Create an authority
+    let mut opts = rocksdb::Options::default();
+    opts.set_max_open_files(max_files_authority_tests());
+    let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
+    let state = AuthorityState::new(
+        committee.clone(),
+        public_key_bytes,
+        Arc::pin(authority_key),
+        store.clone(),
+        genesis::clone_genesis_compiled_modules(),
+        &mut genesis::get_genesis_context(),
+    )
+    .await;
+
+    // Happy path:
+    let auth_client = TrustworthyAuthorityClient::new(state);
+    let safe_client = SafeClient::new(auth_client, committee.clone(), public_key_bytes);
+
+    let request = BatchInfoRequest { start: 0, end: 15 };
+    let batch_stream = safe_client.handle_batch_stream(request.clone()).await;
+
+    // No errors expected
+    assert!(batch_stream.is_ok());
+    let items = batch_stream
+        .unwrap()
+        .collect::<Vec<Result<BatchInfoResponseItem, SuiError>>>()
+        .await;
+
+    // Check length
+    assert!(!items.is_empty());
+    assert_eq!(items.len(), 15 + 6); // 15 items, and 6 batches (enclosing them)
+
+    let mut error_found = false;
+    for item in items {
+        if item.is_err() {
+            error_found = true;
+            println!("error found: {:?}", item);
+        }
+    }
+
+    assert!(!error_found);
+
+    // Byzantine cases:
+    let (_, authority_key) = get_key_pair();
+    let public_key_bytes_b = *authority_key.public_key_bytes();
+    let state_b = AuthorityState::new(
+        committee.clone(),
+        public_key_bytes_b,
+        Arc::pin(authority_key),
+        store,
+        genesis::clone_genesis_compiled_modules(),
+        &mut genesis::get_genesis_context(),
+    )
+    .await;
+    let auth_client_from_byzantine = ByzantineAuthorityClient::new(state_b);
+    let safe_client_from_byzantine = SafeClient::new(
+        auth_client_from_byzantine,
+        committee.clone(),
+        public_key_bytes_b,
+    );
+
+    let mut batch_stream = safe_client_from_byzantine
+        .handle_batch_stream(request.clone())
+        .await;
+
+    // We still expect an ok result
+    assert!(batch_stream.is_ok());
+
+    let items = batch_stream
+        .unwrap()
+        .collect::<Vec<Result<BatchInfoResponseItem, SuiError>>>()
+        .await;
+
+    // Check length
+    assert!(!items.is_empty());
+    assert_eq!(items.len(), 15 + 6); // 15 items, and 6 batches (enclosing them)
+
+    let request_b = BatchInfoRequest { start: 0, end: 10 };
+    batch_stream = safe_client_from_byzantine
+        .handle_batch_stream(request_b.clone())
+        .await;
+
+    // We still expect an ok result
+    assert!(batch_stream.is_ok());
+
+    let items = batch_stream
+        .unwrap()
+        .collect::<Vec<Result<BatchInfoResponseItem, SuiError>>>()
+        .await;
+
+    let mut error_found = false;
+    for item in items {
+        if item.is_err() {
+            error_found = true;
+        }
+    }
+    assert!(error_found);
 }

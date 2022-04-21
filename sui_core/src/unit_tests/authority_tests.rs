@@ -4,12 +4,12 @@
 
 use super::*;
 use bcs;
-
 use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
 };
 use move_core_types::{account_address::AccountAddress, ident_str, language_storage::TypeTag};
+use narwhal_executor::ExecutionIndices;
 use sui_adapter::genesis;
 use sui_types::{
     base_types::dbg_addr,
@@ -292,7 +292,7 @@ async fn test_transfer_package() {
     let result = authority_state
         .handle_transaction(transfer_transaction.clone())
         .await;
-    assert_eq!(result.unwrap_err(), SuiError::TransferSharedError);
+    assert_eq!(result.unwrap_err(), SuiError::TransferUnownedError);
 }
 
 // This test attempts to use an immutable gas object to pay for gas.
@@ -1417,7 +1417,7 @@ async fn shared_object() {
 
         let content = GasCoin::new(shared_object_id, SequenceNumber::new(), 10);
         let obj = MoveObject::new(/* type */ GasCoin::type_(), content.to_bcs_bytes());
-        Object::new_move(obj, Owner::SharedMutable, TransactionDigest::genesis())
+        Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
     };
 
     let authority = init_state_with_objects(vec![gas_object, shared_object]).await;
@@ -1471,7 +1471,7 @@ async fn shared_object() {
     authority
         .handle_consensus_certificate(
             certificate,
-            /* last_consensus_index */ SequenceNumber::new(),
+            /* last_consensus_index */ ExecutionIndices::default(),
         )
         .await
         .unwrap();

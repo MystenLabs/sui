@@ -1,19 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use anyhow::Error;
-use base64ct::{Base64, Encoding};
-use std::borrow::Borrow;
-use std::collections::HashMap;
-
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::error::{SuiError, SuiResult};
-use crate::readable_serde::BytesOrBase64;
+use crate::readable_serde::encoding::Base64;
+use crate::readable_serde::Readable;
+use anyhow::Error;
+use base64ct::Encoding;
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Digest, PublicKey, Verifier};
+use narwhal_crypto::ed25519::Ed25519KeyPair;
+use narwhal_crypto::ed25519::Ed25519PrivateKey;
+use narwhal_crypto::ed25519::Ed25519PublicKey;
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use serde_with::Bytes;
 use sha3::Sha3_256;
+use std::borrow::Borrow;
+use std::collections::HashMap;
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
 #[derive(Debug)]
@@ -42,6 +47,15 @@ impl KeyPair {
             public_key_cell: OnceCell::new(),
         }
     }
+
+    /// Make a Narwhal-compatible key pair from a Sui keypair.
+    pub fn make_narwhal_keypair(&self) -> Ed25519KeyPair {
+        let key = self.copy();
+        Ed25519KeyPair {
+            name: Ed25519PublicKey(key.key_pair.public),
+            secret: Ed25519PrivateKey(key.key_pair.secret),
+        }
+    }
 }
 
 impl Serialize for KeyPair {
@@ -49,7 +63,7 @@ impl Serialize for KeyPair {
     where
         S: serde::ser::Serializer,
     {
-        serializer.serialize_str(&Base64::encode_string(&self.key_pair.to_bytes()))
+        serializer.serialize_str(&base64ct::Base64::encode_string(&self.key_pair.to_bytes()))
     }
 }
 
@@ -59,8 +73,8 @@ impl<'de> Deserialize<'de> for KeyPair {
         D: serde::de::Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        let value =
-            Base64::decode_vec(&s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
+        let value = base64ct::Base64::decode_vec(&s)
+            .map_err(|err| serde::de::Error::custom(err.to_string()))?;
         let key = dalek::Keypair::from_bytes(&value)
             .map_err(|err| serde::de::Error::custom(err.to_string()))?;
         Ok(KeyPair {
@@ -88,8 +102,11 @@ impl signature::Signer<AuthoritySignature> for KeyPair {
     }
 }
 
+#[serde_as]
 #[derive(Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct PublicKeyBytes(#[serde(with = "BytesOrBase64")] [u8; dalek::PUBLIC_KEY_LENGTH]);
+pub struct PublicKeyBytes(
+    #[serde_as(as = "Readable<Base64, Bytes>")] [u8; dalek::PUBLIC_KEY_LENGTH],
+);
 
 impl PublicKeyBytes {
     pub fn to_vec(&self) -> Vec<u8> {
@@ -165,8 +182,9 @@ pub fn get_key_pair_from_bytes(bytes: &[u8]) -> (SuiAddress, KeyPair) {
 pub const SUI_SIGNATURE_LENGTH: usize =
     ed25519_dalek::PUBLIC_KEY_LENGTH + ed25519_dalek::SIGNATURE_LENGTH;
 
+#[serde_as]
 #[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
-pub struct Signature(#[serde(with = "BytesOrBase64")] [u8; SUI_SIGNATURE_LENGTH]);
+pub struct Signature(#[serde_as(as = "Readable<Base64, Bytes>")] [u8; SUI_SIGNATURE_LENGTH]);
 
 impl AsRef<[u8]> for Signature {
     fn as_ref(&self) -> &[u8] {
@@ -184,8 +202,8 @@ impl signature::Signature for Signature {
 
 impl std::fmt::Debug for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = Base64::encode_string(self.signature_bytes());
-        let p = Base64::encode_string(self.public_key_bytes());
+        let s = base64ct::Base64::encode_string(self.signature_bytes());
+        let p = base64ct::Base64::encode_string(self.public_key_bytes());
         write!(f, "{s}@{p}")?;
         Ok(())
     }
@@ -201,11 +219,11 @@ impl Signature {
         secret.sign(&message)
     }
 
-    fn signature_bytes(&self) -> &[u8] {
+    pub fn signature_bytes(&self) -> &[u8] {
         &self.0[..ed25519_dalek::SIGNATURE_LENGTH]
     }
 
-    fn public_key_bytes(&self) -> &[u8] {
+    pub fn public_key_bytes(&self) -> &[u8] {
         &self.0[ed25519_dalek::SIGNATURE_LENGTH..]
     }
 
@@ -297,8 +315,9 @@ impl Signature {
 
 /// A signature emitted by an authority. It's useful to decouple this from user signatures,
 /// as their set of supported schemes will probably diverge
+#[serde_as]
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
-pub struct AuthoritySignature(#[serde(with = "BytesOrBase64")] pub dalek::Signature);
+pub struct AuthoritySignature(#[serde_as(as = "Readable<Base64, _>")] pub dalek::Signature);
 impl AsRef<[u8]> for AuthoritySignature {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
@@ -423,7 +442,7 @@ pub trait SignableBytes
 where
     Self: Sized,
 {
-    fn from_signable_bytes(bytes: Vec<u8>) -> Result<Self, anyhow::Error>;
+    fn from_signable_bytes(bytes: &[u8]) -> Result<Self, anyhow::Error>;
 }
 /// Activate the blanket implementation of `Signable` based on serde and BCS.
 /// * We use `serde_name` to extract a seed from the name of structs and enums.
@@ -447,7 +466,7 @@ impl<T> SignableBytes for T
 where
     T: BcsSignable,
 {
-    fn from_signable_bytes(bytes: Vec<u8>) -> Result<Self, Error> {
+    fn from_signable_bytes(bytes: &[u8]) -> Result<Self, Error> {
         // Remove name tag before deserialization using BCS
         let name = serde_name::trace_name::<Self>().expect("Self must be a struct or an enum");
         let name_byte_len = format!("{}::", name).bytes().len();

@@ -20,7 +20,7 @@ toml = "0.5.8"
 strum = "0.24.0"
 strum_macros = "0.24.0"
 num_cpus = "1.13.1"
-base64 = "0.13.0"
+base64ct = { version = "1.5.0", features = ["alloc"] }
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 rocksdb = "0.18.0"
 hex = "0.4.3"
@@ -53,15 +53,23 @@ http = "0.2.6"
 hyper = "0.14.17"
 schemars = "0.8.8"
 
-move-package = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a", features = ["address20"] }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
-move-binary-format = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
-move-unit-test = { git = "https://github.com/move-language/move", rev = "2e7c37edada44436805e047dd26724a26c07635a" }
+move-package = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646", features = ["address20"] }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
+move-unit-test = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
+
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "aad875a157ba1897b7f277dae7d9cb1deef7955c", package = "node" }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "aad875a157ba1897b7f277dae7d9cb1deef7955c", package = "config" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "aad875a157ba1897b7f277dae7d9cb1deef7955c", package = "crypto" }
 
 once_cell = "1.9.0"
-reqwest = { version = "0.11.10", features=["json","serde_json", "blocking"]}
+reqwest = { version = "0.11.10", features = ["json", "serde_json", "blocking"] }
+
+jsonrpsee = { version = "0.10.1", features = ["full"] }
+
+jsonrpsee-proc-macros = "0.10.1"
 
 [dev-dependencies]
 tracing-test = "0.2.1"
@@ -85,3 +93,11 @@ path = "src/sui-move.rs"
 [[bin]]
 name = "rest_server"
 path = "src/rest_server.rs"
+
+[[bin]]
+name = "rpc-server"
+path = "src/rpc_server.rs"
+
+[[bin]]
+name = "validator"
+path = "src/validator.rs"

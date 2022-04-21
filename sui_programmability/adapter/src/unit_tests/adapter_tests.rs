@@ -160,11 +160,9 @@ impl ModuleResolver for InMemoryStorage {
         Ok(self
             .read_object(&ObjectID::from(*module_id.address()))
             .and_then(|o| match &o.data {
-                Data::Package(m) => Some(
-                    m.serialized_module_map()[module_id.name().as_str()]
-                        .clone()
-                        .into_vec(),
-                ),
+                Data::Package(m) => {
+                    Some(m.serialized_module_map()[module_id.name().as_str()].clone())
+                }
                 Data::Move(_) => None,
             }))
     }
@@ -502,7 +500,7 @@ fn test_freeze() {
     let id1 = storage.get_created_keys().pop().unwrap();
     storage.flush();
     let obj1 = storage.read_object(&id1).unwrap();
-    assert!(!obj1.is_read_only());
+    assert!(!obj1.is_immutable());
 
     // 2. Call freeze_object.
     call(
@@ -519,8 +517,8 @@ fn test_freeze() {
     assert_eq!(storage.updated().len(), 1);
     storage.flush();
     let obj1 = storage.read_object(&id1).unwrap();
-    assert!(obj1.is_read_only());
-    assert!(obj1.owner == Owner::SharedImmutable);
+    assert!(obj1.is_immutable());
+    assert!(obj1.owner == Owner::Immutable);
 
     // 3. Call transfer again and it should fail.
     let pure_args = vec![bcs::to_bytes(&AccountAddress::from(addr1)).unwrap()];
@@ -537,7 +535,7 @@ fn test_freeze() {
     let err = result.unwrap_err();
     assert!(err
         .to_string()
-        .contains("Shared object cannot be passed by-value, found in argument 0"));
+        .contains("Only owned object can be passed by-value, violation found in argument 0"));
 
     // 4. Call set_value (pass as mutable reference) should fail as well.
     let obj1 = storage.read_object(&id1).unwrap();
@@ -589,29 +587,20 @@ fn test_move_call_args_type_mismatch() {
         .to_string()
         .contains("Expected 3 arguments calling function 'create', but found 2"));
 
-    /*
-    // Need to fix https://github.com/MystenLabs/sui/issues/211
-    // in order to enable the following test.
-    let pure_args = vec![
-        10u64.to_le_bytes().to_vec(),
-        10u64.to_le_bytes().to_vec(),
-    ];
-    let status = call(
+    // Make a call with wrong argument types.
+    let pure_args = vec![10u64.to_le_bytes().to_vec(), 10u64.to_le_bytes().to_vec()];
+    let err = call(
         &mut storage,
         &native_functions,
         "ObjectBasics",
         "create",
-        gas_object.clone(),
         GAS_BUDGET,
         Vec::new(),
         Vec::new(),
         pure_args,
     )
-    .unwrap();
-    let (gas_used, err) = status.unwrap_err();
-    assert_eq!(gas_used, gas::MIN_MOVE);
-    // Assert on the error message as well.
-    */
+    .unwrap_err();
+    assert!(matches!(err, SuiError::AbortedExecution { .. }));
 }
 
 #[test]

@@ -41,6 +41,10 @@
         "fileName": "learn/sui-compared"
       },
       {
+        "label": "Sui Consensus Engine",
+        "fileName": "learn/architecture/consensus"
+      },
+      {
         "label": "Understand Sui Security",
         "fileName": "learn/sui-security"
       },
@@ -72,7 +76,7 @@
       },
       {
         "label": "Understand Validators",
-        "fileName": "build/authorities"
+        "fileName": "learn/architecture/validators"
       },
       {
         "label": "Manage Objects",

@@ -3,17 +3,16 @@
 use super::*;
 use crate::gateway_state::GatewayTxSeqNumber;
 
+use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::path::Path;
 use sui_storage::LockService;
-use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
-
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
+use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use typed_store::rocks::{DBBatch, DBMap};
-
 use typed_store::{reopen, traits::Map};
 
 pub type AuthorityStore = SuiDataStore<false, AuthoritySignInfo>;
@@ -99,7 +98,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     /// represents the index of the latest consensus message this authority processed. This field is written
     /// by a single process acting as consensus (light) client. It is used to ensure the authority processes
     /// every message output by consensus (and in the right order).
-    last_consensus_index: DBMap<u64, SequenceNumber>,
+    last_consensus_index: DBMap<u64, ExecutionIndices>,
 }
 
 impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
@@ -173,7 +172,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             "sequenced";<(TransactionDigest, ObjectID), SequenceNumber>,
             "schedule";<ObjectID, SequenceNumber>,
             "batches";<TxSequenceNumber, SignedBatch>,
-            "last_consensus_index";<u64, SequenceNumber>
+            "last_consensus_index";<u64, ExecutionIndices>
         );
 
         // For now, create one LockService for each SuiDataStore, and we use a specific
@@ -705,7 +704,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             let new_locks_to_init: Vec<_> = written
                 .iter()
                 .filter_map(|(_, (object_ref, new_object))| {
-                    if !new_object.is_read_only() {
+                    if !new_object.is_immutable() {
                         Some(*object_ref)
                     } else {
                         None
@@ -781,7 +780,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     pub fn persist_certificate_and_lock_shared_objects(
         &self,
         certificate: CertifiedTransaction,
-        global_certificate_index: SequenceNumber,
+        consensus_index: ExecutionIndices,
     ) -> Result<(), SuiError> {
         // Make an iterator to save the certificate.
         let transaction_digest = *certificate.digest();
@@ -808,7 +807,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             .unzip();
 
         // Make an iterator to update the last consensus index.
-        let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, global_certificate_index));
+        let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, consensus_index));
 
         // Atomically store all elements.
         let mut write_batch = self.sequenced.batch();
@@ -935,7 +934,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     }
 
     /// Return the latest consensus index. It is used to bootstrap the consensus client.
-    pub fn last_consensus_index(&self) -> SuiResult<SequenceNumber> {
+    pub fn last_consensus_index(&self) -> SuiResult<ExecutionIndices> {
         self.last_consensus_index
             .get(&LAST_CONSENSUS_INDEX_ADDR)
             .map(|x| x.unwrap_or_default())
@@ -947,6 +946,14 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<Option<TransactionEnvelope<S>>> {
         let transaction = self.transactions.get(transaction_digest)?;
+        Ok(transaction)
+    }
+
+    pub fn get_certified_transaction(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<CertifiedTransaction>> {
+        let transaction = self.certificates.get(transaction_digest)?;
         Ok(transaction)
     }
 
@@ -1013,7 +1020,6 @@ impl<const A: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> ModuleResolve
                     .serialized_module_map()
                     .get(module_id.name().as_str())
                     .cloned()
-                    .map(|m| m.into_vec())
             }))
     }
 }
