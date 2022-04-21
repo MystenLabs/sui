@@ -1,15 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type as pick, array } from 'superstruct';
 import { JsonRpcClient } from '../../src/rpc/client';
-import { ObjectRef } from '../../src';
 import {
   mockRpcResponse,
   mockServer,
   MOCK_ENDPOINT,
   MOCK_PORT,
 } from '../mocks/rpc-http';
+import { isGetOwnedObjectRefsResponse } from '../../src/index.guard';
 
 const EXAMPLE_OBJECT = {
   objectId: '8dc6a6f70564e29a01c7293a9c03818fda2d049f',
@@ -42,7 +41,7 @@ describe('JSON-RPC Client', () => {
     const resp = await client.requestWithType(
       'sui_getOwnedObjects',
       [],
-      pick({ objects: array(ObjectRef) })
+      isGetOwnedObjectRefsResponse
     );
     expect(resp.objects.length).toEqual(1);
     expect(resp.objects[0]).toEqual(EXAMPLE_OBJECT);

@@ -11,8 +11,8 @@
     "node": ">=10"
   },
   "scripts": {
-    "start": "tsdx watch",
-    "build": "ts-auto-guard --export-all src/**.ts ; tsdx build",
+    "start": "./type_guards.sh; tsdx watch",
+    "build": "./type_guards.sh; tsdx build",
     "test": "tsdx test",
     "lint": "tsdx lint",
     "prepare": "tsdx build",
@@ -46,6 +46,7 @@
   "devDependencies": {
     "@size-limit/preset-small-lib": "^7.0.8",
     "@types/bn.js": "^5.1.0",
+    "@types/mocha": "^9.1.0",
     "husky": "^7.0.4",
     "mockttp": "^2.7.0",
     "size-limit": "^7.0.8",

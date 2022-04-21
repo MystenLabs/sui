@@ -11,7 +11,9 @@ import {
   GatewayTxSeqNumber,
 } from './provider';
 import { JsonRpcClient } from '../rpc/client';
-import { array, number, type as pick } from 'superstruct';
+import { isGetObjectInfoResponse, isGetOwnedObjectRefsResponse, isGetTxnDigestsResponse } from '../index.guard';
+
+const isNumber = (val: any): val is number => typeof(val) === 'number';
 
 export class JsonRpcProvider extends Provider {
   private client: JsonRpcClient;
@@ -32,7 +34,7 @@ export class JsonRpcProvider extends Provider {
       const resp = await this.client.requestWithType(
         'sui_getOwnedObjects',
         [address],
-        pick({ objects: array(ObjectRef) })
+        isGetOwnedObjectRefsResponse
       );
       return resp.objects;
     } catch (err) {
@@ -47,7 +49,7 @@ export class JsonRpcProvider extends Provider {
       const resp = await this.client.requestWithType(
         'sui_getObjectTypedInfo',
         [objectId],
-        GetObjectInfoResponse
+        isGetObjectInfoResponse
       );
       return resp;
     } catch (err) {
@@ -67,7 +69,7 @@ export class JsonRpcProvider extends Provider {
       const resp = await this.client.requestWithType(
         'sui_getTotalTransactionNumber',
         [],
-        number()
+        isNumber
       );
       return resp;
     } catch (err) {
@@ -83,7 +85,7 @@ export class JsonRpcProvider extends Provider {
       return await this.client.requestWithType(
         'sui_getTransactionsInRange',
         [start, end],
-        GetTxnDigestsResponse
+        isGetTxnDigestsResponse
       );
     } catch (err) {
       throw new Error(
@@ -97,7 +99,7 @@ export class JsonRpcProvider extends Provider {
       return await this.client.requestWithType(
         'sui_getRecentTransactions',
         [count],
-        GetTxnDigestsResponse
+        isGetTxnDigestsResponse
       );
     } catch (err) {
       throw new Error(

@@ -81,4 +81,8 @@ export type GetObjectInfoResponse = {
   details: ObjectExistsInfo | ObjectNotExistsInfo | ObjectRef,
 };
 
+export type GetOwnedObjectRefsResponse = {
+  objects: ObjectRef[]
+};
+
 export type GetTxnDigestsResponse = [GatewayTxSeqNumber, TransactionDigest];
