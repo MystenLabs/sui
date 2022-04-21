@@ -111,38 +111,6 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
 
         return asciiFromNumberBytes(addrOwner);
     };
-    type SuiIdBytes = { bytes: number[] };
-
-    function handleSpecialDemoNameArrays(data: {
-        name?: SuiIdBytes | string;
-        player_name?: SuiIdBytes | string;
-        monster_name?: SuiIdBytes | string;
-        farm_name?: SuiIdBytes | string;
-    }): string {
-        let bytesObj: SuiIdBytes = { bytes: [] };
-
-        if ('player_name' in data) {
-            bytesObj = data.player_name as SuiIdBytes;
-            const ascii = asciiFromNumberBytes(bytesObj.bytes);
-            delete data.player_name;
-            return ascii;
-        } else if ('monster_name' in data) {
-            bytesObj = data.monster_name as SuiIdBytes;
-            const ascii = asciiFromNumberBytes(bytesObj.bytes);
-            delete data.monster_name;
-            return ascii;
-        } else if ('farm_name' in data) {
-            bytesObj = data.farm_name as SuiIdBytes;
-            const ascii = asciiFromNumberBytes(bytesObj.bytes);
-            delete data.farm_name;
-            return ascii;
-        } else if ('name' in data) {
-            bytesObj = data.name as SuiIdBytes;
-            return asciiFromNumberBytes(bytesObj.bytes);
-        } else bytesObj = { bytes: [] };
-
-        return asciiFromNumberBytes(bytesObj.bytes);
-    }
 
     function toHexString(byteArray: number[]): string {
         return (
@@ -153,18 +121,6 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
                 })
                 .join('')
         );
-    }
-
-    function processName(name: string | undefined) {
-        // hardcode a friendly name for gas for now
-        const gasTokenTypeStr = 'Coin::Coin<0x2::GAS::GAS>';
-        const gasTokenId = '0000000000000000000000000000000000000003';
-        if (suiObj.objType === gasTokenTypeStr && objID === gasTokenId)
-            return 'GAS';
-
-        if (!name) {
-            return handleSpecialDemoNameArrays(suiObj);
-        }
     }
 
     function processOwner(owner: any) {
@@ -178,7 +134,7 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
     const viewedData = {
         ...data,
         objType: trimStdLibPrefix(suiObj.objType),
-        name: processName(suiObj.name),
+        name: suiObj.name,
         //tx_digest:
         //    data.data.tx_digest && typeof data.data.tx_digest === 'object'
         //        ? toHexString(data.data.tx_digest as number[])
