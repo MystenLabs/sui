@@ -17,4 +17,7 @@ export * from './signers/txn-data-serializers/txn-data-serializer';
 export * from './signers/raw-signer';
 export * from './signers/signer-with-provider';
 
+export * from './types/objects';
+export * from './types/transactions';
+
 export * as BCS from './bcs';

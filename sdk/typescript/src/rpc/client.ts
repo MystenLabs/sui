@@ -56,11 +56,11 @@ export class JsonRpcClient {
     return client;
   }
 
-  async requestWithType<T, S>(
+  async requestWithValidation<T, S>(
     method: string,
     args: Array<any>,
     schema: Struct<T, S>
-  ): Promise<T> {
+  ): Promise<any> {
     const response = await this.request(method, args);
     if (is(response, ErrorResponse)) {
       throw new Error(`RPC Error: ${response.error.message}`);

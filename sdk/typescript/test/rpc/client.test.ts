@@ -3,7 +3,7 @@
 
 import { type as pick, array } from 'superstruct';
 import { JsonRpcClient } from '../../src/rpc/client';
-import { ObjectRef } from '../../src';
+import { ObjectRefSchema } from '../../src';
 import {
   mockRpcResponse,
   mockServer,
@@ -30,7 +30,7 @@ describe('JSON-RPC Client', () => {
     server.stop();
   });
 
-  it('requestWithType', async () => {
+  it('requestWithValidation', async () => {
     await mockRpcResponse({
       method: 'sui_getOwnedObjects',
       params: [],
@@ -39,10 +39,10 @@ describe('JSON-RPC Client', () => {
       },
     });
 
-    const resp = await client.requestWithType(
+    const resp = await client.requestWithValidation(
       'sui_getOwnedObjects',
       [],
-      pick({ objects: array(ObjectRef) })
+      pick({ objects: array(ObjectRefSchema) })
     );
     expect(resp.objects.length).toEqual(1);
     expect(resp.objects[0]).toEqual(EXAMPLE_OBJECT);
