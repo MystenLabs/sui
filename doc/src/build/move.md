@@ -241,9 +241,9 @@ must satisfy a certain set of properties.
 One of the basic operations in Sui is transfer of gas objects between
 [addresses](https://github.com/diem/move/blob/main/language/documentation/book/src/address.md)
 representing individual users. And one of the
-simplest entry functions is defined in the SUI
-[module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/SUI.move) to
-implement gas object transfer:
+simplest entry functions is defined in the
+[SUI module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/SUI.move)
+to implement gas object transfer:
 
 ```rust
 public(script) fun transfer(c: Coin::Coin<SUI>, recipient: address, _ctx: &mut TxContext) {
@@ -283,11 +283,9 @@ wallet in [Calling Move code](wallet.md#calling-move-code).
 ## Writing a package
 
 In order to build a Move package and run code defined in
-this package, first [install Sui binaries](install.md).
-
-Then clone the repository as described in
-[Contributing to Sui](../contribute/index.md#download-and-learn-sui)
-as this tutorial assumes you have a clone of Sui's repository in your current directory.
+this package, first [install Sui binaries](install.md#binaries) and
+[clone the repository](install.md#source-code) as this tutorial assumes
+you have the Sui repository source code in your current directory.
 
 Refer to the code example developed for this tutorial in the
 [M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/tutorial/sources/M1.move) file.
