@@ -76,7 +76,7 @@
       },
       {
         "label": "Understand Validators",
-        "fileName": "build/authorities"
+        "fileName": "learn/architecture/validators"
       },
       {
         "label": "Manage Objects",
