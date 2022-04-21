@@ -61,7 +61,10 @@ fn transfer_object_move_transaction(
     framework_obj_ref: ObjectRef,
     gas_object_ref: ObjectRef,
 ) -> Transaction {
-    let pure_args = vec![bcs::to_bytes(&AccountAddress::from(dest)).unwrap()];
+    let args = vec![
+        CallArg::ImmOrOwnedObject(object_ref),
+        CallArg::Pure(bcs::to_bytes(&AccountAddress::from(dest)).unwrap()),
+    ];
 
     to_transaction(
         TransactionData::new_move_call(
@@ -71,9 +74,7 @@ fn transfer_object_move_transaction(
             ident_str!("transfer").to_owned(),
             Vec::new(),
             gas_object_ref,
-            vec![object_ref],
-            vec![],
-            pure_args,
+            args,
             GAS_VALUE_FOR_TESTING / 2,
         ),
         secret,
@@ -89,9 +90,9 @@ pub fn crate_object_move_transaction(
     gas_object_ref: ObjectRef,
 ) -> Transaction {
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
-    let pure_arguments = vec![
-        value.to_le_bytes().to_vec(),
-        bcs::to_bytes(&AccountAddress::from(dest)).unwrap(),
+    let arguments = vec![
+        CallArg::Pure(value.to_le_bytes().to_vec()),
+        CallArg::Pure(bcs::to_bytes(&AccountAddress::from(dest)).unwrap()),
     ];
 
     to_transaction(
@@ -102,9 +103,7 @@ pub fn crate_object_move_transaction(
             ident_str!("create").to_owned(),
             Vec::new(),
             gas_object_ref,
-            Vec::new(),
-            vec![],
-            pure_arguments,
+            arguments,
             GAS_VALUE_FOR_TESTING / 2,
         ),
         &*secret,
@@ -126,9 +125,7 @@ fn delete_object_move_transaction(
             ident_str!("delete").to_owned(),
             Vec::new(),
             gas_object_ref,
-            vec![object_ref],
-            Vec::new(),
-            vec![],
+            vec![CallArg::ImmOrOwnedObject(object_ref)],
             GAS_VALUE_FOR_TESTING / 2,
         ),
         secret,
@@ -143,7 +140,10 @@ fn set_object_move_transaction(
     framework_obj_ref: ObjectRef,
     gas_object_ref: ObjectRef,
 ) -> Transaction {
-    let pure_args = vec![bcs::to_bytes(&value).unwrap()];
+    let args = vec![
+        CallArg::ImmOrOwnedObject(object_ref),
+        CallArg::Pure(bcs::to_bytes(&value).unwrap()),
+    ];
 
     to_transaction(
         TransactionData::new_move_call(
@@ -153,9 +153,7 @@ fn set_object_move_transaction(
             ident_str!("set_value").to_owned(),
             Vec::new(),
             gas_object_ref,
-            vec![object_ref],
-            vec![],
-            pure_args,
+            args,
             GAS_VALUE_FOR_TESTING / 2,
         ),
         secret,

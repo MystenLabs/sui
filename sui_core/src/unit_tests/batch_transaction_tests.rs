@@ -47,11 +47,9 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
             module: ident_str!("ObjectBasics").to_owned(),
             function: ident_str!("create").to_owned(),
             type_arguments: vec![],
-            object_arguments: vec![],
-            shared_object_arguments: vec![],
-            pure_arguments: vec![
-                16u64.to_le_bytes().to_vec(),
-                bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
+            arguments: vec![
+                CallArg::Pure(16u64.to_le_bytes().to_vec()),
+                CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
             ],
         }));
     }
@@ -118,9 +116,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
         module: ident_str!("ObjectBasics").to_owned(),
         function: ident_str!("create").to_owned(),
         type_arguments: vec![],
-        object_arguments: vec![],
-        shared_object_arguments: vec![],
-        pure_arguments: vec![],
+        arguments: vec![],
     }));
     let data = TransactionData::new(
         TransactionKind::Batch(transactions),
@@ -203,11 +199,9 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
             module: ident_str!("ObjectBasics").to_owned(),
             function: ident_str!("create").to_owned(),
             type_arguments: vec![],
-            object_arguments: vec![],
-            shared_object_arguments: vec![],
-            pure_arguments: vec![
-                16u64.to_le_bytes().to_vec(),
-                bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
+            arguments: vec![
+                CallArg::Pure(16u64.to_le_bytes().to_vec()),
+                CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
             ],
         }));
     }

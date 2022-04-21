@@ -113,14 +113,14 @@ impl Storage for InMemoryStorage {
         self.temporary = ScratchPad::default();
     }
 
-    fn read_object(&self, id: &ObjectID) -> Option<Object> {
+    fn read_object(&self, id: &ObjectID) -> Option<&Object> {
         // there should be no read after delete
         assert!(!self.temporary.deleted.contains_key(id));
         // try objects updated in temp memory first
-        self.temporary.updated.get(id).cloned().or_else(|| {
-            self.temporary.created.get(id).cloned().or_else(||
+        self.temporary.updated.get(id).or_else(|| {
+            self.temporary.created.get(id).or_else(||
                 // try persistent memory
-                 self.persistent.get(id).cloned())
+                 self.persistent.get(id))
         })
     }
 
@@ -190,19 +190,23 @@ fn call(
     type_args: Vec<TypeTag>,
     object_args: Vec<Object>,
     pure_args: Vec<Vec<u8>>,
-) -> SuiResult<Vec<CallResult>> {
+) -> SuiResult {
     let vm = adapter::new_move_vm(native_functions.clone()).expect("No errors");
     let package = storage.find_package(module_name).unwrap();
     let module_id = ModuleId::new(package.id().into(), Identifier::new(module_name).unwrap());
+    // TODO improve API here
+    let args = object_args
+        .into_iter()
+        .map(|obj| CallArg::ImmOrOwnedObject(obj.compute_object_reference()))
+        .chain(pure_args.into_iter().map(CallArg::Pure))
+        .collect();
     adapter::execute(
         &vm,
         storage,
-        native_functions,
         module_id,
         &Identifier::new(fun_name).unwrap(),
         type_args,
-        object_args,
-        pure_args,
+        args,
         &mut SuiGasStatus::new_with_budget(gas_budget, 1, 1),
         &mut TxContext::random_for_testing_only(),
     )
@@ -248,7 +252,7 @@ fn test_object_basics() {
     assert!(storage.deleted().is_empty());
     let id1 = storage.get_created_keys().pop().unwrap();
     storage.flush();
-    let mut obj1 = storage.read_object(&id1).unwrap();
+    let mut obj1 = storage.read_object(&id1).unwrap().clone();
     let mut obj1_seq = SequenceNumber::from(1);
     assert!(obj1.owner == addr1);
     assert_eq!(obj1.version(), obj1_seq);
@@ -271,7 +275,7 @@ fn test_object_basics() {
     assert!(storage.created().is_empty());
     assert!(storage.deleted().is_empty());
     storage.flush();
-    let transferred_obj = storage.read_object(&id1).unwrap();
+    let transferred_obj = storage.read_object(&id1).unwrap().clone();
     assert!(transferred_obj.owner == addr2);
     obj1_seq = obj1_seq.increment();
     assert_eq!(obj1.id(), transferred_obj.id());
@@ -332,7 +336,7 @@ fn test_object_basics() {
         "NewValueEvent"
     );
     storage.flush();
-    let updated_obj = storage.read_object(&id1).unwrap();
+    let updated_obj = storage.read_object(&id1).unwrap().clone();
     assert!(updated_obj.owner == addr2);
     obj1_seq = obj1_seq.increment();
     assert_eq!(updated_obj.version(), obj1_seq);
@@ -399,7 +403,7 @@ fn test_wrap_unwrap() {
     .unwrap();
     let id1 = storage.get_created_keys().pop().unwrap();
     storage.flush();
-    let obj1 = storage.read_object(&id1).unwrap();
+    let obj1 = storage.read_object(&id1).unwrap().clone();
     let obj1_version = obj1.version();
     let obj1_contents = obj1
         .data
@@ -428,7 +432,7 @@ fn test_wrap_unwrap() {
     let id2 = storage.get_created_keys().pop().unwrap();
     storage.flush();
     assert!(storage.read_object(&id1).is_none());
-    let obj2 = storage.read_object(&id2).unwrap();
+    let obj2 = storage.read_object(&id2).unwrap().clone();
 
     // 3. unwrap addr
     call(
@@ -499,7 +503,7 @@ fn test_freeze() {
 
     let id1 = storage.get_created_keys().pop().unwrap();
     storage.flush();
-    let obj1 = storage.read_object(&id1).unwrap();
+    let obj1 = storage.read_object(&id1).unwrap().clone();
     assert!(!obj1.is_immutable());
 
     // 2. Call freeze_object.
@@ -516,7 +520,7 @@ fn test_freeze() {
     .unwrap();
     assert_eq!(storage.updated().len(), 1);
     storage.flush();
-    let obj1 = storage.read_object(&id1).unwrap();
+    let obj1 = storage.read_object(&id1).unwrap().clone();
     assert!(obj1.is_immutable());
     assert!(obj1.owner == Owner::Immutable);
 
@@ -538,7 +542,7 @@ fn test_freeze() {
         .contains("Only owned object can be passed by-value, violation found in argument 0"));
 
     // 4. Call set_value (pass as mutable reference) should fail as well.
-    let obj1 = storage.read_object(&id1).unwrap();
+    let obj1 = storage.read_object(&id1).unwrap().clone();
     let pure_args = vec![bcs::to_bytes(&1u64).unwrap()];
     let result = call(
         &mut storage,
@@ -625,10 +629,8 @@ fn test_move_call_incorrect_function() {
     let status = adapter::execute(
         &vm,
         &mut storage,
-        &native_functions,
         module_id,
         &Identifier::new("create").unwrap(),
-        vec![],
         vec![],
         vec![],
         &mut SuiGasStatus::new_unmetered(),
@@ -1014,107 +1016,4 @@ fn test_publish_init_param() {
 
     // only a package object should have been crated
     assert_eq!(storage.created().len(), 1);
-}
-
-#[test]
-/// Tests calls to entry functions returning values.
-fn test_call_ret() {
-    let native_functions =
-        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_packages();
-    let mut storage = InMemoryStorage::new(genesis_objects);
-
-    // crate gas object for payment
-    let gas_object =
-        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
-
-    // publish modules at a given path
-    publish_from_src(
-        &mut storage,
-        &native_functions,
-        "src/unit_tests/data/call_ret",
-        gas_object,
-        GAS_BUDGET,
-    );
-    storage.flush();
-
-    // call published module function returning a u64 (42)
-    let response = call(
-        &mut storage,
-        &native_functions,
-        "M1",
-        "get_u64",
-        GAS_BUDGET,
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-    )
-    .unwrap();
-    assert!(matches!(response.get(0).unwrap(), CallResult::U64(42)));
-
-    // call published module function returning an address (0x42)
-    let response = call(
-        &mut storage,
-        &native_functions,
-        "M1",
-        "get_addr",
-        GAS_BUDGET,
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-    )
-    .unwrap();
-    assert_eq!(
-        response.get(0).unwrap(),
-        &CallResult::Address(AccountAddress::from_hex_literal("0x42").unwrap()),
-    );
-    // call published module function returning two values: a u64 (42)
-    // and an address (0x42)
-    let response = call(
-        &mut storage,
-        &native_functions,
-        "M1",
-        "get_tuple",
-        GAS_BUDGET,
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-    )
-    .unwrap();
-    assert!(matches!(response.get(0).unwrap(), CallResult::U64(42),));
-    assert_eq!(
-        response.get(1).unwrap(),
-        &CallResult::Address(AccountAddress::from_hex_literal("0x42").unwrap()),
-    );
-
-    // call published module function returning a vector
-    let response = call(
-        &mut storage,
-        &native_functions,
-        "M1",
-        "get_vec",
-        GAS_BUDGET,
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-    )
-    .unwrap();
-    assert_eq!(response.get(0).unwrap(), &CallResult::U64Vec(vec![42, 7]),);
-
-    // call published module function returning a vector of vectors
-    let response = call(
-        &mut storage,
-        &native_functions,
-        "M1",
-        "get_vec_vec",
-        GAS_BUDGET,
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-    )
-    .unwrap();
-    assert_eq!(
-        response.get(0).unwrap(),
-        &CallResult::U64VecVec(vec![vec![42, 7]]),
-    );
 }

@@ -43,9 +43,10 @@ fn make_transfer_transaction(
             module: ident_str!("SUI").to_owned(),
             function: ident_str!("transfer").to_owned(),
             type_arguments: Vec::new(),
-            object_arguments: vec![object_ref],
-            shared_object_arguments: vec![],
-            pure_arguments: vec![bcs::to_bytes(&AccountAddress::from(recipient)).unwrap()],
+            arguments: vec![
+                CallArg::ImmOrOwnedObject(object_ref),
+                CallArg::Pure(bcs::to_bytes(&AccountAddress::from(recipient)).unwrap()),
+            ],
         })
     } else {
         SingleTransactionKind::Transfer(Transfer {

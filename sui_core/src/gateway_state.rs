@@ -137,9 +137,7 @@ pub trait GatewayAPI {
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         gas_object_ref: ObjectRef,
-        object_arguments: Vec<ObjectRef>,
-        shared_object_arguments: Vec<ObjectID>,
-        pure_arguments: Vec<Vec<u8>>,
+        arguments: Vec<CallArg>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -333,7 +331,7 @@ where
             .download_objects_from_authorities(mutated_object_refs)
             .await?;
         self.store.update_gateway_state(
-            &objects_by_kind,
+            objects_by_kind,
             mutated_objects,
             new_certificate.clone(),
             effects.clone(),
@@ -463,19 +461,16 @@ where
         let call = Self::try_get_move_call(&certificate)?;
         let signer = certificate.transaction.data.signer();
         let (gas_payment, _, _) = certificate.transaction.data.gas();
-        let (coin_object_id, _, _) =
-            call.object_arguments
-                .first()
-                .ok_or_else(|| SuiError::InconsistentGatewayResult {
+        let (coin_object_id, split_arg) = match call.arguments.as_slice() {
+            [CallArg::ImmOrOwnedObject((id, _, _)), CallArg::Pure(arg)] => (id, arg),
+            _ => {
+                return Err(SuiError::InconsistentGatewayResult {
                     error: "Malformed transaction data".to_string(),
-                })?;
-        let split_amounts =
-            call.pure_arguments
-                .first()
-                .ok_or_else(|| SuiError::InconsistentGatewayResult {
-                    error: "Malformed transaction data".to_string(),
-                })?;
-        let split_amounts: Vec<u64> = bcs::from_bytes(split_amounts)?;
+                }
+                .into())
+            }
+        };
+        let split_amounts: Vec<u64> = bcs::from_bytes(split_arg)?;
 
         if let ExecutionStatus::Failure { gas_cost: _, error } = effects.status {
             return Err(error.into());
@@ -510,12 +505,15 @@ where
         effects: TransactionEffects,
     ) -> Result<TransactionResponse, anyhow::Error> {
         let call = Self::try_get_move_call(&certificate)?;
-        let (primary_coin, _, _) =
-            call.object_arguments
-                .first()
-                .ok_or_else(|| SuiError::InconsistentGatewayResult {
+        let primary_coin = match call.arguments.first() {
+            Some(CallArg::ImmOrOwnedObject((id, _, _))) => id,
+            _ => {
+                return Err(SuiError::InconsistentGatewayResult {
                     error: "Malformed transaction data".to_string(),
-                })?;
+                }
+                .into())
+            }
+        };
         let (gas_payment, _, _) = certificate.transaction.data.gas();
 
         if let ExecutionStatus::Failure { gas_cost: _, error } = effects.status {
@@ -652,9 +650,7 @@ where
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         gas_object_ref: ObjectRef,
-        object_arguments: Vec<ObjectRef>,
-        shared_object_arguments: Vec<ObjectID>,
-        pure_arguments: Vec<Vec<u8>>,
+        arguments: Vec<CallArg>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
         let data = TransactionData::new_move_call(
@@ -664,9 +660,7 @@ where
             function,
             type_arguments,
             gas_object_ref,
-            object_arguments,
-            shared_object_arguments,
-            pure_arguments,
+            arguments,
             gas_budget,
         );
         Ok(data)
@@ -705,9 +699,10 @@ where
             coin::COIN_SPLIT_VEC_FUNC_NAME.to_owned(),
             vec![coin_type],
             gas_payment_ref,
-            vec![coin_object_ref],
-            vec![],
-            vec![bcs::to_bytes(&split_amounts)?],
+            vec![
+                CallArg::ImmOrOwnedObject(coin_object_ref),
+                CallArg::Pure(bcs::to_bytes(&split_amounts)?),
+            ],
             gas_budget,
         );
         Ok(data)
@@ -738,9 +733,10 @@ where
             coin::COIN_JOIN_FUNC_NAME.to_owned(),
             vec![coin_type],
             gas_payment_ref,
-            vec![primary_coin_ref, coin_to_merge_ref],
-            vec![],
-            vec![],
+            vec![
+                CallArg::ImmOrOwnedObject(primary_coin_ref),
+                CallArg::ImmOrOwnedObject(coin_to_merge_ref),
+            ],
             gas_budget,
         );
         Ok(data)

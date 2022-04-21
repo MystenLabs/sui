@@ -12,12 +12,12 @@ use move_core_types::identifier::Identifier;
 use sui::config::{PersistedConfig, WalletConfig};
 use sui::keystore::{Keystore, SuiKeystore};
 use sui::rest_gateway::responses::ObjectResponse;
-use sui::rpc_gateway::RpcGatewayServer;
 use sui::rpc_gateway::TransactionBytes;
 use sui::rpc_gateway::{Base64EncodedBytes, RpcGatewayClient};
+use sui::rpc_gateway::{RpcCallArg, RpcGatewayServer};
 use sui::rpc_gateway::{RpcGatewayImpl, SignedTransaction};
 use sui::sui_commands::SuiNetwork;
-use sui::sui_json::{resolve_move_function_args, SuiJsonValue};
+use sui::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui::{SUI_GATEWAY_CONFIG, SUI_WALLET_CONFIG};
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_framework::build_move_package_to_bytes;
@@ -143,7 +143,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let module = Identifier::new("ObjectBasics")?;
     let function = Identifier::new("create")?;
 
-    let (object_ids, pure_args) = resolve_move_function_args(
+    let json_args = resolve_move_function_args(
         &package,
         module.clone(),
         function.clone(),
@@ -152,11 +152,16 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
             SuiJsonValue::from_str(&format!("\"0x{}\"", address))?,
         ],
     )?;
-
-    let pure_args = pure_args
-        .into_iter()
-        .map(Base64EncodedBytes)
-        .collect::<Vec<_>>();
+    let mut args = Vec::with_capacity(json_args.len());
+    for json_arg in json_args {
+        args.push(match json_arg {
+            SuiJsonCallArg::Pure(bytes) => RpcCallArg::Pure(Base64EncodedBytes(bytes)),
+            SuiJsonCallArg::Object(id) => match http_client.get_object_info(id).await? {
+                ObjectRead::Exists(_, obj, _) if obj.is_shared() => RpcCallArg::SharedObject(id),
+                _ => RpcCallArg::ImmOrOwnedObject(id),
+            },
+        })
+    }
 
     let tx_data: TransactionBytes = http_client
         .move_call(
@@ -165,11 +170,9 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
             module,
             function,
             Vec::new(),
-            pure_args,
+            args,
             gas.0,
             1000,
-            object_ids,
-            Vec::new(),
         )
         .await?;
 
