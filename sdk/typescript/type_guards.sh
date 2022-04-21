@@ -3,9 +3,19 @@
 # generate TS type guards for project
 npx ts-auto-guard --export-all src/rpc/client.ts src/**.ts
 
-# this only works on macos due to sed differences, perhaps a node script should do this?
-# fix import of BN.js types on line 6
-sed -i '' '6s/"..\/node_modules\/@types\/bn";/"bn.js";/g' src/index.guard.ts
+second_arg=", _argumentName?: string"
+if [[ `uname` == "Darwin" ]]; then
+    # fix import of BN.js types
+    sed -i '' 's/"..\/node_modules\/@types\/bn";/"bn.js";/g' src/index.guard.ts
+    # remove the unsupported second argument from generated type guards
+    sed -i '' "s/${second_arg}//g" src/index.guard.ts
+    sed -i '' "s/${second_arg}//g" src/rpc/client.guard.ts
+else
+    # linux / GNU sed versions of same thing
+    sed -i 's/"..\/node_modules\/@types\/bn";/"bn.js";/g' src/index.guard.ts
+    sed -i "s/${second_arg}//g" src/index.guard.ts
+    sed -i "s/${second_arg}//g" src/rpc/client.guard.ts
+fi
 
 LICENSE="// Copyright (c) 2022, Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n";
 index="src/index.guard.ts"
