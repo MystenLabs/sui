@@ -2,14 +2,26 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::AuthorityState;
 use async_trait::async_trait;
-use futures::stream::BoxStream;
+use futures::lock::Mutex;
+use futures::stream::{self, BoxStream};
 use futures::StreamExt;
+use std::collections::VecDeque;
 use std::io;
+use std::sync::Arc;
 use sui_network::network::NetworkClient;
 use sui_network::transport::TcpDataStream;
 use sui_types::batch::UpdateItem;
 use sui_types::{error::SuiError, messages::*, serialize::*};
+
+#[cfg(test)]
+use sui_types::{
+    base_types::ObjectID,
+    committee::Committee,
+    crypto::{KeyPair, PublicKeyBytes},
+    object::Object,
+};
 
 static MAX_ERRORS: i32 = 10;
 
@@ -54,16 +66,16 @@ pub trait AuthorityAPI {
 pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoResponseItem, SuiError>>;
 
 #[derive(Clone)]
-pub struct AuthorityClient(NetworkClient);
+pub struct NetworkAuthorityClient(NetworkClient);
 
-impl AuthorityClient {
+impl NetworkAuthorityClient {
     pub fn new(network_client: NetworkClient) -> Self {
         Self(network_client)
     }
 }
 
 #[async_trait]
-impl AuthorityAPI for AuthorityClient {
+impl AuthorityAPI for NetworkAuthorityClient {
     /// Initiate a new transfer to a Sui or Primary account.
     async fn handle_transaction(
         &self,
@@ -138,7 +150,7 @@ impl AuthorityAPI for AuthorityClient {
         let stream = framed_read
             .map(|item| {
                 item
-                    // Convert io error to SuiCLient error
+                    // Convert io error to SuiClient error
                     .map_err(|err| SuiError::ClientIoError {
                         error: format!("io error: {:?}", err),
                     })
@@ -171,5 +183,144 @@ impl AuthorityAPI for AuthorityClient {
                 futures::future::ready(flag)
             });
         Ok(Box::pin(stream))
+    }
+}
+
+#[derive(Clone)]
+pub struct LocalAuthorityClient(pub Arc<Mutex<AuthorityState>>);
+
+#[async_trait]
+impl AuthorityAPI for LocalAuthorityClient {
+    async fn handle_transaction(
+        &self,
+        transaction: Transaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        let state = self.0.clone();
+        let result = state.lock().await.handle_transaction(transaction).await;
+        result
+    }
+
+    async fn handle_confirmation_transaction(
+        &self,
+        transaction: ConfirmationTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        let state = self.0.clone();
+        let result = state
+            .lock()
+            .await
+            .handle_confirmation_transaction(transaction)
+            .await;
+        result
+    }
+
+    async fn handle_account_info_request(
+        &self,
+        request: AccountInfoRequest,
+    ) -> Result<AccountInfoResponse, SuiError> {
+        let state = self.0.clone();
+
+        let result = state
+            .lock()
+            .await
+            .handle_account_info_request(request)
+            .await;
+        result
+    }
+
+    async fn handle_object_info_request(
+        &self,
+        request: ObjectInfoRequest,
+    ) -> Result<ObjectInfoResponse, SuiError> {
+        let state = self.0.clone();
+        let x = state.lock().await.handle_object_info_request(request).await;
+        x
+    }
+
+    /// Handle Object information requests for this account.
+    async fn handle_transaction_info_request(
+        &self,
+        request: TransactionInfoRequest,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        let state = self.0.clone();
+
+        let result = state
+            .lock()
+            .await
+            .handle_transaction_info_request(request)
+            .await;
+        result
+    }
+
+    /// Handle Batch information requests for this authority.
+    async fn handle_batch_stream(
+        &self,
+        request: BatchInfoRequest,
+    ) -> Result<BatchInfoResponseItemStream, io::Error> {
+        let state = self.0.clone();
+
+        let update_items = state.lock().await.handle_batch_info_request(request).await;
+
+        let (items, _): (VecDeque<_>, VecDeque<_>) = update_items.into_iter().unzip();
+        let stream = stream::iter(items.into_iter()).then(|mut item| async move {
+            let i = item.pop_front();
+            match i {
+                Some(i) => Ok(BatchInfoResponseItem(i)),
+                None => Result::Err(SuiError::BatchErrorSender),
+            }
+        });
+        Ok(Box::pin(stream))
+    }
+}
+
+impl LocalAuthorityClient {
+    #[cfg(test)]
+    pub async fn new(committee: Committee, address: PublicKeyBytes, secret: KeyPair) -> Self {
+        use crate::authority::AuthorityStore;
+        use std::{env, fs};
+        use sui_adapter::genesis;
+
+        fn system_maxfiles() -> usize {
+            fdlimit::raise_fd_limit().unwrap_or(256u64) as usize
+        }
+
+        fn max_files_client_tests() -> i32 {
+            (system_maxfiles() / 8).try_into().unwrap()
+        }
+
+        // Random directory
+        let dir = env::temp_dir();
+        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+        fs::create_dir(&path).unwrap();
+
+        let mut opts = rocksdb::Options::default();
+        opts.set_max_open_files(max_files_client_tests());
+        let store = Arc::new(AuthorityStore::open(path, Some(opts)));
+        let state = AuthorityState::new(
+            committee.clone(),
+            address,
+            Arc::pin(secret),
+            store,
+            genesis::clone_genesis_compiled_modules(),
+            &mut genesis::get_genesis_context(),
+        )
+        .await;
+        Self(Arc::new(Mutex::new(state)))
+    }
+
+    #[cfg(test)]
+    pub async fn new_with_objects(
+        committee: Committee,
+        address: PublicKeyBytes,
+        secret: KeyPair,
+        objects: Vec<Object>,
+    ) -> Self {
+        let client = Self::new(committee, address, secret).await;
+        {
+            let client_ref = client.0.as_ref().try_lock().unwrap();
+            for object in objects {
+                client_ref.insert_genesis_object(object).await;
+            }
+        }
+        client
     }
 }
