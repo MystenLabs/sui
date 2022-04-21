@@ -14,6 +14,7 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::parser::parse_type_tag;
 use serde::Serialize;
+use serde_json::json;
 use tracing::info;
 
 use sui_adapter::adapter::resolve_and_type_check;
@@ -27,10 +28,15 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects};
 use sui_types::object::ObjectRead::Exists;
 use sui_types::object::{Object, ObjectRead};
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 use crate::config::{Config, PersistedConfig, WalletConfig};
 use crate::keystore::Keystore;
 use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
+
+const EXAMPLE_NFT_NAME: &str = "Example NFT";
+const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the wallet Command Line Tool";
+const EXAMPLE_NFT_URL: &str = "ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty";
 
 #[derive(Parser)]
 #[clap(name = "", rename_all = "kebab-case", no_binary_name = true)]
@@ -200,6 +206,31 @@ pub enum WalletCommands {
         #[clap(long)]
         gas_budget: u64,
     },
+
+    /// Create an example NFT
+    #[clap(name = "create-example-nft")]
+    CreateExampleNFT {
+        /// Name of the NFT
+        #[clap(long)]
+        name: Option<String>,
+
+        /// Description of the NFT
+        #[clap(long)]
+        description: Option<String>,
+
+        /// Display url(e.g., an image url) of the NFT
+        #[clap(long)]
+        url: Option<String>,
+
+        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        /// If not provided, a gas object with at least gas_budget value will be selected
+        #[clap(long)]
+        gas: Option<ObjectID>,
+
+        /// Gas budget for this transfer
+        #[clap(long)]
+        gas_budget: Option<u64>,
+    },
 }
 
 pub struct SimpleTransactionSigner {
@@ -256,89 +287,10 @@ impl WalletCommands {
                 gas_budget,
                 args,
             } => {
-                let package_obj_info = context.gateway.get_object_info(*package).await?;
-                let package_obj = package_obj_info.object().clone()?;
-                let package_obj_ref = package_obj_info.reference().unwrap();
-
-                // These steps can potentially be condensed and moved into the client/manager level
-                // Extract the input args
-                let (object_ids, pure_args) = resolve_move_function_args(
-                    package_obj,
-                    module.clone(),
-                    function.clone(),
-                    args.clone(),
-                )?;
-
-                // Fetch all the objects needed for this call
-                let mut input_objs = vec![];
-                for obj_id in object_ids.clone() {
-                    input_objs.push(
-                        context
-                            .gateway
-                            .get_object_info(obj_id)
-                            .await?
-                            .into_object()?,
-                    );
-                }
-                let forbidden_gas_objects = BTreeSet::from_iter(object_ids.clone().into_iter());
-                let gas_object = context
-                    .choose_gas_for_wallet(*gas, *gas_budget, forbidden_gas_objects)
-                    .await?;
-                let sender = gas_object.owner.get_owner_address()?;
-
-                // Pass in the objects for a deeper check
-                let compiled_module = package_obj
-                    .data
-                    .try_as_package()
-                    .ok_or_else(|| anyhow!("Cannot get package from object"))?
-                    .deserialize_module(module)?;
-                resolve_and_type_check(
-                    &compiled_module,
-                    function,
-                    type_args,
-                    input_objs,
-                    pure_args.clone(),
-                )?;
-
-                // Fetch the object info for the gas obj
-                let gas_obj_ref = gas_object.compute_object_reference();
-
-                // Fetch the objects for the object args
-                let mut object_args_refs = Vec::new();
-                for obj_id in object_ids {
-                    let obj_info = context.gateway.get_object_info(obj_id).await?;
-                    object_args_refs.push(obj_info.object()?.compute_object_reference());
-                }
-
-                let data = context
-                    .gateway
-                    .move_call(
-                        sender,
-                        package_obj_ref,
-                        module.to_owned(),
-                        function.to_owned(),
-                        type_args.clone(),
-                        gas_obj_ref,
-                        object_args_refs,
-                        vec![],
-                        pure_args,
-                        *gas_budget,
-                    )
-                    .await?;
-                let signature = context
-                    .keystore
-                    .read()
-                    .unwrap()
-                    .sign(&sender, &data.to_bytes())?;
-                let (cert, effects) = context
-                    .gateway
-                    .execute_transaction(Transaction::new(data, signature))
-                    .await?
-                    .to_effect_response()?;
-
-                if matches!(effects.status, ExecutionStatus::Failure { .. }) {
-                    return Err(anyhow!("Error calling module: {:#?}", effects.status));
-                }
+                let (cert, effects) = call_move(
+                    package, module, function, type_args, gas, gas_budget, args, context,
+                )
+                .await?;
                 WalletCommandResult::Call(cert, effects)
             }
 
@@ -518,6 +470,40 @@ impl WalletCommands {
             }
             WalletCommands::ActiveAddress {} => {
                 WalletCommandResult::ActiveAddress(context.active_address().ok())
+            }
+            WalletCommands::CreateExampleNFT {
+                name,
+                description,
+                url,
+                gas,
+                gas_budget,
+            } => {
+                let args_json = json!([
+                    unwrap_or(name, EXAMPLE_NFT_NAME),
+                    unwrap_or(description, EXAMPLE_NFT_DESCRIPTION),
+                    unwrap_or(url, EXAMPLE_NFT_URL)
+                ]);
+                let mut args = vec![];
+                for a in args_json.as_array().unwrap() {
+                    args.push(SuiJsonValue::new(a.clone()).unwrap());
+                }
+                let (_, effects) = call_move(
+                    &ObjectID::from(SUI_FRAMEWORK_ADDRESS),
+                    &Identifier::new("DevNetNFT").unwrap(),
+                    &Identifier::new("mint").unwrap(),
+                    &[],
+                    gas,
+                    &gas_budget.unwrap_or(1000),
+                    &args,
+                    context,
+                )
+                .await?;
+                let ((nft_id, _, _), _) = effects
+                    .created
+                    .first()
+                    .ok_or_else(|| anyhow!("Failed to create NFT"))?;
+                let object_read = context.gateway.get_object_info(*nft_id).await?;
+                WalletCommandResult::CreateExampleNFT(object_read)
             }
         });
         // Sync all managed addresses
@@ -728,8 +714,113 @@ impl Display for WalletCommandResult {
                     None => write!(writer, "None")?,
                 };
             }
+            WalletCommandResult::CreateExampleNFT(object_read) => {
+                // TODO: display the content of the object
+                let object = unwrap_err_to_string(|| Ok(object_read.object()?));
+                writeln!(writer, "{}\n", "Successfully created an ExampleNFT:".bold())?;
+                writeln!(writer, "{}", object)?;
+            }
         }
         write!(f, "{}", writer)
+    }
+}
+
+async fn call_move(
+    package: &ObjectID,
+    module: &Identifier,
+    function: &Identifier,
+    type_args: &[TypeTag],
+    gas: &Option<ObjectID>,
+    gas_budget: &u64,
+    args: &[SuiJsonValue],
+    context: &mut WalletContext,
+) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+    let package_obj_info = context.gateway.get_object_info(*package).await?;
+    let package_obj = package_obj_info.object().clone()?;
+    let package_obj_ref = package_obj_info.reference().unwrap();
+
+    // These steps can potentially be condensed and moved into the client/manager level
+    // Extract the input args
+    let (object_ids, pure_args) =
+        resolve_move_function_args(package_obj, module.clone(), function.clone(), args.to_vec())?;
+
+    // Fetch all the objects needed for this call
+    let mut input_objs = vec![];
+    for obj_id in object_ids.clone() {
+        input_objs.push(
+            context
+                .gateway
+                .get_object_info(obj_id)
+                .await?
+                .into_object()?,
+        );
+    }
+    let forbidden_gas_objects = BTreeSet::from_iter(object_ids.clone().into_iter());
+    let gas_object = context
+        .choose_gas_for_wallet(*gas, *gas_budget, forbidden_gas_objects)
+        .await?;
+    let sender = gas_object.owner.get_owner_address()?;
+
+    // Pass in the objects for a deeper check
+    let compiled_module = package_obj
+        .data
+        .try_as_package()
+        .ok_or_else(|| anyhow!("Cannot get package from object"))?
+        .deserialize_module(module)?;
+    resolve_and_type_check(
+        &compiled_module,
+        function,
+        type_args,
+        input_objs,
+        pure_args.clone(),
+    )?;
+
+    // Fetch the object info for the gas obj
+    let gas_obj_ref = gas_object.compute_object_reference();
+
+    // Fetch the objects for the object args
+    let mut object_args_refs = Vec::new();
+    for obj_id in object_ids {
+        let obj_info = context.gateway.get_object_info(obj_id).await?;
+        object_args_refs.push(obj_info.object()?.compute_object_reference());
+    }
+
+    let data = context
+        .gateway
+        .move_call(
+            sender,
+            package_obj_ref,
+            module.to_owned(),
+            function.to_owned(),
+            type_args.to_vec(),
+            gas_obj_ref,
+            object_args_refs,
+            vec![],
+            pure_args,
+            *gas_budget,
+        )
+        .await?;
+    let signature = context
+        .keystore
+        .read()
+        .unwrap()
+        .sign(&sender, &data.to_bytes())?;
+    let (cert, effects) = context
+        .gateway
+        .execute_transaction(Transaction::new(data, signature))
+        .await?
+        .to_effect_response()?;
+
+    if matches!(effects.status, ExecutionStatus::Failure { .. }) {
+        return Err(anyhow!("Error calling module: {:#?}", effects.status));
+    }
+    Ok((cert, effects))
+}
+
+fn unwrap_or<'a>(val: &'a mut Option<String>, default: &'a str) -> &'a str {
+    match val {
+        Some(v) => v,
+        None => default,
     }
 }
 
@@ -803,4 +894,5 @@ pub enum WalletCommandResult {
     MergeCoin(MergeCoinResponse),
     Switch(SwitchResponse),
     ActiveAddress(Option<SuiAddress>),
+    CreateExampleNFT(ObjectRead),
 }
