@@ -215,7 +215,7 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
                             : styles.noaccommodate
                     }`}
                 >
-                    {suiObj.name && <h1>{suiObj.name}</h1>} {' '}
+                    {suiObj.name && <h1>{suiObj.name}</h1>} {' '}
                     {typeof nameKeyValue[0] === 'string' && (
                         <h1>{nameKeyValue}</h1>
                     )}
