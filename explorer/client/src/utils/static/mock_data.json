@@ -489,26 +489,11 @@
         },
         {
             "staticRecentTransactions": [
-                [
-                    0,
-                    "hI1m16cQkwErCDqbPyuV2ZtX4DZEel2lQTU1b1VJq0c="
-                ],
-                [
-                    1,
-                    "PmwIiZ9cq9mPSenH0s8FOr3xDqEoDqQIH7ATeuszTM4="
-                ],
-                [
-                    2,
-                    "QVLs+2OlnCROTCp6avhrfCCqKIcUbL6AteRSkoLuE8U="
-                ],
-                [
-                    3,
-                    "0X4CjesLYhfXITheZHEasvmQXYrk92lvhUkxF7cKhvU"
-                ],
-                [
-                    4,
-                    "zgfZRhRIzYGbadG3vYuF2I8MPDPPoJuEfEbj4nnW9hY="
-                ]
+                [0, "hI1m16cQkwErCDqbPyuV2ZtX4DZEel2lQTU1b1VJq0c="],
+                [1, "PmwIiZ9cq9mPSenH0s8FOr3xDqEoDqQIH7ATeuszTM4="],
+                [2, "QVLs+2OlnCROTCp6avhrfCCqKIcUbL6AteRSkoLuE8U="],
+                [3, "0X4CjesLYhfXITheZHEasvmQXYrk92lvhUkxF7cKhvU"],
+                [4, "zgfZRhRIzYGbadG3vYuF2I8MPDPPoJuEfEbj4nnW9hY="]
             ]
         }
     ]
