@@ -15,8 +15,8 @@ rocksdb = { version = "0.18.0", features = ["snappy", "lz4", "zstd", "zlib"], de
 serde = { version = "1.0.136", features = ["derive"] }
 thiserror = "1.0.30"
 tokio = { version = "1.17.0", features = ["sync"] }
-tokio-util = { version = "0.7.0", features = ["codec"] }
-tracing = "0.1.31"
+tokio-util = { version = "0.7.1", features = ["codec"] }
+tracing = "0.1.34"
 config = { path = "../config" }
 consensus = { path = "../consensus" }
 crypto = { path = "../crypto" }

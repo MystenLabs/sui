@@ -6,8 +6,8 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.55"
-async-trait = "0.1.52"
+anyhow = "1.0.57"
+async-trait = "0.1.53"
 bincode = "1.3.3"
 bytes = "1.1.0"
 cfg-if = "1.0.0"
@@ -17,10 +17,10 @@ rand = "0.7.3"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "808de09203d147b43d59114b8afd9e51cbcf5778" }
 thiserror = "1.0.30"
 tokio = { version = "1.17.0", features = ["full"] }
-tokio-util = { version = "0.7.0", features = ["codec"] }
-tracing = { version = "0.1.31", features = ["log"] }
-tracing-log = "0.1.2"
-tracing-subscriber = { version = "0.3.9", features = ["time", "env-filter"] }
+tokio-util = { version = "0.7.1", features = ["codec"] }
+tracing = { version = "0.1.34", features = ["log"] }
+tracing-log = "0.1.3"
+tracing-subscriber = { version = "0.3.11", features = ["time", "env-filter"] }
 
 config = { path = "../config" }
 consensus = { path = "../consensus" }
@@ -33,7 +33,7 @@ worker = { path = "../worker" }
 [dev-dependencies]
 ed25519-dalek = "1.0.1"
 hex = "0.4.3"
-pretty_assertions = "1.2.0"
+pretty_assertions = "1.2.1"
 serde-reflection = "0.3.5"
 serde_yaml = "0.8.23"
 structopt = "0.3.26"

@@ -8,9 +8,9 @@ publish = false
 
 [dependencies]
 base64 = "0.13.0"
-base64ct = { version = "1.3.3", features = ["alloc"] }
+base64ct = { version = "1.5.0", features = ["alloc"] }
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
-eyre = "0.6.7"
+eyre = "0.6.8"
 rand = { version = "0.7.3", features = ["std"] }
 serde = { version = "1.0.136", features = ["derive"] }
 signature = "1.5.0"
@@ -28,10 +28,10 @@ ark-serialize = { version = "0.3.0", features = ["std"], optional = true }
 ark-std = { version = "0.3.0", features = ["std"], optional = true }
 blake2 = "0.9"
 blst = "0.3.6"
-once_cell = "1.9.0"
+once_cell = "1.10.0"
 readonly = "0.2.0"
 serde_bytes = "0.11.5"
-serde_with = { version = "1.12.0", optional = true }
+serde_with = { version = "1.12.1", optional = true }
 
 [[bench]]
 name = "crypto"
