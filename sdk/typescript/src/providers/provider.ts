@@ -1,30 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-  type as pick,
-  string,
-  Infer,
-  number,
-  enums,
-  unknown,
-  union,
-  array,
-  tuple,
-} from 'superstruct';
-
-///////////////////////////////
-// Exported Types
-/*
-export type ObjectRef = Infer<typeof ObjectRef>;
-export type ObjectExistsInfo = Infer<typeof ObjectExistsInfo>;
-export type ObjectNotExistsInfo = Infer<typeof ObjectNotExistsInfo>;
-export type ObjectStatus = Infer<typeof ObjectStatus>;
-export type GetObjectInfoResponse = Infer<typeof GetObjectInfoResponse>;
-export type GatewayTxSeqNumber = Infer<typeof GatewayTxSeqNumber>;
-export type TransactionDigest = Infer<typeof TransactionDigest>;
-export type GetTxnDigestsResponse = Infer<typeof GetTxnDigestsResponse>;
-*/
 
 export interface SignedTransaction {
   txBytes: string;
