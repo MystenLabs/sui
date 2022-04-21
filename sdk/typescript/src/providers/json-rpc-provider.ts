@@ -6,13 +6,17 @@ import { JsonRpcClient } from '../rpc/client';
 import { array, number, type as pick } from 'superstruct';
 import {
   GetObjectInfoResponse,
+  GetObjectInfoResponseSchema,
   ObjectRef,
-  TransactionDigest,
+  ObjectRefSchema,
 } from '../types/objects';
 import {
   CertifiedTransaction,
+  CertifiedTransactionSchema,
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
+  GetTxnDigestsResponseSchema,
+  TransactionDigest,
 } from '../types/transactions';
 
 export class JsonRpcProvider extends Provider {
@@ -31,10 +35,10 @@ export class JsonRpcProvider extends Provider {
   // Objects
   async getOwnedObjectRefs(address: string): Promise<ObjectRef[]> {
     try {
-      const resp = await this.client.requestWithType(
+      const resp = await this.client.requestWithValidation(
         'sui_getOwnedObjects',
         [address],
-        pick({ objects: array(ObjectRef) })
+        pick({ objects: array(ObjectRefSchema) })
       );
       return resp.objects;
     } catch (err) {
@@ -46,10 +50,10 @@ export class JsonRpcProvider extends Provider {
 
   async getObjectInfo(objectId: string): Promise<GetObjectInfoResponse> {
     try {
-      const resp = await this.client.requestWithType(
+      const resp = await this.client.requestWithValidation(
         'sui_getObjectTypedInfo',
         [objectId],
-        GetObjectInfoResponse
+        GetObjectInfoResponseSchema
       );
       return resp;
     } catch (err) {
@@ -62,10 +66,10 @@ export class JsonRpcProvider extends Provider {
     digest: TransactionDigest
   ): Promise<CertifiedTransaction> {
     try {
-      const resp = await this.client.requestWithType(
+      const resp = await this.client.requestWithValidation(
         'sui_getTransaction',
         [digest],
-        CertifiedTransaction
+        CertifiedTransactionSchema
       );
       return resp;
     } catch (err) {
@@ -81,7 +85,7 @@ export class JsonRpcProvider extends Provider {
 
   async getTotalTransactionNumber(): Promise<number> {
     try {
-      const resp = await this.client.requestWithType(
+      const resp = await this.client.requestWithValidation(
         'sui_getTotalTransactionNumber',
         [],
         number()
@@ -97,10 +101,10 @@ export class JsonRpcProvider extends Provider {
     end: GatewayTxSeqNumber
   ): Promise<GetTxnDigestsResponse> {
     try {
-      return await this.client.requestWithType(
+      return await this.client.requestWithValidation(
         'sui_getTransactionsInRange',
         [start, end],
-        GetTxnDigestsResponse
+        GetTxnDigestsResponseSchema
       );
     } catch (err) {
       throw new Error(
@@ -111,10 +115,10 @@ export class JsonRpcProvider extends Provider {
 
   async getRecentTransactions(count: number): Promise<GetTxnDigestsResponse> {
     try {
-      return await this.client.requestWithType(
+      return await this.client.requestWithValidation(
         'sui_getRecentTransactions',
         [count],
-        GetTxnDigestsResponse
+        GetTxnDigestsResponseSchema
       );
     } catch (err) {
       throw new Error(
