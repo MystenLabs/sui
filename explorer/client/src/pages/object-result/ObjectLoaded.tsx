@@ -9,76 +9,79 @@ import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
 import { type AddressOwner } from '../../utils/api/SuiRpcClient';
 import {
-    extractOwnerData, trimStdLibPrefix, _toSpace,
+    extractOwnerData,
+    trimStdLibPrefix,
+    _toSpace,
 } from '../../utils/stringUtils';
 import { type DataType } from './ObjectResultType';
 
 import styles from './ObjectResult.module.css';
 import { GetObjectInfoResponse } from 'sui.js';
-import { checkIsIDType, hasBytesField, hasVecField, checkVecOfSingleID, isSuiPropertyType } from '../../utils/typeChecks';
+import {
+    checkIsIDType,
+    hasBytesField,
+    hasVecField,
+    checkVecOfSingleID,
+    isSuiPropertyType,
+} from '../../utils/typeChecks';
 import { isString } from 'util';
 
-
 function isString(obj: any): obj is string {
-    return typeof(obj) === 'string';
+    return typeof obj === 'string';
 }
 
-function renderConnectedEntity(key: string, value: any, index1: number): JSX.Element {
+function renderConnectedEntity(
+    key: string,
+    value: any,
+    index1: number
+): JSX.Element {
     return (
-    <div key={`ConnectedEntity-${index1}`}>
-        <div>{_toSpace(key)}</div>
-        {hasBytesField(value) && (
-            <Longtext
-                text={value.bytes}
-                category="objects"
-            />
-        )}
-        {hasVecField(value) && (
-            <div>
-                {value?.vec.map(
-                    (
-                        value2: {
-                            bytes: string;
-                        },
-                        index2: number
-                    ) => (
-                        <Longtext
-                            text={
-                                value2.bytes
-                            }
-                            category="objects"
-                            key={`ConnectedEntity-${index1}-${index2}`}
-                        />
-                    )
-                )}
-            </div>
-        )}
-        {checkVecOfSingleID(value) && (
-            <div>
-                {value.map(
-                    (
-                        value2: {
-                            bytes: string;
-                        },
-                        index2: number
-                    ) => (
-                        <Longtext
-                            text={
-                                value2.bytes
-                            }
-                            category="objects"
-                            key={`ConnectedEntity-${index1}-${index2}`}
-                        />
-                    )
-                )}
-            </div>
-        )}
-    </div>
-    )
+        <div key={`ConnectedEntity-${index1}`}>
+            <div>{_toSpace(key)}</div>
+            {hasBytesField(value) && (
+                <Longtext text={value.bytes} category="objects" />
+            )}
+            {hasVecField(value) && (
+                <div>
+                    {value?.vec.map(
+                        (
+                            value2: {
+                                bytes: string;
+                            },
+                            index2: number
+                        ) => (
+                            <Longtext
+                                text={value2.bytes}
+                                category="objects"
+                                key={`ConnectedEntity-${index1}-${index2}`}
+                            />
+                        )
+                    )}
+                </div>
+            )}
+            {checkVecOfSingleID(value) && (
+                <div>
+                    {value.map(
+                        (
+                            value2: {
+                                bytes: string;
+                            },
+                            index2: number
+                        ) => (
+                            <Longtext
+                                text={value2.bytes}
+                                category="objects"
+                                key={`ConnectedEntity-${index1}-${index2}`}
+                            />
+                        )
+                    )}
+                </div>
+            )}
+        </div>
+    );
 }
 
 function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
-
     // TODO - remove all '@ts-ignore' when type defs are fixed
     //@ts-ignore
     const suiObj = data.details.object;
@@ -109,9 +112,10 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
         [showConnectedEntities]
     );
 
-
     const suiObjName = suiObj['name'];
-    const nonNameEntries = Object.entries(suiObj).filter(([k, _]) => k === 'name');
+    const nonNameEntries = Object.entries(suiObj).filter(
+        ([k, _]) => k === 'name'
+    );
 
     const ownedObjects: [string, any][] = nonNameEntries.filter(
         ([key, value]) => checkIsIDType(key, value)
@@ -125,7 +129,7 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
     return (
         <>
             <div className={styles.resultbox}>
-                {(suiObj?.display && isString(suiObj.display)) (
+                {(suiObj?.display && isString(suiObj.display))(
                     <DisplayBox data={suiObj as { display: string }} />
                 )}
                 <div
@@ -135,10 +139,8 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
                             : styles.noaccommodate
                     }`}
                 >
-                    {suiObj.name && <h1>{suiObj.name}</h1>} {' '}
-                    {typeof suiObjName === 'string' && (
-                        <h1>{suiObjName}</h1>
-                    )}
+                    {suiObj.name && <h1>{suiObj.name}</h1>}{' '}
+                    {typeof suiObjName === 'string' && <h1>{suiObjName}</h1>}
                     <h2
                         className={styles.clickableheader}
                         onClick={clickSetShowDescription}
@@ -246,7 +248,7 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
                             >
                                 Properties {showProperties ? '' : '+'}
                             </h2>
-                            {showProperties &&  (
+                            {showProperties && (
                                 <div className={styles.propertybox}>
                                     {properties.map(([key, value], index) => (
                                         <div key={`property-${index}`}>
@@ -268,9 +270,11 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
                             </h2>
                             {showConnectedEntities && (
                                 <div className={theme.textresults}>
-                                    {ownedObjects.map(
-                                        ([key, value], index1) => (
-                                            renderConnectedEntity(key, value, index1)
+                                    {ownedObjects.map(([key, value], index1) =>
+                                        renderConnectedEntity(
+                                            key,
+                                            value,
+                                            index1
                                         )
                                     )}
                                 </div>
