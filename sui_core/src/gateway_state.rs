@@ -35,6 +35,10 @@ use crate::{
 
 use self::gateway_responses::*;
 
+#[cfg(test)]
+#[path = "unit_tests/gateway_state_tests.rs"]
+mod gateway_state_tests;
+
 pub mod gateway_responses;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
@@ -63,11 +67,18 @@ impl<A> GatewayState<A> {
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
     ) -> SuiResult<Self> {
+        Self::new_with_authorities(path, AuthorityAggregator::new(committee, authority_clients))
+    }
+
+    pub fn new_with_authorities(
+        path: PathBuf,
+        authorities: AuthorityAggregator<A>,
+    ) -> SuiResult<Self> {
         let store = Arc::new(GatewayStore::open(path, None));
         let next_tx_seq_number = AtomicU64::new(store.next_sequence_number()?);
         Ok(Self {
             store,
-            authorities: AuthorityAggregator::new(committee, authority_clients),
+            authorities,
             next_tx_seq_number,
         })
     }

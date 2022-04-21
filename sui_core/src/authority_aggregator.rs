@@ -29,8 +29,8 @@ const OBJECT_DOWNLOAD_CHANNEL_BOUND: usize = 1024;
 pub const DEFAULT_RETRIES: usize = 4;
 
 #[cfg(test)]
-#[path = "unit_tests/gateway_tests.rs"]
-mod gateway_tests;
+#[path = "unit_tests/authority_aggregator_tests.rs"]
+pub mod authority_aggregator_tests;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
@@ -1063,21 +1063,6 @@ where
         Err(SuiError::ErrorWhileRequestingCertificate)
     }
 
-    #[cfg(test)]
-    async fn request_certificate(
-        &self,
-        _sender: SuiAddress,
-        object_id: ObjectID,
-        _sequence_number: SequenceNumber,
-    ) -> Result<CertifiedTransaction, SuiError> {
-        let (object_map, transaction_map) = self
-            .get_object_by_id(object_id, Duration::from_secs(10))
-            .await?;
-
-        let (_obj_ref, tx_digest) = object_map.keys().last().unwrap();
-        Ok(transaction_map[tx_digest].clone())
-    }
-
     /// Find the highest sequence number that is known to a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
@@ -1088,22 +1073,6 @@ where
             .unwrap(); // Not safe, but want to blow up if testing.
         let top_ref = object_infos.keys().last().unwrap().0;
         top_ref.1
-    }
-
-    /// Return owner address and sequence number of an object backed by a quorum of authorities.
-    /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
-    /// This function doesn't work for shared objects that don't have an exclusive owner.
-    #[cfg(test)]
-    async fn get_latest_owner(&self, object_id: ObjectID) -> (SuiAddress, SequenceNumber) {
-        let (object_infos, _certificates) = self
-            .get_object_by_id(object_id, Duration::from_secs(60))
-            .await
-            .unwrap(); // Not safe, but want to blow up if testing.
-        let (top_ref, obj) = object_infos.iter().last().unwrap();
-        (
-            obj.0.as_ref().unwrap().get_single_owner().unwrap(),
-            top_ref.0 .1,
-        )
     }
 
     pub async fn execute_transaction(
