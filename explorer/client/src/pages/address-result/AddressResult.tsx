@@ -98,11 +98,11 @@ function AddressResultInternetAPI({
     useEffect(() => {
         if (addressID === undefined) return;
 
-        rpc.getAddressObjects(addressID as string)
-            .then((json) => {
+        rpc.getOwnedObjectRefs(addressID)
+            .then(objRefs => {
                 setData({
                     id: addressID,
-                    objects: json,
+                    objects: objRefs,
                     loadState: 'loaded',
                 });
             })

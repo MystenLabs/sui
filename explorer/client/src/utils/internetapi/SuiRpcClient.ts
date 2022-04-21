@@ -2,86 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { tryGetRpcSetting } from './rpcSetting';
+import { JsonRpcProvider } from 'sui.js';
 
-export class SuiRpcClient {
-    public readonly host: string;
-
-    readonly moveCallUrl: string;
-    readonly addressesUrl: string;
-
-    // TODO - url type for host
-    public constructor(host: string) {
-        this.host = host;
-        this.moveCallUrl = `${host}/wallet/call`;
-        this.addressesUrl = `${host}/addresses`;
-    }
-
-    public getAddresses = async (): Promise<Addresses> =>
-        this.fetchJson(this.addressesUrl);
-
-    public getAddressObjects = async (address: AddressHexStr) => {
-        const url = `${this.host}/objects?address=${address}`;
-        return this.fetchJson(url);
-    };
-
-    public async getObjectInfo(
-        id: string
-    ): Promise<ObjectInfoResponse<object>> {
-        const url = `${this.host}/object_info?objectId=${id}`;
-        return this.fetchJson(url);
-    }
-
-    public async getObjectInfoT<T extends object>(
-        id: string
-    ): Promise<ObjectInfoResponse<T>> {
-        return (await this.getObjectInfo(id)) as ObjectInfoResponse<T>;
-    }
-
-    // TODO - more detailed type for input
-    public async moveCall<TIn extends object | any[]>(
-        input: TIn
-    ): Promise<MoveCallResponse> {
-        return this.postJson(this.moveCallUrl, input);
-    }
-
-    async fetchJson(url: string): Promise<any> {
-        let response = await fetch(url, { mode: 'cors' });
-        switch (response.status) {
-            case 200:
-                return response.json();
-            case 424:
-                throw new Error(
-                    '424 response status - likely requesting missing data!'
-                );
-            default:
-                throw new Error(
-                    `unhandled HTTP response code: ${response.status}`
-                );
-        }
-    }
-
-    async postJson(url: string, body: object): Promise<any> {
-        const response = await fetch(url, {
-            mode: 'cors',
-            method: 'POST',
-            body: JSON.stringify(body),
-            headers: { 'Content-Type': 'application/json' },
-        });
-        switch (response.status) {
-            case 200:
-                return response.json();
-            default:
-                throw new Error(
-                    `non-200 response to POST ${this.moveCallUrl}: ${response.status}`
-                );
-        }
-    }
-}
 
 export type AddressBytes = number[];
 export type Signature = number[];
-
-type AddressHexStr = string;
 
 export type AddressOwner = { AddressOwner: AddressBytes };
 type ObjectOwner = { ObjectOwner: AddressBytes };
@@ -176,4 +101,5 @@ export interface AddressObjectSummary {
 }
 
 const rpcUrl = tryGetRpcSetting() ?? 'https://demo-rpc.sui.io';
-export const DefaultRpcClient = new SuiRpcClient(rpcUrl);
+
+export const DefaultRpcClient = new JsonRpcProvider(rpcUrl);

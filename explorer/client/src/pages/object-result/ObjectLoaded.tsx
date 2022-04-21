@@ -11,9 +11,13 @@ import {
     trimStdLibPrefix,
 } from '../../utils/stringUtils';
 import DisplayBox from './DisplayBox';
-import { type DataType } from './ObjectResultType';
 
 import styles from './ObjectResult.module.css';
+import { GetObjectInfoResponse } from 'sui.js';
+import { Loadable } from '../../utils/loadState';
+
+type DataType = Loadable<GetObjectInfoResponse>;
+
 
 function ObjectLoaded({ data }: { data: DataType }) {
     // TODO - restore or remove this functionality
