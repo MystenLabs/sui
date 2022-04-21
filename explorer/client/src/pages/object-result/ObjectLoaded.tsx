@@ -5,9 +5,8 @@ import { useEffect, useState, useCallback } from 'react';
 
 import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
-import { type AddressOwner } from '../../utils/internetapi/DefaultRpcClient';
 import {
-    asciiFromNumberBytes, extractOwnerData, trimStdLibPrefix,
+    extractOwnerData, trimStdLibPrefix, _toSpace,
 } from '../../utils/stringUtils';
 import DisplayBox from './DisplayBox';
 
@@ -46,7 +45,7 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
         () => setShowConnectedEntities(!showConnectedEntities),
         [showConnectedEntities]
     );
-    const prepLabel = (label: string) => label.split('_').join(' ');
+    const prepLabel = _toSpace;
     const checkIsPropertyType = (value: any) =>
         ['number', 'string'].includes(typeof value);
 

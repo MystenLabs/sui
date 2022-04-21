@@ -48,6 +48,8 @@ const extractAddressOwner = (addrOwner: number[]): string | null => {
     return asciiFromNumberBytes(addrOwner);
 };
 
+export const _toSpace = (str: string) => str.split('_').join(' ')
+
 /* Currently unused but potentially useful:
  *
  * export const isValidHttpUrl = (url: string) => {
