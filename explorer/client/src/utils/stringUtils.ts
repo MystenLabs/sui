@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { AddressOwner } from "./internetapi/DefaultRpcClient";
+
 export function asciiFromNumberBytes(bytes: number[]) {
     return bytes.map((n) => String.fromCharCode(n)).join('');
 }
@@ -18,6 +20,33 @@ export function hexToAscii(hex: string) {
 
 export const trimStdLibPrefix = (str: string): string =>
     str.replace(/^0x2::/, '');
+
+const addrOwnerPattern = /^AddressOwner\(k#(.*)\)$/;
+const singleOwnerPattern = /^SingleOwner\(k#(.*)\)$/;
+export const extractOwnerData = (owner: string | AddressOwner): string => {
+    switch (typeof owner) {
+        case 'string':
+            const addrExec = addrOwnerPattern.exec(owner);
+            if (addrExec !== null)
+                return addrExec[1];
+
+            const result = singleOwnerPattern.exec(owner);
+            return result ? result[1] : '';
+        case 'object':
+            if ('AddressOwner' in owner) {
+                let ownerId = extractAddressOwner(owner.AddressOwner);
+                return ownerId ? ownerId : '';
+            }
+            return '';
+        default:
+            return '';
+    }
+};
+
+// TODO - this should be removed or updated, now that we don't use number[]
+const extractAddressOwner = (addrOwner: number[]): string | null => {
+    return asciiFromNumberBytes(addrOwner);
+};
 
 /* Currently unused but potentially useful:
  *

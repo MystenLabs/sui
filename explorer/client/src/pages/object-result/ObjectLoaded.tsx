@@ -7,7 +7,7 @@ import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
 import { type AddressOwner } from '../../utils/internetapi/DefaultRpcClient';
 import {
-    asciiFromNumberBytes, trimStdLibPrefix,
+    asciiFromNumberBytes, extractOwnerData, trimStdLibPrefix,
 } from '../../utils/stringUtils';
 import DisplayBox from './DisplayBox';
 
@@ -61,42 +61,12 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
     const checkVecIDs = (value: any) => value?.vec;
     const checkVecOfSingleID = (value: any) =>
         Array.isArray(value) && value.length > 0 && value[0]?.bytes;
-    const addrOwnerPattern = /^AddressOwner\(k#/;
-    const endParensPattern = /\){1}$/;
+
 
     //TODO - improve move code handling:
     // const isMoveVecType = (value: { vec?: [] }) => Array.isArray(value?.vec);
 
-    const extractOwnerData = (owner: string | AddressOwner): string => {
-        switch (typeof owner) {
-            case 'string':
-                if (addrOwnerPattern.test(owner)) {
-                    let ownerId = getAddressOwnerId(owner);
-                    return ownerId ? ownerId : '';
-                }
-                const singleOwnerPattern = /SingleOwner\(k#(.*)\)/;
-                const result = singleOwnerPattern.exec(owner);
-                return result ? result[1] : '';
-            case 'object':
-                if ('AddressOwner' in owner) {
-                    let ownerId = extractAddressOwner(owner.AddressOwner);
-                    return ownerId ? ownerId : '';
-                }
-                return '';
-            default:
-                return '';
-        }
-    };
-    const getAddressOwnerId = (addrOwner: string): string | null => {
-        if (
-            !addrOwnerPattern.test(addrOwner) ||
-            !endParensPattern.test(addrOwner)
-        )
-            return null;
 
-        let str = addrOwner.replace(addrOwnerPattern, '');
-        return str.replace(endParensPattern, '');
-    };
 
     const extractAddressOwner = (addrOwner: number[]): string | null => {
         return asciiFromNumberBytes(addrOwner);
