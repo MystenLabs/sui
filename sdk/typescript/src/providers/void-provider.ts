@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  Provider,
-  ObjectRef,
-  SignedTransaction,
-  TransactionResponse,
   GetObjectInfoResponse,
-  GetTxnDigestsResponse,
+  ObjectRef,
+  TransactionDigest,
+} from '../types/objects';
+import {
+  CertifiedTransaction,
   GatewayTxSeqNumber,
-} from './provider';
+  GetTxnDigestsResponse,
+} from '../types/transactions';
+import { Provider, SignedTransaction, TransactionResponse } from './provider';
 
 export class VoidProvider extends Provider {
   // Objects
@@ -22,6 +24,12 @@ export class VoidProvider extends Provider {
   }
 
   // Transactions
+  async getTransaction(
+    _digest: TransactionDigest
+  ): Promise<CertifiedTransaction> {
+    throw this.newError('getTransaction');
+  }
+
   async executeTransaction(
     _txn: SignedTransaction
   ): Promise<TransactionResponse> {

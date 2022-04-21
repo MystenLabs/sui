@@ -1,17 +1,19 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-  Provider,
-  ObjectRef,
-  SignedTransaction,
-  TransactionResponse,
-  GetObjectInfoResponse,
-  GetTxnDigestsResponse,
-  GatewayTxSeqNumber,
-} from './provider';
+import { Provider, SignedTransaction, TransactionResponse } from './provider';
 import { JsonRpcClient } from '../rpc/client';
 import { array, number, type as pick } from 'superstruct';
+import {
+  GetObjectInfoResponse,
+  ObjectRef,
+  TransactionDigest,
+} from '../types/objects';
+import {
+  CertifiedTransaction,
+  GatewayTxSeqNumber,
+  GetTxnDigestsResponse,
+} from '../types/transactions';
 
 export class JsonRpcProvider extends Provider {
   private client: JsonRpcClient;
@@ -56,6 +58,21 @@ export class JsonRpcProvider extends Provider {
   }
 
   // Transactions
+  async getTransaction(
+    digest: TransactionDigest
+  ): Promise<CertifiedTransaction> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getTransaction',
+        [digest],
+        CertifiedTransaction
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error getting transaction: ${err} for digest ${digest}`);
+    }
+  }
+
   async executeTransaction(
     _txn: SignedTransaction
   ): Promise<TransactionResponse> {

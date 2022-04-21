@@ -2,27 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  type as pick,
-  string,
-  Infer,
-  number,
-  enums,
-  unknown,
-  union,
-  array,
-  tuple,
-} from 'superstruct';
+  GetObjectInfoResponse,
+  ObjectRef,
+  TransactionDigest,
+} from '../types/objects';
+import {
+  CertifiedTransaction,
+  GatewayTxSeqNumber,
+  GetTxnDigestsResponse,
+} from '../types/transactions';
 
 ///////////////////////////////
 // Exported Types
-export type ObjectRef = Infer<typeof ObjectRef>;
-export type ObjectExistsInfo = Infer<typeof ObjectExistsInfo>;
-export type ObjectNotExistsInfo = Infer<typeof ObjectNotExistsInfo>;
-export type ObjectStatus = Infer<typeof ObjectStatus>;
-export type GetObjectInfoResponse = Infer<typeof GetObjectInfoResponse>;
-export type GatewayTxSeqNumber = Infer<typeof GatewayTxSeqNumber>;
-export type TransactionDigest = Infer<typeof TransactionDigest>;
-export type GetTxnDigestsResponse = Infer<typeof GetTxnDigestsResponse>;
 
 export interface SignedTransaction {
   txBytes: string;
@@ -48,6 +39,14 @@ export abstract class Provider {
   abstract getObjectInfo(objectId: string): Promise<GetObjectInfoResponse>;
 
   // Transactions
+
+  /**
+   * Get Transaction Details from a digest
+   */
+  abstract getTransaction(
+    digest: TransactionDigest
+  ): Promise<CertifiedTransaction>;
+
   /**
    * Get transaction digests for a given range
    *
@@ -77,32 +76,3 @@ export abstract class Provider {
 
   // TODO: add more interface methods
 }
-
-export const TransactionDigest = string();
-export const GatewayTxSeqNumber = number();
-
-export const ObjectRef = pick({
-  digest: TransactionDigest,
-  objectId: string(),
-  version: number(),
-});
-
-export const ObjectExistsInfo = pick({
-  objectRef: ObjectRef,
-  object: unknown(),
-});
-
-export const ObjectNotExistsInfo = pick({
-  objectId: string(),
-});
-
-export const ObjectStatus = enums(['Exists', 'NotExists', 'Deleted']);
-
-export const GetObjectInfoResponse = pick({
-  status: ObjectStatus,
-  details: union([ObjectExistsInfo, ObjectNotExistsInfo, ObjectRef]),
-});
-
-export const GetTxnDigestsResponse = array(
-  tuple([GatewayTxSeqNumber, TransactionDigest])
-);
