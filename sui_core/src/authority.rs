@@ -383,6 +383,7 @@ impl AuthorityState {
         certificate: CertifiedTransaction,
         last_consensus_index: ExecutionIndices,
     ) -> SuiResult<()> {
+        println!("AUTHORITY_STATE: 0");
         // Ensure it is a shared object certificate
         if !certificate.transaction.contains_shared_object() {
             log::debug!(
@@ -392,6 +393,7 @@ impl AuthorityState {
             return Ok(());
         }
 
+        println!("AUTHORITY_STATE: 1");
         // Ensure it is the first time we see this certificate.
         let transaction_digest = *certificate.digest();
         if self._database.sequenced(
@@ -404,7 +406,9 @@ impl AuthorityState {
         }
 
         // Check the certificate.
+        println!("AUTHORITY_STATE: 2");
         certificate.check(&self.committee)?;
+        println!("AUTHORITY_STATE: 3");
 
         // Persist the certificate since we are about to lock one or more shared object.
         // We thus need to make sure someone (if not the client) can continue the protocol.
@@ -815,7 +819,7 @@ impl ModuleResolver for AuthorityState {
 
 #[async_trait]
 impl ExecutionState for AuthorityState {
-    type Transaction = CertifiedTransaction;
+    type Transaction = ConsensusTransaction;
     type Error = SuiError;
 
     async fn handle_consensus_transaction(
@@ -823,7 +827,12 @@ impl ExecutionState for AuthorityState {
         execution_indices: ExecutionIndices,
         transaction: Self::Transaction,
     ) -> Result<(), Self::Error> {
-        self.handle_consensus_certificate(transaction, execution_indices)
+        println!("EXECUTION_STATE: 0");
+        let certificate = match transaction {
+            ConsensusTransaction::UserTransaction(certificate) => certificate,
+        };
+        println!("EXECUTION_STATE: 1");
+        self.handle_consensus_certificate(certificate, execution_indices)
             .await
     }
 

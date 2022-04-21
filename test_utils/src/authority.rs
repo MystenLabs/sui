@@ -44,7 +44,7 @@ pub fn test_authority_configs() -> Vec<AuthorityPrivateInfo> {
 /// Make a test authority state for each committee member.
 pub async fn test_authority_states<I>(objects: I) -> Vec<AuthorityState>
 where
-    I: Iterator<Item = Object> + Clone,
+    I: IntoIterator<Item = Object> + Clone,
 {
     let committee = test_committee();
     let mut authorities = Vec::new();
@@ -69,11 +69,10 @@ where
 }
 
 /// Spawn all authorities in the test committee into a separate tokio task.
-pub async fn spawn_test_authorities<I>(objects: I)
+pub async fn spawn_test_authorities<I>(objects: I, configs: &[AuthorityPrivateInfo])
 where
-    I: Iterator<Item = Object> + Clone,
+    I: IntoIterator<Item = Object> + Clone,
 {
-    let configs = test_authority_configs();
     let states = test_authority_states(objects).await;
     let consensus_committee = make_default_narwhal_committee(&configs).unwrap();
     for (state, config) in states.into_iter().zip(configs.iter()) {

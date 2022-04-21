@@ -84,10 +84,14 @@ impl ConsensusListener {
                 },
 
                 Some((result, transaction_digest)) = self.rx_consensus_output.recv() => {
+                    println!("CONSENSUS_LISTENER: 0");
+                    println!("CONSENSUS OUTCOME: {result:?}");
                     // Notify the caller that the transaction has been sequenced.
                     let outcome = result.map_err(SuiError::from);
                     if let Some(replier) = self.pending.get_mut(&transaction_digest).and_then(|r| r.pop_front()) {
+                        println!("CONSENSUS_ADAPTER: 1");
                         if replier.send(outcome).is_err() {
+                            println!("CONSENSUS_LISTENER: 2");
                             debug!("No replier to listen to consensus output {transaction_digest}");
                         }
                     }
@@ -142,11 +146,15 @@ impl ConsensusSubmitter {
 
     /// Submit a transaction to consensus, wait for its processing, and notify the caller.
     pub async fn submit(&self, certificate: &ConsensusTransaction) -> SuiResult<()> {
+        println!("CONSENSUS_SUBMITTER: 0");
         // Check the Sui certificate (submitted by the user).
         certificate.check(&self.committee)?;
+        println!("CONSENSUS_SUBMITTER: 1");
 
-        // Send certificate to consensus
-        let serialized = serialize_consensus_transaction(certificate);
+        // Serialize the certificate in a way that is understandable to consensus (i.e., using
+        // bincode) and it certificate to consensus.
+        //let serialized = serialize_consensus_transaction(certificate);
+        let serialized = bincode::serialize(certificate).expect("Failed to serialize Consensus Tx");
         let bytes = Bytes::from(serialized.clone());
         // TODO [issue #1452]: We are re-creating a connection every time. This is wasteful but does not
         // require to take self as a mutable reference.
@@ -156,6 +164,7 @@ impl ConsensusSubmitter {
             .send(bytes.clone())
             .await
             .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))?;
+        println!("CONSENSUS_SUBMITTER: 2");
 
         // Notify the consensus listener that we are expecting to process this certificate.
         let (sender, receiver) = oneshot::channel();
@@ -167,6 +176,7 @@ impl ConsensusSubmitter {
             .send(consensus_input)
             .await
             .expect("Failed to notify consensus listener");
+        println!("CONSENSUS_SUBMITTER: 3");
 
         // Wait for the consensus to sequence the certificate and assign locks to shared objects.
         receiver
