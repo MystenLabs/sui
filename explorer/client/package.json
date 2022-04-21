@@ -45,7 +45,8 @@
         "stylelint:check": "stylelint \"**/*.{css,scss}\"",
         "stylelint:fix": "yarn stylelint:check --fix",
         "lint": "yarn eslint:check && yarn prettier:check && yarn stylelint:check",
-        "lint:fix": "yarn eslint:fix && yarn prettier:fix && yarn stylelint:fix"
+        "lint:fix": "yarn eslint:fix && yarn prettier:fix && yarn stylelint:fix",
+        "lint:fixn": "npm run eslint:check --fix && npm run prettier:fix && npm run stylelint:check --fix"
     },
     "resolutions": {
         "async": "3.2.2",
