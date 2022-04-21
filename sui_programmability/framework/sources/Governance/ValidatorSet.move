@@ -12,6 +12,9 @@ module Sui::ValidatorSet {
 
     friend Sui::SuiSystem;
 
+    #[test_only]
+    friend Sui::ValidatorSetTests;
+
     const EDUPLICATE_VALIDATOR: u64 = 0;
 
     const EINVALID_VALIDATOR_INDEX: u64 = 1;
@@ -43,9 +46,10 @@ module Sui::ValidatorSet {
     }
 
     public(friend) fun new(init_active_validators: vector<Validator>): ValidatorSet {
+        let total_stake = calculate_total_stake(&init_active_validators);
         let quorum_threshold_pct = calculate_quorum_threshold(&init_active_validators);
         ValidatorSet {
-            total_stake: 0,
+            total_stake,
             quorum_threshold_pct,
             active_validators: init_active_validators,
             pending_validators: Vector::empty(),
@@ -64,8 +68,8 @@ module Sui::ValidatorSet {
     /// processed at the end of epoch.
     public(friend) fun request_add_validator(self: &mut ValidatorSet, validator: Validator) {
         assert!(
-            contains_duplicate_validator(&self.active_validators, &validator)
-                && contains_duplicate_validator(&self.pending_validators, &validator),
+            !contains_duplicate_validator(&self.active_validators, &validator)
+                && !contains_duplicate_validator(&self.pending_validators, &validator),
             EDUPLICATE_VALIDATOR
         );
         Vector::push_back(&mut self.pending_validators, validator);
@@ -125,7 +129,7 @@ module Sui::ValidatorSet {
         self: &mut ValidatorSet,
         withdraw_amount: u64,
         min_validator_stake: u64,
-        ctx: &mut TxContext,
+        ctx: &TxContext,
     ) {
         let validator_address = TxContext::sender(ctx);
         let validator_index_opt = find_validator(&self.active_validators, validator_address);
@@ -147,10 +151,13 @@ module Sui::ValidatorSet {
     ) {
         // TODO: Distribute stake rewards.
 
+        // This needs to come before adjust_stake since some of the
+        // pending validators may also have pending deposits.
+        process_pending_validators(&mut self.active_validators, &mut self.pending_validators);
+
         adjust_stake(&mut self.active_validators, ctx);
 
         process_pending_removals(&mut self.active_validators, &mut self.pending_removals);
-        process_pending_validators(&mut self.active_validators, &mut self.pending_validators);
 
         self.total_stake = calculate_total_stake(&self.active_validators);
         self.quorum_threshold_pct = calculate_quorum_threshold(&self.active_validators);
@@ -256,5 +263,37 @@ module Sui::ValidatorSet {
             Validator::adjust_stake(validator, ctx);
             i = i + 1;
         }
+    }
+
+    #[test_only]
+    public fun get_total_stake(self: &ValidatorSet): u64 {
+        self.total_stake
+    }
+
+    #[test_only]
+    public fun get_quorum_threshold_pct(self: &ValidatorSet): u8 {
+        self.quorum_threshold_pct
+    }
+
+    #[test_only]
+    public(script) fun destroy_for_testing(
+        self: ValidatorSet,
+    ) {
+        let ValidatorSet {
+            total_stake: _,
+            quorum_threshold_pct: _,
+            active_validators,
+            pending_validators,
+            pending_removals: _,
+        } = self;
+        while (!Vector::is_empty(&active_validators)) {
+            let v = Vector::pop_back(&mut active_validators);
+            // We don't care about the actural context,
+            // as long as the address matches.
+            let ctx = TxContext::new_from_address(Validator::get_sui_address(&v), 0);
+            Validator::destroy(v, &mut ctx);
+        };
+        Vector::destroy_empty(active_validators);
+        Vector::destroy_empty(pending_validators);
     }
 }

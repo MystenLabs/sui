@@ -4,6 +4,7 @@
 module Sui::Validator {
     use Std::ASCII::{Self, String};
     use Std::Option::{Self, Option};
+    use Std::Vector;
 
     use Sui::Coin::{Self, Coin};
     use Sui::ID::{Self, VersionedID};
@@ -13,6 +14,11 @@ module Sui::Validator {
 
     friend Sui::Genesis;
     friend Sui::ValidatorSet;
+
+    #[test_only]
+    friend Sui::ValidatorTests;
+    #[test_only]
+    friend Sui::ValidatorSetTests;
 
     /// This happens when someone tries to destroy a Validator object with sui_address
     /// that doesn't match the sender address.
@@ -25,6 +31,8 @@ module Sui::Validator {
     /// This indicates inconsistent internal state, which shouldn't happen and if so is a bug.
     const EINCONSISTENT_STATE: u64 = 2;
 
+    /// Parameters to create validator (e.g. net_address, name) are too big.
+    const PARAM_TOO_LARGE: u64 = 3;
 
     struct Validator has key, store {
         id: VersionedID,
@@ -33,8 +41,8 @@ module Sui::Validator {
         sui_address: address,
         /// A unique human-readable name of this validator.
         name: String,
-        /// The IP address of the validator (could also contain extra info such as port, DNS and etc.).
-        ip_address: vector<u8>,
+        /// The network address of the validator (could also contain extra info such as port, DNS and etc.).
+        net_address: vector<u8>,
         /// The current active stake. This will not change during an epoch. It can only
         /// be updated at the end of epoch.
         stake: Coin<SUI>,
@@ -47,14 +55,18 @@ module Sui::Validator {
     public(script) fun create(
         init_stake: Coin<SUI>,
         name: vector<u8>,
-        ip_address: vector<u8>,
+        net_address: vector<u8>,
         ctx: &mut TxContext,
     ) {
+        assert!(
+            Vector::length(&net_address) <= 100 || Vector::length(&name) <= 50,
+            PARAM_TOO_LARGE
+        );
         let sender = TxContext::sender(ctx);
         let validator = new(
             sender,
             name,
-            ip_address,
+            net_address,
             init_stake,
             ctx,
         );
@@ -72,7 +84,7 @@ module Sui::Validator {
         // directly owned and passed by value to `destroy`.
         check_non_active_validator_invariants(&self);
 
-        let Validator { id, sui_address: _, name: _, ip_address: _, stake, pending_stake, pending_withdraw: _ } = self;
+        let Validator { id, sui_address: _, name: _, net_address: _, stake, pending_stake, pending_withdraw: _ } = self;
         Transfer::transfer(stake, sender);
         ID::delete(id);
         Option::destroy_none(pending_stake);
@@ -99,7 +111,7 @@ module Sui::Validator {
     public(friend) fun new(
         sui_address: address,
         name: vector<u8>,
-        ip_address: vector<u8>,
+        net_address: vector<u8>,
         stake: Coin<SUI>,
         ctx: &mut TxContext,
     ): Validator {
@@ -107,7 +119,7 @@ module Sui::Validator {
             id: TxContext::new_id(ctx),
             sui_address,
             name: ASCII::string(name),
-            ip_address,
+            net_address,
             stake,
             pending_stake: Option::none(),
             pending_withdraw: 0,
@@ -191,7 +203,7 @@ module Sui::Validator {
     public fun is_duplicate(self: &Validator, other: &Validator): bool {
          self.sui_address == other.sui_address
             || self.name == other.name
-            || self.ip_address == other.ip_address
+            || self.net_address == other.net_address
     }
 
     /// For a non-active validator, it should never have any pending deposit or withdraws.
@@ -204,5 +216,19 @@ module Sui::Validator {
                 && self.pending_withdraw == 0,
             EINCONSISTENT_STATE
         );
+    }
+
+    #[test_only]
+    public fun get_pending_stake_amount(self: &Validator): u64 {
+        if (Option::is_some(&self.pending_stake)) {
+            Coin::value(Option::borrow(&self.pending_stake))
+        } else {
+            0
+        }
+    }
+
+    #[test_only]
+    public fun get_pending_withdraw(self: &Validator): u64 {
+        self.pending_withdraw
     }
 }
