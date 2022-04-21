@@ -18,9 +18,13 @@ import { GetObjectInfoResponse } from 'sui.js';
 
 function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
 
+    // TODO - remove all '@ts-ignore' when type defs are fixed
+    //@ts-ignore
     const suiObj = data.details.object;
+    //@ts-ignore
+    const objRef = data.details.objectRef;
+    const objID = objRef.objectId;
 
-    // TODO - restore or remove this functionality
     const [showDescription, setShowDescription] = useState(true);
     const [showProperties, setShowProperties] = useState(false);
     const [showConnectedEntities, setShowConnectedEntities] = useState(false);
@@ -155,11 +159,11 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
         // hardcode a friendly name for gas for now
         const gasTokenTypeStr = 'Coin::Coin<0x2::GAS::GAS>';
         const gasTokenId = '0000000000000000000000000000000000000003';
-        if (data.details.object.objType === gasTokenTypeStr && data.id === gasTokenId)
+        if (suiObj.objType === gasTokenTypeStr && objID === gasTokenId)
             return 'GAS';
 
         if (!name) {
-            return handleSpecialDemoNameArrays(data.data.contents);
+            return handleSpecialDemoNameArrays(suiObj);
         }
     }
 
@@ -173,25 +177,25 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
 
     const viewedData = {
         ...data,
-        objType: trimStdLibPrefix(data.objType),
-        name: processName(data.name),
-        tx_digest:
-            data.data.tx_digest && typeof data.data.tx_digest === 'object'
-                ? toHexString(data.data.tx_digest as number[])
-                : data.data.tx_digest,
-        owner: processOwner(data.owner),
+        objType: trimStdLibPrefix(suiObj.objType),
+        name: processName(suiObj.name),
+        //tx_digest:
+        //    data.data.tx_digest && typeof data.data.tx_digest === 'object'
+        //        ? toHexString(data.data.tx_digest as number[])
+        //        : data.data.tx_digest,
+        owner: processOwner(suiObj),
     };
 
     //TO DO remove when have distinct name field under Description
-    const nameKeyValue = Object.entries(viewedData.data?.contents)
+    const nameKeyValue = Object.entries(suiObj)
         .filter(([key, _]) => /name/i.test(key))
         .map(([_, value]) => value);
 
-    const ownedObjects = Object.entries(viewedData.data?.contents).filter(
+    const ownedObjects: [string, any][] = Object.entries(suiObj).filter(
         ([key, value]) => checkIsIDType(key, value)
     );
 
-    const properties = Object.entries(viewedData.data?.contents)
+    const properties: [string, any][] = Object.entries(suiObj)
         //TO DO: remove when have distinct 'name' field in Description
         .filter(([key, _]) => !/name/i.test(key))
         .filter(([_, value]) => checkIsPropertyType(value))
@@ -201,17 +205,17 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
     return (
         <>
             <div className={styles.resultbox}>
-                {viewedData.data?.contents?.display && (
+                {suiObj?.display && (
                     <DisplayBox data={data} />
                 )}
                 <div
                     className={`${styles.textbox} ${
-                        data?.data.contents.display
+                        suiObj?.display
                             ? styles.accommodate
                             : styles.noaccommodate
                     }`}
                 >
-                    {data.name && <h1>{data.name}</h1>} {' '}
+                    {suiObj.name && <h1>{suiObj.name}</h1>} {' '}
                     {typeof nameKeyValue[0] === 'string' && (
                         <h1>{nameKeyValue}</h1>
                     )}
@@ -227,7 +231,7 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
                                 <div>Object ID</div>
                                 <div>
                                     <Longtext
-                                        text={data.id}
+                                        text={objID}
                                         category="objects"
                                         isLink={false}
                                     />
@@ -236,13 +240,13 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
 
                             <div>
                                 <div>Version</div>
-                                <div>{data.version}</div>
+                                <div>{objRef.version}</div>
                             </div>
 
-                            {data.readonly && (
+                            {suiObj.readonly && (
                                 <div>
                                     <div>Read Only?</div>
-                                    {data.readonly === 'true' ? (
+                                    {suiObj.readonly === 'true' ? (
                                         <div
                                             data-testid="read-only-text"
                                             className={styles.immutable}
@@ -262,45 +266,45 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
 
                             <div>
                                 <div>Type</div>
-                                <div>{prepObjTypeValue(data.objType)}</div>
+                                <div>{prepObjTypeValue(suiObj.objType)}</div>
                             </div>
                             <div>
                                 <div>Owner</div>
                                 <Longtext
-                                    text={extractOwnerData(data.owner)}
+                                    text={extractOwnerData(suiObj.owner)}
                                     category="unknown"
                                     isLink={true}
                                 />
                             </div>
-                            {data.contract_id && (
+                            {suiObj.contract_id && (
                                 <div>
                                     <div>Contract ID</div>
                                     <Longtext
-                                        text={data.contract_id.bytes}
+                                        text={suiObj.contract_id.bytes}
                                         category="objects"
                                         isLink={true}
                                     />
                                 </div>
                             )}
 
-                            {data.ethAddress && (
+                            {suiObj.ethAddress && (
                                 <div>
                                     <div>Ethereum Contract Address</div>
                                     <div>
                                         <Longtext
-                                            text={data.ethAddress}
+                                            text={suiObj.ethAddress}
                                             category="ethAddress"
                                             isLink={true}
                                         />
                                     </div>
                                 </div>
                             )}
-                            {data.ethTokenId && (
+                            {suiObj.ethTokenId && (
                                 <div>
                                     <div>Ethereum Token ID</div>
                                     <div>
                                         <Longtext
-                                            text={data.ethTokenId}
+                                            text={suiObj.ethTokenId}
                                             category="addresses"
                                             isLink={false}
                                         />
@@ -317,7 +321,7 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
                             >
                                 Properties {showProperties ? '' : '+'}
                             </h2>
-                            {showProperties && (
+                            {showProperties &&  (
                                 <div className={styles.propertybox}>
                                     {properties.map(([key, value], index) => (
                                         <div key={`property-${index}`}>
