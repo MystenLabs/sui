@@ -8,13 +8,21 @@ import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
 import { findDataFromID } from '../../utils/static/searchUtil';
 
-import { type SingleTransactionKind, type Transfer, type CertifiedTransaction, isCertifiedTransaction, isMoveCall, isMoveModulePublish, isSingleTransactionKind, isTransfer } from 'sui.js';
+import {
+    type SingleTransactionKind,
+    type Transfer,
+    type CertifiedTransaction,
+    isCertifiedTransaction,
+    isMoveCall,
+    isMoveModulePublish,
+    isSingleTransactionKind,
+    isTransfer,
+} from 'sui.js';
 
 import styles from './TransactionResult.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { useEffect, useState } from 'react';
 import { type Loadable } from '../../utils/loadState';
-
 
 const initState: Loadable<CertifiedTransaction> = {
     loadState: 'pending',
@@ -24,19 +32,19 @@ const initState: Loadable<CertifiedTransaction> = {
                 Single: {
                     Transfer: {
                         recipient: '',
-                        object_ref: ['', 0, '']
-                    }
-                }
+                        object_ref: ['', 0, ''],
+                    },
+                },
             },
             sender: '',
             gas_payment: ['', 0, ''],
-            gas_budget: 0
+            gas_budget: 0,
         },
         tx_signature: '',
-        auth_signature: ''
+        auth_signature: '',
     },
-    signatures: []
-}
+    signatures: [],
+};
 
 const isStatic = process.env.REACT_APP_DATA !== 'static';
 
@@ -45,12 +53,11 @@ function TransactionResult() {
     const [showTxState, setTxState] = useState(initState);
 
     useEffect(() => {
-        if (!digest)
-            return;
+        if (!digest) return;
 
         if (isStatic) {
             const staticObj = findDataFromID(digest, undefined);
-            if(staticObj) {
+            if (staticObj) {
                 setTxState({
                     ...staticObj,
                     loadState: 'loaded',
@@ -81,17 +88,16 @@ function TransactionResult() {
             });
     }, [digest]);
 
-    if(!digest) {
+    if (!digest) {
         return (
             <ErrorResult
                 id={digest}
                 errorMsg="Can't search for a transaction without a digest"
             />
-        )
+        );
     }
 
     if (process.env.REACT_APP_DATA !== 'static') {
-
         return (
             <div className={theme.textresults}>
                 <div>This page is in Development</div>
@@ -107,7 +113,10 @@ function TransactionResult() {
         let singleTx: SingleTransactionKind | null = null;
         let transferTx: Transfer | null = null;
 
-        if ('Single' in txData.kind && isSingleTransactionKind(txData.kind.Single)) {
+        if (
+            'Single' in txData.kind &&
+            isSingleTransactionKind(txData.kind.Single)
+        ) {
             singleTx = txData.kind.Single;
             if ('Transfer' in singleTx && isTransfer(singleTx)) {
                 transferTx = singleTx;
@@ -118,15 +127,16 @@ function TransactionResult() {
                 // const call = singleTx.Call;
                 // decide how to handle Move Call transactions here
             }
-            if ('Publish' in singleTx && isMoveModulePublish(singleTx.Publish)) {
+            if (
+                'Publish' in singleTx &&
+                isMoveModulePublish(singleTx.Publish)
+            ) {
                 // const publish = singleTx.Publish;
                 // decide how to handle Publish transactions here (last priority)
             }
-        }
-        else if('Batch' in txData.kind) {
+        } else if ('Batch' in txData.kind) {
             // decide how to handle batch transaction display here
-        }
-        else {
+        } else {
             // decide how to handle invalid response data here
         }
 
@@ -151,7 +161,6 @@ function TransactionResult() {
             default:
                 actionClass = styles['action-mutate'];
         }
-
 
         return (
             <div className={theme.textresults} id="textResults">
