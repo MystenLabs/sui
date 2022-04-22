@@ -1,6 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/*** How-to 
+ * subcommand: `microbench` to run micro benchmarks
+ * args:
+ *      running_mode: 
+ *          local-single-validator-thread: 
+ *              start a validator in a different thread.
+ *          local-single-validator-process: 
+ *              start a validator in a new local process. 
+ *              --working-dir needs to be specified on this mode where a `validator` binary exists
+ * 
+ * Examples:
+ * ./bench microbench local-single-validator-process --port=9555 throughput --num-transactions 10 --batch-size=1 --working-dir=$YOUR_WORKPLACE/sui/target/debug
+ * ./bench microbench local-single-validator-process latency --num-chunks 10 --batch-size 10 --working-dir=$YOUR_WORKPLACE/sui/target/debug
+ * ./bench microbench local-single-validator-thread throughput --num-transactions 10 --batch-size=1
+ * ./bench microbench local-single-validator-thread latency --num-chunks 10 --batch-size 10 
+ * 
+*/
+
 #![deny(warnings)]
 
 use clap::*;
