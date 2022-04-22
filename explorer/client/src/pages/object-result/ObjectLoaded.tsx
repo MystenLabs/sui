@@ -80,7 +80,6 @@ function renderConnectedEntity(
 }
 
 function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
-
     const [showDescription, setShowDescription] = useState(true);
     const [showProperties, setShowProperties] = useState(false);
     const [showConnectedEntities, setShowConnectedEntities] = useState(false);
@@ -104,8 +103,7 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
         [showConnectedEntities]
     );
 
-    if (!isObjectExistsInfo(data.details))
-        return <></>;
+    if (!isObjectExistsInfo(data.details)) return <></>;
 
     const suiObj = data.details.object;
     const suiObjContent = suiObj.contents;
@@ -133,9 +131,12 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
     return (
         <>
             <div className={styles.resultbox}>
-                {(suiObj?.display && isString(suiObjContent.display)) && (
+                {suiObj?.display && isString(suiObjContent.display) && (
                     // TODO - remove MoveScript tag, don't use Displaybox for Move contracts
-                    <DisplayBox display={suiObjContent.display} tag="imageURL" />
+                    <DisplayBox
+                        display={suiObjContent.display}
+                        tag="imageURL"
+                    />
                 )}
                 <div
                     className={`${styles.textbox} ${
@@ -197,7 +198,11 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
                             {suiObjContent?.objType && (
                                 <div>
                                     <div>Type</div>
-                                    <div>{trimStdLibPrefix(suiObjContent.objType)}</div>
+                                    <div>
+                                        {trimStdLibPrefix(
+                                            suiObjContent.objType
+                                        )}
+                                    </div>
                                 </div>
                             )}
                             <div>
