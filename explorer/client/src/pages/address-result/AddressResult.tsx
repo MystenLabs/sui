@@ -127,7 +127,6 @@ function AddressResultAPI({ addressID }: { addressID: string | undefined }) {
 
 function AddressResult() {
     const { id: addressID } = useParams();
-    // TODO - why are we using the location object as state ?
     const { state } = useLocation();
 
     if (instanceOfResponseType(state)) {
