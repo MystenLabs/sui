@@ -1,10 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    config::{GenesisConfig, PersistedConfig},
-    sui_commands::{genesis, make_server},
-};
 use ed25519_dalek::ed25519::signature;
 use ed25519_dalek::{ed25519, Signer};
 use serde::{Deserialize, Serialize};

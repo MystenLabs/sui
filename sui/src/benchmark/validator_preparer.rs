@@ -30,7 +30,6 @@ const GENESIS_CONFIG_NAME: &str = "genesis_config.json";
 pub const VALIDATOR_BINARY_NAME: &str = "validator";
 
 /// A helper class to set up validators for benchmarking
-#[allow(unused)]
 pub struct ValidatorPreparer {
     running_mode: RunningMode,
     pub keys: Vec<(PublicKeyBytes, KeyPair)>,
@@ -39,7 +38,6 @@ pub struct ValidatorPreparer {
     validator_config: ValidatorConfig,
 }
 
-#[allow(unused)]
 fn set_up_authorities_and_committee(
     committee_size: usize,
 ) -> Result<(Vec<KeyPair>, GenesisConfig), anyhow::Error> {
@@ -156,6 +154,7 @@ impl ValidatorPreparer {
                         .arg(GENESIS_CONFIG_NAME)
                         .arg("--address")
                         .arg(&self.main_authority_address_hex)
+                        .arg("--force-genesis")
                         .spawn()
                         .expect("failed to spawn a validator process");
                     validator_process.replace(child);
