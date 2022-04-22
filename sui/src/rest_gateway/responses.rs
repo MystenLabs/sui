@@ -21,7 +21,7 @@ use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
 use sui_types::crypto::SignableBytes;
 use sui_types::error::SuiError;
 use sui_types::messages::TransactionData;
-use sui_types::object::ObjectRead;
+use sui_types::object::{Data, ObjectRead};
 
 #[serde_as]
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -141,6 +141,7 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpResponse for HttpRes
 #[serde(rename_all = "camelCase")]
 pub struct ObjectExistsResponse {
     object_ref: NamedObjectRef,
+    object_type: String,
     object: Value,
 }
 
@@ -165,8 +166,14 @@ impl TryFrom<ObjectRead> for GetObjectInfoResponse {
     fn try_from(obj: ObjectRead) -> Result<Self, Self::Error> {
         match obj {
             ObjectRead::Exists(object_ref, object, layout) => {
+                let object_type = match object.data {
+                    Data::Move(_) => "move_object",
+                    Data::Package(_) => "move_package",
+                }
+                .to_string();
                 Ok(Self::Exists(ObjectExistsResponse {
                     object_ref: object_ref.into(),
+                    object_type,
                     object: object.to_json(&layout)?,
                 }))
             }
