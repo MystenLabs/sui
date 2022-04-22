@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// This example demonstrates a basic use of a shared object.
 /// Rules:
 /// - anyone can create and share a counter
