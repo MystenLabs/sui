@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
+use crate::committee::EpochId;
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature, BcsSignable,
     EmptySignInfo, Signable, Signature, VerificationObligation,
@@ -836,6 +837,8 @@ impl ExecutionStatus {
 /// The response from processing a transaction or a certified transaction
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionEffects {
+    // The Epoch in which the transaction effects apply
+    pub epoch: EpochId,
     // The status of the execution
     pub status: ExecutionStatus,
     // The transaction digest

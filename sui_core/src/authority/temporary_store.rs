@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use move_core_types::account_address::AccountAddress;
-use sui_types::{event::Event, gas::SuiGasStatus};
+use sui_types::{event::Event, gas::SuiGasStatus, committee::EpochId};
 
 use super::*;
 
@@ -180,6 +180,7 @@ impl<S> AuthorityTemporaryStore<S> {
 
     pub fn to_effects(
         &self,
+        epoch: EpochId,
         transaction_digest: &TransactionDigest,
         transaction_dependencies: Vec<TransactionDigest>,
         status: ExecutionStatus,
@@ -187,6 +188,7 @@ impl<S> AuthorityTemporaryStore<S> {
     ) -> TransactionEffects {
         let (gas_reference, gas_object) = &self.written[gas_object_id];
         TransactionEffects {
+            epoch,
             status,
             transaction_digest: *transaction_digest,
             created: self

@@ -16,12 +16,13 @@ use sui_types::{
         TransactionEffects, Transfer,
     },
     object::Object,
-    storage::{BackingPackageStore, Storage},
+    storage::{BackingPackageStore, Storage}, committee::EpochId,
 };
 use tracing::{debug, instrument};
 
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
 pub fn execute_transaction_to_effects<S: BackingPackageStore>(
+    epoch: EpochId,
     temporary_store: &mut AuthorityTemporaryStore<S>,
     transaction: Transaction,
     transaction_digest: TransactionDigest,
@@ -55,6 +56,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     transaction_dependencies.remove(&TransactionDigest::genesis());
 
     let effects = temporary_store.to_effects(
+        epoch,
         &transaction_digest,
         transaction_dependencies.into_iter().collect(),
         status,

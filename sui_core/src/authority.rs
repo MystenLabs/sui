@@ -354,6 +354,7 @@ impl AuthorityState {
             transaction_digest,
         );
         let effects = execution_engine::execute_transaction_to_effects(
+            self.committee.epoch(),
             &mut temporary_store,
             transaction.clone(),
             transaction_digest,
