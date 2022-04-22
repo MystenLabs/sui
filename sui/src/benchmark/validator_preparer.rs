@@ -10,11 +10,13 @@ use crate::config::{Config, GenesisConfig};
 use rocksdb::Options;
 use std::env;
 use std::fs;
+use std::panic;
 use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::process::Command;
 use std::sync::Arc;
 use std::thread;
+use std::{thread::sleep, time::Duration};
 use sui_adapter::genesis;
 use sui_core::authority::*;
 use sui_network::network::NetworkServer;
@@ -30,6 +32,7 @@ const GENESIS_CONFIG_NAME: &str = "genesis_config.json";
 pub const VALIDATOR_BINARY_NAME: &str = "validator";
 
 /// A helper class to set up validators for benchmarking
+#[allow(unused)]
 pub struct ValidatorPreparer {
     running_mode: RunningMode,
     pub keys: Vec<(PublicKeyBytes, KeyPair)>,
@@ -107,7 +110,8 @@ impl ValidatorPreparer {
 
             RunningMode::LocalSingleValidatorThread => {
                 // Pick the first validator and create state.
-                let (public_auth0, secret_auth0) = keys.pop().unwrap();
+                let public_auth0 = keys[0].0;
+                let secret_auth0 = keys[0].1.copy();
 
                 // Create a random directory to store the DB
                 let path = env::temp_dir().join(format!("DB_{:?}", ObjectID::random()));
@@ -159,7 +163,7 @@ impl ValidatorPreparer {
                         .expect("failed to spawn a validator process");
                     validator_process.replace(child);
                 } else {
-                    panic!("invalid validator config in local-single-validator-process mode");
+                    panic!("Invalid validator config in local-single-validator-process mode");
                 }
             }
             RunningMode::LocalSingleValidatorThread => {
@@ -180,10 +184,12 @@ impl ValidatorPreparer {
                         });
                     });
                 } else {
-                    panic!("invalid validator config in local-single-validator-thread mode");
+                    panic!("Invalid validator config in local-single-validator-thread mode");
                 }
             }
         }
+        // Wait for server start
+        sleep(Duration::from_secs(3));
     }
 
     pub fn update_objects_for_validator(&mut self, objects: Vec<Object>, address: SuiAddress) {

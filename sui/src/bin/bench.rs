@@ -1,6 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/*** How-to
+ * subcommand: `microbench` to run micro benchmarks
+ * args:
+ *      running_mode:
+ *          local-single-validator-thread:
+ *              start a validator in a different thread.
+ *          local-single-validator-process:
+ *              start a validator in a new local process.
+ *              --working-dir needs to be specified on this mode where a `validator` binary exists
+ *
+ * Examples:
+ * ./bench microbench local-single-validator-process --port=9555 throughput --working-dir=$YOUR_WORKPLACE/sui/target/release
+ * ./bench microbench local-single-validator-process latency --working-dir=$YOUR_WORKPLACE/sui/target/release
+ * ./bench microbench local-single-validator-thread throughput
+ * ./bench microbench local-single-validator-thread latency
+ *
+*/
+
 #![deny(warnings)]
 
 use clap::*;
@@ -19,7 +37,7 @@ fn main() {
     let benchmark = bench_types::Benchmark::parse();
     running_mode_pre_check(&benchmark);
     let r = run_benchmark(benchmark);
-    println!("{}", r);
+    info("{}", r);
 }
 
 fn running_mode_pre_check(benchmark: &bench_types::Benchmark) {

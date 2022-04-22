@@ -10,7 +10,7 @@ use sui_types::{
     messages::{InputObjectKind, SingleTransactionKind, Transaction},
     object::{Object, Owner},
 };
-use tracing::{debug};
+use tracing::debug;
 
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
