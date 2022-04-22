@@ -1129,9 +1129,11 @@ impl CertifiedTransaction {
         // Check epoch
         fp_ensure!(
             self.epoch == committee.epoch(),
-            SuiError::WrongEpoch { expected_epoch : committee.epoch() }
+            SuiError::WrongEpoch {
+                expected_epoch: committee.epoch()
+            }
         );
-        
+
         // First check the quorum is sufficient
 
         let mut weight = 0;

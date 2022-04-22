@@ -43,16 +43,36 @@ fn test_signed_values() {
         &sec2,
     );
 
-    let v = SignedTransaction::new(committee.epoch(), transaction.clone(), *sec1.public_key_bytes(), &sec1);
+    let v = SignedTransaction::new(
+        committee.epoch(),
+        transaction.clone(),
+        *sec1.public_key_bytes(),
+        &sec1,
+    );
     assert!(v.check(&committee).is_ok());
 
-    let v = SignedTransaction::new(committee.epoch(), transaction.clone(), *sec2.public_key_bytes(), &sec2);
+    let v = SignedTransaction::new(
+        committee.epoch(),
+        transaction.clone(),
+        *sec2.public_key_bytes(),
+        &sec2,
+    );
     assert!(v.check(&committee).is_err());
 
-    let v = SignedTransaction::new(committee.epoch(), transaction, *sec3.public_key_bytes(), &sec3);
+    let v = SignedTransaction::new(
+        committee.epoch(),
+        transaction,
+        *sec3.public_key_bytes(),
+        &sec3,
+    );
     assert!(v.check(&committee).is_err());
 
-    let v = SignedTransaction::new(committee.epoch(), bad_transaction, *sec1.public_key_bytes(), &sec1);
+    let v = SignedTransaction::new(
+        committee.epoch(),
+        bad_transaction,
+        *sec1.public_key_bytes(),
+        &sec1,
+    );
     assert!(v.check(&committee).is_err());
 }
 
@@ -82,9 +102,24 @@ fn test_certificates() {
         &sec2,
     );
 
-    let v1 = SignedTransaction::new(committee.epoch(), transaction.clone(), *sec1.public_key_bytes(), &sec1);
-    let v2 = SignedTransaction::new(committee.epoch(), transaction.clone(), *sec2.public_key_bytes(), &sec2);
-    let v3 = SignedTransaction::new(committee.epoch(), transaction.clone(), *sec3.public_key_bytes(), &sec3);
+    let v1 = SignedTransaction::new(
+        committee.epoch(),
+        transaction.clone(),
+        *sec1.public_key_bytes(),
+        &sec1,
+    );
+    let v2 = SignedTransaction::new(
+        committee.epoch(),
+        transaction.clone(),
+        *sec2.public_key_bytes(),
+        &sec2,
+    );
+    let v3 = SignedTransaction::new(
+        committee.epoch(),
+        transaction.clone(),
+        *sec3.public_key_bytes(),
+        &sec3,
+    );
 
     let mut builder = SignatureAggregator::try_new(transaction.clone(), &committee).unwrap();
     assert!(builder

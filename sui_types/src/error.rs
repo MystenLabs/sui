@@ -66,7 +66,7 @@ pub enum SuiError {
     UnknownSigner,
     // Certificate verification
     #[error("Signature or certificate from wrong epoch, expected {expected_epoch}")]
-    WrongEpoch { expected_epoch : EpochId },
+    WrongEpoch { expected_epoch: EpochId },
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
     #[error(

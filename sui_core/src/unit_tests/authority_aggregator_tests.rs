@@ -201,7 +201,11 @@ async fn extract_cert<A: AuthorityAPI>(
     let stake: usize = votes.iter().map(|(name, _)| committee.weight(name)).sum();
     assert!(stake >= committee.quorum_threshold());
 
-    CertifiedTransaction::new_with_signatures(committee.epoch(), transaction.unwrap().to_transaction(), votes)
+    CertifiedTransaction::new_with_signatures(
+        committee.epoch(),
+        transaction.unwrap().to_transaction(),
+        votes,
+    )
 }
 
 async fn do_cert<A: AuthorityAPI>(
