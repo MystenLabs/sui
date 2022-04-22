@@ -3,7 +3,8 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type GetObjectInfoResponse } from 'sui.js';
+import { isObjectDigest, isObjectExistsInfo, isObjectNotExistsInfo, isObjectRef, type GetObjectInfoResponse } from 'sui.js';
+import { ObjectResult } from '../../pages/object-result/ObjectResultType';
 
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { navigateWithUnknown } from '../../utils/searchUtil';
@@ -67,15 +68,33 @@ function OwnedObjectAPI({ objects }: { objects: string[] }) {
             console.log('pairs', pairs);
             const results = pairs.map((pair) => {
                 const result = pair[1];
-                return {
-                    id: pair[0],
-                    // @ts-ignore
-                    Type: result.deatails.objType,
-                    // @ts-ignore
-                    Version: result.details.version,
-                    // @ts-ignore
-                    display: processDisplayValue(data.contents?.display),
-                };
+
+                if (result.status === 'Exists' && isObjectExistsInfo(result.details)) {
+                    const obj = result.details.object;
+                    return {
+                        id: pair[0],
+                        Type: obj['objType'] as string,
+                        Version: (obj['version'] as number).toString(),
+                        display: processDisplayValue(obj['display'] as string),
+                    };
+                }
+                if(result.status === 'Deleted' && isObjectRef(result.details)) {
+                    return {
+                        id: pair[0],
+                        Type: 'unknown',
+                        Version: result.details.version.toString(),
+                        display: '',
+                    };
+                }
+                // else case here covers the 'NotExists' status
+                else {
+                    return {
+                        id: pair[0],
+                        Type: '',
+                        Version: '',
+                        display: '',
+                    };
+                }
             });
 
             setResults(results);

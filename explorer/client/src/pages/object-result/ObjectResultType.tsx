@@ -3,7 +3,7 @@
 
 import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
 
-export type DataType = {
+export type ObjectResult = {
     id: string;
     category?: string;
     owner: string | AddressOwner;
