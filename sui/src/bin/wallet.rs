@@ -1,20 +1,23 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::Write;
-use std::io::{stderr, stdout};
-use std::ops::Deref;
-use std::path::PathBuf;
-
 use async_trait::async_trait;
 use clap::*;
 use colored::Colorize;
-
-use sui::shell::{
-    install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
+use std::{
+    io::{stderr, stdout, Write},
+    ops::Deref,
+    path::PathBuf,
 };
-use sui::wallet_commands::*;
-use sui::{sui_config_dir, SUI_WALLET_CONFIG};
+use sui::{
+    shell::{
+        install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
+    },
+    sui_config_dir,
+    wallet_commands::*,
+    SUI_WALLET_CONFIG,
+};
+use tracing::debug;
 
 const SUI: &str = "   _____       _    _       __      ____     __
   / ___/__  __(_)  | |     / /___ _/ / /__  / /_
@@ -54,6 +57,9 @@ async fn main() -> Result<(), anyhow::Error> {
     };
     #[allow(unused)]
     let guard = telemetry_subscribers::init(config);
+    if let Ok(git_rev) = std::env::var("GIT_REV") {
+        debug!("Wallet built at git revision {git_rev}");
+    }
 
     let mut app: Command = ClientOpt::command();
     app = app.no_binary_name(false);
@@ -79,10 +85,15 @@ async fn main() -> Result<(), anyhow::Error> {
     if options.interactive {
         let app: Command = WalletCommands::command();
         writeln!(out, "{}", SUI.cyan().bold())?;
-        let version = app
+        let mut version = app
             .get_long_version()
-            .unwrap_or_else(|| app.get_version().unwrap_or("unknown"));
-        writeln!(out, "--- sui wallet {} ---", version)?;
+            .unwrap_or_else(|| app.get_version().unwrap_or("unknown"))
+            .to_owned();
+        if let Ok(git_rev) = std::env::var("GIT_REV") {
+            version.push('-');
+            version.push_str(&git_rev);
+        }
+        writeln!(out, "--- sui wallet {version} ---")?;
         writeln!(out)?;
         writeln!(out, "{}", context.config.deref())?;
         writeln!(out, "Welcome to the Sui interactive shell.")?;
