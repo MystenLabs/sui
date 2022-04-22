@@ -57,7 +57,7 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
         benchmark.running_mode,
         benchmark.working_dir,
         benchmark.committee_size,
-        &network_client.get_base_address(),
+        network_client.get_base_address(),
         network_client.get_base_port(),
         benchmark.db_cpus,
     );

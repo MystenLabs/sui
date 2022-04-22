@@ -218,6 +218,12 @@ pub struct TransactionCreator {
     pub object_id_offset: usize,
 }
 
+impl Default for TransactionCreator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TransactionCreator {
     pub fn new() -> Self {
         Self {
@@ -235,7 +241,7 @@ impl TransactionCreator {
     ) -> Vec<Bytes> {
         let (address, keypair) = get_key_pair();
         let (signed_txns, txn_objects) = make_transactions(
-            address.clone(),
+            address,
             keypair,
             chunk_size,
             num_chunks,
