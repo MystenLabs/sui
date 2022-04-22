@@ -107,8 +107,6 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
     const objRef = data.details.objectRef;
     const objID = objRef.objectId;
 
-    console.log('suiObj', suiObj, suiObjContent);
-
     const suiObjName = suiObj['name'];
     const nonNameEntries = Object.entries(suiObjContent).filter(
         ([k, _]) => k !== 'name'
@@ -122,8 +120,6 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
         .filter(([_, value]) => isSuiPropertyType(value))
         // TODO: 'display' is a object property added during demo, replace with metadata ptr?
         .filter(([key, _]) => key !== 'display');
-
-    console.log('properties', properties);
 
     return (
         <>
