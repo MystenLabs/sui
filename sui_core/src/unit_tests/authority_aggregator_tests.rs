@@ -37,7 +37,7 @@ pub async fn init_local_authorities(
         voting_rights.insert(authority_name, 1);
         key_pairs.push((authority_name, key_pair));
     }
-    let committee = Committee::new(voting_rights);
+    let committee = Committee::new(0, voting_rights);
 
     let mut clients = BTreeMap::new();
     for ((authority_name, secret), objects) in key_pairs.into_iter().zip(genesis_objects) {

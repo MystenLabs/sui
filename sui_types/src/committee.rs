@@ -20,14 +20,14 @@ pub struct Committee {
 }
 
 impl Committee {
-    pub fn new(voting_rights: BTreeMap<AuthorityName, usize>) -> Self {
+    pub fn new(epoch: EpochId, voting_rights: BTreeMap<AuthorityName, usize>) -> Self {
         let total_votes = voting_rights.iter().map(|(_, votes)| votes).sum();
         let expanded_keys: HashMap<_, _> = voting_rights
             .iter()
             .map(|(addr, _)| (*addr, (*addr).try_into().expect("Invalid Authority Key")))
             .collect();
         Committee {
-            epoch: 0, // TODO: eventually this should be non-zero
+            epoch,
             voting_rights,
             total_votes,
             expanded_keys,

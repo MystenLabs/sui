@@ -1126,6 +1126,7 @@ async fn test_account_state_unknown_account() {
 
 #[tokio::test]
 async fn test_authority_persist() {
+
     let seed = [1u8; 32];
     let (committee, _, authority_key) =
         crate::authority_batch::batch_tests::init_state_parameters_from_rng(
@@ -1183,7 +1184,7 @@ fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStor
         /* address */ *authority_key.public_key_bytes(),
         /* voting right */ 1,
     );
-    let committee = Committee::new(authorities);
+    let committee = Committee::new(0, authorities);
 
     // Create a random directory to store the DB
 
