@@ -23,8 +23,6 @@ import {
 
 import styles from './ObjectResult.module.css';
 
-
-
 function renderConnectedEntity(
     key: string,
     value: any,

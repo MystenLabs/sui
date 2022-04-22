@@ -4,14 +4,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    isObjectDigest,
     isObjectExistsInfo,
-    isObjectNotExistsInfo,
     isObjectRef,
     type GetObjectInfoResponse,
 } from 'sui.js';
 
-import { ObjectResult } from '../../pages/object-result/ObjectResultType';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { navigateWithUnknown } from '../../utils/searchUtil';
 import { findDataFromID } from '../../utils/static/searchUtil';

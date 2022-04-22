@@ -21,9 +21,7 @@ import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { type Loadable } from '../../utils/loadState';
 import { findDataFromID } from '../../utils/static/searchUtil';
 
-
 import styles from './TransactionResult.module.css';
-
 
 const initState: Loadable<CertifiedTransaction> = {
     loadState: 'pending',
@@ -146,7 +144,6 @@ function TransactionResult() {
         const statusClass = 'success';
 
         let action: string = 'unknown';
-        let objectIDs: string[];
         let actionClass;
 
         switch (action) {
