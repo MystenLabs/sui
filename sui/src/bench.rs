@@ -12,10 +12,10 @@
  *              --working-dir needs to be specified on this mode where a `validator` binary exists
  *
  * Examples:
- * ./bench microbench local-single-validator-process --port=9555 throughput --num-transactions 10 --batch-size=1 --working-dir=$YOUR_WORKPLACE/sui/target/debug
- * ./bench microbench local-single-validator-process latency --num-chunks 10 --batch-size 10 --working-dir=$YOUR_WORKPLACE/sui/target/debug
- * ./bench microbench local-single-validator-thread throughput --num-transactions 10 --batch-size=1
- * ./bench microbench local-single-validator-thread latency --num-chunks 10 --batch-size 10
+ * ./bench microbench local-single-validator-process --port=9555 throughput --working-dir=$YOUR_WORKPLACE/sui/target/release
+ * ./bench microbench local-single-validator-process latency --working-dir=$YOUR_WORKPLACE/sui/target/release
+ * ./bench microbench local-single-validator-thread throughput
+ * ./bench microbench local-single-validator-thread latency
  *
 */
 

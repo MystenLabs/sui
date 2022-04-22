@@ -163,11 +163,8 @@ impl ValidatorPreparer {
                         .expect("failed to spawn a validator process");
                     validator_process.replace(child);
                 } else {
-                    panic!("invalid validator config in local-single-validator-process mode");
+                    panic!("Invalid validator config in local-single-validator-process mode");
                 }
-
-                // Wait for server start
-                sleep(Duration::from_secs(20));
             }
             RunningMode::LocalSingleValidatorThread => {
                 if let ValidatorConfig::LocalSingleValidatorThreadConfig {
@@ -187,12 +184,12 @@ impl ValidatorPreparer {
                         });
                     });
                 } else {
-                    panic!("invalid validator config in local-single-validator-thread mode");
+                    panic!("Invalid validator config in local-single-validator-thread mode");
                 }
-                // Wait for server start
-                sleep(Duration::from_secs(3));
             }
         }
+        // Wait for server start
+        sleep(Duration::from_secs(3));
     }
 
     pub fn update_objects_for_validator(&mut self, objects: Vec<Object>, address: SuiAddress) {
