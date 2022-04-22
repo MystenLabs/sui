@@ -3,7 +3,6 @@
 use bytes::Bytes;
 use futures::{sink::SinkExt, stream::StreamExt};
 use std::net::SocketAddr;
-use std::time::Duration;
 use sui_types::messages::ConsensusTransaction;
 use sui_types::serialize::{deserialize_message, serialize_consensus_transaction};
 use test_utils::authority::{spawn_test_authorities, test_authority_configs};
@@ -32,7 +31,7 @@ async fn shared_object_transaction() {
     let message = ConsensusTransaction::UserTransaction(certificate);
     let serialized = serialize_consensus_transaction(&message);
 
-    tokio::time::sleep(Duration::from_millis(1_000)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(1_000)).await;
 
     println!("UNIT_TEST: 0");
     connection.send(Bytes::from(serialized)).await.unwrap();
