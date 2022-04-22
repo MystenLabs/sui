@@ -107,7 +107,8 @@ impl ValidatorPreparer {
 
             RunningMode::LocalSingleValidatorThread => {
                 // Pick the first validator and create state.
-                let (public_auth0, secret_auth0) = keys.pop().unwrap();
+                let public_auth0 = keys[0].0;
+                let secret_auth0 = keys[0].1.copy();
 
                 // Create a random directory to store the DB
                 let path = env::temp_dir().join(format!("DB_{:?}", ObjectID::random()));

@@ -14,8 +14,8 @@ use sui_network::transport;
     about = "Local test and benchmark of the Sui authorities"
 )]
 pub struct Benchmark {
-    /// Size of the Sui committee. Minimum size is 4 to tolerate one fault
-    #[clap(long, default_value = "10", global = true)]
+    /// Size of the Sui committee.
+    #[clap(long, default_value = "1", global = true)]
     pub committee_size: usize,
     /// Timeout for sending queries (us)
     #[clap(long, default_value = "40000000", global = true)]
