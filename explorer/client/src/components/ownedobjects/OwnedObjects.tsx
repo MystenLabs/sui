@@ -71,7 +71,6 @@ function OwnedObjectAPI({ objects }: { objects: string[] }) {
                     })
             )
         ).then((pairs) => {
-            console.log('pairs', pairs);
             const results = pairs.map((pair) => {
                 const result = pair[1];
 
