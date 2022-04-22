@@ -3,24 +3,14 @@
 
 #![deny(warnings)]
 
+use crate::benchmark::validator_preparer::ValidatorPreparer;
 use bytes::Bytes;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use rayon::prelude::*;
-use sui_adapter::genesis;
-use sui_core::authority::*;
 use sui_types::crypto::{get_key_pair, AuthoritySignature, KeyPair, PublicKeyBytes, Signature};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
-use tokio::runtime::Runtime;
-
-use tracing::info;
-
-use rocksdb::Options;
-use std::env;
-use std::fs;
-use std::path::Path;
-use std::sync::Arc;
 
 const OBJECT_ID_OFFSET: usize = 10000;
 
@@ -89,46 +79,6 @@ fn make_serialized_cert(
     serialized_certificate
 }
 
-fn make_authority_state(
-    store_path: &Path,
-    db_cpus: i32,
-    committee: &Committee,
-    pubx: &PublicKeyBytes,
-    secx: KeyPair,
-) -> (AuthorityState, Arc<AuthorityStore>) {
-    fs::create_dir(&store_path).unwrap();
-    info!("Open database on path: {:?}", store_path.as_os_str());
-
-    let mut opts = Options::default();
-    opts.increase_parallelism(db_cpus);
-    opts.set_write_buffer_size(256 * 1024 * 1024);
-    opts.enable_statistics();
-    opts.set_stats_dump_period_sec(5);
-    opts.set_enable_pipelined_write(true);
-
-    // NOTE: turn off the WAL, but is not guaranteed to
-    // recover from a crash. Keep turned off to max safety,
-    // but keep as an option if we periodically flush WAL
-    // manually.
-    // opts.set_manual_wal_flush(true);
-
-    let store = Arc::new(AuthorityStore::open(store_path, Some(opts)));
-    (
-        Runtime::new().unwrap().block_on(async {
-            AuthorityState::new(
-                committee.clone(),
-                *pubx,
-                Arc::pin(secx),
-                store.clone(),
-                genesis::clone_genesis_compiled_modules(),
-                &mut genesis::get_genesis_context(),
-            )
-            .await
-        }),
-        store,
-    )
-}
-
 fn make_gas_objects(
     address: SuiAddress,
     tx_count: usize,
@@ -167,7 +117,7 @@ fn make_serialized_transactions(
     keypair: KeyPair,
     committee: &Committee,
     account_gas_objects: &[(Vec<Object>, Object)],
-    keys: &[(PublicKeyBytes, KeyPair)],
+    authority_keys: &[(PublicKeyBytes, KeyPair)],
     batch_size: usize,
     use_move: bool,
 ) -> Vec<Bytes> {
@@ -213,7 +163,7 @@ fn make_serialized_transactions(
 
             vec![
                 serialized_transaction.into(),
-                make_serialized_cert(keys, committee, transaction).into(),
+                make_serialized_cert(authority_keys, committee, transaction).into(),
             ]
         })
         .flatten()
@@ -221,6 +171,8 @@ fn make_serialized_transactions(
 }
 
 fn make_transactions(
+    address: SuiAddress,
+    key_pair: KeyPair,
     chunk_size: usize,
     num_chunks: usize,
     conn: usize,
@@ -229,8 +181,6 @@ fn make_transactions(
     auth_keys: &[(PublicKeyBytes, KeyPair)],
     committee: &Committee,
 ) -> (Vec<Bytes>, Vec<Object>) {
-    let (address, keypair) = get_key_pair();
-
     assert_eq!(chunk_size % conn, 0);
     let batch_size_per_conn = chunk_size / conn;
 
@@ -254,53 +204,29 @@ fn make_transactions(
 
     let serialized_txes = make_serialized_transactions(
         address,
-        keypair,
+        key_pair,
         committee,
         &account_gas_objects,
         auth_keys,
         batch_size_per_conn,
         use_move,
     );
-
     (serialized_txes, all_objects)
 }
 
 pub struct TransactionCreator {
-    pub authority_keys: Vec<(PublicKeyBytes, KeyPair)>,
-    pub committee: Committee,
-
-    pub authority_state: AuthorityState,
     pub object_id_offset: usize,
-    pub authority_store: Arc<AuthorityStore>,
+}
+
+impl Default for TransactionCreator {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TransactionCreator {
-    pub fn new(committee_size: usize, db_cpus: usize) -> Self {
-        let mut keys = Vec::new();
-        for _ in 0..committee_size {
-            let (_, key_pair) = get_key_pair();
-            let name = *key_pair.public_key_bytes();
-            keys.push((name, key_pair));
-        }
-        let committee = Committee::new(keys.iter().map(|(k, _)| (*k, 1)).collect());
-
-        // Pick an authority and create state.
-        let (public_auth0, secret_auth0) = keys.pop().unwrap();
-
-        // Create a random directory to store the DB
-        let path = env::temp_dir().join(format!("DB_{:?}", ObjectID::random()));
-        let auth_state = make_authority_state(
-            &path,
-            db_cpus as i32,
-            &committee,
-            &public_auth0,
-            secret_auth0,
-        );
+    pub fn new() -> Self {
         Self {
-            committee,
-            authority_state: auth_state.0,
-            authority_store: auth_state.1,
-            authority_keys: keys,
             object_id_offset: OBJECT_ID_OFFSET,
         }
     }
@@ -311,24 +237,25 @@ impl TransactionCreator {
         use_move: bool,
         chunk_size: usize,
         num_chunks: usize,
+        validator_preparer: &mut ValidatorPreparer,
     ) -> Vec<Bytes> {
-        let load_gen_txes = make_transactions(
+        let (address, keypair) = get_key_pair();
+        let (signed_txns, txn_objects) = make_transactions(
+            address,
+            keypair,
             chunk_size,
             num_chunks,
             tcp_conns,
             use_move,
             self.object_id_offset,
-            &self.authority_keys,
-            &self.committee,
+            &validator_preparer.keys,
+            &validator_preparer.committee,
         );
 
         self.object_id_offset += chunk_size * num_chunks;
 
-        // Insert the objects
-        self.authority_store
-            .bulk_object_insert(&load_gen_txes.1[..].iter().collect::<Vec<&Object>>())
-            .unwrap();
+        validator_preparer.update_objects_for_validator(txn_objects, address);
 
-        load_gen_txes.0
+        signed_txns
     }
 }

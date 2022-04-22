@@ -1,12 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::load_generator::calculate_throughput;
 use clap::*;
 use std::default::Default;
+use std::path::PathBuf;
 use strum_macros::EnumString;
 use sui_network::transport;
-
-use super::load_generator::calculate_throughput;
 
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -14,8 +14,8 @@ use super::load_generator::calculate_throughput;
     about = "Local test and benchmark of the Sui authorities"
 )]
 pub struct Benchmark {
-    /// Size of the Sui committee. Minimum size is 4 to tolerate one fault
-    #[clap(long, default_value = "10", global = true)]
+    /// Size of the Sui committee.
+    #[clap(long, default_value = "1", global = true)]
     pub committee_size: usize,
     /// Timeout for sending queries (us)
     #[clap(long, default_value = "40000000", global = true)]
@@ -38,6 +38,17 @@ pub struct Benchmark {
     #[clap(long, default_value = "2000", global = true)]
     pub batch_size: usize,
 
+    #[clap(
+        arg_enum,
+        default_value = "local-single-validator-thread",
+        global = true,
+        ignore_case = true
+    )]
+    pub running_mode: RunningMode,
+
+    #[clap(long, global = true)]
+    pub working_dir: Option<PathBuf>,
+
     /// Type of benchmark to run
     #[clap(subcommand)]
     pub bench_type: BenchmarkType,
@@ -58,6 +69,13 @@ pub enum BenchmarkType {
         type_: MicroBenchmarkType,
     },
     // ... more benchmark types here
+}
+
+#[derive(Debug, Parser, Clone, Copy, ArgEnum, EnumString)]
+#[clap(rename_all = "kebab-case")]
+pub enum RunningMode {
+    LocalSingleValidatorThread,
+    LocalSingleValidatorProcess,
 }
 
 #[derive(Debug, Clone, Parser, Eq, PartialEq, EnumString)]

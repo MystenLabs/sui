@@ -73,3 +73,6 @@ jsonrpsee-proc-macros = "0.10.1"
 
 [dev-dependencies]
 tracing-test = "0.2.1"
+
+[features]
+benchmark = ["narwhal-node/benchmark"]
