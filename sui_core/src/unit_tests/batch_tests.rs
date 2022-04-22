@@ -28,7 +28,7 @@ use sui_types::messages::{
 };
 use sui_types::object::Object;
 
-fn init_state_parameters_from_rng<R>(rng: &mut R) -> (Committee, SuiAddress, KeyPair)
+pub(crate) fn init_state_parameters_from_rng<R>(rng: &mut R) -> (Committee, SuiAddress, KeyPair)
 where
     R: rand::CryptoRng + rand::RngCore,
 {
@@ -43,7 +43,7 @@ where
     (committee, authority_address, authority_key)
 }
 
-async fn init_state(
+pub(crate) async fn init_state(
     committee: Committee,
     authority_key: KeyPair,
     store: Arc<AuthorityStore>,
