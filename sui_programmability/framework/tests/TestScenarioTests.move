@@ -22,6 +22,26 @@ module Sui::TestScenarioTests {
         child: Object,
     }
 
+    struct MyWrapper<T> has key {
+        id: ID::VersionedID,
+        object: T,
+    }
+
+    struct Foo has key {
+        id: ID::VersionedID,
+    }
+
+    #[test]
+    fun test_foo() {
+        let ctx = TxContext::new_from_address(@0x0, 0);
+        let foo = Foo { id: TxContext::new_id(&mut ctx) };
+        let wrapper = MyWrapper { id: TxContext::new_id(&mut ctx), object: foo };
+        let MyWrapper { id, object } = wrapper;
+        ID::delete(id);
+        let Foo { id } = object;
+        ID::delete(id);
+    }
+
     #[test]
     fun test_wrap_unwrap() {
         let sender = @0x0;
