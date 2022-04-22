@@ -19,7 +19,7 @@ export type DataType = {
             [key: string]: any;
         };
         owner?: { ObjectOwner: [] };
-        tx_digest?: number[] | string;
+        tx_digest?: string;
     };
     loadState?: string;
 };

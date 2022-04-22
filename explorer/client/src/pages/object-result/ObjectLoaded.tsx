@@ -14,7 +14,7 @@ import {
 
 import styles from './ObjectResult.module.css';
 
-import { type GetObjectInfoResponse } from 'sui.js';
+import { isObjectExistsInfo, type GetObjectInfoResponse } from 'sui.js';
 
 import {
     checkIsIDType,
@@ -80,12 +80,6 @@ function renderConnectedEntity(
 }
 
 function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
-    // TODO - remove all '@ts-ignore' when type defs are fixed
-    //@ts-ignore
-    const suiObj = data.details.object;
-    //@ts-ignore
-    const objRef = data.details.objectRef;
-    const objID = objRef.objectId;
 
     const [showDescription, setShowDescription] = useState(true);
     const [showProperties, setShowProperties] = useState(false);
@@ -110,9 +104,19 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
         [showConnectedEntities]
     );
 
+    if (!isObjectExistsInfo(data.details))
+        return <></>;
+
+    const suiObj = data.details.object;
+    const suiObjContent = suiObj.contents;
+    const objRef = data.details.objectRef;
+    const objID = objRef.objectId;
+
+    console.log('suiObj', suiObj, suiObjContent);
+
     const suiObjName = suiObj['name'];
-    const nonNameEntries = Object.entries(suiObj).filter(
-        ([k, _]) => k === 'name'
+    const nonNameEntries = Object.entries(suiObjContent).filter(
+        ([k, _]) => k !== 'name'
     );
 
     const ownedObjects: [string, any][] = nonNameEntries.filter(
@@ -124,21 +128,23 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
         // TODO: 'display' is a object property added during demo, replace with metadata ptr?
         .filter(([key, _]) => key !== 'display');
 
+    console.log('properties', properties);
+
     return (
         <>
             <div className={styles.resultbox}>
-                {(suiObj?.display && isString(suiObj.display))(
+                {(suiObj?.display && isString(suiObjContent.display)) && (
                     // TODO - remove MoveScript tag, don't use Displaybox for Move contracts
-                    <DisplayBox display={suiObj.display} tag="imageURL" />
+                    <DisplayBox display={suiObjContent.display} tag="imageURL" />
                 )}
                 <div
                     className={`${styles.textbox} ${
-                        suiObj?.display
+                        suiObjContent?.display
                             ? styles.accommodate
                             : styles.noaccommodate
                     }`}
                 >
-                    {suiObj.name && <h1>{suiObj.name}</h1>}{' '}
+                    {suiObj.name && <h1>{suiObjContent.name}</h1>}{' '}
                     {typeof suiObjName === 'string' && <h1>{suiObjName}</h1>}
                     <h2
                         className={styles.clickableheader}
@@ -188,10 +194,12 @@ function ObjectLoaded({ data }: { data: GetObjectInfoResponse }) {
                                 </div>
                             )}
 
-                            <div>
-                                <div>Type</div>
-                                <div>{trimStdLibPrefix(suiObj.objType)}</div>
-                            </div>
+                            {suiObjContent?.objType && (
+                                <div>
+                                    <div>Type</div>
+                                    <div>{trimStdLibPrefix(suiObjContent.objType)}</div>
+                                </div>
+                            )}
                             <div>
                                 <div>Owner</div>
                                 <div id="owner">
