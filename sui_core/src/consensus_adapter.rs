@@ -15,6 +15,7 @@ use sui_types::messages::ConsensusTransaction;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
+use tokio::time::{timeout, Duration};
 use tracing::debug;
 
 #[cfg(test)]
@@ -84,7 +85,8 @@ impl ConsensusListener {
 
                 Some((result, transaction_digest)) = self.rx_consensus_output.recv() => {
                     println!("CONSENSUS_LISTENER: 0");
-                    println!("CONSENSUS OUTCOME: {result:?}");
+                    println!("CONSENSUS_LISTENER: {result:?}");
+                    println!("CONSENSUS_LISTENER: {transaction_digest:?}");
                     // Notify the caller that the transaction has been sequenced.
                     let outcome = result.map_err(SuiError::from);
                     if let Some(replier) = self.pending.get_mut(&transaction_digest).and_then(|r| r.pop_front()) {
@@ -118,6 +120,8 @@ pub struct ConsensusSubmitter {
     committee: Committee,
     /// A channel to notify the consensus listener of new transactions.
     tx_consensus_listener: Sender<ConsensusInput>,
+    /// The maximum duration to wait from consensus before aborting the transaction.
+    max_delay: Duration,
 }
 
 impl ConsensusSubmitter {
@@ -127,12 +131,14 @@ impl ConsensusSubmitter {
         buffer_size: usize,
         committee: Committee,
         tx_consensus_listener: Sender<ConsensusInput>,
+        max_delay: Duration,
     ) -> Self {
         Self {
             consensus_address,
             buffer_size,
             committee,
             tx_consensus_listener,
+            max_delay,
         }
     }
 
@@ -155,15 +161,6 @@ impl ConsensusSubmitter {
         //let serialized = serialize_consensus_transaction(certificate);
         let serialized = bincode::serialize(certificate).expect("Failed to serialize Consensus Tx");
         let bytes = Bytes::from(serialized.clone());
-        // TODO [issue #1452]: We are re-creating a connection every time. This is wasteful but does not
-        // require to take self as a mutable reference.
-        Self::reconnect(self.consensus_address, self.buffer_size)
-            .await?
-            .sink()
-            .send(bytes.clone())
-            .await
-            .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))?;
-        println!("CONSENSUS_SUBMITTER: 2");
 
         // Notify the consensus listener that we are expecting to process this certificate.
         let (sender, receiver) = oneshot::channel();
@@ -175,11 +172,27 @@ impl ConsensusSubmitter {
             .send(consensus_input)
             .await
             .expect("Failed to notify consensus listener");
+        println!("CONSENSUS_SUBMITTER: 2");
+
+        // TODO [issue #1452]: We are re-creating a connection every time. This is wasteful but does not
+        // require to take self as a mutable reference.
+        Self::reconnect(self.consensus_address, self.buffer_size)
+            .await?
+            .sink()
+            .send(bytes)
+            .await
+            .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))?;
         println!("CONSENSUS_SUBMITTER: 3");
 
         // Wait for the consensus to sequence the certificate and assign locks to shared objects.
+        /*
+        timeout(self.max_delay, receiver)
+            .await
+            .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))?
+            .expect("Chanel with consensus listener dropped")
+            */
         receiver
             .await
-            .expect("Failed to receive reply from consensus listener")
+            .expect("Chanel with consensus listener dropped")
     }
 }
