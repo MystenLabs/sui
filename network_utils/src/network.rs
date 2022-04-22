@@ -85,6 +85,14 @@ impl NetworkClient {
         }
     }
 
+    pub fn base_address(&self) -> &str {
+        &self.base_address
+    }
+
+    pub fn base_port(&self) -> u16 {
+        self.base_port
+    }
+
     async fn batch_send_one_chunk(
         &self,
         requests: Vec<Bytes>,
