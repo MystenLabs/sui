@@ -54,6 +54,10 @@ export const processDisplayValue = (display: { bytes: number[] } | string) =>
 
 export const _toSpace = (str: string) => str.split('_').join(' ');
 
+export function isString(obj: any): obj is string {
+    return typeof obj === 'string';
+}
+
 /* Currently unused but potentially useful:
  *
  * export const isValidHttpUrl = (url: string) => {

@@ -10,6 +10,7 @@ import {
     extractOwnerData,
     trimStdLibPrefix,
     _toSpace,
+    isString
 } from '../../utils/stringUtils';
 
 import styles from './ObjectResult.module.css';
@@ -24,9 +25,6 @@ import {
     isSuiPropertyType,
 } from '../../utils/typeChecks';
 
-function isString(obj: any): obj is string {
-    return typeof obj === 'string';
-}
 
 function renderConnectedEntity(
     key: string,
