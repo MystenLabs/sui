@@ -3,12 +3,12 @@
 
 import { useEffect, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
-import { GetObjectInfoResponse, isGetObjectInfoResponse } from 'sui.js';
+import { type GetObjectInfoResponse, isGetObjectInfoResponse } from 'sui.js';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import theme from '../../styles/theme.module.css';
-import { DefaultRpcClient as rpc } from '../../utils/api/SuiRpcClient';
-import { Loadable } from '../../utils/loadState';
+import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
+import { type Loadable } from '../../utils/loadState';
 import ObjectLoaded from './ObjectLoaded';
 
 const DATATYPE_DEFAULT: Loadable<GetObjectInfoResponse> = {

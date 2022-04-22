@@ -9,7 +9,7 @@ import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
-import { Loadable } from '../../utils/loadState';
+import { type Loadable } from '../../utils/loadState';
 
 type PageData = {
     id: string;

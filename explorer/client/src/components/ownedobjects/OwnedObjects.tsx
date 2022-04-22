@@ -3,9 +3,9 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GetObjectInfoResponse } from 'sui.js';
+import { type GetObjectInfoResponse } from 'sui.js';
 
-import { DefaultRpcClient as rpc } from '../../utils/api/SuiRpcClient';
+import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { navigateWithUnknown } from '../../utils/searchUtil';
 import { findDataFromID } from '../../utils/static/searchUtil';
 import { trimStdLibPrefix, processDisplayValue } from '../../utils/stringUtils';

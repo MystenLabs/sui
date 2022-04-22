@@ -5,18 +5,17 @@ import { useEffect, useState, useCallback } from 'react';
 
 import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
-import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
-import { type AddressOwner } from '../../utils/api/SuiRpcClient';
 import {
     extractOwnerData,
     trimStdLibPrefix,
     _toSpace,
 } from '../../utils/stringUtils';
-import { type DataType } from './ObjectResultType';
 
 import styles from './ObjectResult.module.css';
-import { GetObjectInfoResponse } from 'sui.js';
+
+import { type GetObjectInfoResponse } from 'sui.js';
+
 import {
     checkIsIDType,
     hasBytesField,
