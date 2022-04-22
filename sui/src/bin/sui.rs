@@ -6,7 +6,7 @@ use clap::*;
 use sui::sui_commands::SuiCommand;
 
 #[cfg(test)]
-#[path = "unit_tests/cli_tests.rs"]
+#[path = "../unit_tests/cli_tests.rs"]
 mod cli_tests;
 
 #[derive(Parser)]
