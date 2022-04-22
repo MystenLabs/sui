@@ -730,13 +730,13 @@ SuiError:
     97:
       SharedObjectLockingFailure:
         NEWTYPE: STR
-    97:
+    98:
       SignatureSeedInvalidLength:
         NEWTYPE: U64
-    98:
+    99:
       HkdfError:
         NEWTYPE: STR
-    99:
+    100:
       SignatureKeyGenError:
         NEWTYPE: STR
 TransactionData:
