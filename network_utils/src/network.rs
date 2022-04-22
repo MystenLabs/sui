@@ -85,12 +85,21 @@ impl NetworkClient {
         }
     }
 
+    pub fn get_base_address(&self) -> &str {
+        &self.base_address
+    }
+
+    pub fn get_base_port(&self) -> u16 {
+        self.base_port
+    }
+
     async fn batch_send_one_chunk(
         &self,
         requests: Vec<Bytes>,
         _max_in_flight: u64,
     ) -> Vec<Result<BytesMut, std::io::Error>> {
         let address = format!("{}:{}", self.base_address, self.base_port);
+        // print!("@@@@@@@@@ {}", address);
         let stream = connect(address, self.buffer_size)
             .await
             .expect("Must be able to connect.");
