@@ -32,6 +32,7 @@ const GENESIS_CONFIG_NAME: &str = "genesis_config.json";
 pub const VALIDATOR_BINARY_NAME: &str = "validator";
 
 /// A helper class to set up validators for benchmarking
+#[allow(unused)]
 pub struct ValidatorPreparer {
     running_mode: RunningMode,
     pub keys: Vec<(PublicKeyBytes, KeyPair)>,
@@ -164,6 +165,9 @@ impl ValidatorPreparer {
                 } else {
                     panic!("Invalid validator config in local-single-validator-process mode");
                 }
+
+                // Wait for server start
+                sleep(Duration::from_secs(20));
             }
             RunningMode::LocalSingleValidatorThread => {
                 if let ValidatorConfig::LocalSingleValidatorThreadConfig {
@@ -185,6 +189,8 @@ impl ValidatorPreparer {
                 } else {
                     panic!("Invalid validator config in local-single-validator-thread mode");
                 }
+                // Wait for server start
+                sleep(Duration::from_secs(3));
             }
         }
         // Wait for server start
