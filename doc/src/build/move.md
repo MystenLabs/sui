@@ -127,9 +127,6 @@ file:
 ```
 [addresses]
 Sui = "0x2"
-
-[dev-addresses]
-Sui = "0x2"
 ```
 
 ### Move structs
