@@ -73,31 +73,3 @@ jsonrpsee-proc-macros = "0.10.1"
 
 [dev-dependencies]
 tracing-test = "0.2.1"
-
-[[bin]]
-name = "bench"
-path = "src/bench.rs"
-
-[[bin]]
-name = "wallet"
-path = "src/wallet.rs"
-
-[[bin]]
-name = "sui"
-path = "src/sui.rs"
-
-[[bin]]
-name = "sui-move"
-path = "src/sui-move.rs"
-
-[[bin]]
-name = "rest_server"
-path = "src/rest_server.rs"
-
-[[bin]]
-name = "rpc-server"
-path = "src/rpc_server.rs"
-
-[[bin]]
-name = "validator"
-path = "src/validator.rs"
