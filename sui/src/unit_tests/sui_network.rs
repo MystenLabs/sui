@@ -21,19 +21,11 @@ pub async fn start_test_network(
 
     let mut genesis_config =
         genesis_config.unwrap_or(GenesisConfig::default_genesis(&working_dir)?);
-    let authorities = genesis_config
+    genesis_config.authorities = genesis_config
         .authorities
-        .iter()
-        .map(|info| AuthorityPrivateInfo {
-            key_pair: info.key_pair.copy(),
-            host: info.host.clone(),
-            port: 0,
-            db_path: info.db_path.clone(),
-            stake: info.stake,
-            consensus_address: info.consensus_address,
-        })
+        .into_iter()
+        .map(|info| AuthorityPrivateInfo { port: 0, ..info })
         .collect();
-    genesis_config.authorities = authorities;
 
     let (network_config, accounts, mut keystore) = genesis(genesis_config).await?;
     let network = SuiNetwork::start(&network_config).await?;
