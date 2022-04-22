@@ -32,7 +32,6 @@ const GENESIS_CONFIG_NAME: &str = "genesis_config.json";
 pub const VALIDATOR_BINARY_NAME: &str = "validator";
 
 /// A helper class to set up validators for benchmarking
-#[allow(unused)]
 pub struct ValidatorPreparer {
     running_mode: RunningMode,
     pub keys: Vec<(PublicKeyBytes, KeyPair)>,

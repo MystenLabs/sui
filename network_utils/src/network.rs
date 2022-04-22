@@ -85,11 +85,11 @@ impl NetworkClient {
         }
     }
 
-    pub fn get_base_address(&self) -> &str {
+    pub fn base_address(&self) -> &str {
         &self.base_address
     }
 
-    pub fn get_base_port(&self) -> u16 {
+    pub fn base_port(&self) -> u16 {
         self.base_port
     }
 
@@ -99,7 +99,6 @@ impl NetworkClient {
         _max_in_flight: u64,
     ) -> Vec<Result<BytesMut, std::io::Error>> {
         let address = format!("{}:{}", self.base_address, self.base_port);
-        // print!("@@@@@@@@@ {}", address);
         let stream = connect(address, self.buffer_size)
             .await
             .expect("Must be able to connect.");
