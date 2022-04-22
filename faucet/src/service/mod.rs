@@ -63,6 +63,8 @@ pub async fn dispatch(cmd: FaucetRequest, faucet: &(impl Faucet + Send + Sync)) 
 
 #[cfg(test)]
 mod tests {
+    use sui_types::base_types::SuiAddress;
+
     use super::faucet_service::DEFAULT_NUM_COINS;
     use super::*;
     use crate::{setup_network_and_wallet, SimpleFaucet};
@@ -77,7 +79,9 @@ mod tests {
         // Try calling the service from a new thread
         let handle = thread::spawn(move || async move {
             let res = cloned
-                .execute(FaucetRequest::new_fixed_amount_request("t1"))
+                .execute(FaucetRequest::new_fixed_amount_request(
+                    SuiAddress::random_for_testing_only(),
+                ))
                 .await;
             assert_res_ok(res, DEFAULT_NUM_COINS);
         });
@@ -85,7 +89,9 @@ mod tests {
 
         // Try calling the service from the same thread
         let res = service
-            .execute(FaucetRequest::new_fixed_amount_request("t2"))
+            .execute(FaucetRequest::new_fixed_amount_request(
+                SuiAddress::random_for_testing_only(),
+            ))
             .await;
         assert_res_ok(res, DEFAULT_NUM_COINS);
         network.kill().await.unwrap();

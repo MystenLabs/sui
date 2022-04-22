@@ -3,7 +3,11 @@
 use crate::FaucetError;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use sui_types::{base_types::ObjectID, gas_coin::GasCoin, object::Object};
+use sui_types::{
+    base_types::{ObjectID, SuiAddress},
+    gas_coin::GasCoin,
+    object::Object,
+};
 
 mod simple_faucet;
 pub use self::simple_faucet::SimpleFaucet;
@@ -22,7 +26,11 @@ pub struct CoinInfo {
 #[async_trait]
 pub trait Faucet {
     /// Send `Coin<SUI>` of the specified amount to the recipient
-    async fn send(&self, recipient: &str, amounts: &[u64]) -> Result<FaucetReceipt, FaucetError>;
+    async fn send(
+        &self,
+        recipient: SuiAddress,
+        amounts: &[u64],
+    ) -> Result<FaucetReceipt, FaucetError>;
 }
 
 impl From<Vec<Object>> for FaucetReceipt {
@@ -58,7 +66,7 @@ mod tests {
     }
 
     async fn test_basic_interface(faucet: impl Faucet) {
-        let recipient = "recipient";
+        let recipient = SuiAddress::random_for_testing_only();
         let amounts = vec![1, 2, 3];
 
         let FaucetReceipt { sent } = faucet.send(recipient, &amounts).await.unwrap();

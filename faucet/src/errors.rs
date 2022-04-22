@@ -11,8 +11,11 @@ pub enum FaucetError {
     #[error("Faucet needs at least {0} coins, but only has {1} coin")]
     InsuffientCoins(usize, usize),
 
-    #[error("Fail to split coin: `{0}`")]
+    #[error("Wallet Error: `{0}`")]
     Wallet(String),
+
+    #[error("Coin Transfer Failed `{0}`")]
+    Transfer(String),
 
     #[error("Internal error: {0}")]
     Internal(String),

@@ -4,6 +4,7 @@
 use crate::*;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use sui_types::base_types::SuiAddress;
 
 // TODO: change this to bigger value once we are done with local testing
 pub(crate) const DEFAULT_AMOUNT: u64 = 20;
@@ -20,11 +21,11 @@ pub enum FaucetRequest {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FixedAmountRequest {
-    recipient: String,
+    recipient: SuiAddress,
 }
 
 impl FaucetRequest {
-    pub fn new_fixed_amount_request(recipient: impl Into<String>) -> Self {
+    pub fn new_fixed_amount_request(recipient: impl Into<SuiAddress>) -> Self {
         Self::FixedAmountRequest(FixedAmountRequest {
             recipient: recipient.into(),
         })
@@ -45,7 +46,7 @@ pub struct FaucetResponse {
 impl FaucetService for FixedAmountRequest {
     async fn execute(self, faucet: &(impl Faucet + Send + Sync)) -> FaucetResponse {
         match faucet
-            .send(&self.recipient, &[DEFAULT_AMOUNT; DEFAULT_NUM_COINS])
+            .send(self.recipient, &[DEFAULT_AMOUNT; DEFAULT_NUM_COINS])
             .await
         {
             Ok(v) => v.into(),
