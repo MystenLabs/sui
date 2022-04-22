@@ -4,10 +4,7 @@
 
 use crate::transport::*;
 use bytes::{Bytes, BytesMut};
-use std::{
-    net::TcpListener,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::net::TcpListener;
 use sui_types::{error::*, serialize::*};
 use tracing::debug;
 
@@ -156,9 +153,6 @@ pub struct NetworkServer {
     pub base_address: String,
     pub base_port: u16,
     pub buffer_size: usize,
-    // Stats
-    packets_processed: AtomicUsize,
-    user_errors: AtomicUsize,
 }
 
 impl NetworkServer {
@@ -167,25 +161,7 @@ impl NetworkServer {
             base_address,
             base_port,
             buffer_size,
-            packets_processed: AtomicUsize::new(0),
-            user_errors: AtomicUsize::new(0),
         }
-    }
-
-    pub fn packets_processed(&self) -> usize {
-        self.packets_processed.load(Ordering::Relaxed)
-    }
-
-    pub fn increment_packets_processed(&self) {
-        self.packets_processed.fetch_add(1, Ordering::Relaxed);
-    }
-
-    pub fn user_errors(&self) -> usize {
-        self.user_errors.load(Ordering::Relaxed)
-    }
-
-    pub fn increment_user_errors(&self) {
-        self.user_errors.fetch_add(1, Ordering::Relaxed);
     }
 }
 

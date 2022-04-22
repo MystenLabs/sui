@@ -24,6 +24,7 @@ signature = "1.5.0"
 ed25519-dalek = "1.0.1"
 scopeguard = "1.1.0"
 clap = { version = "3.1.8", features = ["derive"] }
+prometheus_exporter = "0.8.4"
 
 sui-adapter = { path = "../sui_programmability/adapter" }
 sui-framework = { path = "../sui_programmability/framework" }

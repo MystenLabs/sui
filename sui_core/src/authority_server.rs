@@ -22,6 +22,9 @@ use tracing::{error, info, warn, Instrument};
 use crate::consensus_adapter::{ConsensusInput, ConsensusSubmitter};
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
+use prometheus_exporter::prometheus::{
+    register_int_counter, register_int_counter_vec, IntCounter, IntCounterVec,
+};
 use tokio::sync::broadcast::error::RecvError;
 
 #[cfg(test)]
@@ -37,11 +40,43 @@ mod server_tests;
 const CHUNK_SIZE: usize = 36;
 const MIN_BATCH_SIZE: u64 = 1000;
 const MAX_DELAY_MILLIS: u64 = 5_000; // 5 sec
+const PROM_PORT_ADDR: &str = "127.0.0.1:9184";
+
+/// Prometheus metrics which can be displayed in Grafana, queried and alerted on
+pub struct AuthorityMetrics {
+    total_requests: IntCounter,
+    requests_by_route: IntCounterVec,
+    error_requests: IntCounter,
+}
+
+impl AuthorityMetrics {
+    pub fn new() -> AuthorityMetrics {
+        Self {
+            total_requests: register_int_counter!(
+                "total_server_requests",
+                "Total number of authority server requests"
+            )
+            .unwrap(),
+            requests_by_route: register_int_counter_vec!(
+                "server_requests_by_route",
+                "Number of authority requests by route",
+                &["request_enum"]
+            )
+            .unwrap(),
+            error_requests: register_int_counter!(
+                "error_server_requests",
+                "Number of requests which resulted in errors"
+            )
+            .unwrap(),
+        }
+    }
+}
 
 pub struct AuthorityServer {
     server: NetworkServer,
     pub state: Arc<AuthorityState>,
     consensus_submitter: ConsensusSubmitter,
+    metrics: AuthorityMetrics,
 }
 
 impl AuthorityServer {
@@ -59,10 +94,17 @@ impl AuthorityServer {
             state.committee.clone(),
             tx_consensus_listener,
         );
+
+        // Start Prometheus metrics HTTP server/scrape point
+        let prom_binding = PROM_PORT_ADDR.parse().unwrap();
+        prometheus_exporter::start(prom_binding).expect("Failed to start Prometheus exporter");
+        info!("Starting Prometheus HTTP endpoint at {}", PROM_PORT_ADDR);
+
         Self {
             server: NetworkServer::new(base_address, base_port, buffer_size),
             state,
             consensus_submitter,
+            metrics: AuthorityMetrics::new(),
         }
     }
 
@@ -197,6 +239,12 @@ impl AuthorityServer {
     where
         A: RwChannel<'b>,
     {
+        // Tally requests by "route" or SerializedMessage enum name
+        self.metrics
+            .requests_by_route
+            .with_label_values(&[message.enum_name()])
+            .inc();
+
         let reply = match message {
             SerializedMessage::Transaction(message) => {
                 let tx_digest = message.digest();
@@ -273,14 +321,14 @@ impl AuthorityServer {
             _ => Err(SuiError::UnexpectedMessage),
         };
 
-        self.server.increment_packets_processed();
+        self.metrics.total_requests.inc();
 
-        if self.server.packets_processed() % 5000 == 0 {
+        if self.metrics.total_requests.get() % 5000 == 0 {
             info!(
                 "{}:{} has processed {} packets",
                 self.server.base_address,
                 self.server.base_port,
-                self.server.packets_processed()
+                self.metrics.total_requests.get()
             );
         }
 
@@ -288,7 +336,7 @@ impl AuthorityServer {
             Ok(x) => x,
             Err(error) => {
                 warn!("User query failed: {error}");
-                self.server.increment_user_errors();
+                self.metrics.error_requests.inc();
                 Some(serialize_error(&error))
             }
         }

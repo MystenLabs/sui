@@ -8,11 +8,13 @@ use crate::error::*;
 use anyhow::format_err;
 use serde::{Deserialize, Serialize};
 
+use name_variant::NamedVariant;
+
 #[cfg(test)]
 #[path = "unit_tests/serialize_tests.rs"]
 mod serialize_tests;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, NamedVariant)]
 pub enum SerializedMessage {
     Transaction(Box<Transaction>),
     Vote(Box<SignedTransaction>),
@@ -29,6 +31,14 @@ pub enum SerializedMessage {
     ConsensusOutput(Box<ConsensusOutput>),
     ConsensusSync(Box<ConsensusSync>),
     ConsensusTransaction(Box<ConsensusTransaction>),
+}
+
+impl SerializedMessage {
+    /// Returns a static &str for the name of the SerializedMessage variant
+    #[allow(unused)]
+    pub fn enum_name(&self) -> &'static str {
+        self.variant_name()
+    }
 }
 
 // This helper structure is only here to avoid cloning while serializing commands.
