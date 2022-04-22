@@ -20,10 +20,7 @@ pub mod transaction_creator;
 pub mod validator_preparer;
 use crate::benchmark::bench_types::{Benchmark, BenchmarkType};
 use crate::benchmark::load_generator::{
-    calculate_throughput,
-    check_transaction_response,
-    send_tx_chunks,
-    FixedRateLoadGenerator,
+    calculate_throughput, check_transaction_response, send_tx_chunks, FixedRateLoadGenerator,
 };
 use crate::benchmark::transaction_creator::TransactionCreator;
 use crate::benchmark::validator_preparer::ValidatorPreparer;
@@ -31,7 +28,6 @@ use crate::benchmark::validator_preparer::ValidatorPreparer;
 use self::bench_types::{BenchmarkResult, MicroBenchmarkResult, MicroBenchmarkType};
 
 const FOLLOWER_BATCH_SIZE: u64 = 10_000;
-
 
 pub fn run_benchmark(benchmark: Benchmark) -> BenchmarkResult {
     // Only microbenchmark is supported
@@ -73,8 +69,6 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
             benchmark.batch_size,
             benchmark.use_move,
             num_transactions,
-            benchmark.committee_size,
-            benchmark.db_cpus,
             validator_preparer,
         ),
         MicroBenchmarkType::Latency {
@@ -86,8 +80,6 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
             network_server,
             connections,
             benchmark.use_move,
-            benchmark.committee_size,
-            benchmark.db_cpus,
             num_chunks,
             chunk_size,
             period_us,
@@ -98,13 +90,11 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
 
 fn run_throughout_microbench(
     network_client: NetworkClient,
-    _network_server: NetworkServer,
+    network_server: NetworkServer,
     connections: usize,
     batch_size: usize,
     use_move: bool,
     num_transactions: usize,
-    _committee_size: usize,
-    _db_cpus: usize,
     mut validator_preparer: ValidatorPreparer,
 ) -> MicroBenchmarkResult {
     assert_eq!(
@@ -130,7 +120,7 @@ fn run_throughout_microbench(
         &mut validator_preparer,
     );
 
-    validator_preparer.deploy_validator(_network_server);
+    validator_preparer.deploy_validator(network_server);
 
     // Wait for server start
     sleep(Duration::from_secs(20));
@@ -165,8 +155,6 @@ fn run_latency_microbench(
     _network_server: NetworkServer,
     connections: usize,
     use_move: bool,
-    _committee_size: usize,
-    _db_cpus: usize,
     num_chunks: usize,
     chunk_size: usize,
     period_us: u64,

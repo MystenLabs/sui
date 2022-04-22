@@ -165,8 +165,7 @@ impl From<&NetworkConfig> for Committee {
     }
 }
 
-// fixme
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 #[serde(default)]
 pub struct GenesisConfig {
     pub authorities: Vec<AuthorityPrivateInfo>,
@@ -178,8 +177,7 @@ pub struct GenesisConfig {
 
 impl Config for GenesisConfig {}
 
-// fixme
-#[derive(Serialize, Deserialize, Default, Debug)]
+#[derive(Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct AccountConfig {
     #[serde(
@@ -190,8 +188,7 @@ pub struct AccountConfig {
     pub address: Option<SuiAddress>,
     pub gas_objects: Vec<ObjectConfig>,
 }
-// fixme
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 pub struct ObjectConfig {
     #[serde(default = "ObjectID::random")]
     pub object_id: ObjectID,

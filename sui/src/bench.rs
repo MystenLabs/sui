@@ -5,7 +5,6 @@
 
 use clap::*;
 
-// use std::path::Path;
 use sui::benchmark::validator_preparer::VALIDATOR_BINARY_NAME;
 use sui::benchmark::{bench_types, run_benchmark};
 use tracing::subscriber::set_global_default;
@@ -37,8 +36,3 @@ fn running_mode_pre_check(benchmark: &bench_types::Benchmark) {
         },
     }
 }
-
-// fn main() {
-//    let b = Path::new("file.txt").is_file();
-//    println!("{}", b);
-// }

@@ -60,7 +60,6 @@ fn create_object(object_id: ObjectID, owner: SuiAddress, use_move: bool) -> Obje
 }
 
 /// This builds, signs a cert and serializes it
-#[allow(unused)]
 fn make_serialized_cert(
     keys: &[(PublicKeyBytes, KeyPair)],
     committee: &Committee,
@@ -115,9 +114,9 @@ fn make_gas_objects(
 fn make_serialized_transactions(
     address: SuiAddress,
     keypair: KeyPair,
-    _committee: &Committee,
+    committee: &Committee,
     account_gas_objects: &[(Vec<Object>, Object)],
-    _authority_keys: &[(PublicKeyBytes, KeyPair)],
+    authority_keys: &[(PublicKeyBytes, KeyPair)],
     batch_size: usize,
     use_move: bool,
 ) -> Vec<Bytes> {
@@ -163,7 +162,7 @@ fn make_serialized_transactions(
 
             vec![
                 serialized_transaction.into(),
-                make_serialized_cert(_authority_keys, _committee, transaction).into(),
+                make_serialized_cert(authority_keys, committee, transaction).into(),
             ]
         })
         .flatten()

@@ -10,7 +10,7 @@ use sui_types::{
     messages::{InputObjectKind, SingleTransactionKind, Transaction},
     object::{Object, Owner},
 };
-use tracing::{debug, info};
+use tracing::{debug};
 
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
@@ -153,7 +153,6 @@ fn check_one_lock(
             );
 
             // Check the digest matches
-            // info!("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Got object id: {:?}, object digest: {:?}, expected: {:?}, storage rebate: {:?}, owner {:?}, previous transaction: {:?}", object.id(), object.digest(), object_digest, object.storage_rebate, object.owner, object.previous_transaction);
 
             let expected_digest = object.digest();
             fp_ensure!(
