@@ -1,13 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-
-import ErrorResult from '../../components/error-result/ErrorResult';
-import Longtext from '../../components/longtext/Longtext';
-import theme from '../../styles/theme.module.css';
-import { findDataFromID } from '../../utils/static/searchUtil';
-
 import {
     type SingleTransactionKind,
     type Transfer,
@@ -19,10 +14,16 @@ import {
     isTransfer,
 } from 'sui.js';
 
-import styles from './TransactionResult.module.css';
+import ErrorResult from '../../components/error-result/ErrorResult';
+import Longtext from '../../components/longtext/Longtext';
+import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
-import { useEffect, useState } from 'react';
 import { type Loadable } from '../../utils/loadState';
+import { findDataFromID } from '../../utils/static/searchUtil';
+
+
+import styles from './TransactionResult.module.css';
+
 
 const initState: Loadable<CertifiedTransaction> = {
     loadState: 'pending',

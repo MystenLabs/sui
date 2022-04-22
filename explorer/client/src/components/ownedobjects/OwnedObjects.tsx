@@ -10,8 +10,8 @@ import {
     isObjectRef,
     type GetObjectInfoResponse,
 } from 'sui.js';
-import { ObjectResult } from '../../pages/object-result/ObjectResultType';
 
+import { ObjectResult } from '../../pages/object-result/ObjectResultType';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { navigateWithUnknown } from '../../utils/searchUtil';
 import { findDataFromID } from '../../utils/static/searchUtil';

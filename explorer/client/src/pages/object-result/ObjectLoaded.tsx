@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect, useState, useCallback } from 'react';
+import { isObjectExistsInfo, type GetObjectInfoResponse } from 'sui.js';
 
 import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
@@ -12,11 +13,6 @@ import {
     _toSpace,
     isString,
 } from '../../utils/stringUtils';
-
-import styles from './ObjectResult.module.css';
-
-import { isObjectExistsInfo, type GetObjectInfoResponse } from 'sui.js';
-
 import {
     checkIsIDType,
     hasBytesField,
@@ -24,6 +20,10 @@ import {
     checkVecOfSingleID,
     isSuiPropertyType,
 } from '../../utils/typeChecks';
+
+import styles from './ObjectResult.module.css';
+
+
 
 function renderConnectedEntity(
     key: string,

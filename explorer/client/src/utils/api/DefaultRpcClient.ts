@@ -1,8 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { tryGetRpcSetting } from './rpcSetting';
 import { JsonRpcProvider } from 'sui.js';
+
+import { tryGetRpcSetting } from './rpcSetting';
 
 export type AddressBytes = number[];
 export type AddressOwner = { AddressOwner: AddressBytes };
