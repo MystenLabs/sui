@@ -1,0 +1,16 @@
+[package]
+name = "sui-adapter-transactional-tests"
+version = "0.1.0"
+authors = ["Mysten Labs <eng@mystenlabs.com>"]
+description = "Adapter and accompanying CLI for local sui development"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dev-dependencies]
+datatest-stable = "0.1.1"
+sui-transactional-test-runner = { path = "../../transactional-test-runner" }
+
+[[test]]
+name = "tests"
+harness = false

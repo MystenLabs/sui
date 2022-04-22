@@ -109,6 +109,10 @@ impl SuiAddress {
         let value = decode_bytes_hex(&s).map_err(serde::de::Error::custom)?;
         Ok(Some(value))
     }
+
+    pub fn to_inner(self) -> [u8; SUI_ADDRESS_LENGTH] {
+        self.0
+    }
 }
 
 impl From<ObjectID> for SuiAddress {
