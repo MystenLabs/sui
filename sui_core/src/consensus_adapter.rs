@@ -12,7 +12,6 @@ use sui_network::transport::{RwChannel, TcpDataStream};
 use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::ConsensusTransaction;
-use sui_types::serialize::serialize_consensus_transaction;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;

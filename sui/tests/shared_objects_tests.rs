@@ -6,7 +6,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 use sui_types::messages::ConsensusTransaction;
 use sui_types::serialize::{deserialize_message, serialize_consensus_transaction};
-use test_utils::authority::{spawn_test_authorities, test_authority_configs, NETWORK_BUFFER_SIZE};
+use test_utils::authority::{spawn_test_authorities, test_authority_configs};
 use test_utils::messages::test_shared_object_certificates;
 use test_utils::objects::{test_gas_objects, test_shared_object};
 use tokio::net::TcpStream;
@@ -23,15 +23,6 @@ async fn shared_object_transaction() {
 
     tokio::task::yield_now().await;
     let config = configs.pop().unwrap();
-    /*
-    let network = sui_network::network::NetworkClient::NetworkClient::new(
-        config.host,
-        config.port,
-        NETWORK_BUFFER_SIZE,
-        /* send_timeout */ Duration::from_millis(1_000),
-        /* recv_timeout */ Duration::from_millis(1_000),
-    );
-    */
 
     let authority_address: SocketAddr = format!("{}:{}", config.host, config.port).parse().unwrap();
     let stream = TcpStream::connect(authority_address).await.unwrap();
@@ -44,7 +35,6 @@ async fn shared_object_transaction() {
     tokio::time::sleep(Duration::from_millis(1_000)).await;
 
     println!("UNIT_TEST: 0");
-    //let reply = network.send_recv_bytes(serialized).await.unwrap();
     connection.send(Bytes::from(serialized)).await.unwrap();
     println!("UNIT_TEST: 1");
     let bytes = connection.next().await.unwrap().unwrap();
