@@ -3,7 +3,13 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { isObjectDigest, isObjectExistsInfo, isObjectNotExistsInfo, isObjectRef, type GetObjectInfoResponse } from 'sui.js';
+import {
+    isObjectDigest,
+    isObjectExistsInfo,
+    isObjectNotExistsInfo,
+    isObjectRef,
+    type GetObjectInfoResponse,
+} from 'sui.js';
 import { ObjectResult } from '../../pages/object-result/ObjectResultType';
 
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
@@ -69,7 +75,10 @@ function OwnedObjectAPI({ objects }: { objects: string[] }) {
             const results = pairs.map((pair) => {
                 const result = pair[1];
 
-                if (result.status === 'Exists' && isObjectExistsInfo(result.details)) {
+                if (
+                    result.status === 'Exists' &&
+                    isObjectExistsInfo(result.details)
+                ) {
                     const obj = result.details.object;
                     return {
                         id: pair[0],
@@ -78,7 +87,10 @@ function OwnedObjectAPI({ objects }: { objects: string[] }) {
                         display: processDisplayValue(obj['display'] as string),
                     };
                 }
-                if(result.status === 'Deleted' && isObjectRef(result.details)) {
+                if (
+                    result.status === 'Deleted' &&
+                    isObjectRef(result.details)
+                ) {
                     return {
                         id: pair[0],
                         Type: 'unknown',
