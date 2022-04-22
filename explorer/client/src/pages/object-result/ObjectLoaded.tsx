@@ -10,7 +10,7 @@ import {
     extractOwnerData,
     trimStdLibPrefix,
     _toSpace,
-    isString
+    isString,
 } from '../../utils/stringUtils';
 
 import styles from './ObjectResult.module.css';
@@ -24,7 +24,6 @@ import {
     checkVecOfSingleID,
     isSuiPropertyType,
 } from '../../utils/typeChecks';
-
 
 function renderConnectedEntity(
     key: string,
