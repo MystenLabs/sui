@@ -529,6 +529,7 @@ pub type SignedTransaction = TransactionEnvelope<AuthoritySignInfo>;
 impl SignedTransaction {
     /// Use signing key to create a signed object.
     pub fn new(
+        epoch: EpochId,
         transaction: Transaction,
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
@@ -539,6 +540,7 @@ impl SignedTransaction {
             data: transaction.data,
             tx_signature: transaction.tx_signature,
             auth_signature: AuthoritySignInfo {
+                epoch,
                 authority,
                 signature,
             },
@@ -596,6 +598,7 @@ pub struct CertifiedTransaction {
     #[serde(skip)]
     pub is_checked: bool,
 
+    pub epoch: EpochId,
     pub transaction: Transaction,
     pub signatures: Vec<(AuthorityName, AuthoritySignature)>,
 }
@@ -911,10 +914,12 @@ impl TransactionEffects {
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> SignedTransactionEffects {
         let signature = AuthoritySignature::new(&self, secret);
+        let epoch = self.epoch;
 
         SignedTransactionEffects {
             effects: self,
             auth_signature: AuthoritySignInfo {
+                epoch,
                 authority: *authority_name,
                 signature,
             },
@@ -1075,18 +1080,21 @@ impl CertifiedTransaction {
         CertifiedTransaction {
             transaction_digest: OnceCell::new(),
             is_checked: false,
+            epoch: 0,
             transaction,
             signatures: Vec::new(),
         }
     }
 
     pub fn new_with_signatures(
+        epoch: EpochId,
         transaction: Transaction,
         signatures: Vec<(AuthorityName, AuthoritySignature)>,
     ) -> CertifiedTransaction {
         CertifiedTransaction {
             transaction_digest: OnceCell::new(),
             is_checked: false,
+            epoch,
             transaction,
             signatures,
         }

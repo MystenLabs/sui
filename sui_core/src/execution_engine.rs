@@ -9,6 +9,7 @@ use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::adapter;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest, TxContext},
+    committee::EpochId,
     error::SuiResult,
     gas::{self, SuiGasStatus},
     messages::{
@@ -16,7 +17,7 @@ use sui_types::{
         TransactionEffects, Transfer,
     },
     object::Object,
-    storage::{BackingPackageStore, Storage}, committee::EpochId,
+    storage::{BackingPackageStore, Storage},
 };
 use tracing::{debug, instrument};
 

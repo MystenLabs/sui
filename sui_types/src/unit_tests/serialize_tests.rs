@@ -149,7 +149,7 @@ fn test_vote() {
     );
 
     let (_, authority_key) = get_key_pair();
-    let vote = SignedTransaction::new(
+    let vote = SignedTransaction::new(0,
         transaction,
         *authority_key.public_key_bytes(),
         &authority_key,
@@ -213,7 +213,7 @@ fn test_info_response() {
     );
 
     let (_, auth_key) = get_key_pair();
-    let vote = SignedTransaction::new(transaction.clone(), *auth_key.public_key_bytes(), &auth_key);
+    let vote = SignedTransaction::new(0, transaction.clone(), *auth_key.public_key_bytes(), &auth_key);
 
     let mut cert = CertifiedTransaction::new(transaction);
 
@@ -309,7 +309,7 @@ fn test_time_vote() {
     let mut buf = Vec::new();
     let now = Instant::now();
     for _ in 0..100 {
-        let vote = SignedTransaction::new(
+        let vote = SignedTransaction::new(0, 
             transaction.clone(),
             *authority_key.public_key_bytes(),
             &authority_key,

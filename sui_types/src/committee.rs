@@ -27,7 +27,7 @@ impl Committee {
             .map(|(addr, _)| (*addr, (*addr).try_into().expect("Invalid Authority Key")))
             .collect();
         Committee {
-            epoch : 0, // TODO: eventually this should be non-zero
+            epoch: 0, // TODO: eventually this should be non-zero
             voting_rights,
             total_votes,
             expanded_keys,

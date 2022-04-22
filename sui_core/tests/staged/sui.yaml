@@ -34,6 +34,7 @@ AuthorityBatch:
           SIZE: 32
 AuthoritySignInfo:
   STRUCT:
+    - epoch: U64
     - authority:
         TYPENAME: PublicKeyBytes
     - signature:
@@ -69,6 +70,7 @@ CallArg:
           TYPENAME: ObjectID
 CertifiedTransaction:
   STRUCT:
+    - epoch: U64
     - transaction:
         TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::EmptySignInfo>"
     - signatures:

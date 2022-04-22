@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use move_core_types::account_address::AccountAddress;
-use sui_types::{event::Event, gas::SuiGasStatus, committee::EpochId};
+use sui_types::{committee::EpochId, event::Event, gas::SuiGasStatus};
 
 use super::*;
 

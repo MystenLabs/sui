@@ -842,6 +842,7 @@ where
                                 if state.good_stake >= threshold {
                                     state.certificate =
                                         Some(CertifiedTransaction::new_with_signatures(
+                                            self.committee.epoch(),
                                             transaction_ref.clone(),
                                             state.signatures.clone(),
                                         ));

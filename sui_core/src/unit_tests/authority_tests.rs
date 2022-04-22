@@ -1260,7 +1260,7 @@ fn init_certified_transfer_transaction(
 ) -> CertifiedTransaction {
     let transfer_transaction =
         init_transfer_transaction(sender, secret, recipient, object_ref, gas_object_ref);
-    let vote = SignedTransaction::new(
+    let vote = SignedTransaction::new(0, 
         transfer_transaction.clone(),
         authority_state.name,
         &*authority_state.secret,

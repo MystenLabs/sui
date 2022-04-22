@@ -211,7 +211,8 @@ impl AuthorityState {
         }
         let owned_objects = transaction_input_checker::filter_owned_objects(&all_objects);
 
-        let signed_transaction = SignedTransaction::new(transaction, self.name, &*self.secret);
+        let signed_transaction =
+            SignedTransaction::new(self.committee.epoch, transaction, self.name, &*self.secret);
 
         // Check and write locks, to signed transaction, into the database
         // The call to self.set_transaction_lock checks the lock is not conflicting,
