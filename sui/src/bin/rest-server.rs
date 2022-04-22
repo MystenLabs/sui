@@ -1,53 +1,57 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::{Ipv4Addr, SocketAddr};
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::sync::Arc;
-
 use anyhow::anyhow;
 use base64ct::{Base64, Encoding};
 use clap::*;
-use dropshot::{endpoint, Query, TypedBody};
 use dropshot::{
-    ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError,
-    HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext,
+    endpoint, ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError,
+    HttpResponseUpdatedNoContent, HttpServerStarter, Query, RequestContext, TypedBody,
 };
 use ed25519_dalek::ed25519::signature::Signature;
 use futures::lock::Mutex;
 use hyper::StatusCode;
-use move_core_types::identifier::Identifier;
-use move_core_types::parser::parse_type_tag;
-use move_core_types::value::MoveStructLayout;
+use move_core_types::{identifier::Identifier, parser::parse_type_tag, value::MoveStructLayout};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-
-use sui::config::PersistedConfig;
-use sui::gateway_config::GatewayConfig;
-use sui::rest_gateway::requests::{
-    CallRequest, CallRequestArg, GetObjectInfoRequest, GetObjectSchemaRequest, GetObjectsRequest,
-    GetTransactionDetailsRequest, MergeCoinRequest, PublishRequest, SignedTransaction,
-    SplitCoinRequest, SyncRequest, TransferTransactionRequest,
+use std::{
+    net::{Ipv4Addr, SocketAddr},
+    path::PathBuf,
+    str::FromStr,
+    sync::Arc,
 };
-use sui::rest_gateway::responses::{
-    custom_http_error, HttpResponseOk, JsonResponse, NamedObjectRef, ObjectResponse,
-    ObjectSchemaResponse, TransactionBytes,
+use sui::{
+    config::PersistedConfig,
+    gateway_config::GatewayConfig,
+    rest_gateway::{
+        requests::{
+            CallRequest, CallRequestArg, GetObjectInfoRequest, GetObjectSchemaRequest,
+            GetObjectsRequest, GetTransactionDetailsRequest, MergeCoinRequest, PublishRequest,
+            SignedTransaction, SplitCoinRequest, SyncRequest, TransferTransactionRequest,
+        },
+        responses::{
+            custom_http_error, HttpResponseOk, JsonResponse, NamedObjectRef, ObjectResponse,
+            ObjectSchemaResponse, TransactionBytes,
+        },
+    },
+    sui_config_dir, SUI_GATEWAY_CONFIG,
 };
-use sui::{sui_config_dir, SUI_GATEWAY_CONFIG};
-use sui_core::gateway_state::gateway_responses::TransactionResponse;
-use sui_core::gateway_state::{GatewayClient, GatewayState};
-use sui_types::base_types::*;
-use sui_types::crypto::SignableBytes;
-use sui_types::crypto::{self};
-use sui_types::messages::{CallArg, CertifiedTransaction, Transaction, TransactionData};
-use sui_types::object::Object as SuiObject;
-use sui_types::object::ObjectRead;
+use sui_core::gateway_state::{
+    gateway_responses::TransactionResponse, GatewayClient, GatewayState,
+};
+use sui_types::{
+    base_types::*,
+    crypto::{
+        SignableBytes, {self},
+    },
+    messages::{CallArg, CertifiedTransaction, Transaction, TransactionData},
+    object::{Object as SuiObject, ObjectRead},
+};
 
 const DEFAULT_REST_SERVER_PORT: &str = "5001";
 const DEFAULT_REST_SERVER_ADDR_IPV4: &str = "127.0.0.1";
 
-#[path = "unit_tests/rest_server_tests.rs"]
+#[path = "../unit_tests/rest_server_tests.rs"]
 #[cfg(test)]
 mod rest_server_tests;
 
