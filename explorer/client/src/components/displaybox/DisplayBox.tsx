@@ -50,9 +50,6 @@ function DisplayBox({
     const [hasDisplayLoaded, setHasDisplayLoaded] = useState(false);
     const [hasFailedToLoad, setHasFailedToLoad] = useState(false);
 
-    // @ts-ignore
-    const contents = data.details.object;
-
     const imageStyle = hasDisplayLoaded ? {} : { display: 'none' };
     const handleImageLoad = useCallback(
         () => setHasDisplayLoaded(true),
