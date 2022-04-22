@@ -65,12 +65,13 @@ pub async fn dispatch(cmd: FaucetRequest, faucet: &(impl Faucet + Send + Sync)) 
 mod tests {
     use super::faucet_service::DEFAULT_NUM_COINS;
     use super::*;
-    use crate::SimpleFaucet;
+    use crate::{setup_network_and_wallet, SimpleFaucet};
     use std::thread;
 
     #[tokio::test]
     async fn service_should_works() {
-        let service = Service::new(SimpleFaucet::default());
+        let (network, context, _address) = setup_network_and_wallet().await.unwrap();
+        let service = Service::new(SimpleFaucet::new(context));
         let cloned = service.clone();
 
         // Try calling the service from a new thread
@@ -87,6 +88,7 @@ mod tests {
             .execute(FaucetRequest::new_fixed_amount_request("t2"))
             .await;
         assert_res_ok(res, DEFAULT_NUM_COINS);
+        network.kill().await.unwrap();
     }
 }
 

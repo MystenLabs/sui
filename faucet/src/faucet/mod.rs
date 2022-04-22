@@ -15,12 +15,16 @@ pub trait Faucet {
 
 #[cfg(test)]
 mod tests {
+    use crate::setup_network_and_wallet;
+
     use super::*;
 
     #[tokio::test]
     async fn simple_faucet_basic_interface_should_work() {
-        let store = SimpleFaucet::new();
+        let (network, context, _address) = setup_network_and_wallet().await.unwrap();
+        let store = SimpleFaucet::new(context);
         test_basic_interface(store).await;
+        network.kill().await.unwrap();
     }
 
     async fn test_basic_interface(faucet: impl Faucet) {
