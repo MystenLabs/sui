@@ -5,7 +5,8 @@ use crate::*;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-pub(crate) const DEFAULT_AMOUNT: u64 = 2000;
+// TODO: change this to bigger value once we are done with local testing
+pub(crate) const DEFAULT_AMOUNT: u64 = 20;
 pub(crate) const DEFAULT_NUM_COINS: usize = 5;
 
 /* -------------------------------------------------------------------------- */
@@ -36,7 +37,7 @@ impl FaucetRequest {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FaucetResponse {
-    pub gas_object_ids: Vec<String>,
+    pub transferred_gas_objects: Vec<CoinInfo>,
     pub error: Option<String>,
 }
 
@@ -57,15 +58,15 @@ impl From<FaucetError> for FaucetResponse {
     fn from(e: FaucetError) -> Self {
         Self {
             error: Some(e.to_string()),
-            gas_object_ids: vec![],
+            transferred_gas_objects: vec![],
         }
     }
 }
 
-impl From<Vec<String>> for FaucetResponse {
-    fn from(v: Vec<String>) -> Self {
+impl From<FaucetReceipt> for FaucetResponse {
+    fn from(v: FaucetReceipt) -> Self {
         Self {
-            gas_object_ids: v,
+            transferred_gas_objects: v.sent,
             error: None,
         }
     }

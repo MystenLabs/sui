@@ -71,7 +71,7 @@ mod tests {
     #[tokio::test]
     async fn service_should_works() {
         let (network, context, _address) = setup_network_and_wallet().await.unwrap();
-        let service = Service::new(SimpleFaucet::new(context));
+        let service = Service::new(SimpleFaucet::new(context).await.unwrap());
         let cloned = service.clone();
 
         // Try calling the service from a new thread
@@ -95,5 +95,5 @@ mod tests {
 #[cfg(test)]
 pub fn assert_res_ok(res: FaucetResponse, num_objects: usize) {
     assert_eq!(res.error, None);
-    assert_eq!(res.gas_object_ids.len(), num_objects);
+    assert_eq!(res.transferred_gas_objects.len(), num_objects);
 }

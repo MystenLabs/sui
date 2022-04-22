@@ -23,7 +23,9 @@ async fn main() -> Result<(), anyhow::Error> {
     let app = Router::new()
         .route("/", get(health))
         .route("/gas", post(request_gas))
-        .layer(Extension(Service::new(SimpleFaucet::new(context))));
+        .layer(Extension(Service::new(
+            SimpleFaucet::new(context).await.unwrap(),
+        )));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 5003));
     info!("listening on {}", addr);
