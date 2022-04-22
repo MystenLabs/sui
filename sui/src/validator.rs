@@ -40,6 +40,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let cfg = ValidatorOpt::parse();
     let genesis_conf: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
+    // print!("config: {:?}", genesis_conf);
     let address = cfg.address;
 
     let (network_config, _, _) = genesis(genesis_conf).await?;

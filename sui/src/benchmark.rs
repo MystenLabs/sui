@@ -14,23 +14,28 @@ use sui_types::messages::{BatchInfoRequest, BatchInfoResponseItem};
 use sui_types::serialize::*;
 use tokio::runtime::{Builder, Runtime};
 use tracing::{error, info};
-
 pub mod bench_types;
 pub mod load_generator;
 pub mod transaction_creator;
+pub mod validator_preparer;
 use crate::benchmark::bench_types::{Benchmark, BenchmarkType};
 use crate::benchmark::load_generator::{
-    calculate_throughput, check_transaction_response, send_tx_chunks, spawn_authority_server,
+    calculate_throughput,
+    check_transaction_response,
+    send_tx_chunks,
     FixedRateLoadGenerator,
 };
 use crate::benchmark::transaction_creator::TransactionCreator;
+use crate::benchmark::validator_preparer::ValidatorPreparer;
 
 use self::bench_types::{BenchmarkResult, MicroBenchmarkResult, MicroBenchmarkType};
 
 const FOLLOWER_BATCH_SIZE: u64 = 10_000;
 
+
 pub fn run_benchmark(benchmark: Benchmark) -> BenchmarkResult {
-    // Only microbenchmark support is supported
+    // Only microbenchmark is supported
+    info!("benchmark : {:?}", benchmark);
     BenchmarkResult::MicroBenchmark(run_microbenchmark(benchmark))
 }
 
@@ -52,7 +57,14 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
     } else {
         num_cpus::get()
     };
-
+    let validator_preparer = ValidatorPreparer::new(
+        benchmark.running_mode,
+        benchmark.working_dir,
+        benchmark.committee_size,
+        &network_client.get_base_address(),
+        network_client.get_base_port(),
+        benchmark.db_cpus,
+    );
     match type_ {
         MicroBenchmarkType::Throughput { num_transactions } => run_throughout_microbench(
             network_client,
@@ -63,6 +75,7 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
             num_transactions,
             benchmark.committee_size,
             benchmark.db_cpus,
+            validator_preparer,
         ),
         MicroBenchmarkType::Latency {
             num_chunks,
@@ -78,19 +91,21 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
             num_chunks,
             chunk_size,
             period_us,
+            validator_preparer,
         ),
     }
 }
 
 fn run_throughout_microbench(
     network_client: NetworkClient,
-    network_server: NetworkServer,
+    _network_server: NetworkServer,
     connections: usize,
     batch_size: usize,
     use_move: bool,
     num_transactions: usize,
-    committee_size: usize,
-    db_cpus: usize,
+    _committee_size: usize,
+    _db_cpus: usize,
+    mut validator_preparer: ValidatorPreparer,
 ) -> MicroBenchmarkResult {
     assert_eq!(
         num_transactions % batch_size,
@@ -100,11 +115,11 @@ fn run_throughout_microbench(
     // In order to simplify things, we send chunks on each connection and try to ensure all connections have equal load
     assert!(
         (num_transactions % connections) == 0,
-        "num_transactions must {} be multiple of number of TCP connections {}",
+        "num_transactions must be a multiple of number of TCP connections {}, got {}",
+        connections,
         num_transactions,
-        connections
     );
-    let mut tx_cr = TransactionCreator::new(committee_size, db_cpus);
+    let mut tx_cr = TransactionCreator::new();
 
     let chunk_size = batch_size * connections;
     let txes = tx_cr.generate_transactions(
@@ -112,20 +127,13 @@ fn run_throughout_microbench(
         use_move,
         batch_size * connections,
         num_transactions / chunk_size,
+        &mut validator_preparer,
     );
 
-    // Make multi-threaded runtime for the authority
-    thread::spawn(move || {
-        get_multithread_runtime().block_on(async move {
-            let server = spawn_authority_server(network_server, tx_cr.authority_state).await;
-            if let Err(e) = server.join().await {
-                error!("Server ended with an error: {e}");
-            }
-        });
-    });
+    validator_preparer.deploy_validator(_network_server);
 
     // Wait for server start
-    sleep(Duration::from_secs(3));
+    sleep(Duration::from_secs(20));
 
     // Follower to observe batches
     let follower_network_client = network_client.clone();
@@ -144,6 +152,9 @@ fn run_throughout_microbench(
         .par_iter()
         .map(|q| check_transaction_response(deserialize_message(&(q.as_ref().unwrap())[..])))
         .collect();
+
+    validator_preparer.clean_up();
+
     MicroBenchmarkResult::Throughput {
         chunk_throughput: calculate_throughput(num_transactions, elapsed),
     }
@@ -151,15 +162,15 @@ fn run_throughout_microbench(
 
 fn run_latency_microbench(
     network_client: NetworkClient,
-    network_server: NetworkServer,
+    _network_server: NetworkServer,
     connections: usize,
     use_move: bool,
-    committee_size: usize,
-    db_cpus: usize,
-
+    _committee_size: usize,
+    _db_cpus: usize,
     num_chunks: usize,
     chunk_size: usize,
     period_us: u64,
+    mut validator_preparer: ValidatorPreparer,
 ) -> MicroBenchmarkResult {
     // In order to simplify things, we send chunks on each connection and try to ensure all connections have equal load
     assert!(
@@ -168,26 +179,26 @@ fn run_latency_microbench(
         num_chunks * chunk_size,
         connections
     );
-    let mut tx_cr = TransactionCreator::new(committee_size, db_cpus);
+
+    let mut tx_cr = TransactionCreator::new();
 
     // These TXes are to load the network
-    let load_gen_txes = tx_cr.generate_transactions(connections, use_move, chunk_size, num_chunks);
+    let load_gen_txes = tx_cr.generate_transactions(
+        connections,
+        use_move,
+        chunk_size,
+        num_chunks,
+        &mut validator_preparer,
+    );
 
     // These are tracer TXes used for measuring latency
-    let tracer_txes = tx_cr.generate_transactions(1, use_move, 1, num_chunks);
+    let tracer_txes =
+        tx_cr.generate_transactions(1, use_move, 1, num_chunks, &mut validator_preparer);
 
-    // Make multi-threaded runtime for the authority
-    thread::spawn(move || {
-        get_multithread_runtime().block_on(async move {
-            let server = spawn_authority_server(network_server, tx_cr.authority_state).await;
-            if let Err(e) = server.join().await {
-                error!("Server ended with an error: {e}");
-            }
-        });
-    });
+    validator_preparer.deploy_validator(_network_server);
 
     // Wait for server start
-    sleep(Duration::from_secs(3));
+    sleep(Duration::from_secs(20));
     let runtime = get_multithread_runtime();
     // Prep the generators
     let (mut load_gen, mut tracer_gen) = runtime.block_on(async move {
@@ -205,6 +216,8 @@ fn run_latency_microbench(
     // Run the load gen and tracers
     let (load_latencies, tracer_latencies) =
         runtime.block_on(async move { join!(load_gen.start(), tracer_gen.start()) });
+
+    validator_preparer.clean_up();
 
     MicroBenchmarkResult::Latency {
         load_chunk_size: chunk_size,

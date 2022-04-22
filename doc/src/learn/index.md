@@ -14,9 +14,9 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](../.
 
 Find the latest updates to these contents in this section:
 
+* [Narwhal and Tusk for consensus](../learn/architecture/consensus.md) - Learn about Narwhal and Tusk, Sui's high-throughput mempool and consensus engine.
 * [REST API publishing](../build/rest-api.md#post-apipublish) - Instructions exist for publishing Move modules via the Publish endpoint.
 * [Wallet improvements](../build/wallet.md#active-address)- Active (default) addresses and [using gas objects for transactions](../build/wallet.md#paying-for-transactions-with-gas-objects) are supported.
-* [SUI FAQ](../contribute/faq.md) - Frequently asked questions posted in [Discord](https://discord.gg/mysten) and elsewhere can be found online.
 
 See the Sui `doc/src` [history](https://github.com/MystenLabs/sui/commits/main/doc/src) for a complete changelog of updates to this site. 
 

@@ -1,6 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{
+    config::{GenesisConfig, PersistedConfig},
+    sui_commands::{genesis, make_server},
+};
+use ed25519_dalek::ed25519::signature;
+use ed25519_dalek::{ed25519, Signer};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
@@ -9,10 +16,6 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
-
-use ed25519_dalek::ed25519::signature;
-use ed25519_dalek::{ed25519, Signer};
-use serde::{Deserialize, Serialize};
 
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{get_key_pair, KeyPair, Signature};

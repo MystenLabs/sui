@@ -182,6 +182,7 @@ impl AuthorityServer {
         let reply = match message {
             SerializedMessage::Transaction(message) => {
                 let tx_digest = message.digest();
+                // info!("Got a txn, digest: {:?}", tx_digest);
                 // Enable Trace Propagation across spans/processes using tx_digest
                 let span = tracing::debug_span!(
                     "process_tx",
