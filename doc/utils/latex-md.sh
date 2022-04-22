@@ -2,7 +2,7 @@
 # Prereqs: Pandoc installed and in PATH - https://pandoc.org/
 # Usage: convert a directory of files from LaTex to Markdown
 # Run `latex-md.sh` from the directory containing the files
-# Output appears in the same directory
+# Output appears in the same directory; `mv *.md` as needed
 shopt -s nullglob
 for f in *.tex
 do
