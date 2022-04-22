@@ -101,3 +101,6 @@ path = "src/rpc_server.rs"
 [[bin]]
 name = "validator"
 path = "src/validator.rs"
+
+[features]
+benchmark = ["narwhal-node/benchmark"]

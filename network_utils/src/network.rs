@@ -85,11 +85,11 @@ impl NetworkClient {
         }
     }
 
-    pub fn get_base_address(&self) -> &str {
+    pub fn base_address(&self) -> &str {
         &self.base_address
     }
 
-    pub fn get_base_port(&self) -> u16 {
+    pub fn base_port(&self) -> u16 {
         self.base_port
     }
 

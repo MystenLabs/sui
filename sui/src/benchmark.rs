@@ -5,6 +5,7 @@
 
 use futures::{join, StreamExt};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use std::panic;
 use std::thread;
 use std::{thread::sleep, time::Duration};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
@@ -57,8 +58,8 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
         benchmark.running_mode,
         benchmark.working_dir,
         benchmark.committee_size,
-        network_client.get_base_address(),
-        network_client.get_base_port(),
+        network_client.base_address(),
+        network_client.base_port(),
         benchmark.db_cpus,
     );
     match type_ {
@@ -122,31 +123,36 @@ fn run_throughout_microbench(
 
     validator_preparer.deploy_validator(network_server);
 
-    // Wait for server start
-    sleep(Duration::from_secs(20));
+    let result = panic::catch_unwind(|| {
+        // Follower to observe batches
+        let follower_network_client = network_client.clone();
+        thread::spawn(move || {
+            get_multithread_runtime()
+                .block_on(async move { run_follower(follower_network_client).await });
+        });
 
-    // Follower to observe batches
-    let follower_network_client = network_client.clone();
-    thread::spawn(move || {
-        get_multithread_runtime()
-            .block_on(async move { run_follower(follower_network_client).await });
+        sleep(Duration::from_secs(3));
+
+        // Run load
+        let (elapsed, resp) = get_multithread_runtime()
+            .block_on(async move { send_tx_chunks(txes, network_client, connections).await });
+
+        let _: Vec<_> = resp
+            .par_iter()
+            .map(|q| check_transaction_response(deserialize_message(&(q.as_ref().unwrap())[..])))
+            .collect();
+
+        elapsed
     });
-
-    sleep(Duration::from_secs(3));
-
-    // Run load
-    let (elapsed, resp) = get_multithread_runtime()
-        .block_on(async move { send_tx_chunks(txes, network_client, connections).await });
-
-    let _: Vec<_> = resp
-        .par_iter()
-        .map(|q| check_transaction_response(deserialize_message(&(q.as_ref().unwrap())[..])))
-        .collect();
-
     validator_preparer.clean_up();
 
-    MicroBenchmarkResult::Throughput {
-        chunk_throughput: calculate_throughput(num_transactions, elapsed),
+    match result {
+        Ok(elapsed) => MicroBenchmarkResult::Throughput {
+            chunk_throughput: calculate_throughput(num_transactions, elapsed),
+        },
+        Err(err) => {
+            panic::resume_unwind(err);
+        }
     }
 }
 
@@ -185,33 +191,39 @@ fn run_latency_microbench(
 
     validator_preparer.deploy_validator(_network_server);
 
-    // Wait for server start
-    sleep(Duration::from_secs(20));
-    let runtime = get_multithread_runtime();
-    // Prep the generators
-    let (mut load_gen, mut tracer_gen) = runtime.block_on(async move {
-        join!(
-            FixedRateLoadGenerator::new(
-                load_gen_txes,
-                period_us,
-                network_client.clone(),
-                connections,
-            ),
-            FixedRateLoadGenerator::new(tracer_txes, period_us, network_client, 1),
-        )
+    let result = panic::catch_unwind(|| {
+        let runtime = get_multithread_runtime();
+        // Prep the generators
+        let (mut load_gen, mut tracer_gen) = runtime.block_on(async move {
+            join!(
+                FixedRateLoadGenerator::new(
+                    load_gen_txes,
+                    period_us,
+                    network_client.clone(),
+                    connections,
+                ),
+                FixedRateLoadGenerator::new(tracer_txes, period_us, network_client, 1),
+            )
+        });
+
+        // Run the load gen and tracers
+        let (load_latencies, tracer_latencies) =
+            runtime.block_on(async move { join!(load_gen.start(), tracer_gen.start()) });
+
+        (load_latencies, tracer_latencies)
     });
-
-    // Run the load gen and tracers
-    let (load_latencies, tracer_latencies) =
-        runtime.block_on(async move { join!(load_gen.start(), tracer_gen.start()) });
-
     validator_preparer.clean_up();
 
-    MicroBenchmarkResult::Latency {
-        load_chunk_size: chunk_size,
-        load_latencies,
-        tick_period_us: period_us as usize,
-        chunk_latencies: tracer_latencies,
+    match result {
+        Ok((load_latencies, tracer_latencies)) => MicroBenchmarkResult::Latency {
+            load_chunk_size: chunk_size,
+            load_latencies,
+            tick_period_us: period_us as usize,
+            chunk_latencies: tracer_latencies,
+        },
+        Err(err) => {
+            panic::resume_unwind(err);
+        }
     }
 }
 

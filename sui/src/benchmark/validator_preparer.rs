@@ -10,11 +10,13 @@ use crate::config::{Config, GenesisConfig};
 use rocksdb::Options;
 use std::env;
 use std::fs;
+use std::panic;
 use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::process::Command;
 use std::sync::Arc;
 use std::thread;
+use std::{thread::sleep, time::Duration};
 use sui_adapter::genesis;
 use sui_core::authority::*;
 use sui_network::network::NetworkServer;
@@ -30,6 +32,7 @@ const GENESIS_CONFIG_NAME: &str = "genesis_config.json";
 pub const VALIDATOR_BINARY_NAME: &str = "validator";
 
 /// A helper class to set up validators for benchmarking
+#[allow(unused)]
 pub struct ValidatorPreparer {
     running_mode: RunningMode,
     pub keys: Vec<(PublicKeyBytes, KeyPair)>,
@@ -162,6 +165,9 @@ impl ValidatorPreparer {
                 } else {
                     panic!("invalid validator config in local-single-validator-process mode");
                 }
+
+                // Wait for server start
+                sleep(Duration::from_secs(20));
             }
             RunningMode::LocalSingleValidatorThread => {
                 if let ValidatorConfig::LocalSingleValidatorThreadConfig {
@@ -183,6 +189,8 @@ impl ValidatorPreparer {
                 } else {
                     panic!("invalid validator config in local-single-validator-thread mode");
                 }
+                // Wait for server start
+                sleep(Duration::from_secs(3));
             }
         }
     }
