@@ -37,7 +37,7 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 use tracing::log;
-use tracing::{debug, info, instrument};
+use tracing::{debug, instrument};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -145,7 +145,6 @@ impl AuthorityState {
     ) -> Result<Vec<(InputObjectKind, Object)>, SuiError> {
         let input_objects = transaction.input_objects()?;
         // These IDs act as authenticators that can own other objects.
-        // info!("~~~~~~~~~~~~~~~~ input_objects: {:?}", input_objects);
         let objects = self.fetch_objects(&input_objects, Some(gas_object)).await?;
         let all_objects =
             transaction_input_checker::check_locks(transaction, input_objects, objects).await?;

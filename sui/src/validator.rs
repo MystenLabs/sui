@@ -55,7 +55,6 @@ async fn main() -> Result<(), anyhow::Error> {
     let guard = telemetry_subscribers::init(config);
 
     let cfg = ValidatorOpt::parse();
-// <<<<<<< HEAD
 
     let network_config_path = sui_config_dir()?.join(SUI_NETWORK_CONFIG);
 
@@ -91,25 +90,6 @@ async fn main() -> Result<(), anyhow::Error> {
     let listen_address = cfg
         .listen_address
         .unwrap_or(format!("{}:{}", net_cfg.host, net_cfg.port));
-// =======
-//     let genesis_conf: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
-//     // print!("config: {:?}", genesis_conf);
-//     let address = cfg.address;
-
-//     let (network_config, _, _) = genesis(genesis_conf).await?;
-
-//     // Find the network config for this validator
-//     let net_cfg = network_config
-//         .authorities
-//         .iter()
-//         .find(|x| SuiAddress::from(x.key_pair.public_key_bytes()) == address)
-//         .ok_or_else(|| {
-//             anyhow!(
-//                 "Network configs must include config for address {}",
-//                 address
-//             )
-//         })?;
-// >>>>>>> 3d3a0085 (refactor)
 
     info!(
         "authority {:?} listening on {} (public addr: {}:{})",
