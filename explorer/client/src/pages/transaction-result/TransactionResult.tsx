@@ -1,38 +1,97 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useLocation, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
 import { findDataFromID } from '../../utils/static/searchUtil';
 
+import { type SingleTransactionKind, type Transfer, type CertifiedTransaction, isCertifiedTransaction, isMoveCall, isMoveModulePublish, isSingleTransactionKind, isTransfer } from 'sui.js';
+
 import styles from './TransactionResult.module.css';
+import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
+import { useEffect, useState } from 'react';
+import { type Loadable } from '../../utils/loadState';
 
-type DataType = {
-    id: string;
-    status: 'success' | 'fail' | 'pending';
-    sender: string;
-    created?: string[];
-    deleted?: string[];
-    mutated?: string[];
-    recipients: string[];
-};
 
-function instanceOfDataType(object: any): object is DataType {
-    return (
-        object !== undefined &&
-        ['id', 'status', 'sender'].every((x) => x in object)
-    );
+const initState: Loadable<CertifiedTransaction> = {
+    loadState: 'pending',
+    transaction: {
+        data: {
+            kind: {
+                Single: {
+                    Transfer: {
+                        recipient: '',
+                        object_ref: ['', 0, '']
+                    }
+                }
+            },
+            sender: '',
+            gas_payment: ['', 0, ''],
+            gas_budget: 0
+        },
+        tx_signature: '',
+        auth_signature: ''
+    },
+    signatures: []
 }
 
+const isStatic = process.env.REACT_APP_DATA !== 'static';
+
 function TransactionResult() {
-    // TODO - why are we using the location object as state ?
-    const { state } = useLocation();
-    const { id: txID } = useParams();
+    const { digest } = useParams();
+    const [showTxState, setTxState] = useState(initState);
+
+    useEffect(() => {
+        if (!digest)
+            return;
+
+        if (isStatic) {
+            const staticObj = findDataFromID(digest, undefined);
+            if(staticObj) {
+                setTxState({
+                    ...staticObj,
+                    loadState: 'loaded',
+                });
+            } else {
+                setTxState({
+                    ...initState,
+                    loadState: 'fail',
+                });
+            }
+            return;
+        }
+
+        // load transaction data from the backend
+        rpc.getTransaction(digest)
+            .then((objState) => {
+                setTxState({
+                    ...objState,
+                    loadState: 'loaded',
+                });
+            })
+            .catch((error) => {
+                console.log(error);
+                setTxState({
+                    ...initState,
+                    loadState: 'fail',
+                });
+            });
+    }, [digest]);
+
+    if(!digest) {
+        return (
+            <ErrorResult
+                id={digest}
+                errorMsg="Can't search for a transaction without a digest"
+            />
+        )
+    }
 
     if (process.env.REACT_APP_DATA !== 'static') {
+
         return (
             <div className={theme.textresults}>
                 <div>This page is in Development</div>
@@ -40,33 +99,43 @@ function TransactionResult() {
         );
     }
 
-    const data = findDataFromID(txID, state);
+    if (isCertifiedTransaction(showTxState)) {
+        const data = showTxState;
+        const tx = data.transaction;
+        const txData = tx.data;
 
-    if (instanceOfDataType(data)) {
-        let action: string;
-        let objectIDs: string[];
+        let singleTx: SingleTransactionKind | null = null;
+        let transferTx: Transfer | null = null;
 
-        if (data.created !== undefined) {
-            action = 'Create';
-            objectIDs = data.created;
-        } else if (data.deleted !== undefined) {
-            action = 'Delete';
-            objectIDs = data.deleted;
-        } else if (data.mutated !== undefined) {
-            action = 'Mutate';
-            objectIDs = data.mutated;
-        } else {
-            action = 'Fail';
-            objectIDs = [];
+        if ('Single' in txData.kind && isSingleTransactionKind(txData.kind.Single)) {
+            singleTx = txData.kind.Single;
+            if ('Transfer' in singleTx && isTransfer(singleTx)) {
+                transferTx = singleTx;
+                // const transfer = singleTx.Transfer;
+                // decide how to display Transfer transactions here
+            }
+            if ('Call' in singleTx && isMoveCall(singleTx.Call)) {
+                // const call = singleTx.Call;
+                // decide how to handle Move Call transactions here
+            }
+            if ('Publish' in singleTx && isMoveModulePublish(singleTx.Publish)) {
+                // const publish = singleTx.Publish;
+                // decide how to handle Publish transactions here (last priority)
+            }
+        }
+        else if('Batch' in txData.kind) {
+            // decide how to handle batch transaction display here
+        }
+        else {
+            // decide how to handle invalid response data here
         }
 
-        const statusClass =
-            data.status === 'success'
-                ? styles['status-success']
-                : data.status === 'fail'
-                ? styles['status-fail']
-                : styles['status-pending'];
+        // right now we only get access to certified transactions, which have all succeeded
+        const status = 'success';
+        const statusClass = 'success';
 
+        let action: string = 'unknown';
+        let objectIDs: string[];
         let actionClass;
 
         switch (action) {
@@ -83,13 +152,14 @@ function TransactionResult() {
                 actionClass = styles['action-mutate'];
         }
 
+
         return (
             <div className={theme.textresults} id="textResults">
                 <div>
                     <div>Transaction ID</div>
-                    <div id="transactionID">
+                    <div id="digest">
                         <Longtext
-                            text={data.id}
+                            text={digest}
                             category="transactions"
                             isLink={false}
                         />
@@ -99,14 +169,14 @@ function TransactionResult() {
                 <div>
                     <div>Status</div>
                     <div id="transactionStatus" className={statusClass}>
-                        {data.status}
+                        {status}
                     </div>
                 </div>
 
                 <div>
                     <div>From</div>
                     <div>
-                        <Longtext text={data.sender} category="addresses" />
+                        <Longtext text={txData.sender} category="addresses" />
                     </div>
                 </div>
 
@@ -115,44 +185,26 @@ function TransactionResult() {
                     <div className={actionClass}>{action}</div>
                 </div>
 
-                <div>
-                    <div>Object</div>
+                {transferTx != null && (
                     <div>
-                        {objectIDs.map((objectID, index) => (
-                            <div key={`object-${index}`}>
-                                <Longtext text={objectID} category="objects" />
-                            </div>
-                        ))}
+                        <div>To</div>
+                        <div key={`recipient-0`}>
+                            <Longtext
+                                text={transferTx.recipient}
+                                category="addresses"
+                            />
+                        </div>
                     </div>
-                </div>
-
-                <div>
-                    <div>To</div>
-                    <div>
-                        {data.recipients.length !== 0 ? (
-                            data.recipients.map((address, index) => (
-                                <div key={`recipient-${index}`}>
-                                    <Longtext
-                                        text={address}
-                                        category="addresses"
-                                    />
-                                </div>
-                            ))
-                        ) : (
-                            <div />
-                        )}
-                    </div>
-                </div>
+                )}
             </div>
         );
     }
     return (
         <ErrorResult
-            id={txID}
+            id={digest}
             errorMsg="There was an issue with the data on the following transaction"
         />
     );
 }
 
 export default TransactionResult;
-export { instanceOfDataType };
