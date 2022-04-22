@@ -22,6 +22,7 @@
 #![deny(warnings)]
 
 use clap::*;
+
 use sui::benchmark::validator_preparer::VALIDATOR_BINARY_NAME;
 use sui::benchmark::{bench_types, run_benchmark};
 use tracing::subscriber::set_global_default;
@@ -36,7 +37,7 @@ fn main() {
     let benchmark = bench_types::Benchmark::parse();
     running_mode_pre_check(&benchmark);
     let r = run_benchmark(benchmark);
-    print!("{}", r);
+    println!("{}", r);
 }
 
 fn running_mode_pre_check(benchmark: &bench_types::Benchmark) {
