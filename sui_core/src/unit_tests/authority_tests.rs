@@ -10,6 +10,7 @@ use move_binary_format::{
 };
 use move_core_types::{account_address::AccountAddress, ident_str, language_storage::TypeTag};
 use narwhal_executor::ExecutionIndices;
+use rand::{prelude::StdRng, SeedableRng};
 use sui_adapter::genesis;
 use sui_types::{
     base_types::dbg_addr,
@@ -1125,13 +1126,11 @@ async fn test_account_state_unknown_account() {
 
 #[tokio::test]
 async fn test_authority_persist() {
-    let (_, authority_key) = get_key_pair();
-    let mut authorities = BTreeMap::new();
-    authorities.insert(
-        /* address */ *authority_key.public_key_bytes(),
-        /* voting right */ 1,
-    );
-    let committee = Committee::new(authorities);
+    let seed = [1u8; 32];
+    let (committee, _, authority_key) =
+        crate::authority_batch::batch_tests::init_state_parameters_from_rng(
+            &mut StdRng::from_seed(seed),
+        );
 
     // Create a random directory to store the DB
     let dir = env::temp_dir();
@@ -1142,16 +1141,8 @@ async fn test_authority_persist() {
     let mut opts = rocksdb::Options::default();
     opts.set_max_open_files(max_files_authority_tests());
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
-    let authority = AuthorityState::new(
-        committee.clone(),
-        *authority_key.public_key_bytes(),
-        // we assume that the node runner is in charge for its key -> it's ok to reopen a copy below.
-        Arc::pin(authority_key.copy()),
-        store,
-        vec![],
-        &mut genesis::get_genesis_context(),
-    )
-    .await;
+    let authority =
+        crate::authority_batch::batch_tests::init_state(committee, authority_key, store).await;
 
     // Create an object
     let recipient = dbg_addr(2);
@@ -1164,19 +1155,17 @@ async fn test_authority_persist() {
     // Close the authority
     drop(authority);
 
-    // Reopen the authority with the same path
+    // Reopen the same authority with the same path
     let mut opts = rocksdb::Options::default();
     opts.set_max_open_files(max_files_authority_tests());
+    let seed = [1u8; 32];
+    let (committee, _, authority_key) =
+        crate::authority_batch::batch_tests::init_state_parameters_from_rng(
+            &mut StdRng::from_seed(seed),
+        );
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
-    let authority2 = AuthorityState::new(
-        committee,
-        *authority_key.public_key_bytes(),
-        Arc::pin(authority_key),
-        store,
-        vec![],
-        &mut genesis::get_genesis_context(),
-    )
-    .await;
+    let authority2 =
+        crate::authority_batch::batch_tests::init_state(committee, authority_key, store).await;
     let obj2 = authority2.get_object(&object_id).await.unwrap().unwrap();
 
     // Check the object is present

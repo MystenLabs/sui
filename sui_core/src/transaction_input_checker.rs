@@ -153,11 +153,13 @@ fn check_one_lock(
             );
 
             // Check the digest matches
+
+            let expected_digest = object.digest();
             fp_ensure!(
-                object.digest() == object_digest,
+                expected_digest == object_digest,
                 SuiError::InvalidObjectDigest {
                     object_id,
-                    expected_digest: object_digest
+                    expected_digest
                 }
             );
 
