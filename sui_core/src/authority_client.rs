@@ -284,7 +284,7 @@ impl LocalAuthorityClient {
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
-        let store = Arc::new(AuthorityStore::open_for_testing(path, None));
+        let store = Arc::new(AuthorityStore::open(path, None));
         let state = AuthorityState::new(
             committee.clone(),
             address,

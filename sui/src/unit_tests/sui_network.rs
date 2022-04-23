@@ -27,7 +27,6 @@ pub async fn start_test_network(
         .into_iter()
         .map(|info| AuthorityPrivateInfo { port: 0, ..info })
         .collect();
-    genesis_config.is_testing = true;
 
     let (network_config, accounts, mut keystore) = genesis(genesis_config).await?;
     let network = SuiNetwork::start(&network_config).await?;
