@@ -79,7 +79,6 @@ pub struct CheckpointRequest {
 }
 
 impl CheckpointRequest {
-
     /// Create a request for the latest checkpoint proposal from the authority
     pub fn latest(detail: bool) -> CheckpointRequest {
         CheckpointRequest {
@@ -96,7 +95,10 @@ impl CheckpointRequest {
         }
     }
 
-    pub fn set_checkpoint(certificate: CertifiedCheckpoint, contents: Option<CheckpointContents>) -> CheckpointRequest {
+    pub fn set_checkpoint(
+        certificate: CertifiedCheckpoint,
+        contents: Option<CheckpointContents>,
+    ) -> CheckpointRequest {
         CheckpointRequest {
             request_type: CheckpointRequestType::SetCertificate(certificate, contents),
             detail: false,
