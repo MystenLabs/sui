@@ -92,8 +92,6 @@ describe('End-to-end Tests', () => {
     describe('Transaction Results', () => {
         //Specific to transaction tests:
         const successTransactionID = 'txCreateSuccess';
-        const failTransactionID = 'txFails';
-        const pendingTransactionID = 'txSendPending';
         const missingDataTransactionID = 'txMissingData';
 
         const checkStatus = async (
@@ -148,14 +146,6 @@ describe('End-to-end Tests', () => {
             await checkStatus(page, 'success');
         });
 
-        it('can be pending', async () => {
-            await page.goto(`${BASE_URL}/transactions/${pendingTransactionID}`);
-            await checkStatus(page, 'pending');
-        });
-        it('can fail', async () => {
-            await page.goto(`${BASE_URL}/transactions/${failTransactionID}`);
-            await checkStatus(page, 'fail');
-        });
         it('can have missing data', async () => {
             await page.goto(
                 `${BASE_URL}/transactions/${missingDataTransactionID}`
