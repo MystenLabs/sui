@@ -105,6 +105,20 @@ impl CheckpointProposal {
     }
 }
 
+pub type DBLabel = usize;
+const LOCALS: DBLabel = 0;
+
+#[derive(Clone, Serialize, Deserialize, Default)]
+pub struct CheckpointLocals {
+    pub next_checkpoint_sequence_number: CheckpointSequenceNumber,
+    pub next_tx_sequence_number_in_proposal: Option<TxSequenceNumber>,
+    pub next_batch_transaction_sequence: TxSequenceNumber,
+    pub next_uncommitted_transaction: TxSequenceNumber,
+
+    #[serde(skip)]
+    pub current_proposal: Option<CheckpointProposal>,
+}
+
 pub struct CheckpointStore {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
@@ -143,10 +157,45 @@ pub struct CheckpointStore {
     /// this sequence number. At this point the unprocessed_transactions sequence
     /// should be empty. It is none if there is no active proposal. We also include here
     /// the proposal, although we could re-create it from the database.
-    proposal_checkpoint: ArcSwapOption<(TxSequenceNumber, CheckpointProposal)>,
+    memory_locals: ArcSwapOption<CheckpointLocals>,
+
+    /// A single entry table to store locals.
+    pub locals: DBMap<DBLabel, CheckpointLocals>,
 }
 
 impl CheckpointStore {
+    // Manage persistent local variables
+
+    pub fn load_locals(&self) -> Result<CheckpointLocals, SuiError> {
+        // Loads locals from disk, or inserts initial locals
+        let locals = match self.locals.get(&LOCALS)? {
+            Some(locals) => locals,
+            None => {
+                let locals = CheckpointLocals::default();
+                self.locals.insert(&LOCALS, &locals)?;
+                locals
+            }
+        };
+
+        // No need to sync exclusive access
+        self.memory_locals.store(Some(Arc::new(locals.clone())));
+        Ok(locals)
+    }
+
+    pub fn get_locals(&self) -> Arc<CheckpointLocals> {
+        self.memory_locals.load().clone().unwrap()
+    }
+
+    pub fn set_locals(
+        &self,
+        _previous: Arc<CheckpointLocals>,
+        locals: CheckpointLocals,
+    ) -> Result<(), SuiError> {
+        self.locals.insert(&LOCALS, &locals)?;
+        self.memory_locals.store(Some(Arc::new(locals)));
+        Ok(())
+    }
+
     /* TODO: Crash recovery logic.
 
     (1) When we open the checkpoint store, we need to check that the current
@@ -167,7 +216,7 @@ impl CheckpointStore {
         name: AuthorityName,
         committee: Committee,
         secret: StableSyncAuthoritySigner,
-    ) -> CheckpointStore {
+    ) -> Result<CheckpointStore, SuiError> {
         let mut options = db_options.unwrap_or_default();
 
         /* The table cache is locked for updates and this determines the number
@@ -182,20 +231,6 @@ impl CheckpointStore {
         point_lookup.optimize_for_point_lookup(1024 * 1024);
         point_lookup.set_memtable_whole_key_filtering(true);
 
-        let transform = rocksdb::SliceTransform::create(
-            "bytes_8_to_16",
-            |key| {
-                if key.len() >= 16 {
-                    &key[8..16]
-                } else {
-                    key
-                }
-            },
-            None,
-        );
-        point_lookup.set_prefix_extractor(transform);
-        point_lookup.set_memtable_prefix_bloom_ratio(0.2);
-
         let db = open_cf_opts(
             &path,
             Some(options.clone()),
@@ -205,6 +240,7 @@ impl CheckpointStore {
                 ("unprocessed_transactions", &point_lookup),
                 ("extra_transactions", &point_lookup),
                 ("checkpoints", &point_lookup),
+                ("locals", &point_lookup),
             ],
         )
         .expect("Cannot open DB.");
@@ -215,15 +251,18 @@ impl CheckpointStore {
             unprocessed_transactions,
             extra_transactions,
             checkpoints,
+            locals,
         ) = reopen! (
             &db,
             "transactions_to_checkpoint";<TransactionDigest,(CheckpointSequenceNumber, TxSequenceNumber)>,
             "checkpoint_contents";<(CheckpointSequenceNumber,TxSequenceNumber),TransactionDigest>,
             "unprocessed_transactions";<TransactionDigest,CheckpointSequenceNumber>,
             "extra_transactions";<TransactionDigest,TxSequenceNumber>,
-            "checkpoints";<CheckpointSequenceNumber, AuthenticatedCheckpoint>
+            "checkpoints";<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
+            "locals";<DBLabel, CheckpointLocals>
         );
-        CheckpointStore {
+
+        let check_point_db = CheckpointStore {
             name,
             committee,
             secret,
@@ -232,8 +271,14 @@ impl CheckpointStore {
             unprocessed_transactions,
             extra_transactions,
             checkpoints,
-            proposal_checkpoint: ArcSwapOption::from(None),
-        }
+            memory_locals: ArcSwapOption::from(None),
+            locals,
+        };
+
+        // Initialize the locals
+        check_point_db.load_locals()?;
+
+        Ok(check_point_db)
     }
 
     // Define handlers for request
@@ -261,7 +306,8 @@ impl CheckpointStore {
         request: &CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
         // Try to load any latest proposal
-        let latest_checkpoint_proposal = self.proposal_checkpoint.load();
+        let locals = self.get_locals();
+        let latest_checkpoint_proposal = &locals.current_proposal;
 
         // Load the latest checkpoint from the database
         let previous_checkpoint = self
@@ -275,7 +321,7 @@ impl CheckpointStore {
         // Get the current proposal if there is one.
         let current = latest_checkpoint_proposal
             .as_ref()
-            .map(|arc| arc.1.proposal.clone());
+            .map(|proposal| proposal.proposal.clone());
 
         // If requested include either the trasnactions in the latest checkpoint proposal
         // or the unprocessed transactions that block the generation of a proposal.
@@ -283,7 +329,7 @@ impl CheckpointStore {
             latest_checkpoint_proposal
                 .as_ref()
                 // If the checkpoint exist return its contents.
-                .map(|arc| arc.1.transactions.clone())
+                .map(|proposal| proposal.transactions.clone())
                 // If the checkpoint does not exist return the unprocessed transactions
                 .or_else(|| {
                     Some(CheckpointContents::new(
@@ -359,25 +405,28 @@ impl CheckpointStore {
         self.update_new_checkpoint(checkpoint.waypoint.sequence_number, &transactions)?;
 
         // Sign the new checkpoint
-        let sequence_number = checkpoint.waypoint.sequence_number;
+        let checkpoint_sequence_number = checkpoint.waypoint.sequence_number;
         let signed_checkpoint = AuthenticatedCheckpoint::Signed(
             SignedCheckpoint::new_from_summary(checkpoint, self.name, &*self.secret),
         );
 
         // Last store the actual checkpoints.
         self.checkpoints
-            .insert(&sequence_number, &signed_checkpoint)?;
+            .insert(&checkpoint_sequence_number, &signed_checkpoint)?;
 
         // Clean up our proposal if any
-        if self
-            .proposal_checkpoint
-            .load()
+        let locals = self.get_locals();
+        if locals
+            .current_proposal
             .as_ref()
-            .map(|v| *v.1.sequence_number())
+            .map(|v| *v.sequence_number())
             .unwrap_or(0)
-            <= sequence_number
+            <= checkpoint_sequence_number
         {
-            self.proposal_checkpoint.store(None);
+            let mut new_locals = locals.as_ref().clone();
+            new_locals.current_proposal = None;
+            new_locals.next_tx_sequence_number_in_proposal = None;
+            self.set_locals(locals, new_locals)?;
         }
 
         // Try to set a fresh proposal, and ignore errors if this fails.
@@ -462,23 +511,23 @@ impl CheckpointStore {
     /// will use this consensus to get a checkpoint to be the union of 2f+1 proposals.
     pub fn debug_handle_set_checkpoint(
         &self,
-        _contents: &(SignedCheckpoint, CheckpointContents),
+        _contents: &(SignedCheckpointProposal, CheckpointContents),
     ) -> Result<CheckpointResponse, SuiError> {
         let checkpoint = &_contents.0;
         let trasnactions = &_contents.1;
 
         // Check it is correct
-        checkpoint.check_transactions(trasnactions)?;
+        checkpoint.0.check_transactions(trasnactions)?;
         // Check it is from the special 'first' authority
         let max_authority_name = self.committee.voting_rights.keys().max().unwrap();
-        if *max_authority_name != checkpoint.authority {
+        if *max_authority_name != checkpoint.0.authority {
             return Err(SuiError::GenericAuthorityError {
-                error: "Incorrect master authority.".to_string(),
+                error: "DEBUG FUNCTIONALITY: Incorrect master authority.".to_string(),
             });
         }
 
         // Call the otherwise internal code to update the checkpoint.
-        self.handle_internal_set_checkpoint(checkpoint.checkpoint.clone(), trasnactions)?;
+        self.handle_internal_set_checkpoint(checkpoint.0.checkpoint.clone(), trasnactions)?;
 
         // If no error so far repond with success.
         Ok(CheckpointResponse {
@@ -504,7 +553,9 @@ impl CheckpointStore {
         // - there are no unprocessed transactions.
         // - there are some extra transactions to include.
 
-        if self.proposal_checkpoint.load().is_some() {
+        let locals = self.get_locals();
+
+        if locals.current_proposal.is_some() {
             return Err(SuiError::GenericAuthorityError {
                 error: "Proposal already set.".to_string(),
             });
@@ -537,23 +588,14 @@ impl CheckpointStore {
         ));
 
         let proposal_and_transactions = CheckpointProposal::new(proposal, transactions);
-        self.proposal_checkpoint.store(Some(Arc::new((
-            next_local_tx_sequence,
-            proposal_and_transactions.clone(),
-        ))));
+
+        // Record the checkpoint in the locals
+        let mut new_locals = locals.as_ref().clone();
+        new_locals.current_proposal = Some(proposal_and_transactions.clone());
+        new_locals.next_tx_sequence_number_in_proposal = Some(next_local_tx_sequence);
+        self.set_locals(locals, new_locals)?;
 
         Ok(proposal_and_transactions)
-    }
-
-    /// Get the current proposal or error if there is no current proposal
-    pub fn get_proposal(&self) -> Result<CheckpointProposal, SuiError> {
-        self.proposal_checkpoint
-            .load()
-            .as_ref()
-            .ok_or_else(|| SuiError::GenericAuthorityError {
-                error: "No checkpoint proposal found.".to_string(),
-            })
-            .map(|x| x.1.clone())
     }
 
     /// Return the seq number of the last checkpoint we have recorded.
@@ -592,10 +634,6 @@ impl CheckpointStore {
                 error: "Unexpected checkpoint sequence number.".to_string(),
             });
         }
-
-        // Reset the proposal, it should already have been used by this
-        // point or not included in the checkpoint. Either way it is stale.
-        self.proposal_checkpoint.store(None);
 
         // Process transactions not already in a checkpoint
         let new_transactions = self

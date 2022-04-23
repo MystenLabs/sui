@@ -29,7 +29,8 @@ fn random_ckpoint_store() -> Vec<(PathBuf, CheckpointStore)> {
                 *k.public_key_bytes(),
                 committee.clone(),
                 Arc::pin(k.copy()),
-            );
+            )
+            .unwrap();
             (path, cps)
         })
         .collect()
@@ -305,7 +306,7 @@ fn latest_proposal() {
     // --- TEST3 ---
 
     // No valid checkpoint proposal condition...
-    assert!(cps1.proposal_checkpoint.load().is_none());
+    assert!(cps1.get_locals().current_proposal.is_none());
     // ... because a valid checkpoint cannot be generated.
     assert!(cps1.set_proposal().is_err());
 

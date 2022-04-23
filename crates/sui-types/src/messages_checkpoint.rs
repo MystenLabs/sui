@@ -119,7 +119,7 @@ pub enum CheckpointRequestType {
     // the checkpoint we allow a trusted client to just force a
     // checkpoint. This is for early testing and removal at Testnet
     // time.
-    DEBUGSetCheckpoint(Box<(SignedCheckpoint, CheckpointContents)>),
+    DEBUGSetCheckpoint(Box<(SignedCheckpointProposal, CheckpointContents)>),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
