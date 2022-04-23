@@ -9,6 +9,7 @@ use sui::keystore::KeystoreType;
 use sui::sui_commands::{genesis, SuiNetwork};
 use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 
+#[cfg(test)]
 pub async fn start_test_network(
     working_dir: &Path,
     genesis_config: Option<GenesisConfig>,
