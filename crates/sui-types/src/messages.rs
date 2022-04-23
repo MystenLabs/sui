@@ -1244,4 +1244,3 @@ impl ConsensusTransaction {
         }
     }
 }
-

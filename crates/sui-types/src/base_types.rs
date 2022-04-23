@@ -207,8 +207,6 @@ pub struct TransactionEffectsDigest(
     pub [u8; TRANSACTION_DIGEST_LENGTH]
 );
 
-
-
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
 

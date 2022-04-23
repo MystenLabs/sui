@@ -110,7 +110,6 @@ pub enum AuthorityCheckpointInfo {
     Proposal {
         current: Option<SignedCheckpointProposal>,
         previous: AuthenticatedCheckpoint,
-
         // Include in all responses the local state of the sequence
         // of trasacation to allow followers to track the latest
         // updates.
@@ -197,15 +196,18 @@ impl SignedCheckpoint {
         }
     }
 
-    pub fn new_from_summary(checkpoint: CheckpointSummary, authority: AuthorityName,
-        signer: &dyn signature::Signer<AuthoritySignature>, ) -> SignedCheckpoint {
-            let signature = AuthoritySignature::new(&checkpoint, signer);
+    pub fn new_from_summary(
+        checkpoint: CheckpointSummary,
+        authority: AuthorityName,
+        signer: &dyn signature::Signer<AuthoritySignature>,
+    ) -> SignedCheckpoint {
+        let signature = AuthoritySignature::new(&checkpoint, signer);
 
-            SignedCheckpoint {
-                checkpoint,
-                authority,
-                signature,
-            }
+        SignedCheckpoint {
+            checkpoint,
+            authority,
+            signature,
+        }
     }
 
     /// Checks that the signature on the digest is correct
