@@ -374,3 +374,148 @@ fn latest_proposal() {
         assert_eq!(*current_proposal.0.checkpoint.sequence_number(), 1);
     }
 }
+
+#[test]
+fn set_get_checkpoint() {
+    let mut test_objects = random_ckpoint_store();
+    let (_, cps1) = test_objects.pop().unwrap();
+    let (_, cps2) = test_objects.pop().unwrap();
+    let (_, cps3) = test_objects.pop().unwrap();
+    let (_, cps4) = test_objects.pop().unwrap();
+
+    let t1 = TransactionDigest::random();
+    let t2 = TransactionDigest::random();
+    let t3 = TransactionDigest::random();
+    let t4 = TransactionDigest::random();
+    let t5 = TransactionDigest::random();
+    // let t6 = TransactionDigest::random();
+
+    cps1.update_processed_transactions(&[(1, t2), (2, t3)])
+        .unwrap();
+
+    cps2.update_processed_transactions(&[(1, t1), (2, t2)])
+        .unwrap();
+
+    cps3.update_processed_transactions(&[(1, t3), (2, t4)])
+        .unwrap();
+
+    cps4.update_processed_transactions(&[(1, t4), (2, t5)])
+        .unwrap();
+
+    let p1 = cps1.set_proposal().unwrap();
+    let p2 = cps2.set_proposal().unwrap();
+    let p3 = cps3.set_proposal().unwrap();
+
+    // --- TEST 0 ---
+
+    // There is no previous checkpoint
+    let request = CheckpointRequest::past(0, true);
+    let response = cps1.handle_checkpoint_request(&request).unwrap();
+    assert!(matches!(
+        response.info,
+        AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::None)
+    ));
+    assert!(response.detail.is_none());
+
+    // There is no previous checkpoint
+    let request = CheckpointRequest::past(0, true);
+    let response = cps1.handle_checkpoint_request(&request).unwrap();
+    assert!(matches!(
+        response.info,
+        AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::None)
+    ));
+    assert!(response.detail.is_none());
+
+    // ---
+
+    let ckp_items = p1
+        .transactions()
+        .chain(p2.transactions())
+        .chain(p3.transactions())
+        .cloned();
+
+    let transactions = CheckpointContents::new(ckp_items);
+    let summary = CheckpointSummary::new(0, &transactions);
+
+    cps1.handle_internal_set_checkpoint(summary.clone(), &transactions)
+        .unwrap();
+    cps2.handle_internal_set_checkpoint(summary.clone(), &transactions)
+        .unwrap();
+    cps3.handle_internal_set_checkpoint(summary, &transactions)
+        .unwrap();
+    // cps4.handle_internal_set_checkpoint(summary, &transactions)
+    //     .unwrap();
+
+    // --- TEST 1 ---
+
+    // Now we have a signed checkpoint
+    let request = CheckpointRequest::past(0, true);
+    let response = cps1.handle_checkpoint_request(&request).unwrap();
+    assert!(matches!(
+        response.info,
+        AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Signed(..))
+    ));
+    if let AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Signed(signed)) = response.info {
+        signed
+            .check_transactions(&response.detail.unwrap())
+            .unwrap();
+    }
+
+    // Make a certificate
+    let mut signed_checkpoint: Vec<SignedCheckpoint> = Vec::new();
+    for x in [&cps1, &cps2, &cps3] {
+        match x.handle_checkpoint_request(&request).unwrap().info {
+            AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Signed(signed)) => {
+                signed_checkpoint.push(signed)
+            }
+            _ => unreachable!(),
+        };
+    }
+
+    // --- TEST 2 ---
+
+    // We can set the checkpoint cert to those that have it
+
+    let checkpoint_cert =
+        CertifiedCheckpoint::aggregate(signed_checkpoint, &cps1.committee).unwrap();
+
+    // Send the certificate to a party that has the data
+    let request_ckp = CheckpointRequest::set_checkpoint(checkpoint_cert.clone(), None);
+    let response_ckp = cps1.handle_checkpoint_request(&request_ckp).unwrap();
+    assert!(matches!(
+        response_ckp.info,
+        AuthorityCheckpointInfo::Success
+    ));
+
+    // Now we have a certified checkpoint
+    let request = CheckpointRequest::past(0, true);
+    let response = cps1.handle_checkpoint_request(&request).unwrap();
+    assert!(matches!(
+        response.info,
+        AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Certified(..))
+    ));
+
+    // --- TEST 3 ---
+
+    // Setting just cert to a node that does not have the checkpoint fails
+    let request_ckp = CheckpointRequest::set_checkpoint(checkpoint_cert.clone(), None);
+    let response_ckp = cps4.handle_checkpoint_request(&request_ckp);
+    assert!(response_ckp.is_err());
+
+    // Setting with contents suceeds
+    let request_ckp = CheckpointRequest::set_checkpoint(checkpoint_cert, Some(transactions));
+    let response_ckp = cps4.handle_checkpoint_request(&request_ckp).unwrap();
+    assert!(matches!(
+        response_ckp.info,
+        AuthorityCheckpointInfo::Success
+    ));
+
+    // Now we have a certified checkpoint
+    let request = CheckpointRequest::past(0, true);
+    let response = cps4.handle_checkpoint_request(&request).unwrap();
+    println!("{:?}", response.info);
+    assert!(matches!(
+        response.info,
+        AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Certified(..))
+    ));
+}

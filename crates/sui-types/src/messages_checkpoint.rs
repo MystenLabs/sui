@@ -92,6 +92,13 @@ impl CheckpointRequest {
             detail,
         }
     }
+
+    pub fn set_checkpoint(certificate: CertifiedCheckpoint, contents: Option<CheckpointContents>) -> CheckpointRequest {
+        CheckpointRequest {
+            request_type: CheckpointRequestType::SetCertificate(certificate, contents),
+            detail: false,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

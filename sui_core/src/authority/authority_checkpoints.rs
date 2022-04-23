@@ -240,14 +240,12 @@ impl CheckpointStore {
 
     pub fn handle_checkpoint_request(
         &self,
-        request: CheckpointRequest,
+        request: &CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
         match &request.request_type {
-            CheckpointRequestType::LatestCheckpointProposal => {
-                self.handle_latest_proposal(&request)
-            }
+            CheckpointRequestType::LatestCheckpointProposal => self.handle_latest_proposal(request),
             CheckpointRequestType::PastCheckpoint(seq) => {
-                self.handle_past_checkpoint(&request, *seq)
+                self.handle_past_checkpoint(request, *seq)
             }
             CheckpointRequestType::SetCertificate(cert, opt_contents) => {
                 self.handle_checkpoint_certificate(cert, opt_contents)
@@ -427,8 +425,14 @@ impl CheckpointStore {
             // certificate is registered.
             None => {
                 if let &Some(contents) = &contents {
+                    // Check and process contents
                     checkpoint.check_transactions(&self.committee, contents)?;
                     self.handle_internal_set_checkpoint(checkpoint.checkpoint.clone(), contents)?;
+                    // Then insert it
+                    self.checkpoints.insert(
+                        &checkpoint.checkpoint.waypoint.sequence_number,
+                        &AuthenticatedCheckpoint::Certified(checkpoint.clone()),
+                    )?;
                 } else {
                     return Err(SuiError::GenericAuthorityError {
                         error: "No checkpoint set at this sequence.".to_string(),
