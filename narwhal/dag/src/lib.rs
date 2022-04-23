@@ -8,7 +8,10 @@ use std::sync::{Arc, RwLock, Weak};
 pub mod bft;
 pub mod node_dag;
 
+/// Reference-counted pointers to a Node
 pub type NodeRef<T> = Arc<RwLock<Node<T>>>;
+
+/// Non reference-counted pointers to a Node
 pub type WeakNodeRef<T> = Weak<RwLock<Node<T>>>;
 
 impl<T> From<Node<T>> for NodeRef<T> {
@@ -17,21 +20,25 @@ impl<T> From<Node<T>> for NodeRef<T> {
     }
 }
 
-/// The Dag node.
+/// The Dag node, aka vertex.
 #[derive(Debug, Clone)]
 pub struct Node<T> {
+    /// The antecedents of the Node, aka the edges of the DAG in association list form.
     parents: Vec<NodeRef<T>>,
+    /// Whether the node is "empty" in some sense: the nodes have a value payload on top of the connections they form.
+    /// An "empty" node can be reclaimed in ways that preserve the connectedness of the graph.
     compressible: bool,
-    #[allow(dead_code)] // we'll read values elsewhere
+    /// The value payload of the node
     value: T,
 }
 
 impl<T: Sync + Send + std::fmt::Debug> Node<T> {
-    /// Create a new DAG  node that contains the given value.
+    /// Create a new DAG leaf node that contains the given value.
     pub fn new_leaf(value: T, compressible: bool) -> Self {
         Self::new(value, compressible, Vec::default())
     }
 
+    /// Create a new DAG inner node that contains the given value and points to the given parents.
     pub fn new(value: T, compressible: bool, parents: Vec<NodeRef<T>>) -> Self {
         Self {
             parents,
@@ -40,11 +47,44 @@ impl<T: Sync + Send + std::fmt::Debug> Node<T> {
         }
     }
 
+    /// Return the value payload of the node
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dag::Node;
+    ///
+    /// let node = Node::new_leaf(1, false);
+    /// assert_eq!(*node.value(), 1);
+    /// ```
+    pub fn value(&self) -> &T {
+        &self.value
+    }
+
+    /// Is the node parent-less?
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dag::Node;
+    ///
+    /// let node = Node::new_leaf(1, false);
+    /// assert_eq!(node.is_leaf(), true);
+    /// ```
     pub fn is_leaf(&self) -> bool {
         self.parents.is_empty()
     }
 
-    // Is the node compressible?
+    /// Is the node compressible?
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dag::Node;
+    ///
+    /// let node = Node::new_leaf(1, true);
+    /// assert_eq!(node.is_compressible(), true);
+    /// ```
     pub fn is_compressible(&self) -> bool {
         self.compressible
     }
@@ -68,7 +108,7 @@ impl<T: Sync + Send + std::fmt::Debug> Node<T> {
     /// Get the parent nodes in a [`Vec`]. Note the "parents" are in the reverse of the usual tree structure.
     ///
     /// If this node is a leaf node, this function returns [`Vec::empty()`].
-    pub fn raw_parents(&self) -> Vec<NodeRef<T>> {
+    fn raw_parents(&self) -> Vec<NodeRef<T>> {
         self.parents.to_vec()
     }
 
@@ -141,6 +181,9 @@ impl<T: Sync + Send + std::fmt::Debug> Node<T> {
     }
 }
 
+/// Returns a Breadth-first search of the DAG, as an iterator of [`NodeRef`]
+/// This is expected to be used in conjunction with a [`NodeDag<T>`], walking the graph from one of its heads.
+///
 pub fn bfs<T: Sync + Send + std::fmt::Debug>(
     initial: NodeRef<T>,
 ) -> impl Iterator<Item = NodeRef<T>> {

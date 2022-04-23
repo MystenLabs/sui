@@ -80,7 +80,9 @@ impl<T: Affiliated> NodeDag<T> {
         }
     }
 
-    // Note: the dag currently does not do any causal completion, and maintains that
+    // Inserts a node in the Dag.
+    // 
+    // Note: the dag currently does not do any causal completion, and only verifies the invariant that
     // - insertion should be idempotent
     // - an unseen node is a head (not pointed) to by any other node.
     pub fn try_insert(&mut self, value: T) -> Result<(), DagError<T>> {
