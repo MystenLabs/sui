@@ -205,6 +205,23 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         }
     }
 
+    /// Only used in unittests.
+    /// One common issue when running tests on Mac is that the default ulimit is too low,
+    /// leading to I/O errors such as "Too many open files". Raising fdlimit to bypass it.
+    pub fn open_for_testing<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Self {
+        fn system_maxfiles() -> usize {
+            fdlimit::raise_fd_limit().unwrap_or(256u64) as usize
+        }
+
+        fn max_files_client_tests() -> i32 {
+            (system_maxfiles() / 8).try_into().unwrap()
+        }
+
+        let mut db_options = db_options.unwrap_or_default();
+        db_options.set_max_open_files(max_files_client_tests());
+        Self::open(path, Some(db_options))
+    }
+
     /// Returns true if we have a signed_effects structure for this transaction digest
     pub fn effects_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
         self.effects

@@ -222,6 +222,8 @@ pub struct GenesisConfig {
     pub move_packages: Vec<PathBuf>,
     pub sui_framework_lib_path: PathBuf,
     pub move_framework_lib_path: PathBuf,
+    /// Whether we are running in unittests.
+    pub is_testing: bool,
 }
 
 impl Config for GenesisConfig {}
@@ -310,6 +312,7 @@ impl Default for GenesisConfig {
             move_framework_lib_path: PathBuf::from(DEFAULT_FRAMEWORK_PATH)
                 .join("deps")
                 .join("move-stdlib"),
+            is_testing: false,
         }
     }
 }

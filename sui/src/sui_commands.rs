@@ -429,6 +429,7 @@ pub async fn genesis(
             &preload_objects,
             network_config.buffer_size,
             &mut genesis_ctx.clone(),
+            genesis_conf.is_testing,
         )
         .await?;
     }
@@ -472,8 +473,13 @@ async fn make_server_with_genesis_ctx(
     preload_objects: &[Object],
     buffer_size: usize,
     genesis_ctx: &mut TxContext,
+    is_testing: bool,
 ) -> SuiResult<AuthorityServer> {
-    let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
+    let store = Arc::new(if is_testing {
+        AuthorityStore::open_for_testing(&authority.db_path, None)
+    } else {
+        AuthorityStore::open(&authority.db_path, None)
+    });
     let name = *authority.key_pair.public_key_bytes();
 
     let state = AuthorityState::new(

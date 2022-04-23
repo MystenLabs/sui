@@ -9,6 +9,7 @@ use sui::keystore::KeystoreType;
 use sui::sui_commands::{genesis, SuiNetwork};
 use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 
+#[cfg(test)]
 pub async fn start_test_network(
     working_dir: &Path,
     genesis_config: Option<GenesisConfig>,
@@ -26,6 +27,7 @@ pub async fn start_test_network(
         .into_iter()
         .map(|info| AuthorityPrivateInfo { port: 0, ..info })
         .collect();
+    genesis_config.is_testing = true;
 
     let (network_config, accounts, mut keystore) = genesis(genesis_config).await?;
     let network = SuiNetwork::start(&network_config).await?;
