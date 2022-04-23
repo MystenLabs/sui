@@ -168,10 +168,7 @@ impl<T: Sync + Send + std::fmt::Debug> Node<T> {
 
     // A trivial node is one whose parents are all incompressible (or a leaf)
     fn is_trivial(&self) -> bool {
-        self.parents
-            .load()
-            .iter()
-            .all(|p| p.is_leaf() || !p.is_compressible())
+        self.parents.load().iter().all(|p| !p.is_compressible())
     }
 
     /// Compress the path from this node to the next incompressible layer of the DAG.
@@ -314,7 +311,7 @@ mod tests {
             let mut is_first = true;
             for node in iter {
                 if !is_first {
-                assert!(node.is_leaf()|| !node.is_compressible())
+                assert!(!node.is_compressible())
                 }
                 is_first = false;
             }
