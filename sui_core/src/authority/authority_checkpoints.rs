@@ -182,7 +182,17 @@ impl CheckpointStore {
         point_lookup.optimize_for_point_lookup(1024 * 1024);
         point_lookup.set_memtable_whole_key_filtering(true);
 
-        let transform = rocksdb::SliceTransform::create("bytes_8_to_16", |key| &key[8..16], None);
+        let transform = rocksdb::SliceTransform::create(
+            "bytes_8_to_16",
+            |key| {
+                if key.len() >= 16 {
+                    &key[8..16]
+                } else {
+                    key
+                }
+            },
+            None,
+        );
         point_lookup.set_prefix_extractor(transform);
         point_lookup.set_memtable_prefix_bloom_ratio(0.2);
 

@@ -185,3 +185,192 @@ fn make_diffs() {
     // All get the same set for the proposal
     assert_eq!(all_items1, all_items4);
 }
+
+#[test]
+fn latest_proposal() {
+    let mut test_objects = random_ckpoint_store();
+    let (_, cps1) = test_objects.pop().unwrap();
+    let (_, cps2) = test_objects.pop().unwrap();
+    let (_, cps3) = test_objects.pop().unwrap();
+    let (_, cps4) = test_objects.pop().unwrap();
+
+    let t1 = TransactionDigest::random();
+    let t2 = TransactionDigest::random();
+    let t3 = TransactionDigest::random();
+    let t4 = TransactionDigest::random();
+    let t5 = TransactionDigest::random();
+    let t6 = TransactionDigest::random();
+
+    cps1.update_processed_transactions(&[(1, t2), (2, t3)])
+        .unwrap();
+
+    cps2.update_processed_transactions(&[(1, t1), (2, t2)])
+        .unwrap();
+
+    cps3.update_processed_transactions(&[(1, t3), (2, t4)])
+        .unwrap();
+
+    cps4.update_processed_transactions(&[(1, t4), (2, t5)])
+        .unwrap();
+
+    // --- TEST 0 ---
+
+    // No checkpoint no proposal
+
+    let request = CheckpointRequest::latest(false);
+    let response = cps1.handle_latest_proposal(&request).expect("no errors");
+    assert!(response.detail.is_none());
+    assert!(matches!(
+        response.info,
+        AuthorityCheckpointInfo::Proposal { .. }
+    ));
+    if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
+        assert!(current.is_none());
+        assert!(matches!(previous, AuthenticatedCheckpoint::None));
+    }
+
+    // ---
+
+    let p1 = cps1.set_proposal().unwrap();
+    let p2 = cps2.set_proposal().unwrap();
+    let p3 = cps3.set_proposal().unwrap();
+
+    // --- TEST 1 ---
+
+    // First checkpoint condition
+
+    // Check the latest checkpoint with no detail
+    let request = CheckpointRequest::latest(false);
+    let response = cps1.handle_latest_proposal(&request).expect("no errors");
+    assert!(response.detail.is_none());
+    assert!(matches!(
+        response.info,
+        AuthorityCheckpointInfo::Proposal { .. }
+    ));
+    if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
+        assert!(current.is_some());
+        assert!(matches!(previous, AuthenticatedCheckpoint::None));
+
+        let current_proposal = current.unwrap();
+        current_proposal
+            .0
+            .check_digest()
+            .expect("no signature error");
+        assert_eq!(*current_proposal.0.checkpoint.sequence_number(), 0);
+    }
+
+    // --- TEST 2 ---
+
+    // Check the latest checkpoint with detail
+    let request = CheckpointRequest::latest(true);
+    let response = cps1.handle_latest_proposal(&request).expect("no errors");
+    assert!(response.detail.is_some());
+    assert!(matches!(
+        response.info,
+        AuthorityCheckpointInfo::Proposal { .. }
+    ));
+    if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
+        assert!(current.is_some());
+        assert!(matches!(previous, AuthenticatedCheckpoint::None));
+
+        let current_proposal = current.unwrap();
+        current_proposal
+            .0
+            .check_transactions(response.detail.as_ref().unwrap())
+            .expect("no signature error");
+        assert_eq!(*current_proposal.0.checkpoint.sequence_number(), 0);
+    }
+
+    // ---
+
+    let ckp_items: Vec<_> = p1
+        .transactions()
+        .chain(p2.transactions())
+        .chain(p3.transactions())
+        .cloned()
+        .collect();
+
+    let transactions = CheckpointContents::new(ckp_items.clone().into_iter());
+    let summary = CheckpointSummary::new(0, &transactions);
+
+    cps1.handle_internal_set_checkpoint(summary.clone(), &transactions)
+        .unwrap();
+    cps2.handle_internal_set_checkpoint(summary.clone(), &transactions)
+        .unwrap();
+    cps3.handle_internal_set_checkpoint(summary.clone(), &transactions)
+        .unwrap();
+    cps4.handle_internal_set_checkpoint(summary, &transactions)
+        .unwrap();
+
+    // --- TEST3 ---
+
+    // No valid checkpoint proposal condition...
+    assert!(cps1.proposal_checkpoint.load().is_none());
+    // ... because a valid checkpoint cannot be generated.
+    assert!(cps1.set_proposal().is_err());
+
+    let request = CheckpointRequest::latest(false);
+    let response = cps1.handle_latest_proposal(&request).expect("no errors");
+    assert!(response.detail.is_none());
+    assert!(matches!(
+        response.info,
+        AuthorityCheckpointInfo::Proposal { .. }
+    ));
+    if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
+        assert!(current.is_none());
+        assert!(matches!(previous, AuthenticatedCheckpoint::Signed { .. }));
+    }
+
+    // --- TEST 4 ---
+
+    // When details are needed, then return unexecuted trasnactions if there is no proposal
+    let request = CheckpointRequest::latest(true);
+    let response = cps1.handle_latest_proposal(&request).expect("no errors");
+    assert!(response.detail.is_some());
+    use typed_store::traits::Map;
+    let txs = response.detail.unwrap();
+    let unprocessed = CheckpointContents::new(cps1.unprocessed_transactions.keys());
+    assert_eq!(txs.transactions, unprocessed.transactions);
+
+    assert!(matches!(
+        response.info,
+        AuthorityCheckpointInfo::Proposal { .. }
+    ));
+    if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
+        assert!(current.is_none());
+        assert!(matches!(previous, AuthenticatedCheckpoint::Signed { .. }));
+    }
+
+    // ---
+    use std::iter;
+    let batch: Vec<_> = ckp_items
+        .into_iter()
+        .chain(iter::once(t6))
+        .enumerate()
+        .map(|(seq, item)| (seq as u64 + 2, item))
+        .collect();
+    cps1.update_processed_transactions(&batch[..]).unwrap();
+
+    let _p1 = cps1.set_proposal().unwrap();
+
+    // --- TEST 5 ---
+
+    // Get the full proposal with previous proposal
+    let request = CheckpointRequest::latest(true);
+    let response = cps1.handle_latest_proposal(&request).expect("no errors");
+    assert!(matches!(
+        response.info,
+        AuthorityCheckpointInfo::Proposal { .. }
+    ));
+    if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
+        assert!(current.is_some());
+        assert!(matches!(previous, AuthenticatedCheckpoint::Signed { .. }));
+
+        let current_proposal = current.unwrap();
+        current_proposal
+            .0
+            .check_digest()
+            .expect("no signature error");
+        assert_eq!(*current_proposal.0.checkpoint.sequence_number(), 1);
+    }
+}

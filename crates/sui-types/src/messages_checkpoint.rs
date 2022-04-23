@@ -75,13 +75,32 @@ pub struct CheckpointRequest {
     pub detail: bool,
 }
 
+impl CheckpointRequest {
+
+    /// Create a request for the latest checkpoint proposal from the authority
+    pub fn latest(detail: bool) -> CheckpointRequest {
+        CheckpointRequest {
+            request_type: CheckpointRequestType::LatestCheckpointProposal,
+            detail,
+        }
+    }
+
+    /// Create a request for a past checkpoint from the authority
+    pub fn past(seq: CheckpointSequenceNumber, detail: bool) -> CheckpointRequest {
+        CheckpointRequest {
+            request_type: CheckpointRequestType::PastCheckpoint(seq),
+            detail,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CheckpointRequestType {
     // Request the latest proposal and previous checkpoint.
     LatestCheckpointProposal,
     // Requests a past checkpoint
     PastCheckpoint(CheckpointSequenceNumber),
-    // Set a certificate
+    // Set a checkpoint certificate
     SetCertificate(CertifiedCheckpoint, Option<CheckpointContents>),
 
     // DEVNET: until we have a consensus core to collectivelly decide
@@ -166,6 +185,10 @@ impl CheckpointSummary {
             waypoint,
             digest: proposal_digest,
         }
+    }
+
+    pub fn sequence_number(&self) -> &CheckpointSequenceNumber {
+        &self.waypoint.sequence_number
     }
 }
 
