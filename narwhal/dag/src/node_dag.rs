@@ -74,7 +74,9 @@ impl<T: Affiliated> NodeDag<T> {
             .get(&digest)
             .ok_or(DagError::UnknownDigest(digest))?;
         match *node_ref {
-            Either::Left(ref node) => Ok(node.upgrade().ok_or(DagError::DroppedDigest(digest))?),
+            Either::Left(ref node) => Ok(NodeRef(
+                node.upgrade().ok_or(DagError::DroppedDigest(digest))?,
+            )),
             // the node is a head of the graph, just return
             Either::Right(ref node) => Ok(node.clone()),
         }
@@ -116,7 +118,7 @@ impl<T: Affiliated> NodeDag<T> {
         let strong_node_ref = Arc::new(RwLock::new(node));
         // important: do this first, before downgrading the head references
         self.node_table
-            .insert(digest, Either::Right(strong_node_ref));
+            .insert(digest, Either::Right(strong_node_ref.into()));
         // maintain the header invariant
         for mut parent in parent_digests
             .into_iter()

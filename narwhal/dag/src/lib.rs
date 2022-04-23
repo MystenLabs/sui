@@ -3,20 +3,64 @@
 
 use itertools::Itertools;
 use rayon::prelude::*;
-use std::sync::{Arc, RwLock, Weak};
+use std::{
+    ops::Deref,
+    sync::{Arc, RwLock, Weak},
+};
 
 pub mod bft;
 pub mod node_dag;
 
 /// Reference-counted pointers to a Node
-pub type NodeRef<T> = Arc<RwLock<Node<T>>>;
+#[derive(Debug)]
+pub struct NodeRef<T>(Arc<RwLock<Node<T>>>);
+
+// reimplemented to avoid a clone bound on T
+impl<T> Clone for NodeRef<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T> std::hash::Hash for NodeRef<T> {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        (Arc::as_ptr(&self.0)).hash(state)
+    }
+}
+
+impl<T> PartialEq<NodeRef<T>> for NodeRef<T> {
+    fn eq(&self, other: &NodeRef<T>) -> bool {
+        Arc::as_ptr(&self.0) == Arc::as_ptr(&other.0)
+    }
+}
+
+impl<T> Eq for NodeRef<T> {}
+
+// The NodeRef wrapper around a smart pointer is only here to define reference equality
+// when inserting in a collection
+impl<T> Deref for NodeRef<T> {
+    type Target = Arc<RwLock<Node<T>>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> From<Arc<RwLock<Node<T>>>> for NodeRef<T> {
+    fn from(pointer: Arc<RwLock<Node<T>>>) -> Self {
+        NodeRef(pointer)
+    }
+}
 
 /// Non reference-counted pointers to a Node
 pub type WeakNodeRef<T> = Weak<RwLock<Node<T>>>;
 
 impl<T> From<Node<T>> for NodeRef<T> {
     fn from(node: Node<T>) -> Self {
-        Arc::new(RwLock::new(node))
+        NodeRef(Arc::new(RwLock::new(node)))
     }
 }
 

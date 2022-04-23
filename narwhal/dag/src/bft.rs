@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::VecDeque, iter::Extend};
+use std::collections::{BTreeSet, VecDeque};
 
 /// [Breadth-First Traversal] (or Level Order Traversal).
 ///
@@ -22,6 +22,7 @@ use std::{collections::VecDeque, iter::Extend};
 /// ```
 /// use dag::bft::Bft;
 ///
+/// #[derive(PartialEq, Eq, Hash)]
 /// struct Node(&'static str, &'static [Node]);
 ///
 /// let tree = Node("A", &[
@@ -59,7 +60,14 @@ where
     I: Iterator<Item = T>,
 {
     queue: VecDeque<T>,
+    visited: BTreeSet<u64>,
     iter_children: F,
+}
+
+fn default_hash<T: std::hash::Hash>(val: &T) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    val.hash(&mut hasher);
+    std::hash::Hasher::finish(&hasher)
 }
 
 impl<T, F, I> Bft<T, F, I>
@@ -85,6 +93,7 @@ where
     pub fn new(root: T, iter_children: F) -> Self {
         Self {
             queue: VecDeque::from(vec![root]),
+            visited: BTreeSet::new(),
             iter_children,
         }
     }
@@ -92,6 +101,7 @@ where
 
 impl<T, F, I> Iterator for Bft<T, F, I>
 where
+    T: Eq + std::hash::Hash,
     F: Fn(&T) -> I,
     I: Iterator<Item = T>,
 {
@@ -101,7 +111,13 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(node) = self.queue.pop_front() {
             let children = (self.iter_children)(&node);
-            self.queue.extend(children);
+            for c in children {
+                let h = default_hash(&c);
+                if !self.visited.contains(&h) {
+                    self.visited.insert(h);
+                    self.queue.push_back(c)
+                }
+            }
 
             Some(node)
         } else {
@@ -114,6 +130,7 @@ where
 mod tests {
     use super::*;
 
+    #[derive(Eq, PartialEq, Hash)]
     struct Node(&'static str, &'static [Node]);
 
     #[test]
