@@ -27,4 +27,4 @@ tempfile = "3.3.0"
 
 [[bin]]
 name = "sui-faucet"
-path = "src/bin/server.rs"
+path = "src/main.rs"

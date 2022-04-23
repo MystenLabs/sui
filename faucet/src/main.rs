@@ -52,7 +52,6 @@ async fn request_gas(
 
 async fn create_wallet_context() -> Result<WalletContext, anyhow::Error> {
     // Create Wallet context.
-    // TODO: Make the path configurable
     let wallet_conf = sui_config_dir()?.join(SUI_WALLET_CONFIG);
     info!("Initialize wallet from config path: {:?}", wallet_conf);
     let mut context = WalletContext::new(&wallet_conf)?;
