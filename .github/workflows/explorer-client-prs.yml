@@ -24,9 +24,12 @@ jobs:
           node-version: '16'
           cache: 'yarn'
           cache-dependency-path: ./explorer/client/yarn.lock
+      - name: build TS sdk
+        working-directory: ./sdk/typescript
+        run: yarn build
       - name: Install yarn dependencies
         working-directory: ./explorer/client
-        run: yarn install 
+        run: yarn install
       - name: Lint
         working-directory: ./explorer/client
         run: yarn lint
