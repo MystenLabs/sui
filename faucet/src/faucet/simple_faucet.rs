@@ -181,7 +181,3 @@ impl Faucet for SimpleFaucet {
         Ok(coins.into())
     }
 }
-
-// TODO: Make sure this is thread-safe
-unsafe impl Send for SimpleFaucet {}
-unsafe impl Sync for SimpleFaucet {}
