@@ -439,13 +439,9 @@ impl AuthorityState {
         let ref_and_digest = match request.request_kind {
             ObjectInfoRequestKind::PastObjectInfo(seq) => {
                 // Get the Transaction Digest that created the object
-                let parent_iterator = self
-                    .get_parent_iterator(request.object_id, Some(seq))
-                    .await?;
-
-                parent_iterator
-                    .first()
-                    .map(|(object_ref, tx_digest)| (*object_ref, *tx_digest))
+                self.get_parent_iterator(request.object_id, Some(seq))
+                    .await?
+                    .next()
             }
             ObjectInfoRequestKind::LatestObjectInfo(_) => {
                 // Or get the latest object_reference and transaction entry.
@@ -791,7 +787,7 @@ impl AuthorityState {
         &self,
         object_id: ObjectID,
         seq: Option<SequenceNumber>,
-    ) -> Result<Vec<(ObjectRef, TransactionDigest)>, SuiError> {
+    ) -> Result<impl Iterator<Item = (ObjectRef, TransactionDigest)> + '_, SuiError> {
         {
             self._database.get_parent_iterator(object_id, seq)
         }
