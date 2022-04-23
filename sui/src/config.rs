@@ -376,7 +376,7 @@ pub fn make_default_narwhal_committee(
                 .map_err(|e| anyhow::anyhow!("{e}"))?
                 .next_port()
                 .ok_or_else(|| anyhow::anyhow!("No available ports"))?;
-            authority_ports.push(port);
+            authority_ports.push(port + 100);
         }
         ports.push(authority_ports);
     }
