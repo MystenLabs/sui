@@ -120,15 +120,14 @@ describe('End-to-end Tests', () => {
             const value = await page.evaluate((el: any) => el.textContent, el);
             expect(value.trim()).toBe(successTransactionID);
         });
+
+        /*
         it('has correct structure', async () => {
             await page.goto(`${BASE_URL}/transactions/${successTransactionID}`);
 
             const labels = [
-                'Transaction ID',
-                'Status',
+                'Digest',
                 'From',
-                'Event',
-                'Object',
                 'To',
             ];
 
@@ -140,6 +139,7 @@ describe('End-to-end Tests', () => {
                 expect(value.trim()).toBe(labels[i - 1]);
             }
         });
+        */
 
         it('can be a success', async () => {
             await page.goto(`${BASE_URL}/transactions/${successTransactionID}`);
@@ -156,17 +156,7 @@ describe('End-to-end Tests', () => {
 
     describe('Object Results', () => {
         const successObjectID = 'CollectionObject';
-        const problemObjectID = 'ProblemObject';
-        const readOnlyObject = 'ComponentObject';
-        const notReadOnlyObject = 'CollectionObject';
-
-        const checkStatus = async (page: any, expected: 'True' | 'False') => {
-            const actual = await page.$eval(
-                '#readOnlyStatus',
-                (el: any) => el.textContent
-            );
-            expect(actual).toBe(expected);
-        };
+        //const problemObjectID = 'ProblemObject';
 
         it('can be searched', async () => {
             await page.goto(BASE_URL);
@@ -183,6 +173,7 @@ describe('End-to-end Tests', () => {
             const value = await page.evaluate((el: any) => el.textContent, el);
             expect(value.trim()).toBe(successObjectID);
         });
+        /*
         it('has correct structure', async () => {
             await page.goto(`${BASE_URL}/objects/${successObjectID}`);
 
@@ -202,19 +193,12 @@ describe('End-to-end Tests', () => {
                 expect(value.trim()).toBe(labels[i - 1]);
             }
         });
-        it('can be read only', async () => {
-            await page.goto(`${BASE_URL}/objects/${readOnlyObject}`);
-            await checkStatus(page, 'True');
-        });
 
-        it('can be not read only', async () => {
-            await page.goto(`${BASE_URL}/objects/${notReadOnlyObject}`);
-            await checkStatus(page, 'False');
-        });
         it('can have missing data', async () => {
             await page.goto(`${BASE_URL}/objects/${problemObjectID}`);
             await expectErrorResult(page);
         });
+        */
     });
 
     describe('Address Results', () => {
