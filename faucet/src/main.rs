@@ -4,14 +4,17 @@ use axum::{
     routing::{get, post},
     Extension, Json, Router,
 };
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 use sui::{
     sui_config_dir,
     wallet_commands::{WalletCommands, WalletContext},
     SUI_WALLET_CONFIG,
 };
-use sui_faucet::{FaucetRequest, Service, SimpleFaucet};
+use sui_faucet::{Faucet, FaucetRequest, FaucetResponse, SimpleFaucet};
 use tracing::info;
+
+const DEFAULT_AMOUNT: u64 = 20;
+const DEFAULT_NUM_COINS: usize = 5;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -23,7 +26,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let app = Router::new()
         .route("/", get(health))
         .route("/gas", post(request_gas))
-        .layer(Extension(Service::new(
+        .layer(Extension(Arc::new(
             SimpleFaucet::new(context).await.unwrap(),
         )));
 
@@ -44,9 +47,19 @@ async fn health() -> &'static str {
 /// handler for all the request_gas requests
 async fn request_gas(
     Json(payload): Json<FaucetRequest>,
-    Extension(svc): Extension<Service>,
+    Extension(faucet): Extension<Arc<SimpleFaucet>>,
 ) -> impl IntoResponse {
-    let resp = svc.execute(payload).await;
+    let result = match payload {
+        FaucetRequest::FixedAmountRequest(requests) => {
+            faucet
+                .send(requests.recipient, &[DEFAULT_AMOUNT; DEFAULT_NUM_COINS])
+                .await
+        }
+    };
+    let resp: FaucetResponse = match result {
+        Ok(v) => v.into(),
+        Err(v) => v.into(),
+    };
     (StatusCode::CREATED, Json(resp))
 }
 

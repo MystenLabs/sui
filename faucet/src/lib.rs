@@ -3,11 +3,13 @@
 
 mod errors;
 mod faucet;
-mod service;
+mod requests;
+mod responses;
 
 pub use errors::FaucetError;
 pub use faucet::*;
-pub use service::*;
+pub use requests::*;
+pub use responses::*;
 
 #[cfg(test)]
 mod test_utils;
