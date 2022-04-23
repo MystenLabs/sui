@@ -817,7 +817,7 @@ async fn test_handle_confirmation_transaction_ok() {
             .get_parent_iterator(object_id, None)
             .await
             .unwrap()
-            .len(),
+            .count(),
         2
     );
 }
