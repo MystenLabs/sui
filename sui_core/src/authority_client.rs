@@ -279,22 +279,12 @@ impl LocalAuthorityClient {
         use std::{env, fs};
         use sui_adapter::genesis;
 
-        fn system_maxfiles() -> usize {
-            fdlimit::raise_fd_limit().unwrap_or(256u64) as usize
-        }
-
-        fn max_files_client_tests() -> i32 {
-            (system_maxfiles() / 8).try_into().unwrap()
-        }
-
         // Random directory
         let dir = env::temp_dir();
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
-        let mut opts = rocksdb::Options::default();
-        opts.set_max_open_files(max_files_client_tests());
-        let store = Arc::new(AuthorityStore::open(path, Some(opts)));
+        let store = Arc::new(AuthorityStore::open(path, None));
         let state = AuthorityState::new(
             committee.clone(),
             address,
