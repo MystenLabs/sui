@@ -11,10 +11,12 @@ export interface Keypair {
   /**
    * The public key for this keypair
    */
+  //ts-auto-guard-suppress function-type
   getPublicKey(): PublicKey;
 
   /**
    * Return the signature for the data
    */
+  //ts-auto-guard-suppress function-type
   signData(data: Base64DataBuffer): Base64DataBuffer;
 }

@@ -8,7 +8,7 @@
 import { HttpHeaders, ValidResponse, ErrorResponse } from "./client";
 import { isTransactionResponse } from "../index.guard";
 
-export function isHttpHeaders(obj: any, _argumentName?: string): obj is HttpHeaders {
+export function isHttpHeaders(obj: any): obj is HttpHeaders {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -16,7 +16,7 @@ export function isHttpHeaders(obj: any, _argumentName?: string): obj is HttpHead
     )
 }
 
-export function isValidResponse(obj: any, _argumentName?: string): obj is ValidResponse {
+export function isValidResponse(obj: any): obj is ValidResponse {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -26,7 +26,7 @@ export function isValidResponse(obj: any, _argumentName?: string): obj is ValidR
     )
 }
 
-export function isErrorResponse(obj: any, _argumentName?: string): obj is ErrorResponse {
+export function isErrorResponse(obj: any): obj is ErrorResponse {
     return (
         (obj !== null &&
             typeof obj === "object" ||

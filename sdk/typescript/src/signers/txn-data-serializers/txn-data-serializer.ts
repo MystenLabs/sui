@@ -19,6 +19,7 @@ export interface TransferTransaction {
  * Serializes a transaction to a string that can be signed by a `Signer`.
  */
 export interface TxnDataSerializer {
+  //ts-auto-guard-suppress function-type
   new_transfer(transaction: TransferTransaction): Promise<Base64DataBuffer>;
 
   // TODO: add more interface methods
