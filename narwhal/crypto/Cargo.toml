@@ -7,7 +7,6 @@ edition = "2021"
 publish = false
 
 [dependencies]
-base64 = "0.13.0"
 base64ct = { version = "1.5.0", features = ["alloc"] }
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 eyre = "0.6.8"

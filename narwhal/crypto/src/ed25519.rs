@@ -1,10 +1,9 @@
-use std::fmt::{self, Display};
-
-use base64ct::{Base64, Encoding};
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use base64ct::{Base64, Encoding};
 use serde::{de, Deserialize, Serialize};
 use signature::{Signature, Signer, Verifier};
+use std::fmt::{self, Display};
 
 use crate::traits::{
     Authenticator, EncodeDecodeBase64, KeyPair, SigningKey, ToFromBytes, VerifyingKey,
@@ -196,6 +195,15 @@ impl KeyPair for Ed25519KeyPair {
         Ed25519KeyPair {
             name: Ed25519PublicKey(kp.public),
             secret: Ed25519PrivateKey(kp.secret),
+        }
+    }
+}
+
+impl From<ed25519_dalek::Keypair> for Ed25519KeyPair {
+    fn from(dalek_kp: ed25519_dalek::Keypair) -> Self {
+        Ed25519KeyPair {
+            name: Ed25519PublicKey(dalek_kp.public),
+            secret: Ed25519PrivateKey(dalek_kp.secret),
         }
     }
 }
