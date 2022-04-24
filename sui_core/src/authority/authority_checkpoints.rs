@@ -7,7 +7,7 @@ use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use sui_types::{
     base_types::{AuthorityName, TransactionDigest},
-    batch::{AuthorityBatch, TxSequenceNumber},
+    batch::TxSequenceNumber,
     committee::Committee,
     error::SuiError,
     messages_checkpoint::{
@@ -19,7 +19,7 @@ use sui_types::{
 };
 use typed_store::{
     reopen,
-    rocks::{open_cf_opts, DBMap, TypedStoreError},
+    rocks::{open_cf_opts, DBMap},
     Map,
 };
 
@@ -110,11 +110,16 @@ const LOCALS: DBLabel = 0;
 
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct CheckpointLocals {
-    pub next_checkpoint_sequence_number: CheckpointSequenceNumber,
-    pub next_tx_sequence_number_in_proposal: Option<TxSequenceNumber>,
-    pub next_batch_transaction_sequence: TxSequenceNumber,
-    pub next_uncommitted_transaction: TxSequenceNumber,
+    // The next checkpoint number expected.
+    pub next_checkpoint: CheckpointSequenceNumber,
 
+    // The next transaction after what is included in the proposal
+    pub proposal_next_transaction: Option<TxSequenceNumber>,
+
+    // The next trasnaction sequence number of transactions processed
+    pub next_transaction_sequence: TxSequenceNumber,
+
+    // The current checkpoint proposal if any
     #[serde(skip)]
     pub current_proposal: Option<CheckpointProposal>,
 }
@@ -166,9 +171,10 @@ pub struct CheckpointStore {
 impl CheckpointStore {
     // Manage persistent local variables
 
-    pub fn load_locals(&self) -> Result<CheckpointLocals, SuiError> {
+    /// Loads the locals from the store -- do this at init
+    fn load_locals(&self) -> Result<CheckpointLocals, SuiError> {
         // Loads locals from disk, or inserts initial locals
-        let locals = match self.locals.get(&LOCALS)? {
+        let mut locals = match self.locals.get(&LOCALS)? {
             Some(locals) => locals,
             None => {
                 let locals = CheckpointLocals::default();
@@ -177,16 +183,34 @@ impl CheckpointStore {
             }
         };
 
+        // Recreate the proposal
+        if locals.proposal_next_transaction.is_some() {
+            let checkpoint = locals.next_checkpoint;
+            let transactions = self
+                .extra_transactions
+                .iter()
+                .filter(|(_, seq)| seq < locals.proposal_next_transaction.as_ref().unwrap())
+                .map(|(digest, _)| digest);
+
+            let transactions = CheckpointContents::new(transactions);
+            let proposal = SignedCheckpointProposal(SignedCheckpoint::new(
+                checkpoint,
+                self.name,
+                &*self.secret,
+                &transactions,
+            ));
+
+            let proposal_and_transactions = CheckpointProposal::new(proposal, transactions);
+            locals.current_proposal = Some(proposal_and_transactions);
+        }
+
         // No need to sync exclusive access
         self.memory_locals.store(Some(Arc::new(locals.clone())));
         Ok(locals)
     }
 
-    pub fn get_locals(&self) -> Arc<CheckpointLocals> {
-        self.memory_locals.load().clone().unwrap()
-    }
-
-    pub fn set_locals(
+    /// Set the local variables in memory and store
+    fn set_locals(
         &self,
         _previous: Arc<CheckpointLocals>,
         locals: CheckpointLocals,
@@ -196,15 +220,14 @@ impl CheckpointStore {
         Ok(())
     }
 
+    /// Read the local variables
+    pub fn get_locals(&self) -> Arc<CheckpointLocals> {
+        self.memory_locals.load().clone().unwrap()
+    }
+
     /* TODO: Crash recovery logic.
 
-    (1) When we open the checkpoint store, we need to check that the current
-    highest checkpoint available at other nodes, is also the highest
-    checkpoint recorded in the store. If not, then we should download the
-    checkpoints from other authorities and include them in the store, as
-    the consensus channel may not provide them.
-
-    (2) We also need to check that the highest batch processed, is the same
+    We need to check that the highest batch processed, is the same
     as within the authority store. If not we should also update the checkpoint
     store with all the batches since the last batch processed.
 
@@ -414,21 +437,6 @@ impl CheckpointStore {
         self.checkpoints
             .insert(&checkpoint_sequence_number, &signed_checkpoint)?;
 
-        // Clean up our proposal if any
-        let locals = self.get_locals();
-        if locals
-            .current_proposal
-            .as_ref()
-            .map(|v| *v.sequence_number())
-            .unwrap_or(0)
-            <= checkpoint_sequence_number
-        {
-            let mut new_locals = locals.as_ref().clone();
-            new_locals.current_proposal = None;
-            new_locals.next_tx_sequence_number_in_proposal = None;
-            self.set_locals(locals, new_locals)?;
-        }
-
         // Try to set a fresh proposal, and ignore errors if this fails.
         let _ = self.set_proposal();
 
@@ -440,11 +448,17 @@ impl CheckpointStore {
     /// stored to ensure upon crash recovery all batches are processed.
     pub fn handle_internal_batch(
         &self,
-        _batch: &AuthorityBatch,
+        next_sequence_number: TxSequenceNumber,
         transactions: &[(TxSequenceNumber, TransactionDigest)],
     ) -> Result<(), SuiError> {
         self.update_processed_transactions(transactions)?;
-        // TODO: Store the batch or at least its sequence number here.
+
+        // Updates the local sequence number of transactions processed.
+        let locals = self.get_locals();
+        let mut new_locals = locals.as_ref().clone();
+        new_locals.next_transaction_sequence = next_sequence_number;
+        self.set_locals(locals, new_locals)?;
+
         Ok(())
     }
 
@@ -536,18 +550,32 @@ impl CheckpointStore {
         })
     }
 
-    // Helper functions
+    // Helper read functions
 
-    pub fn next_local_tx_number(&self) -> TxSequenceNumber {
-        self.extra_transactions
-            .values()
-            .max()
-            .map(|v| v + 1)
-            .unwrap_or(0)
+    /// Return the seq number of the last checkpoint we have recorded.
+    pub fn next_checkpoint(&self) -> CheckpointSequenceNumber {
+        self.get_locals().next_checkpoint
     }
 
+    /// Returns the lowest checkpoint sequence number with unprocessed transactions
+    /// if any, otherwise the next checkpoint (not seen).
+    pub fn lowest_unprocessed_checkpoint(&self) -> CheckpointSequenceNumber {
+        self.unprocessed_transactions
+            .iter()
+            .map(|(_, chk_seq)| chk_seq)
+            .min()
+            .unwrap_or_else(|| self.next_checkpoint())
+    }
+
+    /// Returns the next transactions sequence number expected.
+    pub fn next_transaction_sequence_expected(&self) -> TxSequenceNumber {
+        self.get_locals().next_transaction_sequence
+    }
+
+    // Helper write functions
+
     /// Set the next checkpoint proposal.
-    pub fn set_proposal(&self) -> Result<CheckpointProposal, SuiError> {
+    fn set_proposal(&self) -> Result<CheckpointProposal, SuiError> {
         // Check that:
         // - there is no current proposal.
         // - there are no unprocessed transactions.
@@ -576,7 +604,7 @@ impl CheckpointStore {
 
         // Include the sequence number of all extra transactions not already in a
         // checkpoint. And make a list of the transactions.
-        let sequence_number = self.next_checkpoint_sequence();
+        let sequence_number = self.next_checkpoint();
         let next_local_tx_sequence = self.extra_transactions.values().max().unwrap() + 1;
 
         let transactions = CheckpointContents::new(self.extra_transactions.keys());
@@ -592,42 +620,22 @@ impl CheckpointStore {
         // Record the checkpoint in the locals
         let mut new_locals = locals.as_ref().clone();
         new_locals.current_proposal = Some(proposal_and_transactions.clone());
-        new_locals.next_tx_sequence_number_in_proposal = Some(next_local_tx_sequence);
+        new_locals.proposal_next_transaction = Some(next_local_tx_sequence);
         self.set_locals(locals, new_locals)?;
 
         Ok(proposal_and_transactions)
     }
 
-    /// Return the seq number of the last checkpoint we have recorded.
-    pub fn next_checkpoint_sequence(&self) -> CheckpointSequenceNumber {
-        self.checkpoint_contents
-            .iter()
-            .skip_to_last()
-            .next()
-            .map(|((seq, _), _)| seq + 1)
-            .unwrap_or_else(|| 0)
-    }
-
-    /// Returns the lowest checkpoint sequence number with unprocessed transactions
-    /// if any, otherwise the next checkpoint (not seen).
-    pub fn lowest_unprocessed_sequence(&self) -> CheckpointSequenceNumber {
-        self.unprocessed_transactions
-            .iter()
-            .map(|(_, chk_seq)| chk_seq)
-            .min()
-            .unwrap_or_else(|| self.next_checkpoint_sequence())
-    }
-
     /// Add transactions associated with a new checkpoint in the structure, and
     /// updates all tables including unprocessed and extra transactions.
-    pub fn update_new_checkpoint(
+    fn update_new_checkpoint(
         &self,
         seq: CheckpointSequenceNumber,
         transactions: &[TransactionDigest],
     ) -> Result<(), SuiError> {
         // Check that this checkpoint seq is new, and directly follows the last
         // highest checkpoint seen. First checkpoint is always zero.
-        let expected_seq = self.next_checkpoint_sequence();
+        let expected_seq = self.next_checkpoint();
 
         if seq != expected_seq {
             return Err(SuiError::CheckpointingError {
@@ -708,16 +716,25 @@ impl CheckpointStore {
         // Write to the database.
         batch.write()?;
 
+        // Clean up our proposal if any
+        let locals = self.get_locals();
+
+        let mut new_locals = locals.as_ref().clone();
+        new_locals.current_proposal = None;
+        new_locals.proposal_next_transaction = None;
+        new_locals.next_checkpoint = expected_seq + 1;
+        self.set_locals(locals, new_locals)?;
+
         Ok(())
     }
 
     /// Updates the store on the basis of transactions that have been processed. This is idempotent
     /// and nothing unsafe happens if it is called twice. Returns the lowest checkpoint number with
     /// unprocessed transactions (this is the low watermark).
-    pub fn update_processed_transactions(
+    fn update_processed_transactions(
         &self, // We take by &mut to prevent concurrent access.
         transactions: &[(TxSequenceNumber, TransactionDigest)],
-    ) -> Result<CheckpointSequenceNumber, TypedStoreError> {
+    ) -> Result<CheckpointSequenceNumber, SuiError> {
         let in_checkpoint = self
             .transactions_to_checkpoint
             .multi_get(transactions.iter().map(|(_, tx)| tx))?;
@@ -823,6 +840,6 @@ impl CheckpointStore {
         // Write to the database.
         batch.write()?;
 
-        Ok(self.lowest_unprocessed_sequence())
+        Ok(self.lowest_unprocessed_checkpoint())
     }
 }

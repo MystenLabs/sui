@@ -37,6 +37,95 @@ fn random_ckpoint_store() -> Vec<(PathBuf, CheckpointStore)> {
 }
 
 #[test]
+fn crash_recovery() {
+    let (keys, committee) = make_committee_key();
+    let k = keys[0].copy();
+
+    // Setup
+
+    let dir = env::temp_dir();
+    let path = dir.join(format!("SC_{:?}", ObjectID::random()));
+    fs::create_dir(&path).unwrap();
+
+    // Create an authority
+    let mut opts = rocksdb::Options::default();
+    opts.set_max_open_files(max_files_authority_tests());
+
+    // Open store first time
+
+    let cps = CheckpointStore::open(
+        path.clone(),
+        Some(opts.clone()),
+        *k.public_key_bytes(),
+        committee.clone(),
+        Arc::pin(k.copy()),
+    )
+    .unwrap();
+
+    // --- TEST 0 ---
+
+    // Check init from empty works.
+
+    let locals = cps.get_locals();
+    assert!(locals.current_proposal.is_none());
+    assert!(locals.proposal_next_transaction.is_none());
+
+    // Do stuff
+
+    let t1 = TransactionDigest::random();
+    let t2 = TransactionDigest::random();
+    let t3 = TransactionDigest::random();
+    let t4 = TransactionDigest::random();
+    let t5 = TransactionDigest::random();
+    let t6 = TransactionDigest::random();
+
+    cps.handle_internal_batch(4, &[(1, t1), (2, t2), (3, t3)])
+        .unwrap();
+
+    // --- TEST 1 ---
+    // Check the recording of transactions works
+
+    let locals = cps.get_locals();
+    assert_eq!(locals.next_transaction_sequence, 4);
+
+    let proposal = cps.set_proposal().unwrap();
+    assert_eq!(*proposal.sequence_number(), 0);
+
+    cps.handle_internal_batch(7, &[(4, t4), (5, t5), (6, t6)])
+        .unwrap();
+
+    // Delete and re-open DB
+    drop(cps);
+
+    let cps_new = CheckpointStore::open(
+        path,
+        Some(opts),
+        *k.public_key_bytes(),
+        committee,
+        Arc::pin(k.copy()),
+    )
+    .unwrap();
+
+    // TEST 3 -- the current proposal is correctly recreated.
+
+    let locals = cps_new.get_locals();
+    assert!(locals.current_proposal.is_some());
+    assert!(locals.proposal_next_transaction.is_some());
+    assert_eq!(locals.next_transaction_sequence, 7);
+
+    assert_eq!(
+        &proposal.proposal.0.checkpoint,
+        &locals
+            .current_proposal
+            .as_ref()
+            .unwrap()
+            .proposal
+            .0
+            .checkpoint
+    );
+}
+
+#[test]
 fn make_checkpoint_db() {
     let (_, cps) = random_ckpoint_store().pop().unwrap();
 
@@ -53,19 +142,19 @@ fn make_checkpoint_db() {
     assert!(cps.extra_transactions.iter().count() == 3);
     assert!(cps.unprocessed_transactions.iter().count() == 0);
 
-    assert!(cps.next_checkpoint_sequence() == 0);
+    assert!(cps.next_checkpoint() == 0);
 
     cps.update_new_checkpoint(0, &[t1, t2, t4, t5]).unwrap();
     assert!(cps.checkpoint_contents.iter().count() == 4);
     assert_eq!(cps.extra_transactions.iter().count(), 1);
     assert!(cps.unprocessed_transactions.iter().count() == 2);
 
-    assert_eq!(cps.lowest_unprocessed_sequence(), 0);
+    assert_eq!(cps.lowest_unprocessed_checkpoint(), 0);
 
     let (_cp_seq, tx_seq) = cps.transactions_to_checkpoint.get(&t4).unwrap().unwrap();
     assert!(tx_seq >= u64::MAX / 2);
 
-    assert!(cps.next_checkpoint_sequence() == 1);
+    assert!(cps.next_checkpoint() == 1);
 
     cps.update_processed_transactions(&[(4, t4), (5, t5), (6, t6)])
         .unwrap();
@@ -73,7 +162,7 @@ fn make_checkpoint_db() {
     assert_eq!(cps.extra_transactions.iter().count(), 2); // t3 & t6
     assert!(cps.unprocessed_transactions.iter().count() == 0);
 
-    assert_eq!(cps.lowest_unprocessed_sequence(), 1);
+    assert_eq!(cps.lowest_unprocessed_checkpoint(), 1);
 
     let (_cp_seq, tx_seq) = cps.transactions_to_checkpoint.get(&t4).unwrap().unwrap();
     assert_eq!(tx_seq, 4);
