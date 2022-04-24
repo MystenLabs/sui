@@ -603,9 +603,91 @@ fn set_get_checkpoint() {
     // Now we have a certified checkpoint
     let request = CheckpointRequest::past(0, true);
     let response = cps4.handle_checkpoint_request(&request).unwrap();
-    println!("{:?}", response.info);
     assert!(matches!(
         response.info,
         AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Certified(..))
     ));
+}
+
+#[test]
+fn checkpoint_integration() {
+    let (keys, committee) = make_committee_key();
+    let k = keys[0].copy();
+
+    // Setup
+
+    let dir = env::temp_dir();
+    let path = dir.join(format!("SC_{:?}", ObjectID::random()));
+    fs::create_dir(&path).unwrap();
+
+    // Create an authority
+    let mut opts = rocksdb::Options::default();
+    opts.set_max_open_files(max_files_authority_tests());
+
+    // Make a checkpoint store:
+
+    let cps = CheckpointStore::open(
+        path,
+        Some(opts.clone()),
+        *k.public_key_bytes(),
+        committee,
+        Arc::pin(k.copy()),
+    )
+    .unwrap();
+
+    let mut next_tx_num: TxSequenceNumber = 0;
+    let mut unprocessed = Vec::new();
+    while cps.get_locals().next_checkpoint < 10 {
+        let old_checkpoint = cps.get_locals().next_checkpoint;
+
+        let some_fresh_transactions: Vec<_> = (0..7)
+            .map(|_| TransactionDigest::random())
+            .chain(unprocessed.clone().into_iter())
+            .enumerate()
+            .map(|(i, d)| (i as u64 + next_tx_num, d))
+            .collect();
+        next_tx_num = some_fresh_transactions
+            .iter()
+            .map(|(s, _)| s)
+            .max()
+            .unwrap()
+            + 1;
+
+        // Step 0. Add transactions to checkpoint
+        cps.handle_internal_batch(next_tx_num, &some_fresh_transactions[..])
+            .unwrap();
+
+        // Step 1. Make a proposal
+        let _proposal = cps.set_proposal().unwrap();
+
+        // Step 2. Continue to process transactions while a proposal is out.
+        let some_fresh_transactions: Vec<_> = (0..7)
+            .map(|_| TransactionDigest::random())
+            .enumerate()
+            .map(|(i, d)| (i as u64 + next_tx_num, d))
+            .collect();
+        next_tx_num = some_fresh_transactions
+            .iter()
+            .map(|(s, _)| s)
+            .max()
+            .unwrap()
+            + 1;
+
+        // Step 3. Receive a Checkpoint
+        unprocessed = (0..5)
+            .map(|_| TransactionDigest::random())
+            .into_iter()
+            .chain(some_fresh_transactions.iter().cloned().map(|(_, d)| d))
+            .collect();
+        let transactions = CheckpointContents::new(unprocessed.clone().into_iter());
+        let summary = CheckpointSummary::new(cps.get_locals().next_checkpoint, &transactions);
+
+        cps.handle_internal_set_checkpoint(summary.clone(), &transactions)
+            .unwrap();
+
+        // Cannot make a checkpoint proposal before adding the unprocessed transactions
+        assert!(cps.set_proposal().is_err());
+        // Loop invariant to ensure termination or error
+        assert_eq!(cps.get_locals().next_checkpoint, old_checkpoint + 1);
+    }
 }
