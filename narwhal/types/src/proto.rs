@@ -2,6 +2,7 @@
 #[rustfmt::skip]
 mod narwhal;
 
+use bytes::Bytes;
 pub use narwhal::{
     primary_to_primary_client::PrimaryToPrimaryClient,
     primary_to_primary_server::{PrimaryToPrimary, PrimaryToPrimaryServer},
@@ -22,5 +23,11 @@ impl BincodeEncodedPayload {
     pub fn try_from<T: serde::Serialize>(value: &T) -> Result<Self, bincode::Error> {
         let payload = bincode::serialize(value)?.into();
         Ok(Self { payload })
+    }
+}
+
+impl From<Bytes> for BincodeEncodedPayload {
+    fn from(payload: Bytes) -> Self {
+        Self { payload }
     }
 }

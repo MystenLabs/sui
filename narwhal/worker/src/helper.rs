@@ -5,7 +5,7 @@ use crate::worker::SerializedBatchMessage;
 use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::traits::VerifyingKey;
-use network::SimpleSender;
+use network::WorkerNetwork;
 use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{error, warn};
@@ -28,7 +28,7 @@ pub struct Helper<PublicKey: VerifyingKey> {
     /// Input channel to receive batch requests from workers.
     rx_client_request: Receiver<(Vec<BatchDigest>, Sender<SerializedBatchMessage>)>,
     /// A network sender to send the batches to the other workers.
-    network: SimpleSender,
+    network: WorkerNetwork,
 }
 
 impl<PublicKey: VerifyingKey> Helper<PublicKey> {
@@ -46,7 +46,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                 store,
                 rx_worker_request,
                 rx_client_request,
-                network: SimpleSender::new(),
+                network: WorkerNetwork::default(),
             }
             .run()
             .await;
@@ -71,7 +71,9 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                     // Reply to the request (the best we can).
                     for digest in digests {
                         match self.store.read(digest).await {
-                            Ok(Some(data)) => self.network.send(address, Bytes::from(data)).await,
+                            Ok(Some(data)) => {
+                                let _ = self.network.unreliable_send_message(address, Bytes::from(data)).await;
+                            }
                             Ok(None) => (),
                             Err(e) => error!("{e}"),
                         }

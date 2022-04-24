@@ -5,8 +5,8 @@ use super::*;
 use crypto::traits::KeyPair;
 use store::rocks;
 use test_utils::{
-    batch, committee_with_base_port, digest_batch, expecting_listener, keys,
-    serialize_batch_message, temp_dir,
+    batch, committee_with_base_port, digest_batch, keys, serialize_batch_message, temp_dir,
+    WorkerToWorkerMockServer,
 };
 use tokio::sync::mpsc::channel;
 use types::BatchDigest;
@@ -46,14 +46,14 @@ async fn worker_batch_reply() {
     // Spawn a listener to receive the batch reply.
     let address = committee.worker(&requestor, &id).unwrap().worker_to_worker;
     let expected = Bytes::from(serialized_batch.clone());
-    let handle = expecting_listener(address, Some(expected));
+    let mut handle = WorkerToWorkerMockServer::spawn(address);
 
     // Send a batch request.
     let digests = vec![batch_digest];
     tx_worker_request.send((digests, requestor)).await.unwrap();
 
     // Ensure the requestor received the batch (ie. it did not panic).
-    assert!(handle.await.is_ok());
+    assert_eq!(handle.recv().await.unwrap().payload, expected);
 }
 
 #[tokio::test]

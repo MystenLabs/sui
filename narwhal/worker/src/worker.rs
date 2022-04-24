@@ -9,21 +9,21 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use config::{Committee, Parameters, WorkerId};
 use crypto::traits::VerifyingKey;
-use futures::sink::SinkExt as _;
+use futures::{Stream, StreamExt};
 use network::{MessageHandler, Receiver, Writer};
 use primary::{PrimaryWorkerMessage, WorkerPrimaryMessage};
-use serde::{Deserialize, Serialize};
 use std::{
     error::Error,
     net::{IpAddr, Ipv4Addr, SocketAddr},
+    pin::Pin,
 };
 use store::Store;
 use tokio::sync::mpsc::{channel, Sender};
 use tonic::{Request, Response, Status};
-use tracing::{info, warn};
+use tracing::info;
 use types::{
-    Batch, BatchDigest, BincodeEncodedPayload, Empty, PrimaryToWorker, PrimaryToWorkerServer,
-    Transaction,
+    BatchDigest, BincodeEncodedPayload, ClientBatchRequest, Empty, PrimaryToWorker,
+    PrimaryToWorkerServer, Transaction, WorkerToWorker, WorkerToWorkerServer,
 };
 
 #[cfg(test)]
@@ -40,17 +40,7 @@ pub type Round = u64;
 /// Indicates a serialized `WorkerMessage::Batch` message.
 pub type SerializedBatchMessage = Vec<u8>;
 
-/// The message exchanged between workers.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
-pub enum WorkerMessage<PublicKey: VerifyingKey> {
-    /// Used by workers to send a new batch or to reply to a batch request.
-    Batch(Batch),
-    /// Used by workers to request batches.
-    BatchRequest(Vec<BatchDigest>, /* origin */ PublicKey),
-    /// Used by clients to request batches.
-    ClientBatchRequest(Vec<BatchDigest>),
-}
+pub use types::WorkerMessage;
 
 pub struct Worker<PublicKey: VerifyingKey> {
     /// The public key of this authority.
@@ -218,15 +208,12 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             .expect("Our public key or worker id is not in the committee")
             .worker_to_worker;
         address.set_ip(INADDR_ANY);
-        Receiver::spawn(
-            address,
-            /* handler */
-            WorkerReceiverHandler {
-                tx_worker_helper,
-                tx_client_helper,
-                tx_processor,
-            },
-        );
+        WorkerReceiverHandler {
+            tx_worker_helper,
+            tx_client_helper,
+            tx_processor,
+        }
+        .spawn(address);
 
         // The `Helper` is dedicated to reply to batch requests from other workers.
         Helper::spawn(
@@ -283,48 +270,75 @@ struct WorkerReceiverHandler<PublicKey: VerifyingKey> {
     tx_processor: Sender<SerializedBatchMessage>,
 }
 
+impl<PublicKey: VerifyingKey> WorkerReceiverHandler<PublicKey> {
+    fn spawn(self, address: SocketAddr) {
+        let service = tonic::transport::Server::builder()
+            .add_service(WorkerToWorkerServer::new(self))
+            .serve(address);
+        tokio::spawn(service);
+    }
+}
+
 #[async_trait]
-impl<PublicKey: VerifyingKey> MessageHandler for WorkerReceiverHandler<PublicKey> {
-    async fn dispatch(&self, writer: &mut Writer, serialized: Bytes) -> Result<(), Box<dyn Error>> {
-        // Deserialize and parse the message.
-        // TODO [issue #7]: Do some accounting to prevent bad actors from use all our resources.
-        match bincode::deserialize(&serialized) {
-            Ok(WorkerMessage::Batch(..)) => {
+impl<PublicKey: VerifyingKey> WorkerToWorker for WorkerReceiverHandler<PublicKey> {
+    async fn send_message(
+        &self,
+        request: Request<BincodeEncodedPayload>,
+    ) -> Result<Response<Empty>, Status> {
+        let message: WorkerMessage<PublicKey> = request
+            .get_ref()
+            .deserialize()
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        match message {
+            WorkerMessage::Batch(..) => {
                 self.tx_processor
-                    .send(serialized.to_vec())
+                    .send(request.get_ref().payload.to_vec())
                     .await
                     .expect("Failed to send batch");
-
-                let _ = writer.send(Bytes::from("Ack")).await;
             }
-            Ok(WorkerMessage::BatchRequest(missing, requestor)) => {
+            WorkerMessage::BatchRequest(missing, requestor) => {
                 self.tx_worker_helper
                     .send((missing, requestor))
                     .await
                     .expect("Failed to send batch request");
-
-                let _ = writer.send(Bytes::from("Ack")).await;
             }
-            Ok(WorkerMessage::ClientBatchRequest(missing)) => {
-                if missing.is_empty() {
-                    return Ok(());
-                }
-                // TODO [issue #7]: Do some accounting to prevent bad actors from use all our
-                // resources (in this case allocate a gigantic channel).
-                let (sender, mut receiver) = channel(missing.len());
-
-                self.tx_client_helper
-                    .send((missing, sender))
-                    .await
-                    .expect("Failed to send batch request");
-
-                while let Some(batch) = receiver.recv().await {
-                    writer.send(Bytes::from(batch)).await?;
-                }
-            }
-            Err(e) => warn!("Serialization error: {e}"),
         }
-        Ok(())
+
+        Ok(Response::new(Empty {}))
+    }
+
+    type ClientBatchRequestStream =
+        Pin<Box<dyn Stream<Item = Result<BincodeEncodedPayload, Status>> + Send>>;
+
+    async fn client_batch_request(
+        &self,
+        request: Request<BincodeEncodedPayload>,
+    ) -> Result<Response<Self::ClientBatchRequestStream>, Status> {
+        let missing = request
+            .into_inner()
+            .deserialize::<ClientBatchRequest>()
+            .map_err(|e| Status::invalid_argument(e.to_string()))?
+            .0;
+
+        // TODO [issue #7]: Do some accounting to prevent bad actors from use all our
+        // resources (in this case allocate a gigantic channel).
+        let (sender, receiver) = channel(missing.len());
+
+        self.tx_client_helper
+            .send((missing, sender))
+            .await
+            .expect("Failed to send batch request");
+
+        let stream = tokio_stream::wrappers::ReceiverStream::new(receiver).map(|batch| {
+            let payload = BincodeEncodedPayload {
+                payload: Bytes::from(batch),
+            };
+            Ok(payload)
+        });
+
+        Ok(Response::new(
+            Box::pin(stream) as Self::ClientBatchRequestStream
+        ))
     }
 }
 

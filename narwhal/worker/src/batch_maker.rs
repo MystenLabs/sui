@@ -2,12 +2,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{quorum_waiter::QuorumWaiterMessage, worker::WorkerMessage};
-use bytes::Bytes;
 use crypto::traits::VerifyingKey;
 
 #[cfg(feature = "benchmark")]
 use blake2::digest::Update;
-use network::ReliableSender;
+use network::WorkerNetwork;
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto as _;
 use std::net::SocketAddr;
@@ -42,7 +41,7 @@ pub struct BatchMaker<PublicKey> {
     /// Holds the size of the current batch (in bytes).
     current_batch_size: usize,
     /// A network sender to broadcast the batches to the other workers.
-    network: ReliableSender,
+    network: WorkerNetwork,
 }
 
 impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
@@ -62,7 +61,7 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
                 workers_addresses,
                 current_batch: Batch(Vec::with_capacity(batch_size * 2)),
                 current_batch_size: 0,
-                network: ReliableSender::new(),
+                network: WorkerNetwork::default(),
             }
             .run()
             .await;
@@ -140,8 +139,7 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
 
         // Broadcast the batch through the network.
         let (names, addresses): (Vec<_>, _) = self.workers_addresses.iter().cloned().unzip();
-        let bytes = Bytes::from(serialized.clone());
-        let handlers = self.network.broadcast(addresses, bytes).await;
+        let handlers = self.network.broadcast(addresses, &message).await;
 
         // Send the batch through the deliver channel for further processing.
         self.tx_message

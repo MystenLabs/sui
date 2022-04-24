@@ -14,6 +14,7 @@ mod receiver;
 mod reliable_sender;
 mod retry;
 mod simple_sender;
+mod worker;
 
 pub use crate::{
     primary::{PrimaryNetwork, PrimaryToWorkerNetwork},
@@ -21,8 +22,10 @@ pub use crate::{
     reliable_sender::{CancelHandler, ReliableSender},
     retry::RetryConfig,
     simple_sender::SimpleSender,
+    worker::WorkerNetwork,
 };
 
+#[derive(Debug)]
 #[must_use]
 pub struct CancelHandler2<T>(tokio::task::JoinHandle<T>);
 

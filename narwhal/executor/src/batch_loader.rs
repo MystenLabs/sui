@@ -5,27 +5,23 @@ use crate::{
     DEFAULT_CHANNEL_SIZE,
 };
 use blake2::digest::Update;
-use bytes::Bytes;
 use config::WorkerId;
 use consensus::ConsensusOutput;
 use crypto::traits::VerifyingKey;
-use futures::{stream::StreamExt, SinkExt};
+use futures::stream::StreamExt;
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
-    time::Duration,
 };
 use store::Store;
 use tokio::{
-    net::TcpStream,
     sync::mpsc::{channel, Receiver, Sender},
     task::JoinHandle,
-    time::sleep,
 };
-use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use tonic::transport::Channel;
 use tracing::warn;
-use types::BatchDigest;
-use worker::{SerializedBatchMessage, WorkerMessage};
+use types::{BatchDigest, BincodeEncodedPayload, ClientBatchRequest, WorkerToWorkerClient};
+use worker::SerializedBatchMessage;
 
 /// Download transactions data from the consensus workers and notifies the called when the job is done.
 pub struct BatchLoader<PublicKey: VerifyingKey> {
@@ -118,143 +114,71 @@ impl SyncConnection {
                 rx_request,
                 already_requested: HashSet::new(),
             }
-            .run::<PublicKey>()
+            .run()
             .await;
         });
     }
 
     /// Main loop keeping the connection with a worker alive and receive batches to download.
-    async fn run<PublicKey: VerifyingKey>(&mut self) {
-        // The connection waiter ensures we do not attempt to reconnect immediately after failure.
-        let mut connection_waiter = ConnectionWaiter::default();
+    async fn run(&mut self) {
+        let url = format!("http://{}", self.address);
+        let channel = Channel::from_shared(url)
+            .expect("URI should be valid")
+            .connect_lazy();
+        let mut client = WorkerToWorkerClient::new(channel);
 
-        // Continuously connects to the worker.
-        'main: loop {
-            // Wait a bit before re-attempting connections.
-            connection_waiter.wait().await;
+        while let Some(digests) = self.rx_request.recv().await {
+            // Filter digests that we already requested.
+            let mut missing = Vec::new();
+            for digest in digests {
+                if !self.already_requested.contains(&digest) {
+                    missing.push(digest);
+                }
+            }
 
-            // Connect to the worker.
-            let mut connection = match TcpStream::connect(self.address).await {
-                Ok(x) => Framed::new(x, LengthDelimitedCodec::new()),
+            // Request the batch from the worker.
+            let message = ClientBatchRequest(missing.clone());
+            //TODO wrap this call in the retry
+            let mut stream = match client
+                .client_batch_request(BincodeEncodedPayload::try_from(&message).unwrap())
+                .await
+            {
+                Ok(stream) => stream.into_inner(),
                 Err(e) => {
                     warn!(
-                        "Failed to connect to worker (retry {}): {e}",
-                        connection_waiter.status(),
+                        "Failed to send sync request to worker {}: {e}",
+                        self.address
                     );
-                    continue 'main;
+                    continue;
                 }
             };
 
-            // Listen to sync request and update the store with the replies.
-            loop {
-                tokio::select! {
-                    // Listen for batches to download.
-                    Some(digests) = self.rx_request.recv() => {
-                        // Filter digests that we already requested.
-                        let mut missing = Vec::new();
-                        for digest in digests {
-                            if !self.already_requested.contains(&digest) {
-                                missing.push(digest);
-                            }
-                        }
+            for digest in missing {
+                self.already_requested.insert(digest);
+            }
 
-                        if missing.is_empty() {
-                            continue;
-                        }
+            // Receive the batch data from the worker.
+            while let Some(result) = stream.next().await {
+                match result {
+                    Ok(batch) => {
+                        let batch = batch.payload;
+                        // Store the batch in the temporary store.
+                        // TODO: We can probably avoid re-computing the hash of the bach since we trust the worker.
+                        let digest =
+                            BatchDigest::new(crypto::blake2b_256(|hasher| hasher.update(&batch)));
+                        self.store.write(digest, batch.to_vec()).await;
 
-                        // Request the batch from the worker.
-                        let message = WorkerMessage::<PublicKey>::ClientBatchRequest(missing.clone());
-                        let serialized = bincode::serialize(&message).expect("Failed to serialize request");
-                        match connection.send(Bytes::from(serialized)).await {
-                            Ok(()) => {
-                                for digest in missing {
-                                    self.already_requested.insert(digest);
-                                }
-                            },
-                            Err(e) => {
-                                warn!("Failed to send sync request to worker {}: {e}", self.address);
-                                continue 'main;
-                            }
-                        }
-                    },
-
-                    // Receive the batch data from the worker.
-                    Some(result) = connection.next() => {
-                        match result {
-                            Ok(batch) => {
-                                // Store the batch in the temporary store.
-                                // TODO: We can probably avoid re-computing the hash of the batch since we trust the worker.
-                                let digest = BatchDigest::new(crypto::blake2b_256(|hasher| hasher.update(&batch)));
-                                self.store.write(digest, batch.to_vec()).await;
-
-                                // Cleanup internal state.
-                                self.already_requested.remove(&digest);
-
-                                // Reset the connection timeout delay.
-                                connection_waiter.reset();
-                            },
-                            Err(e) => {
-                                warn!("Failed to receive batch reply from worker {}: {e}", self.address);
-                                continue 'main;
-                            }
-                        }
+                        // Cleanup internal state.
+                        self.already_requested.remove(&digest);
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Failed to receive batch reply from worker {}: {e}",
+                            self.address
+                        );
                     }
                 }
             }
         }
-    }
-}
-
-/// Make the network client wait a bit before re-attempting network connections.
-pub struct ConnectionWaiter {
-    /// The minimum delay to wait before re-attempting a connection.
-    min_delay: u64,
-    /// The maximum delay to wait before re-attempting a connection.
-    max_delay: u64,
-    /// The actual delay we wait before re-attempting a connection.
-    delay: u64,
-    /// The number of times we attempted to make a connection.
-    retry: usize,
-}
-
-impl Default for ConnectionWaiter {
-    fn default() -> Self {
-        Self::new(/* min_delay */ 200, /* max_delay */ 60_000)
-    }
-}
-
-impl ConnectionWaiter {
-    /// Create a new connection waiter.
-    pub fn new(min_delay: u64, max_delay: u64) -> Self {
-        Self {
-            min_delay,
-            max_delay,
-            delay: 0,
-            retry: 0,
-        }
-    }
-
-    /// Return the number of failed attempts.
-    pub fn status(&self) -> &usize {
-        &self.retry
-    }
-
-    /// Wait for a bit (depending on the number of failed connections).
-    pub async fn wait(&mut self) {
-        if self.delay != 0 {
-            sleep(Duration::from_millis(self.delay)).await;
-        }
-
-        self.delay = match self.delay {
-            0 => self.min_delay,
-            _ => std::cmp::min(2 * self.delay, self.max_delay),
-        };
-        self.retry += 1;
-    }
-
-    /// Reset the waiter to its initial parameters.
-    pub fn reset(&mut self) {
-        self.delay = 0;
-        self.retry = 0;
     }
 }

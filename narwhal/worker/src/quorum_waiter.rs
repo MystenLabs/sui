@@ -5,7 +5,7 @@ use crate::worker::SerializedBatchMessage;
 use config::{Committee, Stake};
 use crypto::traits::VerifyingKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
-use network::CancelHandler;
+use network::CancelHandler2 as CancelHandler;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 #[cfg(test)]
@@ -17,7 +17,7 @@ pub struct QuorumWaiterMessage<PublicKey> {
     /// A serialized `WorkerMessage::Batch` message.
     pub batch: SerializedBatchMessage,
     /// The cancel handlers to receive the acknowledgments of our broadcast.
-    pub handlers: Vec<(PublicKey, CancelHandler)>,
+    pub handlers: Vec<(PublicKey, CancelHandler<()>)>,
 }
 
 /// The QuorumWaiter waits for 2f authorities to acknowledge reception of a batch.
@@ -53,7 +53,7 @@ impl<PublicKey: VerifyingKey> QuorumWaiter<PublicKey> {
     }
 
     /// Helper function. It waits for a future to complete and then delivers a value.
-    async fn waiter(wait_for: CancelHandler, deliver: Stake) -> Stake {
+    async fn waiter(wait_for: CancelHandler<()>, deliver: Stake) -> Stake {
         let _ = wait_for.await;
         deliver
     }

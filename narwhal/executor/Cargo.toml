@@ -21,6 +21,7 @@ config = { path = "../config" }
 consensus = { path = "../consensus" }
 crypto = { path = "../crypto" }
 primary = { path = "../primary" }
+tonic = "0.7"
 
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "808de09203d147b43d59114b8afd9e51cbcf5778" }
 types = { path = "../types" }

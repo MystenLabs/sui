@@ -5,9 +5,8 @@ use super::*;
 use crate::worker::WorkerMessage;
 use bytes::Bytes;
 use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
-use futures::future::try_join_all;
-use network::ReliableSender;
-use test_utils::{batch, committee_with_base_port, expecting_listener, keys};
+use network::WorkerNetwork;
+use test_utils::{batch, committee_with_base_port, keys, WorkerToWorkerMockServer};
 use tokio::sync::mpsc::channel;
 
 #[tokio::test]
@@ -31,15 +30,16 @@ async fn wait_for_quorum() {
     let mut listener_handles = Vec::new();
     for (name, address) in committee.others_workers(&myself, /* id */ &0) {
         let address = address.worker_to_worker;
-        let handle = expecting_listener(address, Some(expected.clone()));
+        let handle = WorkerToWorkerMockServer::spawn(address);
         names.push(name);
         addresses.push(address);
         listener_handles.push(handle);
     }
 
     // Broadcast the batch through the network.
-    let bytes = Bytes::from(serialized.clone());
-    let handlers = ReliableSender::new().broadcast(addresses, bytes).await;
+    let handlers = WorkerNetwork::default()
+        .broadcast(addresses, &message)
+        .await;
 
     // Forward the batch along with the handlers to the `QuorumWaiter`.
     let message = QuorumWaiterMessage {
@@ -53,5 +53,7 @@ async fn wait_for_quorum() {
     assert_eq!(output, serialized);
 
     // Ensure the other listeners correctly received the batch.
-    assert!(try_join_all(listener_handles).await.is_ok());
+    for mut handle in listener_handles {
+        assert_eq!(handle.recv().await.unwrap().payload, expected);
+    }
 }

@@ -9,3 +9,6 @@ pub use primary::*;
 
 mod proto;
 pub use proto::*;
+
+mod worker;
+pub use worker::*;

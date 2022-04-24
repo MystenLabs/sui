@@ -2,20 +2,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::worker::WorkerMessage;
 use blake2::digest::Update;
-use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
-use futures::{SinkExt, StreamExt};
+use crypto::traits::KeyPair;
+use futures::StreamExt;
 use network::SimpleSender;
 use primary::WorkerPrimaryMessage;
 use std::time::Duration;
 use store::rocks;
 use test_utils::{
-    batch, committee_with_base_port, digest_batch, expecting_listener, keys,
-    serialize_batch_message, temp_dir, WorkerToPrimaryMockServer,
+    batch, committee_with_base_port, digest_batch, keys, serialize_batch_message, temp_dir,
+    WorkerToPrimaryMockServer, WorkerToWorkerMockServer,
 };
-use tokio::net::TcpStream;
-use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use types::WorkerToWorkerClient;
 
 #[tokio::test]
 async fn handle_clients_transactions() {
@@ -51,9 +49,10 @@ async fn handle_clients_transactions() {
     let mut handle = WorkerToPrimaryMockServer::spawn(primary_address);
 
     // Spawn enough workers' listeners to acknowledge our batches.
+    let mut other_workers = Vec::new();
     for (_, addresses) in committee.others_workers(&name, &id) {
         let address = addresses.worker_to_worker;
-        let _ = expecting_listener(address, /* expected */ None);
+        other_workers.push(WorkerToWorkerMockServer::spawn(address));
     }
 
     // Send enough transactions to create a batch.
@@ -102,17 +101,20 @@ async fn handle_client_batch_request() {
     // Spawn a client to ask for batches and receive the reply.
     tokio::task::yield_now().await;
     let address = committee.worker(&name, &id).unwrap().worker_to_worker;
-    let socket = TcpStream::connect(address).await.unwrap();
-    let (mut writer, mut reader) = Framed::new(socket, LengthDelimitedCodec::new()).split();
+    let url = format!("http://{}", address);
+    let mut client = WorkerToWorkerClient::connect(url).await.unwrap();
 
     // Send batch request.
     let digests = vec![digest_batch(batch.clone())];
-    let message = WorkerMessage::<Ed25519PublicKey>::ClientBatchRequest(digests);
-    let serialized = bincode::serialize(&message).unwrap();
-    writer.send(Bytes::from(serialized)).await.unwrap();
+    let message = ClientBatchRequest(digests);
+    let mut stream = client
+        .client_batch_request(BincodeEncodedPayload::try_from(&message).unwrap())
+        .await
+        .unwrap()
+        .into_inner();
 
     // Wait for the reply and ensure it is as expected.
-    let bytes = reader.next().await.unwrap().unwrap();
+    let bytes = stream.next().await.unwrap().unwrap().payload;
     let expected = Bytes::from(serialize_batch_message(batch));
     assert_eq!(bytes, expected);
 }
