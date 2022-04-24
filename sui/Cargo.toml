@@ -40,6 +40,8 @@ sui-adapter = { path = "../sui_programmability/adapter" }
 sui-framework = { path = "../sui_programmability/framework" }
 sui-network = { path = "../network_utils" }
 sui-types = { path = "../sui_types" }
+open-rpc = { path = "open_rpc" }
+open-rpc-macros = { path = "open_rpc_macros" }
 sui-verifier = { path = "../sui_programmability/verifier" }
 
 rustyline = "9.1.2"

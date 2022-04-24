@@ -89,7 +89,7 @@ impl GatewayAPI for RpcGatewayClient {
                 package_object_ref.0,
                 module,
                 function,
-                type_arguments,
+                Some(type_arguments),
                 arguments,
                 gas_object_ref.0,
                 gas_budget,

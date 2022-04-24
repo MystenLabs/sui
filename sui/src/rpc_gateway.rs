@@ -11,33 +11,37 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
+use open_rpc_macros::open_rpc;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_with::serde_as;
-use sui_types::messages::CallArg;
-use tracing::debug;
-
 use serde_with::base64::Base64;
+use serde_with::serde_as;
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::crypto;
 use sui_types::crypto::SignableBytes;
+use sui_types::messages::CallArg;
 use sui_types::messages::{CertifiedTransaction, Transaction, TransactionData};
 use sui_types::object::ObjectRead;
+use tracing::debug;
+
+use sui_types::json_schema;
 
 use crate::config::PersistedConfig;
 use crate::gateway_config::GatewayConfig;
 use crate::rest_gateway::responses::GetObjectInfoResponse;
 use crate::rest_gateway::responses::{NamedObjectRef, ObjectResponse};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub enum RpcCallArg {
     Pure(Base64EncodedBytes),
     ImmOrOwnedObject(ObjectID),
     SharedObject(ObjectID),
 }
 
+#[open_rpc]
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcGateway {
     #[method(name = "getObjectTypedInfo")]
@@ -58,9 +62,11 @@ pub trait RpcGateway {
         &self,
         signer: SuiAddress,
         package_object_id: ObjectID,
-        module: Identifier,
-        function: Identifier,
-        type_arguments: Vec<TypeTag>,
+        #[schemars(with = "json_schema::Identifier")] module: Identifier,
+        #[schemars(with = "json_schema::Identifier")] function: Identifier,
+        #[schemars(with = "Option<Vec<json_schema::TypeTag>>")] type_arguments: Option<
+            Vec<TypeTag>,
+        >,
         arguments: Vec<RpcCallArg>,
         gas_object_id: ObjectID,
         gas_budget: u64,
@@ -289,7 +295,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
         package_object_id: ObjectID,
         module: Identifier,
         function: Identifier,
-        type_arguments: Vec<TypeTag>,
+        type_arguments: Option<Vec<TypeTag>>,
         rpc_arguments: Vec<RpcCallArg>,
         gas_object_id: ObjectID,
         gas_budget: u64,
@@ -326,7 +332,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
                     package_object_ref,
                     module,
                     function,
-                    type_arguments,
+                    type_arguments.unwrap_or_default(),
                     gas_obj_ref,
                     arguments,
                     gas_budget,
@@ -370,12 +376,15 @@ impl RpcGatewayServer for RpcGatewayImpl {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct SignedTransaction {
+    #[schemars(with = "json_schema::Base64")]
     #[serde_as(as = "Base64")]
     pub tx_bytes: Vec<u8>,
+    #[schemars(with = "json_schema::Base64")]
     #[serde_as(as = "Base64")]
     pub signature: Vec<u8>,
+    #[schemars(with = "json_schema::Base64")]
     #[serde_as(as = "Base64")]
     pub pub_key: Vec<u8>,
 }
@@ -391,8 +400,9 @@ impl SignedTransaction {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct TransactionBytes {
+    #[schemars(with = "json_schema::Base64")]
     #[serde_as(as = "Base64")]
     pub tx_bytes: Vec<u8>,
 }
@@ -404,8 +414,12 @@ impl TransactionBytes {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize)]
-pub struct Base64EncodedBytes(#[serde_as(as = "serde_with::base64::Base64")] pub Vec<u8>);
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct Base64EncodedBytes(
+    #[schemars(with = "json_schema::Base64")]
+    #[serde_as(as = "serde_with::base64::Base64")]
+    pub Vec<u8>,
+);
 
 impl Deref for Base64EncodedBytes {
     type Target = [u8];

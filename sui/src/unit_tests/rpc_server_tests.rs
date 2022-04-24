@@ -165,14 +165,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
 
     let tx_data: TransactionBytes = http_client
         .move_call(
-            *address,
-            package_id,
-            module,
-            function,
-            Vec::new(),
-            args,
-            gas.0,
-            1000,
+            *address, package_id, module, function, None, args, gas.0, 1000,
         )
         .await?;
 
