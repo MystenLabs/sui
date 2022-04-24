@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::{self, Display};
+
 use crate::traits::{EncodeDecodeBase64, ToFromBytes};
 use ::ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_bls12_377::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -9,6 +11,7 @@ use ark_ff::{
     bytes::{FromBytes, ToBytes},
     Zero,
 };
+use base64ct::{Base64, Encoding};
 use celo_bls::PublicKey;
 use once_cell::sync::OnceCell;
 use serde::{de, Deserialize, Serialize};
@@ -80,6 +83,12 @@ impl AsRef<[u8]> for BLS12377Signature {
                 Ok(bytes)
             })
             .expect("OnceCell invariant violated")
+    }
+}
+
+impl Display for BLS12377Signature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", Base64::encode_string(self.as_ref()))
     }
 }
 
@@ -160,6 +169,12 @@ impl ToFromBytes for BLS12377PublicKey {
             pubkey: g2.into(),
             bytes: OnceCell::new(),
         })
+    }
+}
+
+impl Display for BLS12377PublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", Base64::encode_string(self.as_ref()))
     }
 }
 

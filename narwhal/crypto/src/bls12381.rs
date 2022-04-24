@@ -1,9 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::mem::MaybeUninit;
+use std::{
+    fmt::{self, Display},
+    mem::MaybeUninit,
+};
 
 use ::blst::{blst_scalar, blst_scalar_from_uint64, BLST_ERROR};
+use base64ct::{Base64, Encoding};
 use blst::min_sig as blst;
 use once_cell::sync::OnceCell;
 use rand::{rngs::OsRng, RngCore};
@@ -86,6 +90,12 @@ impl PartialOrd for BLS12381PublicKey {
 impl Ord for BLS12381PublicKey {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.as_ref().cmp(other.as_ref())
+    }
+}
+
+impl Display for BLS12381PublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", Base64::encode_string(self.as_ref()))
     }
 }
 
@@ -239,6 +249,12 @@ impl Default for BLS12381Signature {
             sig,
             bytes: OnceCell::new(),
         }
+    }
+}
+
+impl Display for BLS12381Signature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", Base64::encode_string(self.as_ref()))
     }
 }
 

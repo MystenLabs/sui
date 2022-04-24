@@ -1,3 +1,6 @@
+use std::fmt::{self, Display};
+
+use base64ct::{Base64, Encoding};
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use serde::{de, Deserialize, Serialize};
@@ -42,6 +45,12 @@ impl AsRef<[u8]> for Ed25519PublicKey {
 impl Default for Ed25519PublicKey {
     fn default() -> Self {
         Ed25519PublicKey::from_bytes(&[0u8; 32]).unwrap()
+    }
+}
+
+impl Display for Ed25519PublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", Base64::encode_string(self.0.as_bytes()))
     }
 }
 
@@ -144,6 +153,12 @@ impl Signature for Ed25519Signature {
 impl AsRef<[u8]> for Ed25519Signature {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
+    }
+}
+
+impl Display for Ed25519Signature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", Base64::encode_string(self.as_ref()))
     }
 }
 

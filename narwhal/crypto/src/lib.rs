@@ -8,6 +8,7 @@
     rust_2021_compatibility
 )]
 
+use base64ct::{Base64, Encoding};
 use blake2::{digest::VariableOutput, VarBlake2b};
 
 use rand::{rngs::OsRng, CryptoRng, RngCore};
@@ -72,13 +73,13 @@ impl Digest {
 
 impl fmt::Debug for Digest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(&self.0))
+        write!(f, "{}", Base64::encode_string(&self.0))
     }
 }
 
 impl fmt::Display for Digest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(&self.0).get(0..16).unwrap())
+        write!(f, "{}", Base64::encode_string(&self.0).get(0..16).unwrap())
     }
 }
 

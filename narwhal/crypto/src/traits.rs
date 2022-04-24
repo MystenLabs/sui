@@ -7,7 +7,7 @@ use rand::{CryptoRng, RngCore};
 
 use serde::{de::DeserializeOwned, Serialize};
 pub use signature::{Error, Signer};
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 /// Trait impl'd by concrete types that represent digital cryptographic material
 /// (keys). For signatures, we rely on `signature::Signature`, which may be more widely implemented.
@@ -69,6 +69,7 @@ pub trait VerifyingKey:
     Serialize
     + DeserializeOwned
     + std::hash::Hash
+    + Display
     + Eq  // required to make some cached bytes representations explicit
     + Ord // required to put keys in BTreeMap
     + Default // see [#34](https://github.com/MystenLabs/narwhal/issues/34)
@@ -109,7 +110,15 @@ pub trait SigningKey: ToFromBytes + Serialize + DeserializeOwned + Send + Sync +
 /// to the ones on its associated types for private key and public key material.
 ///
 pub trait Authenticator:
-    signature::Signature + Default + Serialize + DeserializeOwned + Send + Sync + 'static + Clone
+    signature::Signature
+    + Display
+    + Default
+    + Serialize
+    + DeserializeOwned
+    + Send
+    + Sync
+    + 'static
+    + Clone
 {
     type PubKey: VerifyingKey<Sig = Self>;
     type PrivKey: SigningKey<Sig = Self>;
