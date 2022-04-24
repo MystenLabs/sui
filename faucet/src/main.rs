@@ -16,6 +16,11 @@ use tracing::info;
 const DEFAULT_AMOUNT: u64 = 20;
 const DEFAULT_NUM_COINS: usize = 5;
 
+struct AppState<F = SimpleFaucet> {
+    faucet: F,
+    // TODO: add counter
+}
+
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     // initialize tracing
@@ -26,9 +31,9 @@ async fn main() -> Result<(), anyhow::Error> {
     let app = Router::new()
         .route("/", get(health))
         .route("/gas", post(request_gas))
-        .layer(Extension(Arc::new(
-            SimpleFaucet::new(context).await.unwrap(),
-        )));
+        .layer(Extension(Arc::new(AppState {
+            faucet: SimpleFaucet::new(context).await.unwrap(),
+        })));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 5003));
     info!("listening on {}", addr);
@@ -47,11 +52,12 @@ async fn health() -> &'static str {
 /// handler for all the request_gas requests
 async fn request_gas(
     Json(payload): Json<FaucetRequest>,
-    Extension(faucet): Extension<Arc<SimpleFaucet>>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> impl IntoResponse {
     let result = match payload {
         FaucetRequest::FixedAmountRequest(requests) => {
-            faucet
+            state
+                .faucet
                 .send(requests.recipient, &[DEFAULT_AMOUNT; DEFAULT_NUM_COINS])
                 .await
         }
