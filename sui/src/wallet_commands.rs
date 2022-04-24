@@ -571,7 +571,7 @@ impl WalletContext {
 
     /// Get all the gas objects (and conveniently, gas amounts) for the address
     pub async fn gas_objects(
-        &mut self,
+        &self,
         address: SuiAddress,
     ) -> Result<Vec<(u64, Object)>, anyhow::Error> {
         let object_refs = self.gateway.get_owned_objects(address).await?;
@@ -627,7 +627,7 @@ impl WalletContext {
 
     /// Find a gas object which fits the budget
     pub async fn gas_for_owner_budget(
-        &mut self,
+        &self,
         address: SuiAddress,
         budget: u64,
         forbidden_gas_objects: BTreeSet<ObjectID>,

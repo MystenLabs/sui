@@ -1,11 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
 use anyhow::anyhow;
 use async_trait::async_trait;
-use futures::lock::Mutex;
 use sui::wallet_commands::WalletContext;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -20,8 +17,7 @@ use crate::{Faucet, FaucetError, FaucetReceipt};
 /// A naive implementation of a faucet that processes
 /// request sequentially
 pub struct SimpleFaucet {
-    // TODO: handle concurrency correctly
-    wallet: Arc<Mutex<WalletContext>>,
+    wallet: WalletContext,
     // TODO: use a queue of coins to improve concurrency
     /// Used to provide fund to users
     primary_coin_id: ObjectID,
@@ -61,7 +57,7 @@ impl SimpleFaucet {
         );
 
         Ok(Self {
-            wallet: Arc::new(Mutex::new(wallet)),
+            wallet,
             primary_coin_id: *primary_coin.id(),
             gas_coin_id: *gas_coin.id(),
             active_address,
@@ -111,7 +107,7 @@ impl SimpleFaucet {
         budget: u64,
     ) -> Result<Vec<Object>, anyhow::Error> {
         // TODO: move this function to impl WalletContext{} and reuse in wallet_commands
-        let context = self.wallet.lock().await;
+        let context = &self.wallet;
         let data = context
             .gateway
             .split_coin(
@@ -144,7 +140,7 @@ impl SimpleFaucet {
         recipient: SuiAddress,
         budget: u64,
     ) -> Result<(), anyhow::Error> {
-        let context = self.wallet.lock().await;
+        let context = &self.wallet;
 
         let data = context
             .gateway
