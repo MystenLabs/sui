@@ -271,15 +271,16 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                         }
                     }
 
-                    let addresses = self.committee
-                        .others_primaries(&self.name)
-                        .iter()
-                        .map(|(_, x)| x.primary_to_primary)
-                        .collect();
-                    let message = PrimaryMessage::CertificatesRequest(retry, self.name.clone());
-                    let bytes = bincode::serialize(&message).expect("Failed to serialize cert request");
-                    self.network.lucky_broadcast(addresses, Bytes::from(bytes), self.sync_retry_nodes).await;
-
+                    if !retry.is_empty() {
+                        let addresses = self.committee
+                            .others_primaries(&self.name)
+                            .iter()
+                            .map(|(_, x)| x.primary_to_primary)
+                            .collect();
+                        let message = PrimaryMessage::CertificatesRequest(retry, self.name.clone());
+                        let bytes = bincode::serialize(&message).expect("Failed to serialize cert request");
+                        self.network.lucky_broadcast(addresses, Bytes::from(bytes), self.sync_retry_nodes).await;
+                    }
                     // Reschedule the timer.
                     timer.as_mut().reset(Instant::now() + Duration::from_millis(TIMER_RESOLUTION));
                 }
