@@ -18,7 +18,17 @@ serde = { version = "1.0.136", features = ["derive"] }
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "808de09203d147b43d59114b8afd9e51cbcf5778" }
 thiserror = "1.0.30"
 tokio = { version = "1.17.0", features = ["sync", "rt", "macros"] }
+tokio-util = { version = "0.7.1", features = ["codec"] }
+prost = "0.10"
+tonic = { version = "0.7", features = ["tls"] }
 
 config = { path = "../config" }
 crypto = { path = "../crypto" }
 
+[features]
+default = []
+test = []
+
+[dev-dependencies]
+tonic-build = { version = "0.7", features = [ "prost", "transport" ] }
+prost-build = "0.10.1"

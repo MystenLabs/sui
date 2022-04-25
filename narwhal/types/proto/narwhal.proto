@@ -1,0 +1,42 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package narwhal;
+
+// The primary-to-primary interface
+service PrimaryToPrimary {
+  // Sends a message
+  rpc SendMessage (BincodeEncodedPayload) returns (Empty) {}
+}
+
+// The worker-to-worker interface
+service WorkerToWorker {
+  // Sends a worker message
+  rpc SendMessage (BincodeEncodedPayload) returns (Empty) {}
+  // requests a number of batches that the service then streams back to the client
+  rpc ClientBatchRequest (BincodeEncodedPayload) returns (stream BincodeEncodedPayload) {}
+}
+
+// The worker-to-primary interface
+service WorkerToPrimary {
+  // Sends a message
+  rpc SendMessage (BincodeEncodedPayload) returns (Empty) {}
+}
+
+// The primary-to-worker interface
+service PrimaryToWorker {
+  // Sends a message
+  rpc SendMessage (BincodeEncodedPayload) returns (Empty) {}
+}
+
+// A bincode encoded payload. This is intended to be used in the short-term
+// while we don't have good protobuf definitions for Narwhal types
+message BincodeEncodedPayload {
+  bytes payload = 1;
+}
+
+// Empty message for when we don't have anything to return
+message Empty {
+}

@@ -7,5 +7,5 @@ pub mod error;
 mod primary;
 pub use primary::*;
 
-#[cfg(feature = "test")]
-pub mod test_utils;
+mod proto;
+pub use proto::*;
