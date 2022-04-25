@@ -21,11 +21,6 @@ module Sui::Coin {
         total_supply: u64
     }
 
-    /// Trying to withdraw N from a coin with value < N
-    const EVALUE: u64 = 0;
-    /// Trying to destroy a coin with a nonzero value
-    const ENONZERO: u64 = 0;
-
     // === Balance accessors and type morphing methods ===
 
     /// Get immutable reference to the balance of a coin.
