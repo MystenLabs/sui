@@ -142,6 +142,7 @@ async fn submit_transaction_to_consensus() {
         NETWORK_BUFFER_SIZE,
         authority.committee,
         tx_consensus_listener,
+        /* max_delay */ Duration::from_millis(1_000),
     );
 
     // Spawn a network listener to receive the transaction (emulating the consensus node).

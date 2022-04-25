@@ -50,8 +50,8 @@ async fn shared_object_transaction() {
     'main: loop {
         for config in &configs {
             match submit_transaction(serialized.clone(), config).await {
-                SerializedMessage::TransactionResp(reply) => {
-                    println!("{reply:?}");
+                SerializedMessage::TransactionResp(_) => {
+                    // We got a reply from the Sui authority.
                     break 'main;
                 }
                 SerializedMessage::Error(error) => match *error {
