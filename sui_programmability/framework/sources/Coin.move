@@ -28,18 +28,22 @@ module Sui::Coin {
 
     // === Balance accessors and type morphing methods ===
 
+    /// Get immutable reference to the balance of a coin.
     public fun balance<T>(coin: &Coin<T>): &Balance<T> {
         &coin.balance
     }
 
+    /// Get a mutable reference to the balance of a coin.
     public fun balance_mut<T>(coin: &mut Coin<T>): &mut Balance<T> {
         &mut coin.balance
     }
 
+    /// Wrap a balance into a Coin to make it transferable.
     public fun from_balance<T>(balance: Balance<T>, ctx: &mut TxContext): Coin<T> {
         Coin { id: TxContext::new_id(ctx), balance }
     }
 
+    /// Destruct a Coin wrapper and keep the balance.
     public fun to_balance<T>(coin: Coin<T>): Balance<T> {
         let Coin { id, balance } = coin;
         ID::delete(id);
