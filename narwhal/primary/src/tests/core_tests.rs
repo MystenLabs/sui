@@ -4,13 +4,12 @@
 use super::*;
 use crate::common::create_db_stores;
 use crypto::traits::KeyPair;
-use futures::future::try_join_all;
 use test_utils::{
-    certificate, committee, committee_with_base_port, header, headers, keys, listener, votes,
+    certificate, committee, committee_with_base_port, header, headers, keys, votes,
+    PrimaryToPrimaryMockServer,
 };
-use types::{BatchDigest, Header, Vote};
-
 use tokio::sync::mpsc::channel;
+use types::{BatchDigest, Header, Vote};
 
 #[tokio::test]
 async fn process_header() {
@@ -42,7 +41,7 @@ async fn process_header() {
         .primary(&header().author)
         .unwrap()
         .primary_to_primary;
-    let handle = listener(address);
+    let mut handle = PrimaryToPrimaryMockServer::spawn(address);
 
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
@@ -79,8 +78,8 @@ async fn process_header() {
         .unwrap();
 
     // Ensure the listener correctly received the vote.
-    let received = handle.await.unwrap();
-    match bincode::deserialize(&received).unwrap() {
+    let received = handle.recv().await.unwrap();
+    match received.deserialize().unwrap() {
         PrimaryMessage::Vote(x) => assert_eq!(x, expected),
         x => panic!("Unexpected message: {:?}", x),
     }
@@ -264,10 +263,10 @@ async fn process_votes() {
     let expected = certificate(&Header::default());
 
     // Spawn all listeners to receive our newly formed certificate.
-    let handles: Vec<_> = committee
+    let mut handles: Vec<_> = committee
         .others_primaries(&name)
         .iter()
-        .map(|(_, address)| listener(address.primary_to_primary))
+        .map(|(_, address)| PrimaryToPrimaryMockServer::spawn(address.primary_to_primary))
         .collect();
 
     // Send a votes to the core.
@@ -279,8 +278,9 @@ async fn process_votes() {
     }
 
     // Ensure all listeners got the certificate.
-    for received in try_join_all(handles).await.unwrap() {
-        match bincode::deserialize(&received).unwrap() {
+    for handle in handles.iter_mut() {
+        let received = handle.recv().await.unwrap();
+        match received.deserialize().unwrap() {
             PrimaryMessage::Certificate(x) => assert_eq!(x, expected),
             x => panic!("Unexpected message: {:?}", x),
         }

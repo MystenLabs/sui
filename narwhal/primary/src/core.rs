@@ -7,10 +7,9 @@ use crate::{
     synchronizer::Synchronizer,
 };
 use async_recursion::async_recursion;
-use bytes::Bytes;
 use config::Committee;
 use crypto::{traits::VerifyingKey, Hash as _, SignatureService};
-use network::{CancelHandler, ReliableSender};
+use network::{CancelHandler2 as CancelHandler, PrimaryNetwork};
 use std::{
     collections::{HashMap, HashSet},
     sync::{
@@ -75,9 +74,9 @@ pub struct Core<PublicKey: VerifyingKey> {
     /// Aggregates certificates to use as parents for new headers.
     certificates_aggregators: HashMap<Round, Box<CertificatesAggregator<PublicKey>>>,
     /// A network sender to send the batches to the other workers.
-    network: ReliableSender,
+    network: PrimaryNetwork,
     /// Keeps the cancel handlers of the messages we sent.
-    cancel_handlers: HashMap<Round, Vec<CancelHandler>>,
+    cancel_handlers: HashMap<Round, Vec<CancelHandler<()>>>,
 }
 
 impl<PublicKey: VerifyingKey> Core<PublicKey> {
@@ -119,7 +118,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
                 current_header: Header::default(),
                 votes_aggregator: VotesAggregator::new(),
                 certificates_aggregators: HashMap::with_capacity(2 * gc_depth as usize),
-                network: ReliableSender::new(),
+                network: Default::default(),
                 cancel_handlers: HashMap::with_capacity(2 * gc_depth as usize),
             }
             .run()
@@ -139,9 +138,8 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
             .iter()
             .map(|(_, x)| x.primary_to_primary)
             .collect();
-        let bytes = bincode::serialize(&PrimaryMessage::Header(header.clone()))
-            .expect("Failed to serialize our own header");
-        let handlers = self.network.broadcast(addresses, Bytes::from(bytes)).await;
+        let message = PrimaryMessage::Header(header.clone());
+        let handlers = self.network.broadcast(addresses, &message).await;
         self.cancel_handlers
             .entry(header.round)
             .or_insert_with(Vec::new)
@@ -222,9 +220,10 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
                     .primary(&header.author)
                     .expect("Author of valid header is not in the committee")
                     .primary_to_primary;
-                let bytes = bincode::serialize(&PrimaryMessage::Vote(vote))
-                    .expect("Failed to serialize our own vote");
-                let handler = self.network.send(address, Bytes::from(bytes)).await;
+                let handler = self
+                    .network
+                    .send(address, &PrimaryMessage::Vote(vote))
+                    .await;
                 self.cancel_handlers
                     .entry(header.round)
                     .or_insert_with(Vec::new)
@@ -252,9 +251,8 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
                 .iter()
                 .map(|(_, x)| x.primary_to_primary)
                 .collect();
-            let bytes = bincode::serialize(&PrimaryMessage::Certificate(certificate.clone()))
-                .expect("Failed to serialize our own certificate");
-            let handlers = self.network.broadcast(addresses, Bytes::from(bytes)).await;
+            let message = PrimaryMessage::Certificate(certificate.clone());
+            let handlers = self.network.broadcast(addresses, &message).await;
             self.cancel_handlers
                 .entry(certificate.round())
                 .or_insert_with(Vec::new)
