@@ -176,17 +176,19 @@ impl NetworkConfig {
                 .map(|x| {
                     let name = x.key_pair.make_narwhal_keypair().name;
                     let primary = PrimaryAddresses {
-                        primary_to_primary: format!("{}:{}", x.host, x.port + 1).parse().unwrap(),
-                        worker_to_primary: format!("{}:{}", x.host, x.port + 2).parse().unwrap(),
+                        primary_to_primary: format!("{}:{}", x.host, x.port + 100).parse().unwrap(),
+                        worker_to_primary: format!("{}:{}", x.host, x.port + 200).parse().unwrap(),
                     };
                     let workers = [(
                         /* worker_id */ 0,
                         WorkerAddresses {
-                            primary_to_worker: format!("{}:{}", x.host, x.port + 3)
+                            primary_to_worker: format!("{}:{}", x.host, x.port + 300)
                                 .parse()
                                 .unwrap(),
                             transactions: x.consensus_address,
-                            worker_to_worker: format!("{}:{}", x.host, x.port + 4).parse().unwrap(),
+                            worker_to_worker: format!("{}:{}", x.host, x.port + 400)
+                                .parse()
+                                .unwrap(),
                         },
                     )]
                     .iter()
