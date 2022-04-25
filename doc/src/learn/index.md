@@ -50,4 +50,4 @@ Take note of these related repositories of information to make best use of the k
   * [Book](https://github.com/diem/move/blob/main/language/documentation/book/src/introduction.md) - A summary with pages on [various topics](https://github.com/diem/move/tree/main/language/documentation/book/src).
   * [Examples](https://github.com/diem/move/tree/main/language/documentation/examples/experimental) - A set of samples, such as for [defining a coin](https://github.com/diem/move/tree/main/language/documentation/examples/experimental/basic-coin) and [swapping it](https://github.com/diem/move/tree/main/language/documentation/examples/experimental/coin-swap).
 * [Awesome Move](https://github.com/MystenLabs/awesome-move/blob/main/README.md) - A summary of resources related to Move, from blockchains through code samples.
-* [Sui API Reference](https://app.swaggerhub.com/apis/MystenLabs/sui-api/0.1 ) - The reference files for the Sui Rest API.
+* [Sui API Reference](https://app.swaggerhub.com/apis/MystenLabs/sui-api/) - The reference files for the Sui REST API.

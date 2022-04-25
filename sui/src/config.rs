@@ -24,7 +24,7 @@ use std::sync::Mutex;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_network::network::PortAllocator;
 use sui_types::base_types::*;
-use sui_types::committee::Committee;
+use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::{get_key_pair, KeyPair};
 use tracing::log::trace;
 
@@ -53,6 +53,19 @@ pub struct AuthorityPrivateInfo {
     pub db_path: PathBuf,
     pub stake: usize,
     pub consensus_address: SocketAddr,
+}
+
+impl Clone for AuthorityPrivateInfo {
+    fn clone(&self) -> Self {
+        Self {
+            key_pair: self.key_pair.copy(),
+            host: self.host.clone(),
+            port: self.port,
+            db_path: self.db_path.clone(),
+            stake: self.stake,
+            consensus_address: self.consensus_address.clone(),
+        }
+    }
 }
 
 // Custom deserializer with optional default fields
@@ -148,6 +161,7 @@ impl Display for WalletConfig {
 
 #[derive(Serialize, Deserialize)]
 pub struct NetworkConfig {
+    pub epoch: EpochId,
     pub authorities: Vec<AuthorityPrivateInfo>,
     pub buffer_size: usize,
     pub loaded_move_packages: Vec<(PathBuf, ObjectID)>,
@@ -210,7 +224,7 @@ impl From<&NetworkConfig> for Committee {
             .iter()
             .map(|authority| (*authority.key_pair.public_key_bytes(), authority.stake))
             .collect();
-        Committee::new(voting_rights)
+        Committee::new(network_config.epoch, voting_rights)
     }
 }
 
@@ -237,7 +251,6 @@ pub struct AccountConfig {
     pub address: Option<SuiAddress>,
     pub gas_objects: Vec<ObjectConfig>,
 }
-
 #[derive(Serialize, Deserialize)]
 pub struct ObjectConfig {
     #[serde(default = "ObjectID::random")]

@@ -29,6 +29,19 @@ async fn submit_transaction(transaction: Bytes, config: AuthorityPrivateInfo) ->
     deserialize_message(&bytes[..]).unwrap()
 }
 
+async fn send_traffic(configs: Vec<AuthorityPrivateInfo>) {
+    for config in configs {
+        tokio::spawn(async move {
+            let stream = TcpStream::connect(config.consensus_address).await.unwrap();
+            let mut connection = Framed::new(stream, LengthDelimitedCodec::new());
+            let transaction = Bytes::from("hello, world!");
+            loop {
+                connection.send(transaction.clone()).await.unwrap();
+            }
+        });
+    }
+}
+
 #[tokio::test]
 async fn shared_object_transaction() {
     let mut objects = test_gas_objects();
@@ -40,6 +53,9 @@ async fn shared_object_transaction() {
     let certificate = test_shared_object_certificates().await.pop().unwrap();
     let message = ConsensusTransaction::UserTransaction(certificate);
     let serialized = Bytes::from(serialize_consensus_transaction(&message));
+
+    tokio::task::yield_now().await;
+    // send_traffic(configs.clone()).await;
 
     tokio::task::yield_now().await;
     while let Some(config) = configs.pop() {

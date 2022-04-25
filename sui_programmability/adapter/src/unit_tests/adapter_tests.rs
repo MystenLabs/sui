@@ -816,7 +816,7 @@ fn publish_from_src(
     src_path: &str,
     gas_object: Object,
     _gas_budget: u64,
-) {
+) -> SuiResult {
     storage.write_object(gas_object);
     storage.flush();
 
@@ -843,7 +843,6 @@ fn publish_from_src(
         &mut tx_context,
         &mut SuiGasStatus::new_unmetered(),
     )
-    .unwrap();
 }
 
 #[test]
@@ -864,7 +863,8 @@ fn test_simple_call() {
         "src/unit_tests/data/simple_call",
         gas_object,
         GAS_BUDGET,
-    );
+    )
+    .unwrap();
     storage.flush();
 
     // call published module function
@@ -921,7 +921,8 @@ fn test_publish_init() {
         "src/unit_tests/data/publish_init",
         gas_object,
         GAS_BUDGET,
-    );
+    )
+    .unwrap();
 
     // a package object and a fresh object in the constructor should
     // have been crated
@@ -954,16 +955,17 @@ fn test_publish_init_public() {
         Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
 
     // publish modules at a given path
-    publish_from_src(
+    assert!(publish_from_src(
         &mut storage,
         &native_functions,
         "src/unit_tests/data/publish_init_public",
         gas_object,
         GAS_BUDGET,
-    );
+    )
+    .is_err());
 
-    // only a package object should have been crated
-    assert_eq!(storage.created().len(), 1);
+    // nothing should have been crated
+    assert_eq!(storage.created().len(), 0);
 }
 
 #[test]
@@ -980,16 +982,17 @@ fn test_publish_init_ret() {
         Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
 
     // publish modules at a given path
-    publish_from_src(
+    assert!(publish_from_src(
         &mut storage,
         &native_functions,
         "src/unit_tests/data/publish_init_ret",
         gas_object,
         GAS_BUDGET,
-    );
+    )
+    .is_err());
 
-    // only a package object should have been crated
-    assert_eq!(storage.created().len(), 1);
+    // nothing should have been crated
+    assert_eq!(storage.created().len(), 0);
 }
 
 #[test]
@@ -1006,14 +1009,15 @@ fn test_publish_init_param() {
         Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
 
     // publish modules at a given path
-    publish_from_src(
+    assert!(publish_from_src(
         &mut storage,
         &native_functions,
         "src/unit_tests/data/publish_init_param",
         gas_object,
         GAS_BUDGET,
-    );
+    )
+    .is_err());
 
-    // only a package object should have been crated
-    assert_eq!(storage.created().len(), 1);
+    // nothing should have been crated
+    assert_eq!(storage.created().len(), 0);
 }

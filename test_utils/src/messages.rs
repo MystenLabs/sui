@@ -74,7 +74,12 @@ pub async fn test_shared_object_certificates() -> Vec<CertifiedTransaction> {
     for tx in test_shared_object_transactions() {
         let mut aggregator = SignatureAggregator::try_new(tx.clone(), &committee).unwrap();
         for (_, key) in test_keys() {
-            let vote = SignedTransaction::new(tx.clone(), *key.public_key_bytes(), &key);
+            let vote = SignedTransaction::new(
+                /* epoch */ 0,
+                tx.clone(),
+                *key.public_key_bytes(),
+                &key,
+            );
             if let Some(certificate) = aggregator
                 .append(vote.auth_signature.authority, vote.auth_signature.signature)
                 .unwrap()

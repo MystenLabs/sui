@@ -21,10 +21,7 @@ use sui_types::{
     object::{self, Data, MoveObject, Object, Owner},
     storage::{DeleteKind, Storage},
 };
-use sui_verifier::{
-    entry_points_verifier::{self, INIT_FN_NAME},
-    verifier,
-};
+use sui_verifier::{entry_points_verifier::INIT_FN_NAME, verifier};
 
 use move_core_types::{
     account_address::AccountAddress,
@@ -244,12 +241,22 @@ pub fn store_package_and_init_modules<
     ctx: &mut TxContext,
     gas_status: &mut SuiGasStatus,
 ) -> SuiResult {
-    let mut modules_to_init = Vec::new();
-    for module in modules.iter() {
-        if entry_points_verifier::module_has_init(module) {
-            modules_to_init.push(module.self_id());
-        }
-    }
+    let modules_to_init = modules
+        .iter()
+        .filter_map(|module| {
+            let init_fdef = module.function_defs.iter().find(|fdef| {
+                let fhandle = module.function_handle_at(fdef.function).name;
+                let fname = module.identifier_at(fhandle);
+                fname == INIT_FN_NAME
+            })?;
+
+            let fhandle = module.function_handle_at(init_fdef.function);
+            let parameters = &module.signature_at(fhandle.parameters).0;
+            debug_assert!(parameters.len() <= 1);
+            let needs_tx_context = !parameters.is_empty();
+            Some((module.self_id(), needs_tx_context))
+        })
+        .collect();
 
     // wrap the modules in an object, write it to the store
     // The call to unwrap() will go away once we remove address owner from Immutable objects.
@@ -264,13 +271,17 @@ pub fn store_package_and_init_modules<
 fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
     state_view: &mut S,
     vm: &MoveVM,
-    module_ids_to_init: Vec<ModuleId>,
+    module_ids_to_init: Vec<(ModuleId, /* needs TxContext */ bool)>,
     ctx: &mut TxContext,
     gas_status: &mut SuiGasStatus,
 ) -> SuiResult {
     let init_ident = Identifier::new(INIT_FN_NAME.as_str()).unwrap();
-    for module_id in module_ids_to_init {
-        let args = vec![ctx.to_vec()];
+    for (module_id, needs_tx_context) in module_ids_to_init {
+        let args = if needs_tx_context {
+            vec![ctx.to_vec()]
+        } else {
+            vec![]
+        };
 
         execute_internal(
             vm,

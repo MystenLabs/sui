@@ -26,6 +26,7 @@ pub fn test_keys() -> Vec<(SuiAddress, KeyPair)> {
 /// Generate a test Sui committee with `TEST_COMMITTEE_SIZE` members.
 pub fn test_committee() -> Committee {
     Committee::new(
+        0,
         test_keys()
             .into_iter()
             .map(|(_, x)| (*x.public_key_bytes(), /* voting right */ 1))

@@ -18,28 +18,30 @@ use crate::format_signature_token;
 
 pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
 
-/// Checks if parameters of functions that can become entry
-/// functions (functions called directly from Sui) have correct types.
+/// Checks valid rules rules for entry points, both for module initialization and transactions
 ///
-/// We first identify functions that can be entry functions by looking
-/// for functions with the following properties:
-/// 1. Public
-/// 2. Primitive return types (or vector of such up to 2 levels of nesting)
-/// 3. Parameter order: objects, primitives, &mut TxContext
+/// For module initialization
+/// - The existence of the function is optional
+/// - The function must have the name specified by `INIT_FN_NAME`
+/// - The function must have `Visibility::Private`
+/// - The function can have a single parameter: &mut TxContext (see `is_tx_context`)
+/// - Alternatively, the function can have zero parameters
 ///
-/// Note that this can be ambiguous in presence of the following
-/// templated parameters:
-/// - param: T
-/// - param: vector<T> // and nested vectors
-///
-/// A function is considered an entry function if such templated
-/// arguments are part of "object parameters" only.
-///
-/// In order for the parameter types of an entry function to be
-/// correct, all generic types used in templated arguments mentioned
-/// above must have the `key` ability.
+/// For transaction entry points
+/// - The function must have `Visibility::Script`
+/// - The function must have at least one parameter: &mut TxContext (see `is_tx_context`)
+///   - The transaction context parameter must be the last parameter
+/// - The function cannot have any return values
 pub fn verify_module(module: &CompiledModule) -> SuiResult {
     for func_def in &module.function_defs {
+        let handle = module.function_handle_at(func_def.function);
+        let name = module.identifier_at(handle.name);
+        if name == INIT_FN_NAME {
+            verify_init_function(module, func_def)
+                .map_err(|error| SuiError::ModuleVerificationFailure { error })?;
+            continue;
+        }
+
         // find candidate entry functions and checke their parameters
         // (ignore other functions)
         if func_def.visibility != Visibility::Script {
@@ -54,37 +56,57 @@ pub fn verify_module(module: &CompiledModule) -> SuiResult {
 }
 
 /// Checks if this module has a conformant `init`
-// TODO make this static
-pub fn module_has_init(module: &CompiledModule) -> bool {
+fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> Result<(), String> {
     let view = BinaryIndexedView::Module(module);
-    let fdef_opt = module.function_defs.iter().find(|fdef| {
-        let handle = view.function_handle_at(fdef.function);
-        let name = view.identifier_at(handle.name);
-        name == INIT_FN_NAME
-    });
-    let fdef = match fdef_opt {
-        None => return false,
-        Some(fdef) => fdef,
-    };
+
     if fdef.visibility != Visibility::Private {
-        return false;
+        return Err(format!(
+            "{}. '{}' function cannot be public",
+            module.self_id(),
+            INIT_FN_NAME
+        ));
     }
 
     let fhandle = module.function_handle_at(fdef.function);
     if !fhandle.type_parameters.is_empty() {
-        return false;
+        return Err(format!(
+            "{}. '{}' function cannot have type parameters",
+            module.self_id(),
+            INIT_FN_NAME
+        ));
     }
 
     if !view.signature_at(fhandle.return_).0.is_empty() {
-        return false;
+        return Err(format!(
+            "{}, '{}' function cannot have return values",
+            module.self_id(),
+            INIT_FN_NAME
+        ));
     }
 
     let parameters = &view.signature_at(fhandle.parameters).0;
-    if parameters.len() != 1 {
-        return false;
+    match parameters.len() {
+        0 => Ok(()),
+        1 => {
+            if is_tx_context(&view, &parameters[0]) {
+                Ok(())
+            } else {
+                Err(format!(
+                    "Expected parameter for {}::{} to be &mut mut {}::{}::{}, but found {}",
+                    module.self_id(),
+                    INIT_FN_NAME,
+                    SUI_FRAMEWORK_ADDRESS,
+                    TX_CONTEXT_MODULE_NAME,
+                    TX_CONTEXT_STRUCT_NAME,
+                    format_signature_token(module, &parameters[0]),
+                ))
+            }
+        }
+        _ => Err(format!(
+            "'{}' function can have 0 or 1 parameter(s)",
+            INIT_FN_NAME
+        )),
     }
-
-    is_tx_context(&view, &parameters[0])
 }
 
 fn verify_entry_function_impl(
@@ -105,7 +127,8 @@ fn verify_entry_function_impl(
     let last_param = params.0.last().unwrap();
     if !is_tx_context(&view, last_param) {
         return Err(format!(
-            "{}::{}. Expected last parameter of function signature to be &mut {}::{}::{}, but found {}",
+            "{}::{}. Expected last parameter of function signature to be &mut {}::{}::{}, but \
+            found {}",
             module.self_id(),
             view.identifier_at(handle.name),
             SUI_FRAMEWORK_ADDRESS,

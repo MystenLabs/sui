@@ -13,7 +13,7 @@ use typed_store::Map;
 
 #[cfg(test)]
 #[path = "unit_tests/batch_tests.rs"]
-mod batch_tests;
+pub(crate) mod batch_tests;
 
 /*
 

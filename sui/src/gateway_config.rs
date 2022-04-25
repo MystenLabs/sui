@@ -15,7 +15,7 @@ use sui_core::gateway_state::{GatewayClient, GatewayState};
 use sui_network::network::NetworkClient;
 use sui_network::transport;
 use sui_types::base_types::AuthorityName;
-use sui_types::committee::Committee;
+use sui_types::committee::{Committee, EpochId};
 
 use crate::config::{AuthorityInfo, Config};
 use crate::rest_gateway::RestGatewayClient;
@@ -81,6 +81,7 @@ impl GatewayType {
 
 #[derive(Serialize, Deserialize)]
 pub struct GatewayConfig {
+    pub epoch: EpochId,
     pub authorities: Vec<AuthorityInfo>,
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
@@ -97,7 +98,7 @@ impl GatewayConfig {
             .iter()
             .map(|authority| (authority.name, 1))
             .collect();
-        Committee::new(voting_rights)
+        Committee::new(self.epoch, voting_rights)
     }
 
     pub fn make_authority_clients(&self) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
@@ -119,6 +120,7 @@ impl GatewayConfig {
 impl Default for GatewayConfig {
     fn default() -> Self {
         Self {
+            epoch: 0,
             authorities: vec![],
             send_timeout: Duration::from_micros(4000000),
             recv_timeout: Duration::from_micros(4000000),

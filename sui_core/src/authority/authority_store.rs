@@ -115,6 +115,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Self {
         let mut options = db_options.unwrap_or_default();
 
+        // One common issue when running tests on Mac is that the default ulimit is too low,
+        // leading to I/O errors such as "Too many open files". Raising fdlimit to bypass it.
+        options.set_max_open_files((fdlimit::raise_fd_limit().unwrap() / 8) as i32);
+
         /* The table cache is locked for updates and this determines the number
            of shareds, ie 2^10. Increase in case of lock contentions.
         */
@@ -335,7 +339,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         &self,
         object_id: ObjectID,
         seq: Option<SequenceNumber>,
-    ) -> Result<Vec<(ObjectRef, TransactionDigest)>, SuiError> {
+    ) -> Result<impl Iterator<Item = (ObjectRef, TransactionDigest)> + '_, SuiError> {
         let seq_inner = seq.unwrap_or_else(|| SequenceNumber::from(0));
         let obj_dig_inner = ObjectDigest::new([0; 32]);
 
@@ -344,14 +348,13 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             .iter()
             // The object id [0; 16] is the smallest possible
             .skip_to(&(object_id, seq_inner, obj_dig_inner))?
-            .take_while(|((id, iseq, _digest), _txd)| {
+            .take_while(move |((id, iseq, _digest), _txd)| {
                 let mut flag = id == &object_id;
-                if seq.is_some() {
-                    flag &= seq_inner == *iseq;
+                if let Some(seq_num) = seq {
+                    flag &= seq_num == *iseq;
                 }
                 flag
-            })
-            .collect())
+            }))
     }
 
     /// Read a lock for a specific (transaction, shared object) pair.
