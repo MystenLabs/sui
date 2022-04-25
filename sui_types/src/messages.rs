@@ -840,8 +840,6 @@ impl ExecutionStatus {
 /// The response from processing a transaction or a certified transaction
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionEffects {
-    // The Epoch in which the transaction effects apply
-    pub epoch: EpochId,
     // The status of the execution
     pub status: ExecutionStatus,
     // The transaction digest
@@ -910,11 +908,11 @@ impl TransactionEffects {
 
     pub fn to_sign_effects(
         self,
+        epoch: EpochId,
         authority_name: &AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> SignedTransactionEffects {
         let signature = AuthoritySignature::new(&self, secret);
-        let epoch = self.epoch;
 
         SignedTransactionEffects {
             effects: self,

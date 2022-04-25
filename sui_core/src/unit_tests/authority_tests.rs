@@ -1126,7 +1126,6 @@ async fn test_account_state_unknown_account() {
 
 #[tokio::test]
 async fn test_authority_persist() {
-
     let seed = [1u8; 32];
     let (committee, _, authority_key) =
         crate::authority_batch::batch_tests::init_state_parameters_from_rng(

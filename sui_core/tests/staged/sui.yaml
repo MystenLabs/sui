@@ -755,7 +755,6 @@ TransactionDigest:
   NEWTYPESTRUCT: BYTES
 TransactionEffects:
   STRUCT:
-    - epoch: U64
     - status:
         TYPENAME: ExecutionStatus
     - transaction_digest:

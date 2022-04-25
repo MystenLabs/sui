@@ -355,7 +355,6 @@ impl AuthorityState {
             transaction_digest,
         );
         let effects = execution_engine::execute_transaction_to_effects(
-            self.committee.epoch(),
             &mut temporary_store,
             transaction.clone(),
             transaction_digest,
@@ -365,7 +364,8 @@ impl AuthorityState {
             gas_status,
         )?;
         // TODO: Distribute gas charge and rebate, which can be retrieved from effects.
-        let signed_effects = effects.to_sign_effects(&self.name, &*self.secret);
+        let signed_effects =
+            effects.to_sign_effects(self.committee.epoch, &self.name, &*self.secret);
 
         // Update the database in an atomic manner
         self.update_state(temporary_store, &certificate, &signed_effects)
