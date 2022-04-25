@@ -21,7 +21,7 @@ use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
 use sui_types::crypto::SignableBytes;
 use sui_types::error::SuiError;
 use sui_types::messages::TransactionData;
-use sui_types::object::ObjectRead;
+use sui_types::object::{Data, ObjectRead};
 
 #[serde_as]
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -141,6 +141,7 @@ impl<T: JsonSchema + Serialize + Send + Sync + 'static> HttpResponse for HttpRes
 #[serde(rename_all = "camelCase")]
 pub struct ObjectExistsResponse {
     object_ref: NamedObjectRef,
+    object_type: MoveObjectType,
     object: Value,
 }
 
@@ -165,8 +166,10 @@ impl TryFrom<ObjectRead> for GetObjectInfoResponse {
     fn try_from(obj: ObjectRead) -> Result<Self, Self::Error> {
         match obj {
             ObjectRead::Exists(object_ref, object, layout) => {
+                let object_type = MoveObjectType::from_data(&object.data);
                 Ok(Self::Exists(ObjectExistsResponse {
                     object_ref: object_ref.into(),
+                    object_type,
                     object: object.to_json(&layout)?,
                 }))
             }
@@ -174,6 +177,22 @@ impl TryFrom<ObjectRead> for GetObjectInfoResponse {
                 object_id: object_id.to_hex(),
             })),
             ObjectRead::Deleted(obj_ref) => Ok(Self::Deleted(obj_ref.into())),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum MoveObjectType {
+    MoveObject,
+    MovePackage,
+}
+
+impl MoveObjectType {
+    fn from_data(data: &Data) -> Self {
+        match data {
+            Data::Move(_) => MoveObjectType::MoveObject,
+            Data::Package(_) => MoveObjectType::MovePackage,
         }
     }
 }
