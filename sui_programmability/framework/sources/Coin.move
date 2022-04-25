@@ -36,11 +36,11 @@ module Sui::Coin {
         &mut coin.balance
     }
 
-    public fun wrap<T>(balance: Balance<T>, ctx: &mut TxContext): Coin<T> {
+    public fun from_balance<T>(balance: Balance<T>, ctx: &mut TxContext): Coin<T> {
         Coin { id: TxContext::new_id(ctx), balance }
     }
 
-    public fun unwrap<T>(coin: Coin<T>): Balance<T> {
+    public fun to_balance<T>(coin: Coin<T>): Balance<T> {
         let Coin { id, balance } = coin;
         ID::delete(id);
         balance
@@ -194,39 +194,5 @@ module Sui::Coin {
     /// Mint coins of any type for (obviously!) testing purposes only
     public fun mint_for_testing<T>(value: u64, ctx: &mut TxContext): Coin<T> {
         Coin { id: TxContext::new_id(ctx), balance: Balance::create(value) }
-    }
-}
-
-#[test_only]
-module Sui::TestCoin {
-    use Sui::TestScenario::{Self, ctx};
-    use Sui::Coin;
-    use Sui::Balance;
-    use Sui::SUI::SUI;
-
-    #[test]
-    fun type_morphing() {
-        let test = &mut TestScenario::begin(&@0x1);
-
-        let balance = Balance::empty<SUI>();
-        let coin = Coin::wrap(balance, ctx(test));
-        let balance = Coin::unwrap(coin);
-
-        Balance::destroy_empty(balance);
-
-        let coin = Coin::mint_for_testing<SUI>(100, ctx(test));
-        let balance_mut = Coin::balance_mut(&mut coin);
-        let sub_balance = Balance::split(balance_mut, 50);
-
-        assert!(Balance::value(&sub_balance) == 50, 0);
-        assert!(Coin::value(&coin) == 50, 0);
-
-        let balance = Coin::unwrap(coin);
-        Balance::join(&mut balance, sub_balance);
-
-        assert!(Balance::value(&balance) == 100, 0);
-
-        let coin = Coin::wrap(balance, ctx(test));
-        Coin::keep(coin, ctx(test));
     }
 }

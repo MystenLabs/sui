@@ -17,8 +17,6 @@ module Sui::Balance {
         Balance { value: 0 }
     }
 
-
-
     public fun join<T>(self: &mut Balance<T>, balance: Balance<T>) {
         let Balance { value } = balance;
         self.value = self.value + value;
