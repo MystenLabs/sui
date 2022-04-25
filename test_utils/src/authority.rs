@@ -10,6 +10,8 @@ use sui::sui_commands::make_authority;
 use sui_adapter::genesis;
 use sui_core::authority::AuthorityState;
 use sui_core::authority::AuthorityStore;
+use sui_core::authority_server::AuthorityServer;
+use sui_network::transport::SpawnedServer;
 use sui_types::object::Object;
 
 /// The default network buffer size of a test authority.
@@ -69,14 +71,18 @@ where
 }
 
 /// Spawn all authorities in the test committee into a separate tokio task.
-pub async fn spawn_test_authorities<I>(objects: I, configs: &[AuthorityPrivateInfo])
+pub async fn spawn_test_authorities<I>(
+    objects: I,
+    configs: &[AuthorityPrivateInfo],
+) -> Vec<SpawnedServer<AuthorityServer>>
 where
     I: IntoIterator<Item = Object> + Clone,
 {
     let states = test_authority_states(objects).await;
     let consensus_committee = make_default_narwhal_committee(&configs).unwrap();
+    let mut handles = Vec::new();
     for (state, config) in states.into_iter().zip(configs.iter()) {
-        make_authority(
+        let handle = make_authority(
             /* authority */ config,
             NETWORK_BUFFER_SIZE,
             state,
@@ -89,5 +95,7 @@ where
         .spawn()
         .await
         .unwrap();
+        handles.push(handle);
     }
+    handles
 }

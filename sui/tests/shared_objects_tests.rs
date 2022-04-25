@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
 use futures::{sink::SinkExt, stream::StreamExt};
-use std::net::SocketAddr;
 use sui::config::AuthorityPrivateInfo;
+use sui_types::error::SuiError;
 use sui_types::messages::ConsensusTransaction;
 use sui_types::serialize::SerializedMessage;
 use sui_types::serialize::{deserialize_message, serialize_consensus_transaction};
@@ -14,32 +14,18 @@ use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tokio_util::codec::LengthDelimitedCodec;
 
-async fn submit_transaction(transaction: Bytes, config: AuthorityPrivateInfo) -> SerializedMessage {
-    let authority_address: SocketAddr = format!("{}:{}", config.host, config.port).parse().unwrap();
+/// Submits a transaction to a Sui authority.
+async fn submit_transaction(
+    transaction: Bytes,
+    config: &AuthorityPrivateInfo,
+) -> SerializedMessage {
+    let authority_address = format!("{}:{}", config.host, config.port);
     let stream = TcpStream::connect(authority_address).await.unwrap();
     let mut connection = Framed::new(stream, LengthDelimitedCodec::new());
 
-    //tokio::time::sleep(std::time::Duration::from_millis(1_000)).await;
-
-    println!("UNIT_TEST: 0");
     connection.send(transaction).await.unwrap();
-    println!("UNIT_TEST: 1");
     let bytes = connection.next().await.unwrap().unwrap();
-    println!("UNIT_TEST: 2");
     deserialize_message(&bytes[..]).unwrap()
-}
-
-async fn send_traffic(configs: Vec<AuthorityPrivateInfo>) {
-    for config in configs {
-        tokio::spawn(async move {
-            let stream = TcpStream::connect(config.consensus_address).await.unwrap();
-            let mut connection = Framed::new(stream, LengthDelimitedCodec::new());
-            let transaction = Bytes::from("hello, world!");
-            loop {
-                connection.send(transaction.clone()).await.unwrap();
-            }
-        });
-    }
 }
 
 #[tokio::test]
@@ -47,21 +33,37 @@ async fn shared_object_transaction() {
     let mut objects = test_gas_objects();
     objects.push(test_shared_object());
 
-    let mut configs = test_authority_configs();
-    spawn_test_authorities(objects, &configs).await;
+    // Get the authority configs and spawn them. Note that it is important to not drop
+    // the handles (or the authorities will stop).
+    let configs = test_authority_configs();
+    let _handles = spawn_test_authorities(objects, &configs).await;
 
+    // Make a test shared object certificate.
     let certificate = test_shared_object_certificates().await.pop().unwrap();
     let message = ConsensusTransaction::UserTransaction(certificate);
     let serialized = Bytes::from(serialize_consensus_transaction(&message));
 
+    // Keep submitting the certificate until it is sequenced by consensus. We use the loop
+    // since some consensus protocols (like Tusk) are not guaranteed to include the transaction
+    // (but it has high probability to do so).
     tokio::task::yield_now().await;
-    // send_traffic(configs.clone()).await;
-
-    tokio::task::yield_now().await;
-    while let Some(config) = configs.pop() {
-        //tokio::task::yield_now().await;
-        println!("Trying authority on port {}", config.port);
-        let reply = submit_transaction(serialized.clone(), config).await;
-        println!("{reply:?}");
+    'main: loop {
+        for config in &configs {
+            println!("Trying authority on port {}", config.port);
+            match submit_transaction(serialized.clone(), config).await {
+                SerializedMessage::TransactionResp(reply) => {
+                    println!("{reply:?}");
+                    break 'main;
+                }
+                SerializedMessage::Error(error) => match *error {
+                    SuiError::ConsensusConnectionBroken(_) => {
+                        // This is the (confusing) error message returned by the consensus adapter
+                        // timed out and didn't hear back from consensus.
+                    }
+                    error => panic!("Unexpected error {error}"),
+                },
+                message => panic!("Unexpected protocol message {message:?}"),
+            }
+        }
     }
 }
