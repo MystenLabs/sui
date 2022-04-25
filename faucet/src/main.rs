@@ -81,11 +81,13 @@ async fn request_gas(
                 .await
         }
     };
-    let resp: FaucetResponse = match result {
-        Ok(v) => v.into(),
-        Err(v) => v.into(),
-    };
-    (StatusCode::CREATED, Json(resp))
+    match result {
+        Ok(v) => (StatusCode::CREATED, Json(FaucetResponse::from(v))),
+        Err(v) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(FaucetResponse::from(v)),
+        ),
+    }
 }
 
 async fn create_wallet_context() -> Result<WalletContext, anyhow::Error> {
