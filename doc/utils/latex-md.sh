@@ -5,6 +5,8 @@
 # Output appears in the same directory; `mv *.md` as needed
 command -v pandoc >/dev/null 2>&1 || { echo "pandoc (https://pandoc.org/) is not installed or missing from PATH, exiting."; return 1; }
 shopt -s nullglob
+set -e
+set -o pipefail
 for f in *.tex
 do
         echo "Converting to Markdown for LaTex file - $f"
