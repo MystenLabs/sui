@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::base_types::{AuthorityName, SuiAddress};
+use crate::committee::EpochId;
 use crate::error::{SuiError, SuiResult};
 use crate::readable_serde::encoding::Base64;
 use crate::readable_serde::Readable;
@@ -433,6 +434,7 @@ impl AuthoritySignInfoTrait for EmptySignInfo {}
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AuthoritySignInfo {
+    pub epoch: EpochId,
     pub authority: AuthorityName,
     pub signature: AuthoritySignature,
 }

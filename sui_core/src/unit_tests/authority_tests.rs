@@ -1183,7 +1183,7 @@ fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStor
         /* address */ *authority_key.public_key_bytes(),
         /* voting right */ 1,
     );
-    let committee = Committee::new(authorities);
+    let committee = Committee::new(0, authorities);
 
     // Create a random directory to store the DB
 
@@ -1261,6 +1261,7 @@ fn init_certified_transfer_transaction(
     let transfer_transaction =
         init_transfer_transaction(sender, secret, recipient, object_ref, gas_object_ref);
     let vote = SignedTransaction::new(
+        0,
         transfer_transaction.clone(),
         authority_state.name,
         &*authority_state.secret,

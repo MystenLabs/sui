@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::*;
+use crate::committee::EpochId;
 use move_binary_format::errors::{PartialVMError, VMError};
 use narwhal_executor::ExecutionStateError;
 use narwhal_executor::SubscriberError;
@@ -64,6 +65,8 @@ pub enum SuiError {
     #[error("Value was not signed by a known authority")]
     UnknownSigner,
     // Certificate verification
+    #[error("Signature or certificate from wrong epoch, expected {expected_epoch}")]
+    WrongEpoch { expected_epoch: EpochId },
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
     #[error(
