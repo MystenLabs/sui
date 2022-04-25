@@ -19,6 +19,7 @@ pub fn test_keys() -> Vec<(SuiAddress, KeyPair)> {
 // Fixture: test committee.
 pub fn test_committee() -> Committee {
     Committee::new(
+        0,
         test_keys()
             .into_iter()
             .map(|(_, x)| (*x.public_key_bytes(), /* voting right */ 1))

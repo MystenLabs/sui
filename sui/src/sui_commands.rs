@@ -276,6 +276,7 @@ impl SuiNetwork {
         );
 
         let committee = Committee::new(
+            config.epoch,
             config
                 .authorities
                 .iter()
@@ -341,6 +342,7 @@ pub async fn genesis(
     );
 
     let mut network_config = NetworkConfig {
+        epoch: 0,
         authorities: vec![],
         buffer_size: DEFAULT_MAX_DATAGRAM_SIZE,
         loaded_move_packages: vec![],
@@ -420,7 +422,7 @@ pub async fn genesis(
         }
     }
 
-    let committee = Committee::new(voting_right);
+    let committee = Committee::new(network_config.epoch, voting_right);
     for authority in &network_config.authorities {
         make_server_with_genesis_ctx(
             authority,

@@ -68,6 +68,7 @@ fn make_serialized_cert(
 ) -> Vec<u8> {
     // Make certificate
     let mut certificate = CertifiedTransaction::new(tx);
+    certificate.epoch = committee.epoch();
     for i in 0..committee.quorum_threshold() {
         let (pubx, secx) = keys.get(i).unwrap();
         let sig = AuthoritySignature::new(&certificate.transaction.data, secx);
