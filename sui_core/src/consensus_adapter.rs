@@ -185,14 +185,12 @@ impl ConsensusSubmitter {
         println!("CONSENSUS_SUBMITTER: 3");
 
         // Wait for the consensus to sequence the certificate and assign locks to shared objects.
-        /*
         timeout(self.max_delay, receiver)
             .await
             .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))?
             .expect("Chanel with consensus listener dropped")
-            */
-        receiver
-            .await
-            .expect("Chanel with consensus listener dropped")
+        //receiver
+        //    .await
+        //    .expect("Chanel with consensus listener dropped")
     }
 }

@@ -43,6 +43,7 @@ async fn shared_object_transaction() {
 
     tokio::task::yield_now().await;
     while let Some(config) = configs.pop() {
+        //tokio::task::yield_now().await;
         println!("Trying authority on port {}", config.port);
         let reply = submit_transaction(serialized.clone(), config).await;
         println!("{reply:?}");
