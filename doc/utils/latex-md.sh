@@ -3,6 +3,7 @@
 # Usage: convert a directory of files from LaTex to Markdown
 # Run `latex-md.sh` from the directory containing the files
 # Output appears in the same directory; `mv *.md` as needed
+command -v pandoc >/dev/null 2>&1 || { echo "pandoc (https://pandoc.org/) is not installed or missing from PATH, exiting."; return 1; }
 shopt -s nullglob
 for f in *.tex
 do
