@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::PrimaryWorkerMessage;
-use bytes::Bytes;
 use config::Committee;
 use crypto::{traits::VerifyingKey, Digest};
 use futures::{
@@ -9,7 +8,7 @@ use futures::{
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
     FutureExt,
 };
-use network::SimpleSender;
+use network::PrimaryToWorkerNetwork;
 use std::{
     collections::HashMap,
     fmt,
@@ -238,7 +237,7 @@ pub struct BlockWaiter<PublicKey: VerifyingKey> {
     pending_get_block: HashMap<CertificateDigest, Certificate<PublicKey>>,
 
     /// Network driver allowing to send messages.
-    network: SimpleSender,
+    worker_network: PrimaryToWorkerNetwork,
 
     /// The batch receive channel is listening for received
     /// messages for batches that have been requested
@@ -277,7 +276,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
                 certificate_store,
                 rx_commands,
                 pending_get_block: HashMap::new(),
-                network: SimpleSender::new(),
+                worker_network: PrimaryToWorkerNetwork::default(),
                 rx_batch_receiver: batch_receiver,
                 tx_pending_batch: HashMap::new(),
                 tx_get_block_map: HashMap::new(),
@@ -599,9 +598,8 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
                 .primary_to_worker;
 
             let message = PrimaryWorkerMessage::<PublicKey>::RequestBatch(digest);
-            let bytes = bincode::serialize(&message).expect("Failed to serialize batch request");
 
-            self.network.send(worker_address, Bytes::from(bytes)).await;
+            self.worker_network.send(worker_address, &message).await;
 
             // mark it as pending batch. Since we assume that batches are unique
             // per block, a clean up on a block request will also clean

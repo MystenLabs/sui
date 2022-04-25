@@ -471,3 +471,16 @@ pub enum PrimaryMessage<PublicKey: VerifyingKey> {
         payload_availability: Vec<(CertificateDigest, bool)>,
     },
 }
+
+/// The messages sent by the primary to its workers.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum PrimaryWorkerMessage<PublicKey> {
+    /// The primary indicates that the worker need to sync the target missing batches.
+    Synchronize(Vec<BatchDigest>, /* target */ PublicKey),
+    /// The primary indicates a round update.
+    Cleanup(Round),
+    /// The primary requests a batch from the worker
+    RequestBatch(BatchDigest),
+    /// Delete the batches, dictated from the provided vector of digest, from the worker node
+    DeleteBatches(Vec<BatchDigest>),
+}

@@ -20,7 +20,7 @@ use crypto::{
     traits::{EncodeDecodeBase64, Signer, VerifyingKey},
     SignatureService,
 };
-use network::SimpleSender;
+use network::PrimaryToWorkerNetwork;
 use serde::{Deserialize, Serialize};
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -33,27 +33,13 @@ use tonic::{Request, Response, Status};
 use tracing::info;
 use types::{
     Batch, BatchDigest, BincodeEncodedPayload, Certificate, CertificateDigest, Empty, Header,
-    HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer, Round, WorkerToPrimary,
-    WorkerToPrimaryServer,
+    HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
 /// The default channel capacity for each channel of the primary.
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
-pub use types::PrimaryMessage;
-
-/// The messages sent by the primary to its workers.
-#[derive(Debug, Serialize, Deserialize)]
-pub enum PrimaryWorkerMessage<PublicKey> {
-    /// The primary indicates that the worker need to sync the target missing batches.
-    Synchronize(Vec<BatchDigest>, /* target */ PublicKey),
-    /// The primary indicates a round update.
-    Cleanup(Round),
-    /// The primary requests a batch from the worker
-    RequestBatch(BatchDigest),
-    /// Delete the batches, dictated from the provided vector of digest, from the worker node
-    DeleteBatches(Vec<BatchDigest>),
-}
+pub use types::{PrimaryMessage, PrimaryWorkerMessage};
 
 /// The messages sent by the workers to their primary.
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -225,7 +211,7 @@ impl Primary {
             certificate_store.clone(),
             header_store,
             payload_store.clone(),
-            SimpleSender::new(),
+            PrimaryToWorkerNetwork::default(),
             rx_block_removal_commands,
             rx_batch_removal,
         );

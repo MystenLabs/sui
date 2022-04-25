@@ -16,7 +16,7 @@ mod retry;
 mod simple_sender;
 
 pub use crate::{
-    primary::PrimaryNetwork,
+    primary::{PrimaryNetwork, PrimaryToWorkerNetwork},
     receiver::{MessageHandler, Receiver, Writer},
     reliable_sender::{CancelHandler, ReliableSender},
     retry::RetryConfig,

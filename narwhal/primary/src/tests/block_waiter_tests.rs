@@ -11,15 +11,13 @@ use crate::{
 use bincode::deserialize;
 use crypto::{ed25519::Ed25519PublicKey, traits::VerifyingKey, Hash};
 use ed25519_dalek::Signer;
-use futures::StreamExt;
-use network::SimpleSender;
+use network::PrimaryToWorkerNetwork;
 use std::{collections::HashMap, net::SocketAddr};
 use test_utils::{
     certificate, fixture_batch_with_transactions, fixture_header_builder,
-    fixture_header_with_payload, keys, resolve_name_and_committee,
+    fixture_header_with_payload, keys, resolve_name_and_committee, PrimaryToWorkerMockServer,
 };
 use tokio::{
-    net::TcpListener,
     sync::{
         mpsc::{channel, Sender},
         oneshot,
@@ -27,7 +25,6 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, timeout, Duration},
 };
-use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use types::{Batch, BatchDigest, Certificate, CertificateDigest};
 
 #[tokio::test]
@@ -287,7 +284,7 @@ async fn test_one_pending_request_for_block_at_time() {
         certificate_store: certificate_store.clone(),
         rx_commands,
         pending_get_block: HashMap::new(),
-        network: SimpleSender::new(),
+        worker_network: PrimaryToWorkerNetwork::default(),
         rx_batch_receiver: rx_batch_messages,
         tx_pending_batch: HashMap::new(),
         tx_get_block_map: HashMap::new(),
@@ -355,7 +352,7 @@ async fn test_unlocking_pending_get_block_request_after_response() {
         certificate_store: certificate_store.clone(),
         rx_commands,
         pending_get_block: HashMap::new(),
-        network: SimpleSender::new(),
+        worker_network: PrimaryToWorkerNetwork::default(),
         rx_batch_receiver: rx_batch_messages,
         tx_pending_batch: HashMap::new(),
         tx_get_block_map: HashMap::new(),
@@ -503,41 +500,33 @@ pub fn worker_listener<PublicKey: VerifyingKey>(
     expected_batches: HashMap<BatchDigest, BatchMessage>,
     tx_batch_messages: Sender<BatchResult>,
 ) -> JoinHandle<()> {
+    let mut recv = PrimaryToWorkerMockServer::spawn(address);
     tokio::spawn(async move {
-        let listener = TcpListener::bind(&address).await.unwrap();
-        let (socket, _) = listener.accept().await.unwrap();
-        let transport = Framed::new(socket, LengthDelimitedCodec::new());
-
-        println!("Start listening server");
-
-        let (_, mut reader) = transport.split();
         let mut counter = 0;
         loop {
-            match reader.next().await {
-                Some(Ok(received)) => {
-                    let message = received.freeze();
-                    match deserialize(&message) {
-                        Ok(PrimaryWorkerMessage::<PublicKey>::RequestBatch(id)) => {
-                            if expected_batches.contains_key(&id) {
-                                tx_batch_messages
-                                    .send(Ok(expected_batches.get(&id).cloned().unwrap()))
-                                    .await
-                                    .unwrap();
+            let message = recv
+                .recv()
+                .await
+                .expect("Failed to receive network message");
+            match deserialize(&message.payload) {
+                Ok(PrimaryWorkerMessage::<PublicKey>::RequestBatch(id)) => {
+                    if expected_batches.contains_key(&id) {
+                        tx_batch_messages
+                            .send(Ok(expected_batches.get(&id).cloned().unwrap()))
+                            .await
+                            .unwrap();
 
-                                counter += 1;
+                        counter += 1;
 
-                                // Once all the expected requests have been received, break the loop
-                                // of the server.
-                                if counter == expected_batches.len() {
-                                    break;
-                                }
-                            }
+                        // Once all the expected requests have been received, break the loop
+                        // of the server.
+                        if counter == expected_batches.len() {
+                            break;
                         }
-                        _ => panic!("Unexpected request received"),
-                    };
+                    }
                 }
-                _ => panic!("Failed to receive network message"),
-            }
+                _ => panic!("Unexpected request received"),
+            };
         }
     })
 }

@@ -2,10 +2,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::primary::PrimaryWorkerMessage;
-use bytes::Bytes;
 use config::Committee;
 use crypto::traits::VerifyingKey;
-use network::SimpleSender;
+use network::PrimaryToWorkerNetwork;
 use std::{
     net::SocketAddr,
     sync::{
@@ -25,7 +24,7 @@ pub struct GarbageCollector<PublicKey: VerifyingKey> {
     /// The network addresses of our workers.
     addresses: Vec<SocketAddr>,
     /// A network sender to notify our workers of cleanup events.
-    network: SimpleSender,
+    worker_network: PrimaryToWorkerNetwork,
 }
 
 impl<PublicKey: VerifyingKey> GarbageCollector<PublicKey> {
@@ -47,7 +46,7 @@ impl<PublicKey: VerifyingKey> GarbageCollector<PublicKey> {
                 consensus_round,
                 rx_consensus,
                 addresses,
-                network: SimpleSender::new(),
+                worker_network: Default::default(),
             }
             .run()
             .await;
@@ -67,10 +66,9 @@ impl<PublicKey: VerifyingKey> GarbageCollector<PublicKey> {
                 self.consensus_round.store(round, Ordering::Relaxed);
 
                 // Trigger cleanup on the workers..
-                let bytes = bincode::serialize(&PrimaryWorkerMessage::<PublicKey>::Cleanup(round))
-                    .expect("Failed to serialize our own message");
-                self.network
-                    .broadcast(self.addresses.clone(), Bytes::from(bytes))
+                let message = PrimaryWorkerMessage::<PublicKey>::Cleanup(round);
+                self.worker_network
+                    .broadcast(self.addresses.clone(), &message)
                     .await;
             }
         }

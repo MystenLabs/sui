@@ -2,14 +2,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::primary::{PayloadToken, PrimaryMessage, PrimaryWorkerMessage};
-use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::traits::VerifyingKey;
 use futures::{
     future::{try_join_all, BoxFuture},
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
 };
-use network::SimpleSender;
+use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     collections::HashMap,
@@ -66,7 +65,8 @@ pub struct HeaderWaiter<PublicKey: VerifyingKey> {
     tx_core: Sender<Header<PublicKey>>,
 
     /// Network driver allowing to send messages.
-    network: SimpleSender,
+    primary_network: PrimaryNetwork,
+    worker_network: PrimaryToWorkerNetwork,
     /// Keeps the digests of the all certificates for which we sent a sync request,
     /// along with a time stamp (`u128`) indicating when we sent the request.
     parent_requests: HashMap<CertificateDigest, (Round, u128)>,
@@ -103,7 +103,8 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                 sync_retry_nodes,
                 rx_synchronizer,
                 tx_core,
-                network: SimpleSender::new(),
+                primary_network: Default::default(),
+                worker_network: Default::default(),
                 parent_requests: HashMap::new(),
                 batch_requests: HashMap::new(),
                 pending: HashMap::new(),
@@ -181,9 +182,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                                     .expect("Author of valid header is not in the committee")
                                     .primary_to_worker;
                                 let message = PrimaryWorkerMessage::Synchronize(digests, author.clone());
-                                let bytes = bincode::serialize(&message)
-                                    .expect("Failed to serialize batch sync request");
-                                self.network.send(address, Bytes::from(bytes)).await;
+                                self.worker_network.send(address, &message).await;
                             }
                         }
 
@@ -227,8 +226,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                                     .expect("Author of valid header not in the committee")
                                     .primary_to_primary;
                                 let message = PrimaryMessage::CertificatesRequest(requires_sync, self.name.clone());
-                                let bytes = bincode::serialize(&message).expect("Failed to serialize cert request");
-                                self.network.send(address, Bytes::from(bytes)).await;
+                                self.primary_network.unreliable_send(address, &message).await;
                             }
                         }
                     }
@@ -278,8 +276,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                             .map(|(_, x)| x.primary_to_primary)
                             .collect();
                         let message = PrimaryMessage::CertificatesRequest(retry, self.name.clone());
-                        let bytes = bincode::serialize(&message).expect("Failed to serialize cert request");
-                        self.network.lucky_broadcast(addresses, Bytes::from(bytes), self.sync_retry_nodes).await;
+                        self.primary_network.lucky_broadcast(addresses, &message, self.sync_retry_nodes).await;
                     }
                     // Reschedule the timer.
                     timer.as_mut().reset(Instant::now() + Duration::from_millis(TIMER_RESOLUTION));

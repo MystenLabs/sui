@@ -4,7 +4,6 @@
 #![allow(unused_variables)]
 
 use crate::{block_remover::BlockErrorType::Failed, utils, PayloadToken, PrimaryWorkerMessage};
-use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::{traits::VerifyingKey, Digest, Hash};
 use futures::{
@@ -12,7 +11,7 @@ use futures::{
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
     FutureExt,
 };
-use network::SimpleSender;
+use network::PrimaryToWorkerNetwork;
 use std::{collections::HashMap, time::Duration};
 use store::{rocks::TypedStoreError, Store};
 use tokio::{
@@ -91,7 +90,7 @@ pub struct DeleteBatchMessage {
 ///
 /// ```rust
 /// # use store::{reopen, rocks, rocks::DBMap, Store};
-/// # use network::SimpleSender;
+/// # use network::PrimaryToWorkerNetwork;
 /// # use tokio::sync::mpsc::{channel};
 /// # use crypto::Hash;
 /// # use std::env::temp_dir;
@@ -138,7 +137,7 @@ pub struct DeleteBatchMessage {
 ///         certificate_store.clone(),
 ///         headers_store.clone(),
 ///         payload_store.clone(),
-///         SimpleSender::new(),
+///         PrimaryToWorkerNetwork::default(),
 ///         rx_commands,
 ///         rx_delete_batches,
 ///     );
@@ -189,7 +188,7 @@ pub struct BlockRemover<PublicKey: VerifyingKey> {
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
 
     /// Network driver allowing to send messages.
-    network: SimpleSender,
+    worker_network: PrimaryToWorkerNetwork,
 
     /// Receives the commands to execute against
     rx_commands: Receiver<BlockRemoverCommand>,
@@ -215,7 +214,7 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
         certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
         header_store: Store<HeaderDigest, Header<PublicKey>>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-        network: SimpleSender,
+        worker_network: PrimaryToWorkerNetwork,
         rx_commands: Receiver<BlockRemoverCommand>,
         rx_delete_batches: Receiver<DeleteBatchResult>,
     ) -> JoinHandle<()> {
@@ -226,7 +225,7 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
                 certificate_store,
                 header_store,
                 payload_store,
-                network,
+                worker_network,
                 rx_commands,
                 pending_removal_requests: HashMap::new(),
                 map_tx_removal_results: HashMap::new(),
@@ -485,13 +484,9 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
                 .primary_to_worker;
 
             let message = PrimaryWorkerMessage::<PublicKey>::DeleteBatches(batch_ids.clone());
-            let serialised_message =
-                bincode::serialize(&message).expect("Failed to serialize delete batch request");
 
             // send the request
-            self.network
-                .send(worker_address, Bytes::from(serialised_message))
-                .await;
+            self.worker_network.send(worker_address, &message).await;
 
             // create a key based on the provided batch ids and use it as a request
             // key to identify the channel to forward the response once the delete

@@ -2,10 +2,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::primary::PrimaryMessage;
-use bytes::Bytes;
 use config::Committee;
 use crypto::traits::VerifyingKey;
-use network::SimpleSender;
+use network::PrimaryNetwork;
 use store::Store;
 use tokio::sync::mpsc::Receiver;
 use tracing::{error, warn};
@@ -24,7 +23,7 @@ pub struct Helper<PublicKey: VerifyingKey> {
     /// Input channel to receive certificates requests.
     rx_primaries: Receiver<PrimaryMessage<PublicKey>>,
     /// A network sender to reply to the sync requests.
-    network: SimpleSender,
+    primary_network: PrimaryNetwork,
 }
 
 impl<PublicKey: VerifyingKey> Helper<PublicKey> {
@@ -38,7 +37,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                 committee,
                 store,
                 rx_primaries,
-                network: SimpleSender::new(),
+                primary_network: PrimaryNetwork::default(),
             }
             .run()
             .await;
@@ -107,20 +106,21 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
             let response: Vec<(CertificateDigest, Option<Certificate<PublicKey>>)> =
                 digests.into_iter().zip(certificates).collect();
 
-            let message = bincode::serialize(&PrimaryMessage::CertificatesBatchResponse {
+            let message = PrimaryMessage::CertificatesBatchResponse {
                 certificates: response,
-            })
-            .expect("Failed to serialize CertificatesBatchResponse message");
+            };
 
-            self.network.send(address, Bytes::from(message)).await;
+            self.primary_network
+                .unreliable_send(address, &message)
+                .await;
         } else {
             for certificate in certificates {
                 if certificate.is_some() {
                     // TODO: Remove this deserialization-serialization in the critical path.
-                    let bytes =
-                        bincode::serialize(&PrimaryMessage::Certificate(certificate.unwrap()))
-                            .expect("Failed to serialize our own certificate");
-                    self.network.send(address, Bytes::from(bytes)).await;
+                    let message = PrimaryMessage::Certificate(certificate.unwrap());
+                    self.primary_network
+                        .unreliable_send(address, &message)
+                        .await;
                 }
             }
         }

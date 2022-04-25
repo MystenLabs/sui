@@ -15,12 +15,16 @@ use primary::{PrimaryWorkerMessage, WorkerPrimaryMessage};
 use serde::{Deserialize, Serialize};
 use std::{
     error::Error,
-    net::{IpAddr, Ipv4Addr},
+    net::{IpAddr, Ipv4Addr, SocketAddr},
 };
 use store::Store;
 use tokio::sync::mpsc::{channel, Sender};
-use tracing::{error, info, warn};
-use types::{Batch, BatchDigest, Transaction};
+use tonic::{Request, Response, Status};
+use tracing::{info, warn};
+use types::{
+    Batch, BatchDigest, BincodeEncodedPayload, Empty, PrimaryToWorker, PrimaryToWorkerServer,
+    Transaction,
+};
 
 #[cfg(test)]
 #[path = "tests/worker_tests.rs"]
@@ -120,11 +124,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             .expect("Our public key or worker id is not in the committee")
             .primary_to_worker;
         address.set_ip(INADDR_ANY);
-        Receiver::spawn(
-            address,
-            /* handler */
-            PrimaryReceiverHandler { tx_synchronizer },
-        );
+        PrimaryReceiverHandler { tx_synchronizer }.spawn(address);
 
         // The `Synchronizer` is responsible to keep the worker in sync with the others. It handles the commands
         // it receives from the primary (which are mainly notifications that we are out of sync).
@@ -334,22 +334,31 @@ struct PrimaryReceiverHandler<PublicKey: VerifyingKey> {
     tx_synchronizer: Sender<PrimaryWorkerMessage<PublicKey>>,
 }
 
+impl<PublicKey: VerifyingKey> PrimaryReceiverHandler<PublicKey> {
+    fn spawn(self, address: SocketAddr) {
+        let service = tonic::transport::Server::builder()
+            .add_service(PrimaryToWorkerServer::new(self))
+            .serve(address);
+        tokio::spawn(service);
+    }
+}
+
 #[async_trait]
-impl<PublicKey: VerifyingKey> MessageHandler for PrimaryReceiverHandler<PublicKey> {
-    async fn dispatch(
+impl<PublicKey: VerifyingKey> PrimaryToWorker for PrimaryReceiverHandler<PublicKey> {
+    async fn send_message(
         &self,
-        _writer: &mut Writer,
-        serialized: Bytes,
-    ) -> Result<(), Box<dyn Error>> {
-        // Deserialize the message and send it to the synchronizer.
-        match bincode::deserialize(&serialized) {
-            Err(e) => error!("Failed to deserialize primary message: {e}"),
-            Ok(message) => self
-                .tx_synchronizer
-                .send(message)
-                .await
-                .expect("Failed to send transaction"),
-        }
-        Ok(())
+        request: Request<BincodeEncodedPayload>,
+    ) -> Result<Response<Empty>, Status> {
+        let message: PrimaryWorkerMessage<PublicKey> = request
+            .into_inner()
+            .deserialize()
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
+        self.tx_synchronizer
+            .send(message)
+            .await
+            .expect("Failed to send transaction");
+
+        Ok(Response::new(Empty {}))
     }
 }
