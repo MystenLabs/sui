@@ -41,7 +41,7 @@ async fn hash_and_store() {
     // Ensure the `Processor` outputs the batch's digest.
     let output = rx_digest.recv().await.unwrap();
     let digest = BatchDigest::new(crypto::blake2b_256(|hasher| hasher.update(&serialized)));
-    let expected = bincode::serialize(&WorkerPrimaryMessage::OurBatch(digest, id)).unwrap();
+    let expected = WorkerPrimaryMessage::OurBatch(digest, id);
     assert_eq!(output, expected);
 
     // Ensure the `Processor` correctly stored the batch.

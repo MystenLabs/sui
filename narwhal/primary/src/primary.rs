@@ -15,16 +15,14 @@ use crate::{
     BlockRemover, DeleteBatchMessage,
 };
 use async_trait::async_trait;
-use bytes::Bytes;
 use config::{Committee, Parameters, WorkerId};
 use crypto::{
     traits::{EncodeDecodeBase64, Signer, VerifyingKey},
     SignatureService,
 };
-use network::{MessageHandler, Receiver as NetworkReceiver, SimpleSender, Writer};
+use network::SimpleSender;
 use serde::{Deserialize, Serialize};
 use std::{
-    error::Error,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::{atomic::AtomicU64, Arc},
 };
@@ -34,8 +32,9 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tonic::{Request, Response, Status};
 use tracing::info;
 use types::{
-    error::DagError, Batch, BatchDigest, BincodeEncodedPayload, Certificate, CertificateDigest,
-    Empty, Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer, Round,
+    Batch, BatchDigest, BincodeEncodedPayload, Certificate, CertificateDigest, Empty, Header,
+    HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer, Round, WorkerToPrimary,
+    WorkerToPrimaryServer,
 };
 
 /// The default channel capacity for each channel of the primary.
@@ -57,7 +56,7 @@ pub enum PrimaryWorkerMessage<PublicKey> {
 }
 
 /// The messages sent by the workers to their primary.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub enum WorkerPrimaryMessage {
     /// The worker indicates it sealed a new batch.
     OurBatch(BatchDigest, WorkerId),
@@ -156,16 +155,13 @@ impl Primary {
             .expect("Our public key or worker id is not in the committee")
             .worker_to_primary;
         address.set_ip(Primary::INADDR_ANY);
-        NetworkReceiver::spawn(
-            address,
-            /* handler */
-            WorkerReceiverHandler {
-                tx_our_digests,
-                tx_others_digests,
-                tx_batches,
-                tx_batch_removal,
-            },
-        );
+        WorkerReceiverHandler {
+            tx_our_digests,
+            tx_others_digests,
+            tx_batches,
+            tx_batch_removal,
+        }
+        .spawn(address);
         info!(
             "Primary {} listening to workers messages on {}",
             name.encode_base64(),
@@ -362,15 +358,27 @@ struct WorkerReceiverHandler {
     tx_batch_removal: Sender<DeleteBatchResult>,
 }
 
+impl WorkerReceiverHandler {
+    fn spawn(self, address: SocketAddr) {
+        let service = tonic::transport::Server::builder()
+            .add_service(WorkerToPrimaryServer::new(self))
+            .serve(address);
+        tokio::spawn(service);
+    }
+}
+
 #[async_trait]
-impl MessageHandler for WorkerReceiverHandler {
-    async fn dispatch(
+impl WorkerToPrimary for WorkerReceiverHandler {
+    async fn send_message(
         &self,
-        _writer: &mut Writer,
-        serialized: Bytes,
-    ) -> Result<(), Box<dyn Error>> {
-        // Deserialize and parse the message.
-        match bincode::deserialize(&serialized).map_err(DagError::SerializationError)? {
+        request: Request<BincodeEncodedPayload>,
+    ) -> Result<Response<Empty>, Status> {
+        let message: WorkerPrimaryMessage = request
+            .into_inner()
+            .deserialize()
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
+        match message {
             WorkerPrimaryMessage::OurBatch(digest, worker_id) => self
                 .tx_our_digests
                 .send((digest, worker_id))
@@ -407,6 +415,7 @@ impl MessageHandler for WorkerReceiverHandler {
                     .expect("Failed to send error batch delete result"),
             },
         }
-        Ok(())
+
+        Ok(Response::new(Empty {}))
     }
 }

@@ -95,7 +95,7 @@ async fn test_successful_request_batch() {
 
     // THEN we should receive batch the batch
     if let Ok(Some(message)) = timeout(Duration::from_secs(5), rx_primary.recv()).await {
-        match bincode::deserialize(&message).unwrap() {
+        match message {
             WorkerPrimaryMessage::RequestedBatch(digest, batch) => {
                 assert_eq!(batch, expected_batch);
                 assert_eq!(digest, expected_digest)
@@ -147,7 +147,7 @@ async fn test_request_batch_not_found() {
 
     // THEN we should receive batch the batch
     if let Ok(Some(message)) = timeout(Duration::from_secs(5), rx_primary.recv()).await {
-        match bincode::deserialize(&message).unwrap() {
+        match message {
             WorkerPrimaryMessage::Error(error) => {
                 assert_eq!(
                     error,
@@ -211,7 +211,7 @@ async fn test_successful_batch_delete() {
 
     // THEN we should receive the acknowledgement that the batches have been deleted
     if let Ok(Some(message)) = timeout(Duration::from_secs(5), rx_primary.recv()).await {
-        match bincode::deserialize(&message).unwrap() {
+        match message {
             WorkerPrimaryMessage::DeletedBatches(digests) => {
                 assert_eq!(digests, batch_digests);
             }

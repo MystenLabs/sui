@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::worker::{Round, SerializedBatchMessage, SerializedWorkerPrimaryMessage, WorkerMessage};
+use crate::worker::{Round, SerializedBatchMessage, WorkerMessage};
 use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::traits::VerifyingKey;
@@ -55,7 +55,7 @@ pub struct Synchronizer<PublicKey: VerifyingKey> {
     /// It also keeps the round number and a time stamp (`u128`) of each request we sent.
     pending: HashMap<BatchDigest, (Round, Sender<()>, u128)>,
     // Output channel to send out the batch requests.
-    tx_primary: Sender<SerializedWorkerPrimaryMessage>,
+    tx_primary: Sender<WorkerPrimaryMessage>,
 }
 
 impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
@@ -68,7 +68,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
         sync_retry_delay: Duration,
         sync_retry_nodes: usize,
         rx_message: Receiver<PrimaryWorkerMessage<PublicKey>>,
-        tx_primary: Sender<SerializedWorkerPrimaryMessage>,
+        tx_primary: Sender<WorkerPrimaryMessage>,
     ) {
         tokio::spawn(async move {
             Self {
@@ -253,9 +253,8 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
             _ => WorkerPrimaryMessage::Error(WorkerPrimaryError::RequestedBatchNotFound(digest)),
         };
 
-        let serialised = bincode::serialize(&message).expect("Failed to serialise message");
         self.tx_primary
-            .send(serialised)
+            .send(message)
             .await
             .expect("Failed to send message to primary channel");
     }
@@ -271,9 +270,8 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
             }
         };
 
-        let serialised = bincode::serialize(&message).expect("Failed to serialise message");
         self.tx_primary
-            .send(serialised)
+            .send(message)
             .await
             .expect("Failed to send message to primary channel");
     }

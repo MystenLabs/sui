@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::worker::{SerializedBatchMessage, SerializedWorkerPrimaryMessage};
+use crate::worker::SerializedBatchMessage;
 use blake2::digest::Update;
 use config::WorkerId;
 use primary::WorkerPrimaryMessage;
@@ -25,7 +25,7 @@ impl Processor {
         // Input channel to receive batches.
         mut rx_batch: Receiver<SerializedBatchMessage>,
         // Output channel to send out batches' digests.
-        tx_digest: Sender<SerializedWorkerPrimaryMessage>,
+        tx_digest: Sender<WorkerPrimaryMessage>,
         // Whether we are processing our own batches or the batches of other nodes.
         own_digest: bool,
     ) {
@@ -42,8 +42,6 @@ impl Processor {
                     true => WorkerPrimaryMessage::OurBatch(digest, id),
                     false => WorkerPrimaryMessage::OthersBatch(digest, id),
                 };
-                let message = bincode::serialize(&message)
-                    .expect("Failed to serialize our own worker-primary message");
                 tx_digest
                     .send(message)
                     .await

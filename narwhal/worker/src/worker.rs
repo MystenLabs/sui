@@ -11,7 +11,7 @@ use config::{Committee, Parameters, WorkerId};
 use crypto::traits::VerifyingKey;
 use futures::sink::SinkExt as _;
 use network::{MessageHandler, Receiver, Writer};
-use primary::PrimaryWorkerMessage;
+use primary::{PrimaryWorkerMessage, WorkerPrimaryMessage};
 use serde::{Deserialize, Serialize};
 use std::{
     error::Error,
@@ -32,9 +32,6 @@ pub const CHANNEL_CAPACITY: usize = 1_000;
 /// The primary round number.
 // TODO: Move to the primary.
 pub type Round = u64;
-
-/// Indicates a serialized `WorkerPrimaryMessage` message.
-pub type SerializedWorkerPrimaryMessage = Vec<u8>;
 
 /// Indicates a serialized `WorkerMessage::Batch` message.
 pub type SerializedBatchMessage = Vec<u8>;
@@ -113,7 +110,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
     }
 
     /// Spawn all tasks responsible to handle messages from our primary.
-    fn handle_primary_messages(&self, tx_primary: Sender<SerializedWorkerPrimaryMessage>) {
+    fn handle_primary_messages(&self, tx_primary: Sender<WorkerPrimaryMessage>) {
         let (tx_synchronizer, rx_synchronizer) = channel(CHANNEL_CAPACITY);
 
         // Receive incoming messages from our primary.
@@ -150,7 +147,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
     }
 
     /// Spawn all tasks responsible to handle clients transactions.
-    fn handle_clients_transactions(&self, tx_primary: Sender<SerializedWorkerPrimaryMessage>) {
+    fn handle_clients_transactions(&self, tx_primary: Sender<WorkerPrimaryMessage>) {
         let (tx_batch_maker, rx_batch_maker) = channel(CHANNEL_CAPACITY);
         let (tx_quorum_waiter, rx_quorum_waiter) = channel(CHANNEL_CAPACITY);
         let (tx_processor, rx_processor) = channel(CHANNEL_CAPACITY);
@@ -209,7 +206,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
     }
 
     /// Spawn all tasks responsible to handle messages from other workers.
-    fn handle_workers_messages(&self, tx_primary: Sender<SerializedWorkerPrimaryMessage>) {
+    fn handle_workers_messages(&self, tx_primary: Sender<WorkerPrimaryMessage>) {
         let (tx_worker_helper, rx_worker_helper) = channel(CHANNEL_CAPACITY);
         let (tx_client_helper, rx_client_helper) = channel(CHANNEL_CAPACITY);
         let (tx_processor, rx_processor) = channel(CHANNEL_CAPACITY);

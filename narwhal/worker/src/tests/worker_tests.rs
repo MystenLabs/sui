@@ -12,7 +12,7 @@ use std::time::Duration;
 use store::rocks;
 use test_utils::{
     batch, committee_with_base_port, digest_batch, expecting_listener, keys,
-    serialize_batch_message, temp_dir,
+    serialize_batch_message, temp_dir, WorkerToPrimaryMockServer,
 };
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
@@ -48,7 +48,7 @@ async fn handle_clients_transactions() {
 
     let primary_address = committee.primary(&name).unwrap().worker_to_primary;
     let expected = bincode::serialize(&WorkerPrimaryMessage::OurBatch(batch_digest, id)).unwrap();
-    let handle = expecting_listener(primary_address, Some(Bytes::from(expected)));
+    let mut handle = WorkerToPrimaryMockServer::spawn(primary_address);
 
     // Spawn enough workers' listeners to acknowledge our batches.
     for (_, addresses) in committee.others_workers(&name, &id) {
@@ -65,7 +65,7 @@ async fn handle_clients_transactions() {
     }
 
     // Ensure the primary received the batch's digest (ie. it did not panic).
-    assert!(handle.await.is_ok());
+    assert_eq!(handle.recv().await.unwrap().payload, expected);
 }
 
 #[tokio::test]
