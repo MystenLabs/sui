@@ -128,7 +128,10 @@ module Sui::Coin {
         value: u64, cap: &mut TreasuryCap<T>, ctx: &mut TxContext,
     ): Coin<T> {
         cap.total_supply = cap.total_supply + value;
-        Coin { id: TxContext::new_id(ctx), balance: Balance::create(value) }
+        Coin {
+            id: TxContext::new_id(ctx),
+            balance: Balance::create_with_value(value)
+        }
     }
 
     /// Destroy the coin `c` and decrease the total supply in `cap`
@@ -192,6 +195,6 @@ module Sui::Coin {
     #[test_only]
     /// Mint coins of any type for (obviously!) testing purposes only
     public fun mint_for_testing<T>(value: u64, ctx: &mut TxContext): Coin<T> {
-        Coin { id: TxContext::new_id(ctx), balance: Balance::create(value) }
+        Coin { id: TxContext::new_id(ctx), balance: Balance::create_with_value(value) }
     }
 }

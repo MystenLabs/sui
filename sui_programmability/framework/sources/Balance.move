@@ -51,7 +51,7 @@ module Sui::Balance {
 
     /// Can only be called by Sui::Coin.
     /// Create a `Balance` with a predefined value; required for minting new `Coin`s.
-    public(friend) fun create<T>(value: u64): Balance<T> {
+    public(friend) fun create_with_value<T>(value: u64): Balance<T> {
         Balance { value }
     }
 
@@ -63,11 +63,13 @@ module Sui::Balance {
     }
 
     #[test_only]
+    /// Create a `Balance` of any coin for testing purposes.
     public fun create_for_testing<T>(value: u64): Balance<T> {
         create(value)
     }
 
     #[test_only]
+    /// Destroy a `Balance` with any value in it for testing purposes.
     public fun destroy_for_testing<T>(self: Balance<T>): u64 {
         destroy(self)
     }
