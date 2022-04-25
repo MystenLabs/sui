@@ -6,8 +6,6 @@
 /// `Balance` eliminating the need to create new IDs for each application
 /// that needs to hold coins.
 module Sui::Balance {
-    use Std::Errors;
-
     friend Sui::Coin;
 
     const ENONZERO: u64 = 0;
@@ -38,14 +36,14 @@ module Sui::Balance {
 
     /// Split a `Balance` and take a sub balance from it.
     public fun split<T>(self: &mut Balance<T>, value: u64): Balance<T> {
-        assert!(self.value >= value, Errors::limit_exceeded(EVALUE));
+        assert!(self.value >= value, EVALUE);
         self.value = self.value - value;
         Balance { value }
     }
 
     /// Destroy an empty `Balance`.
     public fun destroy_empty<T>(balance: Balance<T>) {
-        assert!(balance.value == 0, Errors::invalid_argument(ENONZERO));
+        assert!(balance.value == 0, ENONZERO);
         let Balance { value: _ } = balance;
     }
 

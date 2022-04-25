@@ -39,7 +39,7 @@ module Sui::Coin {
     }
 
     /// Destruct a Coin wrapper and keep the balance.
-    public fun to_balance<T>(coin: Coin<T>): Balance<T> {
+    public fun into_balance<T>(coin: Coin<T>): Balance<T> {
         let Coin { id, balance } = coin;
         ID::delete(id);
         balance
