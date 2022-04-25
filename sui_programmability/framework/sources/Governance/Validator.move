@@ -127,7 +127,7 @@ module Sui::Validator {
     }
 
     /// Called by `ValidatorSet`, to send back a Validator object to its address.
-    /// This happens when a validator is withdrawn or does not quality.
+    /// This happens when a validator is removed.
     public(friend) fun send_back(self: Validator) {
         check_non_active_validator_invariants(&self);
         let owner = self.sui_address;

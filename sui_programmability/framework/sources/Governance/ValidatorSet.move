@@ -97,9 +97,7 @@ module Sui::ValidatorSet {
     /// Called by `SuiSystem`, to add more stake to a validator.
     /// The new stake will be added to the validator's pending stake, which will be processed
     /// at the end of epoch.
-    /// We allow adding stake to both pending validators and active validators.
-    /// In either case, the total stake of the validator cannot exceed `max_validator_stake`
-    /// with the `new_stake`.
+    /// The total stake of the validator cannot exceed `max_validator_stake` with the `new_stake`.
     public(friend) fun request_add_stake(
         self: &mut ValidatorSet,
         new_stake: Coin<SUI>,
@@ -107,18 +105,11 @@ module Sui::ValidatorSet {
         ctx: &TxContext,
     ) {
         let validator_address = TxContext::sender(ctx);
-        let validator_index_opt = find_validator(&self.pending_validators, validator_address);
-        if (Option::is_some(&validator_index_opt)) {
-            let validator_index = Option::extract(&mut validator_index_opt);
-            let validator = Vector::borrow_mut(&mut self.pending_validators, validator_index);
-            Validator::request_add_stake(validator, new_stake, max_validator_stake);
-        } else {
-            let validator_index_opt = find_validator(&self.active_validators, validator_address);
-            assert!(Option::is_some(&validator_index_opt), EVALIDATOR_NOT_FOUND);
-            let validator_index = Option::extract(&mut validator_index_opt);
-            let validator = Vector::borrow_mut(&mut self.active_validators, validator_index);
-            Validator::request_add_stake(validator, new_stake, max_validator_stake);
-        }
+        let validator_index_opt = find_validator(&self.active_validators, validator_address);
+        assert!(Option::is_some(&validator_index_opt), EVALIDATOR_NOT_FOUND);
+        let validator_index = Option::extract(&mut validator_index_opt);
+        let validator = Vector::borrow_mut(&mut self.active_validators, validator_index);
+        Validator::request_add_stake(validator, new_stake, max_validator_stake);
     }
 
     /// Called by `SuiSystem`, to withdraw stake from a validator.
@@ -137,6 +128,13 @@ module Sui::ValidatorSet {
         let validator_index = Option::extract(&mut validator_index_opt);
         let validator = Vector::borrow_mut(&mut self.active_validators, validator_index);
         Validator::request_withdraw_stake(validator, withdraw_amount, min_validator_stake);
+    }
+
+    public(friend) fun is_active_validator(
+        self: &ValidatorSet,
+        validator_address: address,
+    ): bool {
+        Option::is_some(&find_validator(&self.active_validators, validator_address))
     }
 
     /// Update the validator set at the end of epoch.

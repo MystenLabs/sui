@@ -62,6 +62,7 @@ module Sui::SuiSystem {
         max_validator_stake: u64,
         ctx: &mut TxContext,
     ) {
+        assert!(min_validator_stake < max_validator_stake, 0);
         let state = SuiSystemState {
             id: TxContext::new_id(ctx),
             epoch: 0,
@@ -154,14 +155,14 @@ module Sui::SuiSystem {
     }
 
     /// This function should be called at the end of an epoch, and advances the system to the next epoch.
-    /// All system parameters can be changed at this time.
-    /// The number of validators can also be adjusted through `new_active_validator_count`.
-    /// If however there are not enough validators, this function can fail.
     public(script) fun advance_epoch(
         self: &mut SuiSystemState,
         new_epoch: u64,
         ctx: &mut TxContext,
     ) {
+        // Only an active validator can make a call to this function.
+        assert!(ValidatorSet::is_active_validator(&self.validators, TxContext::sender(ctx)), 0);
+
         self.epoch = self.epoch + 1;
         // Sanity check to make sure we are advancing to the right epoch.
         assert!(new_epoch == self.epoch, EINVALID_EPOCH);
