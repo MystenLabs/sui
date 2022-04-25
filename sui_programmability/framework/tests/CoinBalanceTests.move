@@ -14,7 +14,7 @@ module Sui::TestCoin {
 
         let balance = Balance::empty<SUI>();
         let coin = Coin::from_balance(balance, ctx(test));
-        let balance = Coin::to_balance(coin);
+        let balance = Coin::into_balance(coin);
 
         Balance::destroy_empty(balance);
 
@@ -25,7 +25,7 @@ module Sui::TestCoin {
         assert!(Balance::value(&sub_balance) == 50, 0);
         assert!(Coin::value(&coin) == 50, 0);
 
-        let balance = Coin::to_balance(coin);
+        let balance = Coin::into_balance(coin);
         Balance::join(&mut balance, sub_balance);
 
         assert!(Balance::value(&balance) == 100, 0);

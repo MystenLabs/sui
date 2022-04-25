@@ -63,7 +63,7 @@ module Sui::Balance {
     #[test_only]
     /// Create a `Balance` of any coin for testing purposes.
     public fun create_for_testing<T>(value: u64): Balance<T> {
-        create(value)
+        create_with_value(value)
     }
 
     #[test_only]
