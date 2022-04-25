@@ -257,11 +257,9 @@ impl AuthorityServer {
                 .await
                 .map(|_| None),
             SerializedMessage::ConsensusTransaction(message) => {
-                println!("AUTHORITY_SERVER: 0");
                 match self.consensus_submitter.submit(&message).await {
                     Ok(()) => match *message {
                         ConsensusTransaction::UserTransaction(certificate) => {
-                            println!("AUTHORITY_SERVER: 1");
                             let confirmation_transaction = ConfirmationTransaction { certificate };
                             self.state
                                 .handle_confirmation_transaction(confirmation_transaction)

@@ -49,7 +49,6 @@ async fn shared_object_transaction() {
     tokio::task::yield_now().await;
     'main: loop {
         for config in &configs {
-            println!("Trying authority on port {}", config.port);
             match submit_transaction(serialized.clone(), config).await {
                 SerializedMessage::TransactionResp(reply) => {
                     println!("{reply:?}");

@@ -84,15 +84,10 @@ impl ConsensusListener {
                 },
 
                 Some((result, transaction_digest)) = self.rx_consensus_output.recv() => {
-                    println!("CONSENSUS_LISTENER: 0");
-                    println!("CONSENSUS_LISTENER: {result:?}");
-                    println!("CONSENSUS_LISTENER: {transaction_digest:?}");
                     // Notify the caller that the transaction has been sequenced.
                     let outcome = result.map_err(SuiError::from);
                     if let Some(replier) = self.pending.get_mut(&transaction_digest).and_then(|r| r.pop_front()) {
-                        println!("CONSENSUS_ADAPTER: 1");
                         if replier.send(outcome).is_err() {
-                            println!("CONSENSUS_LISTENER: 2");
                             debug!("No replier to listen to consensus output {transaction_digest}");
                         }
                     }
@@ -151,10 +146,8 @@ impl ConsensusSubmitter {
 
     /// Submit a transaction to consensus, wait for its processing, and notify the caller.
     pub async fn submit(&self, certificate: &ConsensusTransaction) -> SuiResult<()> {
-        println!("CONSENSUS_SUBMITTER: 0");
         // Check the Sui certificate (submitted by the user).
         certificate.check(&self.committee)?;
-        println!("CONSENSUS_SUBMITTER: 1");
 
         // Serialize the certificate in a way that is understandable to consensus (i.e., using
         // bincode) and it certificate to consensus.
@@ -172,7 +165,6 @@ impl ConsensusSubmitter {
             .send(consensus_input)
             .await
             .expect("Failed to notify consensus listener");
-        println!("CONSENSUS_SUBMITTER: 2");
 
         // TODO [issue #1452]: We are re-creating a connection every time. This is wasteful but does not
         // require to take self as a mutable reference.
@@ -182,15 +174,11 @@ impl ConsensusSubmitter {
             .send(bytes)
             .await
             .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))?;
-        println!("CONSENSUS_SUBMITTER: 3");
 
         // Wait for the consensus to sequence the certificate and assign locks to shared objects.
         timeout(self.max_delay, receiver)
             .await
             .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))?
             .expect("Chanel with consensus listener dropped")
-        //receiver
-        //    .await
-        //    .expect("Chanel with consensus listener dropped")
     }
 }
