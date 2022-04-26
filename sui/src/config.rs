@@ -56,20 +56,6 @@ pub struct AuthorityPrivateInfo {
     pub consensus_address: SocketAddr,
 }
 
-impl Clone for AuthorityPrivateInfo {
-    fn clone(&self) -> Self {
-        Self {
-            address: self.address,
-            key_pair: self.key_pair.copy(),
-            host: self.host.clone(),
-            port: self.port,
-            db_path: self.db_path.clone(),
-            stake: self.stake,
-            consensus_address: self.consensus_address,
-        }
-    }
-}
-
 // Warning: to_socket_addrs() is blocking and can fail.  Be careful where you use it.
 fn socket_addr_from_hostport(host: &str, port: u16) -> SocketAddr {
     let mut addresses = format!("{host}:{port}")
