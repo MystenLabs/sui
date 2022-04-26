@@ -34,7 +34,7 @@ pub const AUTHORITIES_DB_NAME: &str = "authorities_db";
 pub const DEFAULT_STARTING_PORT: u16 = 10000;
 pub const CONSENSUS_DB_NAME: &str = "consensus_db";
 
-static PORT_ALLOCATOR: Lazy<Mutex<PortAllocator>> =
+pub static PORT_ALLOCATOR: Lazy<Mutex<PortAllocator>> =
     Lazy::new(|| Mutex::new(PortAllocator::new(DEFAULT_STARTING_PORT)));
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -54,6 +54,19 @@ pub struct AuthorityPrivateInfo {
     pub db_path: PathBuf,
     pub stake: usize,
     pub consensus_address: SocketAddr,
+}
+
+impl Clone for AuthorityPrivateInfo {
+    fn clone(&self) -> Self {
+        Self {
+            key_pair: self.key_pair.copy(),
+            host: self.host.clone(),
+            port: self.port,
+            db_path: self.db_path.clone(),
+            stake: self.stake,
+            consensus_address: self.consensus_address,
+        }
+    }
 }
 
 // Custom deserializer with optional default fields

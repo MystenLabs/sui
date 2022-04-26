@@ -58,6 +58,7 @@ impl AuthorityServer {
             buffer_size,
             state.committee.clone(),
             tx_consensus_listener,
+            /* max_delay */ Duration::from_millis(1_000),
         );
         Self {
             server: NetworkServer::new(base_address, base_port, buffer_size),

@@ -813,7 +813,7 @@ impl ModuleResolver for AuthorityState {
 
 #[async_trait]
 impl ExecutionState for AuthorityState {
-    type Transaction = CertifiedTransaction;
+    type Transaction = ConsensusTransaction;
     type Error = SuiError;
 
     async fn handle_consensus_transaction(
@@ -821,7 +821,8 @@ impl ExecutionState for AuthorityState {
         execution_indices: ExecutionIndices,
         transaction: Self::Transaction,
     ) -> Result<(), Self::Error> {
-        self.handle_consensus_certificate(transaction, execution_indices)
+        let ConsensusTransaction::UserTransaction(certificate) = transaction;
+        self.handle_consensus_certificate(certificate, execution_indices)
             .await
     }
 
