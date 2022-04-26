@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use sha3::Sha3_256;
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
+#[derive(Debug)]
 pub struct KeyPair {
     key_pair: dalek::Keypair,
     public_key_cell: OnceCell<PublicKeyBytes>,
@@ -81,14 +82,6 @@ impl FromStr for KeyPair {
             key_pair: key,
             public_key_cell: OnceCell::new(),
         })
-    }
-}
-
-impl std::fmt::Debug for KeyPair {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = Base64::encode_string(&self.key_pair.to_bytes());
-        write!(f, "{}", s)?;
-        Ok(())
     }
 }
 
