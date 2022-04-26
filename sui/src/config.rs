@@ -56,19 +56,6 @@ pub struct AuthorityPrivateInfo {
     pub consensus_address: SocketAddr,
 }
 
-impl Clone for AuthorityPrivateInfo {
-    fn clone(&self) -> Self {
-        Self {
-            key_pair: self.key_pair.copy(),
-            host: self.host.clone(),
-            port: self.port,
-            db_path: self.db_path.clone(),
-            stake: self.stake,
-            consensus_address: self.consensus_address,
-        }
-    }
-}
-
 // Custom deserializer with optional default fields
 impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
