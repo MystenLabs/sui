@@ -180,7 +180,7 @@ impl<S> AuthorityTemporaryStore<S> {
 
     pub fn to_effects(
         &self,
-        shared_objects: Vec<ObjectRef>,
+        shared_object_refs: Vec<ObjectRef>,
         transaction_digest: &TransactionDigest,
         transaction_dependencies: Vec<TransactionDigest>,
         status: ExecutionStatus,
@@ -189,7 +189,7 @@ impl<S> AuthorityTemporaryStore<S> {
         let (gas_reference, gas_object) = &self.written[gas_object_id];
         TransactionEffects {
             status,
-            shared_objects,
+            shared_objects: shared_object_refs,
             transaction_digest: *transaction_digest,
             created: self
                 .written

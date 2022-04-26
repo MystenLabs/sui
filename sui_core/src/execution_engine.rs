@@ -22,7 +22,7 @@ use tracing::{debug, instrument};
 
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
 pub fn execute_transaction_to_effects<S: BackingPackageStore>(
-    shared_objects: Vec<ObjectRef>,
+    shared_object_refs: Vec<ObjectRef>,
     temporary_store: &mut AuthorityTemporaryStore<S>,
     transaction: Transaction,
     transaction_digest: TransactionDigest,
@@ -56,7 +56,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     transaction_dependencies.remove(&TransactionDigest::genesis());
 
     let effects = temporary_store.to_effects(
-        shared_objects,
+        shared_object_refs,
         &transaction_digest,
         transaction_dependencies.into_iter().collect(),
         status,
