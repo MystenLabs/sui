@@ -70,6 +70,7 @@ impl Clone for AuthorityPrivateInfo {
     }
 }
 
+// Warning: to_socket_addrs() is blocking and can fail.  Be careful where you use it.
 fn socket_addr_from_hostport(host: &str, port: u16) -> SocketAddr {
     let mut addresses = format!("{host}:{port}")
         .to_socket_addrs()
