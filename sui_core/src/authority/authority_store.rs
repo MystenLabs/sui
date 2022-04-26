@@ -834,10 +834,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         let (sequenced_to_write, schedule_to_write): (Vec<_>, Vec<_>) = ids
             .zip(versions.iter())
             .map(|(id, v)| {
-                let version = v.unwrap_or_else(SequenceNumber::new);
+                let version = v.unwrap_or_else(|| SequenceNumber::from(1));
                 let next_version = v
                     .map(|v| v.increment())
-                    .unwrap_or_else(|| SequenceNumber::from(1));
+                    .unwrap_or_else(|| SequenceNumber::from(2));
 
                 let sequenced = ((transaction_digest, *id), version);
                 let scheduled = (id, next_version);
