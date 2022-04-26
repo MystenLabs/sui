@@ -7,6 +7,7 @@ use crate::{
     execution_engine, transaction_input_checker,
 };
 use async_trait::async_trait;
+use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::ModuleCache;
 use move_core_types::{
@@ -329,10 +330,13 @@ impl AuthorityState {
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
-        let has_shared_object = objects_by_kind
+        let shared_object: Vec<_> = objects_by_kind
             .iter()
-            .any(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)));
-        if has_shared_object {
+            .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)))
+            .map(|(_, obj)| obj.compute_object_reference())
+            .sorted()
+            .collect();
+        if !shared_object.is_empty() {
             // If the transaction contains shared objects, we need to ensure they have been scheduled
             // for processing by the consensus protocol.
             self.check_shared_locks(&transaction_digest, &objects_by_kind)
@@ -355,6 +359,7 @@ impl AuthorityState {
             transaction_digest,
         );
         let effects = execution_engine::execute_transaction_to_effects(
+            shared_object,
             &mut temporary_store,
             transaction.clone(),
             transaction_digest,
