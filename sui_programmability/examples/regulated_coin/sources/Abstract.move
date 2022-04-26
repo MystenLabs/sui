@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module USDC::Abstract {
+module Stable::RegulatedCoin {
     use Std::Vector;
     use Sui::Balance::{Self, Balance};
     use Sui::Coin::{Self, TreasuryCap};
@@ -194,14 +194,14 @@ module USDC::Abstract {
 }
 
 #[test_only]
-module USDC::AbstractTests {
+module Stable::RegulatedCoinTests {
     use Sui::TestScenario::{Self, Scenario, ctx, next_tx};
-    use USDC::Abstract::{Self, OwnedBalance, Transfer, Registry};
+    use Stable::RegulatedCoin::{Self, OwnedBalance, Transfer, Registry};
 
-    struct USDC has drop {}
+    struct Stable has drop {}
 
     fun people(): (address, address, address) {
-        (@USDC, @0xADD1, @0xADD2)
+        (@Stable, @0xADD1, @0xADD2)
     }
 
     #[test]
@@ -215,11 +215,11 @@ module USDC::AbstractTests {
 
         next_tx(test, &admin);
         {
-            let registry = TestScenario::take_object<Registry<USDC>>(test);
-            let balance = TestScenario::take_object<OwnedBalance<USDC>>(test);
+            let registry = TestScenario::take_object<Registry<Stable>>(test);
+            let balance = TestScenario::take_object<OwnedBalance<Stable>>(test);
 
             // Make a safe transfer to the user1
-            Abstract::transfer<USDC>(&registry, &mut balance, 666, user1, ctx(test));
+            RegulatedCoin::transfer<Stable>(&registry, &mut balance, 666, user1, ctx(test));
 
             TestScenario::return_object(test, registry);
             TestScenario::return_object(test, balance);
@@ -227,12 +227,12 @@ module USDC::AbstractTests {
 
         next_tx(test, &user1);
         {
-            let registry = TestScenario::take_object<Registry<USDC>>(test);
-            let balance = TestScenario::take_object<OwnedBalance<USDC>>(test);
-            let transfer = TestScenario::take_object<Transfer<USDC>>(test);
+            let registry = TestScenario::take_object<Registry<Stable>>(test);
+            let balance = TestScenario::take_object<OwnedBalance<Stable>>(test);
+            let transfer = TestScenario::take_object<Transfer<Stable>>(test);
 
             // BALANCE IS ACTUALLY ADMIN'S (USER1 HASN'T CREATED A BALANCE YET)
-            Abstract::accept<USDC>(&registry, &mut balance, transfer, ctx(test));
+            RegulatedCoin::accept<Stable>(&registry, &mut balance, transfer, ctx(test));
 
             TestScenario::return_object(test, registry);
             TestScenario::return_object(test, balance);
@@ -245,8 +245,8 @@ module USDC::AbstractTests {
 
         next_tx(test, &admin);
 
-        Abstract::create_currency(USDC {}, ctx(test));
-        Abstract::create_balance<USDC>(ctx(test));
+        RegulatedCoin::create_currency(Stable {}, ctx(test));
+        RegulatedCoin::create_balance<Stable>(ctx(test));
     }
 
     // Mint some coin to the admin address
@@ -255,11 +255,11 @@ module USDC::AbstractTests {
 
         next_tx(test, &admin);
 
-        let registry = TestScenario::take_object<Registry<USDC>>(test);
-        let balance = TestScenario::take_object<OwnedBalance<USDC>>(test);
-        let usdc = Abstract::mint(&mut registry, 1000, ctx(test));
+        let registry = TestScenario::take_object<Registry<Stable>>(test);
+        let balance = TestScenario::take_object<OwnedBalance<Stable>>(test);
+        let usdc = RegulatedCoin::mint(&mut registry, 1000, ctx(test));
 
-        Abstract::join(&mut balance, usdc);
+        RegulatedCoin::join(&mut balance, usdc);
 
         TestScenario::return_object(test, registry);
         TestScenario::return_object(test, balance);

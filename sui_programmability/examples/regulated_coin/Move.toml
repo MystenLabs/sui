@@ -6,4 +6,4 @@ version = "0.0.1"
 Sui = { local = "../../framework" }
 
 [addresses]
-USDC = "0x0"
+Stable = "0x0"
