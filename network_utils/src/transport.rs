@@ -204,13 +204,12 @@ where
         let stream;
 
         tokio::select! {
-            _ = &mut exit_future => { break },
+            _ = &mut exit_future => break,
             result = listener.accept() => {
                 let (value, _addr) = result?;
                 stream = value;
             }
         }
-
         let guarded_state = state.clone();
         tokio::spawn(async move {
             let framed = TcpDataStream::from_tcp_stream(stream, _buffer_size);

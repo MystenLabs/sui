@@ -15,7 +15,6 @@ use sui_types::messages::{
     CallArg, CertifiedTransaction, SignatureAggregator, Transaction, TransactionData,
 };
 use sui_types::object::{MoveObject, Object, Owner};
-use sui_types::serialize::{deserialize_message, SerializedMessage};
 use test_utils::network::test_listener;
 use test_utils::test_keys;
 use tokio::sync::mpsc::channel;
@@ -135,6 +134,7 @@ async fn submit_transaction_to_consensus() {
     objects.push(test_shared_object());
     let authority = init_state_with_objects(objects).await;
     let certificate = test_certificates(&authority).await.pop().unwrap();
+    let expected_transaction = certificate.transaction.clone();
 
     // Make a new consensus submitter instance.
     let submitter = ConsensusSubmitter::new(
@@ -142,6 +142,7 @@ async fn submit_transaction_to_consensus() {
         NETWORK_BUFFER_SIZE,
         authority.committee,
         tx_consensus_listener,
+        /* max_delay */ Duration::from_millis(1_000),
     );
 
     // Spawn a network listener to receive the transaction (emulating the consensus node).
@@ -161,8 +162,9 @@ async fn submit_transaction_to_consensus() {
 
     // Ensure the consensus node got the transaction.
     let bytes = handle.await.unwrap();
-    match deserialize_message(&bytes[..]).unwrap() {
-        SerializedMessage::ConsensusTransaction(..) => (),
-        _ => panic!("Unexpected protocol message"),
+    match bincode::deserialize(&bytes).unwrap() {
+        ConsensusTransaction::UserTransaction(x) => {
+            assert_eq!(x.transaction, expected_transaction)
+        }
     }
 }
