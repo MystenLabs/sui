@@ -7,12 +7,12 @@ module Sui::Validator {
     use Std::Vector;
 
     use Sui::Coin::{Self, Coin};
-    use Sui::ID::{Self, VersionedID};
     use Sui::SUI::SUI;
     use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use Sui::TxContext::TxContext;
 
     friend Sui::Genesis;
+    friend Sui::SuiSystem;
     friend Sui::ValidatorSet;
 
     #[test_only]
@@ -20,22 +20,7 @@ module Sui::Validator {
     #[test_only]
     friend Sui::ValidatorSetTests;
 
-    /// This happens when someone tries to destroy a Validator object with sui_address
-    /// that doesn't match the sender address.
-    const EADDRESS_MISMATCH: u64 = 0;
-
-    /// This can happen when a validator tries to add or withdraw stake but the resulting
-    /// stake no longer meets validator stake requirement.
-    const EINVALID_STAKE_AMOUNT: u64 = 1;
-
-    /// This indicates inconsistent internal state, which shouldn't happen and if so is a bug.
-    const EINCONSISTENT_STATE: u64 = 2;
-
-    /// Parameters to create validator (e.g. net_address, name) are too big.
-    const PARAM_TOO_LARGE: u64 = 3;
-
-    struct Validator has key, store {
-        id: VersionedID,
+    struct Validator has store {
         /// The Sui Address of the validator. This is the sender that created the Validator object,
         /// and also the address to send validator/coins to during withdraws.
         sui_address: address,
@@ -52,71 +37,17 @@ module Sui::Validator {
         pending_withdraw: u64,
     }
 
-    public(script) fun create(
-        init_stake: Coin<SUI>,
-        name: vector<u8>,
-        net_address: vector<u8>,
-        ctx: &mut TxContext,
-    ) {
-        assert!(
-            Vector::length(&net_address) <= 100 || Vector::length(&name) <= 50,
-            PARAM_TOO_LARGE
-        );
-        let sender = TxContext::sender(ctx);
-        let validator = new(
-            sender,
-            name,
-            net_address,
-            init_stake,
-            ctx,
-        );
-        Transfer::transfer(validator, sender);
-    }
-
-    public(script) fun destroy(
-        self: Validator,
-        ctx: &mut TxContext,
-    ) {
-        let sender = TxContext::sender(ctx);
-        assert!(self.sui_address == sender, EADDRESS_MISMATCH);
-
-        // This must hold since only a non-active validator can be
-        // directly owned and passed by value to `destroy`.
-        check_non_active_validator_invariants(&self);
-
-        let Validator { id, sui_address: _, name: _, net_address: _, stake, pending_stake, pending_withdraw: _ } = self;
-        Transfer::transfer(stake, sender);
-        ID::delete(id);
-        Option::destroy_none(pending_stake);
-    }
-
-    public(script) fun add_stake(
-        self: &mut Validator,
-        new_stake: Coin<SUI>,
-        _ctx: &mut TxContext,
-    ) {
-        Coin::join(&mut self.stake, new_stake)
-    }
-
-    public(script) fun withdraw_stake(
-        self: &mut Validator,
-        withdraw_amount: u64,
-        ctx: &mut TxContext,
-    ) {
-        let coin = Coin::withdraw(&mut self.stake, withdraw_amount, ctx);
-        Coin::transfer(coin, TxContext::sender(ctx))
-    }
-
-
     public(friend) fun new(
         sui_address: address,
         name: vector<u8>,
         net_address: vector<u8>,
         stake: Coin<SUI>,
-        ctx: &mut TxContext,
     ): Validator {
+        assert!(
+            Vector::length(&net_address) <= 100 || Vector::length(&name) <= 50,
+            0
+        );
         Validator {
-            id: TxContext::new_id(ctx),
             sui_address,
             name: ASCII::string(name),
             net_address,
@@ -126,13 +57,19 @@ module Sui::Validator {
         }
     }
 
-    /// Called by `ValidatorSet`, to send back a Validator object to its address.
-    /// This happens when a validator is removed.
-    public(friend) fun send_back(self: Validator) {
-        check_non_active_validator_invariants(&self);
-        let owner = self.sui_address;
-        Transfer::transfer(self, owner)
-    }
+    public(friend) fun destroy(self: Validator) {
+        let Validator {
+            sui_address,
+            name: _,
+            net_address: _,
+            stake,
+            pending_stake,
+            pending_withdraw,
+        } = self;
+        Transfer::transfer(stake, sui_address);
+        assert!(pending_withdraw == 0 && Option::is_none(&pending_stake), 0);
+        Option::destroy_none(pending_stake);
+}
 
     /// Add stake to an active validator. The new stake is added to the pending_stake field,
     /// which will be processed at the end of epoch.
@@ -145,7 +82,7 @@ module Sui::Validator {
         if (Option::is_none(&self.pending_stake)) {
             assert!(
                 cur_stake + Coin::value(&new_stake) <= max_validator_stake,
-                EINVALID_STAKE_AMOUNT
+                0
             );
             Option::fill(&mut self.pending_stake, new_stake)
         } else {
@@ -153,7 +90,7 @@ module Sui::Validator {
             Coin::join(&mut pending_stake, new_stake);
             assert!(
                 cur_stake + Coin::value(&pending_stake) <= max_validator_stake,
-                EINVALID_STAKE_AMOUNT
+                0
             );
             Option::fill(&mut self.pending_stake, pending_stake);
         }
@@ -175,7 +112,7 @@ module Sui::Validator {
             Coin::value(Option::borrow(&self.pending_stake))
         };
         let total_stake = Coin::value(&self.stake) + pending_stake_amount;
-        assert!(total_stake >= self.pending_withdraw + min_validator_stake, EINVALID_STAKE_AMOUNT);
+        assert!(total_stake >= self.pending_withdraw + min_validator_stake, 0);
     }
 
     /// Process pending stake and pending withdraws.
@@ -186,40 +123,21 @@ module Sui::Validator {
         };
         if (self.pending_withdraw > 0) {
             let coin = Coin::withdraw(&mut self.stake, self.pending_withdraw, ctx);
-            Coin::transfer(coin, TxContext::sender(ctx));
+            Coin::transfer(coin, self.sui_address);
             self.pending_withdraw = 0;
         }
     }
 
 
-    public fun get_sui_address(self: &Validator): address {
+    public fun sui_address(self: &Validator): address {
         self.sui_address
     }
 
-    public fun get_stake_amount(self: &Validator): u64 {
+    public fun stake_amount(self: &Validator): u64 {
         Coin::value(&self.stake)
     }
 
-    public fun is_duplicate(self: &Validator, other: &Validator): bool {
-         self.sui_address == other.sui_address
-            || self.name == other.name
-            || self.net_address == other.net_address
-    }
-
-    /// For a non-active validator, it should never have any pending deposit or withdraws.
-    /// Any active validator will first process those pending stake changes before they
-    /// can be removed from the active validator list.
-    /// TODO: Check this in Move Prover.
-    fun check_non_active_validator_invariants(self: &Validator) {
-        assert!(
-            Option::is_none(&self.pending_stake)
-                && self.pending_withdraw == 0,
-            EINCONSISTENT_STATE
-        );
-    }
-
-    #[test_only]
-    public fun get_pending_stake_amount(self: &Validator): u64 {
+    public fun pending_stake_amount(self: &Validator): u64 {
         if (Option::is_some(&self.pending_stake)) {
             Coin::value(Option::borrow(&self.pending_stake))
         } else {
@@ -227,8 +145,13 @@ module Sui::Validator {
         }
     }
 
-    #[test_only]
-    public fun get_pending_withdraw(self: &Validator): u64 {
+    public fun pending_withdraw(self: &Validator): u64 {
         self.pending_withdraw
+    }
+
+    public fun is_duplicate(self: &Validator, other: &Validator): bool {
+         self.sui_address == other.sui_address
+            || self.name == other.name
+            || self.net_address == other.net_address
     }
 }

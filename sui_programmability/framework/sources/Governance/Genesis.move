@@ -41,7 +41,6 @@ module Sui::Genesis {
             VALIDATOR1_NAME,
             VALIDATOR1_IP_ADDRESS,
             Coin::mint(VALIDATOR1_STAKE, &mut treasury_cap, ctx),
-            ctx,
         ));
         SuiSystem::create(
             validators,

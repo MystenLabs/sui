@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Sui::SuiSystem {
-    use Sui::Coin::{Coin, TreasuryCap};
+    use Sui::Coin::{Self, Coin, TreasuryCap};
     use Sui::ID::VersionedID;
     use Sui::SUI::SUI;
     use Sui::Transfer;
@@ -12,20 +12,10 @@ module Sui::SuiSystem {
 
     friend Sui::Genesis;
 
-    /// A wrong epoch ID is passed in when trying to advance epoch.
-    /// This shouldn't happen unless there is a bug in the validator code.
-    const EINVALID_EPOCH: u64 = 0;
-
-    /// This happens when a new validator request is sent, but the new validator's
-    /// stake amount does not meet the requirement.
-    const EINVALID_STAKE_AMOUNT: u64 = 1;
-
-    /// This happens when the number of validator candidate exceeds the limit.
-    const EMAX_VALIDATOR_EXCEEDED: u64 = 2;
-
-    const EVALIDATOR_ADDRESS_MISMATCH: u64 = 3;
-
-    /// A list of config parameters that may change from epoch to epoch.
+    /// A list of system config parameters.
+    // TDOO: We will likely add more, a few potential ones:
+    // - the change in stake across epochs can be at most +/- x%
+    // - the change in the validator set across epochs can be at most x validators
     struct SystemParameters has store {
         /// Lower-bound on the amount of stake required to become a validator.
         min_validator_stake: u64,
@@ -50,6 +40,8 @@ module Sui::SuiSystem {
         /// A list of system config parameters.
         parameters: SystemParameters,
     }
+
+    // ==== functions that can only be called by Genesis ====
 
     /// Create a new SuiSystemState object and make it shared.
     /// This function will be called only once in Genesis.
@@ -78,32 +70,31 @@ module Sui::SuiSystem {
         Transfer::share_object(state);
     }
 
+    // ==== entry functions ====
+
     /// Can be called by anyone who wishes to become a validator in the next epoch.
-    /// At the end of the current epoch, the system will look at the amount of stake
-    /// compared to other validator candidates to decide if it is eligible.
-    /// If not, the `validator` object will be returned to `validator.sui_address` at that time.
-    ///
     /// The `validator` object needs to be created before calling this.
     /// The amount of stake in the `validator` object must meet the requirements.
+    // TODO: Does this need to go through a voting process? Any other criteria for
+    // someone to become a validator?
     public(script) fun request_add_validator(
         self: &mut SuiSystemState,
-        validator: Validator,
+        name: vector<u8>,
+        net_address: vector<u8>,
+        stake: Coin<SUI>,
         ctx: &mut TxContext,
     ) {
         assert!(
             ValidatorSet::get_total_validator_candidate_count(&self.validators) < self.parameters.max_validator_candidate_count,
-            EMAX_VALIDATOR_EXCEEDED
+            0
         );
-        assert!(
-            TxContext::sender(ctx) == Validator::get_sui_address(&validator),
-            EVALIDATOR_ADDRESS_MISMATCH
-        );
-        let stake_amount = Validator::get_stake_amount(&validator);
+        let stake_amount = Coin::value(&stake);
         assert!(
             stake_amount >= self.parameters.min_validator_stake
                 && stake_amount <= self.parameters.max_validator_stake,
-            EINVALID_STAKE_AMOUNT
+            0
         );
+        let validator = Validator::new(TxContext::sender(ctx), name, net_address, stake);
         ValidatorSet::request_add_validator(&mut self.validators, validator);
     }
 
@@ -165,7 +156,7 @@ module Sui::SuiSystem {
 
         self.epoch = self.epoch + 1;
         // Sanity check to make sure we are advancing to the right epoch.
-        assert!(new_epoch == self.epoch, EINVALID_EPOCH);
+        assert!(new_epoch == self.epoch, 0);
         ValidatorSet::advance_epoch(
             &mut self.validators,
             ctx,

@@ -15,23 +15,14 @@ module Sui::ValidatorSet {
     #[test_only]
     friend Sui::ValidatorSetTests;
 
-    const EDUPLICATE_VALIDATOR: u64 = 0;
-
-    const EINVALID_VALIDATOR_INDEX: u64 = 1;
-
-    const EVALIDATOR_NOT_FOUND: u64 = 2;
-
-    const EDUPLICATE_WITHDRAW: u64 = 3;
-
-    const ENOT_ENOUGH_VALIDATORS: u64 = 4;
-
     struct ValidatorSet has store {
         /// Total amount of stake from all active validators, at the beginning of the epoch.
         total_stake: u64,
 
-        /// Percentage of stake required to achieve quorum among validators.
-        /// This value is recaculated every epoch, based on the current number of active validators.
-        quorum_threshold_pct: u8,
+        /// The amount of accumulated stake to reach a quorum among all active validators.
+        /// This is always 2/3 of total stake. Keep it here to reduce potential inconsistencies
+        /// among validators.
+        quorum_stake_threshold: u64,
 
         /// The current list of active validators.
         active_validators: vector<Validator>,
@@ -46,11 +37,10 @@ module Sui::ValidatorSet {
     }
 
     public(friend) fun new(init_active_validators: vector<Validator>): ValidatorSet {
-        let total_stake = calculate_total_stake(&init_active_validators);
-        let quorum_threshold_pct = calculate_quorum_threshold(&init_active_validators);
+        let (total_stake, quorum_stake_threshold) = calculate_total_stake_and_quorum_threshold(&init_active_validators);
         ValidatorSet {
             total_stake,
-            quorum_threshold_pct,
+            quorum_stake_threshold,
             active_validators: init_active_validators,
             pending_validators: Vector::empty(),
             pending_removals: Vector::empty(),
@@ -70,7 +60,7 @@ module Sui::ValidatorSet {
         assert!(
             !contains_duplicate_validator(&self.active_validators, &validator)
                 && !contains_duplicate_validator(&self.pending_validators, &validator),
-            EDUPLICATE_VALIDATOR
+            0
         );
         Vector::push_back(&mut self.pending_validators, validator);
     }
@@ -85,11 +75,11 @@ module Sui::ValidatorSet {
     ) {
         let validator_address = TxContext::sender(ctx);
         let validator_index_opt = find_validator(&self.active_validators, validator_address);
-        assert!(Option::is_some(&validator_index_opt), EVALIDATOR_NOT_FOUND);
+        assert!(Option::is_some(&validator_index_opt), 0);
         let validator_index = Option::extract(&mut validator_index_opt);
         assert!(
             !Vector::contains(&self.pending_removals, &validator_index),
-            EDUPLICATE_WITHDRAW
+            0
         );
         Vector::push_back(&mut self.pending_removals, validator_index);
     }
@@ -106,14 +96,13 @@ module Sui::ValidatorSet {
     ) {
         let validator_address = TxContext::sender(ctx);
         let validator_index_opt = find_validator(&self.active_validators, validator_address);
-        assert!(Option::is_some(&validator_index_opt), EVALIDATOR_NOT_FOUND);
+        assert!(Option::is_some(&validator_index_opt), 0);
         let validator_index = Option::extract(&mut validator_index_opt);
         let validator = Vector::borrow_mut(&mut self.active_validators, validator_index);
         Validator::request_add_stake(validator, new_stake, max_validator_stake);
     }
 
     /// Called by `SuiSystem`, to withdraw stake from a validator.
-    /// Only an active validator can be requested to withdraw stake.
     /// We send a withdraw request to the validator which will be processed at the end of epoch.
     /// The remaining stake of the validator cannot be lower than `min_validator_stake`.
     public(friend) fun request_withdraw_stake(
@@ -124,7 +113,7 @@ module Sui::ValidatorSet {
     ) {
         let validator_address = TxContext::sender(ctx);
         let validator_index_opt = find_validator(&self.active_validators, validator_address);
-        assert!(Option::is_some(&validator_index_opt), EVALIDATOR_NOT_FOUND);
+        assert!(Option::is_some(&validator_index_opt), 0);
         let validator_index = Option::extract(&mut validator_index_opt);
         let validator = Vector::borrow_mut(&mut self.active_validators, validator_index);
         Validator::request_withdraw_stake(validator, withdraw_amount, min_validator_stake);
@@ -157,8 +146,13 @@ module Sui::ValidatorSet {
 
         process_pending_removals(&mut self.active_validators, &mut self.pending_removals);
 
-        self.total_stake = calculate_total_stake(&self.active_validators);
-        self.quorum_threshold_pct = calculate_quorum_threshold(&self.active_validators);
+        let (total_stake, quorum_stake_threshold) = calculate_total_stake_and_quorum_threshold(&self.active_validators);
+        self.total_stake = total_stake;
+        self.quorum_stake_threshold = quorum_stake_threshold;
+    }
+
+    public fun total_stake(self: &ValidatorSet): u64 {
+        self.total_stake
     }
 
     /// Checks whether a duplicate of `new_validator` is already in `validators`.
@@ -184,7 +178,7 @@ module Sui::ValidatorSet {
         let i = 0;
         while (i < length) {
             let v = Vector::borrow(validators, i);
-            if (Validator::get_sui_address(v) == validator_address) {
+            if (Validator::sui_address(v) == validator_address) {
                 return Option::some(i)
             };
             i = i + 1;
@@ -199,7 +193,7 @@ module Sui::ValidatorSet {
         while (!Vector::is_empty(withdraw_list)) {
             let index = Vector::pop_back(withdraw_list);
             let validator = Vector::remove(validators, index);
-            Validator::send_back(validator);
+            Validator::destroy(validator);
         }
     }
 
@@ -230,26 +224,17 @@ module Sui::ValidatorSet {
         };
     }
 
-    /// Calculate the total active stake.
-    fun calculate_total_stake(validators: &vector<Validator>): u64 {
+    /// Calculate the total active stake, and the amount of stake to reach quorum.
+    fun calculate_total_stake_and_quorum_threshold(validators: &vector<Validator>): (u64, u64) {
         let total = 0;
         let length = Vector::length(validators);
         let i = 0;
         while (i < length) {
             let v = Vector::borrow(validators, i);
-            total = total + Validator::get_stake_amount(v);
+            total = total + Validator::stake_amount(v);
             i = i + 1;
         };
-        total
-    }
-
-    /// Calculate the required percentage threshold to reach quorum.
-    /// With 3f + 1 validators, we can tolerate up to f byzantine ones.
-    /// Hence (2f + 1) / total is our threshold.
-    fun calculate_quorum_threshold(validators: &vector<Validator>): u8 {
-        let count = Vector::length(validators);
-        let threshold = (2 * count / 3 + 1) * 100 / count;
-        (threshold as u8)
+        (total, (total + 1) * 2 / 3)
     }
 
     /// Process the pending stake changes for each validator.
@@ -264,32 +249,19 @@ module Sui::ValidatorSet {
     }
 
     #[test_only]
-    public fun get_total_stake(self: &ValidatorSet): u64 {
-        self.total_stake
-    }
-
-    #[test_only]
-    public fun get_quorum_threshold_pct(self: &ValidatorSet): u8 {
-        self.quorum_threshold_pct
-    }
-
-    #[test_only]
     public(script) fun destroy_for_testing(
         self: ValidatorSet,
     ) {
         let ValidatorSet {
             total_stake: _,
-            quorum_threshold_pct: _,
+            quorum_stake_threshold: _,
             active_validators,
             pending_validators,
             pending_removals: _,
         } = self;
         while (!Vector::is_empty(&active_validators)) {
             let v = Vector::pop_back(&mut active_validators);
-            // We don't care about the actural context,
-            // as long as the address matches.
-            let ctx = TxContext::new_from_address(Validator::get_sui_address(&v), 0);
-            Validator::destroy(v, &mut ctx);
+            Validator::destroy(v);
         };
         Vector::destroy_empty(active_validators);
         Vector::destroy_empty(pending_validators);
