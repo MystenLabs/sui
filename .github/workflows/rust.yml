@@ -65,6 +65,8 @@ jobs:
           cargo build --all-features --lib
           cargo test --all-features --no-run # -j N # uncomment and set a low number if builds start OOMing again
           cargo test --all-features
+      # Ensure there are no uncommitted changes in the repo after running tests
+      - run: scripts/changed-files.sh
 
   clippy:
     needs: diff
