@@ -439,23 +439,18 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         // Naively now just broadcast the request to all the primaries
         let bytes = bincode::serialize(&message).expect("Failed to serialize request");
 
-        let primaries_addresses = self.committee.others_primaries(&self.name);
+        let (primaries_names, primaries_addresses) = self
+            .committee
+            .others_primaries(&self.name)
+            .into_iter()
+            .map(|(name, address)| (name, address.primary_to_primary))
+            .unzip();
 
         self.network
-            .broadcast(
-                primaries_addresses
-                    .clone()
-                    .into_iter()
-                    .map(|(_, address)| address.primary_to_primary)
-                    .collect(),
-                Bytes::from(bytes),
-            )
+            .broadcast(primaries_addresses, Bytes::from(bytes))
             .await;
 
-        primaries_addresses
-            .into_iter()
-            .map(|(name, _)| name)
-            .collect()
+        primaries_names
     }
 
     async fn handle_synchronize_block_payloads<'a>(
