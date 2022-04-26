@@ -2,7 +2,7 @@ name: Explorer Client PR checks
 on: pull_request
 jobs:
   diff:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-latest]
     outputs:
       isClient: ${{ steps.diff.outputs.isExplorerClient }}
     steps:
@@ -14,7 +14,7 @@ jobs:
     name: Lint, Test & Build
     needs: diff
     if: needs.diff.outputs.isClient == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -24,9 +24,13 @@ jobs:
           node-version: '16'
           cache: 'yarn'
           cache-dependency-path: ./explorer/client/yarn.lock
+      - run: yarn cache dir && du -sh $(yarn cache dir)
       - name: Install yarn dependencies
         working-directory: ./explorer/client
-        run: yarn install 
+        run: env DEBUG="puppeteer:*" yarn install
+      # - run: sudo apt-get update && sudo apt-get install -y libcairo2  libpango-1.0-0 libxkbcommon-x11-0  libgbm-dev libatk-bridge2.0-0 libcups2 libnss3 libxcomposite-dev libxdamage1 libxfixes-dev libxrandr2
+      - run: sudo apt-get update && sudo apt-get install -y build-essential
+      # - run: ls -la ./explorer/client/node_modules/puppeteer/.local-chromium/linux-970485/ && ldd ./explorer/client/node_modules/puppeteer/.local-chromium/linux-970485/chrome-linux/chrome | grep "not"
       - name: Lint
         working-directory: ./explorer/client
         run: yarn lint
