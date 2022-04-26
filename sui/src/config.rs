@@ -55,6 +55,15 @@ pub struct AuthorityPrivateInfo {
     pub consensus_address: SocketAddr,
 }
 
+fn socket_addr_from_hostport(host: &str, port: u16) -> SocketAddr {
+    let mut addresses = format!("{host}:{port}")
+        .to_socket_addrs()
+        .expect("Cannot parse {host} and {port} into socket address");
+    addresses
+        .next()
+        .expect("Hostname/IP resolution failed for {host}")
+}
+
 // Custom deserializer with optional default fields
 impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -103,7 +112,7 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
                 .map_err(serde::de::Error::custom)?
                 .next_port()
                 .ok_or_else(|| serde::de::Error::custom("No available port."))?;
-            format!("127.0.0.1:{port}").to_socket_addrs().unwrap()
+            socket_addr_from_hostport("127.0.0.1", port)
         };
 
         Ok(AuthorityPrivateInfo {
@@ -176,23 +185,15 @@ impl NetworkConfig {
                 .map(|x| {
                     let name = x.key_pair.make_narwhal_keypair().name;
                     let primary = PrimaryAddresses {
-                        primary_to_primary: format!("{}:{}", x.host, x.port + 100)
-                            .to_socket_addrs()
-                            .unwrap(),
-                        worker_to_primary: format!("{}:{}", x.host, x.port + 200)
-                            .to_socket_addrs()
-                            .unwrap(),
+                        primary_to_primary: socket_addr_from_hostport(&x.host, x.port + 100),
+                        worker_to_primary: socket_addr_from_hostport(&x.host, x.port + 200),
                     };
                     let workers = [(
                         /* worker_id */ 0,
                         WorkerAddresses {
-                            primary_to_worker: format!("{}:{}", x.host, x.port + 300)
-                                .to_socket_addrs()
-                                .unwrap(),
+                            primary_to_worker: socket_addr_from_hostport(&x.host, x.port + 300),
                             transactions: x.consensus_address,
-                            worker_to_worker: format!("{}:{}", x.host, x.port + 400)
-                                .to_socket_addrs()
-                                .unwrap(),
+                            worker_to_worker: socket_addr_from_hostport(&x.host, x.port + 400),
                         },
                     )]
                     .iter()
@@ -396,23 +397,15 @@ pub fn make_default_narwhal_committee(
                 let name = x.key_pair.make_narwhal_keypair().name;
 
                 let primary = PrimaryAddresses {
-                    primary_to_primary: format!("127.0.0.1:{}", ports[i][0])
-                        .to_socket_addrs()
-                        .unwrap(),
-                    worker_to_primary: format!("127.0.0.1:{}", ports[i][1])
-                        .to_socket_addrs()
-                        .unwrap(),
+                    primary_to_primary: socket_addr_from_hostport("127.0.0.1", ports[i][0]),
+                    worker_to_primary: socket_addr_from_hostport("127.0.0.1", ports[i][1]),
                 };
                 let workers = [(
                     /* worker_id */ 0,
                     WorkerAddresses {
-                        primary_to_worker: format!("127.0.0.1:{}", ports[i][2])
-                            .to_socket_addrs()
-                            .unwrap(),
+                        primary_to_worker: socket_addr_from_hostport("127.0.0.1", ports[i][2]),
                         transactions: x.consensus_address,
-                        worker_to_worker: format!("127.0.0.1:{}", ports[i][3])
-                            .to_socket_addrs()
-                            .unwrap(),
+                        worker_to_worker: socket_addr_from_hostport("127.0.0.1", ports[i][3]),
                     },
                 )]
                 .iter()
