@@ -97,7 +97,7 @@ struct SyncConnection {
     /// Receive the batches to download from the worker.
     rx_request: Receiver<Vec<BatchDigest>>,
     /// Keep a set of requests already made to avoid asking twice for the same batch.
-    already_requested: HashSet<BatchDigest>,
+    to_request: HashSet<BatchDigest>,
 }
 
 impl SyncConnection {
@@ -112,7 +112,7 @@ impl SyncConnection {
                 address,
                 store,
                 rx_request,
-                already_requested: HashSet::new(),
+                to_request: HashSet::new(),
             }
             .run()
             .await;
@@ -129,15 +129,13 @@ impl SyncConnection {
 
         while let Some(digests) = self.rx_request.recv().await {
             // Filter digests that we already requested.
-            let mut missing = Vec::new();
             for digest in digests {
-                if !self.already_requested.contains(&digest) {
-                    missing.push(digest);
-                }
+                self.to_request.insert(digest);
             }
 
+            let missing = self.to_request.iter().copied().collect();
             // Request the batch from the worker.
-            let message = ClientBatchRequest(missing.clone());
+            let message = ClientBatchRequest(missing);
             //TODO wrap this call in the retry
             let mut stream = match client
                 .client_batch_request(BincodeEncodedPayload::try_from(&message).unwrap())
@@ -153,10 +151,6 @@ impl SyncConnection {
                 }
             };
 
-            for digest in missing {
-                self.already_requested.insert(digest);
-            }
-
             // Receive the batch data from the worker.
             while let Some(result) = stream.next().await {
                 match result {
@@ -169,7 +163,7 @@ impl SyncConnection {
                         self.store.write(digest, batch.to_vec()).await;
 
                         // Cleanup internal state.
-                        self.already_requested.remove(&digest);
+                        self.to_request.remove(&digest);
                     }
                     Err(e) => {
                         warn!(

@@ -10,10 +10,8 @@ use bytes::Bytes;
 use config::{Committee, Parameters, WorkerId};
 use crypto::traits::VerifyingKey;
 use futures::{Stream, StreamExt};
-use network::{MessageHandler, Receiver, Writer};
 use primary::{PrimaryWorkerMessage, WorkerPrimaryMessage};
 use std::{
-    error::Error,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     pin::Pin,
 };
@@ -23,7 +21,8 @@ use tonic::{Request, Response, Status};
 use tracing::info;
 use types::{
     BatchDigest, BincodeEncodedPayload, ClientBatchRequest, Empty, PrimaryToWorker,
-    PrimaryToWorkerServer, Transaction, WorkerToWorker, WorkerToWorkerServer,
+    PrimaryToWorkerServer, Transaction, TransactionProto, Transactions, TransactionsServer,
+    WorkerToWorker, WorkerToWorkerServer,
 };
 
 #[cfg(test)]
@@ -149,10 +148,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             .expect("Our public key or worker id is not in the committee")
             .transactions;
         address.set_ip(INADDR_ANY);
-        Receiver::spawn(
-            address,
-            /* handler */ TxReceiverHandler { tx_batch_maker },
-        );
+        TxReceiverHandler { tx_batch_maker }.spawn(address);
 
         // The transactions are sent to the `BatchMaker` that assembles them into batches. It then broadcasts
         // (in a reliable manner) the batches to all other workers that share the same `id` as us. Finally, it
@@ -247,18 +243,45 @@ struct TxReceiverHandler {
     tx_batch_maker: Sender<Transaction>,
 }
 
+impl TxReceiverHandler {
+    fn spawn(self, address: SocketAddr) {
+        let service = tonic::transport::Server::builder()
+            .add_service(TransactionsServer::new(self))
+            .serve(address);
+        tokio::spawn(service);
+    }
+}
+
 #[async_trait]
-impl MessageHandler for TxReceiverHandler {
-    async fn dispatch(&self, _writer: &mut Writer, message: Bytes) -> Result<(), Box<dyn Error>> {
+impl Transactions for TxReceiverHandler {
+    async fn submit_transaction(
+        &self,
+        request: Request<TransactionProto>,
+    ) -> Result<Response<Empty>, Status> {
+        let message = request.into_inner().transaction;
         // Send the transaction to the batch maker.
         self.tx_batch_maker
             .send(message.to_vec())
             .await
             .expect("Failed to send transaction");
 
-        // Give the change to schedule other tasks.
-        tokio::task::yield_now().await;
-        Ok(())
+        Ok(Response::new(Empty {}))
+    }
+
+    async fn submit_transaction_stream(
+        &self,
+        request: tonic::Request<tonic::Streaming<types::TransactionProto>>,
+    ) -> Result<tonic::Response<types::Empty>, tonic::Status> {
+        let mut transactions = request.into_inner();
+
+        while let Some(Ok(txn)) = transactions.next().await {
+            // Send the transaction to the batch maker.
+            self.tx_batch_maker
+                .send(txn.transaction.to_vec())
+                .await
+                .expect("Failed to send transaction");
+        }
+        Ok(Response::new(Empty {}))
     }
 }
 

@@ -4,16 +4,16 @@
 use anyhow::{Context, Result};
 use bytes::{BufMut as _, BytesMut};
 use clap::{crate_name, crate_version, App, AppSettings};
-use futures::{future::join_all, sink::SinkExt as _};
+use futures::{future::join_all, StreamExt};
 use rand::Rng;
 use std::net::SocketAddr;
 use tokio::{
     net::TcpStream,
     time::{interval, sleep, Duration, Instant},
 };
-use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::{info, subscriber::set_global_default, warn};
 use tracing_subscriber::filter::EnvFilter;
+use types::{TransactionProto, TransactionsClient};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -108,16 +108,14 @@ impl Client {
         }
 
         // Connect to the mempool.
-        let stream = TcpStream::connect(self.target)
+        let mut client = TransactionsClient::connect(format!("http://{}", self.target))
             .await
             .context(format!("failed to connect to {}", self.target))?;
 
         // Submit all transactions.
         let burst = self.rate / PRECISION;
-        let mut tx = BytesMut::with_capacity(self.size);
         let mut counter = 0;
         let mut r = rand::thread_rng().gen();
-        let mut transport = Framed::new(stream, LengthDelimitedCodec::new());
         let interval = interval(Duration::from_millis(BURST_DURATION));
         tokio::pin!(interval);
 
@@ -128,7 +126,9 @@ impl Client {
             interval.as_mut().tick().await;
             let now = Instant::now();
 
-            for x in 0..burst {
+            let mut tx = BytesMut::with_capacity(self.size);
+            let size = self.size;
+            let stream = tokio_stream::iter(0..burst).map(move |x| {
                 if x == counter % burst {
                     // NOTE: This log entry is used to compute performance.
                     info!("Sending sample transaction {counter}");
@@ -141,13 +141,16 @@ impl Client {
                     tx.put_u64(r); // Ensures all clients send different txs.
                 };
 
-                tx.resize(self.size, 0u8);
+                tx.resize(size, 0u8);
                 let bytes = tx.split().freeze();
-                if let Err(e) = transport.send(bytes).await {
-                    warn!("Failed to send transaction: {e}");
-                    break 'main;
-                }
+                TransactionProto { transaction: bytes }
+            });
+
+            if let Err(e) = client.submit_transaction_stream(stream).await {
+                warn!("Failed to send transaction: {e}");
+                break 'main;
             }
+
             if now.elapsed().as_millis() > BURST_DURATION as u128 {
                 // NOTE: This log entry is used to compute performance.
                 warn!("Transaction rate too high for this client");

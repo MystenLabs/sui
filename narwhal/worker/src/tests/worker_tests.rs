@@ -5,7 +5,6 @@ use super::*;
 use blake2::digest::Update;
 use crypto::traits::KeyPair;
 use futures::StreamExt;
-use network::SimpleSender;
 use primary::WorkerPrimaryMessage;
 use std::time::Duration;
 use store::rocks;
@@ -13,7 +12,7 @@ use test_utils::{
     batch, committee_with_base_port, digest_batch, keys, serialize_batch_message, temp_dir,
     WorkerToPrimaryMockServer, WorkerToWorkerMockServer,
 };
-use types::WorkerToWorkerClient;
+use types::{TransactionsClient, WorkerToWorkerClient};
 
 #[tokio::test]
 async fn handle_clients_transactions() {
@@ -55,12 +54,18 @@ async fn handle_clients_transactions() {
         other_workers.push(WorkerToWorkerMockServer::spawn(address));
     }
 
+    // Wait till other services have been able to start up
+    tokio::task::yield_now().await;
     // Send enough transactions to create a batch.
-    let mut network = SimpleSender::new();
     let address = committee.worker(&name, &id).unwrap().transactions;
-
+    let mut client = TransactionsClient::connect(format!("http://{address}"))
+        .await
+        .unwrap();
     for tx in batch.0 {
-        network.send(address, Bytes::from(tx.clone())).await;
+        let txn = TransactionProto {
+            transaction: Bytes::from(tx.clone()),
+        };
+        client.submit_transaction(txn).await.unwrap();
     }
 
     // Ensure the primary received the batch's digest (ie. it did not panic).

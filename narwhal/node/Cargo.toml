@@ -17,6 +17,7 @@ rand = "0.7.3"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "808de09203d147b43d59114b8afd9e51cbcf5778" }
 thiserror = "1.0.30"
 tokio = { version = "1.17.0", features = ["full"] }
+tokio-stream = "0.1.8"
 tokio-util = { version = "0.7.1", features = ["codec"] }
 tracing = { version = "0.1.34", features = ["log"] }
 tracing-log = "0.1.3"
