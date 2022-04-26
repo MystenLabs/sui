@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     block_remover::DeleteBatchResult,
-    block_synchronizer::BlockSynchronizer,
+    // TODO[#175][#127]: re-plug the BlockSynchronizer
+    // block_synchronizer::BlockSynchronizer,
     block_waiter::{BatchMessage, BatchMessageError, BatchResult, BlockWaiter},
     certificate_waiter::CertificateWaiter,
     core::Core,
@@ -13,11 +14,18 @@ use crate::{
     payload_receiver::PayloadReceiver,
     proposer::Proposer,
     synchronizer::Synchronizer,
-    BlockRemover, DeleteBatchMessage,
+    BlockRemover,
+    DeleteBatchMessage,
 };
 use async_trait::async_trait;
 use bytes::Bytes;
-use config::{BlockSynchronizerParameters, Committee, Parameters, WorkerId};
+use config::{
+    // TODO[#175][#127]: re-plug the BlockSynchronizer
+    // BlockSynchronizerParameters,
+    Committee,
+    Parameters,
+    WorkerId,
+};
 use crypto::{
     traits::{EncodeDecodeBase64, Signer, VerifyingKey},
     SignatureService,
@@ -143,11 +151,13 @@ impl Primary {
         // to remove collections from Narwhal (e.x the remove_collections endpoint).
         let (_tx_block_removal_commands, rx_block_removal_commands) = channel(CHANNEL_CAPACITY);
         let (tx_batch_removal, rx_batch_removal) = channel(CHANNEL_CAPACITY);
+        /* TODO[#175][#175][#127]: re-plug the block synchronizer
         let (_tx_block_synchronizer_commands, rx_block_synchronizer_commands) =
             channel(CHANNEL_CAPACITY);
         let (_tx_certificate_responses, rx_certificate_responses) = channel(CHANNEL_CAPACITY);
         let (_tx_payload_availability_responses, rx_payload_availability_responses) =
             channel(CHANNEL_CAPACITY);
+        */
 
         // Write the parameters to the logs.
         parameters.tracing();
@@ -262,6 +272,7 @@ impl Primary {
 
         // Responsible for finding missing blocks (certificates) and fetching
         // them from the primary peers by synchronizing also their batches.
+        /* TODO[#175][#127]: re-plug the block synchronizer
         BlockSynchronizer::spawn(
             name.clone(),
             committee.clone(),
@@ -272,6 +283,7 @@ impl Primary {
             payload_store.clone(),
             BlockSynchronizerParameters::default(),
         );
+        */
 
         // Whenever the `Synchronizer` does not manage to validate a header due to missing parent certificates of
         // batch digests, it commands the `HeaderWaiter` to synchronize with other nodes, wait for their reply, and
