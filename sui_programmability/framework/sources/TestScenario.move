@@ -88,24 +88,12 @@ module Sui::TestScenario {
         let last_tx_start_index = last_tx_start_index(scenario);
         let old_total_events = last_tx_start_index;
 
-        // emit dummy Wrapped events for every removed object wrapped during the current tx.
-        // we know an object was wrapped if:
+        // Objects that were wrapped during the transaction need to be explicitly handled
+        // since there is no dedicated event for object wrapping.
+        // We know an object was wrapped if:
         // - it was removed and not returned
-        // - it does not appear in a transfer event
-        // - its ID does not appear in a delete id event
-        let transferred_ids = transferred_object_ids(last_tx_start_index);
-        let deleted_ids = deleted_object_ids(last_tx_start_index);
-        let i = 0;
-        let removed = &scenario.removed;
-        let num_removed = Vector::length(removed);
-        while (i < num_removed) {
-            let removed_id = ID::bytes(Vector::borrow(removed, i));
-            if (!Vector::contains(&transferred_ids, &removed_id) && !Vector::contains(&deleted_ids, &removed_id)) {
-                // removed_id was wrapped by this transaction. emit a wrapped event
-                emit_wrapped_object_event(removed_id)
-            };
-            i = i + 1
-        };
+        // - it does not appear in an event during the current transaction.
+        emit_wrapped_object_events(last_tx_start_index, &scenario.removed);
         // reset `removed` for the next tx
         scenario.removed = Vector::empty();
 
@@ -322,15 +310,8 @@ module Sui::TestScenario {
     /// Return the total number of events emitted by all txes in the current VM execution, including both user-defined events and system events
     native fun num_events(): u64;
 
-    /// Return the ID's of objects transferred since the `tx_begin_idx`th event in the global event log
-    /// Does not include objects that were transferred, then subsequently deleted
-    native fun transferred_object_ids(tx_begin_idx: u64): vector<vector<u8>>;
-
-    /// Return the ID's of objects deleted since the `tx_begin_idx`th event in the global event log
-    native fun deleted_object_ids(tx_begin_idx: u64): vector<vector<u8>>;
-
-    /// Emit a special, test-only event recording that `object_id` was wrapped
-    native fun emit_wrapped_object_event(object_id: vector<u8>);
+    /// Find out all objects that were wrapped during the transaction, and emit an event for each of them.
+    native fun emit_wrapped_object_events<ID>(tx_begin_idx: u64, removed: &vector<ID>);
 
     /// Update the content of an object in the inventory.
     native fun update_object<T: key>(obj: T);
