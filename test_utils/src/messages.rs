@@ -146,12 +146,12 @@ pub fn make_certificates(transactions: Vec<Transaction>) -> Vec<CertifiedTransac
     certificates
 }
 
-pub fn parse_package_id(effects: TransactionEffects) -> Option<ObjectRef> {
-    for (reference, owner) in effects.created {
-        match owner {
-            Owner::Immutable => return Some(reference),
-            _ => continue,
-        }
-    }
-    None
+/// Extract the package reference from a transaction effect. This is useful to deduce the
+/// authority-created package reference after attempting to publish a new Move package.
+pub fn parse_package_ref(effects: &TransactionEffects) -> Option<ObjectRef> {
+    effects
+        .created
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::Immutable))
+        .map(|(reference, _)| *reference)
 }

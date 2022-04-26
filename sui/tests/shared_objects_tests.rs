@@ -7,11 +7,13 @@ use sui_types::error::SuiError;
 use sui_types::messages::CallArg;
 use sui_types::messages::TransactionInfoResponse;
 use sui_types::messages::{ConsensusTransaction, ExecutionStatus};
-use sui_types::serialize::{deserialize_message, serialize_consensus_transaction};
+use sui_types::serialize::{
+    deserialize_message, deserialize_transaction_info, serialize_consensus_transaction,
+};
 use sui_types::serialize::{serialize_cert, SerializedMessage};
 use test_utils::authority::{spawn_test_authorities, test_authority_configs};
 use test_utils::messages::{make_certificates, move_transaction, publish_move_package_transaction};
-use test_utils::messages::{parse_package_id, test_shared_object_transactions};
+use test_utils::messages::{parse_package_ref, test_shared_object_transactions};
 use test_utils::objects::{test_gas_objects, test_shared_object};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
@@ -48,8 +50,8 @@ async fn submit_until_processing(
                 }
                 SerializedMessage::Error(error) => match *error {
                     SuiError::ConsensusConnectionBroken(_) => {
-                        // This is the (confusing) error message returned by the consensus adapter
-                        // timed out and didn't hear back from consensus.
+                        // This is the (confusing) error message returned by the consensus
+                        // adapter timed out and didn't hear back from consensus.
                     }
                     error => panic!("{error}"),
                 },
@@ -90,59 +92,60 @@ async fn call_shared_object_contract() {
     // the handles (or the authorities will stop).
     let configs = test_authority_configs();
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
+    tokio::task::yield_now().await;
 
-    // Publish the move package to all authorities.
+    // Publish the move package to all authorities and get the new pacakge ref.
     let transaction = publish_move_package_transaction(gas_objects.pop().unwrap());
     let certificate = make_certificates(vec![transaction]).pop().unwrap();
     let serialized = Bytes::from(serialize_cert(&certificate));
 
-    tokio::task::yield_now().await;
-    let mut package_ref = None;
+    let mut package_refs = Vec::new();
     for config in &configs {
-        match submit_transaction(serialized.clone(), config).await {
-            SerializedMessage::TransactionResp(reply) => {
-                let effects = reply.signed_effects.unwrap().effects;
-                if package_ref.is_none() {
-                    package_ref = parse_package_id(effects);
-                }
-            }
-            message => panic!("Unexpected protocol message {message:?}"),
-        }
+        let bytes = submit_transaction(serialized.clone(), config).await;
+        let reply = deserialize_transaction_info(bytes).unwrap();
+        let effects = reply.signed_effects.unwrap().effects;
+        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+        package_refs.push(parse_package_ref(&effects).unwrap());
     }
+    let package_ref = package_refs.pop().unwrap();
 
     // Make a transaction to create a counter.
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "Counter",
         "create",
-        package_ref.unwrap(),
+        package_ref,
         /* arguments */ Vec::default(),
     );
     let certificate = make_certificates(vec![transaction]).pop().unwrap();
-    let message = ConsensusTransaction::UserTransaction(certificate);
-    let serialized = Bytes::from(serialize_consensus_transaction(&message));
+    let serialized = Bytes::from(serialize_cert(&certificate));
 
-    let reply = submit_until_processing(serialized, &configs).await;
-    let effects = reply.signed_effects.unwrap().effects;
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    println!("Counter: {:?}", effects.created[0]);
-    let ((counter_id, _, _), _) = effects.created[0];
+    let mut counter_ids = Vec::new();
+    for config in &configs {
+        let bytes = submit_transaction(serialized.clone(), config).await;
+        let reply = deserialize_transaction_info(bytes).unwrap();
+        let effects = reply.signed_effects.unwrap().effects;
+        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+        println!("Counter: {:?}\n", effects.created[0]);
+        let ((shared_object_id, _, _), _) = effects.created[0];
+        counter_ids.push(shared_object_id);
+    }
+    let counter_id = counter_ids.pop().unwrap();
 
     // Make a transaction to increment the counter.
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "Counter",
         "increment",
-        package_ref.unwrap(),
+        package_ref,
         vec![CallArg::SharedObject(counter_id)],
     );
     let certificate = make_certificates(vec![transaction]).pop().unwrap();
     let message = ConsensusTransaction::UserTransaction(certificate);
     let serialized = Bytes::from(serialize_consensus_transaction(&message));
 
-    // Submit the transaction.
     let reply = submit_until_processing(serialized, &configs).await;
     let effects = reply.signed_effects.unwrap().effects;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    println!("{effects:?}");
+    println!("{effects:?}\n");
 }

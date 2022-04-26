@@ -47,6 +47,7 @@ pub struct AuthorityInfo {
 
 #[derive(Serialize, Debug)]
 pub struct AuthorityPrivateInfo {
+    pub address: SuiAddress,
     pub key_pair: KeyPair,
     pub host: String,
     pub port: u16,
@@ -58,6 +59,7 @@ pub struct AuthorityPrivateInfo {
 impl Clone for AuthorityPrivateInfo {
     fn clone(&self) -> Self {
         Self {
+            address: self.address,
             key_pair: self.key_pair.copy(),
             host: self.host.clone(),
             port: self.port,
@@ -120,6 +122,7 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
         };
 
         Ok(AuthorityPrivateInfo {
+            address: SuiAddress::from(key_pair.public_key_bytes()),
             key_pair,
             host,
             port,

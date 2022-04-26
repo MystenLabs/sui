@@ -27,11 +27,12 @@ pub fn test_authority_store() -> AuthorityStore {
 pub fn test_authority_configs() -> Vec<AuthorityPrivateInfo> {
     test_keys()
         .into_iter()
-        .map(|(_, key)| {
+        .map(|(address, key)| {
             let authority_port = PORT_ALLOCATOR.lock().unwrap().next_port().unwrap();
             let consensus_port = PORT_ALLOCATOR.lock().unwrap().next_port().unwrap();
 
             AuthorityPrivateInfo {
+                address,
                 key_pair: key,
                 host: "127.0.0.1".to_string(),
                 port: authority_port,
