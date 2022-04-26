@@ -30,7 +30,7 @@ env:
 
 jobs:
   diff:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-latest]
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
     steps:
@@ -41,7 +41,7 @@ jobs:
 
   license-check:
     name: license-check
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
       - run: scripts/license_check.sh
@@ -49,7 +49,7 @@ jobs:
   test:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-latest]
     strategy:
       fail-fast: false
     steps:
@@ -69,7 +69,7 @@ jobs:
   clippy:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -87,7 +87,7 @@ jobs:
   rustfmt:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -103,7 +103,7 @@ jobs:
     name: cargo-deny (advisories, licenses, bans, ...)
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-latest]
     steps:
     - uses: actions/checkout@v3
     - uses: EmbarkStudios/cargo-deny-action@v1
@@ -111,7 +111,7 @@ jobs:
   cargo-udeps:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
