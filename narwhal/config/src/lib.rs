@@ -93,6 +93,32 @@ pub struct Parameters {
     /// The delay after which the workers seal a batch of transactions, even if `max_batch_size`
     /// is not reached. Denominated in ms.
     pub max_batch_delay: u64,
+    /// The parameters for the block synchronizer
+    pub block_synchronizer: BlockSynchronizerParameters,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct BlockSynchronizerParameters {
+    /// The timeout configuration when requesting certificates from peers.
+    /// Denominated in milliseconds.
+    pub certificates_synchronize_timeout_ms: u64,
+    /// Timeout when has requested the payload for a certificate and is
+    /// waiting to receive them. Denominated in milliseconds.
+    pub payload_synchronize_timeout_ms: u64,
+    /// The timeout configuration when for when we ask the other peers to
+    /// discover who has the payload available for the dictated certificates.
+    /// Denominated in milliseconds.
+    pub payload_availability_timeout_ms: u64,
+}
+
+impl Default for BlockSynchronizerParameters {
+    fn default() -> Self {
+        Self {
+            certificates_synchronize_timeout_ms: 2_000,
+            payload_synchronize_timeout_ms: 2_000,
+            payload_availability_timeout_ms: 2_000,
+        }
+    }
 }
 
 impl Default for Parameters {
@@ -105,6 +131,7 @@ impl Default for Parameters {
             sync_retry_nodes: 3,
             batch_size: 500_000,
             max_batch_delay: 100,
+            block_synchronizer: BlockSynchronizerParameters::default(),
         }
     }
 }
@@ -118,6 +145,18 @@ impl Parameters {
         info!("Sync retry nodes set to {} nodes", self.sync_retry_nodes);
         info!("Batch size set to {} B", self.batch_size);
         info!("Max batch delay set to {} ms", self.max_batch_delay);
+        info!(
+            "Synchronize certificates timeout set to {} ms",
+            self.block_synchronizer.certificates_synchronize_timeout_ms
+        );
+        info!(
+            "Payload (batches) availability timeout set to {} ms",
+            self.block_synchronizer.payload_availability_timeout_ms
+        );
+        info!(
+            "Synchronize payload (batches) timeout set to {} ms",
+            self.block_synchronizer.payload_synchronize_timeout_ms
+        );
     }
 }
 

@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use crate::{block_remover::BlockErrorType::Failed, PayloadToken, PrimaryWorkerMessage};
+use crate::{block_remover::BlockErrorType::Failed, utils, PayloadToken, PrimaryWorkerMessage};
 use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::{traits::VerifyingKey, Digest, Hash};
@@ -280,7 +280,7 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
                     }
                     Some(certificates) => {
                         let batches_by_worker =
-                            Self::map_batches_by_worker(certificates.as_slice());
+                            utils::map_certificate_batches_by_worker(certificates.as_slice());
                         // Clean up any possible pending result channel (e.x in case of a timeout channels are not cleaned up)
                         // So we ensure that we "unlock" the pending request and give the opportunity
                         // a request to re-execute if the downstream clean up operations fail.
@@ -471,7 +471,7 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
     ) -> Vec<(RequestKey, oneshot::Receiver<DeleteBatchResult>)> {
         // For each certificate, batch the requests by worker
         // and send the requests
-        let batches_by_worker = Self::map_batches_by_worker(certificates.as_slice());
+        let batches_by_worker = utils::map_certificate_batches_by_worker(certificates.as_slice());
 
         let mut receivers: Vec<(RequestKey, oneshot::Receiver<DeleteBatchResult>)> = Vec::new();
 
@@ -570,23 +570,5 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
             .collect();
 
         result
-    }
-
-    // a helper method that collects all the batches from each certificate and maps
-    // them by the worker id.
-    fn map_batches_by_worker(
-        certificates: &[Certificate<PublicKey>],
-    ) -> HashMap<WorkerId, Vec<BatchDigest>> {
-        let mut batches_by_worker: HashMap<WorkerId, Vec<BatchDigest>> = HashMap::new();
-        for certificate in certificates.iter() {
-            for (batch_id, worker_id) in &certificate.header.payload {
-                batches_by_worker
-                    .entry(*worker_id)
-                    .or_insert_with(Vec::new)
-                    .push(*batch_id);
-            }
-        }
-
-        batches_by_worker
     }
 }

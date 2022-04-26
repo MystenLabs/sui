@@ -55,46 +55,62 @@ pub fn committee() -> Committee<Ed25519PublicKey> {
             .map(|(i, kp)| {
                 let id = kp.public();
                 let primary = PrimaryAddresses {
-                    primary_to_primary: format!("127.0.0.1:{}", 100 + i).parse().unwrap(),
-                    worker_to_primary: format!("127.0.0.1:{}", 200 + i).parse().unwrap(),
+                    primary_to_primary: format!("127.0.0.1:{}", 100 + i * 10).parse().unwrap(),
+                    worker_to_primary: format!("127.0.0.1:{}", 200 + i * 10).parse().unwrap(),
                 };
                 let workers = vec![
                     (
                         0,
                         WorkerAddresses {
-                            primary_to_worker: format!("127.0.0.1:{}", 300 + i).parse().unwrap(),
-                            transactions: format!("127.0.0.1:{}", 400 + i).parse().unwrap(),
-                            worker_to_worker: format!("127.0.0.1:{}", 500 + i).parse().unwrap(),
+                            primary_to_worker: format!("127.0.0.1:{}", 300 + i * 10)
+                                .parse()
+                                .unwrap(),
+                            transactions: format!("127.0.0.1:{}", 400 + i * 10).parse().unwrap(),
+                            worker_to_worker: format!("127.0.0.1:{}", 500 + i * 10)
+                                .parse()
+                                .unwrap(),
                         },
                     ),
                     (
                         1,
                         WorkerAddresses {
-                            primary_to_worker: format!("127.0.0.1:{}", 300 + i + 1)
+                            primary_to_worker: format!("127.0.0.1:{}", 300 + i * 10 + 1)
                                 .parse()
                                 .unwrap(),
-                            transactions: format!("127.0.0.1:{}", 400 + i + 1).parse().unwrap(),
-                            worker_to_worker: format!("127.0.0.1:{}", 500 + i + 1).parse().unwrap(),
+                            transactions: format!("127.0.0.1:{}", 400 + i * 10 + 1)
+                                .parse()
+                                .unwrap(),
+                            worker_to_worker: format!("127.0.0.1:{}", 500 + i * 10 + 1)
+                                .parse()
+                                .unwrap(),
                         },
                     ),
                     (
                         2,
                         WorkerAddresses {
-                            primary_to_worker: format!("127.0.0.1:{}", 300 + i + 2)
+                            primary_to_worker: format!("127.0.0.1:{}", 300 + i * 10 + 2)
                                 .parse()
                                 .unwrap(),
-                            transactions: format!("127.0.0.1:{}", 400 + i + 2).parse().unwrap(),
-                            worker_to_worker: format!("127.0.0.1:{}", 500 + i + 2).parse().unwrap(),
+                            transactions: format!("127.0.0.1:{}", 400 + i * 10 + 2)
+                                .parse()
+                                .unwrap(),
+                            worker_to_worker: format!("127.0.0.1:{}", 500 + i * 10 + 2)
+                                .parse()
+                                .unwrap(),
                         },
                     ),
                     (
                         3,
                         WorkerAddresses {
-                            primary_to_worker: format!("127.0.0.1:{}", 300 + i + 3)
+                            primary_to_worker: format!("127.0.0.1:{}", 300 + i * 10 + 3)
                                 .parse()
                                 .unwrap(),
-                            transactions: format!("127.0.0.1:{}", 400 + i + 3).parse().unwrap(),
-                            worker_to_worker: format!("127.0.0.1:{}", 500 + i + 3).parse().unwrap(),
+                            transactions: format!("127.0.0.1:{}", 400 + i * 10 + 3)
+                                .parse()
+                                .unwrap(),
+                            worker_to_worker: format!("127.0.0.1:{}", 500 + i * 10 + 3)
+                                .parse()
+                                .unwrap(),
                         },
                     ),
                 ]

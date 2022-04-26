@@ -1,6 +1,5 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use config::WorkerId;
 use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair, Hash};
 use store::{reopen, rocks, rocks::DBMap, Store};

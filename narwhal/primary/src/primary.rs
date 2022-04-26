@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     block_remover::DeleteBatchResult,
+    block_synchronizer::BlockSynchronizer,
     block_waiter::{BatchMessage, BatchMessageError, BatchResult, BlockWaiter},
     certificate_waiter::CertificateWaiter,
     core::Core,
@@ -48,6 +49,23 @@ pub enum PrimaryMessage<PublicKey: VerifyingKey> {
     Vote(Vote<PublicKey>),
     Certificate(Certificate<PublicKey>),
     CertificatesRequest(Vec<CertificateDigest>, /* requestor */ PublicKey),
+
+    CertificatesBatchRequest {
+        certificate_ids: Vec<CertificateDigest>,
+        requestor: PublicKey,
+    },
+    CertificatesBatchResponse {
+        certificates: Vec<(CertificateDigest, Option<Certificate<PublicKey>>)>,
+    },
+
+    PayloadAvailabilityRequest {
+        certificate_ids: Vec<CertificateDigest>,
+        requestor: PublicKey,
+    },
+
+    PayloadAvailabilityResponse {
+        payload_availability: Vec<(CertificateDigest, bool)>,
+    },
 }
 
 /// The messages sent by the primary to its workers.
@@ -125,6 +143,11 @@ impl Primary {
         // to remove collections from Narwhal (e.x the remove_collections endpoint).
         let (_tx_block_removal_commands, rx_block_removal_commands) = channel(CHANNEL_CAPACITY);
         let (tx_batch_removal, rx_batch_removal) = channel(CHANNEL_CAPACITY);
+        let (_tx_block_synchronizer_commands, rx_block_synchronizer_commands) =
+            channel(CHANNEL_CAPACITY);
+        let (_tx_certificate_responses, rx_certificate_responses) = channel(CHANNEL_CAPACITY);
+        let (_tx_payload_availability_responses, rx_payload_availability_responses) =
+            channel(CHANNEL_CAPACITY);
 
         // Write the parameters to the logs.
         parameters.tracing();
@@ -235,6 +258,19 @@ impl Primary {
             SimpleSender::new(),
             rx_block_removal_commands,
             rx_batch_removal,
+        );
+
+        // Responsible for finding missing blocks (certificates) and fetching
+        // them from the primary peers by synchronizing also their batches.
+        BlockSynchronizer::spawn(
+            name.clone(),
+            committee.clone(),
+            rx_block_synchronizer_commands,
+            rx_certificate_responses,
+            rx_payload_availability_responses,
+            SimpleSender::new(),
+            payload_store.clone(),
+            parameters.block_synchronizer,
         );
 
         // Whenever the `Synchronizer` does not manage to validate a header due to missing parent certificates of

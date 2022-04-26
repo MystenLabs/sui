@@ -18,7 +18,7 @@ use std::{
 };
 use store::Store;
 use tokio::{
-    sync::{mpsc::Receiver, oneshot, oneshot::error::RecvError},
+    sync::{mpsc::Receiver, oneshot},
     time::timeout,
 };
 use tracing::{error, log::debug};
@@ -513,12 +513,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
         ids: Vec<CertificateDigest>,
         get_block_receivers: Vec<oneshot::Receiver<BlockResult<GetBlockResponse>>>,
     ) -> BlocksResult {
-        let receivers: Vec<_> = get_block_receivers
-            .into_iter()
-            .map(|r| Self::wait_to_receive(r))
-            .collect();
-
-        let result = try_join_all(receivers).await;
+        let result = try_join_all(get_block_receivers).await;
 
         if result.is_err() {
             Err(BlocksError {
@@ -530,12 +525,6 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
                 blocks: result.unwrap(),
             })
         }
-    }
-
-    async fn wait_to_receive(
-        receiver: oneshot::Receiver<BlockResult<GetBlockResponse>>,
-    ) -> Result<BlockResult<GetBlockResponse>, RecvError> {
-        receiver.await
     }
 
     async fn handle_batch_waiting_result(&mut self, result: BlockResult<GetBlockResponse>) {

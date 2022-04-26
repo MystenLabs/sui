@@ -38,7 +38,7 @@ async fn test_successfully_retrieve_block() {
     let (_, certificate_store, _) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(13000);
+    let (name, committee) = resolve_name_and_committee(12000);
 
     // AND store certificate
     let header = fixture_header_with_payload(2);
@@ -132,7 +132,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let (_, certificate_store, _) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(13001);
+    let (name, committee) = resolve_name_and_committee(14001);
 
     let key = keys().pop().unwrap();
     let mut block_ids = Vec::new();

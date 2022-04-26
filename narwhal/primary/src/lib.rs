@@ -10,6 +10,7 @@
 
 mod aggregators;
 mod block_remover;
+mod block_synchronizer;
 mod block_waiter;
 mod certificate_waiter;
 mod core;
@@ -20,6 +21,7 @@ mod payload_receiver;
 mod primary;
 mod proposer;
 mod synchronizer;
+mod utils;
 
 #[cfg(test)]
 #[path = "tests/common.rs"]
