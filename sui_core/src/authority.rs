@@ -330,13 +330,13 @@ impl AuthorityState {
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
-        let shared_object: Vec<_> = objects_by_kind
+        let shared_objects: Vec<_> = objects_by_kind
             .iter()
             .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)))
             .map(|(_, obj)| obj.compute_object_reference())
             .sorted()
             .collect();
-        if !shared_object.is_empty() {
+        if !shared_objects.is_empty() {
             // If the transaction contains shared objects, we need to ensure they have been scheduled
             // for processing by the consensus protocol.
             self.check_shared_locks(&transaction_digest, &objects_by_kind)
@@ -359,7 +359,7 @@ impl AuthorityState {
             transaction_digest,
         );
         let effects = execution_engine::execute_transaction_to_effects(
-            shared_object,
+            shared_objects,
             &mut temporary_store,
             transaction.clone(),
             transaction_digest,
