@@ -1,5 +1,5 @@
 [package]
-name = "open-rpc"
+name = "sui-open-rpc"
 version = "0.1.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
@@ -9,7 +9,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-open-rpc-macros = { path = "macros" }
+sui-open-rpc-macros = { path = "macros" }
 sui-types = { path = "../../sui_types" }
 schemars = "0.8.8"
 serde = "1.0.136"

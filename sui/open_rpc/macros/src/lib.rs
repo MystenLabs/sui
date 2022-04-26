@@ -50,7 +50,7 @@ pub fn open_rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
             quote! {None;}
         };
         methods.push(quote! {
-            let mut inputs: Vec<open_rpc::ContentDescriptor> = Vec::new();
+            let mut inputs: Vec<sui_open_rpc::ContentDescriptor> = Vec::new();
             #(#inputs)*
             let result = #returns_ty
             builder.add_method(#name, inputs, result, #doc);
@@ -86,8 +86,8 @@ pub fn open_rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
         #trait_data
         pub struct #open_rpc_name;
         impl #open_rpc_name {
-            pub fn open_rpc() -> open_rpc::Project{
-                let mut builder = open_rpc::ProjectBuilder::new(#proj_name, #namespace);
+            pub fn open_rpc() -> sui_open_rpc::Project{
+                let mut builder = sui_open_rpc::ProjectBuilder::new(#proj_name, #namespace);
                 #license
                 #contact
                 #description

@@ -1,5 +1,5 @@
 [package]
-name = "open-rpc-macros"
+name = "sui-open-rpc-macros"
 version = "0.1.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
