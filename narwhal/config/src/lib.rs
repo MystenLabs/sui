@@ -160,7 +160,7 @@ impl Parameters {
     }
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct PrimaryAddresses {
     /// Address to receive messages from other primaries (WAN).
     pub primary_to_primary: SocketAddr,
@@ -168,7 +168,7 @@ pub struct PrimaryAddresses {
     pub worker_to_primary: SocketAddr,
 }
 
-#[derive(Clone, Deserialize, Eq, Hash, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, Eq, Hash, PartialEq)]
 pub struct WorkerAddresses {
     /// Address to receive client transactions (WAN).
     pub transactions: SocketAddr,
@@ -178,7 +178,7 @@ pub struct WorkerAddresses {
     pub primary_to_worker: SocketAddr,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Authority {
     /// The voting power of this authority.
     pub stake: Stake,
@@ -188,7 +188,7 @@ pub struct Authority {
     pub workers: HashMap<WorkerId, WorkerAddresses>,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(bound(deserialize = "PublicKey: DeserializeOwned"))]
 pub struct Committee<PublicKey: VerifyingKey> {
     pub authorities: BTreeMap<PublicKey, Authority>,
