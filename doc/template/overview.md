@@ -6,9 +6,9 @@ Use this template to introduce a new Sui technology, such as a service, product,
 
 Always make the tile of the page (above) active. Then modify, augment, and replace the sample text in this file as you see fit. It's merely a starting point.
 
-Explain the purpose of this page right here before the very first sub-heading.
+## Purpose
 
-Give our users a quick summary of the primary functions of the page's subject. Answer these questions:
+Explain the purpose of this page right here. Give our users a quick summary of the primary functions of the page's subject. Answer these questions:
 
 * What does the subject of this page do?
 * Why does it exist?
@@ -53,7 +53,7 @@ friendly neighborhood technical writer.
 
 ## Configuration
 
-* Where does this product run run?
+* Where does this product run?
 * How is it set up for use?
 * What configuration or implementation is required?
 
