@@ -10,7 +10,7 @@ use anyhow::Error;
 use base64ct::Encoding;
 use digest::Digest;
 use ed25519_dalek as dalek;
-use ed25519_dalek::{Keypair as DalekKeypair, PublicKey, Verifier};
+use ed25519_dalek::{Keypair as DalekKeypair, Verifier};
 use narwhal_crypto::ed25519::Ed25519KeyPair;
 use narwhal_crypto::ed25519::Ed25519PrivateKey;
 use narwhal_crypto::ed25519::Ed25519PublicKey;
@@ -146,13 +146,13 @@ impl AsRef<[u8]> for PublicKeyBytes {
     }
 }
 
-impl TryInto<PublicKey> for PublicKeyBytes {
+impl TryInto<dalek::PublicKey> for PublicKeyBytes {
     type Error = SuiError;
 
-    fn try_into(self) -> Result<PublicKey, Self::Error> {
+    fn try_into(self) -> Result<dalek::PublicKey, Self::Error> {
         // TODO(https://github.com/MystenLabs/sui/issues/101): Do better key validation
         // to ensure the bytes represent a point on the curve.
-        PublicKey::from_bytes(self.as_ref()).map_err(|_| SuiError::InvalidAuthenticator)
+        dalek::PublicKey::from_bytes(self.as_ref()).map_err(|_| SuiError::InvalidAuthenticator)
     }
 }
 
@@ -276,12 +276,11 @@ impl Signature {
 
         // is this a cryptographically correct public key?
         // TODO: perform stricter key validation, sp. small order points, see https://github.com/MystenLabs/sui/issues/101
-        let public_key =
-            ed25519_dalek::PublicKey::from_bytes(self.public_key_bytes()).map_err(|err| {
-                SuiError::InvalidSignature {
-                    error: err.to_string(),
-                }
-            })?;
+        let public_key = dalek::PublicKey::from_bytes(self.public_key_bytes()).map_err(|err| {
+            SuiError::InvalidSignature {
+                error: err.to_string(),
+            }
+        })?;
 
         // deserialize the signature
         let signature =
@@ -375,7 +374,7 @@ impl AuthoritySignature {
         T: Signable<Vec<u8>>,
     {
         // is this a cryptographically valid public Key?
-        let public_key: PublicKey = author.try_into()?;
+        let public_key: dalek::PublicKey = author.try_into()?;
 
         // access the signature
         let signature = self.0;
@@ -399,7 +398,7 @@ impl AuthoritySignature {
     pub fn verify_batch<T, I, K>(
         value: &T,
         votes: I,
-        key_cache: &HashMap<PublicKeyBytes, PublicKey>,
+        key_cache: &HashMap<PublicKeyBytes, dalek::PublicKey>,
     ) -> Result<(), SuiError>
     where
         T: Signable<Vec<u8>>,
@@ -501,7 +500,7 @@ where
     }
 }
 
-pub type PubKeyLookup = HashMap<PublicKeyBytes, PublicKey>;
+pub type PubKeyLookup = HashMap<PublicKeyBytes, dalek::PublicKey>;
 
 pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
     let mut digest = Sha3_256::default();
@@ -527,7 +526,10 @@ impl VerificationObligation {
         }
     }
 
-    pub fn lookup_public_key(&mut self, key_bytes: &PublicKeyBytes) -> Result<PublicKey, SuiError> {
+    pub fn lookup_public_key(
+        &mut self,
+        key_bytes: &PublicKeyBytes,
+    ) -> Result<dalek::PublicKey, SuiError> {
         match self.lookup.get(key_bytes) {
             Some(v) => Ok(*v),
             None => {
