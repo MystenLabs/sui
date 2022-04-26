@@ -60,6 +60,7 @@ pub async fn start_test_network(
             db_path: info.db_path.clone(),
             stake: info.stake,
             consensus_address: info.consensus_address,
+            address: SuiAddress::from(info.key_pair.public_key_bytes()),
         })
         .collect();
     genesis_config.authorities = authorities;

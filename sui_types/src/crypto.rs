@@ -5,6 +5,7 @@ use crate::committee::EpochId;
 use crate::error::{SuiError, SuiResult};
 use crate::readable_serde::encoding::Base64;
 use crate::readable_serde::Readable;
+use anyhow::anyhow;
 use anyhow::Error;
 use base64ct::Encoding;
 use digest::Digest;
@@ -21,6 +22,7 @@ use serde_with::Bytes;
 use sha3::Sha3_256;
 use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::str::FromStr;
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
 #[derive(Debug)]
@@ -88,6 +90,19 @@ impl<'de> Deserialize<'de> for KeyPair {
             .map_err(|err| serde::de::Error::custom(err.to_string()))?;
         let key = DalekKeypair::from_bytes(&value)
             .map_err(|err| serde::de::Error::custom(err.to_string()))?;
+        Ok(KeyPair {
+            key_pair: key,
+            public_key_cell: OnceCell::new(),
+        })
+    }
+}
+
+impl FromStr for KeyPair {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let value = base64ct::Base64::decode_vec(s).map_err(|e| anyhow!("{}", e.to_string()))?;
+        let key = dalek::Keypair::from_bytes(&value).map_err(|e| anyhow!("{}", e.to_string()))?;
         Ok(KeyPair {
             key_pair: key,
             public_key_cell: OnceCell::new(),
