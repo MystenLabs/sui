@@ -9,7 +9,5 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-sui-open-rpc-macros = { path = "macros" }
-sui-types = { path = "../../sui_types" }
 schemars = "0.8.8"
 serde = "1.0.136"
