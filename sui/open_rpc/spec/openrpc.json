@@ -986,6 +986,21 @@
           }
         }
       },
+      "MoveFieldLayout": {
+        "type": "object",
+        "required": [
+          "layout",
+          "name"
+        ],
+        "properties": {
+          "layout": {
+            "$ref": "#/components/schemas/MoveTypeLayout"
+          },
+          "name": {
+            "$ref": "#/components/schemas/Identifier"
+          }
+        }
+      },
       "MoveModulePublish": {
         "type": "object",
         "required": [
@@ -1039,6 +1054,106 @@
             }
           }
         }
+      },
+      "MoveStructLayout": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "Runtime"
+            ],
+            "properties": {
+              "Runtime": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/MoveTypeLayout"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "WithFields"
+            ],
+            "properties": {
+              "WithFields": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/MoveFieldLayout"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "WithTypes"
+            ],
+            "properties": {
+              "WithTypes": {
+                "type": "object",
+                "required": [
+                  "fields",
+                  "type_"
+                ],
+                "properties": {
+                  "fields": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/MoveFieldLayout"
+                    }
+                  },
+                  "type_": {
+                    "$ref": "#/components/schemas/StructTag"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "MoveTypeLayout": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "bool",
+              "u8",
+              "u64",
+              "u128",
+              "address",
+              "signer"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "vector"
+            ],
+            "properties": {
+              "vector": {
+                "$ref": "#/components/schemas/MoveTypeLayout"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "struct"
+            ],
+            "properties": {
+              "struct": {
+                "$ref": "#/components/schemas/MoveStructLayout"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "NamedObjectRef": {
         "type": "object",
@@ -1189,7 +1304,14 @@
                     "$ref": "#/components/schemas/Object"
                   },
                   {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/MoveStructLayout"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 ],
                 "maxItems": 3,

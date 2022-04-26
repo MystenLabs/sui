@@ -583,7 +583,7 @@ pub enum ObjectRead {
     Exists(
         ObjectRef,
         Object,
-        #[schemars(with = "String")] Option<MoveStructLayout>,
+        #[schemars(with = "Option<json_schema::MoveStructLayout>")] Option<MoveStructLayout>,
     ),
     Deleted(ObjectRef),
 }
