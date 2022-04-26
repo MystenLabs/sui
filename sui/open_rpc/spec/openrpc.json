@@ -689,10 +689,16 @@
         "description": "An transaction signed by a quorum of authorities\n\nNote: the signature set of this data structure is not necessarily unique in the system, i.e. there can be several valid certificates per transaction.\n\nAs a consequence, we check this struct does not implement Hash or Eq, see the note below.",
         "type": "object",
         "required": [
+          "epoch",
           "signatures",
           "transaction"
         ],
         "properties": {
+          "epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
           "signatures": {
             "type": "array",
             "items": {
@@ -1009,6 +1015,13 @@
           }
         }
       },
+      "MoveObjectType": {
+        "type": "string",
+        "enum": [
+          "moveObject",
+          "movePackage"
+        ]
+      },
       "MovePackage": {
         "type": "object",
         "required": [
@@ -1099,12 +1112,16 @@
         "type": "object",
         "required": [
           "object",
-          "objectRef"
+          "objectRef",
+          "objectType"
         ],
         "properties": {
           "object": true,
           "objectRef": {
             "$ref": "#/components/schemas/NamedObjectRef"
+          },
+          "objectType": {
+            "$ref": "#/components/schemas/MoveObjectType"
           }
         }
       },
