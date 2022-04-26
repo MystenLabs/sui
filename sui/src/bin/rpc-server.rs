@@ -78,9 +78,8 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     let mut module = RpcModule::new(());
-    module.register_method("rpc.discover", |_, _| {
-        Ok(RpcGatewayOpenRpc::open_rpc("Sui JSON-RPC", "sui"))
-    })?;
+    let open_rpc = RpcGatewayOpenRpc::open_rpc();
+    module.register_method("rpc.discover", move |_, _| Ok(open_rpc.clone()))?;
     module.merge(RpcGatewayImpl::new(&config_path)?.into_rpc())?;
 
     info!(

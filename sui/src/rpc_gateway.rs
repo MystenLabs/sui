@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Deref;
 use std::path::Path;
 
 use anyhow::anyhow;
@@ -15,7 +14,7 @@ use open_rpc_macros::open_rpc;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_with::base64::Base64;
+use serde_with::base64;
 use serde_with::serde_as;
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
@@ -28,6 +27,7 @@ use sui_types::object::ObjectRead;
 use tracing::debug;
 
 use sui_types::json_schema;
+use sui_types::json_schema::Base64;
 
 use crate::config::PersistedConfig;
 use crate::gateway_config::GatewayConfig;
@@ -36,17 +36,28 @@ use crate::rest_gateway::responses::{NamedObjectRef, ObjectResponse};
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub enum RpcCallArg {
-    Pure(Base64EncodedBytes),
+    Pure(json_schema::Base64),
     ImmOrOwnedObject(ObjectID),
     SharedObject(ObjectID),
 }
 
-#[open_rpc]
+#[open_rpc(
+    name = "Sui JSON-RPC",
+    namespace = "sui",
+    contact_name = "Mysten Labs",
+    contact_url = "https://mystenlabs.com",
+    contact_email = "build@mystenlabs.com",
+    license = "Apache-2.0",
+    license_url = "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE",
+    description = "Sui JSON-RPC API for interaction with the Sui network gateway."
+)]
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcGateway {
+    /// Return the object information for a specified object
     #[method(name = "getObjectTypedInfo")]
     async fn get_object_typed_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse>;
 
+    /// Create a transaction to transfer a Sui coin from one address to another.
     #[method(name = "transferCoin")]
     async fn transfer_coin(
         &self,
@@ -57,6 +68,7 @@ pub trait RpcGateway {
         recipient: SuiAddress,
     ) -> RpcResult<TransactionBytes>;
 
+    /// Execute a Move call transaction by calling the specified function in the module of a given package.
     #[method(name = "moveCall")]
     async fn move_call(
         &self,
@@ -72,11 +84,12 @@ pub trait RpcGateway {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
+    /// Publish Move module.
     #[method(name = "publish")]
     async fn publish(
         &self,
         sender: SuiAddress,
-        compiled_modules: Vec<Base64EncodedBytes>,
+        compiled_modules: Vec<Base64>,
         gas_object_id: ObjectID,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
@@ -101,15 +114,18 @@ pub trait RpcGateway {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
+    /// Execute the transaction using the transaction data, signature and public key.
     #[method(name = "executeTransaction")]
     async fn execute_transaction(
         &self,
         signed_transaction: SignedTransaction,
     ) -> RpcResult<TransactionResponse>;
 
+    /// Synchronize client state with validators.
     #[method(name = "syncAccountState")]
     async fn sync_account_state(&self, address: SuiAddress) -> RpcResult<()>;
 
+    /// Return the list of objects owned by an address.
     #[method(name = "getOwnedObjects")]
     async fn get_owned_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse>;
 
@@ -184,7 +200,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
     async fn publish(
         &self,
         sender: SuiAddress,
-        compiled_modules: Vec<Base64EncodedBytes>,
+        compiled_modules: Vec<Base64>,
         gas_object_id: ObjectID,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
@@ -379,13 +395,13 @@ impl RpcGatewayServer for RpcGatewayImpl {
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct SignedTransaction {
     #[schemars(with = "json_schema::Base64")]
-    #[serde_as(as = "Base64")]
+    #[serde_as(as = "base64::Base64")]
     pub tx_bytes: Vec<u8>,
     #[schemars(with = "json_schema::Base64")]
-    #[serde_as(as = "Base64")]
+    #[serde_as(as = "base64::Base64")]
     pub signature: Vec<u8>,
     #[schemars(with = "json_schema::Base64")]
-    #[serde_as(as = "Base64")]
+    #[serde_as(as = "base64::Base64")]
     pub pub_key: Vec<u8>,
 }
 
@@ -403,28 +419,12 @@ impl SignedTransaction {
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct TransactionBytes {
     #[schemars(with = "json_schema::Base64")]
-    #[serde_as(as = "Base64")]
+    #[serde_as(as = "base64::Base64")]
     pub tx_bytes: Vec<u8>,
 }
 
 impl TransactionBytes {
     pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
         TransactionData::from_signable_bytes(&self.tx_bytes)
-    }
-}
-
-#[serde_as]
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub struct Base64EncodedBytes(
-    #[schemars(with = "json_schema::Base64")]
-    #[serde_as(as = "serde_with::base64::Base64")]
-    pub Vec<u8>,
-);
-
-impl Deref for Base64EncodedBytes {
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
     }
 }

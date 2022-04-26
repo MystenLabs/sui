@@ -1,9 +1,15 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use crate::readable_serde::encoding;
+use crate::readable_serde::Readable;
 use schemars::gen::SchemaGenerator;
 use schemars::schema::Schema;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-
+use serde_with::serde_as;
+use std::ops::Deref;
 #[derive(Deserialize, Serialize)]
 pub struct StructTag;
 
@@ -41,8 +47,8 @@ impl JsonSchema for TypeTag {
             U128,
             Address,
             Signer,
-            Vector(#[schemars(with = "TypeTag")] Box<TypeTag>),
-            Struct(#[schemars(with = "StructTag")] StructTag),
+            Vector(Box<TypeTag>),
+            Struct(StructTag),
         }
         TypeTag::json_schema(gen)
     }
@@ -65,8 +71,29 @@ impl JsonSchema for Identifier {
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct AccountAddress(Hex);
 
-#[derive(Deserialize, Serialize, JsonSchema)]
-pub struct Base64(String);
+#[serde_as]
+#[derive(Deserialize, Serialize)]
+pub struct Base64(#[serde_as(as = "Readable<encoding::Base64, _>")] pub Vec<u8>);
+
+impl JsonSchema for Base64 {
+    fn schema_name() -> String {
+        "Base64".to_string()
+    }
+
+    fn json_schema(gen: &mut SchemaGenerator) -> Schema {
+        #[derive(Serialize, Deserialize, JsonSchema)]
+        struct Base64(String);
+        Base64::json_schema(gen)
+    }
+}
+
+impl Deref for Base64 {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct Hex(String);
