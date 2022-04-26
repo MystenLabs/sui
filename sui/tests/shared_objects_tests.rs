@@ -5,6 +5,7 @@ use futures::{sink::SinkExt, stream::StreamExt};
 use sui::config::AuthorityPrivateInfo;
 use sui_types::error::SuiError;
 use sui_types::messages::CallArg;
+use sui_types::messages::Transaction;
 use sui_types::messages::TransactionInfoResponse;
 use sui_types::messages::{ConsensusTransaction, ExecutionStatus};
 use sui_types::serialize::{
@@ -19,11 +20,8 @@ use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tokio_util::codec::LengthDelimitedCodec;
 
-/// Submits a transaction to a Sui authority.
-async fn submit_transaction(
-    transaction: Bytes,
-    config: &AuthorityPrivateInfo,
-) -> SerializedMessage {
+/// Send bytes to a Sui authority.
+async fn transmit(transaction: Bytes, config: &AuthorityPrivateInfo) -> SerializedMessage {
     let authority_address = format!("{}:{}", config.host, config.port);
     let stream = TcpStream::connect(authority_address).await.unwrap();
     let mut connection = Framed::new(stream, LengthDelimitedCodec::new());
@@ -33,17 +31,38 @@ async fn submit_transaction(
     deserialize_message(&bytes[..]).unwrap()
 }
 
+/// Submit a certificate containing only owned-objects to all authorities.
+async fn submit_single_owner_transaction(
+    transaction: Transaction,
+    configs: &[AuthorityPrivateInfo],
+) -> Vec<TransactionInfoResponse> {
+    let certificate = make_certificates(vec![transaction]).pop().unwrap();
+    let serialized = Bytes::from(serialize_cert(&certificate));
+
+    let mut responses = Vec::new();
+    for config in configs {
+        let bytes = transmit(serialized.clone(), config).await;
+        let reply = deserialize_transaction_info(bytes).unwrap();
+        responses.push(reply);
+    }
+    responses
+}
+
 // Keep submitting the certificate until it is sequenced by consensus. We use the loop
 // since some consensus protocols (like Tusk) are not guaranteed to include the transaction
 // (but it has high probability to do so).
 // NOTE: This is good for testing but is not how a real client should submit transactions.
-async fn submit_until_processing(
-    serialized: Bytes,
+async fn submit_shared_object_transaction(
+    transaction: Transaction,
     configs: &[AuthorityPrivateInfo],
 ) -> TransactionInfoResponse {
+    let certificate = make_certificates(vec![transaction]).pop().unwrap();
+    let message = ConsensusTransaction::UserTransaction(certificate);
+    let serialized = Bytes::from(serialize_consensus_transaction(&message));
+
     'main: loop {
         for config in configs {
-            match submit_transaction(serialized.clone(), config).await {
+            match transmit(serialized.clone(), config).await {
                 SerializedMessage::TransactionResp(reply) => {
                     // We got a reply from the Sui authority.
                     break 'main *reply;
@@ -72,15 +91,12 @@ async fn shared_object_transaction() {
     let _handles = spawn_test_authorities(objects, &configs).await;
 
     // Make a test shared object certificate.
-    let transactions = test_shared_object_transactions();
-    let certificate = make_certificates(transactions).pop().unwrap();
-    let message = ConsensusTransaction::UserTransaction(certificate);
-    let serialized = Bytes::from(serialize_consensus_transaction(&message));
+    let transaction = test_shared_object_transactions().pop().unwrap();
 
     // Submit the transaction. Note that this transaction is random and we do not expect
     // it to be successfully executed by the Move execution engine.
     tokio::task::yield_now().await;
-    let reply = submit_until_processing(serialized, &configs).await;
+    let reply = submit_shared_object_transaction(transaction, &configs).await;
     assert!(reply.signed_effects.is_some());
 }
 
@@ -94,15 +110,11 @@ async fn call_shared_object_contract() {
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
 
     // Publish the move package to all authorities and get the new pacakge ref.
-    let transaction = publish_move_package_transaction(gas_objects.pop().unwrap());
-    let certificate = make_certificates(vec![transaction]).pop().unwrap();
-    let serialized = Bytes::from(serialize_cert(&certificate));
-
     tokio::task::yield_now().await;
+    let transaction = publish_move_package_transaction(gas_objects.pop().unwrap());
+    let replies = submit_single_owner_transaction(transaction, &configs).await;
     let mut package_refs = Vec::new();
-    for config in &configs {
-        let bytes = submit_transaction(serialized.clone(), config).await;
-        let reply = deserialize_transaction_info(bytes).unwrap();
+    for reply in replies {
         let effects = reply.signed_effects.unwrap().effects;
         assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
         package_refs.push(parse_package_ref(&effects).unwrap());
@@ -110,6 +122,7 @@ async fn call_shared_object_contract() {
     let package_ref = package_refs.pop().unwrap();
 
     // Make a transaction to create a counter.
+    tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "Counter",
@@ -117,14 +130,9 @@ async fn call_shared_object_contract() {
         package_ref,
         /* arguments */ Vec::default(),
     );
-    let certificate = make_certificates(vec![transaction]).pop().unwrap();
-    let serialized = Bytes::from(serialize_cert(&certificate));
-
-    tokio::task::yield_now().await;
+    let replies = submit_single_owner_transaction(transaction, &configs).await;
     let mut counter_ids = Vec::new();
-    for config in &configs {
-        let bytes = submit_transaction(serialized.clone(), config).await;
-        let reply = deserialize_transaction_info(bytes).unwrap();
+    for reply in replies {
         let effects = reply.signed_effects.unwrap().effects;
         assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
         let ((shared_object_id, _, _), _) = effects.created[0];
@@ -132,7 +140,24 @@ async fn call_shared_object_contract() {
     }
     let counter_id = counter_ids.pop().unwrap();
 
+    // Ensure the value of the counter is `0`.
+    tokio::task::yield_now().await;
+    let transaction = move_transaction(
+        gas_objects.pop().unwrap(),
+        "Counter",
+        "assert_value",
+        package_ref,
+        vec![
+            CallArg::SharedObject(counter_id),
+            CallArg::Pure(0u64.to_le_bytes().to_vec()),
+        ],
+    );
+    let reply = submit_shared_object_transaction(transaction, &configs).await;
+    let effects = reply.signed_effects.unwrap().effects;
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+
     // Make a transaction to increment the counter.
+    tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "Counter",
@@ -140,16 +165,12 @@ async fn call_shared_object_contract() {
         package_ref,
         vec![CallArg::SharedObject(counter_id)],
     );
-    let certificate = make_certificates(vec![transaction]).pop().unwrap();
-    let message = ConsensusTransaction::UserTransaction(certificate);
-    let serialized = Bytes::from(serialize_consensus_transaction(&message));
-
-    tokio::task::yield_now().await;
-    let reply = submit_until_processing(serialized, &configs).await;
+    let reply = submit_shared_object_transaction(transaction, &configs).await;
     let effects = reply.signed_effects.unwrap().effects;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
     // Ensure the value of the counter is `1`.
+    tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "Counter",
@@ -160,12 +181,7 @@ async fn call_shared_object_contract() {
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
-    let certificate = make_certificates(vec![transaction]).pop().unwrap();
-    let message = ConsensusTransaction::UserTransaction(certificate);
-    let serialized = Bytes::from(serialize_consensus_transaction(&message));
-
-    tokio::task::yield_now().await;
-    let reply = submit_until_processing(serialized, &configs).await;
+    let reply = submit_shared_object_transaction(transaction, &configs).await;
     let effects = reply.signed_effects.unwrap().effects;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 }
