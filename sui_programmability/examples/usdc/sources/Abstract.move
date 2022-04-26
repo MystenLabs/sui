@@ -51,10 +51,37 @@ module USDC::Abstract {
         owner: address,
     }
 
+    /// Create an empty balance. Open to everyone as the procedure is equal
+    /// to issuing new coin/balance. OwnedBalance gets its owner field from
+    /// the transaction sender.
+    public(script) fun create_balance<T>(ctx: &mut TxContext) {
+        let sender = TxContext::sender(ctx);
+
+        Transfer::transfer(OwnedBalance<T> {
+            id: TxContext::new_id(ctx),
+            balance: Balance::empty(),
+            owner: sender
+        }, sender);
+    }
+
+    /// Allows merging two balances together if they're owned by the same
+    /// account.
+    /// TODO: possibly rename to `join_balances`.
+    public fun join<T>(
+        b1: &mut OwnedBalance<T>,
+        b2: OwnedBalance<T>,
+    ) {
+        assert!(b1.owner == b2.owner, 5); // EOWNER_MISMATCH
+
+        let OwnedBalance { id, balance, owner: _ } = b2;
+        Balance::join(&mut b1.balance, balance);
+        ID::delete(id);
+    }
+
     /// Create a new regulated currency. To do so, first create a new
     /// currency through Coin module, and then share an object representing
     /// a regulated currency's Registry.
-    public fun create_currency<T: drop>(
+    public(script) fun create_currency<T: drop>(
         witness: T,
         ctx: &mut TxContext
     ) {
@@ -93,7 +120,7 @@ module USDC::Abstract {
     /// Fails if one of the following conditions is not met:
     /// - Tx sender doesn't own OwnedBalance
     /// - Either sender or receiver are banned in the Registry
-    public fun transfer<T>(
+    public(script) fun transfer<T>(
         registry: &Registry<T>,
         owned_balance: &mut OwnedBalance<T>,
         value: u64,
@@ -120,7 +147,7 @@ module USDC::Abstract {
     /// - Transfer object was stolen
     /// - OwnedBalance is not owned by tx sender
     /// - Either receiver or sender of the tx is banned in the Registry
-    public fun accept<T>(
+    public(script) fun accept<T>(
         registry: &Registry<T>,
         owned_balance: &mut OwnedBalance<T>,
         transfer: Transfer<T>,
@@ -138,6 +165,17 @@ module USDC::Abstract {
         ID::delete(id);
     }
 
+    /// Add an address to the list of banned addresses.
+    /// Only owner of the Registry is allowed to do that.
+    public(script) fun ban<T>(
+        registry: &mut Registry<T>,
+        account: address,
+        ctx: &mut TxContext
+    ) {
+        assert!(registry.owner == TxContext::sender(ctx), 5); // ENOT_ALLOWED
+        Vector::push_back(&mut registry.banned, account);
+    }
+
     /// This method allows building on top of the regulated coin by
     /// authorizing borrows with a witness (which can only be created in
     /// the custom coin module).
@@ -153,14 +191,73 @@ module USDC::Abstract {
 
 #[test_only]
 module USDC::AbstractTests {
-    use Sui::TestScenario::{Self, ctx};
-    use USDC::Abstract;
+    use Sui::TestScenario::{Self, Scenario, ctx, next_tx};
+    use USDC::Abstract::{Self, OwnedBalance, Transfer, Registry};
 
     struct USDC has drop {}
 
+    fun people(): (address, address, address) {
+        (@USDC, @0xADD1, @0xADD2)
+    }
+
     #[test]
-    fun test_abstract() {
-        let test = &mut TestScenario::begin(&@USDC);
+    #[expected_failure(abort_code = 3)]
+    public(script) fun test_balance_transfer_mismatch() {
+        let (admin, user1, _user2) = people();
+        let test = &mut TestScenario::begin(&admin);
+
+        init(test);
+        mint(test);
+
+        next_tx(test, &admin);
+        {
+            let registry = TestScenario::take_object<Registry<USDC>>(test);
+            let balance = TestScenario::take_object<OwnedBalance<USDC>>(test);
+
+            // Make a safe transfer to the user1
+            Abstract::transfer<USDC>(&registry, &mut balance, 666, user1, ctx(test));
+
+            TestScenario::return_object(test, registry);
+            TestScenario::return_object(test, balance);
+        };
+
+        next_tx(test, &user1);
+        {
+            let registry = TestScenario::take_object<Registry<USDC>>(test);
+            let balance = TestScenario::take_object<OwnedBalance<USDC>>(test);
+            let transfer = TestScenario::take_object<Transfer<USDC>>(test);
+
+            // BALANCE IS ACTUALLY ADMIN'S (USER1 HASN'T CREATED A BALANCE YET)
+            Abstract::accept<USDC>(&registry, &mut balance, transfer, ctx(test));
+
+            TestScenario::return_object(test, registry);
+            TestScenario::return_object(test, balance);
+        };
+    }
+
+    // Init currency, create admin balance
+    public(script) fun init(test: &mut Scenario) {
+        let (admin, _, _) = people();
+
+        next_tx(test, &admin);
+
         Abstract::create_currency(USDC {}, ctx(test));
+        Abstract::create_balance<USDC>(ctx(test));
+    }
+
+    // Mint some coin to the admin address
+    public(script) fun mint(test: &mut Scenario) {
+        let (admin, _, _) = people();
+
+        next_tx(test, &admin);
+
+        let registry = TestScenario::take_object<Registry<USDC>>(test);
+        let balance = TestScenario::take_object<OwnedBalance<USDC>>(test);
+        let usdc = Abstract::mint(&mut registry, 1000, ctx(test));
+
+        Abstract::join(&mut balance, usdc);
+
+        TestScenario::return_object(test, registry);
+        TestScenario::return_object(test, balance);
     }
 }
