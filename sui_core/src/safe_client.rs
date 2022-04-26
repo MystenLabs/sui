@@ -31,6 +31,11 @@ impl<C> SafeClient<C> {
         }
     }
 
+    #[cfg(test)]
+    pub fn authority_client(&mut self) -> &mut C {
+        &mut self.authority_client
+    }
+
     // Here we centralize all checks for transaction info responses
     fn check_transaction_response(
         &self,
