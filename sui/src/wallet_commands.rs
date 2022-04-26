@@ -508,21 +508,6 @@ impl WalletCommands {
                 WalletCommandResult::CreateExampleNFT(object_read)
             }
         });
-        // Sync all managed addresses
-        // This is wasteful because not all addresses might be modified
-        // but will be removed as part of https://github.com/MystenLabs/sui/issues/1045
-        match self {
-            WalletCommands::Publish { .. }
-            | WalletCommands::Call { .. }
-            | WalletCommands::Transfer { .. }
-            | WalletCommands::SplitCoin { .. }
-            | WalletCommands::MergeCoin { .. } => {
-                for address in context.config.accounts.clone() {
-                    context.gateway.sync_account_state(address).await?;
-                }
-            }
-            _ => {}
-        }
         ret
     }
 }
