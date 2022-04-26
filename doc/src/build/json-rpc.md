@@ -6,8 +6,6 @@ Welcome to the Sui RPC server quick start.
 
 This document walks you through setting up your own local Sui RPC Server and using the Sui JSON-RPC api to interact with a local Sui network. This guide is useful for developers interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to the [wallet](wallet.md) documentation.
 
-Full [API documentation](https://app.swaggerhub.com/apis/MystenLabs/sui-api) can
-be found on SwaggerHub.
 
 ## Local RPC server setup
 Follow the instructions to [install Sui binaries](install.md).
