@@ -17,7 +17,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use bytes::Bytes;
-use config::{Committee, Parameters, WorkerId};
+use config::{BlockSynchronizerParameters, Committee, Parameters, WorkerId};
 use crypto::{
     traits::{EncodeDecodeBase64, Signer, VerifyingKey},
     SignatureService,
@@ -270,7 +270,7 @@ impl Primary {
             rx_payload_availability_responses,
             SimpleSender::new(),
             payload_store.clone(),
-            parameters.block_synchronizer,
+            BlockSynchronizerParameters::default(),
         );
 
         // Whenever the `Synchronizer` does not manage to validate a header due to missing parent certificates of
