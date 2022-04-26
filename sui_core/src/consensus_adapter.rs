@@ -146,7 +146,8 @@ impl ConsensusSubmitter {
         certificate.check(&self.committee)?;
 
         // Send certificate to consensus
-        let serialized = serialize_consensus_transaction(certificate);
+        //let serialized = serialize_consensus_transaction(certificate);
+        let serialized = bincode::serialize(certificate).unwrap();
         let bytes = Bytes::from(serialized.clone());
         // TODO [issue #1452]: We are re-creating a connection every time. This is wasteful but does not
         // require to take self as a mutable reference.
