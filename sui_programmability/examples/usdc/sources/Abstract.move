@@ -24,6 +24,8 @@ module USDC::Abstract {
         owner: address,
     }
 
+    /// A restricted transfer. Holds a `Balance` of a regulated Coin.
+    /// Can only be `accept`ed by the receiver.
     struct Transfer<phantom T> has key {
         id: VersionedID,
         balance: Balance<T>,
@@ -65,7 +67,9 @@ module USDC::Abstract {
     }
 
     /// Allows merging two balances together if they're owned by the same
-    /// account.
+    /// account (currently, the only case where it can be applied is when
+    /// the owner of the `Registry` mints more coin and needs to do a merge).
+    ///
     /// TODO: possibly rename to `join_balances`.
     public fun join<T>(
         b1: &mut OwnedBalance<T>,
@@ -94,8 +98,7 @@ module USDC::Abstract {
     }
 
     /// Mint some amount of the regulated currency.
-    /// To do so, use `Registry.treasury_cap`, mint `Sui::Coin`,
-    /// and then turn it into the regulated Coin.
+    /// Only owner of the `Registry` can perform this action.
     public fun mint<T>(
         registry: &mut Registry<T>,
         value: u64,
@@ -120,6 +123,7 @@ module USDC::Abstract {
     /// Fails if one of the following conditions is not met:
     /// - Tx sender doesn't own OwnedBalance
     /// - Either sender or receiver are banned in the Registry
+    /// - If transfered amount is bigger than the one held on a balance
     public(script) fun transfer<T>(
         registry: &Registry<T>,
         owned_balance: &mut OwnedBalance<T>,
@@ -142,7 +146,7 @@ module USDC::Abstract {
         }, receiver);
     }
 
-    /// Accept a transfer from another account.
+    /// Accept a transfer from another account and put it to an `OwnedBalance`.
     /// Fails if one of the following conditions is not met:
     /// - Transfer object was stolen
     /// - OwnedBalance is not owned by tx sender
