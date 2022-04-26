@@ -10,7 +10,7 @@ on:
 
 jobs:
   diff:
-    runs-on: [self-hosted, ubuntu-latest]
+    runs-on: [ubuntu-latest]
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
     steps:
