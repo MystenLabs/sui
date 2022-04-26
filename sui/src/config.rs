@@ -176,8 +176,12 @@ impl NetworkConfig {
                 .map(|x| {
                     let name = x.key_pair.make_narwhal_keypair().name;
                     let primary = PrimaryAddresses {
-                        primary_to_primary: format!("{}:{}", x.host, x.port + 100).to_socket_addrs().unwrap(),
-                        worker_to_primary: format!("{}:{}", x.host, x.port + 200).to_socket_addrs().unwrap(),
+                        primary_to_primary: format!("{}:{}", x.host, x.port + 100)
+                            .to_socket_addrs()
+                            .unwrap(),
+                        worker_to_primary: format!("{}:{}", x.host, x.port + 200)
+                            .to_socket_addrs()
+                            .unwrap(),
                     };
                     let workers = [(
                         /* worker_id */ 0,
@@ -392,15 +396,23 @@ pub fn make_default_narwhal_committee(
                 let name = x.key_pair.make_narwhal_keypair().name;
 
                 let primary = PrimaryAddresses {
-                    primary_to_primary: format!("127.0.0.1:{}", ports[i][0]).to_socket_addrs().unwrap(),
-                    worker_to_primary: format!("127.0.0.1:{}", ports[i][1]).to_socket_addrs().unwrap(),
+                    primary_to_primary: format!("127.0.0.1:{}", ports[i][0])
+                        .to_socket_addrs()
+                        .unwrap(),
+                    worker_to_primary: format!("127.0.0.1:{}", ports[i][1])
+                        .to_socket_addrs()
+                        .unwrap(),
                 };
                 let workers = [(
                     /* worker_id */ 0,
                     WorkerAddresses {
-                        primary_to_worker: format!("127.0.0.1:{}", ports[i][2]).to_socket_addrs().unwrap(),
+                        primary_to_worker: format!("127.0.0.1:{}", ports[i][2])
+                            .to_socket_addrs()
+                            .unwrap(),
                         transactions: x.consensus_address,
-                        worker_to_worker: format!("127.0.0.1:{}", ports[i][3]).to_socket_addrs().unwrap(),
+                        worker_to_worker: format!("127.0.0.1:{}", ports[i][3])
+                            .to_socket_addrs()
+                            .unwrap(),
                     },
                 )]
                 .iter()
