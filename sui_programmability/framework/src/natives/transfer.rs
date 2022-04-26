@@ -105,7 +105,7 @@ pub fn delete_child_object_internal(
 
     let obj = args.pop_back().unwrap();
     let event_type = EventType::DeleteChildObject;
-    let obj_id = get_object_id(obj);
+    let obj_id = get_object_id(obj)?;
     // TODO: Decide the cost.
     let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 1);
     if context.save_event(vec![], event_type as u64, Type::Address, obj_id)? {

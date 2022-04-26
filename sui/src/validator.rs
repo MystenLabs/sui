@@ -3,11 +3,14 @@
 
 use anyhow::anyhow;
 use clap::*;
+use narwhal_config::Parameters as ConsensusParameters;
 use std::path::PathBuf;
 use sui::{
-    config::{GenesisConfig, PersistedConfig},
+    config::{GenesisConfig, NetworkConfig, PersistedConfig, CONSENSUS_DB_NAME},
     sui_commands::{genesis, make_server},
+    sui_config_dir, SUI_NETWORK_CONFIG,
 };
+use sui_types::base_types::encode_bytes_hex;
 use sui_types::base_types::{decode_bytes_hex, SuiAddress};
 use sui_types::committee::Committee;
 use tracing::{error, info};
@@ -22,9 +25,22 @@ struct ValidatorOpt {
     /// The genesis config file location
     #[clap(long)]
     pub genesis_config_path: PathBuf,
+    #[clap(long, help = "If set, run genesis even if network.conf already exists")]
+    pub force_genesis: bool,
+
+    #[clap(long)]
+    pub network_config_path: Option<PathBuf>,
+
     /// Public key/address of the validator to start
     #[clap(long, parse(try_from_str = decode_bytes_hex))]
-    address: SuiAddress,
+    address: Option<SuiAddress>,
+
+    /// Index in validator array of validator to start
+    #[clap(long)]
+    validator_idx: Option<usize>,
+
+    #[clap(long, help = "Specify host:port to listen on")]
+    listen_address: Option<String>,
 }
 
 #[tokio::main]
@@ -39,36 +55,67 @@ async fn main() -> Result<(), anyhow::Error> {
     let _guard = telemetry_subscribers::init(config);
 
     let cfg = ValidatorOpt::parse();
-    let genesis_conf: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
-    let address = cfg.address;
 
-    let (network_config, _, _) = genesis(genesis_conf).await?;
+    let network_config_path = sui_config_dir()?.join(SUI_NETWORK_CONFIG);
 
-    // Find the network config for this validator
-    let net_cfg = network_config
-        .authorities
-        .iter()
-        .find(|x| SuiAddress::from(x.key_pair.public_key_bytes()) == address)
-        .ok_or_else(|| {
-            anyhow!(
-                "Network configs must include config for address {}",
-                address
-            )
-        })?;
+    let network_config = match (network_config_path.exists(), cfg.force_genesis) {
+        (true, false) => PersistedConfig::<NetworkConfig>::read(&network_config_path)?,
+
+        // If network.conf is missing, or if --force-genesis is true, we run genesis.
+        _ => {
+            let genesis_conf: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
+            let (network_config, _, _) = genesis(genesis_conf).await?;
+            network_config
+        }
+    };
+
+    let net_cfg = if let Some(address) = cfg.address {
+        // Find the network config for this validator
+        network_config
+            .authorities
+            .iter()
+            .find(|x| SuiAddress::from(x.key_pair.public_key_bytes()) == address)
+            .ok_or_else(|| {
+                anyhow!(
+                    "Network configs must include config for address {}",
+                    address
+                )
+            })?
+    } else if let Some(index) = cfg.validator_idx {
+        &network_config.authorities[index]
+    } else {
+        return Err(anyhow!("Must supply either --address of --validator-idx"));
+    };
+
+    let listen_address = cfg
+        .listen_address
+        .unwrap_or(format!("{}:{}", net_cfg.host, net_cfg.port));
 
     info!(
-        "Started {} authority on {}:{}",
-        address, net_cfg.host, net_cfg.port
+        "authority {:?} listening on {} (public addr: {}:{})",
+        net_cfg.key_pair.public_key_bytes(),
+        listen_address,
+        net_cfg.host,
+        net_cfg.port
     );
+
+    let consensus_committee = network_config.make_narwhal_committee();
+    let consensus_parameters = ConsensusParameters::default();
+    let consensus_store_path = sui_config_dir()?
+        .join(CONSENSUS_DB_NAME)
+        .join(encode_bytes_hex(net_cfg.key_pair.public_key_bytes()));
 
     if let Err(e) = make_server(
         net_cfg,
         &Committee::from(&network_config),
         network_config.buffer_size,
+        &consensus_committee,
+        &consensus_store_path,
+        &consensus_parameters,
     )
     .await
     .unwrap()
-    .spawn()
+    .spawn_with_bind_address(&listen_address)
     .await
     .unwrap()
     .join()

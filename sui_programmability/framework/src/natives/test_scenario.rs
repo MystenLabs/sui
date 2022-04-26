@@ -11,17 +11,17 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::{native_gas, NativeResult},
     pop_arg,
-    values::Value,
+    values::{StructRef, Value, VectorRef},
 };
 use num_enum::TryFromPrimitive;
 use smallvec::smallvec;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     object::Owner,
 };
 
-use super::{get_nested_struct_field, get_nth_struct_field};
+use super::{get_nested_struct_field, get_object_id};
 
 type Event = (Vec<u8>, u64, Type, MoveTypeLayout, Value);
 
@@ -52,35 +52,45 @@ struct OwnedObj {
 // TODO: add a native function that prints the log of transfers, deletes, wraps for debugging purposes
 type Inventory = BTreeMap<ObjectID, OwnedObj>;
 
-// The deleted id event contains the VersionedID.
-// We want to retrieve the inner id bytes.
-fn get_deleted_id_bytes(id: &Value) -> AccountAddress {
-    get_nested_struct_field(id.copy_value().unwrap(), &[0, 0, 0])
-        .value_as::<AccountAddress>()
-        .unwrap()
-}
-
-fn get_value_object_id(val: &Value, layout: &MoveTypeLayout) -> ObjectID {
-    let obj_bytes = val
-        .simple_serialize(layout)
-        .expect("This will always succeed for a well-structured event log");
-    ObjectID::try_from(&obj_bytes[0..ObjectID::LENGTH])
-        .expect("This will always succeed on an object from a system transfer event")
+/// Return the object ID involved in an event.
+/// This depends on the value format for each event type.
+fn get_object_id_from_event(event_type_byte: u64, val: &Value) -> Option<ObjectID> {
+    let val = val.copy_value().unwrap();
+    let address = if event_type_byte == WRAPPED_OBJECT_EVENT {
+        val
+    } else if event_type_byte == UPDATE_OBJECT_EVENT {
+        get_object_id(val).unwrap()
+    } else {
+        let event_type = EventType::try_from_primitive(event_type_byte as u8).unwrap();
+        match event_type {
+            EventType::DeleteChildObject => val,
+            EventType::DeleteObjectID => get_nested_struct_field(val, &[0, 0, 0]).unwrap(),
+            EventType::User => {
+                return None;
+            }
+            _ => get_object_id(val.copy_value().unwrap()).unwrap(),
+        }
+    };
+    Some(ObjectID::try_from(address.value_as::<AccountAddress>().unwrap().as_slice()).unwrap())
 }
 
 /// Process the event log to determine the global set of live objects
 /// Returns the abort_code if an error is encountered.
 fn get_global_inventory(events: &[Event]) -> Result<Inventory, u64> {
     let mut inventory = Inventory::new();
-    for (recipient, event_type_byte, type_, layout, val) in events {
+    for (recipient, event_type_byte, type_, _layout, val) in events {
+        let obj_id = if let Some(obj_id) = get_object_id_from_event(*event_type_byte, val) {
+            obj_id
+        } else {
+            continue;
+        };
+
         if *event_type_byte == WRAPPED_OBJECT_EVENT {
             // special, TestScenario-only event for object wrapping. treat the same as DeleteObjectID for inventory purposes--a wrapped object is not available for use
-            let obj_id = ObjectID::try_from(recipient.as_slice()).unwrap();
             assert!(inventory.remove(&obj_id).is_some());
             continue;
         }
         if *event_type_byte == UPDATE_OBJECT_EVENT {
-            let obj_id = get_value_object_id(val, layout);
             if let Some(cur) = inventory.get_mut(&obj_id) {
                 let new_value = val.copy_value().unwrap();
                 if cur.owner == Owner::Immutable && !cur.value.equals(&new_value).unwrap() {
@@ -98,7 +108,6 @@ fn get_global_inventory(events: &[Event]) -> Result<Inventory, u64> {
             | EventType::TransferToObject
             | EventType::FreezeObject
             | EventType::ShareObject => {
-                let obj_id = get_value_object_id(val, layout);
                 let owner = get_new_owner(&inventory, &obj_id, event_type, recipient.clone())?;
                 // note; may overwrite older values of the object, which is intended
                 inventory.insert(
@@ -110,14 +119,9 @@ fn get_global_inventory(events: &[Event]) -> Result<Inventory, u64> {
                     },
                 );
             }
-            EventType::DeleteObjectID => {
+            EventType::DeleteObjectID | EventType::DeleteChildObject => {
                 // note: obj_id may or may not be present in `inventory`--a useer can create an ID and delete it without associating it with a transferred object
-                inventory.remove(&get_deleted_id_bytes(val).into());
-            }
-            EventType::DeleteChildObject => {
-                // val is an Sui object, with the first field as the versioned id.
-                let versioned_id = get_nth_struct_field(val.copy_value().unwrap(), 0);
-                inventory.remove(&get_deleted_id_bytes(&versioned_id).into());
+                inventory.remove(&obj_id);
             }
             EventType::User => (),
         }
@@ -177,82 +181,42 @@ fn get_inventory_for(
         .collect())
 }
 
-/// Return the ID's of objects deleted since a given `tx_begin_idx`
-pub fn deleted_object_ids(
+pub fn emit_wrapped_object_events(
     context: &mut NativeContext,
-    ty_args: Vec<Type>,
+    mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert_eq!(args.len(), 1);
+    debug_assert_eq!(ty_args.len(), 1);
+    debug_assert_eq!(args.len(), 2);
 
+    let id_type = ty_args.pop().unwrap();
+    let removed = pop_arg!(args, VectorRef);
     let tx_begin_idx = pop_arg!(args, u64) as usize;
 
-    let deleted_ids: Vec<Value> = context
-        .events()
+    let mut removed_ids: BTreeSet<ObjectID> = BTreeSet::new();
+    for i in 0..removed.len(&id_type)?.value_as::<u64>()? {
+        let id = removed.borrow_elem(i as usize, &id_type)?;
+        let id_bytes = get_nested_struct_field(id.value_as::<StructRef>()?.read_ref()?, &[0])?;
+        removed_ids.insert(id_bytes.value_as::<AccountAddress>()?.into());
+    }
+
+    let processed_ids: BTreeSet<_> = context.events()[tx_begin_idx..]
         .iter()
-        .skip(tx_begin_idx)
         .filter_map(|(_, event_type_byte, _, _, val)| {
-            if *event_type_byte == EventType::DeleteObjectID as u64 {
-                Some(Value::vector_u8(get_deleted_id_bytes(val).to_vec()))
-            } else {
-                None
-            }
+            get_object_id_from_event(*event_type_byte, val)
         })
         .collect();
+    // Any object that was removed (and not returned) during the current transaction,
+    // but did not appear in any of the events, must be wrapped.
+    for id in removed_ids.difference(&processed_ids) {
+        context.save_event(
+            vec![],
+            WRAPPED_OBJECT_EVENT,
+            Type::Address,
+            Value::address((*id).into()),
+        )?;
+    }
 
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
-    Ok(NativeResult::ok(
-        cost,
-        smallvec![Value::vector_for_testing_only(deleted_ids)],
-    ))
-}
-
-/// Return the ID's of objects transferred since a given `tx_begin_idx`
-// Note: if an object was transferred, but subsequently deleted, it will not appear in the return values
-pub fn transferred_object_ids(
-    context: &mut NativeContext,
-    ty_args: Vec<Type>,
-    mut args: VecDeque<Value>,
-) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert_eq!(args.len(), 1);
-
-    let tx_begin_idx = pop_arg!(args, u64) as usize;
-
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
-    let inventory = match get_global_inventory(&context.events().as_slice()[tx_begin_idx..]) {
-        Ok(inventory) => inventory,
-        Err(abort_code) => {
-            return Ok(NativeResult::err(cost, abort_code));
-        }
-    };
-
-    let transferred_ids: Vec<Value> = inventory
-        .into_keys()
-        .map(|obj_id| Value::vector_u8(obj_id.to_vec()))
-        .collect();
-
-    Ok(NativeResult::ok(
-        cost,
-        smallvec![Value::vector_for_testing_only(transferred_ids)],
-    ))
-}
-
-/// Emit a special event that is only meaningful to `TestScenario`: object wrapping
-pub fn emit_wrapped_object_event(
-    context: &mut NativeContext,
-    ty_args: Vec<Type>,
-    mut args: VecDeque<Value>,
-) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert_eq!(args.len(), 1);
-
-    let wrapped_id = pop_arg!(args, Vec<u8>);
-    // pick dummy type/value--these won't be inspected by the consumer of the event, only wrapped_id matters
-    let dummy_type = Type::Bool;
-    let dummy_value = Value::bool(true);
-    context.save_event(wrapped_id, WRAPPED_OBJECT_EVENT, dummy_type, dummy_value)?;
     let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
     Ok(NativeResult::ok(cost, smallvec![]))
 }

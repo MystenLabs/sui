@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
-
+use futures::{SinkExt, StreamExt};
 use std::collections::VecDeque;
+use std::net::SocketAddr;
 use std::{io, sync::Arc};
 use sui_network::{
     network::NetworkServer,
@@ -13,12 +14,12 @@ use sui_network::{
 use sui_types::{
     batch::UpdateItem, crypto::VerificationObligation, error::*, messages::*, serialize::*,
 };
-
-use futures::{SinkExt, StreamExt};
+use tokio::sync::mpsc::Sender;
 
 use std::time::Duration;
 use tracing::{error, info, warn, Instrument};
 
+use crate::consensus_adapter::{ConsensusInput, ConsensusSubmitter};
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use tokio::sync::broadcast::error::RecvError;
@@ -39,7 +40,8 @@ const MAX_DELAY_MILLIS: u64 = 5_000; // 5 sec
 
 pub struct AuthorityServer {
     server: NetworkServer,
-    pub state: AuthorityState,
+    pub state: Arc<AuthorityState>,
+    consensus_submitter: ConsensusSubmitter,
 }
 
 impl AuthorityServer {
@@ -47,11 +49,20 @@ impl AuthorityServer {
         base_address: String,
         base_port: u16,
         buffer_size: usize,
-        state: AuthorityState,
+        state: Arc<AuthorityState>,
+        consensus_address: SocketAddr,
+        tx_consensus_listener: Sender<ConsensusInput>,
     ) -> Self {
+        let consensus_submitter = ConsensusSubmitter::new(
+            consensus_address,
+            buffer_size,
+            state.committee.clone(),
+            tx_consensus_listener,
+        );
         Self {
             server: NetworkServer::new(base_address, base_port, buffer_size),
             state,
+            consensus_submitter,
         }
     }
 
@@ -77,6 +88,13 @@ impl AuthorityServer {
 
     pub async fn spawn(self) -> Result<SpawnedServer<AuthorityServer>, io::Error> {
         let address = format!("{}:{}", self.server.base_address, self.server.base_port);
+        self.spawn_with_bind_address(&address).await
+    }
+
+    pub async fn spawn_with_bind_address(
+        self,
+        address: &str,
+    ) -> Result<SpawnedServer<AuthorityServer>, io::Error> {
         let buffer_size = self.server.buffer_size;
         let guarded_state = Arc::new(self);
 
@@ -85,7 +103,7 @@ impl AuthorityServer {
             .spawn_batch_subsystem(MIN_BATCH_SIZE, Duration::from_millis(MAX_DELAY_MILLIS))
             .await;
 
-        spawn_server(&address, guarded_state, buffer_size).await
+        spawn_server(address, guarded_state, buffer_size).await
     }
 
     async fn handle_batch_streaming<'a, 'b, A>(
@@ -237,6 +255,20 @@ impl AuthorityServer {
                 .handle_batch_streaming(*message, channel)
                 .await
                 .map(|_| None),
+            SerializedMessage::ConsensusTransaction(message) => {
+                match self.consensus_submitter.submit(&message).await {
+                    Ok(()) => match *message {
+                        ConsensusTransaction::UserTransaction(certificate) => {
+                            let confirmation_transaction = ConfirmationTransaction { certificate };
+                            self.state
+                                .handle_confirmation_transaction(confirmation_transaction)
+                                .await
+                                .map(|info| Some(serialize_transaction_info(&info)))
+                        }
+                    },
+                    Err(e) => Err(e),
+                }
+            }
 
             _ => Err(SuiError::UnexpectedMessage),
         };

@@ -3,15 +3,15 @@
 use super::*;
 use crate::gateway_state::GatewayTxSeqNumber;
 
+use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::path::Path;
-use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
-
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
+use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use tracing::warn;
 use typed_store::rocks::{DBBatch, DBMap};
 
@@ -105,7 +105,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     /// represents the index of the latest consensus message this authority processed. This field is written
     /// by a single process acting as consensus (light) client. It is used to ensure the authority processes
     /// every message output by consensus (and in the right order).
-    last_consensus_index: DBMap<u64, SequenceNumber>,
+    last_consensus_index: DBMap<u64, ExecutionIndices>,
 }
 
 impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
@@ -114,6 +114,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     /// Open an authority store by directory path
     pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Self {
         let mut options = db_options.unwrap_or_default();
+
+        // One common issue when running tests on Mac is that the default ulimit is too low,
+        // leading to I/O errors such as "Too many open files". Raising fdlimit to bypass it.
+        options.set_max_open_files((fdlimit::raise_fd_limit().unwrap() / 8) as i32);
 
         /* The table cache is locked for updates and this determines the number
            of shareds, ie 2^10. Increase in case of lock contentions.
@@ -182,7 +186,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             "sequenced";<(TransactionDigest, ObjectID), SequenceNumber>,
             "schedule";<ObjectID, SequenceNumber>,
             "batches";<TxSequenceNumber, SignedBatch>,
-            "last_consensus_index";<u64, SequenceNumber>
+            "last_consensus_index";<u64, ExecutionIndices>
         );
         Self {
             objects,
@@ -335,7 +339,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         &self,
         object_id: ObjectID,
         seq: Option<SequenceNumber>,
-    ) -> Result<Vec<(ObjectRef, TransactionDigest)>, SuiError> {
+    ) -> Result<impl Iterator<Item = (ObjectRef, TransactionDigest)> + '_, SuiError> {
         let seq_inner = seq.unwrap_or_else(|| SequenceNumber::from(0));
         let obj_dig_inner = ObjectDigest::new([0; 32]);
 
@@ -344,14 +348,13 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             .iter()
             // The object id [0; 16] is the smallest possible
             .skip_to(&(object_id, seq_inner, obj_dig_inner))?
-            .take_while(|((id, iseq, _digest), _txd)| {
+            .take_while(move |((id, iseq, _digest), _txd)| {
                 let mut flag = id == &object_id;
-                if seq.is_some() {
-                    flag &= seq_inner == *iseq;
+                if let Some(seq_num) = seq {
+                    flag &= seq_num == *iseq;
                 }
                 flag
-            })
-            .collect())
+            }))
     }
 
     /// Read a lock for a specific (transaction, shared object) pair.
@@ -572,7 +575,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     /// need to recreate the temporary store based on the inputs and effects to update it properly.
     pub fn update_gateway_state(
         &self,
-        active_inputs: &[(InputObjectKind, Object)],
+        active_inputs: Vec<(InputObjectKind, Object)>,
         mutated_objects: HashMap<ObjectRef, Object>,
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
@@ -817,7 +820,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     pub fn persist_certificate_and_lock_shared_objects(
         &self,
         certificate: CertifiedTransaction,
-        global_certificate_index: SequenceNumber,
+        consensus_index: ExecutionIndices,
     ) -> Result<(), SuiError> {
         // Make an iterator to save the certificate.
         let transaction_digest = *certificate.digest();
@@ -844,7 +847,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             .unzip();
 
         // Make an iterator to update the last consensus index.
-        let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, global_certificate_index));
+        let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, consensus_index));
 
         // Atomically store all elements.
         let mut write_batch = self.sequenced.batch();
@@ -971,7 +974,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     }
 
     /// Return the latest consensus index. It is used to bootstrap the consensus client.
-    pub fn last_consensus_index(&self) -> SuiResult<SequenceNumber> {
+    pub fn last_consensus_index(&self) -> SuiResult<ExecutionIndices> {
         self.last_consensus_index
             .get(&LAST_CONSENSUS_INDEX_ADDR)
             .map(|x| x.unwrap_or_default())
@@ -1057,7 +1060,6 @@ impl<const A: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> ModuleResolve
                     .serialized_module_map()
                     .get(module_id.name().as_str())
                     .cloned()
-                    .map(|m| m.into_vec())
             }))
     }
 }

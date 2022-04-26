@@ -27,6 +27,7 @@ pub mod move_package;
 pub mod object;
 pub mod readable_serde;
 pub mod serialize;
+pub mod signature_seed;
 pub mod storage;
 
 /// 0x1-- account address where Move stdlib modules are stored

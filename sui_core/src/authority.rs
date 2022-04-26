@@ -6,6 +6,7 @@ use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
     execution_engine, transaction_input_checker,
 };
+use async_trait::async_trait;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::ModuleCache;
 use move_core_types::{
@@ -13,7 +14,9 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use narwhal_executor::{ExecutionIndices, ExecutionState};
 use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     pin::Pin,
@@ -208,7 +211,8 @@ impl AuthorityState {
         }
         let owned_objects = transaction_input_checker::filter_owned_objects(&all_objects);
 
-        let signed_transaction = SignedTransaction::new(transaction, self.name, &*self.secret);
+        let signed_transaction =
+            SignedTransaction::new(self.committee.epoch, transaction, self.name, &*self.secret);
 
         // Check and write locks, to signed transaction, into the database
         // The call to self.set_transaction_lock checks the lock is not conflicting,
@@ -325,7 +329,10 @@ impl AuthorityState {
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
-        if transaction.contains_shared_object() {
+        let has_shared_object = objects_by_kind
+            .iter()
+            .any(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)));
+        if has_shared_object {
             // If the transaction contains shared objects, we need to ensure they have been scheduled
             // for processing by the consensus protocol.
             self.check_shared_locks(&transaction_digest, &objects_by_kind)
@@ -338,22 +345,27 @@ impl AuthorityState {
             "Read inputs for transaction from DB"
         );
 
+        let transaction_dependencies = objects_by_kind
+            .iter()
+            .map(|(_, obj)| obj.previous_transaction)
+            .collect();
         let mut temporary_store = AuthorityTemporaryStore::new(
             self._database.clone(),
-            &objects_by_kind,
+            objects_by_kind,
             transaction_digest,
         );
         let effects = execution_engine::execute_transaction_to_effects(
             &mut temporary_store,
             transaction.clone(),
             transaction_digest,
-            objects_by_kind,
+            transaction_dependencies,
             &self.move_vm,
             &self._native_functions,
             gas_status,
         )?;
         // TODO: Distribute gas charge and rebate, which can be retrieved from effects.
-        let signed_effects = effects.to_sign_effects(&self.name, &*self.secret);
+        let signed_effects =
+            effects.to_sign_effects(self.committee.epoch, &self.name, &*self.secret);
 
         // Update the database in an atomic manner
         self.update_state(temporary_store, &certificate, &signed_effects)
@@ -371,7 +383,7 @@ impl AuthorityState {
     pub async fn handle_consensus_certificate(
         &self,
         certificate: CertifiedTransaction,
-        last_consensus_index: SequenceNumber,
+        last_consensus_index: ExecutionIndices,
     ) -> SuiResult<()> {
         // Ensure it is a shared object certificate
         if !certificate.transaction.contains_shared_object() {
@@ -429,13 +441,9 @@ impl AuthorityState {
         let ref_and_digest = match request.request_kind {
             ObjectInfoRequestKind::PastObjectInfo(seq) => {
                 // Get the Transaction Digest that created the object
-                let parent_iterator = self
-                    .get_parent_iterator(request.object_id, Some(seq))
-                    .await?;
-
-                parent_iterator
-                    .first()
-                    .map(|(object_ref, tx_digest)| (*object_ref, *tx_digest))
+                self.get_parent_iterator(request.object_id, Some(seq))
+                    .await?
+                    .next()
             }
             ObjectInfoRequestKind::LatestObjectInfo(_) => {
                 // Or get the latest object_reference and transaction entry.
@@ -642,7 +650,6 @@ impl AuthorityState {
         ctx: &mut TxContext,
         modules: Vec<CompiledModule>,
     ) -> SuiResult {
-        debug_assert!(ctx.digest() == TransactionDigest::genesis());
         let inputs = Transaction::input_objects_in_compiled_modules(&modules);
         let input_objects = self.fetch_objects(&inputs, None).await?;
         // When publishing genesis packages, since the std framework packages all have
@@ -670,8 +677,9 @@ impl AuthorityState {
             .filter_map(|(input, object_opt)| object_opt.map(|object| (input, object)))
             .collect::<Vec<_>>();
 
+        debug_assert!(ctx.digest() == TransactionDigest::genesis());
         let mut temporary_store =
-            AuthorityTemporaryStore::new(self._database.clone(), &filtered, ctx.digest());
+            AuthorityTemporaryStore::new(self._database.clone(), filtered, ctx.digest());
         let package_id = ObjectID::from(*modules[0].self_id().address());
         let natives = self._native_functions.clone();
         let mut gas_status = SuiGasStatus::new_unmetered();
@@ -781,7 +789,7 @@ impl AuthorityState {
         &self,
         object_id: ObjectID,
         seq: Option<SequenceNumber>,
-    ) -> Result<Vec<(ObjectRef, TransactionDigest)>, SuiError> {
+    ) -> Result<impl Iterator<Item = (ObjectRef, TransactionDigest)> + '_, SuiError> {
         {
             self._database.get_parent_iterator(object_id, seq)
         }
@@ -793,10 +801,6 @@ impl AuthorityState {
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
         self._database.get_latest_parent_entry(object_id)
     }
-
-    pub fn last_consensus_index(&self) -> SuiResult<SequenceNumber> {
-        self._database.last_consensus_index()
-    }
 }
 
 impl ModuleResolver for AuthorityState {
@@ -804,5 +808,32 @@ impl ModuleResolver for AuthorityState {
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         self._database.get_module(module_id)
+    }
+}
+
+#[async_trait]
+impl ExecutionState for AuthorityState {
+    type Transaction = CertifiedTransaction;
+    type Error = SuiError;
+
+    async fn handle_consensus_transaction(
+        &self,
+        execution_indices: ExecutionIndices,
+        transaction: Self::Transaction,
+    ) -> Result<(), Self::Error> {
+        self.handle_consensus_certificate(transaction, execution_indices)
+            .await
+    }
+
+    fn ask_consensus_write_lock(&self) -> bool {
+        self.consensus_guardrail.fetch_add(1, Ordering::SeqCst) == 0
+    }
+
+    fn release_consensus_write_lock(&self) {
+        self.consensus_guardrail.fetch_sub(0, Ordering::SeqCst);
+    }
+
+    async fn load_execution_indices(&self) -> Result<ExecutionIndices, Self::Error> {
+        self._database.last_consensus_index()
     }
 }

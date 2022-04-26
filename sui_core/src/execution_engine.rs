@@ -8,11 +8,12 @@ use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::adapter;
 use sui_types::{
-    base_types::{SuiAddress, TransactionDigest, TxContext},
+    base_types::{ObjectID, SuiAddress, TransactionDigest, TxContext},
     error::SuiResult,
     gas::{self, SuiGasStatus},
     messages::{
-        ExecutionStatus, InputObjectKind, SingleTransactionKind, Transaction, TransactionEffects,
+        ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind, Transaction,
+        TransactionEffects, Transfer,
     },
     object::Object,
     storage::{BackingPackageStore, Storage},
@@ -24,23 +25,18 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
     transaction: Transaction,
     transaction_digest: TransactionDigest,
-    objects_by_kind: Vec<(InputObjectKind, Object)>,
+    mut transaction_dependencies: BTreeSet<TransactionDigest>,
     move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     gas_status: SuiGasStatus,
 ) -> SuiResult<TransactionEffects> {
-    let mut transaction_dependencies: BTreeSet<_> = objects_by_kind
-        .iter()
-        .map(|(_, object)| object.previous_transaction)
-        .collect();
-
     let mut tx_ctx = TxContext::new(&transaction.sender_address(), &transaction_digest);
 
     let gas_object_id = transaction.gas_payment_object_ref().0;
     let status = execute_transaction(
         temporary_store,
         transaction,
-        objects_by_kind,
+        gas_object_id,
         &mut tx_ctx,
         move_vm,
         native_functions,
@@ -71,63 +67,65 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
 fn execute_transaction<S: BackingPackageStore>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
     transaction: Transaction,
-    mut objects_by_kind: Vec<(InputObjectKind, Object)>,
+    gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     mut gas_status: SuiGasStatus,
 ) -> ExecutionStatus {
-    // unwraps here are safe because we built `inputs`
-    let mut gas_object = objects_by_kind.pop().unwrap().1;
-    let mut object_input_iter = objects_by_kind.into_iter().map(|(_, object)| object);
-    let mut result = Ok(vec![]);
+    let mut gas_object = temporary_store
+        .objects()
+        .get(&gas_object_id)
+        .expect("We constructed the object map so it should always have the gas object id")
+        .clone();
+
+    let mut result = Ok(());
     // TODO: Since we require all mutable objects to not show up more than
     // once across single tx, we should be able to run them in parallel.
     for single_tx in transaction.into_single_transactions() {
-        let input_size = single_tx.input_object_count();
-        match single_tx {
-            SingleTransactionKind::Transfer(t) => {
-                let inputs = object_input_iter.by_ref().take(input_size).collect();
-                if let Err(err) = transfer(temporary_store, inputs, t.recipient) {
-                    result = Err(err);
-                    break;
-                }
+        result = match single_tx {
+            SingleTransactionKind::Transfer(Transfer {
+                recipient,
+                object_ref,
+            }) => {
+                // unwrap is is safe because we built the object map from the transactions
+                let object = temporary_store
+                    .objects()
+                    .get(&object_ref.0)
+                    .unwrap()
+                    .clone();
+                transfer(temporary_store, object, recipient)
             }
-            SingleTransactionKind::Call(c) => {
-                let mut inputs: Vec<_> = object_input_iter.by_ref().take(input_size).collect();
-                // unwraps here are safe because we built `inputs`
-                // TODO don't load and push the package object here in the first place
-                let _package = inputs.pop().unwrap();
-                let module_id = ModuleId::new(c.package.0.into(), c.module.clone());
-                result = adapter::execute(
+            SingleTransactionKind::Call(MoveCall {
+                package,
+                module,
+                function,
+                type_arguments,
+                arguments,
+            }) => {
+                let module_id = ModuleId::new(package.0.into(), module);
+                adapter::execute(
                     move_vm,
                     temporary_store,
-                    native_functions,
                     module_id,
-                    &c.function,
-                    c.type_arguments.clone(),
-                    inputs,
-                    c.pure_arguments.clone(),
+                    &function,
+                    type_arguments,
+                    arguments,
                     &mut gas_status,
                     tx_ctx,
-                );
-                if result.is_err() {
-                    break;
-                }
+                )
             }
-            SingleTransactionKind::Publish(m) => {
-                if let Err(err) = adapter::publish(
-                    temporary_store,
-                    native_functions.clone(),
-                    m.modules,
-                    tx_ctx,
-                    &mut gas_status,
-                ) {
-                    result = Err(err);
-                    break;
-                }
-            }
+            SingleTransactionKind::Publish(MoveModulePublish { modules }) => adapter::publish(
+                temporary_store,
+                native_functions.clone(),
+                modules,
+                tx_ctx,
+                &mut gas_status,
+            ),
         };
+        if result.is_err() {
+            break;
+        }
     }
     if result.is_err() {
         // Roll back the temporary store if execution failed.
@@ -151,9 +149,8 @@ fn execute_transaction<S: BackingPackageStore>(
     // TODO: Return cost_summary so that the detailed summary exists in TransactionEffects for
     // gas and rebate distribution.
     match result {
-        Ok(results) => ExecutionStatus::Success {
+        Ok(()) => ExecutionStatus::Success {
             gas_cost: cost_summary,
-            results,
         },
         Err(error) => ExecutionStatus::new_failure(cost_summary, error),
     }
@@ -161,12 +158,10 @@ fn execute_transaction<S: BackingPackageStore>(
 
 fn transfer<S>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
-    mut inputs: Vec<Object>,
+    mut object: Object,
     recipient: SuiAddress,
 ) -> SuiResult {
-    // Safe to unwrap since we constructed the inputs.
-    let mut output_object = inputs.pop().unwrap();
-    output_object.transfer(recipient)?;
-    temporary_store.write_object(output_object);
+    object.transfer(recipient)?;
+    temporary_store.write_object(object);
     Ok(())
 }

@@ -4,12 +4,12 @@
 use std::path::Path;
 
 use sui::config::{AuthorityPrivateInfo, Config, GenesisConfig, WalletConfig};
-use sui::gateway::{GatewayConfig, GatewayType};
+use sui::gateway_config::{GatewayConfig, GatewayType};
 use sui::keystore::KeystoreType;
 use sui::sui_commands::{genesis, SuiNetwork};
 use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
-use sui_types::base_types::SuiAddress;
 
+#[cfg(test)]
 pub async fn start_test_network(
     working_dir: &Path,
     genesis_config: Option<GenesisConfig>,
@@ -22,19 +22,11 @@ pub async fn start_test_network(
 
     let mut genesis_config =
         genesis_config.unwrap_or(GenesisConfig::default_genesis(&working_dir)?);
-    let authorities = genesis_config
+    genesis_config.authorities = genesis_config
         .authorities
-        .iter()
-        .map(|info| AuthorityPrivateInfo {
-            key_pair: info.key_pair.copy(),
-            host: info.host.clone(),
-            port: 0,
-            db_path: info.db_path.clone(),
-            stake: info.stake,
-            address: SuiAddress::from(info.key_pair.public_key_bytes()),
-        })
+        .into_iter()
+        .map(|info| AuthorityPrivateInfo { port: 0, ..info })
         .collect();
-    genesis_config.authorities = authorities;
 
     let (network_config, accounts, mut keystore) = genesis(genesis_config).await?;
     let network = SuiNetwork::start(&network_config).await?;

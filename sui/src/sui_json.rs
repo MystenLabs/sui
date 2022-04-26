@@ -13,12 +13,10 @@ use sui_types::{
     base_types::{decode_bytes_hex, ObjectID, SuiAddress},
     object::Object,
 };
-use sui_verifier::entry_points_verifier::is_object;
 
 // Alias the type names for clarity
 use move_binary_format::{
     access::ModuleAccess,
-    binary_views::BinaryIndexedView,
     file_format::{SignatureToken, Visibility},
 };
 use serde_json::Value as JsonValue;
@@ -28,6 +26,14 @@ const HEX_PREFIX: &str = "0x";
 #[cfg(test)]
 #[path = "unit_tests/sui_json.rs"]
 mod base_types_tests;
+
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub enum SuiJsonCallArg {
+    // Needs to become an Object Ref or Object ID, depending on object type
+    Object(ObjectID),
+    // pure value, bcs encoded
+    Pure(Vec<u8>),
+}
 
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct SuiJsonValue(JsonValue);
@@ -196,27 +202,21 @@ fn is_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> bool {
     is_homogeneous_rec(&mut next_q)
 }
 
-fn check_and_serialize_pure_args<'a>(
-    pure_args_and_params: impl IntoIterator<Item = (&'a SuiJsonValue, &'a SignatureToken)>,
-) -> Result<Vec<Vec<u8>>, anyhow::Error> {
-    pure_args_and_params
-        .into_iter()
-        .map(|(arg, param)| {
-            let move_type_layout = make_prim_move_type_layout(param)?;
-            // Check that the args are what we expect or can be converted
-            // Then return the serialized bcs value
-            match arg.to_bcs_bytes(&move_type_layout) {
-                Ok(a) => Ok(a),
-                Err(e) => {
-                    return Err(anyhow!(
-                        "Unable to parse arg at type {}. Got error: {:?}",
-                        move_type_layout,
-                        e
-                    ))
-                }
-            }
-        })
-        .collect()
+fn resolve_primtive_arg(
+    arg: &SuiJsonValue,
+    param: &SignatureToken,
+) -> Result<Vec<u8>, anyhow::Error> {
+    let move_type_layout = make_prim_move_type_layout(param)?;
+    // Check that the args are what we expect or can be converted
+    // Then return the serialized bcs value
+    match arg.to_bcs_bytes(&move_type_layout) {
+        Ok(a) => Ok(a),
+        Err(e) => Err(anyhow!(
+            "Unable to parse arg at type {}. Got error: {:?}",
+            move_type_layout,
+            e
+        )),
+    }
 }
 
 fn make_prim_move_type_layout(param: &SignatureToken) -> Result<MoveTypeLayout, anyhow::Error> {
@@ -244,42 +244,61 @@ fn make_prim_move_type_layout(param: &SignatureToken) -> Result<MoveTypeLayout, 
     })
 }
 
-fn resolve_object_args(
-    args: &[SuiJsonValue],
-    start: usize,
-    end_exclusive: usize,
-) -> Result<Vec<ObjectID>, anyhow::Error> {
+fn resolve_object_arg(idx: usize, arg: &SuiJsonValue) -> Result<ObjectID, anyhow::Error> {
     // Every elem has to be a string convertible to a ObjectID
-    let mut object_args_ids = vec![];
-    for (idx, arg) in args
-        .iter()
-        .enumerate()
-        .take(end_exclusive - start)
-        .skip(start)
-    {
-        let transformed = match arg.to_json_value() {
-            JsonValue::String(s) => {
-                let  s = s.trim().to_lowercase();
-                if !s.starts_with(HEX_PREFIX) {
-                    return Err(anyhow!(
-                        "ObjectID hex string must start with 0x.",
-                    ))
-                }
-                ObjectID::from_hex_literal(&s)?
+    match arg.to_json_value() {
+        JsonValue::String(s) => {
+            let s = s.trim().to_lowercase();
+            if !s.starts_with(HEX_PREFIX) {
+                return Err(anyhow!("ObjectID hex string must start with 0x.",));
             }
-            _ => {
-                return Err(anyhow!(
-                    "Unable to parse arg {:?} as ObjectID at pos {}. Expected {:?} byte hex string prefixed with 0x.",
-                    ObjectID::LENGTH,
-                    idx,
-                    arg.to_json_value(),
-                ))
-            }
-        };
-
-        object_args_ids.push(transformed);
+            Ok(ObjectID::from_hex_literal(&s)?)
+        }
+        _ => Err(anyhow!(
+            "Unable to parse arg {:?} as ObjectID at pos {}. Expected {:?} byte hex string \
+                prefixed with 0x.",
+            ObjectID::LENGTH,
+            idx,
+            arg.to_json_value(),
+        )),
     }
-    Ok(object_args_ids)
+}
+
+fn resolve_call_arg(
+    idx: usize,
+    arg: &SuiJsonValue,
+    param: &SignatureToken,
+) -> Result<SuiJsonCallArg, anyhow::Error> {
+    Ok(match param {
+        SignatureToken::Bool
+        | SignatureToken::U8
+        | SignatureToken::U64
+        | SignatureToken::U128
+        | SignatureToken::Address
+        | SignatureToken::Vector(_) => SuiJsonCallArg::Pure(resolve_primtive_arg(arg, param)?),
+
+        SignatureToken::Struct(_)
+        | SignatureToken::StructInstantiation(_, _)
+        | SignatureToken::Reference(_)
+        | SignatureToken::MutableReference(_) => {
+            SuiJsonCallArg::Object(resolve_object_arg(idx, arg)?)
+        }
+
+        SignatureToken::TypeParameter(_) => unreachable!("Not yet supported and already gated"),
+        SignatureToken::Signer => unreachable!(),
+    })
+}
+
+fn resolve_call_args(
+    json_args: &[SuiJsonValue],
+    parameter_types: &[SignatureToken],
+) -> Result<Vec<SuiJsonCallArg>, anyhow::Error> {
+    json_args
+        .iter()
+        .zip(parameter_types)
+        .enumerate()
+        .map(|(idx, (arg, param))| resolve_call_arg(idx, arg, param))
+        .collect()
 }
 
 /// Resolve a the JSON args of a function into the expected formats to make them usable by Move call
@@ -289,7 +308,7 @@ pub fn resolve_move_function_args(
     module_ident: Identifier,
     function: Identifier,
     combined_args_json: Vec<SuiJsonValue>,
-) -> Result<(Vec<ObjectID>, Vec<Vec<u8>>), anyhow::Error> {
+) -> Result<Vec<SuiJsonCallArg>, anyhow::Error> {
     // Extract the expected function signature
     let module = package
         .data
@@ -338,31 +357,8 @@ pub fn resolve_move_function_args(
         ));
     }
 
-    // Object args must always precede the pure/primitive args, so extract those first
-    // Find the first non-object args, which marks the start of the pure args
-    // Find the first pure/primitive type
-    let view = BinaryIndexedView::Module(&module);
-    let pessimistic_type_args = &function_signature.type_parameters;
-    debug_assert!(
-        pessimistic_type_args.is_empty(),
-        "TODO support type arguments"
-    );
-    let pure_args_start = parameters
-        .iter()
-        .position(|t| !is_object(&view, pessimistic_type_args, t).unwrap())
-        .unwrap_or(expected_len);
-
-    // Everything to the left of pure args must be object args
-
-    // Check that the object args are valid
-    let obj_args = resolve_object_args(&combined_args_json, 0, pure_args_start)?;
-
-    // Check that the pure args are valid or can be made valid
-    let pure_args = &combined_args_json[pure_args_start..expected_len];
-    let pure_params = &parameters[pure_args_start..expected_len];
-    let pure_args_serialized = check_and_serialize_pure_args(pure_args.iter().zip(pure_params))?;
-
-    Ok((obj_args, pure_args_serialized))
+    // Check that the args are valid and convert to the correct format
+    resolve_call_args(&combined_args_json, parameters)
 }
 
 fn convert_string_to_u128(s: &str) -> Result<u128, anyhow::Error> {

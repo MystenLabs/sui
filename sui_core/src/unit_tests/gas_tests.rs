@@ -314,9 +314,9 @@ async fn test_move_call_gas() -> SuiResult {
 
     let module = ident_str!("ObjectBasics").to_owned();
     let function = ident_str!("create").to_owned();
-    let pure_args = vec![
-        16u64.to_le_bytes().to_vec(),
-        bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
+    let args = vec![
+        CallArg::Pure(16u64.to_le_bytes().to_vec()),
+        CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
     ];
     let data = TransactionData::new_move_call(
         sender,
@@ -325,9 +325,7 @@ async fn test_move_call_gas() -> SuiResult {
         function.clone(),
         Vec::new(),
         gas_object.compute_object_reference(),
-        Vec::new(),
-        vec![],
-        pure_args.clone(),
+        args.clone(),
         GAS_VALUE_FOR_TESTING,
     );
     let signature = Signature::new(&data, &sender_key);
@@ -387,9 +385,7 @@ async fn test_move_call_gas() -> SuiResult {
         ident_str!("delete").to_owned(),
         vec![],
         gas_object.compute_object_reference(),
-        vec![created_object_ref],
-        vec![],
-        vec![],
+        vec![CallArg::ImmOrOwnedObject(created_object_ref)],
         expected_gas_balance,
     );
     let signature = Signature::new(&data, &sender_key);
@@ -415,9 +411,7 @@ async fn test_move_call_gas() -> SuiResult {
         function,
         Vec::new(),
         gas_object.compute_object_reference(),
-        Vec::new(),
-        vec![],
-        pure_args,
+        args,
         budget,
     );
     let signature = Signature::new(&data, &sender_key);

@@ -103,7 +103,7 @@ pub fn filter_owned_objects(all_objects: &[(InputObjectKind, Object)]) -> Vec<Ob
                     Some(*object_ref)
                 }
             }
-            InputObjectKind::SharedMoveObject(..) => None,
+            InputObjectKind::SharedMoveObject(_) => None,
         })
         .collect();
 
@@ -153,17 +153,19 @@ fn check_one_lock(
             );
 
             // Check the digest matches
+
+            let expected_digest = object.digest();
             fp_ensure!(
-                object.digest() == object_digest,
+                expected_digest == object_digest,
                 SuiError::InvalidObjectDigest {
                     object_id,
-                    expected_digest: object_digest
+                    expected_digest
                 }
             );
 
             match object.owner {
                 Owner::Immutable => {
-                    // Nothing else to check for SharedImmutable.
+                    // Nothing else to check for Immutable.
                 }
                 Owner::AddressOwner(owner) => {
                     // Check the owner is the transaction sender.

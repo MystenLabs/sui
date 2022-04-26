@@ -108,7 +108,7 @@ module Sui::TxContext {
 
     #[test_only]
     /// Return the most recent created object ID.
-    public fun get_last_created_object_id(self: &TxContext): ID {
+    public fun last_created_object_id(self: &TxContext): ID {
         let ids_created = self.ids_created;
         assert!(ids_created > 0, ENO_IDS_CREATED);
         ID::new(derive_id(*&self.tx_hash, ids_created - 1))

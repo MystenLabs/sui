@@ -1,0 +1,55 @@
+.noobjects {
+    @apply font-sans tracking-tight font-semibold
+        bg-amber-300 rounded-l-md
+          h-[1.5rem] p-2 mt-2;
+}
+
+.ownedobjects {
+    @apply w-[100%] lg:grid lg:justify-items-center lg:grid-cols-3;
+}
+
+.objectbox {
+    @apply border-solid border-stone-300 rounded-lg my-2 p-[0.25vw] lg:w-[23vw] lg:self-center hover:shadow-md cursor-pointer;
+}
+
+.objectbox > div > div {
+    @apply border-0 border-b border-solid border-gray-300
+                        mb-2;
+}
+
+.objectbox > div:first-child > div {
+    @apply border-none;
+}
+
+.objectbox > div > div > span:first-child {
+    @apply mr-[1rem] uppercase font-sans font-semibold block xl:inline;
+}
+
+.previewimage > div > img {
+    @apply h-[15vh];
+}
+
+.previewimage {
+    @apply h-[15vh];
+}
+
+.gone {
+    @apply invisible;
+}
+
+.btncontainer,
+.pagenumber {
+    @apply inline-block w-[20%];
+}
+
+button.btncontainer {
+    @apply inline-block px-0 cursor-pointer border-none bg-offwhite hover:bg-sui 
+  py-2
+  text-offblack stroke-offblack
+  hover:text-white hover:stroke-white
+  items-center;
+}
+
+.pagenumber {
+    @apply select-none text-center break-normal text-sm;
+}

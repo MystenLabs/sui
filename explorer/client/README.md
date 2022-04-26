@@ -20,31 +20,35 @@ When running most of the below yarn commands, the SuiExplorer Client will extrac
 
 If the environment variable `REACT_APP_DATA` is set to `static`, then the SuiExplorer will instead pull data from a local, static JSON dataset that can be found at `./src/utils/static/mock_data.json`.
 
-For example, suppose we wish to locally run the website using the static JSON dataset and not the API, then we would run the following:
+For example, suppose we wish to locally run the website using the static JSON dataset and not the API, then we could run the following:
 
 ```bash
 REACT_APP_DATA=static yarn start
 ```
 
-Note that the command `yarn test` is the exception. Here the SuiExplorer will instead use the static JSON dataset. The tests have been written to specifically check the UI and not the API connection.
+Note that the commands `yarn test` and `yarn start:static` are the exceptions. Here the SuiExplorer will instead use the static JSON dataset. The tests have been written to specifically check the UI and not the API connection and so use the static JSON dataset.
 
 ## Yarn Commands and what they do
 
 ### `yarn start`
 
-Runs the app in the development mode.
+Runs the app as connected to the API at https://demo-rpc.sui.io.
 
 Open http://localhost:3000 to view it in the browser.
 
 The page will reload if you make edits. You will also see any lint errors in the console.
 
-### `yarn start:dev`
+### `yarn start:static`
 
-Same as `yarn start` but runs `prettier:fix:watch` to format the files.
+Runs the app as connected to the static JSON dataset with `REACT_APP_DATA` set to `static`.
+
+Open http://localhost:8080 to view it in the browser.
+
+The page will reload when edits are made. You can run `yarn start` and `yarn start:static` at the same time because they use different ports.
 
 ### `yarn test`
 
-Launches the test runner in the interactive watch mode.
+This runs a series of end-to-end browser tests using the website as connected to the static JSON dataset. This command is run by the GitHub checks. The tests must pass before merging a branch into main.
 
 ### `yarn build`
 
@@ -59,11 +63,6 @@ Run linting check (prettier/eslint/stylelint).
 ### `yarn lint:fix`
 
 Run linting check but also try to fix any issues.
-
-### `yarn prettier:fix:watch`
-
-Run prettier in watch mode and format any file that changes. (Also runs prettier once in the beginning for all the files)\
-It can be useful during development to format automatically all the files that change.
 
 ## Deployment
 

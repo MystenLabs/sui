@@ -16,13 +16,15 @@ use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use serde_with::base64::Base64;
 use serde_with::serde_as;
+use serde_with::Bytes;
 
 use crate::coin::Coin;
 use crate::crypto::{sha3_hash, BcsSignable};
 use crate::error::{SuiError, SuiResult};
 use crate::move_package::MovePackage;
+use crate::readable_serde::encoding::Base64;
+use crate::readable_serde::Readable;
 use crate::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -37,7 +39,7 @@ pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MoveObject {
     pub type_: StructTag,
-    #[serde_as(as = "Base64")]
+    #[serde_as(as = "Readable<Base64, Bytes>")]
     contents: Vec<u8>,
 }
 
@@ -482,6 +484,10 @@ impl Object {
     pub fn with_id_owner_for_testing(id: ObjectID, owner: SuiAddress) -> Self {
         // For testing, we provide sufficient gas by default.
         Self::with_id_owner_gas_for_testing(id, SequenceNumber::new(), owner, GAS_VALUE_FOR_TESTING)
+    }
+
+    pub fn with_owner_for_testing(owner: SuiAddress) -> Self {
+        Self::with_id_owner_for_testing(ObjectID::random(), owner)
     }
 
     /// Create Coin object for use in Move object operation

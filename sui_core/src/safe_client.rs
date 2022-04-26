@@ -221,6 +221,47 @@ impl<C> SafeClient<C> {
     }
 }
 
+impl<C> SafeClient<C>
+where
+    C: AuthorityAPI + Send + Sync + Clone + 'static,
+{
+    /// Uses the follower API and augments each digest received with a full transactions info structure.
+    pub async fn handle_transaction_info_request_to_transaction_info(
+        &self,
+        request: BatchInfoRequest,
+    ) -> Result<
+        impl futures::Stream<Item = Result<(u64, TransactionInfoResponse), SuiError>> + '_,
+        SuiError,
+    > {
+        let new_stream = self
+            .handle_batch_stream(request)
+            .await
+            .map_err(|err| SuiError::GenericAuthorityError {
+                error: format!("Stream error: {:?}", err),
+            })?
+            .filter_map(|item| {
+                let _client = self.clone();
+                async move {
+                    match &item {
+                        Ok(BatchInfoResponseItem(UpdateItem::Batch(_signed_batch))) => None,
+                        Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest)))) => {
+                            // Download the full transaction info
+                            let transaction_info_request = TransactionInfoRequest::from(*digest);
+                            let res = _client
+                                .handle_transaction_info_request(transaction_info_request)
+                                .await
+                                .map(|v| (*seq, v));
+                            Some(res)
+                        }
+                        Err(err) => Some(Err(err.clone())),
+                    }
+                }
+            });
+
+        Ok(new_stream)
+    }
+}
+
 #[async_trait]
 impl<C> AuthorityAPI for SafeClient<C>
 where
