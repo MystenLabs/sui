@@ -17,7 +17,7 @@ use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::fs::{self, File};
 use std::io::BufReader;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -103,7 +103,7 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
                 .map_err(serde::de::Error::custom)?
                 .next_port()
                 .ok_or_else(|| serde::de::Error::custom("No available port."))?;
-            format!("127.0.0.1:{port}").parse().unwrap()
+            format!("127.0.0.1:{port}").to_socket_addrs().unwrap()
         };
 
         Ok(AuthorityPrivateInfo {
@@ -176,18 +176,18 @@ impl NetworkConfig {
                 .map(|x| {
                     let name = x.key_pair.make_narwhal_keypair().name;
                     let primary = PrimaryAddresses {
-                        primary_to_primary: format!("{}:{}", x.host, x.port + 100).parse().unwrap(),
-                        worker_to_primary: format!("{}:{}", x.host, x.port + 200).parse().unwrap(),
+                        primary_to_primary: format!("{}:{}", x.host, x.port + 100).to_socket_addrs().unwrap(),
+                        worker_to_primary: format!("{}:{}", x.host, x.port + 200).to_socket_addrs().unwrap(),
                     };
                     let workers = [(
                         /* worker_id */ 0,
                         WorkerAddresses {
                             primary_to_worker: format!("{}:{}", x.host, x.port + 300)
-                                .parse()
+                                .to_socket_addrs()
                                 .unwrap(),
                             transactions: x.consensus_address,
                             worker_to_worker: format!("{}:{}", x.host, x.port + 400)
-                                .parse()
+                                .to_socket_addrs()
                                 .unwrap(),
                         },
                     )]
@@ -392,15 +392,15 @@ pub fn make_default_narwhal_committee(
                 let name = x.key_pair.make_narwhal_keypair().name;
 
                 let primary = PrimaryAddresses {
-                    primary_to_primary: format!("127.0.0.1:{}", ports[i][0]).parse().unwrap(),
-                    worker_to_primary: format!("127.0.0.1:{}", ports[i][1]).parse().unwrap(),
+                    primary_to_primary: format!("127.0.0.1:{}", ports[i][0]).to_socket_addrs().unwrap(),
+                    worker_to_primary: format!("127.0.0.1:{}", ports[i][1]).to_socket_addrs().unwrap(),
                 };
                 let workers = [(
                     /* worker_id */ 0,
                     WorkerAddresses {
-                        primary_to_worker: format!("127.0.0.1:{}", ports[i][2]).parse().unwrap(),
+                        primary_to_worker: format!("127.0.0.1:{}", ports[i][2]).to_socket_addrs().unwrap(),
                         transactions: x.consensus_address,
-                        worker_to_worker: format!("127.0.0.1:{}", ports[i][3]).parse().unwrap(),
+                        worker_to_worker: format!("127.0.0.1:{}", ports[i][3]).to_socket_addrs().unwrap(),
                     },
                 )]
                 .iter()
