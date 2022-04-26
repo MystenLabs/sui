@@ -61,10 +61,10 @@ jobs:
         with:
           path: ~/.cargo/registry/src/**/librocksdb-sys-*
       - name: cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features
+        run: |
+          cargo build --all-features --lib
+          cargo test --all-features --no-run # -j N # uncomment and set a low number if builds start OOMing again
+          cargo test --all-features
 
   clippy:
     needs: diff
