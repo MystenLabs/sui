@@ -2,10 +2,10 @@ name: Codecov
 on:
   push:
     branches:
-      - main
+#      - main
   pull_request:
     branches:
-      - main
+#      - main
     types: [opened, reopened, synchronize]
 
 jobs:
