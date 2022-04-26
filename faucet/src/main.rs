@@ -40,7 +40,7 @@ const TIMEOUT_IN_SECONDS: u64 = 120;
     about = "Faucet for requesting test tokens on Sui",
     rename_all = "kebab-case"
 )]
-struct ServerConfig {
+struct FaucetConfig {
     #[clap(long, default_value = DEFAULT_SERVER_PORT)]
     port: u16,
 
@@ -60,7 +60,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let context = create_wallet_context().await?;
 
-    let config: ServerConfig = ServerConfig::parse();
+    let config: FaucetConfig = FaucetConfig::parse();
 
     let app_state = Arc::new(AppState {
         faucet: SimpleFaucet::new(context).await.unwrap(),
