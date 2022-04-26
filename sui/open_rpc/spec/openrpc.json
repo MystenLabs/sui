@@ -1711,6 +1711,7 @@
           "events",
           "gas_object",
           "mutated",
+          "shared_objects",
           "status",
           "transaction_digest",
           "unwrapped",
@@ -1832,6 +1833,25 @@
               ],
               "maxItems": 2,
               "minItems": 2
+            }
+          },
+          "shared_objects": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/ObjectID"
+                },
+                {
+                  "$ref": "#/components/schemas/SequenceNumber"
+                },
+                {
+                  "$ref": "#/components/schemas/ObjectDigest"
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3
             }
           },
           "status": {

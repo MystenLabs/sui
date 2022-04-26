@@ -1178,6 +1178,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive-syn-parse"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e79116f119dd1dba1abf1f3405f03b9b0e79a27a3883864bfebded8a3dc768cd"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "derive_builder"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4997,6 +5008,7 @@ dependencies = [
  "node",
  "num_cpus",
  "once_cell",
+ "pretty_assertions",
  "rand 0.8.5",
  "rayon",
  "reqwest",
@@ -5014,6 +5026,8 @@ dependencies = [
  "sui-adapter",
  "sui-framework",
  "sui-network",
+ "sui-open-rpc",
+ "sui-open-rpc-macros",
  "sui-types",
  "sui-verifier",
  "sui_core",
@@ -5107,6 +5121,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-open-rpc"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde 1.0.136",
+]
+
+[[package]]
+name = "sui-open-rpc-macros"
+version = "0.1.0"
+dependencies = [
+ "derive-syn-parse",
+ "itertools",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "sui-types"
 version = "0.1.0"
 dependencies = [
@@ -5132,6 +5165,7 @@ dependencies = [
  "opentelemetry",
  "parking_lot 0.12.0",
  "rand 0.7.3",
+ "schemars",
  "serde 1.0.136",
  "serde-name",
  "serde_bytes",
@@ -5184,6 +5218,7 @@ dependencies = [
  "pretty_assertions",
  "rand 0.7.3",
  "rocksdb",
+ "schemars",
  "scopeguard",
  "serde 1.0.136",
  "serde-reflection",

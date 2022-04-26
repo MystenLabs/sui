@@ -1,24 +1,24 @@
 ---
-title: Local RPC Server & JSON-RPC api Quick Start
+title: Local RPC Server & JSON-RPC API Quick Start
 ---
 
 Welcome to the Sui RPC server quick start.
 
-This document walks you through setting up your own local Sui RPC Server and using the Sui JSON-RPC api to interact with a local Sui network. This guide is useful for developers interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to the [wallet](wallet.md) documentation.
+This document walks you through setting up your own local Sui RPC Server and using the Sui JSON-RPC API to interact with a local Sui network. This guide is useful for developers interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to the [wallet](wallet.md) documentation.
 
 
 ## Local RPC server setup
 Follow the instructions to [install Sui binaries](install.md).
 
-### Start local Sui Network
+### Start local Sui network
 Follow the instructions to [create](wallet.md#genesis) and [start](wallet.md#starting-the-network) the Sui network.
-The genesis process will create a `gateway.conf` configuration file, which will be used by the RPC server.
+The genesis process will create a `gateway.conf` configuration file that will be used by the RPC server.
 
 ### Start local RPC server
 
 Use the following command to start a local server:
 ```shell
-rpc-server
+$ rpc-server
 ```
 You will see output resembling:
 ```
@@ -28,16 +28,16 @@ You will see output resembling:
 2022-04-25T11:06:40.163590Z  INFO rpc_server: Sui RPC Gateway listening on local_addr:127.0.0.1:5001
 ```
 
-NOTE: For additional logs, set `RUST_LOG=debug` before invoking `rpc-server`
+> **Note:** For additional logs, set `RUST_LOG=debug` before invoking `rpc-server`.
 
-Export a local user variable to store the hardcoded hostname + port that the local RPC server starts with to be used when issuing the curl commands that follow.
+Export a local user variable to store the hardcoded hostname + port that the local RPC server starts with to be used when issuing the `curl` commands that follow.
 ```shell
 export SUI_RPC_HOST=http://127.0.0.1:5001
 ```
 
 ## Sui JSON-RPC API
 
-In the following sections we will show how to use Sui's JSON-RPC API using
+In the following sections we will show how to use Sui's JSON-RPC API with
 the `curl` command.
 
 ## Sui JSON-RPC methods
@@ -52,9 +52,12 @@ curl --location --request POST $SUI_RPC_HOST \
 --data-raw '{ "jsonrpc":"2.0", "method":"rpc.discover","id":1}'
 ```
 
+TODO: Explain what they should see or show the output.
+
 ### sui_syncAccountState
 
-Synchronize client state with validators:
+Synchronize client state with validators with the following command,
+replacing `{{address}}` with an actual address value, for example one obtained from `wallet.conf` (without quotes):
 
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
@@ -62,8 +65,8 @@ curl --location --request POST $SUI_RPC_HOST \
 --data-raw '{ "jsonrpc":"2.0", "method":"sui_syncAccountState", "params":["{{address}}"], "id":1}'
 ```
 
-You should replace `{{address}}` in the command above with an actual
-address value, for example one obtained from `wallet.conf` (without quotes).
+TODO: Clarify what we mean by "without quotes" above. Do you mean when copying the address from `wallet.conf` or including in the command?
+Why does the command include quotes then ("{{address}}")? Should we instead say, replace "{{address}}" then?
 
 This will fetch the latest information on all objects owned by each
 address that is managed by this server. This command has no output.
