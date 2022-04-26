@@ -15,7 +15,7 @@ use move_vm_types::{
 };
 use num_enum::TryFromPrimitive;
 use smallvec::smallvec;
-use std::collections::{BTreeMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     object::Owner,
@@ -193,14 +193,14 @@ pub fn emit_wrapped_object_events(
     let removed = pop_arg!(args, VectorRef);
     let tx_begin_idx = pop_arg!(args, u64) as usize;
 
-    let mut removed_ids: HashSet<ObjectID> = HashSet::new();
+    let mut removed_ids: BTreeSet<ObjectID> = BTreeSet::new();
     for i in 0..removed.len(&id_type)?.value_as::<u64>()? {
         let id = removed.borrow_elem(i as usize, &id_type)?;
         let id_bytes = get_nested_struct_field(id.value_as::<StructRef>()?.read_ref()?, &[0])?;
         removed_ids.insert(id_bytes.value_as::<AccountAddress>()?.into());
     }
 
-    let processed_ids: HashSet<_> = context.events()[tx_begin_idx..]
+    let processed_ids: BTreeSet<_> = context.events()[tx_begin_idx..]
         .iter()
         .filter_map(|(_, event_type_byte, _, _, val)| {
             get_object_id_from_event(*event_type_byte, val)
