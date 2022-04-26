@@ -63,7 +63,7 @@ impl Clone for AuthorityPrivateInfo {
             port: self.port,
             db_path: self.db_path.clone(),
             stake: self.stake,
-            consensus_address: self.consensus_address.clone(),
+            consensus_address: self.consensus_address,
         }
     }
 }

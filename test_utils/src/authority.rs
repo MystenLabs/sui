@@ -79,7 +79,7 @@ where
     I: IntoIterator<Item = Object> + Clone,
 {
     let states = test_authority_states(objects).await;
-    let consensus_committee = make_default_narwhal_committee(&configs).unwrap();
+    let consensus_committee = make_default_narwhal_committee(configs).unwrap();
     let mut handles = Vec::new();
     for (state, config) in states.into_iter().zip(configs.iter()) {
         let handle = make_authority(

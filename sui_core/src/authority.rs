@@ -821,9 +821,7 @@ impl ExecutionState for AuthorityState {
         execution_indices: ExecutionIndices,
         transaction: Self::Transaction,
     ) -> Result<(), Self::Error> {
-        let certificate = match transaction {
-            ConsensusTransaction::UserTransaction(certificate) => certificate,
-        };
+        let ConsensusTransaction::UserTransaction(certificate) = transaction;
         self.handle_consensus_certificate(certificate, execution_indices)
             .await
     }
