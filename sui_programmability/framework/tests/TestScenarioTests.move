@@ -259,7 +259,7 @@ module Sui::TestScenarioTests {
             let obj = Object { id: versioned_id, value: 10 };
             Transfer::transfer(obj, copy sender);
             let ctx = TestScenario::ctx(&mut scenario);
-            assert!(id == TxContext::get_last_created_object_id(ctx), 0);
+            assert!(id == TxContext::last_created_object_id(ctx), 0);
         };
     }
 

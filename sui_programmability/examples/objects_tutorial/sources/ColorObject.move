@@ -77,6 +77,7 @@ module Tutorial::ColorObject {
 module Tutorial::ColorObjectTests {
     use Sui::TestScenario;
     use Tutorial::ColorObject::{Self, ColorObject};
+    use Sui::TxContext;
 
     // == Tests covered in Chapter 1 ==
 
@@ -107,6 +108,40 @@ module Tutorial::ColorObjectTests {
     }
 
     // == Tests covered in Chapter 2 ==
+
+    #[test]
+    public(script) fun test_copy_into() {
+        let owner = @0x1;
+        let scenario = &mut TestScenario::begin(&owner);
+        // Create two ColorObjects owned by `owner`, and obtain their IDs.
+        let (id1, id2) = {
+            let ctx = TestScenario::ctx(scenario);
+            ColorObject::create(255, 255, 255, ctx);
+            let id1 = TxContext::last_created_object_id(ctx);
+            ColorObject::create(0, 0, 0, ctx);
+            let id2 = TxContext::last_created_object_id(ctx);
+            (id1, id2)
+        };
+        TestScenario::next_tx(scenario, &owner);
+        {
+            let obj1 = TestScenario::take_object_by_id<ColorObject>(scenario, id1);
+            let obj2 = TestScenario::take_object_by_id<ColorObject>(scenario, id2);
+            let (red, green, blue) = ColorObject::get_color(&obj1);
+            assert!(red == 255 && green == 255 && blue == 255, 0);
+
+            let ctx = TestScenario::ctx(scenario);
+            ColorObject::copy_into(&obj2, &mut obj1, ctx);
+            TestScenario::return_object(scenario, obj1);
+            TestScenario::return_object(scenario, obj2);
+        };
+        TestScenario::next_tx(scenario, &owner);
+        {
+            let obj1 = TestScenario::take_object_by_id<ColorObject>(scenario, id1);
+            let (red, green, blue) = ColorObject::get_color(&obj1);
+            assert!(red == 0 && green == 0 && blue == 0, 0);
+            TestScenario::return_object(scenario, obj1);
+        }
+    }
 
     #[test]
     public(script) fun test_delete() {
