@@ -73,6 +73,10 @@ jsonrpsee-proc-macros = "0.10.1"
 
 [dev-dependencies]
 tracing-test = "0.2.1"
+tokio-util = { version = "0.7.0", features = ["codec"] }
+
+test_utils = { path = "../test_utils" }
+sui-network = { path = "../network_utils" }
 
 [features]
 benchmark = ["narwhal-node/benchmark"]

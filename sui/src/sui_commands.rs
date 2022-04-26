@@ -505,7 +505,7 @@ async fn make_server_with_genesis_ctx(
 
 /// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,
 /// and a consensus listener bridging the consensus node and the sui authority.
-async fn make_authority(
+pub async fn make_authority(
     authority: &AuthorityPrivateInfo,
     buffer_size: usize,
     state: AuthorityState,
