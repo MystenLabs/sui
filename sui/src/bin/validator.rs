@@ -100,7 +100,11 @@ async fn main() -> Result<(), anyhow::Error> {
     );
 
     let consensus_committee = network_config.make_narwhal_committee();
-    let consensus_parameters = ConsensusParameters::default();
+    let consensus_parameters = ConsensusParameters {
+        max_header_delay: 5_000,
+        max_batch_delay: 5_000,
+        ..ConsensusParameters::default()
+    };
     let consensus_store_path = sui_config_dir()?
         .join(CONSENSUS_DB_NAME)
         .join(encode_bytes_hex(net_cfg.key_pair.public_key_bytes()));

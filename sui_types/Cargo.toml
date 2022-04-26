@@ -42,5 +42,5 @@ move-disassembler = { git = "https://github.com/move-language/move", rev = "6a80
 move-ir-types = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
 
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "aad875a157ba1897b7f277dae7d9cb1deef7955c", package = "executor" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "aad875a157ba1897b7f277dae7d9cb1deef7955c", package = "crypto" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "8ae2164f0510349cbac2770e50e853bce5ab0e02", package = "executor" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "8ae2164f0510349cbac2770e50e853bce5ab0e02", package = "crypto" }
