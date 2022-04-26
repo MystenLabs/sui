@@ -135,9 +135,6 @@ TestScenario::next_tx(scenario, &owner);
 
 `TestScenario::take_object` removes the object of given type from global storage that's owned by the current transaction sender (it also implicitly checks `can_take_object`). If this line of code succeeds, it means that `owner` indeed owns an object of type `ColorObject`.
 We also check that the field values of the object match with what we set in creation. At the end, we must return the object back to the global storage by calling `TestScenario::return_object` so that it's back to the global storage. This also ensures that if any mutations happened to the object during the test, the global storage is aware of the changes.
-You may have noticed that `take_object` picks the object only based on the type parameter. What if there are multiple objects of the same type owned by the account? How do we retrieve each of them? In fact, if you call `take_object` when there are more than one object of the same type in the same account, an assertion failure will be triggered. We are working on adding an API just for this. Update coming soon.
-
-You may have noticed that `take_object` picks the object based solely on the type parameter. What if there are multiple objects of the same type owned by the account? How do we retrieve each of them? In fact, if you call `take_object` when there are more than one object of the same type in the same account, an assertion failure will be triggered. We are working on adding an API just for this. Update coming soon.
 
 Again, you can find the full code in [ColorObject.move](../../../../sui_programmability/examples/objects_tutorial/sources/ColorObject.move).
 
