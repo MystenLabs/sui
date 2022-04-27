@@ -8,7 +8,7 @@ use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::adapter;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress, TransactionDigest, TxContext},
+    base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
     error::SuiResult,
     gas::{self, SuiGasStatus},
     messages::{
@@ -22,6 +22,7 @@ use tracing::{debug, instrument};
 
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
 pub fn execute_transaction_to_effects<S: BackingPackageStore>(
+    shared_object_refs: Vec<ObjectRef>,
     temporary_store: &mut AuthorityTemporaryStore<S>,
     transaction: Transaction,
     transaction_digest: TransactionDigest,
@@ -55,6 +56,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     transaction_dependencies.remove(&TransactionDigest::genesis());
 
     let effects = temporary_store.to_effects(
+        shared_object_refs,
         &transaction_digest,
         transaction_dependencies.into_iter().collect(),
         status,

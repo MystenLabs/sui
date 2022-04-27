@@ -757,6 +757,12 @@ TransactionEffects:
   STRUCT:
     - status:
         TYPENAME: ExecutionStatus
+    - shared_objects:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
     - transaction_digest:
         TYPENAME: TransactionDigest
     - created:

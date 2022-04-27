@@ -842,6 +842,8 @@ impl ExecutionStatus {
 pub struct TransactionEffects {
     // The status of the execution
     pub status: ExecutionStatus,
+    // The object references of the shared objects used in this trasnaction. Empty if no shared objects were used.
+    pub shared_objects: Vec<ObjectRef>,
     // The transaction digest
     pub transaction_digest: TransactionDigest,
     // ObjectRef and owner of new objects created.

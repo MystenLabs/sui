@@ -7,6 +7,7 @@ use crate::{
     execution_engine, transaction_input_checker,
 };
 use async_trait::async_trait;
+use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::ModuleCache;
 use move_core_types::{
@@ -249,23 +250,14 @@ impl AuthorityState {
     async fn check_shared_locks(
         &self,
         transaction_digest: &TransactionDigest,
-        inputs: &[(InputObjectKind, Object)],
+        // inputs: &[(InputObjectKind, Object)],
+        shared_object_refs: &[ObjectRef],
     ) -> Result<(), SuiError> {
         debug!("Validating shared object sequence numbers from consensus...");
 
-        // Collect the version we have for each shared object
-        let shared_ids: HashSet<_> = inputs
-            .iter()
-            .filter_map(|(kind, obj)| match kind {
-                InputObjectKind::SharedMoveObject(..) if obj.owner.is_shared() => {
-                    Some((obj.id(), obj.version()))
-                }
-                _ => None,
-            })
-            .collect();
         // Internal consistency check
         debug_assert!(
-            !shared_ids.is_empty(),
+            !shared_object_refs.is_empty(),
             "we just checked that there are share objects yet none found?"
         );
 
@@ -280,9 +272,9 @@ impl AuthorityState {
         // (i) was not assigned a sequence number, or
         // (ii) has a different sequence number than the current one.
 
-        let lock_errors: Vec<_> = shared_ids
+        let lock_errors: Vec<_> = shared_object_refs
             .iter()
-            .filter_map(|(object_id, version)| {
+            .filter_map(|(object_id, version, _)| {
                 if !shared_locks.contains_key(object_id) {
                     Some(SuiError::SharedObjectLockNotSetObject)
                 } else if shared_locks[object_id] != *version {
@@ -329,13 +321,16 @@ impl AuthorityState {
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
-        let has_shared_object = objects_by_kind
+        let shared_object_refs: Vec<_> = objects_by_kind
             .iter()
-            .any(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)));
-        if has_shared_object {
+            .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)))
+            .map(|(_, obj)| obj.compute_object_reference())
+            .sorted()
+            .collect();
+        if !shared_object_refs.is_empty() {
             // If the transaction contains shared objects, we need to ensure they have been scheduled
             // for processing by the consensus protocol.
-            self.check_shared_locks(&transaction_digest, &objects_by_kind)
+            self.check_shared_locks(&transaction_digest, &shared_object_refs)
                 .await?;
             gas_status.charge_consensus()?;
         }
@@ -355,6 +350,7 @@ impl AuthorityState {
             transaction_digest,
         );
         let effects = execution_engine::execute_transaction_to_effects(
+            shared_object_refs,
             &mut temporary_store,
             transaction.clone(),
             transaction_digest,
