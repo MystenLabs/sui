@@ -27,7 +27,12 @@ def local(ctx, debug=True):
         'sync_retry_delay': 10_000,  # ms
         'sync_retry_nodes': 3,  # number of nodes
         'batch_size': 500_000,  # bytes
-        'max_batch_delay': 200  # ms
+        'max_batch_delay': 200,  # ms,
+        'block_synchronizer': {
+            'certificates_synchronize_timeout_ms': 2_000,
+            'payload_synchronize_timeout_ms': 2_000,
+            'payload_availability_timeout_ms': 2_000
+        }
     }
     try:
         ret = LocalBench(bench_params, node_params).run(debug)
@@ -110,7 +115,12 @@ def remote(ctx, debug=False):
         'sync_retry_delay': 10_000,  # ms
         'sync_retry_nodes': 3,  # number of nodes
         'batch_size': 500_000,  # bytes
-        'max_batch_delay': 200  # ms
+        'max_batch_delay': 200,  # ms
+        'block_synchronizer': {
+            'certificates_synchronize_timeout_ms': 2_000,
+            'payload_synchronize_timeout_ms': 2_000,
+            'payload_availability_timeout_ms': 2_000
+        }
     }
     try:
         Bench(ctx).run(bench_params, node_params, debug)
