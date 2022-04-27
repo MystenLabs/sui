@@ -834,6 +834,9 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         let (sequenced_to_write, schedule_to_write): (Vec<_>, Vec<_>) = ids
             .zip(versions.iter())
             .map(|(id, v)| {
+                // If it is the first time the shared object has been sequenced, assign it the default
+                // sequence number (`OBJECT_START_VERSION`). Otherwise use the `scheduled` map to
+                // to assign the next sequence number.
                 let version = v.unwrap_or_else(|| OBJECT_START_VERSION);
                 let next_version = v
                     .map(|v| v.increment())
