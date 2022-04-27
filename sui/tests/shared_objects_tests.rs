@@ -101,6 +101,7 @@ async fn shared_object_transaction() {
 }
 
 #[tokio::test]
+#[ignore = "Flaky, see #1624"]
 async fn call_shared_object_contract() {
     let mut gas_objects = test_gas_objects();
 
