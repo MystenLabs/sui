@@ -8,10 +8,10 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-anyhow = { version = "1.0.56", features = ["backtrace"] }
+anyhow = { version = "1.0.57", features = ["backtrace"] }
 base64 = "0.13.0"
 smallvec = "1.8.0"
-num_enum = "0.5.6"
+num_enum = "0.5.7"
 
 sui-types = { path = "../../sui_types" }
 sui-verifier = { path = "../verifier" }

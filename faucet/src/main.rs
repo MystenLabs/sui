@@ -8,7 +8,13 @@ use axum::{
     routing::{get, post},
     BoxError, Extension, Json, Router,
 };
-use std::{borrow::Cow, net::SocketAddr, sync::Arc, time::Duration};
+use clap::Parser;
+use std::{
+    borrow::Cow,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::Arc,
+    time::Duration,
+};
 use sui::{
     sui_config_dir,
     wallet_commands::{WalletCommands, WalletContext},
@@ -18,12 +24,29 @@ use sui_faucet::{Faucet, FaucetRequest, FaucetResponse, SimpleFaucet};
 use tower::ServiceBuilder;
 use tracing::info;
 
+const DEFAULT_SERVER_PORT: &str = "5003";
+const DEFAULT_SERVER_ADDR_IPV4: &str = "127.0.0.1";
+
 const DEFAULT_AMOUNT: u64 = 20;
 const DEFAULT_NUM_COINS: usize = 5;
 const REQUEST_BUFFER_SIZE: usize = 10;
 // TODO: Increase this once we use multiple gas objects
 const CONCURRENCY_LIMIT: usize = 1;
 const TIMEOUT_IN_SECONDS: u64 = 120;
+
+#[derive(Parser)]
+#[clap(
+    name = "Sui Faucet",
+    about = "Faucet for requesting test tokens on Sui",
+    rename_all = "kebab-case"
+)]
+struct FaucetConfig {
+    #[clap(long, default_value = DEFAULT_SERVER_PORT)]
+    port: u16,
+
+    #[clap(long, default_value = DEFAULT_SERVER_ADDR_IPV4)]
+    host: Ipv4Addr,
+}
 
 struct AppState<F = SimpleFaucet> {
     faucet: F,
@@ -36,6 +59,8 @@ async fn main() -> Result<(), anyhow::Error> {
     tracing_subscriber::fmt::init();
 
     let context = create_wallet_context().await?;
+
+    let config: FaucetConfig = FaucetConfig::parse();
 
     let app_state = Arc::new(AppState {
         faucet: SimpleFaucet::new(context).await.unwrap(),
@@ -54,7 +79,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 .into_inner(),
         );
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 5003));
+    let addr = SocketAddr::new(IpAddr::V4(config.host), config.port);
     info!("listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())

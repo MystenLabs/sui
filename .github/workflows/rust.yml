@@ -30,7 +30,7 @@ env:
 
 jobs:
   diff:
-    runs-on: ubuntu-latest
+    runs-on: [ubuntu-latest]
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
     steps:
@@ -41,7 +41,7 @@ jobs:
 
   license-check:
     name: license-check
-    runs-on: ubuntu-latest
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
       - run: scripts/license_check.sh
@@ -49,7 +49,7 @@ jobs:
   test:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-latest]
     strategy:
       fail-fast: false
     steps:
@@ -61,15 +61,17 @@ jobs:
         with:
           path: ~/.cargo/registry/src/**/librocksdb-sys-*
       - name: cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features
+        run: |
+          cargo build --all-features --lib
+          cargo test --all-features --no-run # -j N # uncomment and set a low number if builds start OOMing again
+          cargo test --all-features
+      # Ensure there are no uncommitted changes in the repo after running tests
+      - run: scripts/changed-files.sh
 
   clippy:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -87,7 +89,7 @@ jobs:
   rustfmt:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -103,7 +105,7 @@ jobs:
     name: cargo-deny (advisories, licenses, bans, ...)
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v3
     - uses: EmbarkStudios/cargo-deny-action@v1
@@ -111,7 +113,7 @@ jobs:
   cargo-udeps:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
