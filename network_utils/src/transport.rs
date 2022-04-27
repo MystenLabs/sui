@@ -132,9 +132,20 @@ pub struct TcpDataStream {
 
 impl TcpDataStream {
     async fn connect(address: String, max_data_size: usize) -> Result<Self, std::io::Error> {
-        let addr = address
-            .parse()
-            .map_err(|e| std::io::Error::new(ErrorKind::Other, e))?;
+        let addr = match address.parse() {
+            Ok(addr) => addr,
+            Err(_) => {
+                // Maybe it's a host name, try doing lookup first
+                if let Some(addr) = tokio::net::lookup_host(address.clone()).await?.next() {
+                    addr
+                } else {
+                    return Err(std::io::Error::new(
+                        ErrorKind::Other,
+                        format!("Could not lookup address {address}"),
+                    ));
+                }
+            }
+        };
         let socket = TcpSocket::new_v4()?;
         socket.set_send_buffer_size(max_data_size as u32)?;
         socket.set_recv_buffer_size(max_data_size as u32)?;
