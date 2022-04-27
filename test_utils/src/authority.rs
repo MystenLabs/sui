@@ -12,7 +12,6 @@ use sui_core::authority::AuthorityState;
 use sui_core::authority::AuthorityStore;
 use sui_core::authority_server::AuthorityServer;
 use sui_network::transport::SpawnedServer;
-use sui_types::base_types::SuiAddress;
 use sui_types::object::Object;
 
 /// The default network buffer size of a test authority.
