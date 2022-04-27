@@ -1414,7 +1414,7 @@ async fn shared_object() {
         use sui_types::gas_coin::GasCoin;
         use sui_types::object::MoveObject;
 
-        let content = GasCoin::new(shared_object_id, SequenceNumber::new(), 10);
+        let content = GasCoin::new(shared_object_id, OBJECT_START_VERSION, 10);
         let obj = MoveObject::new(/* type */ GasCoin::type_(), content.to_bcs_bytes());
         Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
     };
@@ -1479,7 +1479,7 @@ async fn shared_object() {
         .sequenced(&transaction_digest, [shared_object_id].iter())
         .unwrap()[0]
         .unwrap();
-    assert_eq!(shared_object_version, SequenceNumber::new());
+    assert_eq!(shared_object_version, OBJECT_START_VERSION);
 
     // Finally process the certificate and execute the contract. Ensure that the
     // shared object lock is cleaned up and that its sequence number increased.
@@ -1500,5 +1500,5 @@ async fn shared_object() {
         .unwrap()
         .unwrap()
         .version();
-    assert_eq!(shared_object_version, SequenceNumber::from(1));
+    assert_eq!(shared_object_version, SequenceNumber::from(2));
 }

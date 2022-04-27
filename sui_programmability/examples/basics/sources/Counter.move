@@ -45,6 +45,11 @@ module Basics::Counter {
         assert!(counter.owner == TxContext::sender(ctx), 0);
         counter.value = value;
     }
+
+    /// Assert a value for the counter.
+    public(script) fun assert_value(counter: &Counter, value: u64, _ctx: &mut TxContext) {
+        assert!(counter.value == value, 0)
+    }
 }
 
 #[test_only]
