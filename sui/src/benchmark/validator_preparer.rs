@@ -18,13 +18,13 @@ use std::{thread::sleep, time::Duration};
 use sui_adapter::genesis;
 use sui_core::authority::*;
 use sui_network::network::NetworkServer;
-use sui_types::crypto::{get_key_pair, KeyPair, PublicKeyBytes};
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::{random_key_pairs, KeyPair, PublicKeyBytes};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Object;
 use sui_types::{base_types::*, committee::*};
 use tokio::runtime::{Builder, Runtime};
 use tracing::{error, info};
-use sui_types::base_types::SuiAddress;
 const GENESIS_CONFIG_NAME: &str = "genesis_config.json";
 
 pub const VALIDATOR_BINARY_NAME: &str = "validator";
@@ -43,15 +43,16 @@ fn set_up_authorities_and_committee(
     committee_size: usize,
 ) -> Result<(Vec<KeyPair>, GenesisConfig), anyhow::Error> {
     let temp_dir = tempfile::tempdir()?;
-    // FIXMe
-    let mut config = GenesisConfig::custom_genesis(temp_dir.path(), committee_size, 0, 0, None)?;
-    let mut key_pairs = Vec::new();
-    for i in 0..committee_size {
-        let (address, key_pair) = get_key_pair();
-        config.authorities[i].address = address;
-        config.authorities[i].public_key = *key_pair.public_key_bytes();
-        key_pairs.push(key_pair);
-    }
+    let key_pairs = random_key_pairs(committee_size);
+    let key_pairs_clone = key_pairs.iter().map(|kp| kp.copy()).collect::<Vec<_>>();
+    let mut config = GenesisConfig::custom_genesis(
+        temp_dir.path(),
+        committee_size,
+        0,
+        0,
+        Some(key_pairs_clone),
+    )?;
+
     config.key_pair = key_pairs[0].copy();
 
     Ok((key_pairs, config))
@@ -81,15 +82,16 @@ impl ValidatorPreparer {
         let (key_pairs, mut genesis_config) = set_up_authorities_and_committee(committee_size)
             .expect("Got error in setting up committee");
 
-        let main_authority_address_hex =
-            format!("{}", SuiAddress::from(genesis_config.key_pair.public_key_bytes()));
+        let main_authority_address_hex = format!(
+            "{}",
+            SuiAddress::from(genesis_config.key_pair.public_key_bytes())
+        );
         info!("authority address hex: {}", main_authority_address_hex);
 
         let keys: Vec<_> = key_pairs
             .into_iter()
             .map(|key_pair| (*key_pair.public_key_bytes(), key_pair))
             .collect();
-
 
         let committee = Committee::new(0, keys.iter().map(|(k, _)| (*k, 1)).collect());
 
