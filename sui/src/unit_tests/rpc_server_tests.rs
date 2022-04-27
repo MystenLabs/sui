@@ -29,23 +29,23 @@ use crate::rpc_server_tests::sui_network::start_test_network;
 
 mod sui_network;
 
-// #[tokio::test]
-// async fn test_get_objects() -> Result<(), anyhow::Error> {
-//     let test_network = setup_test_network().await?;
-//     let http_client = test_network.http_client;
-//     let address = test_network.accounts.first().unwrap();
+#[tokio::test]
+async fn test_get_objects() -> Result<(), anyhow::Error> {
+    let test_network = setup_test_network().await?;
+    let http_client = test_network.http_client;
+    let address = test_network.accounts.first().unwrap();
 
-//     http_client.sync_account_state(*address).await?;
-//     let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
-//     let result = result
-//         .objects
-//         .into_iter()
-//         .map(|o| o.to_object_ref())
-//         .collect::<Result<Vec<_>, _>>()?;
+    http_client.sync_account_state(*address).await?;
+    let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
+    let result = result
+        .objects
+        .into_iter()
+        .map(|o| o.to_object_ref())
+        .collect::<Result<Vec<_>, _>>()?;
 
-//     assert_eq!(5, result.len());
-//     Ok(())
-// }
+    assert_eq!(5, result.len());
+    Ok(())
+}
 
 #[tokio::test]
 async fn test_transfer_coin() -> Result<(), anyhow::Error> {
