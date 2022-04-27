@@ -100,7 +100,6 @@ async fn send_tx_for_quorum(
 
         tokio::spawn(async move {
             send_tx_chunks_notif(notif, chunk, &mut ch_tx, net_client.clone(), stake, conn).await;
-            println!("Spawn for order {:?} with stake {}", net_client, stake);
         });
     }
     drop(order_chann_tx);
@@ -128,7 +127,6 @@ async fn send_tx_for_quorum(
         panic!("Quorum threshold not reached for orders")
     }
 
-    println!("order {}", total);
     // Confirmation step
     let (conf_chann_tx, mut conf_chann_rx) = MpscChannel(net_clients.len() * 2);
 
@@ -139,7 +137,6 @@ async fn send_tx_for_quorum(
         let mut chann_tx = conf_chann_tx.clone();
         handles.push(tokio::spawn(async move {
             let r = send_tx_chunks(chunk, net_client.clone(), conn).await;
-            println!("Spawn for conf {:?} with stake {}", net_client, stake);
             match chann_tx.send((r.0, stake)).await {
                 Ok(_) => (),
                 Err(e) => {
@@ -173,8 +170,6 @@ async fn send_tx_for_quorum(
     if total < quorum_threshold {
         panic!("Quorum threshold not reached for confirmation")
     }
-
-    println!("conf {}", total);
 
     let elapsed = time_start.elapsed().as_micros();
 
