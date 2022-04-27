@@ -35,8 +35,8 @@ async fn shared_object_transaction() {
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let configs = test_authority_configs();
-    let _handles = spawn_test_authorities(objects, &configs).await;
+    let (authorities, key_pairs) = test_authority_configs();
+    let _handles = spawn_test_authorities(objects, &authorities, &key_pairs).await;
 
     // Make a test shared object certificate.
     let certificate = test_shared_object_certificates().await.pop().unwrap();
@@ -48,7 +48,7 @@ async fn shared_object_transaction() {
     // (but it has high probability to do so).
     tokio::task::yield_now().await;
     'main: loop {
-        for config in &configs {
+        for config in &authorities {
             match submit_transaction(serialized.clone(), config).await {
                 SerializedMessage::TransactionResp(_) => {
                     // We got a reply from the Sui authority.

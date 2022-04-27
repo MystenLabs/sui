@@ -8,11 +8,17 @@ use sui::gateway_config::{GatewayConfig, GatewayType};
 use sui::keystore::KeystoreType;
 use sui::sui_commands::{genesis, SuiNetwork};
 use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
+use sui_types::crypto::{get_key_pair, random_key_pairs};
+use sui_types::base_types::SuiAddress;
+use tracing::info;
+
+const NUM_VALIDAOTR: usize = 4;
 
 #[cfg(test)]
 pub async fn start_test_network(
     working_dir: &Path,
     genesis_config: Option<GenesisConfig>,
+    // fixme
 ) -> Result<SuiNetwork, anyhow::Error> {
     let working_dir = working_dir.to_path_buf();
     let network_path = working_dir.join(SUI_NETWORK_CONFIG);
@@ -20,19 +26,42 @@ pub async fn start_test_network(
     let keystore_path = working_dir.join("wallet.key");
     let db_folder_path = working_dir.join("client_db");
 
-    let mut genesis_config =
-        genesis_config.unwrap_or(GenesisConfig::default_genesis(&working_dir)?);
+    let key_pairs = random_key_pairs(NUM_VALIDAOTR);
+
+    // let mut genesis_config =
+    //     genesis_config.unwrap_or(GenesisConfig::default_genesis(&working_dir)?);
+
+    let mut genesis_config = match genesis_config {
+        Some(genesis_config) => genesis_config,
+        None => {
+            let key_pairs = random_key_pairs(NUM_VALIDAOTR);
+            GenesisConfig::default_genesis(&working_dir, Some(key_pairs))?
+        }
+    };
+
     genesis_config.authorities = genesis_config
         .authorities
         .into_iter()
         .map(|info| AuthorityPrivateInfo { port: 0, ..info })
         .collect();
 
+    print!("@@@@@@@@ Genesis config. key_pair: {:?}\n", genesis_config.key_pair.public_key_bytes());
+    for a in &genesis_config.authorities {
+        print!("@@@@@@@ Genesis config. au pub key {:?}\n", a.public_key);
+    }
+    
+    // let (_, key_pair) = get_key_pair();
+    // genesis_config.authorities[0].public_key = *key_pair.public_key_bytes();
+    // genesis_config.authorities[0].address = SuiAddress::from(key_pair.public_key_bytes());
+    // genesis_config.key_pair = key_pair;
+
     let (network_config, accounts, mut keystore) = genesis(genesis_config).await?;
-    let network = SuiNetwork::start(&network_config).await?;
+    let key_pair_refs = key_pairs.iter().map(|kp| kp).collect::<Vec<_>>();
+    let network = SuiNetwork::start(&network_config, key_pair_refs).await?;
 
     let network_config = network_config.persisted(&network_path);
     network_config.save()?;
+    print!("@@@@@@@@ Network config. key_pair: {:?}\n", network_config.key_pair.public_key_bytes());
     keystore.set_path(&keystore_path);
     keystore.save()?;
 

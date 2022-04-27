@@ -11,9 +11,7 @@ use base64ct::Encoding;
 use digest::Digest;
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Keypair as DalekKeypair, Verifier};
-use narwhal_crypto::ed25519::Ed25519KeyPair;
-use narwhal_crypto::ed25519::Ed25519PrivateKey;
-use narwhal_crypto::ed25519::Ed25519PublicKey;
+use narwhal_crypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -23,6 +21,36 @@ use sha3::Sha3_256;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::str::FromStr;
+
+// #[derive(Debug, Clone)]
+// pub struct PublicKey {
+//     public_key_bytes: PublicKeyBytes,
+// }
+
+// impl Serialize for PublicKey {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::ser::Serializer,
+//     {
+//         serializer.serialize_str(&base64ct::Base64::encode_string(&self.public_key_bytes))
+//     }
+// }
+
+// impl<'de> Deserialize<'de> for PublicKey {
+//     fn deserialize<D>(deserializer: D) -> Result<PublicKey, D::Error>
+//     where
+//         D: serde::de::Deserializer<'de>,
+//     {
+//         let s = String::deserialize(deserializer)?;
+//         let value = base64ct::Base64::decode_vec(&s)
+//             .map_err(|err| serde::de::Error::custom(err.to_string()))?;
+//         let key = DalekKeypair::from_bytes(&value)
+//             .map_err(|err| serde::de::Error::custom(err.to_string()))?;
+//         Ok(PublicKey {
+//             public_key_bytes: OnceCell::new(),
+//         })
+//     }
+// }
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
 #[derive(Debug)]
@@ -138,7 +166,35 @@ impl PublicKeyBytes {
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
     }
+    /// Make a Narwhal-compatible public key from a Sui pub.
+    pub fn get_narwhal_public_key(&self) -> Ed25519PublicKey {
+        let pub_key = dalek::PublicKey::from_bytes(&self.0).unwrap();
+        Ed25519PublicKey(pub_key)
+    }
 }
+
+// impl Serialize for PublicKeyBytes {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::ser::Serializer,
+//     {
+//         serializer.serialize_str(&base64ct::Base64::encode_string(&self.0))
+//     }
+// }
+
+// impl<'de> Deserialize<'de> for PublicKeyBytes {
+//     fn deserialize<D>(deserializer: D) -> Result<PublicKeyBytes, D::Error>
+//     where
+//         D: serde::de::Deserializer<'de>,
+//     {
+//         let s = String::deserialize(deserializer)?;
+//         let value = base64ct::Base64::decode_vec(&s)
+//             .map_err(|err| serde::de::Error::custom(err.to_string()))?;
+//         let res = PublicKeyBytes::try_from(&value)
+//             .map_err(|err| serde::de::Error::custom(err.to_string()))?;
+//         Ok(res)
+//     }
+// }
 
 impl AsRef<[u8]> for PublicKeyBytes {
     fn as_ref(&self) -> &[u8] {
@@ -174,6 +230,14 @@ impl std::fmt::Debug for PublicKeyBytes {
         write!(f, "k#{}", s)?;
         Ok(())
     }
+}
+
+pub fn random_key_pairs(num: usize) -> Vec<KeyPair> {
+    let mut key_pairs = Vec::with_capacity(num);
+    for _ in 0..num {
+        key_pairs.push(get_key_pair().1);
+    }
+    key_pairs
 }
 
 // TODO: get_key_pair() and get_key_pair_from_bytes() should return KeyPair only.

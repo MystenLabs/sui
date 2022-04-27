@@ -336,7 +336,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
     // Create and save genesis config file
     // Create 4 authorities, 1 account with 1 gas object with custom id
-    let mut config = GenesisConfig::default_genesis(working_dir.path())?;
+    let mut config = GenesisConfig::default_genesis(working_dir.path(), None)?;
     config.accounts.clear();
     let object_id = ObjectID::random();
     config.accounts.push(AccountConfig {
@@ -388,7 +388,7 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     // Create and save genesis config file
     // Create 4 authorities and 1 account
     let num_authorities = 4;
-    let mut config = GenesisConfig::custom_genesis(working_dir, num_authorities, 1, 1)?;
+    let mut config = GenesisConfig::custom_genesis(working_dir, num_authorities, 1, 1, None)?;
     config
         .move_packages
         .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_1"));
