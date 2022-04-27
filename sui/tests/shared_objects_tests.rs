@@ -28,6 +28,8 @@ async fn submit_transaction(
     deserialize_message(&bytes[..]).unwrap()
 }
 
+// TODO: Taking too long to run. Re-enable once it's fixed.
+#[ignore]
 #[tokio::test]
 async fn shared_object_transaction() {
     let mut objects = test_gas_objects();
