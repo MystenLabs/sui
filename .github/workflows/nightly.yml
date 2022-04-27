@@ -29,7 +29,7 @@ env:
 jobs:
   beta:
     name: Run test on the beta channel
-    runs-on: [self-hosted, ubuntu-latest]
+    runs-on: [self-hosted, ubuntu]
     steps:
       - uses: actions/checkout@v3
       - name: Install beta toolchain
@@ -49,7 +49,7 @@ jobs:
 
   release:
     name: build release binaries
-    runs-on: [self-hosted, ubuntu-latest]
+    runs-on: [self-hosted, ubuntu]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
