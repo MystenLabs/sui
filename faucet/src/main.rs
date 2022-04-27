@@ -38,7 +38,7 @@ struct FaucetConfig {
     port: u16,
 
     #[clap(long, default_value = "127.0.0.1")]
-    host: Ipv4Addr,
+    host_ip: Ipv4Addr,
 
     #[clap(long, default_value_t = 2000)]
     amount: u64,
@@ -69,7 +69,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let config: FaucetConfig = FaucetConfig::parse();
 
     let FaucetConfig {
-        host,
+        host_ip,
         port,
         request_buffer_size,
         timeout_in_seconds,
@@ -94,7 +94,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 .into_inner(),
         );
 
-    let addr = SocketAddr::new(IpAddr::V4(host), port);
+    let addr = SocketAddr::new(IpAddr::V4(host_ip), port);
     info!("listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
