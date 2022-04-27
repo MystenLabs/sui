@@ -1,6 +1,7 @@
-use arc_swap::ArcSwap;
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use arc_swap::ArcSwap;
 use dashmap::DashMap;
 use either::Either;
 use once_cell::sync::OnceCell;
@@ -12,12 +13,18 @@ use super::{Node, NodeRef, WeakNodeRef};
 /// A trait marking the minimum information we need to sort out the value for a node:
 /// - `parents`: hash pointers to its parents, and
 /// - `compressible`: a value-derived boolean indicating if that value is, initially, compressible
+///
 /// The `crypto:Hash` trait bound offers the digest-ibility.
 pub trait Affiliated: crypto::Hash {
+    /// Hash pointers to the parents of the current value
     fn parents(&self) -> Vec<<Self as crypto::Hash>::TypedDigest>;
-    fn compressible(&self) -> bool;
-}
 
+    /// Whether the current value should be marked as compressible when first inserted in a Node.
+    /// Defaults to a blanket false for all values.
+    fn compressible(&self) -> bool {
+        false
+    }
+}
 /// The Dag data structure
 /// This consists morally of two tables folded in one:
 /// - the node table, which contains mappings from node hashes to weak references,
@@ -49,14 +56,16 @@ pub enum DagError<T: crypto::Hash> {
 }
 
 impl<T: Affiliated> NodeDag<T> {
+    /// Creates a new Node dag
+    ///
     pub fn new() -> NodeDag<T> {
         NodeDag {
             node_table: DashMap::new(),
         }
     }
 
-    // Returns a weak reference to the requested vertex.
-    // This does not prevent the vertex from being dropped off the graph.
+    /// Returns a weak reference to the requested vertex.
+    /// This does not prevent the vertex from being dropped off the graph.
     pub fn get_weak(&self, digest: T::TypedDigest) -> Result<WeakNodeRef<T>, DagError<T>> {
         let node_ref = self
             .node_table
@@ -84,15 +93,44 @@ impl<T: Affiliated> NodeDag<T> {
         }
     }
 
-    // Inserts a node in the Dag.
-    //
-    // Note: the dag currently does not do any causal completion, and only verifies the invariant that
-    // - insertion should be idempotent
-    // - an unseen node is a head (not pointed) to by any other node.
+    /// Returns whether the vertex pointed to by the hash passed as an argument is
+    /// contained in the DAG.
+    pub fn contains(&self, hash: T::TypedDigest) -> bool {
+        self.node_table.contains_key(&hash)
+    }
+
+    /// Returns whether the vertex pointed to by the hash passed as an argument is a
+    /// head of the DAG (nodes not pointed to by any other). Heads carry strong references
+    /// to many downward nodes and dropping them might GC large spans of the graph.
+    ///
+    /// This returns an error if the queried node is unknown
+    pub fn has_head(&self, hash: T::TypedDigest) -> Result<bool, DagError<T>> {
+        let node_ref = self
+            .node_table
+            .get(&hash)
+            .ok_or(DagError::UnknownDigest(hash))?;
+        match *node_ref {
+            Either::Right(ref _node) => Ok(true),
+            Either::Left(ref _ode) => Ok(false),
+        }
+    }
+
+    /// Inserts a node in the Dag from the provided value
+    ///
+    /// When the value is inserted, its parent references are interpreted as hash pointers (see [`Affiliated`])`.
+    /// Those hash pointers are converted to [`NodeRef`] based on the pointed nodes that are already in the DAG.
+    ///
+    /// Note: the dag currently does not do any causal completion. It is an error to insert a node which parents
+    /// are unknown by the DAG it's inserted into.
+    ///
+    /// This insertion procedure only verifies the invariant that
+    /// - insertion should be idempotent
+    /// - an unseen node is a head (not pointed) to by any other node.
+    ///
     pub fn try_insert(&mut self, value: T) -> Result<(), DagError<T>> {
         let digest = value.digest();
         // Do we have this node already?
-        if self.get_weak(digest).is_ok() {
+        if self.contains(digest) {
             // idempotence (beware: re-adding removed nodes under the same hash won't bump the Rc)
             return Ok(());
         }
@@ -148,7 +186,7 @@ impl<T: Affiliated> Default for NodeDag<T> {
 
 #[cfg(test)]
 mod tests {
-    use std::fmt;
+    use std::{collections::HashSet, fmt};
 
     use crypto::{Digest, Hash};
     use proptest::prelude::*;
@@ -286,6 +324,34 @@ mod tests {
                     Either::Right(_) => (),
                     Either::Left(ref node) => assert!(node.upgrade().is_some()),
                 }
+            }
+        }
+
+
+        #[test]
+        fn test_dag_contains_heads(
+            dag in arb_dag_complete(10, 10)
+        ) {
+            let mut node_dag = NodeDag::new();
+            let mut digests = Vec::new();
+            for node in dag.iter() {
+                digests.push(node.digest());
+                // the elements are generated in order & with no missing parents => no suprises
+                assert!(node_dag.try_insert(node.clone()).is_ok());
+            }
+            let mut heads = HashSet::new();
+            for hash in digests {
+                // all insertions are reflected
+                assert!(node_dag.contains(hash));
+                if node_dag.has_head(hash).unwrap() {
+                    heads.insert(hash);
+                }
+            }
+            // at least the last round has nothing pointing to themselves
+            assert!(heads.len() >= 10);
+            // check heads have nothing pointing to them
+            for node in dag.into_iter() {
+                assert!(node.parents().iter().all(|parent| !heads.contains(parent)))
             }
         }
 
