@@ -60,14 +60,20 @@ impl MovePackage {
     }
 }
 
-impl From<&Vec<CompiledModule>> for MovePackage {
-    fn from(compiled_modules: &Vec<CompiledModule>) -> Self {
-        let id = ObjectID::from(*compiled_modules[0].self_id().address());
+impl FromIterator<CompiledModule> for MovePackage {
+    fn from_iter<T: IntoIterator<Item = CompiledModule>>(iter: T) -> Self {
+        let mut iter = iter.into_iter().peekable();
+        let id = ObjectID::from(
+            *iter
+                .peek()
+                .expect("Tried to build a Move package from an empty iterator of Compiled modules")
+                .self_id()
+                .address(),
+        );
 
         Self::new(
             id,
-            &compiled_modules
-                .iter()
+            &iter
                 .map(|module| {
                     let mut bytes = Vec::new();
                     module.serialize(&mut bytes).unwrap();
