@@ -801,7 +801,7 @@ pub fn resolve_and_type_check(
 }
 
 fn is_primitive(
-    module: &CompiledModule,
+    _module: &CompiledModule,
     function_type_arguments: &[TypeTag],
     t: &SignatureToken,
 ) -> bool {
@@ -812,7 +812,7 @@ fn is_primitive(
         | SignatureToken::U128
         | SignatureToken::Address => true,
 
-        SignatureToken::Vector(inner) => is_primitive(module, function_type_arguments, inner),
+        SignatureToken::Vector(inner) => is_primitive(_module, function_type_arguments, inner),
 
         SignatureToken::TypeParameter(idx) => function_type_arguments
             .get(*idx as usize)
