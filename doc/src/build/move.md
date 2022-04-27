@@ -1,5 +1,5 @@
 ---
-title: Smart Contracts with Move
+title: Quickstart Smart Contracts with Move
 ---
 
 Welcome to the Sui tutorial for building smart contracts with
