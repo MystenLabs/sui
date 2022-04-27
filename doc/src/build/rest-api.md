@@ -20,7 +20,7 @@ The genesis process will create a `gateway.conf` configuration file, which will 
 
 Use the following command to start a local server:
 ```shell
-rest_server
+$ rest_server
 ```
 You will see output resembling:
 ```
@@ -31,7 +31,7 @@ NOTE: For additional logs, set `RUST_LOG=debug` before invoking `rest_server`
 
 Export a local user variable to store the hardcoded hostname + port that the local REST server starts with to be used when issuing the curl commands that follow.
 ```shell
-export SUI_GATEWAY_HOST=http://127.0.0.1:5001
+$ export SUI_GATEWAY_HOST=http://127.0.0.1:5001
 ```
 
 ## Sui REST API
@@ -48,7 +48,7 @@ setup section](#postman-setup).
 Retrieve OpenAPI documentation:
 
 ```shell
-curl --location --request GET $SUI_GATEWAY_HOST/docs | json_pp
+$ curl --location --request GET $SUI_GATEWAY_HOST/docs | json_pp
 ```
 
 ### POST /api/sync_account_state
@@ -56,7 +56,7 @@ curl --location --request GET $SUI_GATEWAY_HOST/docs | json_pp
 Synchronize client state with validators:
 
 ```shell
-curl --location --request POST $SUI_GATEWAY_HOST/api/sync_account_state \
+$ curl --location --request POST $SUI_GATEWAY_HOST/api/sync_account_state \
 --header 'Content-Type: application/json' \
 --data-raw '{
     "address": "{{address}}"
@@ -73,7 +73,7 @@ address that is managed by this server. This command has no output.
 
 Return the list of objects owned by an address:
 ```shell
-curl --location --request GET $SUI_GATEWAY_HOST'/api/objects?address={{address}}' | json_pp
+$ curl --location --request GET $SUI_GATEWAY_HOST'/api/objects?address={{address}}' | json_pp
 ```
 
 You should replace `{{address}}` in the command above with an actual
@@ -105,7 +105,7 @@ The output you see should resemble the following (abbreviated to show only two o
 Return the object information for a specified object, for example:
 
 ```shell
-curl --location --request GET $SUI_GATEWAY_HOST'/api/object_info?objectId={{object_id}}' | json_pp
+$ curl --location --request GET $SUI_GATEWAY_HOST'/api/object_info?objectId={{object_id}}' | json_pp
 ```
 
 Replace `{{object_id}}` in the command above with an
@@ -117,7 +117,7 @@ actual object ID, for example one obtained from [`GET
 Return the schema for a specified object:
 
 ```shell
-curl --location --request GET $SUI_GATEWAY_HOST'/object_schema?objectId={{object_id}}' | json_pp
+$ curl --location --request GET $SUI_GATEWAY_HOST'/object_schema?objectId={{object_id}}' | json_pp
 ```
 
 Replace `{{object_id}}` in the command above with an
@@ -127,7 +127,7 @@ actual object ID, for example one obtained from [`GET
 ### POST /api/new_transfer
 #### 1, Create a transaction to transfer an object from one address to another:
 ```shell
-curl --location --request POST $SUI_GATEWAY_HOST/api/new_transfer \
+$ curl --location --request POST $SUI_GATEWAY_HOST/api/new_transfer \
 --header 'Content-Type: application/json' \
 --data-raw '{
     "fromAddress": "{{owner_address}}",
@@ -145,7 +145,7 @@ A transaction data response will be returned from the gateway server.
 ```
 #### 2, Sign the transaction using the Sui signtool
 ```shell
-sui signtool --address <owner_address> --data <tx_bytes>
+$ sui signtool --address <owner_address> --data <tx_bytes>
 ```
 The signing tool will create and print out the signature and public key information.
 You will see output resembling:
@@ -158,7 +158,7 @@ You will see output resembling:
 
 #### 3, Execute the transaction using the transaction data, signature and public key.
 ```shell
-curl --location --request POST $SUI_GATEWAY_HOST/api/execute_transaction \
+$ curl --location --request POST $SUI_GATEWAY_HOST/api/execute_transaction \
 --header 'Content-Type: application/json' \
 --data-raw '{
     "tx_bytes": "{{tx_bytes}}",
@@ -191,7 +191,7 @@ the module of a given package (smart contracts in Sui are written in
 the [Move](move.md#move) language):
 
 ```shell
-curl --location --request POST $SUI_GATEWAY_HOST/api/move_call \
+$ curl --location --request POST $SUI_GATEWAY_HOST/api/move_call \
 --header 'Content-Type: application/json' \
 --data-raw '{
     "sender": "{{owner_address}}",
@@ -237,7 +237,7 @@ To learn more about what `args` are accepted in a Move call, refer to the [SuiJS
 Publish Move module.
 
 ```shell
-curl --location --request POST $SUI_GATEWAY_HOST/publish \
+$ curl --location --request POST $SUI_GATEWAY_HOST/publish \
 --header 'Content-Type: application/json' \
 --data-raw '{
     "sender": "{{owner_address}}",
@@ -265,13 +265,13 @@ represented by `{{gas_object_id}}` must be owned by the address represented by
 To publish a Move module, you also need `{{vector_of_compiled_modules}}`. To generate the value of this field, use the `sui-move` command. The `sui-move` command supports printing the bytecodes as base64 with the following option
 
 ```
-sui-move --path <move-module-path> build --dump-bytecode-as-base64
+$ sui-move --path <move-module-path> build --dump-bytecode-as-base64
 ```
 
 Assuming that the location of the package's sources is in the `PATH_TO_PACKAGE` environment variable an example command would resemble the following
 
 ```
-sui-move --path $PATH_TO_PACKAGE/my_move_package build --dump-bytecode-as-base64
+$ sui-move --path $PATH_TO_PACKAGE/my_move_package build --dump-bytecode-as-base64
 
 ["oRzrCwUAAAAJAQAIAggUAxw3BFMKBV1yB88BdAjDAigK6wIFDPACQgAAAQEBAgEDAAACAAEEDAEAAQEBDAEAAQMDAgAABQABAAAGAgEAAAcDBAAACAUBAAEFBwEBAAEKCQoBAgMLCwwAAgwNAQEIAQcODwEAAQgQAQEABAYFBgcICAYJBgMHCwEBCAALAgEIAAcIAwABBwgDAwcLAQEIAAMHCAMBCwIBCAADCwEBCAAFBwgDAQgAAgsCAQkABwsBAQkAAQsBAQgAAgkABwgDAQsBAQkAAQYIAwEFAgkABQMDBwsBAQkABwgDAQsCAQkAAgsBAQkABQdNQU5BR0VEBENvaW4IVHJhbnNmZXIJVHhDb250ZXh0C1RyZWFzdXJ5Q2FwBGJ1cm4EaW5pdARtaW50DHRyYW5zZmVyX2NhcAtkdW1teV9maWVsZA9jcmVhdGVfY3VycmVuY3kGc2VuZGVyCHRyYW5zZmVyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgACAQkBAAEAAAEECwELADgAAgEAAAAICwkSAAoAOAEMAQsBCwAuEQY4AgICAQAAAQULAQsACwI4AwIDAQAAAQQLAAsBOAQCAA==", "oRzrCwUAAAALAQAOAg4kAzJZBIsBHAWnAasBB9IC6QEIuwQoBuMECgrtBB0MigWzAQ29BgYAAAABAQIBAwEEAQUBBgAAAgAABwgAAgIMAQABBAQCAAEBAgAGBgIAAxAEAAISDAEAAQAIAAEAAAkCAwAACgQFAAALBgcAAAwEBQAADQQFAAIVCgUBAAIICwMBAAIWDQ4BAAIXERIBAgYYAhMAAhkCDgEABRoVAwEIAhsWAwEAAgsXDgEAAg0YBQEABgkHCQgMCA8JCQsMCw8MFAYPBgwNDA0PDgkPCQMHCAELAgEIAAcIBQILAgEIAwsCAQgEAQcIBQABBggBAQMEBwgBCwIBCAMLAgEIBAcIBQELAgEIAAMLAgEIBAMLAgEIAwEIAAEGCwIBCQACCwIBCQAHCwcBCQABCAMDBwsCAQkAAwcIBQELAgEJAAEIBAELBwEIAAIJAAcIBQELBwEJAAEIBgEIAQEJAAIHCwIBCQALAgEJAAMDBwsHAQkABwgFAQYLBwEJAAZCQVNLRVQHTUFOQUdFRARDb2luAklEA1NVSQhUcmFuc2ZlcglUeENvbnRleHQHUmVzZXJ2ZQRidXJuBGluaXQObWFuYWdlZF9zdXBwbHkEbWludApzdWlfc3VwcGx5DHRvdGFsX3N1cHBseQtkdW1teV9maWVsZAJpZAtWZXJzaW9uZWRJRAx0cmVhc3VyeV9jYXALVHJlYXN1cnlDYXADc3VpB21hbmFnZWQFdmFsdWUId2l0aGRyYXcPY3JlYXRlX2N1cnJlbmN5Bm5ld19pZAR6ZXJvDHNoYXJlX29iamVjdARqb2luAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgMIAAAAAAAAAAAAAgEOAQECBA8IBhELBwEIABMLAgEIAxQLAgEIBAABAAAIFg4BOAAMBAsBCgAPADgBCgAPAQoECgI4AgwFCwAPAgsECwI4AwwDCwULAwIBAAAAEA8JEgAKADgEDAEKABEKCwEKADgFCwA4BhIBOAcCAgEAAAMECwAQAjgIAgMBAAAFHA4BOAkMBAoEDgI4CCEDDgsAAQsDAQcAJwoADwELATgKCgAPAgsCOAsLBAsADwALAzgMAgQBAAADBAsAEAE4CQIFAQAAAwQLABAAOA0CAQEBAgEDAA=="]
 Build Successful
