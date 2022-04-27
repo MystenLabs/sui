@@ -10,12 +10,12 @@ edition = "2021"
 bytes = "1.1.0"
 futures = "0.3.21"
 async-trait = "0.1.53"
-net2 = "0.2.37"
 tokio = { version = "1.17.0", features = ["full"] }
 tracing = { version = "0.1.34", features = ["log"] }
 tokio-util = { version = "0.7.1", features = ["codec"] }
 
 sui-types = { path = "../sui_types" }
+
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["net2"]
