@@ -26,7 +26,6 @@ use sui_network::network::PortAllocator;
 use sui_types::base_types::*;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::{get_key_pair, KeyPair, PublicKeyBytes};
-use tracing::info;
 use tracing::log::trace;
 
 const DEFAULT_WEIGHT: usize = 1;
@@ -49,7 +48,6 @@ pub struct AuthorityInfo {
 #[derive(Serialize, Debug)]
 pub struct AuthorityPrivateInfo {
     pub address: SuiAddress,
-    // pub key_pair: KeyPair,
     pub public_key: PublicKeyBytes,
     pub host: String,
     pub port: u16,
@@ -189,9 +187,7 @@ impl NetworkConfig {
                 .authorities
                 .iter()
                 .map(|x| {
-                    // let name = x.key_pair.make_narwhal_keypair().name;
-                    let name = x.public_key.get_narwhal_public_key();
-                    info!("narwhal commmittee member pub key: {}", name);
+                    let name = x.public_key.make_narwhal_public_key();
                     let primary = PrimaryAddresses {
                         primary_to_primary: socket_addr_from_hostport(&x.host, x.port + 100),
                         worker_to_primary: socket_addr_from_hostport(&x.host, x.port + 200),
@@ -442,7 +438,7 @@ pub fn make_default_narwhal_committee(
             .iter()
             .enumerate()
             .map(|(i, x)| {
-                let name = x.public_key.get_narwhal_public_key();
+                let name = x.public_key.make_narwhal_public_key();
 
                 let primary = PrimaryAddresses {
                     primary_to_primary: socket_addr_from_hostport("127.0.0.1", ports[i][0]),

@@ -326,7 +326,6 @@ impl SuiNetwork {
         let consensus_parameters = ConsensusParameters::default();
 
         let mut spawned_authorities = Vec::new();
-        // for i in 0..config.authorities.len() {
         for (i, key_pair) in ordered_key_pairs
             .iter()
             .enumerate()
@@ -339,7 +338,6 @@ impl SuiNetwork {
 
             let server = make_server(
                 authority,
-                // ordered_key_pairs[i],
                 key_pair,
                 &committee,
                 config.buffer_size,
@@ -574,7 +572,6 @@ pub async fn make_authority(
     let consensus_keypair = key_pair.make_narwhal_keypair();
     let consensus_name = consensus_keypair.name.clone();
     let consensus_store = narwhal_node::NodeStorage::reopen(consensus_store_path);
-
     narwhal_node::Node::spawn_primary(
         consensus_keypair,
         consensus_committee.clone(),
