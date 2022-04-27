@@ -57,6 +57,23 @@ impl<T> From<Arc<Node<T>>> for NodeRef<T> {
     }
 }
 
+impl<T> NodeRef<T> {
+    /// Returns a NodeRef pointing at the Node passed as argument
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use dag::{ Node, NodeRef };
+    ///
+    /// let node = Node::new_leaf(1, false);
+    /// // Note the 2 derefs: one for the newtype, one for the Arc
+    /// assert_eq!(Node::new_leaf(1, false), **NodeRef::from_pointee(node));
+    /// ```
+    pub fn from_pointee(val: Node<T>) -> Self {
+        Arc::new(val).into()
+    }
+}
+
 /// Non reference-counted pointers to a Node
 pub type WeakNodeRef<T> = Weak<Node<T>>;
 
@@ -78,8 +95,26 @@ pub struct Node<T> {
     value: T,
 }
 
-impl<T: Sync + Send + std::fmt::Debug> Node<T> {
+impl<T: PartialEq> PartialEq for Node<T> {
+    fn eq(&self, other: &Self) -> bool {
+        *self.parents.load() == *other.parents.load()
+            && self.is_compressible() == other.is_compressible()
+            && self.value.eq(&other.value)
+    }
+}
+
+impl<T: Eq> Eq for Node<T> {}
+
+impl<T> Node<T> {
     /// Create a new DAG leaf node that contains the given value.
+    /// 
+    /// # Example
+    ///
+    /// ```
+    /// use dag::{ Node, NodeRef };
+    ///
+    /// let node = Node::new_leaf(1, false);
+    /// ```
     pub fn new_leaf(value: T, compressible: bool) -> Self {
         Self::new(value, compressible, Vec::default())
     }
@@ -102,7 +137,7 @@ impl<T: Sync + Send + std::fmt::Debug> Node<T> {
 
     /// Return the value payload of the node
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use dag::Node;
@@ -190,7 +225,9 @@ impl<T: Sync + Send + std::fmt::Debug> Node<T> {
     fn is_trivial(&self) -> bool {
         self.parents.load().iter().all(|p| !p.is_compressible())
     }
+}
 
+impl<T: Sync + Send + std::fmt::Debug> Node<T> {
     /// Compress the path from this node to the next incompressible layer of the DAG.
     /// Returns the parents of the node.
     ///
