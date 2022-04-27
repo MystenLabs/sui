@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::gateway_state::GatewayTxSeqNumber;
-
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -12,6 +11,7 @@ use std::path::Path;
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
+use sui_types::object::OBJECT_START_VERSION;
 use tracing::warn;
 use typed_store::rocks::{DBBatch, DBMap};
 
@@ -834,7 +834,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         let (sequenced_to_write, schedule_to_write): (Vec<_>, Vec<_>) = ids
             .zip(versions.iter())
             .map(|(id, v)| {
-                let version = v.unwrap_or_else(|| SequenceNumber::from(1));
+                let version = v.unwrap_or_else(|| OBJECT_START_VERSION);
                 let next_version = v
                     .map(|v| v.increment())
                     .unwrap_or_else(|| SequenceNumber::from(2));
