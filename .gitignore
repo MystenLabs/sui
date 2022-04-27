@@ -18,6 +18,3 @@ storage/
 
 # Python
 .pyc
-
-# Cargo
-Cargo.lock

@@ -7,11 +7,11 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = { version = "1.0.56", features = ["backtrace"] }
+anyhow = { version = "1.0.57", features = ["backtrace"] }
 bcs = "0.1.3"
 bincode = "1.3.3"
 itertools = "0.10.3"
-once_cell = "1.9.0"
+once_cell = "1.10.0"
 rand = "0.7.3"
 serde = { version = "1.0.136", features = ["derive"] }
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
@@ -21,10 +21,10 @@ thiserror = "1.0.30"
 hex = "0.4.3"
 serde_bytes = "0.11.5"
 serde_json = "1.0.79"
-serde_with = { version = "1.12.0", features = ["base64", "hex"] }
+serde_with = { version = "1.13.0", features = ["base64", "hex"] }
 signature = "1.5.0"
 static_assertions = "1.1.0"
-opentelemetry = { version = "0.17", features = ["rt-tokio"] }
+opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
 parking_lot = "0.12.0"
 base64ct = { version = "1.5.0", features = ["alloc"] }
 sha2 = "0.10.2"
@@ -33,7 +33,7 @@ hkdf = "0.12.3"
 digest = "0.10.3"
 
 name_variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "97a056f85555fa2afe497d6abb7cf6bf8faa63cf" }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "e44bca4513a6ff6c97399cd79e82e4bc00571ac3" }
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d2976a45420147ad821baae96e6fe4b12215f743" }
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
