@@ -1,0 +1,6 @@
+{
+    "extends": "./tsconfig.common",
+    "compilerOptions": {
+        "jsx": "react-jsxdev"
+    }
+}
