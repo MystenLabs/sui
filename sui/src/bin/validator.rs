@@ -58,20 +58,11 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let network_config_path = sui_config_dir()?.join(SUI_NETWORK_CONFIG);
 
-    let network_config = match (network_config_path.exists(), cfg.force_genesis) {
-        (true, false) => PersistedConfig::<NetworkConfig>::read(&network_config_path)?,
+    let genesis_conf: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
 
-        // If network.conf is missing, or if --force-genesis is true, we run genesis.
-        _ => {
-            let genesis_conf: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
-            let (network_config, _, _) = genesis(genesis_conf).await?;
-            network_config
-        }
-    };
-
-    let net_cfg = if let Some(address) = cfg.address {
+    let authority = if let Some(address) = cfg.address {
         // Find the network config for this validator
-        network_config
+        genesis_conf
             .authorities
             .iter()
             .find(|x| SuiAddress::from(x.key_pair.public_key_bytes()) == address)
@@ -82,21 +73,52 @@ async fn main() -> Result<(), anyhow::Error> {
                 )
             })?
     } else if let Some(index) = cfg.validator_idx {
-        &network_config.authorities[index]
+        &genesis_conf.authorities[index]
     } else {
         return Err(anyhow!("Must supply either --address of --validator-idx"));
     };
 
+    let genesis_conf_copy: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
+
+    let network_config = match (network_config_path.exists(), cfg.force_genesis) {
+        (true, false) => PersistedConfig::<NetworkConfig>::read(&network_config_path)?,
+
+        // If network.conf is missing, or if --force-genesis is true, we run genesis.
+        _ => {
+            let (network_config, _, _) =
+                genesis(genesis_conf_copy, Some(authority.address)).await?;
+            network_config
+        }
+    };
+
+    // let net_cfg = if let Some(address) = cfg.address {
+    //     // Find the network config for this validator
+    //     network_config
+    //         .authorities
+    //         .iter()
+    //         .find(|x| SuiAddress::from(x.key_pair.public_key_bytes()) == address)
+    //         .ok_or_else(|| {
+    //             anyhow!(
+    //                 "Network configs must include config for address {}",
+    //                 address
+    //             )
+    //         })?
+    // } else if let Some(index) = cfg.validator_idx {
+    //     &network_config.authorities[index]
+    // } else {
+    //     return Err(anyhow!("Must supply either --address of --validator-idx"));
+    // };
+
     let listen_address = cfg
         .listen_address
-        .unwrap_or(format!("{}:{}", net_cfg.host, net_cfg.port));
+        .unwrap_or(format!("{}:{}", authority.host, authority.port));
 
     info!(
         "authority {:?} listening on {} (public addr: {}:{})",
-        net_cfg.key_pair.public_key_bytes(),
+        authority.key_pair.public_key_bytes(),
         listen_address,
-        net_cfg.host,
-        net_cfg.port
+        authority.host,
+        authority.port
     );
 
     let consensus_committee = network_config.make_narwhal_committee();
@@ -107,10 +129,10 @@ async fn main() -> Result<(), anyhow::Error> {
     };
     let consensus_store_path = sui_config_dir()?
         .join(CONSENSUS_DB_NAME)
-        .join(encode_bytes_hex(net_cfg.key_pair.public_key_bytes()));
+        .join(encode_bytes_hex(authority.key_pair.public_key_bytes()));
 
     if let Err(e) = make_server(
-        net_cfg,
+        authority,
         &Committee::from(&network_config),
         network_config.buffer_size,
         &consensus_committee,

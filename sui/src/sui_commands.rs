@@ -27,8 +27,8 @@ use sui_core::authority_server::AuthorityServer;
 use sui_core::consensus_adapter::ConsensusListener;
 use sui_network::transport::SpawnedServer;
 use sui_network::transport::DEFAULT_MAX_DATAGRAM_SIZE;
-use sui_types::base_types::{decode_bytes_hex, ObjectID};
 use sui_types::base_types::encode_bytes_hex;
+use sui_types::base_types::{decode_bytes_hex, ObjectID};
 use sui_types::base_types::{SequenceNumber, SuiAddress, TxContext};
 use sui_types::committee::Committee;
 use sui_types::error::SuiResult;
@@ -189,7 +189,7 @@ impl SuiCommand {
                     return Ok(());
                 }
 
-                let (network_config, accounts, mut keystore) = genesis(genesis_conf).await?;
+                let (network_config, accounts, mut keystore) = genesis(genesis_conf, None).await?;
                 info!("Network genesis completed.");
                 let network_config = network_config.persisted(&network_path);
                 network_config.save()?;
@@ -335,11 +335,15 @@ impl SuiNetwork {
 
 pub async fn genesis(
     genesis_conf: GenesisConfig,
+    single_address: Option<SuiAddress>,
 ) -> Result<(NetworkConfig, Vec<SuiAddress>, SuiKeystore), anyhow::Error> {
-    info!(
-        "Creating {} new authorities...",
+    let num_to_provision = if single_address.is_none() {
         genesis_conf.authorities.len()
-    );
+    } else {
+        1
+    };
+
+    info!("Creating {} new authorities...", num_to_provision);
 
     let mut network_config = NetworkConfig {
         epoch: 0,
@@ -449,6 +453,12 @@ pub async fn genesis(
 
     let committee = Committee::new(network_config.epoch, voting_right);
     for authority in &network_config.authorities {
+        if let Some(addr) = single_address {
+            if addr != authority.address {
+                continue;
+            }
+        }
+
         make_server_with_genesis_ctx(
             authority,
             &committee,
