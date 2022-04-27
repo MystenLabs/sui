@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Sui::Coin {
+    use Sui::Balance::{Self, Balance};
     use Sui::ID::{Self, VersionedID};
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
-    use Std::Errors;
     use Std::Vector;
 
     /// A coin of type `T` worth `value`. Transferrable
     struct Coin<phantom T> has key, store {
         id: VersionedID,
-        value: u64
+        balance: Balance<T>
     }
 
     /// Capability allowing the bearer to mint and burn
@@ -21,10 +21,29 @@ module Sui::Coin {
         total_supply: u64
     }
 
-    /// Trying to withdraw N from a coin with value < N
-    const EVALUE: u64 = 0;
-    /// Trying to destroy a coin with a nonzero value
-    const ENONZERO: u64 = 0;
+    // === Balance accessors and type morphing methods ===
+
+    /// Get immutable reference to the balance of a coin.
+    public fun balance<T>(coin: &Coin<T>): &Balance<T> {
+        &coin.balance
+    }
+
+    /// Get a mutable reference to the balance of a coin.
+    public fun balance_mut<T>(coin: &mut Coin<T>): &mut Balance<T> {
+        &mut coin.balance
+    }
+
+    /// Wrap a balance into a Coin to make it transferable.
+    public fun from_balance<T>(balance: Balance<T>, ctx: &mut TxContext): Coin<T> {
+        Coin { id: TxContext::new_id(ctx), balance }
+    }
+
+    /// Destruct a Coin wrapper and keep the balance.
+    public fun into_balance<T>(coin: Coin<T>): Balance<T> {
+        let Coin { id, balance } = coin;
+        ID::delete(id);
+        balance
+    }
 
     // === Functionality for Coin<T> holders ===
 
@@ -41,9 +60,9 @@ module Sui::Coin {
     /// Consume the coin `c` and add its value to `self`.
     /// Aborts if `c.value + self.value > U64_MAX`
     public fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
-        let Coin { id, value } = c;
+        let Coin { id, balance } = c;
         ID::delete(id);
-        self.value = self.value + value
+        Balance::join(&mut self.balance, balance);
     }
 
     /// Join everything in `coins` with `self`
@@ -65,24 +84,20 @@ module Sui::Coin {
     public fun withdraw<T>(
         self: &mut Coin<T>, value: u64, ctx: &mut TxContext,
     ): Coin<T> {
-        assert!(
-            self.value >= value,
-            Errors::limit_exceeded(EVALUE)
-        );
-        self.value = self.value - value;
-        Coin { id: TxContext::new_id(ctx), value }
+        let balance = Balance::split(&mut self.balance, value);
+        Coin { id: TxContext::new_id(ctx), balance }
     }
 
     /// Public getter for the coin's value
     public fun value<T>(self: &Coin<T>): u64 {
-        self.value
+        Balance::value(&self.balance)
     }
 
     /// Destroy a coin with value zero
     public fun destroy_zero<T>(c: Coin<T>) {
-        let Coin { id, value } = c;
+        let Coin { id, balance } = c;
         ID::delete(id);
-        assert!(value == 0, Errors::invalid_argument(ENONZERO))
+        Balance::destroy_zero(balance);
     }
 
     // === Registering new coin types and managing the coin supply ===
@@ -90,7 +105,7 @@ module Sui::Coin {
     /// Make any Coin with a zero value. Useful for placeholding
     /// bids/payments or preemptively making empty balances.
     public fun zero<T>(ctx: &mut TxContext): Coin<T> {
-        Coin { id: TxContext::new_id(ctx), value: 0 }
+        Coin { id: TxContext::new_id(ctx), balance: Balance::zero() }
     }
 
     /// Create a new currency type `T` as and return the `TreasuryCap`
@@ -113,13 +128,17 @@ module Sui::Coin {
         value: u64, cap: &mut TreasuryCap<T>, ctx: &mut TxContext,
     ): Coin<T> {
         cap.total_supply = cap.total_supply + value;
-        Coin { id: TxContext::new_id(ctx), value }
+        Coin {
+            id: TxContext::new_id(ctx),
+            balance: Balance::create_with_value(value)
+        }
     }
 
     /// Destroy the coin `c` and decrease the total supply in `cap`
     /// accordingly.
     public fun burn<T>(c: Coin<T>, cap: &mut TreasuryCap<T>) {
-        let Coin { id, value } = c;
+        let Coin { id, balance } = c;
+        let value = Balance::destroy<T>(balance);
         ID::delete(id);
         cap.total_supply = cap.total_supply - value
     }
@@ -176,6 +195,6 @@ module Sui::Coin {
     #[test_only]
     /// Mint coins of any type for (obviously!) testing purposes only
     public fun mint_for_testing<T>(value: u64, ctx: &mut TxContext): Coin<T> {
-        Coin { id: TxContext::new_id(ctx), value }
+        Coin { id: TxContext::new_id(ctx), balance: Balance::create_with_value(value) }
     }
 }
