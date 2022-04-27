@@ -174,6 +174,6 @@ impl Faucet for SimpleFaucet {
         let coins = self.get_coins(amounts).await?;
         let coin_ids = coins.iter().map(|c| c.id()).collect::<Vec<ObjectID>>();
         self.transfer_coins(&coin_ids, recipient).await?;
-        Ok(coins.into())
+        Ok(coins.iter().by_ref().collect())
     }
 }
