@@ -376,12 +376,13 @@ impl Object {
         }
     }
 
+    // Note: this will panic if `modules` is empty
     pub fn new_package(
         modules: Vec<CompiledModule>,
         previous_transaction: TransactionDigest,
     ) -> Self {
         Object {
-            data: Data::Package(MovePackage::from(&modules)),
+            data: Data::Package(MovePackage::from_iter(modules)),
             owner: Owner::Immutable,
             previous_transaction,
             storage_rebate: 0,
