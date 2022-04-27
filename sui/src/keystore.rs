@@ -115,6 +115,10 @@ impl SuiKeystore {
     pub fn addresses(&self) -> Vec<SuiAddress> {
         self.keys.keys().cloned().collect()
     }
+
+    pub fn key_pairs(&self) -> Vec<&KeyPair> {
+        self.keys.values().collect()
+    }
 }
 
 pub struct SuiKeystoreSigner {

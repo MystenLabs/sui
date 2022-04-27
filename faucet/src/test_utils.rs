@@ -6,7 +6,7 @@ use sui::{
     sui_commands::SuiNetwork,
     wallet_commands::{WalletCommands, WalletContext},
 };
-use sui_types::base_types::SuiAddress;
+use sui_types::{base_types::SuiAddress, crypto::{get_key_pair, random_key_pairs}};
 
 use sui::config::{AuthorityPrivateInfo, Config, GenesisConfig, WalletConfig};
 use sui::gateway_config::{GatewayConfig, GatewayType};
@@ -17,6 +17,8 @@ use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 /* -------------------------------------------------------------------------- */
 /*  NOTE: Below is copied from sui/src/unit_tests, we should consolidate them */
 /* -------------------------------------------------------------------------- */
+
+const NUM_VALIDAOTR: usize = 4;
 
 pub async fn setup_network_and_wallet(
 ) -> Result<(SuiNetwork, WalletContext, SuiAddress), anyhow::Error> {
@@ -41,6 +43,7 @@ pub async fn setup_network_and_wallet(
 pub async fn start_test_network(
     working_dir: &Path,
     genesis_config: Option<GenesisConfig>,
+    // TODO: pass in Vec<KeyPairs> optionally
 ) -> Result<SuiNetwork, anyhow::Error> {
     let working_dir = working_dir.to_path_buf();
     let network_path = working_dir.join(SUI_NETWORK_CONFIG);
@@ -48,25 +51,42 @@ pub async fn start_test_network(
     let keystore_path = working_dir.join("wallet.key");
     let db_folder_path = working_dir.join("client_db");
 
-    let mut genesis_config =
-        genesis_config.unwrap_or(GenesisConfig::default_genesis(&working_dir)?);
+    // let num_authorities = match &genesis_config {
+    //     Some(genesis_config) => genesis_config.authorities.len(),
+    //     None => NUM_VALIDAOTR,
+    // };
+
+    let key_pairs = random_key_pairs(NUM_VALIDAOTR);
+    let key_pairs_clone = key_pairs.iter().map(|kp| kp.copy()).collect();
+    let mut genesis_config = match genesis_config {
+        Some(genesis_config) => genesis_config,
+        None => {
+            GenesisConfig::default_genesis(&working_dir, Some(key_pairs_clone))?
+        }
+    };
+
     let authorities = genesis_config
         .authorities
         .iter()
-        .map(|info| AuthorityPrivateInfo {
-            key_pair: info.key_pair.copy(),
-            host: info.host.clone(),
-            port: 0,
-            db_path: info.db_path.clone(),
-            stake: info.stake,
-            consensus_address: info.consensus_address,
-            address: SuiAddress::from(info.key_pair.public_key_bytes()),
-        })
+        .map(|info| {
+            let (address, key_pair) = get_key_pair();
+            AuthorityPrivateInfo {
+                public_key: *key_pair.public_key_bytes(),
+                host: info.host.clone(),
+                port: 0,
+                db_path: info.db_path.clone(),
+                stake: info.stake,
+                consensus_address: info.consensus_address,
+                address: address,
+            }
+        }
+        )
         .collect();
     genesis_config.authorities = authorities;
 
     let (network_config, accounts, mut keystore) = genesis(genesis_config).await?;
-    let network = SuiNetwork::start(&network_config).await?;
+    let key_pair_refs = key_pairs.iter().map(|kp| kp).collect::<Vec<_>>();
+    let network = SuiNetwork::start(&network_config, key_pair_refs).await?;
 
     let network_config = network_config.persisted(&network_path);
     network_config.save()?;

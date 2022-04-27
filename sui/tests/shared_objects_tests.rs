@@ -87,8 +87,8 @@ async fn shared_object_transaction() {
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let configs = test_authority_configs();
-    let _handles = spawn_test_authorities(objects, &configs).await;
+    let (configs, key_pairs) = test_authority_configs();
+    let _handles = spawn_test_authorities(objects, &configs, key_pairs).await;
 
     // Make a test shared object certificate.
     let transaction = test_shared_object_transactions().pop().unwrap();
