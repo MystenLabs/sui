@@ -111,7 +111,7 @@ impl<T: Affiliated> NodeDag<T> {
             .ok_or(DagError::UnknownDigest(hash))?;
         match *node_ref {
             Either::Right(ref _node) => Ok(true),
-            Either::Left(ref _ode) => Ok(false),
+            Either::Left(ref _node) => Ok(false),
         }
     }
 
