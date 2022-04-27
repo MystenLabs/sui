@@ -13,15 +13,14 @@ use rayon::prelude::*;
 use std::io;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use sui_network::network::{NetworkClient};
+use sui_network::network::NetworkClient;
 use sui_types::committee::Committee;
 use sui_types::{messages::*, serialize::*};
 use tokio::sync::Notify;
 use tokio::time;
 use tracing::{error, info};
 
-use crate::config::{ NetworkConfig};
-
+use crate::config::NetworkConfig;
 
 pub fn check_transaction_response(reply_message: Result<SerializedMessage, Error>) {
     match reply_message {
@@ -66,8 +65,17 @@ async fn send_tx_chunks_notif(
     conn: usize,
 ) {
     notif.notified().await;
-    let r = send_tx_chunks(tx_chunk, net_client, conn).await;
-    result_chann_tx.send((r.0, stake)).await.unwrap();
+    let r = send_tx_chunks(tx_chunk, net_client.clone(), conn).await;
+
+    match result_chann_tx.send((r.0, stake)).await {
+        Ok(_) => (),
+        Err(e) => {
+            // Disconnect is okay since we may leave f running
+            if !e.is_disconnected() {
+                panic!("Send failed! {:?}", net_client)
+            }
+        }
+    }
 
     let _: Vec<_> =
         r.1.par_iter()
@@ -140,6 +148,7 @@ async fn send_tx_for_quorum(
             match chann_tx.send((r.0, stake)).await {
                 Ok(_) => (),
                 Err(e) => {
+                    // Disconnect is okay since we may leave f running
                     if !e.is_disconnected() {
                         panic!("Send failed! {:?}", net_client)
                     }
@@ -183,7 +192,6 @@ pub struct MultiFixedRateLoadGenerator {
     pub period_us: u64,
 
     //pub network_config: Vec<AuthorityPrivateInfo>,
-
     pub tick_notifier: Arc<Notify>,
 
     /// Number of TCP connections to open
