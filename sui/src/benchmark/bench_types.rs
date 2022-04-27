@@ -46,7 +46,7 @@ pub struct Benchmark {
 
     #[clap(
         arg_enum,
-        default_value = "local-single-validator-thread",
+        default_value = "single-validator-thread",
         global = true,
         ignore_case = true
     )]
