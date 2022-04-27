@@ -40,7 +40,7 @@ jobs:
   bench:
     needs: diff
     if: github.event.pull_request.draft == false && needs.diff.outputs.isRust == 'true'
-    runs-on: [self-hosted, ubuntu-latest]
+    runs-on: [self-hosted, ubuntu]
     steps:
     - uses: actions/checkout@v3
     - uses: actions-rs/toolchain@v1
