@@ -10,8 +10,8 @@ use sui::{
     sui_commands::{genesis, make_server},
     sui_config_dir, SUI_NETWORK_CONFIG,
 };
+use sui_types::base_types::encode_bytes_hex;
 use sui_types::base_types::{decode_bytes_hex, SuiAddress};
-use sui_types::base_types::{encode_bytes_hex, AuthorityName};
 use sui_types::committee::Committee;
 use tracing::{error, info};
 
@@ -110,18 +110,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .join(encode_bytes_hex(net_cfg.key_pair.public_key_bytes()));
 
     // Pass in the newtwork parameters of all authorities
-    let net: Vec<(AuthorityName, String, u16)> = network_config
-        .authorities
-        .iter()
-        .map(|authority| {
-            (
-                *authority.key_pair.public_key_bytes(),
-                authority.host.clone(),
-                authority.port,
-            )
-        })
-        .collect();
-
+    let net = network_config.get_authority_infos();
     if let Err(e) = make_server(
         net_cfg,
         &Committee::from(&network_config),

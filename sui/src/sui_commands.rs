@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::config::{make_default_narwhal_committee, CONSENSUS_DB_NAME};
+use crate::config::{make_default_narwhal_committee, AuthorityInfo, CONSENSUS_DB_NAME};
 use crate::config::{
     AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
 };
@@ -31,8 +31,8 @@ use sui_core::consensus_adapter::ConsensusListener;
 use sui_network::network::NetworkClient;
 use sui_network::transport::SpawnedServer;
 use sui_network::transport::DEFAULT_MAX_DATAGRAM_SIZE;
+use sui_types::base_types::decode_bytes_hex;
 use sui_types::base_types::encode_bytes_hex;
-use sui_types::base_types::{decode_bytes_hex, AuthorityName};
 use sui_types::base_types::{SequenceNumber, SuiAddress, TxContext};
 use sui_types::committee::Committee;
 use sui_types::error::SuiResult;
@@ -292,17 +292,7 @@ impl SuiNetwork {
         let consensus_parameters = ConsensusParameters::default();
 
         // Pass in the newtwork parameters of all authorities
-        let net: Vec<(AuthorityName, String, u16)> = config
-            .authorities
-            .iter()
-            .map(|authority| {
-                (
-                    *authority.key_pair.public_key_bytes(),
-                    authority.host.clone(),
-                    authority.port,
-                )
-            })
-            .collect();
+        let net = config.get_authority_infos();
 
         let mut spawned_authorities = Vec::new();
         for authority in &config.authorities {
@@ -463,7 +453,7 @@ pub async fn make_server(
     consensus_committee: &ConsensusCommittee<Ed25519PublicKey>,
     consensus_store_path: &Path,
     consensus_parameters: &ConsensusParameters,
-    net_parameters: Option<Vec<(AuthorityName, String, u16)>>,
+    net_parameters: Option<Vec<AuthorityInfo>>,
 ) -> SuiResult<AuthorityServer> {
     let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
     let name = *authority.key_pair.public_key_bytes();
@@ -532,7 +522,7 @@ pub async fn make_authority(
     consensus_committee: &ConsensusCommittee<Ed25519PublicKey>,
     consensus_store_path: &Path,
     consensus_parameters: &ConsensusParameters,
-    net_parameters: Option<Vec<(AuthorityName, String, u16)>>,
+    net_parameters: Option<Vec<AuthorityInfo>>,
 ) -> SuiResult<AuthorityServer> {
     let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1_000);
     let (tx_sui_to_consensus, rx_sui_to_consensus) = channel(1_000);
@@ -569,15 +559,15 @@ pub async fn make_authority(
     // to all authorities in the system.
     let _active_authority = if let Some(network) = net_parameters {
         let mut authority_clients = BTreeMap::new();
-        for (key, host, port) in &network {
+        for info in &network {
             let client = NetworkAuthorityClient::new(NetworkClient::new(
-                host.clone(),
-                *port,
+                info.host.clone(),
+                info.base_port,
                 buffer_size,
                 Duration::from_secs(5),
                 Duration::from_secs(5),
             ));
-            authority_clients.insert(*key, client);
+            authority_clients.insert(info.name, client);
         }
 
         let active_authority = ActiveAuthority::new(authority_state.clone(), authority_clients)?;
