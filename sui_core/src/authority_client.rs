@@ -39,6 +39,12 @@ pub trait AuthorityAPI {
         transaction: ConfirmationTransaction,
     ) -> Result<TransactionInfoResponse, SuiError>;
 
+    /// Processes consensus request.
+    async fn handle_consensus_transaction(
+        &self,
+        transaction: ConsensusTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError>;
+
     /// Handle Account information requests for this account.
     async fn handle_account_info_request(
         &self,
@@ -96,6 +102,17 @@ impl AuthorityAPI for NetworkAuthorityClient {
         let response = self
             .0
             .send_recv_bytes(serialize_cert(&transaction.certificate))
+            .await?;
+        deserialize_transaction_info(response)
+    }
+
+    async fn handle_consensus_transaction(
+        &self,
+        transaction: ConsensusTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        let response = self
+            .0
+            .send_recv_bytes(serialize_consensus_transaction(&transaction))
             .await?;
         deserialize_transaction_info(response)
     }
@@ -211,6 +228,13 @@ impl AuthorityAPI for LocalAuthorityClient {
             .handle_confirmation_transaction(transaction)
             .await;
         result
+    }
+
+    async fn handle_consensus_transaction(
+        &self,
+        _transaction: ConsensusTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        unimplemented!("LocalAuthorityClient does not support consensus transaction");
     }
 
     async fn handle_account_info_request(

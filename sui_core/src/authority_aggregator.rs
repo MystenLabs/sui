@@ -950,6 +950,7 @@ where
             ?timeout_after_quorum,
             "Broadcasting certificate to authorities"
         );
+        let contains_shared_object = certificate.transaction.contains_shared_object();
 
         let state = self
             .quorum_map_then_reduce_with_timeout(
@@ -961,10 +962,15 @@ where
                         // - we try to update the authority with the cert, and on error return Err.
                         // - we try to re-process the certificate and return the result.
 
-                        let res = client
+                        let handle = if contains_shared_object {
+                            client.handle_consensus_transaction(ConsensusTransaction::UserTransaction(cert_ref.clone()))
+                        } else {
+                            client
                             .handle_confirmation_transaction(ConfirmationTransaction::new(
                                 cert_ref.clone(),
                             ))
+                        };
+                        let res = handle
                             .instrument(tracing::trace_span!("handle_cert", authority =? _name))
                             .await;
 
