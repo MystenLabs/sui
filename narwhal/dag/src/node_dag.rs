@@ -115,6 +115,15 @@ impl<T: Affiliated> NodeDag<T> {
         }
     }
 
+    /// Marks the node passed as argument as compressible, leaving it to be reaped by path compression.
+    /// Returns true if the node was made compressible, and false if it already was
+    ///
+    /// This returne an error if the queried node is unknown or dropped from the graph
+    pub fn make_compressible(&self, hash: T::TypedDigest) -> Result<bool, DagError<T>> {
+        let node_ref = self.get(hash)?;
+        Ok(node_ref.make_compressible())
+    }
+
     /// Inserts a node in the Dag from the provided value
     ///
     /// When the value is inserted, its parent references are interpreted as hash pointers (see [`Affiliated`])`.
@@ -391,6 +400,42 @@ mod tests {
                         matches!(node_dag.get(compressed_node), Err(DagError::DroppedDigest(_))),
                         "node {compressed_node} should have been compressed yet is still present"
                     );
+                }
+            }
+        }
+
+        #[test]
+        fn test_compress_all_the_things(
+            dag in arb_dag_complete(10, 10)
+        ) {
+            let mut node_dag = NodeDag::new();
+            let mut digests = Vec::new();
+            {
+                for node in dag.iter() {
+                    digests.push(node.digest());
+                    // the elements are generated in order & with no missing parents => no suprises
+                    assert!(node_dag.try_insert(node.clone()).is_ok());
+                }
+            }
+            // make everything compressible
+            for hash in digests.clone() {
+                node_dag.make_compressible(hash).unwrap();
+            }
+
+            let mut heads = HashSet::new();
+            for hash in digests.clone() {
+                if node_dag.has_head(hash).unwrap() {
+                    heads.insert(hash);
+
+                    let node = node_dag.get(hash).unwrap(); // strong reference
+                    crate::bfs(node).for_each(|_node| ()); // path compression
+                }
+            }
+            // now we've done a graph walk from every head => everything is compressed,
+            // and since everything is compressible, all that's left is the heads
+            for digest in digests {
+                if !heads.contains(&digest){
+                    assert!(matches!(node_dag.get(digest), Err(DagError::DroppedDigest(_))))
                 }
             }
         }
