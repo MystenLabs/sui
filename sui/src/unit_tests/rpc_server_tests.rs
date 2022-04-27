@@ -83,114 +83,114 @@ async fn test_transfer_coin() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-// #[tokio::test]
-// async fn test_publish() -> Result<(), anyhow::Error> {
-//     let test_network = setup_test_network().await?;
-//     let http_client = test_network.http_client;
-//     let address = test_network.accounts.first().unwrap();
-//     http_client.sync_account_state(*address).await?;
-//     let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
-//     let objects = result
-//         .objects
-//         .into_iter()
-//         .map(|o| o.to_object_ref())
-//         .collect::<Result<Vec<_>, _>>()?;
+#[tokio::test]
+async fn test_publish() -> Result<(), anyhow::Error> {
+    let test_network = setup_test_network().await?;
+    let http_client = test_network.http_client;
+    let address = test_network.accounts.first().unwrap();
+    http_client.sync_account_state(*address).await?;
+    let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
+    let objects = result
+        .objects
+        .into_iter()
+        .map(|o| o.to_object_ref())
+        .collect::<Result<Vec<_>, _>>()?;
 
-//     let gas = objects.first().unwrap();
+    let gas = objects.first().unwrap();
 
-//     let compiled_modules = build_move_package_to_bytes(
-//         Path::new("../sui_programmability/examples/fungible_tokens"),
-//         false,
-//     )?
-//     .into_iter()
-//     .map(Base64EncodedBytes)
-//     .collect::<Vec<_>>();
+    let compiled_modules = build_move_package_to_bytes(
+        Path::new("../sui_programmability/examples/fungible_tokens"),
+        false,
+    )?
+    .into_iter()
+    .map(Base64EncodedBytes)
+    .collect::<Vec<_>>();
 
-//     let tx_data: TransactionBytes = http_client
-//         .publish(*address, compiled_modules, gas.0, 10000)
-//         .await?;
+    let tx_data: TransactionBytes = http_client
+        .publish(*address, compiled_modules, gas.0, 10000)
+        .await?;
 
-//     let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;
-//     let signature = keystore.sign(address, &tx_data.tx_bytes)?;
+    let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;
+    let signature = keystore.sign(address, &tx_data.tx_bytes)?;
 
-//     let tx_response: TransactionResponse = http_client
-//         .execute_transaction(SignedTransaction::new(tx_data.tx_bytes, signature))
-//         .await?;
+    let tx_response: TransactionResponse = http_client
+        .execute_transaction(SignedTransaction::new(tx_data.tx_bytes, signature))
+        .await?;
 
-//     let response = tx_response.to_publish_response()?;
-//     assert_eq!(2, response.created_objects.len());
-//     Ok(())
-// }
+    let response = tx_response.to_publish_response()?;
+    assert_eq!(2, response.created_objects.len());
+    Ok(())
+}
 
-// #[tokio::test]
-// async fn test_move_call() -> Result<(), anyhow::Error> {
-//     let test_network = setup_test_network().await?;
-//     let http_client = test_network.http_client;
-//     let address = test_network.accounts.first().unwrap();
-//     http_client.sync_account_state(*address).await?;
-//     let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
-//     let objects = result
-//         .objects
-//         .into_iter()
-//         .map(|o| o.to_object_ref())
-//         .collect::<Result<Vec<_>, _>>()?;
+#[tokio::test]
+async fn test_move_call() -> Result<(), anyhow::Error> {
+    let test_network = setup_test_network().await?;
+    let http_client = test_network.http_client;
+    let address = test_network.accounts.first().unwrap();
+    http_client.sync_account_state(*address).await?;
+    let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
+    let objects = result
+        .objects
+        .into_iter()
+        .map(|o| o.to_object_ref())
+        .collect::<Result<Vec<_>, _>>()?;
 
-//     let gas = objects.first().unwrap();
+    let gas = objects.first().unwrap();
 
-//     let package_id = ObjectID::new(SUI_FRAMEWORK_ADDRESS.into_bytes());
-//     let package: ObjectRead = http_client.get_object_info(package_id).await?;
-//     let package = package.into_object()?;
-//     let module = Identifier::new("ObjectBasics")?;
-//     let function = Identifier::new("create")?;
+    let package_id = ObjectID::new(SUI_FRAMEWORK_ADDRESS.into_bytes());
+    let package: ObjectRead = http_client.get_object_info(package_id).await?;
+    let package = package.into_object()?;
+    let module = Identifier::new("ObjectBasics")?;
+    let function = Identifier::new("create")?;
 
-//     let json_args = resolve_move_function_args(
-//         &package,
-//         module.clone(),
-//         function.clone(),
-//         vec![
-//             SuiJsonValue::from_str("10000")?,
-//             SuiJsonValue::from_str(&format!("\"0x{}\"", address))?,
-//         ],
-//     )?;
-//     let mut args = Vec::with_capacity(json_args.len());
-//     for json_arg in json_args {
-//         args.push(match json_arg {
-//             SuiJsonCallArg::Pure(bytes) => RpcCallArg::Pure(Base64EncodedBytes(bytes)),
-//             SuiJsonCallArg::Object(id) => match http_client.get_object_info(id).await? {
-//                 ObjectRead::Exists(_, obj, _) if obj.is_shared() => RpcCallArg::SharedObject(id),
-//                 _ => RpcCallArg::ImmOrOwnedObject(id),
-//             },
-//         })
-//     }
+    let json_args = resolve_move_function_args(
+        &package,
+        module.clone(),
+        function.clone(),
+        vec![
+            SuiJsonValue::from_str("10000")?,
+            SuiJsonValue::from_str(&format!("\"0x{}\"", address))?,
+        ],
+    )?;
+    let mut args = Vec::with_capacity(json_args.len());
+    for json_arg in json_args {
+        args.push(match json_arg {
+            SuiJsonCallArg::Pure(bytes) => RpcCallArg::Pure(Base64EncodedBytes(bytes)),
+            SuiJsonCallArg::Object(id) => match http_client.get_object_info(id).await? {
+                ObjectRead::Exists(_, obj, _) if obj.is_shared() => RpcCallArg::SharedObject(id),
+                _ => RpcCallArg::ImmOrOwnedObject(id),
+            },
+        })
+    }
 
-//     let tx_data: TransactionBytes = http_client
-//         .move_call(
-//             *address,
-//             package_id,
-//             module,
-//             function,
-//             Vec::new(),
-//             args,
-//             gas.0,
-//             1000,
-//         )
-//         .await?;
+    let tx_data: TransactionBytes = http_client
+        .move_call(
+            *address,
+            package_id,
+            module,
+            function,
+            Vec::new(),
+            args,
+            gas.0,
+            1000,
+        )
+        .await?;
 
-//     let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;
-//     let signature = keystore.sign(address, &tx_data.tx_bytes)?;
+    let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;
+    let signature = keystore.sign(address, &tx_data.tx_bytes)?;
 
-//     let tx_response: TransactionResponse = http_client
-//         .execute_transaction(SignedTransaction::new(tx_data.tx_bytes, signature))
-//         .await?;
+    let tx_response: TransactionResponse = http_client
+        .execute_transaction(SignedTransaction::new(tx_data.tx_bytes, signature))
+        .await?;
 
-//     let (_cert, effect) = tx_response.to_effect_response()?;
-//     assert_eq!(1, effect.created.len());
-//     Ok(())
-// }
+    let (_cert, effect) = tx_response.to_effect_response()?;
+    assert_eq!(1, effect.created.len());
+    Ok(())
+}
 
 async fn setup_test_network() -> Result<TestNetwork, anyhow::Error> {
     let working_dir = tempfile::tempdir()?.path().to_path_buf();
-    let _network = start_test_network(&working_dir, None).await?;
+    let _network = start_test_network(&working_dir, None, None).await?;
     let (server_addr, rpc_server_handle) =
         start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;
     let wallet_conf: WalletConfig = PersistedConfig::read(&working_dir.join(SUI_WALLET_CONFIG))?;

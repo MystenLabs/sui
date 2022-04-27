@@ -51,7 +51,7 @@ async fn main() -> Result<(), anyhow::Error> {
         json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
         ..Default::default()
     };
-    
+
     let _guard = telemetry_subscribers::init(config);
 
     let cfg = ValidatorOpt::parse();
@@ -96,17 +96,8 @@ async fn main() -> Result<(), anyhow::Error> {
         authority.public_key, listen_address, authority.host, authority.port
     );
 
-    info!(
-        "[Validator] ~~~~~~~~~ {:?}", &network_config.key_pair.public_key_bytes()
-    );
-
     let consensus_committee = network_config.make_narwhal_committee();
 
-    for (keypair, _) in &consensus_committee.authorities {
-        info!("[Validator] ~~~~~~ committee: {:?}", keypair);
-    }
-
-    // info!("narwhal committee: {:?}", network_config.make_narwhal_committee());
     let consensus_parameters = ConsensusParameters {
         max_header_delay: 5_000,
         max_batch_delay: 5_000,
@@ -116,7 +107,6 @@ async fn main() -> Result<(), anyhow::Error> {
         .join(CONSENSUS_DB_NAME)
         .join(encode_bytes_hex(&authority.public_key));
 
-    info!("sui committee: {:?}", &Committee::from(&network_config));
     if let Err(e) = make_server(
         authority,
         &network_config.key_pair,

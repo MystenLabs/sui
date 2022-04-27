@@ -25,9 +25,9 @@ use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_network::network::PortAllocator;
 use sui_types::base_types::*;
 use sui_types::committee::{Committee, EpochId};
-use sui_types::crypto::{get_key_pair, random_key_pairs, KeyPair, PublicKeyBytes};
-use tracing::log::trace;
+use sui_types::crypto::{get_key_pair, KeyPair, PublicKeyBytes};
 use tracing::info;
+use tracing::log::trace;
 
 const DEFAULT_WEIGHT: usize = 1;
 const DEFAULT_GAS_AMOUNT: u64 = 100000;
@@ -271,14 +271,15 @@ const DEFAULT_NUMBER_OF_ACCOUNT: usize = 5;
 const DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT: usize = 5;
 
 impl GenesisConfig {
-    pub fn default_genesis(working_dir: &Path, key_pairs: Option<Vec<KeyPair>>) -> Result<Self, anyhow::Error> {
-        // fixme
-        let num_authorities;
-        if let Some(keypairs) = &key_pairs {
-            num_authorities = keypairs.len();
-        } else {
-            num_authorities = DEFAULT_NUMBER_OF_AUTHORITIES;
-        }
+    pub fn default_genesis(
+        working_dir: &Path,
+        key_pairs: Option<Vec<KeyPair>>,
+    ) -> Result<Self, anyhow::Error> {
+        let num_authorities = match &key_pairs {
+            Some(keypairs) => keypairs.len(),
+            None => DEFAULT_NUMBER_OF_AUTHORITIES,
+        };
+
         GenesisConfig::custom_genesis(
             working_dir,
             num_authorities,
@@ -293,9 +294,12 @@ impl GenesisConfig {
         num_authorities: usize,
         num_accounts: usize,
         num_objects_per_account: usize,
-        key_pairs: Option<Vec<KeyPair>> ,
+        key_pairs: Option<Vec<KeyPair>>,
     ) -> Result<Self, anyhow::Error> {
-        assert!(num_authorities > 0, "num_authorities should be larger than 0");
+        assert!(
+            num_authorities > 0,
+            "num_authorities should be larger than 0"
+        );
         let mut authorities = Vec::with_capacity(num_authorities);
         for _ in 0..num_authorities {
             // Get default authority config from deserialization logic.
@@ -308,7 +312,11 @@ impl GenesisConfig {
         let authority_key_pair;
         if let Some(keypairs) = key_pairs {
             // Use key pairs if given
-            assert_eq!(keypairs.len(), num_authorities, "Number of key pairs does not maych num_authorities");
+            assert_eq!(
+                keypairs.len(),
+                num_authorities,
+                "Number of key pairs does not maych num_authorities"
+            );
             authority_key_pair = keypairs[0].copy();
             for i in 0..num_authorities {
                 authorities[i].public_key = *keypairs[i].public_key_bytes();
@@ -316,8 +324,8 @@ impl GenesisConfig {
             }
         } else {
             let (address, key_pair) = get_key_pair();
-            // If authorities is not empty, we override the first one's public key
-            if authorities.len() != 0 {
+            // If authorities is not empty, we override the first one
+            if !authorities.is_empty() {
                 authorities[0].address = address;
                 authorities[0].public_key = *key_pair.public_key_bytes();
             }

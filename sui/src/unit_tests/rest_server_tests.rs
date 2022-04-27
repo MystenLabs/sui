@@ -30,7 +30,7 @@ async fn test_concurrency() -> Result<(), anyhow::Error> {
 
     // Start sui network
     let working_dir = tempfile::tempdir()?;
-    let network = start_test_network(working_dir.path(), None).await?;
+    let network = start_test_network(working_dir.path(), None, None).await?;
     let wallet = WalletContext::new(&working_dir.path().join(SUI_WALLET_CONFIG))?;
     let address = wallet.config.accounts.first().unwrap();
     let documentation = api.openapi("Sui API", "0.1").json()?;
