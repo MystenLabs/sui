@@ -107,7 +107,7 @@ impl<T: Eq> Eq for Node<T> {}
 
 impl<T> Node<T> {
     /// Create a new DAG leaf node that contains the given value.
-    /// 
+    ///
     /// # Example
     ///
     /// ```

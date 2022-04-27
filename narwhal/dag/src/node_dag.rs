@@ -355,5 +355,44 @@ mod tests {
             }
         }
 
+        #[test]
+        fn test_path_compression_from_dag(
+            dag in arb_dag_complete(10, 10)
+        ) {
+            let mut node_dag = NodeDag::new();
+            let mut compressibles = Vec::new();
+            let mut digests = Vec::new();
+            {
+                for node in dag.iter() {
+                    digests.push(node.digest());
+                    if node.compressible(){
+                        compressibles.push(node.digest());
+                    }
+                    // the elements are generated in order & with no missing parents => no suprises
+                    assert!(node_dag.try_insert(node.clone()).is_ok());
+                }
+            }
+            // the chance of this happening is (1/2)^90
+            assert!(!compressibles.is_empty());
+
+            let mut heads = HashSet::new();
+            for hash in digests {
+                if node_dag.has_head(hash).unwrap() {
+                    heads.insert(hash);
+
+                    let node = node_dag.get(hash).unwrap(); // strong reference
+                    crate::bfs(node).for_each(|_node| ()); // path compression
+                }
+            }
+            // now we've done a graph walk from every head => everything is compressed, save for the heads themselves
+            for compressed_node in compressibles {
+                if !heads.contains(&compressed_node) {
+                    assert!(
+                        matches!(node_dag.get(compressed_node), Err(DagError::DroppedDigest(_))),
+                        "node {compressed_node} should have been compressed yet is still present"
+                    );
+                }
+            }
+        }
     }
 }
