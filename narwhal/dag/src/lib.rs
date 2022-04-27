@@ -142,6 +142,26 @@ impl<T: Sync + Send + std::fmt::Debug> Node<T> {
         self.compressible.get().is_some()
     }
 
+    /// Make the node compressible.
+    /// Returns true if the node was made compressible, false if it already was.
+    ///
+    /// Beware: this operation is irreversible.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dag::Node;
+    ///
+    /// let node = Node::new_leaf(1, false);
+    /// assert_eq!(node.make_compressible(), true);
+    /// let node2 = Node::new_leaf(2, true);
+    /// assert_eq!(node.make_compressible(), false);
+    /// ```
+    pub fn make_compressible(&self) -> bool {
+        let res = self.compressible.set(());
+        res.is_ok()
+    }
+
     // What's the maximum distance from this to a leaf?
     #[cfg(test)]
     fn height(&self) -> usize {
@@ -307,7 +327,7 @@ mod tests {
         ) {
             let first = dag.first().unwrap();
             let iter = bfs(first.clone());
-            // The first nodemay end up compressible
+            // The first nodemay end up compressible as a result of our random DAG
             let mut is_first = true;
             for node in iter {
                 if !is_first {
