@@ -53,7 +53,7 @@ fn create_gas_object(object_id: ObjectID, owner: SuiAddress) -> Object {
         object_id,
         SequenceNumber::new(),
         owner,
-        GAS_PER_TX,
+        u64::MAX,
     )
 }
 
