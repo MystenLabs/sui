@@ -157,7 +157,7 @@ impl<PublicKey: VerifyingKey> Consensus<PublicKey> {
             for output in sequence {
                 let certificate = &output.certificate;
                 #[cfg(not(feature = "benchmark"))]
-                info!("Committed {}", certificate.header);
+                debug!("Committed {}", certificate.header);
 
                 #[cfg(feature = "benchmark")]
                 for digest in certificate.header.payload.keys() {
