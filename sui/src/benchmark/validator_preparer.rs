@@ -5,7 +5,7 @@
 
 use crate::benchmark::bench_types::RunningMode;
 use crate::benchmark::load_generator::spawn_authority_server;
-use crate::config::{AccountConfig, ObjectConfig};
+use crate::config::{AccountConfig, NetworkConfig, ObjectConfig};
 use crate::config::{Config, GenesisConfig};
 use rocksdb::Options;
 use std::env;
@@ -64,10 +64,27 @@ pub enum ValidatorConfig {
         working_dir: PathBuf,
         validator_process: Option<Child>,
     },
+    RemoteValidatorConfig,
 }
 
 impl ValidatorPreparer {
-    pub fn new(
+    pub fn new_for_remote(network_config: &NetworkConfig) -> Self {
+        let keys = network_config
+            .authorities
+            .iter()
+            .map(|q| (*q.key_pair.public_key_bytes(), q.key_pair.copy()))
+            .collect::<Vec<_>>();
+        let committee = Committee::from(network_config);
+
+        Self {
+            running_mode: RunningMode::RemoteValidator,
+            keys,
+            main_authority_address_hex: "".to_string(),
+            committee,
+            validator_config: ValidatorConfig::RemoteValidatorConfig,
+        }
+    }
+    pub fn new_for_local(
         running_mode: RunningMode,
         working_dir: Option<PathBuf>,
         committee_size: usize,
@@ -91,7 +108,7 @@ impl ValidatorPreparer {
         let committee = Committee::new(0, keys.iter().map(|(k, _)| (*k, 1)).collect());
 
         match running_mode {
-            RunningMode::LocalSingleValidatorProcess => {
+            RunningMode::SingleValidatorProcess => {
                 // Honor benchmark's host:port setting
                 genesis_config.authorities[0].port = validator_port;
                 genesis_config.authorities[0].host = validator_host.into();
@@ -108,7 +125,7 @@ impl ValidatorPreparer {
                 }
             }
 
-            RunningMode::LocalSingleValidatorThread => {
+            RunningMode::SingleValidatorThread => {
                 // Pick the first validator and create state.
                 let public_auth0 = keys[0].0;
                 let secret_auth0 = keys[0].1.copy();
@@ -134,12 +151,13 @@ impl ValidatorPreparer {
                     },
                 }
             }
+            RunningMode::RemoteValidator => panic!("Use new_for_remote"),
         }
     }
 
     pub fn deploy_validator(&mut self, _network_server: NetworkServer) {
         match self.running_mode {
-            RunningMode::LocalSingleValidatorProcess => {
+            RunningMode::SingleValidatorProcess => {
                 if let ValidatorConfig::LocalSingleValidatorProcessConfig {
                     working_dir,
                     genesis_config,
@@ -166,7 +184,7 @@ impl ValidatorPreparer {
                     panic!("Invalid validator config in local-single-validator-process mode");
                 }
             }
-            RunningMode::LocalSingleValidatorThread => {
+            RunningMode::SingleValidatorThread => {
                 if let ValidatorConfig::LocalSingleValidatorThreadConfig {
                     authority_state,
                     authority_store: _,
@@ -187,6 +205,7 @@ impl ValidatorPreparer {
                     panic!("Invalid validator config in local-single-validator-thread mode");
                 }
             }
+            RunningMode::RemoteValidator => (),
         }
         // Wait for server start
         sleep(Duration::from_secs(3));
@@ -194,7 +213,7 @@ impl ValidatorPreparer {
 
     pub fn update_objects_for_validator(&mut self, objects: Vec<Object>, address: SuiAddress) {
         match self.running_mode {
-            RunningMode::LocalSingleValidatorProcess => {
+            RunningMode::SingleValidatorProcess => {
                 let all_objects: Vec<ObjectConfig> = objects
                     .iter()
                     .map(|object| ObjectConfig {
@@ -215,12 +234,13 @@ impl ValidatorPreparer {
                         .push(AccountConfig {
                             address: Some(address),
                             gas_objects: all_objects,
+                            gas_object_ranges: None,
                         })
                 } else {
                     panic!("invalid validator config in local-single-validator-process mode");
                 }
             }
-            RunningMode::LocalSingleValidatorThread => {
+            RunningMode::SingleValidatorThread => {
                 if let ValidatorConfig::LocalSingleValidatorThreadConfig {
                     authority_state: _,
                     authority_store,
@@ -233,29 +253,29 @@ impl ValidatorPreparer {
                     panic!("invalid validator config in local-single-validator-thread mode");
                 }
             }
+
+            // Nothing to do here. Remote machine must be provisioned separately
+            RunningMode::RemoteValidator => (),
         }
     }
 
     pub fn clean_up(&mut self) {
-        match self.running_mode {
-            RunningMode::LocalSingleValidatorProcess => {
-                info!("Cleaning up local validator process...");
-                if let ValidatorConfig::LocalSingleValidatorProcessConfig {
-                    working_dir: _,
-                    genesis_config: _,
-                    validator_process,
-                } = &mut self.validator_config
-                {
-                    validator_process
-                        .take()
-                        .unwrap()
-                        .kill()
-                        .expect("Failed to kill validator process");
-                } else {
-                    panic!("invalid validator config in local-single-validator-process mode");
-                }
+        if let RunningMode::SingleValidatorProcess = self.running_mode {
+            info!("Cleaning up local validator process...");
+            if let ValidatorConfig::LocalSingleValidatorProcessConfig {
+                working_dir: _,
+                genesis_config: _,
+                validator_process,
+            } = &mut self.validator_config
+            {
+                validator_process
+                    .take()
+                    .unwrap()
+                    .kill()
+                    .expect("Failed to kill validator process");
+            } else {
+                panic!("invalid validator config in local-single-validator-process mode");
             }
-            RunningMode::LocalSingleValidatorThread => {}
         }
     }
 }

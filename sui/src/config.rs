@@ -56,6 +56,20 @@ pub struct AuthorityPrivateInfo {
     pub consensus_address: SocketAddr,
 }
 
+impl AuthorityPrivateInfo {
+    pub fn copy(&self) -> Self {
+        Self {
+            key_pair: self.key_pair.copy(),
+            address: self.address,
+            host: self.host.clone(),
+            port: self.port,
+            db_path: self.db_path.clone(),
+            stake: self.stake,
+            consensus_address: self.consensus_address,
+        }
+    }
+}
+
 // Custom deserializer with optional default fields
 impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -231,7 +245,7 @@ pub struct GenesisConfig {
 
 impl Config for GenesisConfig {}
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 #[serde(default)]
 pub struct AccountConfig {
     #[serde(
@@ -241,8 +255,20 @@ pub struct AccountConfig {
     )]
     pub address: Option<SuiAddress>,
     pub gas_objects: Vec<ObjectConfig>,
+    pub gas_object_ranges: Option<Vec<ObjectConfigRange>>,
 }
-#[derive(Serialize, Deserialize)]
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ObjectConfigRange {
+    /// Starting object id
+    pub offset: ObjectID,
+    /// Number of object ids
+    pub count: u64,
+    /// Gas value per object id
+    pub gas_value: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ObjectConfig {
     #[serde(default = "ObjectID::random")]
     pub object_id: ObjectID,
@@ -295,6 +321,7 @@ impl GenesisConfig {
             accounts.push(AccountConfig {
                 address: None,
                 gas_objects: objects,
+                gas_object_ranges: Some(Vec::new()),
             })
         }
         Ok(Self {

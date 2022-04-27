@@ -1,12 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::config::Config;
+
 use super::load_generator::calculate_throughput;
 use clap::*;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::default::Default;
 use std::path::PathBuf;
 use strum_macros::EnumString;
 use sui_network::transport;
+use sui_types::base_types::ObjectID;
+use sui_types::crypto::KeyPair;
 
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -34,7 +40,7 @@ pub struct Benchmark {
     pub db_cpus: usize,
     /// Use Move orders
     #[clap(long, global = true)]
-    pub use_move: bool,
+    pub use_native: bool,
     #[clap(long, default_value = "2000", global = true)]
     pub batch_size: usize,
 
@@ -74,8 +80,9 @@ pub enum BenchmarkType {
 #[derive(Debug, Parser, Clone, Copy, ArgEnum, EnumString)]
 #[clap(rename_all = "kebab-case")]
 pub enum RunningMode {
-    LocalSingleValidatorThread,
-    LocalSingleValidatorProcess,
+    SingleValidatorThread,
+    SingleValidatorProcess,
+    RemoteValidator,
 }
 
 #[derive(Debug, Clone, Parser, Eq, PartialEq, EnumString)]
@@ -172,3 +179,16 @@ impl std::fmt::Display for MicroBenchmarkResult {
         }
     }
 }
+
+#[serde_as]
+#[derive(Serialize, Deserialize)]
+pub struct RemoteLoadGenConfig {
+    /// Account keypair to use for transactions
+    pub account_keypair: KeyPair,
+    /// ObjectID offset for transaction objects
+    pub object_id_offset: ObjectID,
+    /// Network config path which point to validators
+    pub network_cfg_path: PathBuf,
+}
+
+impl Config for RemoteLoadGenConfig {}

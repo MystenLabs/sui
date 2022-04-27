@@ -17,6 +17,7 @@ use tokio::runtime::{Builder, Runtime};
 use tracing::{error, info};
 pub mod bench_types;
 pub mod load_generator;
+pub mod multi_load_generator;
 pub mod transaction_creator;
 pub mod validator_preparer;
 use crate::benchmark::bench_types::{Benchmark, BenchmarkType};
@@ -54,7 +55,7 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
     } else {
         num_cpus::get()
     };
-    let validator_preparer = ValidatorPreparer::new(
+    let validator_preparer = ValidatorPreparer::new_for_local(
         benchmark.running_mode,
         benchmark.working_dir,
         benchmark.committee_size,
@@ -68,7 +69,7 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
             network_server,
             connections,
             benchmark.batch_size,
-            benchmark.use_move,
+            !benchmark.use_native,
             num_transactions,
             validator_preparer,
         ),
@@ -80,7 +81,7 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
             network_client,
             network_server,
             connections,
-            benchmark.use_move,
+            !benchmark.use_native,
             num_chunks,
             chunk_size,
             period_us,
@@ -118,6 +119,7 @@ fn run_throughout_microbench(
         use_move,
         batch_size * connections,
         num_transactions / chunk_size,
+        None,
         &mut validator_preparer,
     );
 
@@ -182,12 +184,13 @@ fn run_latency_microbench(
         use_move,
         chunk_size,
         num_chunks,
+        None,
         &mut validator_preparer,
     );
 
     // These are tracer TXes used for measuring latency
     let tracer_txes =
-        tx_cr.generate_transactions(1, use_move, 1, num_chunks, &mut validator_preparer);
+        tx_cr.generate_transactions(1, use_move, 1, num_chunks, None, &mut validator_preparer);
 
     validator_preparer.deploy_validator(_network_server);
 

@@ -15,7 +15,7 @@ use move_binary_format::CompiledModule;
 use move_package::BuildConfig;
 use narwhal_config::{Committee as ConsensusCommittee, Parameters as ConsensusParameters};
 use narwhal_crypto::ed25519::Ed25519PublicKey;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -27,7 +27,7 @@ use sui_core::authority_server::AuthorityServer;
 use sui_core::consensus_adapter::ConsensusListener;
 use sui_network::transport::SpawnedServer;
 use sui_network::transport::DEFAULT_MAX_DATAGRAM_SIZE;
-use sui_types::base_types::decode_bytes_hex;
+use sui_types::base_types::{decode_bytes_hex, ObjectID};
 use sui_types::base_types::encode_bytes_hex;
 use sui_types::base_types::{SequenceNumber, SuiAddress, TxContext};
 use sui_types::committee::Committee;
@@ -356,6 +356,7 @@ pub async fn genesis(
     let mut addresses = Vec::new();
     let mut preload_modules: Vec<Vec<CompiledModule>> = Vec::new();
     let mut preload_objects = Vec::new();
+    let mut all_preload_objects_set = BTreeSet::new();
 
     info!("Creating accounts and gas objects...",);
 
@@ -368,13 +369,37 @@ pub async fn genesis(
         };
 
         addresses.push(address);
+        let mut preload_objects_map = BTreeMap::new();
 
-        for object_conf in account.gas_objects {
+        // Populate gas itemized objects
+        account.gas_objects.iter().for_each(|q| {
+            if !all_preload_objects_set.contains(&q.object_id) {
+                preload_objects_map.insert(q.object_id, q.gas_value);
+            }
+        });
+
+        // Populate ranged gas objects
+        if let Some(ranges) = account.gas_object_ranges {
+            for rg in ranges {
+                let ids = ObjectID::in_range(rg.offset, rg.count)?;
+
+                for obj_id in ids {
+                    if !preload_objects_map.contains_key(&obj_id)
+                        && !all_preload_objects_set.contains(&obj_id)
+                    {
+                        preload_objects_map.insert(obj_id, rg.gas_value);
+                        all_preload_objects_set.insert(obj_id);
+                    }
+                }
+            }
+        }
+
+        for (object_id, value) in preload_objects_map {
             let new_object = Object::with_id_owner_gas_coin_object_for_testing(
-                object_conf.object_id,
+                object_id,
                 SequenceNumber::new(),
                 address,
-                object_conf.gas_value,
+                value,
             );
             preload_objects.push(new_object);
         }

@@ -94,8 +94,6 @@ pub struct FixedRateLoadGenerator {
     pub chunk_size_per_task: usize,
 }
 
-// new -> ready -> start
-
 impl FixedRateLoadGenerator {
     pub async fn new(
         transactions: Vec<Bytes>,
