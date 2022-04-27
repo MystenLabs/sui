@@ -13,7 +13,7 @@ use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
 
 const OBJECT_ID_OFFSET: &str = "0x10000";
-const GAS_PER_TX: u64 = 10000000;
+const GAS_PER_TX: u64 = u64::MAX;
 
 /// Create a transaction for object transfer
 /// This can either use the Move path or the native path
@@ -53,7 +53,7 @@ fn create_gas_object(object_id: ObjectID, owner: SuiAddress) -> Object {
         object_id,
         SequenceNumber::new(),
         owner,
-        u64::MAX,
+        GAS_PER_TX,
     )
 }
 
