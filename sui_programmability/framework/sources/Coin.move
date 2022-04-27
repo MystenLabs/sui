@@ -97,7 +97,7 @@ module Sui::Coin {
     public fun destroy_zero<T>(c: Coin<T>) {
         let Coin { id, balance } = c;
         ID::delete(id);
-        Balance::destroy_empty(balance);
+        Balance::destroy_zero(balance);
     }
 
     // === Registering new coin types and managing the coin supply ===
@@ -105,7 +105,7 @@ module Sui::Coin {
     /// Make any Coin with a zero value. Useful for placeholding
     /// bids/payments or preemptively making empty balances.
     public fun zero<T>(ctx: &mut TxContext): Coin<T> {
-        Coin { id: TxContext::new_id(ctx), balance: Balance::empty() }
+        Coin { id: TxContext::new_id(ctx), balance: Balance::zero() }
     }
 
     /// Create a new currency type `T` as and return the `TreasuryCap`
