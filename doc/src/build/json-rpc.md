@@ -44,7 +44,8 @@ the `curl` command.
 
 ### rpc.discover
 
-Retrieve OpenRPC documentation:
+Sui RPC server supports OpenRPC’s [service discovery method](https://spec.open-rpc.org/#service-discovery-method).
+A `rpc.discover` method is added to provide documentation describing our JSON-RPC APIs service.
 
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
@@ -52,21 +53,18 @@ curl --location --request POST $SUI_RPC_HOST \
 --data-raw '{ "jsonrpc":"2.0", "method":"rpc.discover","id":1}'
 ```
 
-TODO: Explain what they should see or show the output.
+You can see an example of the discovery service in the [OpenRPC Playground](https://playground.open-rpc.org/?schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/189d61df846f7c3676c1215cc41fb970ee9e22b5/sui/open_rpc/spec/openrpc.json).
 
 ### sui_syncAccountState
 
 Synchronize client state with validators with the following command,
-replacing `{{address}}` with an actual address value, for example one obtained from `wallet.conf` (without quotes):
+replacing `{{address}}` with an actual address value, for example one obtained from `wallet.conf`:
 
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
 --data-raw '{ "jsonrpc":"2.0", "method":"sui_syncAccountState", "params":["{{address}}"], "id":1}'
 ```
-
-TODO: Clarify what we mean by "without quotes" above. Do you mean when copying the address from `wallet.conf` or including in the command?
-Why does the command include quotes then ("{{address}}")? Should we instead say, replace "{{address}}" then?
 
 This will fetch the latest information on all objects owned by each
 address that is managed by this server. This command has no output.
