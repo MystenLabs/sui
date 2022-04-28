@@ -33,8 +33,18 @@ pub fn all_natives(
         ),
         (
             "TestScenario",
-            "get_inventory",
-            test_scenario::get_inventory,
+            "get_account_owned_inventory",
+            test_scenario::get_account_owned_inventory,
+        ),
+        (
+            "TestScenario",
+            "get_object_owned_inventory",
+            test_scenario::get_object_owned_inventory,
+        ),
+        (
+            "TestScenario",
+            "get_unowned_inventory",
+            test_scenario::get_unowned_inventory,
         ),
         ("TestScenario", "num_events", test_scenario::num_events),
         (

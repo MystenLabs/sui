@@ -139,6 +139,8 @@ module NFTs::MarketplaceTests {
     use Sui::TestScenario::{Self, Scenario};
     use NFTs::Marketplace::{Self, Marketplace, Listing};
 
+    use Std::Debug;
+
     // Simple Kitty-NFT data structure.
     struct Kitty has key, store {
         id: VersionedID,
@@ -172,12 +174,13 @@ module NFTs::MarketplaceTests {
     // SELLER lists Kitty at the Marketplace for 100 SUI.
     public(script) fun list_kitty(scenario: &mut Scenario) {
         TestScenario::next_tx(scenario, &SELLER);
-        let mkp = TestScenario::take_object<Marketplace>(scenario);
-        let bag = TestScenario::take_nested_object<Marketplace, Bag>(scenario, &mkp);
+        let mkp_wrapper = TestScenario::take_shared_object<Marketplace>(scenario);
+        let mkp = TestScenario::borrow_mut(&mut mkp_wrapper);
+        let bag = TestScenario::take_child_object<Marketplace, Bag>(scenario, mkp);
         let nft = TestScenario::take_object<Kitty>(scenario);
 
-        Marketplace::list<Kitty, SUI>(&mkp, &mut bag, nft, 100, TestScenario::ctx(scenario));
-        TestScenario::return_object(scenario, mkp);
+        Marketplace::list<Kitty, SUI>(mkp, &mut bag, nft, 100, TestScenario::ctx(scenario));
+        TestScenario::return_shared_object(scenario, mkp_wrapper);
         TestScenario::return_object(scenario, bag);
     }
 
@@ -191,17 +194,18 @@ module NFTs::MarketplaceTests {
 
         TestScenario::next_tx(scenario, &SELLER);
         {
-            let mkp = TestScenario::take_object<Marketplace>(scenario);
-            let bag = TestScenario::take_nested_object<Marketplace, Bag>(scenario, &mkp);
-            let listing = TestScenario::take_nested_object<Bag, Listing<Kitty, SUI>>(scenario, &bag);
+            let mkp_wrapper = TestScenario::take_shared_object<Marketplace>(scenario);
+            let mkp = TestScenario::borrow_mut(&mut mkp_wrapper);
+            let bag = TestScenario::take_child_object<Marketplace, Bag>(scenario, mkp);
+            let listing = TestScenario::take_child_object<Bag, Listing<Kitty, SUI>>(scenario, &bag);
 
             // Do the delist operation on a Marketplace.
-            let nft = Marketplace::delist<Kitty, SUI>(&mkp, &mut bag, listing, TestScenario::ctx(scenario));
+            let nft = Marketplace::delist<Kitty, SUI>(mkp, &mut bag, listing, TestScenario::ctx(scenario));
             let kitty_id = burn_kitty(nft);
 
             assert!(kitty_id == 1, 0);
 
-            TestScenario::return_object(scenario, mkp);
+            TestScenario::return_shared_object(scenario, mkp_wrapper);
             TestScenario::return_object(scenario, bag);
         };
     }
@@ -219,15 +223,16 @@ module NFTs::MarketplaceTests {
         // BUYER attempts to delist Kitty and he has no right to do so. :(
         TestScenario::next_tx(scenario, &BUYER);
         {
-            let mkp = TestScenario::take_object<Marketplace>(scenario);
-            let bag = TestScenario::take_nested_object<Marketplace, Bag>(scenario, &mkp);
-            let listing = TestScenario::take_nested_object<Bag, Listing<Kitty, SUI>>(scenario, &bag);
+            let mkp_wrapper = TestScenario::take_shared_object<Marketplace>(scenario);
+            let mkp = TestScenario::borrow_mut(&mut mkp_wrapper);
+            let bag = TestScenario::take_child_object<Marketplace, Bag>(scenario, mkp);
+            let listing = TestScenario::take_child_object<Bag, Listing<Kitty, SUI>>(scenario, &bag);
 
             // Do the delist operation on a Marketplace.
-            let nft = Marketplace::delist<Kitty, SUI>(&mkp, &mut bag, listing, TestScenario::ctx(scenario));
+            let nft = Marketplace::delist<Kitty, SUI>(mkp, &mut bag, listing, TestScenario::ctx(scenario));
             let _ = burn_kitty(nft);
 
-            TestScenario::return_object(scenario, mkp);
+            TestScenario::return_shared_object(scenario, mkp_wrapper);
             TestScenario::return_object(scenario, bag);
         };
     }
@@ -236,18 +241,24 @@ module NFTs::MarketplaceTests {
     public(script) fun buy_kitty() {
         let scenario = &mut TestScenario::begin(&ADMIN);
 
+        Debug::print(&0);
         create_marketplace(scenario);
+        Debug::print(&1);
         mint_some_coin(scenario);
+        Debug::print(&2);
         mint_kitty(scenario);
+        Debug::print(&3);
         list_kitty(scenario);
+        Debug::print(&4);
 
         // BUYER takes 100 SUI from his wallet and purchases Kitty.
         TestScenario::next_tx(scenario, &BUYER);
         {
             let coin = TestScenario::take_object<Coin<SUI>>(scenario);
-            let mkp = TestScenario::take_object<Marketplace>(scenario);
-            let bag = TestScenario::take_nested_object<Marketplace, Bag>(scenario, &mkp);
-            let listing = TestScenario::take_nested_object<Bag, Listing<Kitty, SUI>>(scenario, &bag);
+            let mkp_wrapper = TestScenario::take_shared_object<Marketplace>(scenario);
+            let mkp = TestScenario::borrow_mut(&mut mkp_wrapper);
+            let bag = TestScenario::take_child_object<Marketplace, Bag>(scenario, mkp);
+            let listing = TestScenario::take_child_object<Bag, Listing<Kitty, SUI>>(scenario, &bag);
             let payment = Coin::withdraw(&mut coin, 100, TestScenario::ctx(scenario));
 
             // Do the buy call and expect successful purchase.
@@ -256,7 +267,7 @@ module NFTs::MarketplaceTests {
 
             assert!(kitty_id == 1, 0);
 
-            TestScenario::return_object(scenario, mkp);
+            TestScenario::return_shared_object(scenario, mkp_wrapper);
             TestScenario::return_object(scenario, bag);
             TestScenario::return_object(scenario, coin);
         };
@@ -276,9 +287,10 @@ module NFTs::MarketplaceTests {
         TestScenario::next_tx(scenario, &BUYER);
         {
             let coin = TestScenario::take_object<Coin<SUI>>(scenario);
-            let mkp = TestScenario::take_object<Marketplace>(scenario);
-            let bag = TestScenario::take_nested_object<Marketplace, Bag>(scenario, &mkp);
-            let listing = TestScenario::take_nested_object<Bag, Listing<Kitty, SUI>>(scenario, &bag);
+            let mkp_wrapper = TestScenario::take_shared_object<Marketplace>(scenario);
+            let mkp = TestScenario::borrow_mut(&mut mkp_wrapper);
+            let bag = TestScenario::take_child_object<Marketplace, Bag>(scenario, mkp);
+            let listing = TestScenario::take_child_object<Bag, Listing<Kitty, SUI>>(scenario, &bag);
 
             // AMOUNT here is 10 while expected is 100.
             let payment = Coin::withdraw(&mut coin, 10, TestScenario::ctx(scenario));
@@ -287,7 +299,7 @@ module NFTs::MarketplaceTests {
             let nft = Marketplace::buy<Kitty, SUI>(&mut bag, listing, payment);
             let _ = burn_kitty(nft);
 
-            TestScenario::return_object(scenario, mkp);
+            TestScenario::return_shared_object(scenario, mkp_wrapper);
             TestScenario::return_object(scenario, bag);
             TestScenario::return_object(scenario, coin);
         };
