@@ -195,25 +195,21 @@ Now start a new terminal since you have Sui running in the first terminal.
 
 The following commands are supported by the wallet:
 
-    active-address    Use this default address for commands when none is specified
-    addresses         Obtain the Addresses managed by the wallet
-    call              Call Move function
-    clear             Clear screen
-    echo              Write arguments to the console output
-    env               Print environment
-    exit              Exit the interactive shell
-    gas               Obtain all gas objects owned by the address
-    help              Print this message or the help of the given subcommand(s)
-    history           Print history
-    merge-coin        Merge two coin objects into one coin
-    new-address       Generate new address and keypair
-    object            Get object information
-    objects           Obtain all objects owned by the address
-    publish           Publish Move modules
-    split-coin        Split a coin object into multiple coins
-    switch            Switch active address
-    sync              Synchronize client state with validators
-    transfer          Transfer an object
+    active-address        Default address used for commands when none specified
+    addresses             Obtain the Addresses managed by the wallet
+    call                  Call Move function
+    create-example-nft    Create an example NFT
+    gas                   Obtain all gas objects owned by the address
+    help                  Print this message or the help of the given subcommand(s)
+    merge-coin            Merge two coin objects into one coin
+    new-address           Generate new address and keypair
+    object                Get obj info
+    objects               Obtain all objects owned by the address
+    publish               Publish Move modules
+    split-coin            Split a coin object into multiple coins
+    switch                Switch active address
+    sync                  Synchronize client state with authorities
+    transfer              Transfer an object
 Use `help <command>` to see more information on each command.
 
 You can start the wallet in two modes: interactive shell or command line interface.
@@ -551,6 +547,43 @@ $ wallet objects --address C72CF3ADCC4D11C03079CEF2C8992AEA5268677A
 Showing 1 results.
 (DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1, SequenceNumber(1), o#f77edd77f5c154a850078b81b320870890bbb4f06d18f80fd512b1cc26bc3297)
 ```
+
+## Creating example NFTs
+
+You may create an [NFT-like object](https://github.com/MystenLabs/sui/blob/27dff728a4c9cb65cd5d92a574105df20cb51887/sui_programmability/framework/sources/DevNetNFT.move#L16) on Sui using the following command.
+
+
+```shell
+$ wallet create-example-nft
+Successfully created an ExampleNFT:
+
+Owner: AddressOwner(k#66af3898e7558b79e115ab61184a958497d1905a)
+Version: 1
+ID: 70874F1ABD0A9A0126726A626FF48374F7B2D9C6
+Readonly: false
+Type: 0x2::DevNetNFT::DevNetNFT
+
+```
+
+The command will invoke the `mint` function in `DevNetNFT` module, which mints a Sui object with three attributes: name, description, and image URL with [default values](https://github.com/MystenLabs/sui/blob/27dff728a4c9cb65cd5d92a574105df20cb51887/sui/src/wallet_commands.rs#L39) and transfers the object to your address. You can also provide custom values using the following instructions:
+
+
+`create-example-nft` command usage:
+
+```shell
+USAGE:
+    wallet create-example-nft [OPTIONS]
+
+OPTIONS:
+        --description <DESCRIPTION>    Description of the NFT
+        --gas <GAS>                    ID of the gas object for gas payment, in 20 bytes Hex string
+                                       If not provided, a gas object with at least gas_budget value
+                                       will be selected
+        --gas-budget <GAS_BUDGET>      Gas budget for this transfer
+        --name <NAME>                  Name of the NFT
+        --url <URL>                    Display url(e.g., an image url) of the NFT
+```
+
 
 ## Merging and splitting coin objects
 
