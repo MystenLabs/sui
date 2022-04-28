@@ -12,7 +12,6 @@ import { findDataFromID } from '../../utils/static/searchUtil';
 
 import styles from './TransactionResult.module.css';
 
-
 // Todo update state to include Call types
 const initState = {
     loadState: 'pending',
@@ -97,7 +96,7 @@ function TransactionResult() {
     // TODO update Loading screen
     if (showTxState.loadState === 'pending') {
         return (
-            <div className={theme.textresults} >
+            <div className={theme.textresults}>
                 <div className={styles.content}>Loading...</div>
             </div>
         );
@@ -118,11 +117,11 @@ function TransactionResult() {
     }
 
     return (
-        <div className={theme.textresults} >
+        <div className={theme.textresults}>
             <div>Transaction Details </div>
             {showTxState.loadState === 'loaded' && (
-                <div className={styles.content} >
-                    <TransactionCard  txdata={showTxState} />
+                <div className={styles.content}>
+                    <TransactionCard txdata={showTxState} />
                 </div>
             )}
         </div>
