@@ -49,7 +49,7 @@ jobs:
   test:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [self-hosted, ubuntu]
+    runs-on: [self-hosted, self-hosted-ubuntu]
     strategy:
       fail-fast: false
     steps:
