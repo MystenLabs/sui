@@ -256,20 +256,11 @@ impl AuthorityServer {
                 .handle_batch_streaming(*message, channel)
                 .await
                 .map(|_| None),
-            SerializedMessage::ConsensusTransaction(message) => {
-                match self.consensus_submitter.submit(&message).await {
-                    Ok(()) => match *message {
-                        ConsensusTransaction::UserTransaction(certificate) => {
-                            let confirmation_transaction = ConfirmationTransaction { certificate };
-                            self.state
-                                .handle_confirmation_transaction(confirmation_transaction)
-                                .await
-                                .map(|info| Some(serialize_transaction_info(&info)))
-                        }
-                    },
-                    Err(e) => Err(e),
-                }
-            }
+            SerializedMessage::ConsensusTransaction(message) => self
+                .consensus_submitter
+                .submit(&message)
+                .await
+                .map(|info| Some(serialize_transaction_info(&info))),
 
             _ => Err(SuiError::UnexpectedMessage),
         };
