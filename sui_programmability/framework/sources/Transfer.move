@@ -3,7 +3,6 @@
 
 module Sui::Transfer {
     use Std::Option::{Self, Option};
-
     use Sui::ID::{Self, ID, VersionedID};
 
     // To allow access to transfer_to_object_unsafe.
@@ -13,7 +12,7 @@ module Sui::Transfer {
 
     // When transferring a child object, this error is thrown if the child object
     // doesn't match the ChildRef that represents the onwershp.
-    const ECHILD_ID_MISMATCH: u64 = 0;
+    const EChildIDMismatch: u64 = 0;
 
     /// Represents a reference to a child object, whose type is T.
     /// This is used to track ownership between objects.
@@ -109,7 +108,7 @@ module Sui::Transfer {
     /// consume a ChildRef. It will return a ChildRef that represents the new ownership.
     public fun transfer_child_to_object<T: key, R: key>(child: T, child_ref: ChildRef<T>, owner: &mut R): ChildRef<T> {
         let ChildRef { child_id } = child_ref;
-        assert!(&child_id == ID::id(&child), ECHILD_ID_MISMATCH);
+        assert!(&child_id == ID::id(&child), EChildIDMismatch);
         transfer_to_object(child, owner)
     }
 
@@ -120,7 +119,7 @@ module Sui::Transfer {
     // Currently one has to first transfer it to an address, and then delete it.
     public fun transfer_child_to_address<T: key>(child: T, child_ref: ChildRef<T>, recipient: address) {
         let ChildRef { child_id } = child_ref;
-        assert!(&child_id == ID::id(&child), ECHILD_ID_MISMATCH);
+        assert!(&child_id == ID::id(&child), EChildIDMismatch);
         transfer(child, recipient)
     }
 
@@ -130,7 +129,7 @@ module Sui::Transfer {
     /// be dangling reference to the child object through ownership.
     public fun delete_child_object<T: key>(child: T, child_ref: ChildRef<T>) {
         let ChildRef { child_id } = child_ref;
-        assert!(&child_id == ID::id(&child), ECHILD_ID_MISMATCH);
+        assert!(&child_id == ID::id(&child), EChildIDMismatch);
         delete_child_object_internal(child);
     }
 

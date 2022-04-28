@@ -49,7 +49,7 @@ module Sui::CrossChainAirdrop {
     // Error codes
 
     /// Trying to claim a token that has already been claimed
-    const ETOKEN_ID_CLAIMED: u64 = 0;
+    const ETokenIDClaimed: u64 = 0;
 
     /// Create the `Orcacle` capability and hand it off to the oracle
     fun init(ctx: &mut TxContext) {
@@ -75,7 +75,7 @@ module Sui::CrossChainAirdrop {
         let contract = get_or_create_contract(oracle, &source_contract_address);
         let token_id = ERC721Metadata::new_token_id(source_token_id);
         // NOTE: this is where the globally uniqueness check happens
-        assert!(!is_token_claimed(contract, &token_id), ETOKEN_ID_CLAIMED);
+        assert!(!is_token_claimed(contract, &token_id), ETokenIDClaimed);
         let nft = ERC721 {
             id: TxContext::new_id(ctx),
             source_contract_address: SourceContractAddress { address: source_contract_address },

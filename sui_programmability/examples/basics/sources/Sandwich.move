@@ -39,10 +39,9 @@ module Basics::Sandwich {
     const BREAD_PRICE: u64 = 2;
 
     /// Not enough funds to pay for the good in question
-    const EINSUFFICIENT_FUNDS: u64 = 0;
-
+    const EInsufficientFunds: u64 = 0;
     /// Nothing to withdraw
-    const ENO_PROFITS: u64 = 1;
+    const ENoProfits: u64 = 1;
 
     /// On module init, create a grocery
     fun init(ctx: &mut TxContext) {
@@ -62,7 +61,7 @@ module Basics::Sandwich {
         c: Coin<SUI>,
         ctx: &mut TxContext
     ) {
-        assert!(Coin::value(&c) == HAM_PRICE, EINSUFFICIENT_FUNDS);
+        assert!(Coin::value(&c) == HAM_PRICE, EInsufficientFunds);
         Coin::join(&mut grocery.profits, c);
         Transfer::transfer(Ham { id: TxContext::new_id(ctx) }, TxContext::sender(ctx))
     }
@@ -73,7 +72,7 @@ module Basics::Sandwich {
         c: Coin<SUI>,
         ctx: &mut TxContext
     ) {
-        assert!(Coin::value(&c) == BREAD_PRICE, EINSUFFICIENT_FUNDS);
+        assert!(Coin::value(&c) == BREAD_PRICE, EInsufficientFunds);
         Coin::join(&mut grocery.profits, c);
         Transfer::transfer(Bread { id: TxContext::new_id(ctx) }, TxContext::sender(ctx))
     }
@@ -98,7 +97,7 @@ module Basics::Sandwich {
     public(script) fun collect_profits(_cap: &GroceryOwnerCapability, grocery: &mut Grocery, ctx: &mut TxContext) {
         let amount = Coin::value(&grocery.profits);
 
-        assert!(amount > 0, ENO_PROFITS);
+        assert!(amount > 0, ENoProfits);
 
         let coin = Coin::withdraw(&mut grocery.profits, amount, ctx);
         Transfer::transfer(coin, TxContext::sender(ctx));
