@@ -2,15 +2,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::common::listener;
 use futures::future::try_join_all;
+use test_utils::expecting_listener;
 
 #[tokio::test]
 async fn send() {
     // Run a TCP server.
     let address = "127.0.0.1:5000".parse::<SocketAddr>().unwrap();
     let message = "Hello, world!";
-    let handle = listener(address, message.to_string());
+    let handle = expecting_listener(address, Some(message.as_bytes().into()));
 
     // Make the network sender and send the message.
     let mut sender = ReliableSender::new();
@@ -32,7 +32,10 @@ async fn broadcast() {
             let address = format!("127.0.0.1:{}", 5_200 + x)
                 .parse::<SocketAddr>()
                 .unwrap();
-            (listener(address, message.to_string()), address)
+            (
+                expecting_listener(address, Some(message.as_bytes().into())),
+                address,
+            )
         })
         .collect::<Vec<_>>()
         .into_iter()
@@ -59,7 +62,7 @@ async fn retry() {
 
     // Run a TCP server.
     sleep(Duration::from_millis(50)).await;
-    let handle = listener(address, message.to_string());
+    let handle = expecting_listener(address, Some(message.as_bytes().into()));
 
     // Ensure we get back an acknowledgement.
     assert!(cancel_handler.await.is_ok());
