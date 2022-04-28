@@ -644,6 +644,12 @@ impl AuthorityState {
             .expect("TODO: propagate the error")
     }
 
+    pub async fn insert_genesis_objects_bulk_unsafe(&self, objects: &[&Object]) {
+        self._database
+            .bulk_object_insert(objects)
+            .expect("TODO: propagate the error")
+    }
+
     /// Persist the Genesis package to DB along with the side effects for module initialization
     async fn store_package_and_init_modules_for_genesis(
         &self,
