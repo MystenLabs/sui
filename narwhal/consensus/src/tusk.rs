@@ -19,7 +19,7 @@ use tokio::{
     sync::mpsc::{Receiver, Sender},
     task::JoinHandle,
 };
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 use types::{Certificate, CertificateDigest, Round};
 
 #[cfg(any(test, feature = "benchmark"))]
@@ -162,7 +162,7 @@ impl<PublicKey: VerifyingKey> Consensus<PublicKey> {
                 #[cfg(feature = "benchmark")]
                 for digest in certificate.header.payload.keys() {
                     // NOTE: This log entry is used to compute performance.
-                    info!("Committed {} -> {:?}", certificate.header, digest);
+                    tracing::info!("Committed {} -> {:?}", certificate.header, digest);
                 }
 
                 self.tx_primary

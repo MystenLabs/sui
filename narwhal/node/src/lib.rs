@@ -3,7 +3,7 @@
 use config::{Committee, Parameters, WorkerId};
 use consensus::{dag::Dag, Consensus, ConsensusStore, SequenceNumber, SubscriberHandler};
 use crypto::traits::{KeyPair, Signer, VerifyingKey};
-use executor::{ExecutionState, Executor, SerializedTransactionDigest, SubscriberResult};
+use executor::{ExecutionState, Executor, SerializedTransaction, SubscriberResult};
 use primary::{PayloadToken, Primary};
 use std::sync::Arc;
 use store::{
@@ -97,7 +97,7 @@ impl Node {
         // The state used by the client to execute transactions.
         execution_state: Arc<State>,
         // A channel to output transactions execution confirmations.
-        tx_confirmation: Sender<(SubscriberResult<()>, SerializedTransactionDigest)>,
+        tx_confirmation: Sender<(SubscriberResult<()>, SerializedTransaction)>,
     ) -> SubscriberResult<()>
     where
         PublicKey: VerifyingKey,
@@ -155,7 +155,7 @@ impl Node {
         execution_state: Arc<State>,
         rx_new_certificates: Receiver<Certificate<PublicKey>>,
         tx_feedback: Sender<Certificate<PublicKey>>,
-        tx_confirmation: Sender<(SubscriberResult<()>, SerializedTransactionDigest)>,
+        tx_confirmation: Sender<(SubscriberResult<()>, SerializedTransaction)>,
     ) -> SubscriberResult<()>
     where
         PublicKey: VerifyingKey,
