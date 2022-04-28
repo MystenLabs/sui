@@ -12,22 +12,6 @@ import { findDataFromID } from '../../utils/static/searchUtil';
 
 import styles from './TransactionResult.module.css';
 
-type DataType = {
-    id: string;
-    status: 'success' | 'fail' | 'pending';
-    sender: string;
-    created?: string[];
-    deleted?: string[];
-    mutated?: string[];
-    recipients: string[];
-};
-
-function instanceOfDataType(object: any): object is DataType {
-    return (
-        object !== undefined &&
-        ['id', 'status', 'sender'].every((x) => x in object)
-    );
-}
 
 // Todo update state to include Call types
 const initState = {
@@ -113,7 +97,7 @@ function TransactionResult() {
     // TODO update Loading screen
     if (showTxState.loadState === 'pending') {
         return (
-            <div className={theme.textresults}>
+            <div className={theme.textresults} >
                 <div className={styles.content}>Loading...</div>
             </div>
         );
@@ -134,11 +118,11 @@ function TransactionResult() {
     }
 
     return (
-        <div className={theme.textresults} id="textResults">
-            <div>Transaction Details</div>
+        <div className={theme.textresults} >
+            <div>Transaction Details </div>
             {showTxState.loadState === 'loaded' && (
-                <div className={styles.content}>
-                    <TransactionCard txdata={showTxState} />
+                <div className={styles.content} >
+                    <TransactionCard  txdata={showTxState} />
                 </div>
             )}
         </div>
@@ -146,4 +130,4 @@ function TransactionResult() {
 }
 
 export default TransactionResult;
-export { instanceOfDataType };
+// export { instanceOfDataType };

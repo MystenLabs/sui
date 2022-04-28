@@ -41,7 +41,7 @@ function formatTxResponse(data: any) {
                       label: 'From',
                       value: tx.data.sender,
                       link: true,
-                      group: 'grouped',
+                      className: 'grouped',
                   },
                   {
                       label: 'To',
@@ -113,7 +113,9 @@ function TransactionCard({ txdata }: any) {
                                     key={index}
                                     className={cl(
                                         styles.txcardgrid,
-                                        itm.group ? styles[itm.group] : ''
+                                        itm.className
+                                            ? styles[itm.className]
+                                            : ''
                                     )}
                                 >
                                     <div>{itm.label}</div>
