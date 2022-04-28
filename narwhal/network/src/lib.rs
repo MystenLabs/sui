@@ -8,34 +8,27 @@
     rust_2021_compatibility
 )]
 
-mod error;
 mod primary;
-mod receiver;
-mod reliable_sender;
 mod retry;
-mod simple_sender;
 mod worker;
 
 pub use crate::{
     primary::{PrimaryNetwork, PrimaryToWorkerNetwork},
-    receiver::{MessageHandler, Receiver, Writer},
-    reliable_sender::{CancelHandler, ReliableSender},
     retry::RetryConfig,
-    simple_sender::SimpleSender,
     worker::WorkerNetwork,
 };
 
 #[derive(Debug)]
 #[must_use]
-pub struct CancelHandler2<T>(tokio::task::JoinHandle<T>);
+pub struct CancelHandler<T>(tokio::task::JoinHandle<T>);
 
-impl<T> Drop for CancelHandler2<T> {
+impl<T> Drop for CancelHandler<T> {
     fn drop(&mut self) {
         self.0.abort();
     }
 }
 
-impl<T> std::future::Future for CancelHandler2<T> {
+impl<T> std::future::Future for CancelHandler<T> {
     type Output = T;
 
     fn poll(

@@ -5,7 +5,7 @@ use crate::worker::SerializedBatchMessage;
 use config::{Committee, Stake};
 use crypto::traits::VerifyingKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
-use network::CancelHandler2 as CancelHandler;
+use network::CancelHandler;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 #[cfg(test)]

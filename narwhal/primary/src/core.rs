@@ -9,7 +9,7 @@ use crate::{
 use async_recursion::async_recursion;
 use config::Committee;
 use crypto::{traits::VerifyingKey, Hash as _, SignatureService};
-use network::{CancelHandler2 as CancelHandler, PrimaryNetwork};
+use network::{CancelHandler, PrimaryNetwork};
 use std::{
     collections::{HashMap, HashSet},
     sync::{

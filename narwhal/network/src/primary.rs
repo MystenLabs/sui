@@ -1,4 +1,4 @@
-use crate::{CancelHandler2 as CancelHandler, RetryConfig};
+use crate::{CancelHandler, RetryConfig};
 use crypto::traits::VerifyingKey;
 use futures::FutureExt;
 use rand::{prelude::SliceRandom as _, rngs::SmallRng, SeedableRng as _};

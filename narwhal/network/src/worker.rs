@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{CancelHandler2 as CancelHandler, RetryConfig};
+use crate::{CancelHandler, RetryConfig};
 use crypto::traits::VerifyingKey;
 use futures::FutureExt;
 use rand::{prelude::SliceRandom as _, rngs::SmallRng, SeedableRng as _};
