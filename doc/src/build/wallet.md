@@ -133,7 +133,7 @@ all data will be stored locally and the application will make direct
 connection to the validators.
 
 #### RPC gateway
-You can also connect the wallet to the Sui network via a [RPC Gateway](json-rpc.md#start-local-rpc-server);
+You can also connect the wallet to the Sui network via an [RPC Gateway](json-rpc.md#start-local-rpc-server);
 To use the RPC gateway, update `wallet.conf`'s `gateway` section to:
 ```json
 {
