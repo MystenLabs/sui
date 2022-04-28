@@ -19,7 +19,7 @@ use tokio::sync::mpsc::Sender;
 use std::time::Duration;
 use tracing::{error, info, warn, Instrument};
 
-use crate::consensus_adapter::{ConsensusInput, ConsensusSubmitter};
+use crate::consensus_adapter::{ConsensusAdapter, ConsensusInput};
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use tokio::sync::broadcast::error::RecvError;
@@ -41,7 +41,7 @@ const MAX_DELAY_MILLIS: u64 = 5_000; // 5 sec
 pub struct AuthorityServer {
     server: NetworkServer,
     pub state: Arc<AuthorityState>,
-    consensus_submitter: ConsensusSubmitter,
+    consensus_adapter: ConsensusAdapter,
 }
 
 impl AuthorityServer {
@@ -53,7 +53,7 @@ impl AuthorityServer {
         consensus_address: SocketAddr,
         tx_consensus_listener: Sender<ConsensusInput>,
     ) -> Self {
-        let consensus_submitter = ConsensusSubmitter::new(
+        let consensus_adapter = ConsensusAdapter::new(
             consensus_address,
             buffer_size,
             state.committee.clone(),
@@ -63,7 +63,7 @@ impl AuthorityServer {
         Self {
             server: NetworkServer::new(base_address, base_port, buffer_size),
             state,
-            consensus_submitter,
+            consensus_adapter,
         }
     }
 
@@ -257,7 +257,7 @@ impl AuthorityServer {
                 .await
                 .map(|_| None),
             SerializedMessage::ConsensusTransaction(message) => self
-                .consensus_submitter
+                .consensus_adapter
                 .submit(&message)
                 .await
                 .map(|info| Some(serialize_transaction_info(&info))),

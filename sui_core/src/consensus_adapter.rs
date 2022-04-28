@@ -46,6 +46,96 @@ pub struct ConsensusInput {
     replier: Replier,
 }
 
+/// Submit Sui certificates to the consensus.
+pub struct ConsensusAdapter {
+    /// The network address of the consensus node.
+    consensus_address: SocketAddr,
+    /// The network buffer size.
+    buffer_size: usize,
+    /// The Sui committee information.
+    committee: Committee,
+    /// A channel to notify the consensus listener of new transactions.
+    tx_consensus_listener: Sender<ConsensusInput>,
+    /// The maximum duration to wait from consensus before aborting the transaction.
+    max_delay: Duration,
+}
+
+impl ConsensusAdapter {
+    /// Make a new Consensus submitter instance.
+    pub fn new(
+        consensus_address: SocketAddr,
+        buffer_size: usize,
+        committee: Committee,
+        tx_consensus_listener: Sender<ConsensusInput>,
+        max_delay: Duration,
+    ) -> Self {
+        Self {
+            consensus_address,
+            buffer_size,
+            committee,
+            tx_consensus_listener,
+            max_delay,
+        }
+    }
+
+    /// Attempt to reconnect with a the consensus node.
+    async fn reconnect(address: SocketAddr, buffer_size: usize) -> SuiResult<TcpDataStream> {
+        transport::connect(address.to_string(), buffer_size)
+            .await
+            .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))
+    }
+
+    /// Check if this authority should submit the transaction to consensus.
+    fn should_submit(_certificate: &ConsensusTransaction) -> bool {
+        // TODO [issue #1647]: Right now every authority submits the transaction to consensus.
+        true
+    }
+
+    /// Submit a transaction to consensus, wait for its processing, and notify the caller.
+    pub async fn submit(
+        &self,
+        certificate: &ConsensusTransaction,
+    ) -> SuiResult<TransactionInfoResponse> {
+        // Check the Sui certificate (submitted by the user).
+        certificate.check(&self.committee)?;
+
+        // Serialize the certificate in a way that is understandable to consensus (i.e., using
+        // bincode) and it certificate to consensus.
+        //let serialized = serialize_consensus_transaction(certificate);
+        let serialized = bincode::serialize(certificate).expect("Failed to serialize consensus tx");
+        let bytes = Bytes::from(serialized.clone());
+
+        // Notify the consensus listener that we are expecting to process this certificate.
+        let (sender, receiver) = oneshot::channel();
+        let consensus_input = ConsensusInput {
+            serialized,
+            replier: sender,
+        };
+        self.tx_consensus_listener
+            .send(consensus_input)
+            .await
+            .expect("Failed to notify consensus listener");
+
+        // Check if this authority submits the transaction to consensus.
+        if Self::should_submit(certificate) {
+            // TODO [issue #1452]: We are re-creating a connection every time. This is wasteful but
+            // does not require to take self as a mutable reference.
+            Self::reconnect(self.consensus_address, self.buffer_size)
+                .await?
+                .sink()
+                .send(bytes)
+                .await
+                .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))?;
+        }
+
+        // Wait for the consensus to sequence the certificate and assign locks to shared objects.
+        timeout(self.max_delay, receiver)
+            .await
+            .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))?
+            .expect("Channel with consensus listener dropped")
+    }
+}
+
 /// This module interfaces the consensus with Sui. It receives certificates input to consensus and
 /// notify the called when they are sequenced.
 pub struct ConsensusListener {
@@ -134,95 +224,5 @@ impl ConsensusListener {
         let mut hasher = DefaultHasher::new();
         serialized.hash(&mut hasher);
         hasher.finish()
-    }
-}
-
-/// Submit Sui certificates to the consensus.
-pub struct ConsensusSubmitter {
-    /// The network address of the consensus node.
-    consensus_address: SocketAddr,
-    /// The network buffer size.
-    buffer_size: usize,
-    /// The Sui committee information.
-    committee: Committee,
-    /// A channel to notify the consensus listener of new transactions.
-    tx_consensus_listener: Sender<ConsensusInput>,
-    /// The maximum duration to wait from consensus before aborting the transaction.
-    max_delay: Duration,
-}
-
-impl ConsensusSubmitter {
-    /// Make a new Consensus submitter instance.
-    pub fn new(
-        consensus_address: SocketAddr,
-        buffer_size: usize,
-        committee: Committee,
-        tx_consensus_listener: Sender<ConsensusInput>,
-        max_delay: Duration,
-    ) -> Self {
-        Self {
-            consensus_address,
-            buffer_size,
-            committee,
-            tx_consensus_listener,
-            max_delay,
-        }
-    }
-
-    /// Attempt to reconnect with a the consensus node.
-    async fn reconnect(address: SocketAddr, buffer_size: usize) -> SuiResult<TcpDataStream> {
-        transport::connect(address.to_string(), buffer_size)
-            .await
-            .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))
-    }
-
-    /// Check if this authority should submit the transaction to consensus.
-    fn should_submit(_certificate: &ConsensusTransaction) -> bool {
-        // TODO [issue #1647]: Right now every authority submits the transaction to consensus.
-        true
-    }
-
-    /// Submit a transaction to consensus, wait for its processing, and notify the caller.
-    pub async fn submit(
-        &self,
-        certificate: &ConsensusTransaction,
-    ) -> SuiResult<TransactionInfoResponse> {
-        // Check the Sui certificate (submitted by the user).
-        certificate.check(&self.committee)?;
-
-        // Serialize the certificate in a way that is understandable to consensus (i.e., using
-        // bincode) and it certificate to consensus.
-        //let serialized = serialize_consensus_transaction(certificate);
-        let serialized = bincode::serialize(certificate).expect("Failed to serialize consensus tx");
-        let bytes = Bytes::from(serialized.clone());
-
-        // Notify the consensus listener that we are expecting to process this certificate.
-        let (sender, receiver) = oneshot::channel();
-        let consensus_input = ConsensusInput {
-            serialized,
-            replier: sender,
-        };
-        self.tx_consensus_listener
-            .send(consensus_input)
-            .await
-            .expect("Failed to notify consensus listener");
-
-        // Check if this authority submits the transaction to consensus.
-        if Self::should_submit(certificate) {
-            // TODO [issue #1452]: We are re-creating a connection every time. This is wasteful but
-            // does not require to take self as a mutable reference.
-            Self::reconnect(self.consensus_address, self.buffer_size)
-                .await?
-                .sink()
-                .send(bytes)
-                .await
-                .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))?;
-        }
-
-        // Wait for the consensus to sequence the certificate and assign locks to shared objects.
-        timeout(self.max_delay, receiver)
-            .await
-            .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))?
-            .expect("Channel with consensus listener dropped")
     }
 }
