@@ -14,6 +14,7 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](../.
 
 Find the latest updates to these contents in this section:
 
+* [JSON-RPC API](../build/json-rpc.md) - Set up your own local Sui RPC Server and use the Sui JSON-RPC API to interact with a local Sui network.
 * [Narwhal and Tusk for consensus](../learn/architecture/consensus.md) - Learn about Narwhal and Tusk, Sui's high-throughput mempool and consensus engine.
 * [REST API publishing](../build/rest-api.md#post-apipublish) - Instructions exist for publishing Move modules via the Publish endpoint.
 * [Wallet improvements](../build/wallet.md#active-address)- Active (default) addresses and [using gas objects for transactions](../build/wallet.md#paying-for-transactions-with-gas-objects) are supported.
