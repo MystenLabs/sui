@@ -1,6 +1,6 @@
 # Sui TypeScript SDK
 
-This is the Sui TypeScript SDK built on the Sui [JSON RPC API](../../doc/build/json-rpc.md). It provides utility classes and functions for applications to sign transactions and interact with the Sui network.
+This is the Sui TypeScript SDK built on the Sui [JSON RPC API](https://github.com/MystenLabs/sui/blob/main/doc/src/build/json-rpc.md). It provides utility classes and functions for applications to sign transactions and interact with the Sui network.
 
 Note that the SDK is still in development mode and some API functions are subject to change.
 
@@ -9,17 +9,19 @@ Note that the SDK is still in development mode and some API functions are subjec
 We haven't published the npm package yet, so right now you may use [npm link](https://docs.npmjs.com/cli/v8/commands/npm-link) to install it locally.
 
 ```bash
-
 cd sui/sdk/typescript
 yarn && yarn build && npm link
+```
 
+Then:
+```bash
 cd your/project
 npm link sui.js
 ```
 
 ## Local Development Environment Setup
 
-Follow the [JSON RPC doc](../../doc/build/json-rpc.md) to start a local network and local RPC server
+Follow the [JSON RPC doc](https://github.com/MystenLabs/sui/blob/main/doc/src/build/json-rpc.md) to start a local network and local RPC server
 
 ## Usage
 
