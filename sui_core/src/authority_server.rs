@@ -117,10 +117,10 @@ impl AuthorityServer {
     {
         // Register a subscriber to not miss any updates
         let mut subscriber = self.state.subscribe_batch();
-        let message_end = request.end;
 
         // Get the historical data requested
-        let (mut items, should_subscribe) = self.state.handle_batch_info_request(request).await?;
+        let (mut items, (should_subscribe, _start, end)) =
+            self.state.handle_batch_info_request(request).await?;
 
         let mut last_seq_sent = 0;
         while let Some(item) = items.pop_front() {
@@ -170,7 +170,7 @@ impl AuthorityServer {
                     // We always stop sending at batch boundaries, so that we try to always
                     // start with a batch and end with a batch to allow signature verification.
                     if let BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) = &response {
-                        if message_end < signed_batch.batch.next_sequence_number {
+                        if end < signed_batch.batch.next_sequence_number {
                             break;
                         }
                     }

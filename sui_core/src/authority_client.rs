@@ -147,6 +147,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
         let mut error_count = 0;
         let TcpDataStream { framed_read, .. } = tcp_stream;
 
+        let mut start = request.start;
         let stream = framed_read
             .map(|item| {
                 item
@@ -169,10 +170,12 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .take_while(move |item| {
                 let flag = match item {
                     Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
-                        signed_batch.batch.next_sequence_number < request.end
+                        start = start.or(Some(signed_batch.batch.next_sequence_number));
+                        signed_batch.batch.next_sequence_number < start.unwrap() + request.length
                     }
                     Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest)))) => {
-                        *seq < request.end
+                        start = start.or(Some(*seq));
+                        *seq < start.unwrap() + request.length
                     }
                     Err(_e) => {
                         // TODO: record e

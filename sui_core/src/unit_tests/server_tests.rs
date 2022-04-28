@@ -156,6 +156,7 @@ async fn test_subscription() {
 
     let db = server.state.db().clone();
     let db2 = server.state.db().clone();
+    let db3 = server.state.db().clone();
 
     let _join = server
         .spawn_batch_subsystem(10, Duration::from_secs(500))
@@ -181,7 +182,10 @@ async fn test_subscription() {
     println!("Started messahe handling.");
     // TEST 1: Get historical data
 
-    let req = BatchInfoRequest { start: 12, end: 34 };
+    let req = BatchInfoRequest {
+        start: Some(12),
+        length: 22,
+    };
 
     let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);
     tx.send(Ok(bytes)).await.expect("Problem sending");
@@ -220,7 +224,7 @@ async fn test_subscription() {
     // Add data in real time
     let inner_server2 = server.clone();
     let _handle2 = tokio::spawn(async move {
-        for i in 105..150 {
+        for i in 105..120 {
             tokio::time::sleep(Duration::from_millis(20)).await;
             let ticket = inner_server2
                 .state
@@ -237,8 +241,8 @@ async fn test_subscription() {
     println!("TEST2: Sending realtime.");
 
     let req = BatchInfoRequest {
-        start: 101,
-        end: 112,
+        start: Some(101),
+        length: 11,
     };
 
     let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);
@@ -272,7 +276,64 @@ async fn test_subscription() {
     assert_eq!(3, num_batches);
     assert_eq!(20, num_transactions);
 
+    _handle2.await.expect("Finished sending");
     println!("TEST2: Finished.");
+
+    println!("TEST3: Sending from very latest.");
+
+    let req = BatchInfoRequest {
+        start: None,
+        length: 10,
+    };
+
+    let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);
+    tx.send(Ok(bytes)).await.expect("Problem sending");
+
+    println!("TEST3: Send request.");
+
+    let mut num_batches = 0;
+    let mut num_transactions = 0;
+    let mut i = 120;
+    let inner_server2 = server.clone();
+
+    loop {
+
+        // Send a trasnaction
+        let ticket = inner_server2
+            .state
+            .batch_notifier
+            .ticket()
+            .expect("all good");
+        db3.executed_sequence
+            .insert(&ticket.seq(), &tx_zero)
+            .expect("Failed to write.");
+        println!("Send item {i}");
+        i += 1;
+
+        // Then we wait to receive
+        if let Some(data) = rx.next().await {
+            match deserialize_message(&data[..]).expect("Bad response") {
+                SerializedMessage::BatchInfoResp(resp) => match *resp {
+                    BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                        num_batches += 1;
+                        if signed_batch.batch.next_sequence_number >= 129 {
+                            break;
+                        }
+                    }
+                    BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
+                        println!("Received {seq}");
+                        num_transactions += 1;
+                    }
+                },
+                _ => {
+                    panic!("Bad response");
+                }
+            }
+        }
+    }
+
+    assert_eq!(2, num_batches);
+    assert_eq!(10, num_transactions);
 
     server.state.batch_notifier.close();
     drop(tx);

@@ -492,7 +492,7 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
             BatchInfoResponseItem(UpdateItem::Batch(item))
         });
         let mut seq = 0;
-        while last_batch.next_sequence_number < request.end {
+        while last_batch.next_sequence_number < request.length {
             let mut transactions = Vec::new();
             for _i in 0..batch_size {
                 let rnd = TransactionDigest::random();
@@ -601,7 +601,7 @@ impl AuthorityAPI for ByzantineAuthorityClient {
             BatchInfoResponseItem(UpdateItem::Batch(item))
         });
         let mut seq = 0;
-        while last_batch.next_sequence_number < request.end {
+        while last_batch.next_sequence_number < request.length {
             let mut transactions = Vec::new();
             for _i in 0..batch_size {
                 let rnd = TransactionDigest::random();
@@ -671,7 +671,10 @@ async fn test_safe_batch_stream() {
     let auth_client = TrustworthyAuthorityClient::new(state);
     let safe_client = SafeClient::new(auth_client, committee.clone(), public_key_bytes);
 
-    let request = BatchInfoRequest { start: 0, end: 15 };
+    let request = BatchInfoRequest {
+        start: Some(0),
+        length: 15,
+    };
     let batch_stream = safe_client.handle_batch_stream(request.clone()).await;
 
     // No errors expected
@@ -730,7 +733,10 @@ async fn test_safe_batch_stream() {
     assert!(!items.is_empty());
     assert_eq!(items.len(), 15 + 6); // 15 items, and 6 batches (enclosing them)
 
-    let request_b = BatchInfoRequest { start: 0, end: 10 };
+    let request_b = BatchInfoRequest {
+        start: Some(0),
+        length: 10,
+    };
     batch_stream = safe_client_from_byzantine
         .handle_batch_stream(request_b.clone())
         .await;

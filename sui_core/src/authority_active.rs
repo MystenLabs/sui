@@ -67,4 +67,20 @@ where
     pub async fn spawn_all_active_processes(self) -> Option<()> {
         None
     }
+
+    /*
+        A bare bones gossip network.
+    */
+
+    ///
+    pub fn spawn_basic_gossip(_active_auth: &Self) {
+
+        /*
+            - Sample k peers by weight
+            - register as listeners.
+            - for any digest received if we do not have it after X seconds download + process.
+              (this leads to our follower emmiting on follower)
+
+        */
+    }
 }
