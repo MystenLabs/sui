@@ -15,8 +15,8 @@ module DeFi::EscrowTests {
     const RANDOM_ADDRESS: address = @123;
 
     // Error codes.
-    const ESWAP_TRANSFER_FAILED: u64 = 0;
-    const ERETURN_TRANSFER_FAILED: u64 = 0;
+    const ESwapTransferFailed: u64 = 0;
+    const EReturnTransferFailed: u64 = 0;
 
     // Example of an object type used for exchange
     struct ItemA has key, store {
@@ -35,8 +35,8 @@ module DeFi::EscrowTests {
         swap(scenario, &THIRD_PARTY_ADDRESS);
 
         // Alice now owns item B, and Bob now owns item A
-        assert!(owns_object<ItemB>(scenario, &ALICE_ADDRESS), ESWAP_TRANSFER_FAILED);
-        assert!(owns_object<ItemA>(scenario, &BOB_ADDRESS), ESWAP_TRANSFER_FAILED);
+        assert!(owns_object<ItemB>(scenario, &ALICE_ADDRESS), ESwapTransferFailed);
+        assert!(owns_object<ItemA>(scenario, &BOB_ADDRESS), ESwapTransferFailed);
     }
 
     #[test]
@@ -57,8 +57,8 @@ module DeFi::EscrowTests {
         };
 
         // Alice now owns item A, and Bob now owns item B
-        assert!(owns_object<ItemA>(scenario, &ALICE_ADDRESS), ERETURN_TRANSFER_FAILED);
-        assert!(owns_object<ItemB>(scenario, &BOB_ADDRESS), ERETURN_TRANSFER_FAILED);
+        assert!(owns_object<ItemA>(scenario, &ALICE_ADDRESS), EReturnTransferFailed);
+        assert!(owns_object<ItemB>(scenario, &BOB_ADDRESS), EReturnTransferFailed);
     }
 
     #[test]

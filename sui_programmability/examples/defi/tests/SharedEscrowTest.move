@@ -15,8 +15,8 @@ module DeFi::SharedEscrowTests {
     const RANDOM_ADDRESS: address = @123;
 
     // Error codes.
-    const ESWAP_TRANSFER_FAILED: u64 = 0;
-    const ERETURN_TRANSFER_FAILED: u64 = 0;
+    const ESwapTransferFailed: u64 = 0;
+    const EReturnTransferFailed: u64 = 0;
 
     // Example of an object type used for exchange
     struct ItemA has key, store {
@@ -37,8 +37,8 @@ module DeFi::SharedEscrowTests {
         exchange(&mut scenario, &BOB_ADDRESS, item_b_versioned_id);
 
         // Alice now owns item B, and Bob now owns item A
-        assert!(owns_object<ItemB>(&mut scenario, &ALICE_ADDRESS), ESWAP_TRANSFER_FAILED);
-        assert!(owns_object<ItemA>(&mut scenario, &BOB_ADDRESS), ESWAP_TRANSFER_FAILED);
+        assert!(owns_object<ItemB>(&mut scenario, &ALICE_ADDRESS), ESwapTransferFailed);
+        assert!(owns_object<ItemA>(&mut scenario, &BOB_ADDRESS), ESwapTransferFailed);
     }
 
     #[test]
@@ -48,13 +48,13 @@ module DeFi::SharedEscrowTests {
         ID::delete(id);
         let scenario = &mut scenario;
         // Alice does not own item A
-        assert!(!owns_object<ItemA>(scenario, &ALICE_ADDRESS), ERETURN_TRANSFER_FAILED);
+        assert!(!owns_object<ItemA>(scenario, &ALICE_ADDRESS), EReturnTransferFailed);
 
         // Alice cancels the escrow
         cancel(scenario, &ALICE_ADDRESS);
 
         // Alice now owns item A
-        assert!(owns_object<ItemA>(scenario, &ALICE_ADDRESS), ERETURN_TRANSFER_FAILED);
+        assert!(owns_object<ItemA>(scenario, &ALICE_ADDRESS), EReturnTransferFailed);
     }
 
     #[test]
@@ -103,13 +103,13 @@ module DeFi::SharedEscrowTests {
         ID::delete(id);
         let scenario = &mut scenario;
         // Alice does not own item A
-        assert!(!owns_object<ItemA>(scenario, &ALICE_ADDRESS), ERETURN_TRANSFER_FAILED);
+        assert!(!owns_object<ItemA>(scenario, &ALICE_ADDRESS), EReturnTransferFailed);
 
         // Alice cancels the escrow
         cancel(scenario, &ALICE_ADDRESS);
 
         // Alice now owns item A
-        assert!(owns_object<ItemA>(scenario, &ALICE_ADDRESS), ERETURN_TRANSFER_FAILED);
+        assert!(owns_object<ItemA>(scenario, &ALICE_ADDRESS), EReturnTransferFailed);
 
         // Alice tries to cancel the escrow again
         cancel(scenario, &ALICE_ADDRESS);

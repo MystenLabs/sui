@@ -9,16 +9,10 @@ module NFTs::Marketplace {
     use Sui::Coin::{Self, Coin};
 
     // For when amount paid does not match the expected.
-    const EAMOUNT_INCORRECT: u64 = 0;
+    const EAmountIncorrect: u64 = 0;
 
     // For when someone tries to delist without ownership.
-    const ENOT_OWNER: u64 = 1;
-
-    // For when trying to remove object that's not on the Marketplace.
-    const EOBJECT_NOT_FOUND: u64 = 2;
-
-    /// Adding the same object to the markeplace twice is not allowed.
-    const EOBJECT_DOUBLE_ADD: u64 = 3;
+    const ENotOwner: u64 = 1;
 
     struct Marketplace has key {
         id: VersionedID,
@@ -72,7 +66,7 @@ module NFTs::Marketplace {
         let listing = Bag::remove(objects, listing);
         let Listing { id, item, ask: _, owner } = listing;
 
-        assert!(TxContext::sender(ctx) == owner, ENOT_OWNER);
+        assert!(TxContext::sender(ctx) == owner, ENotOwner);
 
         ID::delete(id);
         item
@@ -99,7 +93,7 @@ module NFTs::Marketplace {
         let listing = Bag::remove(objects, listing);
         let Listing { id, item, ask, owner } = listing;
 
-        assert!(ask == Coin::value(&paid), EAMOUNT_INCORRECT);
+        assert!(ask == Coin::value(&paid), EAmountIncorrect);
 
         Transfer::transfer(paid, owner);
         ID::delete(id);
