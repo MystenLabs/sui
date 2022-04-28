@@ -45,6 +45,23 @@ module Sui::Coin {
         balance
     }
 
+    /// Subtract `value` from `Balance` and create a new coin
+    /// worth `value` with ID `id`.
+    /// Aborts if `value > balance.value`
+    public fun withdraw<T>(
+        balance: &mut Balance<T>, value: u64, ctx: &mut TxContext,
+    ): Coin<T> {
+        Coin {
+            id: TxContext::new_id(ctx),
+            balance: Balance::split(balance, value)
+        }
+    }
+
+    /// Deposit a `Coin` to the `Balance`
+    public fun deposit<T>(balance: &mut Balance<T>, coin: Coin<T>) {
+        Balance::join(balance, into_balance(coin));
+    }
+
     // === Functionality for Coin<T> holders ===
 
     /// Send `c` to `recipient`
@@ -76,16 +93,6 @@ module Sui::Coin {
         };
         // safe because we've drained the vector
         Vector::destroy_empty(coins)
-    }
-
-    /// Subtract `value` from `self` and create a new coin
-    /// worth `value` with ID `id`.
-    /// Aborts if `value > self.value`
-    public fun withdraw<T>(
-        self: &mut Coin<T>, value: u64, ctx: &mut TxContext,
-    ): Coin<T> {
-        let balance = Balance::split(&mut self.balance, value);
-        Coin { id: TxContext::new_id(ctx), balance }
     }
 
     /// Public getter for the coin's value
@@ -158,7 +165,7 @@ module Sui::Coin {
     /// Send `amount` units of `c` to `recipient
     /// Aborts with `EVALUE` if `amount` is greater than or equal to `amount`
     public(script) fun transfer_<T>(c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext) {
-        Transfer::transfer(withdraw(c, amount, ctx), recipient)
+        Transfer::transfer(withdraw(&mut c.balance, amount, ctx), recipient)
     }
 
     /// Consume the coin `c` and add its value to `self`.
@@ -175,7 +182,7 @@ module Sui::Coin {
     /// Split coin `self` to two coins, one with balance `split_amount`,
     /// and the remaining balance is left is `self`.
     public(script) fun split<T>(self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext) {
-        let new_coin = withdraw(self, split_amount, ctx);
+        let new_coin = withdraw(&mut self.balance, split_amount, ctx);
         Transfer::transfer(new_coin, TxContext::sender(ctx));
     }
 
