@@ -9,9 +9,9 @@ module Sui::Balance {
     friend Sui::Coin;
 
     /// For when trying to destroy a non-zero balance.
-    const ENONZERO: u64 = 0;
+    const ENonZero: u64 = 0;
     /// For when trying to withdraw more than there is.
-    const EVALUE: u64 = 0;
+    const ENotEnough: u64 = 0;
 
     /// Storable balance - an inner struct of a Coin type.
     /// Can be used to store coins which don't need to have the
@@ -38,14 +38,14 @@ module Sui::Balance {
 
     /// Split a `Balance` and take a sub balance from it.
     public fun split<T>(self: &mut Balance<T>, value: u64): Balance<T> {
-        assert!(self.value >= value, EVALUE);
+        assert!(self.value >= value, ENotEnough);
         self.value = self.value - value;
         Balance { value }
     }
 
     /// Destroy a zero `Balance`.
     public fun destroy_zero<T>(balance: Balance<T>) {
-        assert!(balance.value == 0, ENONZERO);
+        assert!(balance.value == 0, ENonZero);
         let Balance { value: _ } = balance;
     }
 

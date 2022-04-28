@@ -13,7 +13,7 @@ module Sui::Url {
     const HASH_VECTOR_LENGTH: u64 = 32;
 
     /// Error code when the length of the hash vector is not HASH_VECTOR_LENGTH
-    const EHASH_LENGTH_MISMATCH: u64 = 0;
+    const EHashLengthMismatch: u64 = 0;
 
     /// Represents an arbitrary URL. Clients rendering values of this type should fetch the resource at `url` and render it using a to-be-defined Sui standard.
     struct Url has store, drop {
@@ -46,7 +46,7 @@ module Sui::Url {
     /// Create a `UrlCommitment`, and set the immutable hash
     public fun new_unsafe_url_commitment(url: Url, resource_hash: vector<u8>): UrlCommitment {
         // Length must be exact
-        assert!(Vector::length(&resource_hash) == HASH_VECTOR_LENGTH, EHASH_LENGTH_MISMATCH);
+        assert!(Vector::length(&resource_hash) == HASH_VECTOR_LENGTH, EHashLengthMismatch);
 
         UrlCommitment { url, resource_hash }
     }

@@ -8,36 +8,30 @@ module Sui::TestScenario {
     use Std::Option::{Self, Option};
     use Std::Vector;
 
-    /// Attempted an operation that required a concluded transaction, but there are none
-    const ENO_CONCLUDED_TRANSACTIONS: u64 = 0;
-
     /// Requested a transfer or user-defined event on an invalid transaction index
-    const EINVALID_TX_INDEX: u64 = 1;
+    const EInvalidTxIndex: u64 = 1;
 
     /// Attempted to return an object to the inventory that was not previously removed from the
     /// inventory during the current transaction. Can happen if the user attempts to call
     /// `return_object` on a locally constructed object rather than one returned from a `TestScenario`
     /// function such as `take_object`.
-    const ECANT_RETURN_OBJECT: u64 = 2;
+    const ECantReturnObject: u64 = 2;
 
     /// Attempted to retrieve an object of a particular type from the inventory, but it is empty.
     /// Can happen if the user already transferred the object or a previous transaction failed to
     /// transfer the object to the user.
-    const EEMPTY_INVENTORY: u64 = 3;
+    const EEmptyInventory: u64 = 3;
 
     /// Expected 1 object of this type in the tx sender's inventory, but found >1.
     /// Consider using TestScenario::take_object_by_id to select a specific object
-    const EINVENTORY_AMBIGUITY: u64 = 4;
+    const EInventoryAbiguity: u64 = 4;
 
     /// The inventory previously contained an object of this type, but it was removed during the current
     /// transaction.
-    const EALREADY_REMOVED_OBJECT: u64 = 5;
+    const EAlreadyRemovedObject: u64 = 5;
 
     /// Object of given ID cannot be found in the inventory.
-    const EOBJECT_ID_NOT_FOUND: u64 = 6;
-
-    /// Found two objects with the same ID in the inventory.
-    const EDUPLICATE_OBJCET_ID_FOUND: u64 = 7;
+    const EObjectIDNotFound: u64 = 6;
 
     /// Utility for mocking a multi-transaction Sui execution in a single Move procedure.
     /// A `Scenario` maintains a view of the global object pool built up by the execution.
@@ -198,11 +192,11 @@ module Sui::TestScenario {
     public fun take_object_by_id<T: key>(scenario: &mut Scenario, id: ID): T {
         let object_opt: Option<T> = find_object_by_id_in_inventory(scenario, &id);
 
-        assert!(Option::is_some(&object_opt), EOBJECT_ID_NOT_FOUND);
+        assert!(Option::is_some(&object_opt), EObjectIDNotFound);
         let object = Option::extract(&mut object_opt);
         Option::destroy_none(object_opt);
 
-        assert!(!Vector::contains(&scenario.removed, &id), EALREADY_REMOVED_OBJECT);
+        assert!(!Vector::contains(&scenario.removed, &id), EAlreadyRemovedObject);
         Vector::push_back(&mut scenario.removed, id);
 
         object
@@ -242,7 +236,7 @@ module Sui::TestScenario {
         // TODO: add Vector::remove_element to Std that does this 3-liner
         let (is_mem, idx) = Vector::index_of(removed, id);
         // can't return an object we haven't removed
-        assert!(is_mem, ECANT_RETURN_OBJECT);
+        assert!(is_mem, ECantReturnObject);
         Vector::remove(removed, idx);
 
         // Update the object content in the inventory.
@@ -300,7 +294,7 @@ module Sui::TestScenario {
     fun tx_start_index(scenario: &Scenario, tx_idx: u64): u64 {
         let idxs = &scenario.event_start_indexes;
         let len = Vector::length(idxs);
-        assert!(tx_idx < len, EINVALID_TX_INDEX);
+        assert!(tx_idx < len, EInvalidTxIndex);
         *Vector::borrow(idxs, tx_idx)
     }
 
@@ -320,13 +314,13 @@ module Sui::TestScenario {
             let id = ID::id(&t);
             Vector::destroy_empty(inventory);
 
-            assert!(!Vector::contains(&scenario.removed, id), EALREADY_REMOVED_OBJECT);
+            assert!(!Vector::contains(&scenario.removed, id), EAlreadyRemovedObject);
             Vector::push_back(&mut scenario.removed, *id);
             t
         } else if (objects_len == 0) {
-            abort(EEMPTY_INVENTORY)
+            abort(EEmptyInventory)
         } else { // objects_len > 1
-            abort(EINVENTORY_AMBIGUITY)
+            abort(EInventoryAbiguity)
         }
     }
 
