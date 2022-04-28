@@ -806,21 +806,9 @@ dependencies = [
 [[package]]
 name = "config"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8#7566e3e94bba636092bce523fe5d0da27facf8d8"
-dependencies = [
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
- "serde 1.0.136",
- "serde_json",
- "thiserror",
- "tracing",
-]
-
-[[package]]
-name = "config"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02#8ae2164f0510349cbac2770e50e853bce5ab0e02"
 dependencies = [
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "crypto",
  "serde 1.0.136",
  "serde_json",
  "thiserror",
@@ -846,35 +834,13 @@ dependencies = [
 [[package]]
 name = "consensus"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8#7566e3e94bba636092bce523fe5d0da27facf8d8"
-dependencies = [
- "bincode",
- "blake2",
- "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
- "futures",
- "rand 0.7.3",
- "rocksdb",
- "serde 1.0.136",
- "serde_bytes",
- "tokio",
- "tokio-util",
- "tracing",
- "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=808de09203d147b43d59114b8afd9e51cbcf5778)",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
-]
-
-[[package]]
-name = "consensus"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02#8ae2164f0510349cbac2770e50e853bce5ab0e02"
 dependencies = [
  "bincode",
  "blake2",
  "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "config 0.1.0",
+ "crypto",
  "futures",
  "rand 0.7.3",
  "rocksdb",
@@ -884,7 +850,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=808de09203d147b43d59114b8afd9e51cbcf5778)",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "types",
 ]
 
 [[package]]
@@ -1011,33 +977,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ae1b35a484aa10e07fe0638d02301c5ad24de82d310ccbd2f3693da5f09bf1c"
 dependencies = [
  "winapi",
-]
-
-[[package]]
-name = "crypto"
-version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8#7566e3e94bba636092bce523fe5d0da27facf8d8"
-dependencies = [
- "ark-bls12-377",
- "ark-ec",
- "ark-ff",
- "ark-serialize",
- "ark-std",
- "base64ct",
- "blake2",
- "bls-crypto",
- "blst",
- "ed25519-dalek",
- "eyre",
- "once_cell",
- "rand 0.7.3",
- "readonly",
- "serde 1.0.136",
- "serde_bytes",
- "serde_with",
- "signature",
- "tokio",
- "zeroize",
 ]
 
 [[package]]
@@ -1574,42 +1513,17 @@ checksum = "77f3309417938f28bf8228fcff79a4a37103981e3e186d2ccd19c74b38f4eb71"
 [[package]]
 name = "executor"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8#7566e3e94bba636092bce523fe5d0da27facf8d8"
-dependencies = [
- "async-trait",
- "bincode",
- "blake2",
- "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
- "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
- "futures",
- "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
- "rocksdb",
- "serde 1.0.136",
- "thiserror",
- "tokio",
- "tokio-util",
- "tracing",
- "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=808de09203d147b43d59114b8afd9e51cbcf5778)",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
- "worker 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
-]
-
-[[package]]
-name = "executor"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02#8ae2164f0510349cbac2770e50e853bce5ab0e02"
 dependencies = [
  "async-trait",
  "bincode",
  "blake2",
  "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
- "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "config 0.1.0",
+ "consensus",
+ "crypto",
  "futures",
- "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "primary",
  "rocksdb",
  "serde 1.0.136",
  "thiserror",
@@ -1617,8 +1531,8 @@ dependencies = [
  "tokio-util",
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=808de09203d147b43d59114b8afd9e51cbcf5778)",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
- "worker 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "types",
+ "worker",
 ]
 
 [[package]]
@@ -3316,21 +3230,6 @@ dependencies = [
 [[package]]
 name = "network"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8#7566e3e94bba636092bce523fe5d0da27facf8d8"
-dependencies = [
- "async-trait",
- "bytes",
- "futures",
- "rand 0.7.3",
- "thiserror",
- "tokio",
- "tokio-util",
- "tracing",
-]
-
-[[package]]
-name = "network"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02#8ae2164f0510349cbac2770e50e853bce5ab0e02"
 dependencies = [
  "async-trait",
@@ -3376,12 +3275,12 @@ dependencies = [
  "bytes",
  "cfg-if 1.0.0",
  "clap 2.34.0",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
- "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
- "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "config 0.1.0",
+ "consensus",
+ "crypto",
+ "executor",
  "futures",
- "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "primary",
  "rand 0.7.3",
  "thiserror",
  "tokio",
@@ -3390,8 +3289,8 @@ dependencies = [
  "tracing-log",
  "tracing-subscriber 0.3.11",
  "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=808de09203d147b43d59114b8afd9e51cbcf5778)",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
- "worker 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "types",
+ "worker",
 ]
 
 [[package]]
@@ -3991,33 +3890,6 @@ dependencies = [
 [[package]]
 name = "primary"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8#7566e3e94bba636092bce523fe5d0da27facf8d8"
-dependencies = [
- "async-recursion",
- "async-trait",
- "base64",
- "bincode",
- "blake2",
- "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
- "derive_builder",
- "ed25519-dalek",
- "futures",
- "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
- "rand 0.7.3",
- "serde 1.0.136",
- "thiserror",
- "tokio",
- "tokio-util",
- "tracing",
- "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=808de09203d147b43d59114b8afd9e51cbcf5778)",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
-]
-
-[[package]]
-name = "primary"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02#8ae2164f0510349cbac2770e50e853bce5ab0e02"
 dependencies = [
  "async-recursion",
@@ -4026,19 +3898,19 @@ dependencies = [
  "bincode",
  "blake2",
  "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "config 0.1.0",
+ "crypto",
  "derive_builder",
  "ed25519-dalek",
  "futures",
- "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "network",
  "serde 1.0.136",
  "thiserror",
  "tokio",
  "tokio-util",
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=808de09203d147b43d59114b8afd9e51cbcf5778)",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "types",
 ]
 
 [[package]]
@@ -5116,8 +4988,8 @@ dependencies = [
  "bytes",
  "clap 3.1.12",
  "colored",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "config 0.1.0",
+ "crypto",
  "dirs",
  "dropshot",
  "ed25519-dalek",
@@ -5275,10 +5147,10 @@ dependencies = [
  "base64ct",
  "bcs",
  "bincode",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "crypto",
  "digest 0.10.3",
  "ed25519-dalek",
- "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "executor",
  "hex",
  "hkdf",
  "itertools",
@@ -5331,7 +5203,7 @@ dependencies = [
  "bytes",
  "clap 3.1.12",
  "ed25519-dalek",
- "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
+ "executor",
  "fdlimit",
  "futures",
  "hex",
@@ -5482,7 +5354,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "config 0.1.0",
  "futures",
  "move-core-types",
  "move-package",
@@ -5948,37 +5820,14 @@ checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 [[package]]
 name = "types"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8#7566e3e94bba636092bce523fe5d0da27facf8d8"
-dependencies = [
- "base64",
- "bincode",
- "blake2",
- "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
- "derive_builder",
- "ed25519-dalek",
- "futures",
- "rand 0.7.3",
- "serde 1.0.136",
- "tempfile",
- "thiserror",
- "tokio",
- "tokio-util",
- "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=808de09203d147b43d59114b8afd9e51cbcf5778)",
-]
-
-[[package]]
-name = "types"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02#8ae2164f0510349cbac2770e50e853bce5ab0e02"
 dependencies = [
  "base64",
  "bincode",
  "blake2",
  "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "config 0.1.0",
+ "crypto",
  "derive_builder",
  "ed25519-dalek",
  "futures",
@@ -6501,47 +6350,24 @@ dependencies = [
 [[package]]
 name = "worker"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8#7566e3e94bba636092bce523fe5d0da27facf8d8"
-dependencies = [
- "async-trait",
- "bincode",
- "blake2",
- "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
- "ed25519-dalek",
- "futures",
- "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
- "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
- "serde 1.0.136",
- "tokio",
- "tokio-util",
- "tracing",
- "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=808de09203d147b43d59114b8afd9e51cbcf5778)",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=7566e3e94bba636092bce523fe5d0da27facf8d8)",
-]
-
-[[package]]
-name = "worker"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02#8ae2164f0510349cbac2770e50e853bce5ab0e02"
 dependencies = [
  "async-trait",
  "bincode",
  "blake2",
  "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "config 0.1.0",
+ "crypto",
  "ed25519-dalek",
  "futures",
- "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
- "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "network",
+ "primary",
  "serde 1.0.136",
  "tokio",
  "tokio-util",
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=808de09203d147b43d59114b8afd9e51cbcf5778)",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02)",
+ "types",
 ]
 
 [[package]]
