@@ -94,16 +94,16 @@ module Tutorial::ColorObjectTests {
         let not_owner = @0x2;
         TestScenario::next_tx(scenario, &not_owner);
         {
-            assert!(!TestScenario::can_take_object<ColorObject>(scenario), 0);
+            assert!(!TestScenario::can_take_owned<ColorObject>(scenario), 0);
         };
         // Check that @owner indeed owns the just-created ColorObject.
         // Also checks the value fields of the object.
         TestScenario::next_tx(scenario, &owner);
         {
-            let object = TestScenario::take_object<ColorObject>(scenario);
+            let object = TestScenario::take_owned<ColorObject>(scenario);
             let (red, green, blue) = ColorObject::get_color(&object);
             assert!(red == 255 && green == 0 && blue == 255, 0);
-            TestScenario::return_object(scenario, object);
+            TestScenario::return_owned(scenario, object);
         };
     }
 
@@ -124,22 +124,22 @@ module Tutorial::ColorObjectTests {
         };
         TestScenario::next_tx(scenario, &owner);
         {
-            let obj1 = TestScenario::take_object_by_id<ColorObject>(scenario, id1);
-            let obj2 = TestScenario::take_object_by_id<ColorObject>(scenario, id2);
+            let obj1 = TestScenario::take_owned_by_id<ColorObject>(scenario, id1);
+            let obj2 = TestScenario::take_owned_by_id<ColorObject>(scenario, id2);
             let (red, green, blue) = ColorObject::get_color(&obj1);
             assert!(red == 255 && green == 255 && blue == 255, 0);
 
             let ctx = TestScenario::ctx(scenario);
             ColorObject::copy_into(&obj2, &mut obj1, ctx);
-            TestScenario::return_object(scenario, obj1);
-            TestScenario::return_object(scenario, obj2);
+            TestScenario::return_owned(scenario, obj1);
+            TestScenario::return_owned(scenario, obj2);
         };
         TestScenario::next_tx(scenario, &owner);
         {
-            let obj1 = TestScenario::take_object_by_id<ColorObject>(scenario, id1);
+            let obj1 = TestScenario::take_owned_by_id<ColorObject>(scenario, id1);
             let (red, green, blue) = ColorObject::get_color(&obj1);
             assert!(red == 0 && green == 0 && blue == 0, 0);
-            TestScenario::return_object(scenario, obj1);
+            TestScenario::return_owned(scenario, obj1);
         }
     }
 
@@ -155,14 +155,14 @@ module Tutorial::ColorObjectTests {
         // Delete the ColorObject we just created.
         TestScenario::next_tx(scenario, &owner);
         {
-            let object = TestScenario::take_object<ColorObject>(scenario);
+            let object = TestScenario::take_owned<ColorObject>(scenario);
             let ctx = TestScenario::ctx(scenario);
             ColorObject::delete(object, ctx);
         };
         // Verify that the object was indeed deleted.
         TestScenario::next_tx(scenario, &owner);
         {
-            assert!(!TestScenario::can_take_object<ColorObject>(scenario), 0);
+            assert!(!TestScenario::can_take_owned<ColorObject>(scenario), 0);
         }
     }
 
@@ -179,19 +179,19 @@ module Tutorial::ColorObjectTests {
         let recipient = @0x2;
         TestScenario::next_tx(scenario, &owner);
         {
-            let object = TestScenario::take_object<ColorObject>(scenario);
+            let object = TestScenario::take_owned<ColorObject>(scenario);
             let ctx = TestScenario::ctx(scenario);
             ColorObject::transfer(object, recipient, ctx);
         };
         // Check that owner no longer owns the object.
         TestScenario::next_tx(scenario, &owner);
         {
-            assert!(!TestScenario::can_take_object<ColorObject>(scenario), 0);
+            assert!(!TestScenario::can_take_owned<ColorObject>(scenario), 0);
         };
         // Check that recipient now owns the object.
         TestScenario::next_tx(scenario, &recipient);
         {
-            assert!(TestScenario::can_take_object<ColorObject>(scenario), 0);
+            assert!(TestScenario::can_take_owned<ColorObject>(scenario), 0);
         };
     }
 
@@ -207,16 +207,16 @@ module Tutorial::ColorObjectTests {
         };
         TestScenario::next_tx(scenario, &sender1);
         {
-            assert!(!TestScenario::can_take_object<ColorObject>(scenario), 0);
+            assert!(!TestScenario::can_take_owned<ColorObject>(scenario), 0);
         };
         let sender2 = @0x2;
         TestScenario::next_tx(scenario, &sender2);
         {
-            let object_wrapper = TestScenario::take_immutable_object<ColorObject>(scenario);
+            let object_wrapper = TestScenario::take_immutable<ColorObject>(scenario);
             let object = TestScenario::borrow(&object_wrapper);
             let (red, green, blue) = ColorObject::get_color(object);
             assert!(red == 255 && green == 0 && blue == 255, 0);
-            TestScenario::return_immutable_object(scenario, object_wrapper);
+            TestScenario::return_immutable(scenario, object_wrapper);
         };
     }
 }

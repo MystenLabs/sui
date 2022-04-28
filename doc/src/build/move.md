@@ -680,7 +680,7 @@ function:
         TestScenario::next_tx(scenario, &initial_owner);
         {
             // extract the sword owned by the initial owner
-            let sword = TestScenario::take_object<Sword>(scenario);
+            let sword = TestScenario::take_owned<Sword>(scenario);
             // transfer the sword to the final owner
             sword_transfer(sword, final_owner, TestScenario::ctx(scenario));
         };
@@ -688,11 +688,11 @@ function:
         TestScenario::next_tx(scenario, &final_owner);
         {
             // extract the sword owned by the final owner
-            let sword = TestScenario::take_object<Sword>(scenario);
+            let sword = TestScenario::take_owned<Sword>(scenario);
             // verify that the sword has expected properties
             assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
             // return the sword to the object pool (it cannot be simply "dropped")
-            TestScenario::return_object(scenario, sword)
+            TestScenario::return_owned(scenario, sword)
         }
     }
 ```
@@ -711,7 +711,7 @@ the sword it now owns to its final owner. Please note that in *pure
 Move* we do not have the notion of Sui storage and, consequently, no
 easy way for the emulated Sui transaction to retrieve it from
 storage. This is where the `TestScenario` module comes to help - its
-`take_object` function makes an object of a given type (in this case
+`take_owned` function makes an object of a given type (in this case
 of type `Sword`) owned by an address executing the current transaction
 available for manipulation by the Move code. (For now, we assume that
 there is only one such object.) In this case, the object retrieved
@@ -730,7 +730,7 @@ by transferring the sword object to the fake address. But the
 `TestScenario` package gives us a more elegant solution, which is
 closer to what happens when Move code is actually executed in the
 context of Sui - we can simply return the sword to the object pool
-using the `TestScenario::return_object` function.
+using the `TestScenario::return_owned` function.
 
 We can now run the test command again and see that we now have two
 successful tests for our module:
@@ -870,11 +870,11 @@ We can now create a function to test the module initialization:
         TestScenario::next_tx(scenario, &admin);
         {
             // extract the Forge object
-            let forge = TestScenario::take_object<Forge>(scenario);
+            let forge = TestScenario::take_owned<Forge>(scenario);
             // verify number of created swords
             assert!(swords_created(&forge) == 0, 1);
             // return the Forge object to the object pool
-            TestScenario::return_object(scenario, forge)
+            TestScenario::return_owned(scenario, forge)
         }
     }
 

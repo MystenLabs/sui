@@ -33,7 +33,7 @@ module Sui::BagTests {
         // Add two objects of different types into the bag.
         TestScenario::next_tx(scenario, &sender);
         {
-            let bag = TestScenario::take_object<Bag>(scenario);
+            let bag = TestScenario::take_owned<Bag>(scenario);
             assert!(Bag::size(&bag) == 0, EBAG_SIZE_MISMATCH);
 
             let obj1 = Object1 { id: TxContext::new_id(TestScenario::ctx(scenario)) };
@@ -48,7 +48,7 @@ module Sui::BagTests {
             assert!(Bag::contains(&bag, &id1), EOBJECT_NOT_FOUND);
             assert!(Bag::contains(&bag, &id2), EOBJECT_NOT_FOUND);
 
-            TestScenario::return_object(scenario, bag);
+            TestScenario::return_owned(scenario, bag);
         };
         // TODO: Test object removal once we can retrieve object owned objects from TestScenario.
     }

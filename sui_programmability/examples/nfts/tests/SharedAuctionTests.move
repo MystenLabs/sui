@@ -68,13 +68,13 @@ module NFTs::SharedAuctionTests {
         // a transaction by the first bidder to put a bid
         TestScenario::next_tx(scenario, &bidder1);
         {
-            let coin = TestScenario::take_object<Coin<SUI>>(scenario);
-            let auction_wrapper = TestScenario::take_shared_object<Auction<SomeItemToSell>>(scenario);
+            let coin = TestScenario::take_owned<Coin<SUI>>(scenario);
+            let auction_wrapper = TestScenario::take_shared<Auction<SomeItemToSell>>(scenario);
             let auction = TestScenario::borrow_mut(&mut auction_wrapper);
 
             SharedAuction::bid(coin, auction, TestScenario::ctx(scenario));
 
-            TestScenario::return_shared_object(scenario, auction_wrapper);
+            TestScenario::return_shared(scenario, auction_wrapper);
         };
 
         // a transaction by the second bidder to put a bid (a bid will
@@ -82,48 +82,48 @@ module NFTs::SharedAuctionTests {
         // bidder's)
         TestScenario::next_tx(scenario, &bidder2);
         {
-            let coin = TestScenario::take_object<Coin<SUI>>(scenario);
-            let auction_wrapper = TestScenario::take_shared_object<Auction<SomeItemToSell>>(scenario);
+            let coin = TestScenario::take_owned<Coin<SUI>>(scenario);
+            let auction_wrapper = TestScenario::take_shared<Auction<SomeItemToSell>>(scenario);
             let auction = TestScenario::borrow_mut(&mut auction_wrapper);
 
             SharedAuction::bid(coin, auction, TestScenario::ctx(scenario));
 
-            TestScenario::return_shared_object(scenario, auction_wrapper);
+            TestScenario::return_shared(scenario, auction_wrapper);
         };
 
         // a transaction by the second bidder to verify that the funds
         // have been returned (as a result of the failed bid).
         TestScenario::next_tx(scenario, &bidder2);
         {
-            let coin = TestScenario::take_object<Coin<SUI>>(scenario);
+            let coin = TestScenario::take_owned<Coin<SUI>>(scenario);
 
             assert!(Coin::value(&coin) == COIN_VALUE, EWRONG_COIN_VALUE);
 
-            TestScenario::return_object(scenario, coin);
+            TestScenario::return_owned(scenario, coin);
         };
 
         // a transaction by the owner to end auction
         TestScenario::next_tx(scenario, &owner);
         {
-            let auction_wrapper = TestScenario::take_shared_object<Auction<SomeItemToSell>>(scenario);
+            let auction_wrapper = TestScenario::take_shared<Auction<SomeItemToSell>>(scenario);
             let auction = TestScenario::borrow_mut(&mut auction_wrapper);
 
             // pass auction as mutable reference as its a shared
             // object that cannot be deleted
             SharedAuction::end_auction(auction, TestScenario::ctx(scenario));
 
-            TestScenario::return_shared_object(scenario, auction_wrapper);
+            TestScenario::return_shared(scenario, auction_wrapper);
         };
 
         // a transaction to check if the first bidder won (as the
         // second bidder's bid was the same as that of the first one)
         TestScenario::next_tx(scenario, &bidder1);
         {
-            let acquired_item = TestScenario::take_object<SomeItemToSell>(scenario);
+            let acquired_item = TestScenario::take_owned<SomeItemToSell>(scenario);
 
             assert!(acquired_item.value == 42, EWRONG_ITEM_VALUE);
 
-            TestScenario::return_object(scenario, acquired_item);
+            TestScenario::return_owned(scenario, acquired_item);
         };
     }
 }
