@@ -21,12 +21,13 @@ function formatTxResponse(data: any) {
             value: data.txId,
         },
         {
-            label: 'Result/Status',
+            // May change later 
+            label: 'Status',
             value: 'Success',
             classAttr: 'status-success',
         },
         {
-            label: 'Transaction Kind',
+            label: 'Transaction Type',
             value: txKindName,
         },
         // txKind Transfer or Call
@@ -93,7 +94,7 @@ function formatTxResponse(data: any) {
             value: tx.data.gas_budget,
         },
         {
-            label: 'Signatures',
+            label: 'Validator Signatures',
             value: data.signatures,
             list: true,
             sublist: true,
