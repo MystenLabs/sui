@@ -2,11 +2,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::common::{
-    batch, batch_digest, batches, committee_with_base_port, keys, listener, open_batch_store,
-    resolve_batch_digest, serialise_batch,
+use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
+use test_utils::{
+    batch, batch_digest, batches, committee_with_base_port, expecting_listener, keys,
+    open_batch_store, resolve_batch_digest, serialize_batch_message,
 };
-use crypto::ed25519::Ed25519PublicKey;
 use tokio::{sync::mpsc::channel, time::timeout};
 
 #[tokio::test]
@@ -15,7 +15,7 @@ async fn synchronize() {
     let (tx_primary, _) = channel(1);
 
     let mut keys = keys();
-    let (name, _) = keys.pop().unwrap();
+    let name = keys.pop().unwrap().public().clone();
     let id = 0;
     let committee = committee_with_base_port(9_000);
 
@@ -37,12 +37,12 @@ async fn synchronize() {
     );
 
     // Spawn a listener to receive our batch requests.
-    let (target, _) = keys.pop().unwrap();
+    let target = keys.pop().unwrap().public().clone();
     let address = committee.worker(&target, &id).unwrap().worker_to_worker;
     let missing = vec![batch_digest()];
     let message = WorkerMessage::BatchRequest(missing.clone(), name.clone());
     let serialized = bincode::serialize(&message).unwrap();
-    let handle = listener(address, Some(Bytes::from(serialized)));
+    let handle = expecting_listener(address, Some(Bytes::from(serialized)));
 
     // Send a sync request.
     let message = PrimaryWorkerMessage::Synchronize(missing, target);
@@ -58,7 +58,7 @@ async fn test_successful_request_batch() {
     let (tx_primary, mut rx_primary) = channel(1);
 
     let mut keys = keys();
-    let (name, _) = keys.pop().unwrap();
+    let name = keys.pop().unwrap().public().clone();
     let id = 0;
     let committee = committee_with_base_port(9_000);
 
@@ -81,7 +81,7 @@ async fn test_successful_request_batch() {
 
     // Create a dummy batch and store
     let expected_batch = batch();
-    let batch_serialised = serialise_batch(expected_batch.clone());
+    let batch_serialised = serialize_batch_message(expected_batch.clone());
     let expected_digest = resolve_batch_digest(batch_serialised.clone());
     store.write(expected_digest, batch_serialised.clone()).await;
 
@@ -113,7 +113,7 @@ async fn test_request_batch_not_found() {
     let (tx_primary, mut rx_primary) = channel(1);
 
     let mut keys = keys();
-    let (name, _) = keys.pop().unwrap();
+    let name = keys.pop().unwrap().public().clone();
     let id = 0;
     let committee = committee_with_base_port(9_000);
 
@@ -167,7 +167,7 @@ async fn test_successful_batch_delete() {
     let (tx_primary, mut rx_primary) = channel(1);
 
     let mut keys = keys();
-    let (name, _) = keys.pop().unwrap();
+    let name = keys.pop().unwrap().public().clone();
     let id = 0;
     let committee = committee_with_base_port(9_000);
 
@@ -193,7 +193,7 @@ async fn test_successful_batch_delete() {
     let mut batch_digests = Vec::new();
 
     for batch in expected_batches.clone() {
-        let s = serialise_batch(batch);
+        let s = serialize_batch_message(batch);
         let digest = resolve_batch_digest(s.clone());
 
         batch_digests.push(digest);
@@ -223,7 +223,7 @@ async fn test_successful_batch_delete() {
 
     // AND batches should be deleted
     for batch in expected_batches {
-        let s = serialise_batch(batch);
+        let s = serialize_batch_message(batch);
         let digest = resolve_batch_digest(s.clone());
 
         let result = store.read(digest).await;

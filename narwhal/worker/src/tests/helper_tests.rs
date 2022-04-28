@@ -2,10 +2,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::common::{
-    batch_digest, committee_with_base_port, keys, listener, serialized_batch, temp_dir,
-};
+use crypto::traits::KeyPair;
 use store::rocks;
+use test_utils::{
+    batch, committee_with_base_port, digest_batch, expecting_listener, keys,
+    serialize_batch_message, temp_dir,
+};
 use tokio::sync::mpsc::channel;
 use types::BatchDigest;
 
@@ -13,7 +15,7 @@ use types::BatchDigest;
 async fn worker_batch_reply() {
     let (tx_worker_request, rx_worker_request) = channel(1);
     let (_tx_client_request, rx_client_request) = channel(1);
-    let (requestor, _) = keys().pop().unwrap();
+    let requestor = keys().pop().unwrap().public().clone();
     let id = 0;
     let committee = committee_with_base_port(8_000);
 
@@ -27,7 +29,10 @@ async fn worker_batch_reply() {
     let store = Store::new(db);
 
     // Add a batch to the store.
-    store.write(batch_digest(), serialized_batch()).await;
+    let batch = batch();
+    let serialized_batch = serialize_batch_message(batch.clone());
+    let batch_digest = digest_batch(batch.clone());
+    store.write(batch_digest, serialized_batch.clone()).await;
 
     // Spawn an `Helper` instance.
     Helper::spawn(
@@ -40,11 +45,11 @@ async fn worker_batch_reply() {
 
     // Spawn a listener to receive the batch reply.
     let address = committee.worker(&requestor, &id).unwrap().worker_to_worker;
-    let expected = Bytes::from(serialized_batch());
-    let handle = listener(address, Some(expected));
+    let expected = Bytes::from(serialized_batch.clone());
+    let handle = expecting_listener(address, Some(expected));
 
     // Send a batch request.
-    let digests = vec![batch_digest()];
+    let digests = vec![batch_digest];
     tx_worker_request.send((digests, requestor)).await.unwrap();
 
     // Ensure the requestor received the batch (ie. it did not panic).
@@ -68,7 +73,10 @@ async fn client_batch_reply() {
     let store = Store::new(db);
 
     // Add a batch to the store.
-    store.write(batch_digest(), serialized_batch()).await;
+    let batch = batch();
+    let serialized_batch = serialize_batch_message(batch.clone());
+    let batch_digest = digest_batch(batch.clone());
+    store.write(batch_digest, serialized_batch.clone()).await;
 
     // Spawn an `Helper` instance.
     Helper::spawn(
@@ -80,12 +88,12 @@ async fn client_batch_reply() {
     );
 
     // Send batch request.
-    let digests = vec![batch_digest()];
+    let digests = vec![batch_digest];
     let (sender, mut receiver) = channel(digests.len());
     tx_client_request.send((digests, sender)).await.unwrap();
 
     // Wait for the reply and ensure it is as expected.
     while let Some(bytes) = receiver.recv().await {
-        assert_eq!(bytes, serialized_batch());
+        assert_eq!(bytes, serialized_batch);
     }
 }

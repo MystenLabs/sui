@@ -2,21 +2,19 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::{
-    common::{batch, committee_with_base_port, keys, listener},
-    worker::WorkerMessage,
-};
+use crate::worker::WorkerMessage;
 use bytes::Bytes;
-use crypto::ed25519::Ed25519PublicKey;
+use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
 use futures::future::try_join_all;
 use network::ReliableSender;
+use test_utils::{batch, committee_with_base_port, expecting_listener, keys};
 use tokio::sync::mpsc::channel;
 
 #[tokio::test]
 async fn wait_for_quorum() {
     let (tx_message, rx_message) = channel(1);
     let (tx_batch, mut rx_batch) = channel(1);
-    let (myself, _) = keys().pop().unwrap();
+    let myself = keys().pop().unwrap().public().clone();
     let committee = committee_with_base_port(7_000);
 
     // Spawn a `QuorumWaiter` instance.
@@ -33,7 +31,7 @@ async fn wait_for_quorum() {
     let mut listener_handles = Vec::new();
     for (name, address) in committee.others_workers(&myself, /* id */ &0) {
         let address = address.worker_to_worker;
-        let handle = listener(address, Some(expected.clone()));
+        let handle = expecting_listener(address, Some(expected.clone()));
         names.push(name);
         addresses.push(address);
         listener_handles.push(handle);

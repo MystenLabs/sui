@@ -2,13 +2,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::{
-    common::{batch, temp_dir},
-    worker::WorkerMessage,
-};
+use crate::worker::WorkerMessage;
 use blake2::digest::Update;
 use crypto::ed25519::Ed25519PublicKey;
 use store::rocks;
+use test_utils::{batch, temp_dir};
 use tokio::sync::mpsc::channel;
 
 #[tokio::test]
