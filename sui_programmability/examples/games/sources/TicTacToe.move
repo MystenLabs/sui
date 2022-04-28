@@ -34,8 +34,8 @@ module Games::TicTacToe {
     const FINAL_TURN: u8 = 8;
 
     // Error codes
-    const INVALID_LOCATION: u64 = 0;
-    const NO_MORE_MARK: u64 = 1;
+    const EInvalidLocation: u64 = 0;
+    const ENoMoreMark: u64 = 1;
 
     struct TicTacToe has key {
         id: VersionedID,
@@ -119,7 +119,7 @@ module Games::TicTacToe {
         ctx: &mut TxContext,
     ) {
         if (row > 2 || col > 2) {
-            abort INVALID_LOCATION
+            abort EInvalidLocation
         };
         let mark = mint_mark(cap, row, col, ctx);
         // Once an event is emitted, it should be observed by a game server.
@@ -195,7 +195,7 @@ module Games::TicTacToe {
 
     fun mint_mark(cap: &mut MarkMintCap, row: u64, col: u64, ctx: &mut TxContext): Mark {
         if (cap.remaining_supply == 0) {
-            abort NO_MORE_MARK
+            abort ENoMoreMark
         };
         cap.remaining_supply = cap.remaining_supply - 1;
         Mark {

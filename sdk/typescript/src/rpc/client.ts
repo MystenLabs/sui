@@ -18,30 +18,36 @@ export class JsonRpcClient {
   }
 
   private createRpcClient(url: string, httpHeaders?: HttpHeaders): RpcClient {
-    const client = new RpcClient(async (request: any, callback: (arg0: Error | null, arg1?: string | undefined) => void) => {
-      const options = {
-        method: 'POST',
-        body: request,
-        headers: Object.assign(
-          {
-            'Content-Type': 'application/json',
-          },
-          httpHeaders || {}
-        ),
-      };
+    const client = new RpcClient(
+      async (
+        request: any,
+        callback: (arg0: Error | null, arg1?: string | undefined) => void
+      ) => {
+        const options = {
+          method: 'POST',
+          body: request,
+          headers: Object.assign(
+            {
+              'Content-Type': 'application/json',
+            },
+            httpHeaders || {}
+          ),
+        };
 
-      try {
-        let res: Response = await fetch(url, options);
-        const text = await res.text();
-        if (res.ok) {
-          callback(null, text);
-        } else {
-          callback(new Error(`${res.status} ${res.statusText}: ${text}`));
+        try {
+          let res: Response = await fetch(url, options);
+          const text = await res.text();
+          if (res.ok) {
+            callback(null, text);
+          } else {
+            callback(new Error(`${res.status} ${res.statusText}: ${text}`));
+          }
+        } catch (err) {
+          if (err instanceof Error) callback(err);
         }
-      } catch (err) {
-        if (err instanceof Error) callback(err);
-      }
-    }, {});
+      },
+      {}
+    );
 
     return client;
   }
@@ -55,10 +61,13 @@ export class JsonRpcClient {
     if (isErrorResponse(response)) {
       throw new Error(`RPC Error: ${response.error.message}`);
     } else if (isValidResponse(response)) {
-      if (isT(response.result))
-        return response.result;
+      if (isT(response.result)) return response.result;
       else
-        throw new Error(`RPC Error: result not of expected type`)
+        throw new Error(
+          `RPC Error: result not of expected type. Result received was: ${JSON.stringify(
+            response.result
+          )}`
+        );
     }
     throw new Error(`Unexpected RPC Response: ${response}`);
   }
@@ -77,17 +86,17 @@ export class JsonRpcClient {
 }
 
 export type ValidResponse = {
-  jsonrpc: '2.0',
-  id: string,
-  result: any,
+  jsonrpc: '2.0';
+  id: string;
+  result: any;
 };
 
 export type ErrorResponse = {
-  jsonrpc: '2.0',
-  id: string,
+  jsonrpc: '2.0';
+  id: string;
   error: {
-    code: any,
-    message: string,
-    data?: any,
-  }
-}
+    code: any;
+    message: string;
+    data?: any;
+  };
+};

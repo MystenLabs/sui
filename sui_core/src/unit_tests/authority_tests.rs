@@ -1173,6 +1173,44 @@ async fn test_authority_persist() {
     assert_eq!(obj2.owner, recipient);
 }
 
+#[tokio::test]
+async fn test_idempotent_reversed_confirmation() {
+    // In this test we exercise the case where an authority first receive the certificate,
+    // and then receive the raw transaction latter. We should still ensure idempotent
+    // response and be able to get back the same result.
+    let recipient = dbg_addr(2);
+    let (sender, sender_key) = get_key_pair();
+
+    let object = Object::with_owner_for_testing(sender);
+    let object_ref = object.compute_object_reference();
+    let gas_object = Object::with_owner_for_testing(sender);
+    let gas_object_ref = gas_object.compute_object_reference();
+    let authority_state = init_state_with_objects([object, gas_object]).await;
+
+    let certified_transfer_transaction = init_certified_transfer_transaction(
+        sender,
+        &sender_key,
+        recipient,
+        object_ref,
+        gas_object_ref,
+        &authority_state,
+    );
+    let result1 = authority_state
+        .handle_confirmation_transaction(ConfirmationTransaction::new(
+            certified_transfer_transaction.clone(),
+        ))
+        .await;
+    assert!(result1.is_ok());
+    let result2 = authority_state
+        .handle_transaction(certified_transfer_transaction.transaction)
+        .await;
+    assert!(result2.is_ok());
+    assert_eq!(
+        result1.unwrap().signed_effects.unwrap().effects,
+        result2.unwrap().signed_effects.unwrap().effects
+    );
+}
+
 // helpers
 
 #[cfg(test)]

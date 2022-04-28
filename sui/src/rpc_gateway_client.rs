@@ -3,8 +3,7 @@
 
 use crate::rest_gateway::responses::ObjectResponse;
 use crate::rpc_gateway::{
-    Base64EncodedBytes, RpcCallArg, RpcGatewayClient as RpcGateway, SignedTransaction,
-    TransactionBytes,
+    RpcCallArg, RpcGatewayClient as RpcGateway, SignedTransaction, TransactionBytes,
 };
 use anyhow::Error;
 use async_trait::async_trait;
@@ -14,6 +13,7 @@ use move_core_types::language_storage::TypeTag;
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
+use sui_types::json_schema::Base64;
 use sui_types::messages::{CallArg, CertifiedTransaction, Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 use tokio::runtime::Handle;
@@ -76,7 +76,7 @@ impl GatewayAPI for RpcGatewayClient {
         let arguments = arguments
             .into_iter()
             .map(|arg| match arg {
-                CallArg::Pure(bytes) => RpcCallArg::Pure(Base64EncodedBytes(bytes)),
+                CallArg::Pure(bytes) => RpcCallArg::Pure(Base64(bytes)),
                 CallArg::ImmOrOwnedObject((id, _, _)) => RpcCallArg::ImmOrOwnedObject(id),
                 CallArg::SharedObject(id) => RpcCallArg::SharedObject(id),
             })
@@ -89,7 +89,7 @@ impl GatewayAPI for RpcGatewayClient {
                 package_object_ref.0,
                 module,
                 function,
-                type_arguments,
+                Some(type_arguments),
                 arguments,
                 gas_object_ref.0,
                 gas_budget,
@@ -105,7 +105,7 @@ impl GatewayAPI for RpcGatewayClient {
         gas_object_ref: ObjectRef,
         gas_budget: u64,
     ) -> Result<TransactionData, Error> {
-        let package_bytes = package_bytes.into_iter().map(Base64EncodedBytes).collect();
+        let package_bytes = package_bytes.into_iter().map(Base64).collect();
         let bytes: TransactionBytes = self
             .client
             .publish(signer, package_bytes, gas_object_ref.0, gas_budget)

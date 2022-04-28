@@ -1,16 +1,18 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use base64ct::Encoding;
+
 use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 
 use crate::crypto::PublicKeyBytes;
 use crate::error::SuiError;
+use crate::json_schema;
 use crate::readable_serde::encoding::Base64;
 use crate::readable_serde::encoding::Hex;
 use crate::readable_serde::Readable;
+use base64ct::Encoding;
 use digest::Digest;
 use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
@@ -18,6 +20,7 @@ use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use opentelemetry::{global, Context};
 use rand::Rng;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
@@ -28,7 +31,18 @@ use sha3::Sha3_256;
 mod base_types_tests;
 
 #[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Copy,
+    Clone,
+    Hash,
+    Default,
+    Debug,
+    Serialize,
+    Deserialize,
+    JsonSchema,
 )]
 pub struct SequenceNumber(u64);
 
@@ -40,15 +54,25 @@ pub struct UserData(pub Option<[u8; 32]>);
 pub type AuthorityName = PublicKeyBytes;
 
 #[serde_as]
-#[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct ObjectID(#[serde_as(as = "Readable<Hex, _>")] AccountAddress);
+#[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
+pub struct ObjectID(
+    #[schemars(with = "json_schema::Hex")]
+    #[serde_as(as = "Readable<Hex, _>")]
+    AccountAddress,
+);
 
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
 pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;
 #[serde_as]
-#[derive(Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct SuiAddress(#[serde_as(as = "Readable<Hex, _>")] [u8; SUI_ADDRESS_LENGTH]);
+#[derive(
+    Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema,
+)]
+pub struct SuiAddress(
+    #[schemars(with = "json_schema::Hex")]
+    #[serde_as(as = "Readable<Hex, _>")]
+    [u8; SUI_ADDRESS_LENGTH],
+);
 
 impl SuiAddress {
     pub fn to_vec(&self) -> Vec<u8> {
@@ -137,14 +161,20 @@ pub const OBJECT_DIGEST_LENGTH: usize = 32;
 
 /// A transaction will have a (unique) digest.
 #[serde_as]
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct TransactionDigest(
-    #[serde_as(as = "Readable<Base64, Bytes>")] [u8; TRANSACTION_DIGEST_LENGTH],
+    #[schemars(with = "json_schema::Base64")]
+    #[serde_as(as = "Readable<Base64, Bytes>")]
+    [u8; TRANSACTION_DIGEST_LENGTH],
 );
 // Each object has a unique digest
 #[serde_as]
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct ObjectDigest(#[serde_as(as = "Readable<Base64, Bytes>")] pub [u8; 32]); // We use SHA3-256 hence 32 bytes here
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
+pub struct ObjectDigest(
+    #[schemars(with = "json_schema::Base64")]
+    #[serde_as(as = "Readable<Base64, Bytes>")]
+    pub [u8; 32],
+); // We use SHA3-256 hence 32 bytes here
 
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;

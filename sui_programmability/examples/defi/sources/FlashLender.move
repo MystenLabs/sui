@@ -43,23 +43,23 @@ module DeFi::FlashLender {
 
     /// Attempted to borrow more than the `FlashLender` has.
     /// Try borrowing a smaller amount.
-    const ELOAN_TOO_LARGE: u64 = 0;
+    const ELoanTooLarge: u64 = 0;
 
     /// Tried to repay an amount other than `repay_amount` (i.e., the amount borrowed + the fee).
     /// Try repaying the proper amount.
-    const EINVALID_REPAYMENT_AMOUNT: u64 = 1;
+    const EInvalidRepaymentAmount: u64 = 1;
 
     /// Attempted to repay a `FlashLender` that was not the source of this particular debt.
     /// Try repaying the correct lender.
-    const EREPAY_TO_WRONG_LENDER: u64 = 2;
+    const ERepayToWrongLender: u64 = 2;
 
     /// Attempted to perform an admin-only operation without valid permissions
     /// Try using the correct `AdminCap`
-    const EADMIN_ONLY: u64 = 3;
+    const EAdminOnly: u64 = 3;
 
     /// Attempted to withdraw more than the `FlashLender` has.
     /// Try withdrawing a smaller amount.
-    const EWITHDRAW_TOO_LARGE: u64 = 4;
+    const EWithdrawTooLarge: u64 = 4;
 
     // === Creating a flash lender ===
 
@@ -91,7 +91,7 @@ module DeFi::FlashLender {
         self: &mut FlashLender<T>, amount: u64, ctx: &mut TxContext
     ): (Coin<T>, Receipt<T>) {
         let to_lend = &mut self.to_lend;
-        assert!(Coin::value(to_lend) >= amount, ELOAN_TOO_LARGE);
+        assert!(Coin::value(to_lend) >= amount, ELoanTooLarge);
         let loan = Coin::withdraw(to_lend, amount, ctx);
 
         let repay_amount = amount + self.fee;
@@ -104,8 +104,8 @@ module DeFi::FlashLender {
     /// that issued the original loan.
     public fun repay<T>(self: &mut FlashLender<T>, payment: Coin<T>, receipt: Receipt<T>) {
         let Receipt { flash_lender_id, repay_amount } = receipt;
-        assert!(ID::id(self) == &flash_lender_id, EREPAY_TO_WRONG_LENDER);
-        assert!(Coin::value(&payment) == repay_amount, EINVALID_REPAYMENT_AMOUNT);
+        assert!(ID::id(self) == &flash_lender_id, ERepayToWrongLender);
+        assert!(Coin::value(&payment) == repay_amount, EInvalidRepaymentAmount);
 
         Coin::join(&mut self.to_lend, payment)
     }
@@ -123,7 +123,7 @@ module DeFi::FlashLender {
         check_admin(self, admin_cap);
 
         let to_lend = &mut self.to_lend;
-        assert!(Coin::value(to_lend) >= amount, EWITHDRAW_TOO_LARGE);
+        assert!(Coin::value(to_lend) >= amount, EWithdrawTooLarge);
         Coin::withdraw(to_lend, amount, ctx)
     }
 
@@ -148,7 +148,7 @@ module DeFi::FlashLender {
     }
 
     fun check_admin<T>(self: &FlashLender<T>, admin_cap: &AdminCap) {
-        assert!(ID::id(self) == &admin_cap.flash_lender_id, EADMIN_ONLY);
+        assert!(ID::id(self) == &admin_cap.flash_lender_id, EAdminOnly);
     }
 
     // === Reads ===
