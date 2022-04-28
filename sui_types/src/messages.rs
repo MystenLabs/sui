@@ -9,6 +9,7 @@ use crate::crypto::{
     EmptySignInfo, Signable, Signature, VerificationObligation,
 };
 use crate::gas::GasCostSummary;
+use crate::json_schema;
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use crate::readable_serde::encoding::Base64;
 use crate::readable_serde::Readable;
@@ -22,6 +23,7 @@ use move_core_types::{
 };
 use name_variant::NamedVariant;
 use once_cell::sync::OnceCell;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
 use serde_with::serde_as;
@@ -36,7 +38,7 @@ use std::{
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
 pub enum CallArg {
     // contains no structs or objects
     Pure(Vec<u8>),
@@ -47,13 +49,13 @@ pub enum CallArg {
     SharedObject(ObjectID),
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Transfer {
     pub recipient: SuiAddress,
     pub object_ref: ObjectRef,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct MoveCall {
     // Although `package` represents a read-only Move package,
     // we still want to use a reference instead of just object ID.
@@ -61,20 +63,24 @@ pub struct MoveCall {
     // used in an order (through the object digest) without having to
     // re-execute the order on a quorum of authorities.
     pub package: ObjectRef,
+    #[schemars(with = "json_schema::Identifier")]
     pub module: Identifier,
+    #[schemars(with = "json_schema::Identifier")]
     pub function: Identifier,
+    #[schemars(with = "Vec<json_schema::TypeTag>")]
     pub type_arguments: Vec<TypeTag>,
     pub arguments: Vec<CallArg>,
 }
 
 #[serde_as]
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct MoveModulePublish {
+    #[schemars(with = "Vec<String>")]
     #[serde_as(as = "Vec<Readable<Base64, Bytes>>")]
     pub modules: Vec<Vec<u8>>,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
 pub enum SingleTransactionKind {
     /// Initiate an object transfer between addresses
     Transfer(Transfer),
@@ -188,7 +194,7 @@ impl Display for SingleTransactionKind {
 
 // TODO: Make SingleTransactionKind a Box
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, NamedVariant)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, NamedVariant, JsonSchema)]
 pub enum TransactionKind {
     /// A single transaction.
     Single(SingleTransactionKind),
@@ -216,7 +222,7 @@ impl Display for TransactionKind {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct TransactionData {
     pub kind: TransactionKind,
     sender: SuiAddress,
@@ -318,7 +324,7 @@ where
 /// universally in the transactions storage in `SuiDataStore`, shared by both authorities
 /// and non-authorities: authorities store signed transactions, while non-authorities
 /// store unsigned transactions.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(remote = "TransactionEnvelope")]
 pub struct TransactionEnvelope<S> {
     // Deserialization sets this to "false"
@@ -588,7 +594,7 @@ impl PartialEq for SignedTransaction {
 ///
 /// As a consequence, we check this struct does not implement Hash or Eq, see the note below.
 ///
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct CertifiedTransaction {
     // This is a cache of an otherwise expensive to compute value.
     // DO NOT serialize or deserialize from the network or disk.
@@ -774,7 +780,7 @@ pub enum CallResult {
     AddrVecVec(Vec<Vec<AccountAddress>>),
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub enum ExecutionStatus {
     // Gas used in the success case.
     Success {
@@ -783,6 +789,7 @@ pub enum ExecutionStatus {
     // Gas used in the failed case, and the error.
     Failure {
         gas_cost: GasCostSummary,
+        #[schemars(with = "String")]
         error: Box<SuiError>,
     },
 }
@@ -838,7 +845,7 @@ impl ExecutionStatus {
 }
 
 /// The response from processing a transaction or a certified transaction
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct TransactionEffects {
     // The status of the execution
     pub status: ExecutionStatus,

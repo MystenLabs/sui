@@ -41,6 +41,8 @@ sui-framework = { path = "../sui_programmability/framework" }
 sui-network = { path = "../network_utils" }
 sui-types = { path = "../sui_types" }
 sui-verifier = { path = "../sui_programmability/verifier" }
+sui-open-rpc = { path = "open_rpc" }
+sui-open-rpc-macros = { path = "open_rpc/macros" }
 
 rustyline = "9.1.2"
 rustyline-derive = "0.6.0"
@@ -68,11 +70,11 @@ once_cell = "1.10.0"
 reqwest = { version = "0.11.10", features = ["json", "serde_json", "blocking"] }
 
 jsonrpsee = { version = "0.11.0", features = ["full"] }
-
 jsonrpsee-proc-macros = "0.11.0"
 
 [dev-dependencies]
 tracing-test = "0.2.1"
+pretty_assertions = "1.2.0"
 tokio-util = { version = "0.7.1", features = ["codec"] }
 
 test_utils = { path = "../test_utils" }
@@ -80,3 +82,8 @@ sui-network = { path = "../network_utils" }
 
 [features]
 benchmark = ["narwhal-node/benchmark"]
+
+[[example]]
+name = "generate-json-rpc-spec"
+path = "src/generate_json_rpc_spec.rs"
+test = false

@@ -5,23 +5,10 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt::{Debug, Display, Formatter};
 use std::mem::size_of;
 
-use move_binary_format::binary_views::BinaryIndexedView;
-use move_binary_format::CompiledModule;
-use move_bytecode_utils::layout::TypeLayoutBuilder;
-use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::language_storage::StructTag;
-use move_core_types::language_storage::TypeTag;
-use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout};
-use move_disassembler::disassembler::Disassembler;
-use move_ir_types::location::Spanned;
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use serde_with::serde_as;
-use serde_with::Bytes;
-
 use crate::coin::Coin;
 use crate::crypto::{sha3_hash, BcsSignable};
 use crate::error::{SuiError, SuiResult};
+use crate::json_schema;
 use crate::move_package::MovePackage;
 use crate::readable_serde::encoding::Base64;
 use crate::readable_serde::Readable;
@@ -31,14 +18,30 @@ use crate::{
     },
     gas_coin::GasCoin,
 };
+use move_binary_format::binary_views::BinaryIndexedView;
+use move_binary_format::CompiledModule;
+use move_bytecode_utils::layout::TypeLayoutBuilder;
+use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::TypeTag;
+use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout};
+use move_disassembler::disassembler::Disassembler;
+use move_ir_types::location::Spanned;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use serde_with::serde_as;
+use serde_with::Bytes;
 
 pub const GAS_VALUE_FOR_TESTING: u64 = 100000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 
 #[serde_as]
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema)]
 pub struct MoveObject {
+    #[schemars(with = "json_schema::StructTag")]
     pub type_: StructTag,
+    #[schemars(with = "json_schema::Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
     contents: Vec<u8>,
 }
@@ -177,7 +180,7 @@ impl MoveObject {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema)]
 #[allow(clippy::large_enum_variant)]
 pub enum Data {
     /// An object whose governing logic lives in a published Move module
@@ -271,7 +274,7 @@ impl Data {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash)]
+#[derive(Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema)]
 pub enum Owner {
     /// Object is exclusively owned by a single address, and is mutable.
     AddressOwner(SuiAddress),
@@ -327,7 +330,7 @@ impl std::cmp::PartialEq<ObjectID> for Owner {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema)]
 pub struct Object {
     /// The meat of the object
     pub data: Data,
@@ -573,10 +576,15 @@ impl Object {
 }
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "status", content = "details")]
 pub enum ObjectRead {
     NotExists(ObjectID),
-    Exists(ObjectRef, Object, Option<MoveStructLayout>),
+    Exists(
+        ObjectRef,
+        Object,
+        #[schemars(with = "Option<json_schema::MoveStructLayout>")] Option<MoveStructLayout>,
+    ),
     Deleted(ObjectRef),
 }
 
