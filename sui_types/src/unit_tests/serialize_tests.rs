@@ -329,9 +329,9 @@ fn test_time_vote() {
     let now = Instant::now();
     for _ in 0..100 {
         if let SerializedMessage::Vote(vote) = deserialize_message(&mut buf2).unwrap() {
-            vote.auth_signature
+            vote.auth_sign_info
                 .signature
-                .check(&vote.data, vote.auth_signature.authority)
+                .check(&vote.data, vote.auth_sign_info.authority)
                 .unwrap();
         }
     }
