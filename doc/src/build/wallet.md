@@ -198,11 +198,11 @@ The following commands are supported by the wallet:
     active-address        Default address used for commands when none specified
     addresses             Obtain the Addresses managed by the wallet
     call                  Call Move function
-    clear                 Clear screen (interative only)
+    clear                 Clear screen (interactive only)
     create-example-nft    Create an example NFT
-    echo                  Write arguments to the console output (interative only)
-    env                   Print environment (interative only)
-    exit                  Exit the interactive shell (interative only)
+    echo                  Write arguments to the console output (interactive only)
+    env                   Print environment (interactive only)
+    exit                  Exit the interactive shell (interactive only)
     gas                   Obtain all gas objects owned by the address
     help                  Print this message or the help of the given subcommand(s)
     history               Print history
@@ -215,6 +215,8 @@ The following commands are supported by the wallet:
     switch                Switch active address
     sync                  Synchronize client state with authorities
     transfer              Transfer an object
+
+> **Note:** The `clear`, `echo`, `env` and `exit` commands exist only in the interactive shell.
 
 Use `wallet -h` to see the most up-to-date list of commands.
 
