@@ -15,7 +15,7 @@ To develop in Sui, you will need the Sui binaries. After installing `cargo`, run
 $ cargo install --git https://github.com/MystenLabs/sui.git sui
 ```
 
-This will put three binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
+This will put these binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
 * [`sui-move`](move.md): Build and test Move packages.
 * [`wallet`](wallet.md): Run a local Sui network and gateway service accessible via the wallet CLI. The wallet CLI manage keypairs to sign/send transactions.
 * [`rest_server`](rest-api.md): Run a local Sui network and gateway service accessible via a REST interface.
