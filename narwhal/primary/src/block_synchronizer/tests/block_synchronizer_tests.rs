@@ -5,7 +5,7 @@ use crate::{
         responses::PayloadAvailabilityResponse, BlockSynchronizer, CertificatesResponse, Command,
         PendingIdentifier, RequestID, SyncError,
     },
-    common::{create_db_stores, fixture_header_builder},
+    common::create_db_stores,
     primary::PrimaryMessage,
     PrimaryWorkerMessage,
 };
@@ -21,7 +21,10 @@ use std::{
     net::SocketAddr,
     time::Duration,
 };
-use test_utils::{certificate, fixture_batch_with_transactions, keys, resolve_name_and_committee};
+use test_utils::{
+    certificate, fixture_batch_with_transactions, fixture_header_builder, keys,
+    resolve_name_and_committee,
+};
 use tokio::{
     net::TcpListener,
     sync::mpsc::channel,

@@ -1,28 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::WorkerId;
-use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair, Hash};
+use crypto::ed25519::Ed25519PublicKey;
 use store::{reopen, rocks, rocks::DBMap, Store};
-use types::{
-    
-    BatchDigest, Certificate, CertificateDigest, Header, HeaderBuilder, HeaderDigest,
-};
-use test_utils::{committee, keys, temp_dir, CERTIFICATES_CF, HEADERS_CF, PAYLOAD_CF};
+use test_utils::{temp_dir, CERTIFICATES_CF, HEADERS_CF, PAYLOAD_CF};
+use types::{BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest};
 
 use crate::PayloadToken;
-
-#[allow(dead_code)]
-pub fn fixture_header_builder() -> HeaderBuilder<Ed25519PublicKey> {
-    let kp = keys().pop().unwrap();
-
-    let builder = HeaderBuilder::<Ed25519PublicKey>::default();
-    builder.author(kp.public().clone()).round(1).parents(
-        Certificate::genesis(&committee())
-            .iter()
-            .map(|x| x.digest())
-            .collect(),
-    )
-}
 
 pub fn create_db_stores() -> (
     Store<HeaderDigest, Header<Ed25519PublicKey>>,

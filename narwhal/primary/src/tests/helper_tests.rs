@@ -1,10 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    common::{create_db_stores, fixture_header_builder},
-    helper::Helper,
-    primary::PrimaryMessage,
-};
+use crate::{common::create_db_stores, helper::Helper, primary::PrimaryMessage};
 use bincode::deserialize;
 use crypto::{ed25519::Ed25519PublicKey, Hash};
 use ed25519_dalek::Signer;
@@ -14,7 +10,10 @@ use std::{
     net::SocketAddr,
     time::Duration,
 };
-use test_utils::{certificate, fixture_batch_with_transactions, keys, resolve_name_and_committee};
+use test_utils::{
+    certificate, fixture_batch_with_transactions, fixture_header_builder, keys,
+    resolve_name_and_committee,
+};
 use tokio::{net::TcpListener, sync::mpsc::channel, task::JoinHandle, time::timeout};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use types::CertificateDigest;

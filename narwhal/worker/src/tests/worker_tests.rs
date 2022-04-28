@@ -4,8 +4,7 @@
 use super::*;
 use crate::worker::WorkerMessage;
 use blake2::digest::Update;
-use crypto::ed25519::Ed25519PublicKey;
-use crypto::traits::KeyPair;
+use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
 use futures::{SinkExt, StreamExt};
 use network::SimpleSender;
 use primary::WorkerPrimaryMessage;
