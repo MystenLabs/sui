@@ -78,38 +78,10 @@ async fn submit_shared_object_transaction(
             message => panic!("Unexpected protocol message: {message:?}"),
         }
     }
-
-    /*
-    'main: loop {
-        let futures: Vec<_> = configs
-            .iter()
-            .map(|config| transmit(serialized.clone(), config))
-            .collect();
-        let results = join_all(futures).await;
-        println!("{} --> {results:?}\n", results.len());
-        for x in results {
-            println!("HERE: {x:?}");
-            match x {
-                SerializedMessage::TransactionResp(reply) => {
-                    // We got a reply from the Sui authority.
-                    break 'main *reply;
-                }
-                SerializedMessage::Error(error) => match *error {
-                    SuiError::ConsensusConnectionBroken(_) => {
-                        // This is the (confusing) error message returned by the consensus
-                        // adapter. It means it didn't hear back from consensus and timed out.
-                    }
-                    error => panic!("{error}"),
-                },
-                message => panic!("Unexpected protocol message: {message:?}"),
-            }
-        }
-        println!("LOOP!");
-    }
-    */
 }
 
 #[tokio::test]
+#[ignore = "Flaky, see #1624"]
 async fn shared_object_transaction() {
     let mut objects = test_gas_objects();
     objects.push(test_shared_object());
@@ -130,7 +102,7 @@ async fn shared_object_transaction() {
 }
 
 #[tokio::test]
-//#[ignore = "Flaky, see #1624"]
+#[ignore = "Flaky, see #1624"]
 async fn call_shared_object_contract() {
     let mut gas_objects = test_gas_objects();
 
