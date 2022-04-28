@@ -908,7 +908,7 @@ UpdateItem:
         TYPENAME: TransactionData
     - tx_signature:
         TYPENAME: Signature
-    - auth_signature:
+    - auth_sign_info:
         TYPENAME: AuthoritySignInfo
 "sui_types::messages::TransactionEnvelope<sui_types::crypto::EmptySignInfo>":
   STRUCT:
@@ -916,6 +916,6 @@ UpdateItem:
         TYPENAME: TransactionData
     - tx_signature:
         TYPENAME: Signature
-    - auth_signature:
+    - auth_sign_info:
         TYPENAME: EmptySignInfo
 

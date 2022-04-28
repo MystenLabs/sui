@@ -1914,13 +1914,13 @@
         "description": "A transaction signed by a client, optionally signed by an authority (depending on `S`). `S` indicates the authority signing state. It can be either empty or signed. We make the authority signature templated so that `TransactionEnvelope<S>` can be used universally in the transactions storage in `SuiDataStore`, shared by both authorities and non-authorities: authorities store signed transactions, while non-authorities store unsigned transactions.",
         "type": "object",
         "required": [
-          "auth_signature",
+          "auth_sign_info",
           "data",
           "tx_signature"
         ],
         "properties": {
-          "auth_signature": {
-            "description": "auth_signature, if available, is signed by an authority, applied on `data`.",
+          "auth_sign_info": {
+            "description": "authority signature information, if available, is signed by an authority, applied on `data`.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/EmptySignInfo"
