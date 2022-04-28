@@ -34,16 +34,16 @@ module NFTs::DiscountCouponTests {
         // Mint and transfer NFT + top up recipient's address.
         TestScenario::next_tx(scenario, &ISSUER_ADDRESS);
         {
-            let coin = TestScenario::take_object<Coin<SUI>>(scenario);
+            let coin = TestScenario::take_owned<Coin<SUI>>(scenario);
             DiscountCoupon::mint_and_topup(coin, 10, 1648820870, USER1_ADDRESS, TestScenario::ctx(scenario));
         };
 
         TestScenario::next_tx(scenario, &USER1_ADDRESS);
         {
-            assert!(TestScenario::can_take_object<DiscountCoupon>(scenario), 0);
-            let nft_coupon = TestScenario::take_object<DiscountCoupon>(scenario); // if can remove, object exists
+            assert!(TestScenario::can_take_owned<DiscountCoupon>(scenario), 0);
+            let nft_coupon = TestScenario::take_owned<DiscountCoupon>(scenario); // if can remove, object exists
             assert!(DiscountCoupon::issuer(&nft_coupon) == ISSUER_ADDRESS, 0);
-            TestScenario::return_object(scenario, nft_coupon);
+            TestScenario::return_owned(scenario, nft_coupon);
         }
     }
 }

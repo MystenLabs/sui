@@ -31,9 +31,9 @@ module Sui::ValidatorTests {
         // Check that after destroy, the original stake still exists.
         TestScenario::next_tx(scenario, &sender);
         {
-            let stake_coin = TestScenario::take_object<Coin<SUI>>(scenario);
+            let stake_coin = TestScenario::take_owned<Coin<SUI>>(scenario);
             assert!(Coin::value(&stake_coin) == 10, 0);
-            TestScenario::return_object(scenario, stake_coin);
+            TestScenario::return_owned(scenario, stake_coin);
         };
     }
 
@@ -70,9 +70,9 @@ module Sui::ValidatorTests {
 
         TestScenario::next_tx(scenario, &sender);
         {
-            let withdraw = TestScenario::take_object<Coin<SUI>>(scenario);
+            let withdraw = TestScenario::take_owned<Coin<SUI>>(scenario);
             assert!(Coin::value(&withdraw) == 5, 0);
-            TestScenario::return_object(scenario, withdraw);
+            TestScenario::return_owned(scenario, withdraw);
         };
 
         Validator::destroy(validator)
