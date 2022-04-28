@@ -129,7 +129,7 @@ module Basics::TestSandwich {
 
         TestScenario::next_tx(scenario, &the_guy);
         {
-            let grocery_wrapper = TestScenario::take_shared_object<Grocery>(scenario);
+            let grocery_wrapper = TestScenario::take_shared<Grocery>(scenario);
             let grocery = TestScenario::borrow_mut(&mut grocery_wrapper);
             let ctx = TestScenario::ctx(scenario);
 
@@ -145,29 +145,29 @@ module Basics::TestSandwich {
                 ctx
             );
 
-            TestScenario::return_shared_object(scenario, grocery_wrapper);
+            TestScenario::return_shared(scenario, grocery_wrapper);
         };
 
         TestScenario::next_tx(scenario, &the_guy);
         {
-            let ham = TestScenario::take_object<Ham>(scenario);
-            let bread = TestScenario::take_object<Bread>(scenario);
+            let ham = TestScenario::take_owned<Ham>(scenario);
+            let bread = TestScenario::take_owned<Bread>(scenario);
 
             Sandwich::make_sandwich(ham, bread, TestScenario::ctx(scenario));
         };
 
         TestScenario::next_tx(scenario, &owner);
         {
-            let grocery_wrapper = TestScenario::take_shared_object<Grocery>(scenario);
+            let grocery_wrapper = TestScenario::take_shared<Grocery>(scenario);
             let grocery = TestScenario::borrow_mut(&mut grocery_wrapper);
-            let capability = TestScenario::take_object<GroceryOwnerCapability>(scenario);
+            let capability = TestScenario::take_owned<GroceryOwnerCapability>(scenario);
 
             assert!(Sandwich::profits(grocery) == 12, 0);
             Sandwich::collect_profits(&capability, grocery, TestScenario::ctx(scenario));
             assert!(Sandwich::profits(grocery) == 0, 0);
 
-            TestScenario::return_object(scenario, capability);
-            TestScenario::return_shared_object(scenario, grocery_wrapper);
+            TestScenario::return_owned(scenario, capability);
+            TestScenario::return_shared(scenario, grocery_wrapper);
         };
     }
 }
