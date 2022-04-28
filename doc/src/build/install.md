@@ -33,7 +33,7 @@ And ensure the `.cargo/bin` directory appears.
 For Move development, we recommend the [Visual Studio Code (vscode)](https://code.visualstudio.com/) IDE with the Move Analyzer language server plugin installed:
 
 ```shell
-$ cargo install --git https://github.com/diem/move move-analyzer
+$ cargo install --git https://github.com/move-language/move move-analyzer
 ```
 
 Then follow the Visual Studio Marketplace instructions to install the [Move Analyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer). (The `cargo install` command for the language server is broken there; hence, we include the correct command above.)
