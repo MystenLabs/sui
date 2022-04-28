@@ -31,7 +31,8 @@ types = { path = "../types" }
 
 [dev-dependencies]
 tempfile = "3.3.0"
-types = { path = "../types", features = ["test"] }
+test_utils = { path = "../test_utils"}
+
 
 [features]
 benchmark = []

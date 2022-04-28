@@ -14,9 +14,6 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     fmt,
 };
-
-#[cfg(feature = "test")]
-pub mod test_utils;
 // Error types
 #[macro_use]
 pub mod error;
@@ -226,6 +223,12 @@ impl<PublicKey: VerifyingKey> fmt::Display for Header<PublicKey> {
     }
 }
 
+impl<PublicKey: VerifyingKey> PartialEq for Header<PublicKey> {
+    fn eq(&self, other: &Self) -> bool {
+        self.digest() == other.digest()
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(bound(deserialize = "PublicKey: VerifyingKey"))] // bump the bound to VerifyingKey as soon as you include a sig
 
@@ -315,6 +318,12 @@ impl<PublicKey: VerifyingKey> fmt::Debug for Vote<PublicKey> {
             self.author.encode_base64(),
             self.id
         )
+    }
+}
+
+impl<PublicKey: VerifyingKey> PartialEq for Vote<PublicKey> {
+    fn eq(&self, other: &Self) -> bool {
+        self.digest() == other.digest()
     }
 }
 

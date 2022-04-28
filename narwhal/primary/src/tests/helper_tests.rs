@@ -14,12 +14,10 @@ use std::{
     net::SocketAddr,
     time::Duration,
 };
+use test_utils::{certificate, fixture_batch_with_transactions, keys, resolve_name_and_committee};
 use tokio::{net::TcpListener, sync::mpsc::channel, task::JoinHandle, time::timeout};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
-use types::{
-    test_utils::{certificate, fixture_batch_with_transactions, keys, resolve_name_and_committee},
-    CertificateDigest,
-};
+use types::CertificateDigest;
 
 #[tokio::test]
 async fn test_process_certificates_stream_mode() {

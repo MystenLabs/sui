@@ -14,6 +14,10 @@ use ed25519_dalek::Signer;
 use futures::StreamExt;
 use network::SimpleSender;
 use std::{collections::HashMap, net::SocketAddr};
+use test_utils::{
+    certificate, fixture_batch_with_transactions, fixture_header_builder,
+    fixture_header_with_payload, keys, resolve_name_and_committee,
+};
 use tokio::{
     net::TcpListener,
     sync::{
@@ -24,13 +28,7 @@ use tokio::{
     time::{sleep, timeout, Duration},
 };
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
-use types::{
-    test_utils::{
-        certificate, fixture_batch_with_transactions, fixture_header_builder,
-        fixture_header_with_payload, keys, resolve_name_and_committee,
-    },
-    Batch, BatchDigest, Certificate, CertificateDigest,
-};
+use types::{Batch, BatchDigest, Certificate, CertificateDigest};
 
 #[tokio::test]
 async fn test_successfully_retrieve_block() {

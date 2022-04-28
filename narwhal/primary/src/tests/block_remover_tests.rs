@@ -18,6 +18,10 @@ use crypto::{
 use futures::{future::try_join_all, stream::FuturesUnordered, StreamExt};
 use network::SimpleSender;
 use std::{collections::HashMap, net::SocketAddr, time::Duration};
+use test_utils::{
+    certificate, fixture_batch_with_transactions, fixture_header_builder, keys,
+    resolve_name_and_committee,
+};
 use tokio::{
     net::TcpListener,
     sync::mpsc::{channel, Sender},
@@ -25,13 +29,7 @@ use tokio::{
     time::{sleep, timeout},
 };
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
-use types::{
-    test_utils::{
-        certificate, fixture_batch_with_transactions, fixture_header_builder, keys,
-        resolve_name_and_committee,
-    },
-    BatchDigest,
-};
+use types::BatchDigest;
 
 #[tokio::test]
 async fn test_successful_blocks_delete() {

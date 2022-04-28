@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crypto::traits::KeyPair;
+use test_utils::{committee, keys};
 use tokio::sync::mpsc::channel;
-use types::test_utils::{committee, keys};
 
 #[tokio::test]
 async fn propose_empty() {
