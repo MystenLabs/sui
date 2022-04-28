@@ -13,6 +13,7 @@ use crypto::ed25519::Ed25519PublicKey;
 use futures::{SinkExt, StreamExt};
 use network::SimpleSender;
 use primary::WorkerPrimaryMessage;
+use std::time::Duration;
 use store::rocks;
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
@@ -66,7 +67,7 @@ async fn handle_client_batch_request() {
     let id = 0;
     let committee = committee_with_base_port(11_001);
     let parameters = Parameters {
-        max_header_delay: 100_000, // Ensure no batches are created.
+        max_header_delay: Duration::from_millis(100_000), // Ensure no batches are created.
         ..Parameters::default()
     };
 

@@ -16,9 +16,12 @@ use std::{
     io::{BufWriter, Write as _},
     net::SocketAddr,
     ops::Deref,
+    time::Duration,
 };
 use thiserror::Error;
 use tracing::info;
+
+mod duration_format;
 
 #[derive(Error, Debug)]
 pub enum ConfigError {
@@ -73,17 +76,23 @@ pub type Stake = u32;
 pub type WorkerId = u32;
 
 #[derive(Deserialize, Clone)]
+/// Holds all the node properties. An example is provided to
+/// showcase the usage and deserialization from a json file.
+/// To define a Duration on the property file can use either
+/// miliseconds or seconds (e.x 5s, 10ms , 2000ms).
 pub struct Parameters {
     /// The preferred header size. The primary creates a new header when it has enough parents and
     /// enough batches' digests to reach `header_size`. Denominated in bytes.
     pub header_size: usize,
     /// The maximum delay that the primary waits between generating two headers, even if the header
-    /// did not reach `max_header_size`. Denominated in ms.
-    pub max_header_delay: u64,
+    /// did not reach `max_header_size`.
+    #[serde(with = "duration_format")]
+    pub max_header_delay: Duration,
     /// The depth of the garbage collection (Denominated in number of rounds).
     pub gc_depth: u64,
     /// The delay after which the synchronizer retries to send sync requests. Denominated in ms.
-    pub sync_retry_delay: u64,
+    #[serde(with = "duration_format")]
+    pub sync_retry_delay: Duration,
     /// Determine with how many nodes to sync when re-trying to send sync-request. These nodes
     /// are picked at random from the committee.
     pub sync_retry_nodes: usize,
@@ -91,8 +100,9 @@ pub struct Parameters {
     /// Denominated in bytes.
     pub batch_size: usize,
     /// The delay after which the workers seal a batch of transactions, even if `max_batch_size`
-    /// is not reached. Denominated in ms.
-    pub max_batch_delay: u64,
+    /// is not reached.
+    #[serde(with = "duration_format")]
+    pub max_batch_delay: Duration,
     /// The parameters for the block synchronizer
     pub block_synchronizer: BlockSynchronizerParameters,
 }
@@ -100,23 +110,24 @@ pub struct Parameters {
 #[derive(Deserialize, Clone)]
 pub struct BlockSynchronizerParameters {
     /// The timeout configuration when requesting certificates from peers.
-    /// Denominated in milliseconds.
-    pub certificates_synchronize_timeout_ms: u64,
+    #[serde(with = "duration_format")]
+    pub certificates_synchronize_timeout: Duration,
     /// Timeout when has requested the payload for a certificate and is
-    /// waiting to receive them. Denominated in milliseconds.
-    pub payload_synchronize_timeout_ms: u64,
+    /// waiting to receive them.
+    #[serde(with = "duration_format")]
+    pub payload_synchronize_timeout: Duration,
     /// The timeout configuration when for when we ask the other peers to
     /// discover who has the payload available for the dictated certificates.
-    /// Denominated in milliseconds.
-    pub payload_availability_timeout_ms: u64,
+    #[serde(with = "duration_format")]
+    pub payload_availability_timeout: Duration,
 }
 
 impl Default for BlockSynchronizerParameters {
     fn default() -> Self {
         Self {
-            certificates_synchronize_timeout_ms: 2_000,
-            payload_synchronize_timeout_ms: 2_000,
-            payload_availability_timeout_ms: 2_000,
+            certificates_synchronize_timeout: Duration::from_millis(2_000),
+            payload_synchronize_timeout: Duration::from_millis(2_000),
+            payload_availability_timeout: Duration::from_millis(2_000),
         }
     }
 }
@@ -125,12 +136,12 @@ impl Default for Parameters {
     fn default() -> Self {
         Self {
             header_size: 1_000,
-            max_header_delay: 100,
+            max_header_delay: Duration::from_millis(100),
             gc_depth: 50,
-            sync_retry_delay: 5_000,
+            sync_retry_delay: Duration::from_millis(5_000),
             sync_retry_nodes: 3,
             batch_size: 500_000,
-            max_batch_delay: 100,
+            max_batch_delay: Duration::from_millis(100),
             block_synchronizer: BlockSynchronizerParameters::default(),
         }
     }
@@ -139,23 +150,38 @@ impl Default for Parameters {
 impl Parameters {
     pub fn tracing(&self) {
         info!("Header size set to {} B", self.header_size);
-        info!("Max header delay set to {} ms", self.max_header_delay);
+        info!(
+            "Max header delay set to {} ms",
+            self.max_header_delay.as_millis()
+        );
         info!("Garbage collection depth set to {} rounds", self.gc_depth);
-        info!("Sync retry delay set to {} ms", self.sync_retry_delay);
+        info!(
+            "Sync retry delay set to {} ms",
+            self.sync_retry_delay.as_millis()
+        );
         info!("Sync retry nodes set to {} nodes", self.sync_retry_nodes);
         info!("Batch size set to {} B", self.batch_size);
-        info!("Max batch delay set to {} ms", self.max_batch_delay);
+        info!(
+            "Max batch delay set to {} ms",
+            self.max_batch_delay.as_millis()
+        );
         info!(
             "Synchronize certificates timeout set to {} ms",
-            self.block_synchronizer.certificates_synchronize_timeout_ms
+            self.block_synchronizer
+                .certificates_synchronize_timeout
+                .as_millis()
         );
         info!(
             "Payload (batches) availability timeout set to {} ms",
-            self.block_synchronizer.payload_availability_timeout_ms
+            self.block_synchronizer
+                .payload_availability_timeout
+                .as_millis()
         );
         info!(
             "Synchronize payload (batches) timeout set to {} ms",
-            self.block_synchronizer.payload_synchronize_timeout_ms
+            self.block_synchronizer
+                .payload_synchronize_timeout
+                .as_millis()
         );
     }
 }
@@ -298,5 +324,97 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
                     .map(|(_, addresses)| (name.deref().clone(), addresses.clone()))
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Import, Parameters};
+    use std::{fs::File, io::Write};
+    use tempfile::tempdir;
+    use tracing_test::traced_test;
+
+    #[test]
+    #[traced_test]
+    fn parse_properties() {
+        // GIVEN
+        let input = r#"{
+             "header_size": 1000,
+             "max_header_delay": "100ms",
+             "gc_depth": 50,
+             "sync_retry_delay": "5s",
+             "sync_retry_nodes": 3,
+             "batch_size": 500000,
+             "max_batch_delay": "100ms",
+             "block_synchronizer": {
+                 "certificates_synchronize_timeout": "2s",
+                 "payload_synchronize_timeout": "3_000ms",
+                 "payload_availability_timeout": "4_000ms"
+             }
+          }"#;
+
+        // AND temporary file
+        let dir = tempdir().expect("Couldn't create tempdir");
+
+        let file_path = dir.path().join("temp-properties.json");
+        let mut file = File::create(file_path.clone()).expect("Couldn't create temp file");
+
+        // AND write the json context
+        writeln!(file, "{input}").expect("Couldn't write to file");
+
+        // WHEN
+        let params = Parameters::import(file_path.to_str().unwrap()).expect("Error raised");
+
+        // THEN
+        assert_eq!(params.sync_retry_delay.as_millis(), 5_000);
+        assert_eq!(
+            params
+                .block_synchronizer
+                .certificates_synchronize_timeout
+                .as_millis(),
+            2_000
+        );
+        assert_eq!(
+            params
+                .block_synchronizer
+                .payload_synchronize_timeout
+                .as_millis(),
+            3_000
+        );
+        assert_eq!(
+            params
+                .block_synchronizer
+                .payload_availability_timeout
+                .as_millis(),
+            4_000
+        );
+    }
+
+    #[test]
+    #[traced_test]
+    fn tracing_should_print_parameters() {
+        // GIVEN
+        let parameters = Parameters::default();
+
+        // WHEN
+        parameters.tracing();
+
+        // THEN
+        assert!(logs_contain("Header size set to 1000 B"));
+        assert!(logs_contain("Max header delay set to 100 ms"));
+        assert!(logs_contain("Garbage collection depth set to 50 rounds"));
+        assert!(logs_contain("Sync retry delay set to 5000 ms"));
+        assert!(logs_contain("Sync retry nodes set to 3 nodes"));
+        assert!(logs_contain("Batch size set to 500000 B"));
+        assert!(logs_contain("Max batch delay set to 100 ms"));
+        assert!(logs_contain(
+            "Synchronize certificates timeout set to 2000 ms"
+        ));
+        assert!(logs_contain(
+            "Payload (batches) availability timeout set to 2000 ms"
+        ));
+        assert!(logs_contain(
+            "Synchronize payload (batches) timeout set to 2000 ms"
+        ));
     }
 }

@@ -56,7 +56,7 @@ pub struct HeaderWaiter<PublicKey: VerifyingKey> {
     /// The depth of the garbage collector.
     gc_depth: Round,
     /// The delay to wait before re-trying sync requests.
-    sync_retry_delay: u64,
+    sync_retry_delay: Duration,
     /// Determine with how many nodes to sync when re-trying to send sync-request.
     sync_retry_nodes: usize,
 
@@ -86,7 +86,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         consensus_round: Arc<AtomicU64>,
         gc_depth: Round,
-        sync_retry_delay: u64,
+        sync_retry_delay: Duration,
         sync_retry_nodes: usize,
         rx_synchronizer: Receiver<WaiterMessage<PublicKey>>,
         tx_core: Sender<Header<PublicKey>>,
@@ -265,7 +265,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
 
                     let mut retry = Vec::new();
                     for (digest, (_, timestamp)) in &self.parent_requests {
-                        if timestamp + (self.sync_retry_delay as u128) < now {
+                        if timestamp + self.sync_retry_delay.as_millis() < now {
                             debug!("Requesting sync for certificate {digest} (retry)");
                             retry.push(*digest);
                         }

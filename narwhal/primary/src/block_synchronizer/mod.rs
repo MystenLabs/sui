@@ -192,15 +192,9 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                 map_payload_availability_responses_senders: HashMap::new(),
                 network,
                 payload_store,
-                certificates_synchronize_timeout: Duration::from_millis(
-                    parameters.certificates_synchronize_timeout_ms,
-                ),
-                payload_synchronize_timeout: Duration::from_millis(
-                    parameters.payload_availability_timeout_ms,
-                ),
-                payload_availability_timeout: Duration::from_millis(
-                    parameters.payload_availability_timeout_ms,
-                ),
+                certificates_synchronize_timeout: parameters.certificates_synchronize_timeout,
+                payload_synchronize_timeout: parameters.payload_availability_timeout,
+                payload_availability_timeout: parameters.payload_availability_timeout,
             }
             .run()
             .await;

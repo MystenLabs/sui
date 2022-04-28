@@ -25,7 +25,7 @@ pub struct Proposer<PublicKey: VerifyingKey> {
     /// The size of the headers' payload.
     header_size: usize,
     /// The maximum delay to wait for batches' digests.
-    max_header_delay: u64,
+    max_header_delay: Duration,
 
     /// Receives the parents to include in the next header (along with their round number).
     rx_core: Receiver<(Vec<CertificateDigest>, Round)>,
@@ -50,7 +50,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
         committee: &Committee<PublicKey>,
         signature_service: SignatureService<PublicKey::Sig>,
         header_size: usize,
-        max_header_delay: u64,
+        max_header_delay: Duration,
         rx_core: Receiver<(Vec<CertificateDigest>, Round)>,
         rx_workers: Receiver<(BatchDigest, WorkerId)>,
         tx_core: Sender<Header<PublicKey>>,
@@ -108,7 +108,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
     pub async fn run(&mut self) {
         debug!("Dag starting at round {}", self.round);
 
-        let timer = sleep(Duration::from_millis(self.max_header_delay));
+        let timer = sleep(self.max_header_delay);
         tokio::pin!(timer);
 
         loop {
@@ -126,7 +126,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
                 self.payload_size = 0;
 
                 // Reschedule the timer.
-                let deadline = Instant::now() + Duration::from_millis(self.max_header_delay);
+                let deadline = Instant::now() + self.max_header_delay;
                 timer.as_mut().reset(deadline);
             }
 

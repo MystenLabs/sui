@@ -175,9 +175,6 @@ class NodeParameters:
         except KeyError as e:
             raise ConfigError(f'Malformed parameters: missing key {e}')
 
-        if not all(isinstance(x, int) for x in inputs):
-            raise ConfigError('Invalid parameters type')
-
         self.json = json
 
     def print(self, filename):

@@ -15,7 +15,8 @@ async fn make_batch() {
     // Spawn a `BatchMaker` instance.
     BatchMaker::spawn(
         /* max_batch_size */ 200,
-        /* max_batch_delay */ 1_000_000, // Ensure the timer is not triggered.
+        /* max_batch_delay */
+        Duration::from_millis(1_000_000), // Ensure the timer is not triggered.
         rx_transaction,
         tx_message,
         /* workers_addresses */ dummy_addresses,
@@ -43,7 +44,8 @@ async fn batch_timeout() {
     // Spawn a `BatchMaker` instance.
     BatchMaker::spawn(
         /* max_batch_size */ 200,
-        /* max_batch_delay */ 50, // Ensure the timer is triggered.
+        /* max_batch_delay */
+        Duration::from_millis(50), // Ensure the timer is triggered.
         rx_transaction,
         tx_message,
         /* workers_addresses */ dummy_addresses,

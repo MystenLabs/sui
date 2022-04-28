@@ -40,7 +40,7 @@ pub struct Synchronizer<PublicKey: VerifyingKey> {
     /// The depth of the garbage collection.
     gc_depth: Round,
     /// The delay to wait before re-trying to send sync requests.
-    sync_retry_delay: u64,
+    sync_retry_delay: Duration,
     /// Determine with how many nodes to sync when re-trying to send sync-requests. These nodes
     /// are picked at random from the committee.
     sync_retry_nodes: usize,
@@ -65,7 +65,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
         committee: Committee<PublicKey>,
         store: Store<BatchDigest, SerializedBatchMessage>,
         gc_depth: Round,
-        sync_retry_delay: u64,
+        sync_retry_delay: Duration,
         sync_retry_nodes: usize,
         rx_message: Receiver<PrimaryWorkerMessage<PublicKey>>,
         tx_primary: Sender<SerializedWorkerPrimaryMessage>,
@@ -215,7 +215,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
 
                     let mut retry = Vec::new();
                     for (digest, (_, _, timestamp)) in &self.pending {
-                        if timestamp + (self.sync_retry_delay as u128) < now {
+                        if timestamp + self.sync_retry_delay.as_millis() < now {
                             debug!("Requesting sync for batch {digest} (retry)");
                             retry.push(*digest);
                         }

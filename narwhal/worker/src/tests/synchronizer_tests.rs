@@ -29,7 +29,8 @@ async fn synchronize() {
         committee.clone(),
         store.clone(),
         /* gc_depth */ 50, // Not used in this test.
-        /* sync_retry_delay */ 1_000_000, // Ensure it is not triggered.
+        /* sync_retry_delay */
+        Duration::from_millis(1_000_000), // Ensure it is not triggered.
         /* sync_retry_nodes */ 3, // Not used in this test.
         rx_message,
         tx_primary,
@@ -71,7 +72,8 @@ async fn test_successful_request_batch() {
         committee.clone(),
         store.clone(),
         /* gc_depth */ 50, // Not used in this test.
-        /* sync_retry_delay */ 1_000_000, // Ensure it is not triggered.
+        /* sync_retry_delay */
+        Duration::from_millis(1_000_000), // Ensure it is not triggered.
         /* sync_retry_nodes */ 3, // Not used in this test.
         rx_message,
         tx_primary,
@@ -125,7 +127,8 @@ async fn test_request_batch_not_found() {
         committee.clone(),
         store.clone(),
         /* gc_depth */ 50, // Not used in this test.
-        /* sync_retry_delay */ 1_000_000, // Ensure it is not triggered.
+        /* sync_retry_delay */
+        Duration::from_millis(1_000_000), // Ensure it is not triggered.
         /* sync_retry_nodes */ 3, // Not used in this test.
         rx_message,
         tx_primary,
@@ -178,7 +181,8 @@ async fn test_successful_batch_delete() {
         committee.clone(),
         store.clone(),
         /* gc_depth */ 50, // Not used in this test.
-        /* sync_retry_delay */ 1_000_000, // Ensure it is not triggered.
+        /* sync_retry_delay */
+        Duration::from_millis(1_000_000), // Ensure it is not triggered.
         /* sync_retry_nodes */ 3, // Not used in this test.
         rx_message,
         tx_primary,

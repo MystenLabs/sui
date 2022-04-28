@@ -3,8 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     block_remover::DeleteBatchResult,
-    // TODO[#175][#127]: re-plug the BlockSynchronizer
-    // block_synchronizer::BlockSynchronizer,
     block_waiter::{BatchMessage, BatchMessageError, BatchResult, BlockWaiter},
     certificate_waiter::CertificateWaiter,
     core::Core,
@@ -14,18 +12,11 @@ use crate::{
     payload_receiver::PayloadReceiver,
     proposer::Proposer,
     synchronizer::Synchronizer,
-    BlockRemover,
-    DeleteBatchMessage,
+    BlockRemover, DeleteBatchMessage,
 };
 use async_trait::async_trait;
 use bytes::Bytes;
-use config::{
-    // TODO[#175][#127]: re-plug the BlockSynchronizer
-    // BlockSynchronizerParameters,
-    Committee,
-    Parameters,
-    WorkerId,
-};
+use config::{Committee, Parameters, WorkerId};
 use crypto::{
     traits::{EncodeDecodeBase64, Signer, VerifyingKey},
     SignatureService,

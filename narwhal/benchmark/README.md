@@ -30,12 +30,17 @@ The nodes parameters determine the configuration for the primaries and workers:
 ```python
 node_params = {
     'header_size': 1_000,
-    'max_header_delay': 100,
+    'max_header_delay': '100ms',
     'gc_depth': 50,
-    'sync_retry_delay': 10_000,
+    'sync_retry_delay': '10000ms',
     'sync_retry_nodes': 3,
     'batch_size': 500_000,
-    'max_batch_delay': 100
+    'max_batch_delay': '100ms',
+    'block_synchronizer': {
+        'certificates_synchronize_timeout': '2000ms',
+        'payload_synchronize_timeout': '2000ms',
+        'payload_availability_timeout': '2000ms'
+    }
 }
 ```
 They are defined as follows:
@@ -46,6 +51,9 @@ They are defined as follows:
 * `sync_retry_nodes`: How many nodes to sync when re-trying to send sync-request. These nodes are picked at random from the committee.
 * `batch_size`: The preferred batch size. The workers seal a batch of transactions when it reaches this size. Denominated in bytes.
 * `max_batch_delay`: The delay after which the workers seal a batch of transactions, even if `max_batch_size` is not reached. Denominated in ms.
+* `certificates_synchronize_timeout`: The timeout configuration when requesting certificates from peers.
+* `payload_synchronize_timeout`: Timeout when has requested the payload for a certificate and is waiting to receive them.
+* `payload_availability_timeout`: The timeout configuration when for when we ask the other peers to discover who has the payload available for the dictated certificates.
 
 ### Run the benchmark
 Once you specified both `bench_params` and `node_params` as desired, run:

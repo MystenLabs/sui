@@ -29,8 +29,8 @@ pub mod batch_maker_tests;
 pub struct BatchMaker<PublicKey> {
     /// The preferred batch size (in bytes).
     batch_size: usize,
-    /// The maximum delay after which to seal the batch (in ms).
-    max_batch_delay: u64,
+    /// The maximum delay after which to seal the batch.
+    max_batch_delay: Duration,
     /// Channel to receive transactions from the network.
     rx_transaction: Receiver<Transaction>,
     /// Output channel to deliver sealed batches to the `QuorumWaiter`.
@@ -48,7 +48,7 @@ pub struct BatchMaker<PublicKey> {
 impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
     pub fn spawn(
         batch_size: usize,
-        max_batch_delay: u64,
+        max_batch_delay: Duration,
         rx_transaction: Receiver<Transaction>,
         tx_message: Sender<QuorumWaiterMessage<PublicKey>>,
         workers_addresses: Vec<(PublicKey, SocketAddr)>,
@@ -71,7 +71,7 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
 
     /// Main loop receiving incoming transactions and creating batches.
     async fn run(&mut self) {
-        let timer = sleep(Duration::from_millis(self.max_batch_delay));
+        let timer = sleep(self.max_batch_delay);
         tokio::pin!(timer);
 
         loop {
@@ -82,7 +82,7 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
                     self.current_batch.0.push(transaction);
                     if self.current_batch_size >= self.batch_size {
                         self.seal().await;
-                        timer.as_mut().reset(Instant::now() + Duration::from_millis(self.max_batch_delay));
+                        timer.as_mut().reset(Instant::now() + self.max_batch_delay);
                     }
                 },
 
@@ -91,7 +91,7 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
                     if !self.current_batch.0.is_empty() {
                         self.seal().await;
                     }
-                    timer.as_mut().reset(Instant::now() + Duration::from_millis(self.max_batch_delay));
+                    timer.as_mut().reset(Instant::now() + self.max_batch_delay);
                 }
             }
 
