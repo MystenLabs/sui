@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
-use futures::future::join_all;
 use futures::{sink::SinkExt, stream::StreamExt};
 use sui::config::AuthorityPrivateInfo;
 use sui_types::error::SuiError;
