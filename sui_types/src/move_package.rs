@@ -9,6 +9,7 @@ use crate::{
 };
 use move_binary_format::file_format::CompiledModule;
 use move_core_types::identifier::Identifier;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
@@ -21,10 +22,11 @@ use std::collections::BTreeMap;
 
 // serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
 #[serde_as]
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema)]
 pub struct MovePackage {
     id: ObjectID,
     // TODO use session cache
+    #[schemars(with = "BTreeMap<String, String>")]
     #[serde_as(as = "BTreeMap<_, Readable<Base64, Bytes>>")]
     module_map: BTreeMap<String, Vec<u8>>,
 }

@@ -44,3 +44,4 @@ move-vm-types = { git = "https://github.com/move-language/move", rev = "4e025186
 
 narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "8ae2164f0510349cbac2770e50e853bce5ab0e02", package = "executor" }
 narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "8ae2164f0510349cbac2770e50e853bce5ab0e02", package = "crypto" }
+schemars ="0.8.8"
