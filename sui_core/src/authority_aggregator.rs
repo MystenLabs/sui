@@ -836,7 +836,7 @@ where
                             }) => {
                                 state.signatures.push((
                                     name,
-                                    inner_signed_transaction.auth_signature.signature,
+                                    inner_signed_transaction.auth_sign_info.signature,
                                 ));
                                 state.good_stake += weight;
                                 if state.good_stake >= threshold {
