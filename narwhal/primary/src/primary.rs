@@ -25,6 +25,7 @@ use futures::sink::SinkExt as _;
 use network::{MessageHandler, Receiver as NetworkReceiver, SimpleSender, Writer};
 use serde::{Deserialize, Serialize};
 use std::{
+    borrow::Borrow,
     error::Error,
     net::{IpAddr, Ipv4Addr},
     sync::{atomic::AtomicU64, Arc},
@@ -335,7 +336,7 @@ impl Primary {
 #[derive(Clone)]
 struct PrimaryReceiverHandler<PublicKey: VerifyingKey> {
     tx_primary_messages: Sender<PrimaryMessage<PublicKey>>,
-    tx_cert_requests: Sender<(Vec<CertificateDigest>, PublicKey)>,
+    tx_cert_requests: Sender<PrimaryMessage<PublicKey>>,
 }
 
 #[async_trait]
@@ -345,13 +346,21 @@ impl<PublicKey: VerifyingKey> MessageHandler for PrimaryReceiverHandler<PublicKe
         let _ = writer.send(Bytes::from("Ack")).await;
 
         // Deserialize and parse the message.
-        match bincode::deserialize(&serialized).map_err(DagError::SerializationError)? {
-            PrimaryMessage::CertificatesRequest(missing, requestor) => self
+        let request: PrimaryMessage<PublicKey> =
+            bincode::deserialize(&serialized).map_err(DagError::SerializationError)?;
+
+        match request.borrow() {
+            PrimaryMessage::CertificatesRequest(_, _) => self
                 .tx_cert_requests
-                .send((missing, requestor))
+                .send(request)
                 .await
                 .expect("Failed to send primary message"),
-            request => self
+            PrimaryMessage::CertificatesBatchRequest { .. } => self
+                .tx_cert_requests
+                .send(request)
+                .await
+                .expect("Failed to send primary message"),
+            _ => self
                 .tx_primary_messages
                 .send(request)
                 .await
