@@ -60,9 +60,7 @@ async fn submit_shared_object_transaction(
     let serialized = Bytes::from(serialize_consensus_transaction(&message));
 
     'main: loop {
-        let result = transmit(serialized.clone(), &configs[0]).await;
-        println!("HERE: {result:?}");
-        match result {
+        match transmit(serialized.clone(), &configs[0]).await {
             SerializedMessage::TransactionResp(reply) => {
                 // We got a reply from the Sui authority.
                 break 'main *reply;
