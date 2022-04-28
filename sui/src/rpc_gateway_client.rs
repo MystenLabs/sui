@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::rpc_gateway::responses::ObjectResponse;
-use crate::rpc_gateway::{
-    RpcCallArg, RpcGatewayClient as RpcGateway, SignedTransaction, TransactionBytes,
-};
+use crate::rpc_gateway::{RpcGatewayClient as RpcGateway, SignedTransaction, TransactionBytes};
 use anyhow::Error;
 use async_trait::async_trait;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
@@ -12,9 +10,10 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use sui_core::gateway_state::gateway_responses::{TransactionEffectsResponse, TransactionResponse};
 use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
+use sui_core::sui_json::SuiJsonValue;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::json_schema::Base64;
-use sui_types::messages::{CallArg, Transaction, TransactionData};
+use sui_types::messages::{CallArg, CertifiedTransaction, Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 use tokio::runtime::Handle;
 
@@ -69,19 +68,10 @@ impl GatewayAPI for RpcGatewayClient {
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
+        arguments: Vec<SuiJsonValue>,
         gas_object_ref: ObjectRef,
-        arguments: Vec<CallArg>,
         gas_budget: u64,
     ) -> Result<TransactionData, Error> {
-        let arguments = arguments
-            .into_iter()
-            .map(|arg| match arg {
-                CallArg::Pure(bytes) => RpcCallArg::Pure(Base64(bytes)),
-                CallArg::ImmOrOwnedObject((id, _, _)) => RpcCallArg::ImmOrOwnedObject(id),
-                CallArg::SharedObject(id) => RpcCallArg::SharedObject(id),
-            })
-            .collect();
-
         let bytes: TransactionBytes = self
             .client
             .move_call(

@@ -160,7 +160,7 @@
           "schema": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/RpcCallArg"
+              "$ref": "#/components/schemas/SuiJsonValue"
             }
           }
         },
@@ -1456,46 +1456,6 @@
           }
         }
       },
-      "RpcCallArg": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "Pure"
-            ],
-            "properties": {
-              "Pure": {
-                "$ref": "#/components/schemas/Base64"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "ImmOrOwnedObject"
-            ],
-            "properties": {
-              "ImmOrOwnedObject": {
-                "$ref": "#/components/schemas/ObjectID"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "SharedObject"
-            ],
-            "properties": {
-              "SharedObject": {
-                "$ref": "#/components/schemas/ObjectID"
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
       "SequenceNumber": {
         "type": "integer",
         "format": "uint64",
@@ -1637,6 +1597,7 @@
       "SuiAddress": {
         "$ref": "#/components/schemas/Hex"
       },
+      "SuiJsonValue": {},
       "TransactionBytes": {
         "type": "object",
         "required": [

@@ -197,17 +197,19 @@ the [Move](move.md#move) language):
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
---data-raw '{ "jsonrpc":"2.0", 
-              "method":"sui_moveCall", 
-              "params":["{{owner_address}}",
-                        "0x2",
-                        "GAS",
-                        "transfer",
-                        [],
-                        ["Pure": "{{coin_object_id_base64}}", "Pure": "{{to_address_base64}}"}],
-                        "{{gas_object_id}}",
-                        2000], 
-              "id":1}' | json_pp
+--data-raw '{ "jsonrpc": "2.0",
+              "method": "sui_moveCall",
+              "params": [
+                  "{{owner_address}}",
+                  "0000000000000000000000000000000000000002",
+                  "ObjectBasics",
+                  "transfer",
+                  null,
+                  ["0x{{coin_object_id}}", "0x{{recipient_address}}"],
+                  "{{gas_object_id}}",
+                  2000
+              ],
+              "id": 1 }' | json_pp
 ```
 
 #### 2, Sign the transaction

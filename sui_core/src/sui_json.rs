@@ -1,25 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::VecDeque;
+
 use anyhow::{anyhow, bail};
+// Alias the type names for clarity
+use move_binary_format::{
+    access::ModuleAccess,
+    file_format::{SignatureToken, Visibility},
+};
 use move_core_types::{
     identifier::Identifier,
     value::{MoveTypeLayout, MoveValue},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
-use sui_types::{
-    base_types::{decode_bytes_hex, ObjectID, SuiAddress},
-    object::Object,
-};
-
-// Alias the type names for clarity
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{SignatureToken, Visibility},
-};
 use serde_json::Value as JsonValue;
+
+use sui_types::base_types::{decode_bytes_hex, ObjectID, SuiAddress};
+use sui_types::object::Object;
 
 const HEX_PREFIX: &str = "0x";
 

@@ -19,6 +19,7 @@ use sui_core::gateway_state::{
     gateway_responses::{TransactionEffectsResponse, TransactionResponse},
     GatewayClient, GatewayState, GatewayTxSeqNumber,
 };
+use sui_core::sui_json::SuiJsonValue;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
@@ -78,7 +79,7 @@ pub trait RpcGateway {
         #[schemars(with = "Option<Vec<json_schema::TypeTag>>")] type_arguments: Option<
             Vec<TypeTag>,
         >,
-        arguments: Vec<RpcCallArg>,
+        arguments: Vec<SuiJsonValue>,
         gas_object_id: ObjectID,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
@@ -314,7 +315,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
         module: Identifier,
         function: Identifier,
         type_arguments: Option<Vec<TypeTag>>,
-        rpc_arguments: Vec<RpcCallArg>,
+        rpc_arguments: Vec<SuiJsonValue>,
         gas_object_id: ObjectID,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
@@ -331,19 +332,6 @@ impl RpcGatewayServer for RpcGatewayImpl {
                 .await?
                 .reference()?;
 
-            // Fetch the objects for the object args
-            let mut arguments = Vec::with_capacity(rpc_arguments.len());
-            for rpc_arg in rpc_arguments {
-                arguments.push(match rpc_arg {
-                    RpcCallArg::Pure(arg) => CallArg::Pure(arg.to_vec()),
-                    RpcCallArg::SharedObject(id) => CallArg::SharedObject(id),
-                    RpcCallArg::ImmOrOwnedObject(id) => {
-                        let object_ref = self.gateway.get_object_info(id).await?.reference()?;
-                        CallArg::ImmOrOwnedObject(object_ref)
-                    }
-                })
-            }
-
             self.gateway
                 .move_call(
                     signer,
@@ -351,8 +339,8 @@ impl RpcGatewayServer for RpcGatewayImpl {
                     module,
                     function,
                     type_arguments.unwrap_or_default(),
+                    rpc_arguments,
                     gas_obj_ref,
-                    arguments,
                     gas_budget,
                 )
                 .await
