@@ -408,7 +408,10 @@ mod tests {
         let rounds: Round = rand::thread_rng().gen_range(10, 100);
 
         // process certificates for rounds, check we don't grow the dag too much
-        let keys: Vec<_> = keys().into_iter().map(|kp| kp.public().clone()).collect();
+        let keys: Vec<_> = test_utils::keys()
+            .into_iter()
+            .map(|kp| kp.public().clone())
+            .collect();
 
         let genesis = Certificate::genesis(&mock_committee(&keys[..]))
             .iter()
@@ -417,7 +420,7 @@ mod tests {
         let (certificates, _next_parents) = make_optimal_certificates(1, rounds, &genesis, &keys);
         let committee = mock_committee(&keys);
 
-        let store_path = temp_testdir::TempDir::default();
+        let store_path = test_utils::temp_dir();
         let store = make_consensus_store(&store_path);
 
         let consensus_index = 0;
@@ -454,7 +457,10 @@ mod tests {
         let rounds: Round = rand::thread_rng().gen_range(10, 100);
 
         // process certificates for rounds, check we don't grow the dag too much
-        let keys: Vec<_> = keys().into_iter().map(|kp| kp.public().clone()).collect();
+        let keys: Vec<_> = test_utils::keys()
+            .into_iter()
+            .map(|kp| kp.public().clone())
+            .collect();
 
         let genesis = Certificate::genesis(&mock_committee(&keys[..]))
             .iter()
@@ -464,7 +470,7 @@ mod tests {
         let (certificates, _next_parents) = make_certificates(1, rounds, &genesis, &keys, 0.333);
         let committee = mock_committee(&keys);
 
-        let store_path = temp_testdir::TempDir::default();
+        let store_path = test_utils::temp_dir();
         let store = make_consensus_store(&store_path);
 
         let mut state = State::new(Certificate::genesis(&mock_committee(&keys[..])));

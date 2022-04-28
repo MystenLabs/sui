@@ -3,22 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use config::{Authority, PrimaryAddresses};
-use crypto::{
-    ed25519::{Ed25519KeyPair, Ed25519PublicKey},
-    traits::KeyPair,
-};
-use rand::{rngs::StdRng, Rng, SeedableRng as _};
+use crypto::ed25519::Ed25519PublicKey;
+#[allow(unused_imports)] // WT*?
+use crypto::traits::KeyPair;
+use rand::Rng;
 use std::collections::{BTreeSet, VecDeque};
 use store::{reopen, rocks, rocks::DBMap};
 #[allow(unused_imports)] // WT*?
 use tokio::sync::mpsc::channel;
 use types::{CertificateDigest, Header};
-
-// Fixture
-pub fn keys() -> Vec<Ed25519KeyPair> {
-    let mut rng = StdRng::from_seed([0; 32]);
-    (0..4).map(|_| Ed25519KeyPair::generate(&mut rng)).collect()
-}
 
 // Fixture
 pub fn mock_committee(keys: &[Ed25519PublicKey]) -> Committee<Ed25519PublicKey> {
@@ -164,7 +157,10 @@ pub fn make_certificate_store(
 #[tokio::test]
 async fn commit_one() {
     // Make certificates for rounds 1 to 4.
-    let keys: Vec<_> = keys().into_iter().map(|kp| kp.public().clone()).collect();
+    let keys: Vec<_> = test_utils::keys()
+        .into_iter()
+        .map(|kp| kp.public().clone())
+        .collect();
     let genesis = Certificate::genesis(&mock_committee(&keys[..]))
         .iter()
         .map(|x| x.digest())
@@ -179,7 +175,7 @@ async fn commit_one() {
     let (tx_waiter, rx_waiter) = channel(1);
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
-    let store_path = temp_testdir::TempDir::default();
+    let store_path = test_utils::temp_dir();
     Consensus::spawn(
         mock_committee(&keys[..]),
         make_consensus_store(&store_path),
@@ -211,7 +207,10 @@ async fn commit_one() {
 #[tokio::test]
 async fn dead_node() {
     // Make the certificates.
-    let mut keys: Vec<_> = keys().into_iter().map(|kp| kp.public().clone()).collect();
+    let mut keys: Vec<_> = test_utils::keys()
+        .into_iter()
+        .map(|kp| kp.public().clone())
+        .collect();
     keys.sort(); // Ensure we don't remove one of the leaders.
     let _ = keys.pop().unwrap();
 
@@ -226,7 +225,7 @@ async fn dead_node() {
     let (tx_waiter, rx_waiter) = channel(1);
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
-    let store_path = temp_testdir::TempDir::default();
+    let store_path = test_utils::temp_dir();
     Consensus::spawn(
         mock_committee(&keys[..]),
         make_consensus_store(&store_path),
@@ -258,7 +257,10 @@ async fn dead_node() {
 // round 4 does. The leader of rounds 2 and 4 should thus be committed upon entering round 6.
 #[tokio::test]
 async fn not_enough_support() {
-    let mut keys: Vec<_> = keys().into_iter().map(|kp| kp.public().clone()).collect();
+    let mut keys: Vec<_> = test_utils::keys()
+        .into_iter()
+        .map(|kp| kp.public().clone())
+        .collect();
     keys.sort();
 
     let genesis = Certificate::genesis(&mock_committee(&keys[..]))
@@ -316,7 +318,7 @@ async fn not_enough_support() {
     let (tx_waiter, rx_waiter) = channel(1);
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
-    let store_path = temp_testdir::TempDir::default();
+    let store_path = test_utils::temp_dir();
     Consensus::spawn(
         mock_committee(&keys[..]),
         make_consensus_store(&store_path),
@@ -354,7 +356,10 @@ async fn not_enough_support() {
 // and reapers from round 3.
 #[tokio::test]
 async fn missing_leader() {
-    let mut keys: Vec<_> = keys().into_iter().map(|kp| kp.public().clone()).collect();
+    let mut keys: Vec<_> = test_utils::keys()
+        .into_iter()
+        .map(|kp| kp.public().clone())
+        .collect();
     keys.sort();
 
     let genesis = Certificate::genesis(&mock_committee(&keys[..]))
@@ -381,7 +386,7 @@ async fn missing_leader() {
     let (tx_waiter, rx_waiter) = channel(1);
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
-    let store_path = temp_testdir::TempDir::default();
+    let store_path = test_utils::temp_dir();
     Consensus::spawn(
         mock_committee(&keys[..]),
         make_consensus_store(&store_path),

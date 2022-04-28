@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use consensus::tusk::{
-    consensus_tests::{keys, make_consensus_store, make_optimal_certificates, mock_committee},
+    consensus_tests::{make_consensus_store, make_optimal_certificates, mock_committee},
     *,
 };
 use criterion::{
@@ -10,6 +10,7 @@ use criterion::{
 use crypto::{traits::KeyPair, Hash};
 use pprof::criterion::{Output, PProfProfiler};
 use std::collections::BTreeSet;
+use test_utils::{keys, temp_dir};
 use types::{Certificate, Round};
 
 pub fn process_certificates(c: &mut Criterion) {
@@ -31,7 +32,7 @@ pub fn process_certificates(c: &mut Criterion) {
         let (certificates, _next_parents) = make_optimal_certificates(1, rounds, &genesis, &keys);
         let committee = mock_committee(&keys);
 
-        let store_path = temp_testdir::TempDir::default();
+        let store_path = temp_dir();
         let store = make_consensus_store(&store_path);
 
         let mut state =
