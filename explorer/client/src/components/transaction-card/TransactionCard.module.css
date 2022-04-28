@@ -1,0 +1,64 @@
+div.txcard {
+    @apply bg-white px-6 pt-0 pb-0  bg-center rounded-lg shadow-md
+    font-sans break-all tracking-tight font-semibold block pl-0 pr-0 m-auto mt-10 mb-10;
+}
+
+div.txcardgrid {
+    @apply grid md:grid-cols-3 sm:grid-cols-1 gap-2 border-0 border-b border-solid border-suilight pt-3 pb-3 pl-8 pr-8 items-center;
+}
+
+div.txcardgrid:first-child {
+    @apply bg-suilight rounded-lg rounded-b-none items-center;
+}
+
+div.txcardgrid > div:first-child {
+    @apply col-span-1 font-normal;
+}
+
+div.txcardgrid > div:last-child {
+    @apply border-none;
+}
+
+div.txcardgridlarge {
+    @apply font-mono break-all tracking-tight font-normal block col-span-2;
+}
+
+div.status-success {
+    @apply text-sui;
+}
+
+div.status-fail {
+    @apply bg-red-300;
+}
+
+div.status-pending {
+    @apply text-orange-300;
+}
+
+div.action-create {
+    @apply bg-lime-300;
+}
+
+div.action-mutate {
+    @apply bg-blue-300;
+}
+
+div.grouped {
+    @apply border-transparent;
+}
+
+ul.listitems {
+    @apply list-none p-0 m-0;
+}
+
+.listitems .list {
+    @apply mt-5 list-none p-0;
+}
+
+.listitems .list:first-child {
+    @apply mt-0;
+}
+
+.listitems .sublist {
+    @apply mt-2 list-none p-0;
+}
