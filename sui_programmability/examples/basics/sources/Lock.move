@@ -13,13 +13,13 @@ module Basics::Lock {
     use Std::Option::{Self, Option};
 
     /// Lock is empty, nothing to take.
-    const ELOCK_IS_EMPTY: u64 = 0;
+    const ELockIsEmpty: u64 = 0;
 
     /// Key does not match the Lock.
-    const EKEY_MISMATCH: u64 = 1;
+    const EKeyMismatch: u64 = 1;
 
     /// Lock already contains something.
-    const ELOCK_IS_FULL: u64 = 2;
+    const ELockIsFull: u64 = 2;
 
     /// Lock that stores any content inside it.
     struct Lock<T: store + key> has key, store {
@@ -64,8 +64,8 @@ module Basics::Lock {
         key: &Key<T>,
         _ctx: &mut TxContext,
     ) {
-        assert!(Option::is_none(&lock.locked), ELOCK_IS_FULL);
-        assert!(&key.for == ID::id(lock), EKEY_MISMATCH);
+        assert!(Option::is_none(&lock.locked), ELockIsFull);
+        assert!(&key.for == ID::id(lock), EKeyMismatch);
 
         Option::fill(&mut lock.locked, obj);
     }
@@ -78,8 +78,8 @@ module Basics::Lock {
         lock: &mut Lock<T>,
         key: &Key<T>,
     ): T {
-        assert!(Option::is_some(&lock.locked), ELOCK_IS_EMPTY);
-        assert!(&key.for == ID::id(lock), EKEY_MISMATCH);
+        assert!(Option::is_some(&lock.locked), ELockIsEmpty);
+        assert!(&key.for == ID::id(lock), EKeyMismatch);
 
         Option::extract(&mut lock.locked)
     }
