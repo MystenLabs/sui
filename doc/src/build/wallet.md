@@ -196,7 +196,7 @@ Now start a new terminal since you have Sui running in the first terminal.
 The following commands are supported by the wallet:
 
     active-address        Default address used for commands when none specified
-    addresses             Obtain the Addresses managed by the wallet
+    addresses             Obtain the addresses managed by the wallet
     call                  Call Move function
     clear                 Clear screen (interactive only)
     create-example-nft    Create an example NFT
@@ -208,7 +208,7 @@ The following commands are supported by the wallet:
     history               Print history
     merge-coin            Merge two coin objects into one coin
     new-address           Generate new address and keypair
-    object                Get obj info
+    object                Get object info
     objects               Obtain all objects owned by the address
     publish               Publish Move modules
     split-coin            Split a coin object into multiple coins
@@ -560,11 +560,15 @@ Showing 1 results.
 
 ## Creating example NFTs
 
-You may create an [NFT-like object](https://github.com/MystenLabs/sui/blob/27dff728a4c9cb65cd5d92a574105df20cb51887/sui_programmability/framework/sources/DevNetNFT.move#L16) on Sui using the following command.
-
+You may create an [NFT-like object](https://github.com/MystenLabs/sui/blob/27dff728a4c9cb65cd5d92a574105df20cb51887/sui_programmability/framework/sources/DevNetNFT.move#L16) on Sui using the following command:
 
 ```shell
 $ wallet create-example-nft
+```
+
+You will see output resembling:
+
+```shell
 Successfully created an ExampleNFT:
 
 Owner: AddressOwner(k#66af3898e7558b79e115ab61184a958497d1905a)
@@ -572,10 +576,9 @@ Version: 1
 ID: 70874F1ABD0A9A0126726A626FF48374F7B2D9C6
 Readonly: false
 Type: 0x2::DevNetNFT::DevNetNFT
-
 ```
 
-The command will invoke the `mint` function in `DevNetNFT` module, which mints a Sui object with three attributes: name, description, and image URL with [default values](https://github.com/MystenLabs/sui/blob/27dff728a4c9cb65cd5d92a574105df20cb51887/sui/src/wallet_commands.rs#L39) and transfers the object to your address. You can also provide custom values using the following instructions:
+The command will invoke the `mint` function in the `DevNetNFT` module, which mints a Sui object with three attributes: name, description, and image URL with [default values](https://github.com/MystenLabs/sui/blob/27dff728a4c9cb65cd5d92a574105df20cb51887/sui/src/wallet_commands.rs#L39) and transfers the object to your address. You can also provide custom values using the following instructions:
 
 
 `create-example-nft` command usage:
@@ -586,7 +589,7 @@ USAGE:
 
 OPTIONS:
         --description <DESCRIPTION>    Description of the NFT
-        --gas <GAS>                    ID of the gas object for gas payment, in 20 bytes Hex string
+        --gas <GAS>                    ID of the gas object for gas payment, in 20 bytes hex string
                                        If not provided, a gas object with at least gas_budget value
                                        will be selected
         --gas-budget <GAS_BUDGET>      Gas budget for this transfer
