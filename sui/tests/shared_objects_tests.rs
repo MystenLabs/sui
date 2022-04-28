@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
+use futures::future::join_all;
 use futures::{sink::SinkExt, stream::StreamExt};
 use sui::config::AuthorityPrivateInfo;
 use sui_types::error::SuiError;
@@ -50,8 +51,7 @@ async fn submit_single_owner_transaction(
 
 // Keep submitting the certificate until it is sequenced by consensus. We use the loop
 // since some consensus protocols (like Tusk) are not guaranteed to include the transaction
-// (but it has high probability to do so).
-// NOTE: This is good for testing but is not how a real client should submit transactions.
+// (but it has high probability to do so, so it should virtually never be used).
 async fn submit_shared_object_transaction(
     transaction: Transaction,
     configs: &[AuthorityPrivateInfo],
@@ -61,8 +61,35 @@ async fn submit_shared_object_transaction(
     let serialized = Bytes::from(serialize_consensus_transaction(&message));
 
     'main: loop {
-        for config in configs {
-            match transmit(serialized.clone(), config).await {
+        let result = transmit(serialized.clone(), &configs[0]).await;
+        println!("HERE: {result:?}");
+        match result {
+            SerializedMessage::TransactionResp(reply) => {
+                // We got a reply from the Sui authority.
+                break 'main *reply;
+            }
+            SerializedMessage::Error(error) => match *error {
+                SuiError::ConsensusConnectionBroken(_) => {
+                    // This is the (confusing) error message returned by the consensus
+                    // adapter. It means it didn't hear back from consensus and timed out.
+                }
+                error => panic!("{error}"),
+            },
+            message => panic!("Unexpected protocol message: {message:?}"),
+        }
+    }
+
+    /*
+    'main: loop {
+        let futures: Vec<_> = configs
+            .iter()
+            .map(|config| transmit(serialized.clone(), config))
+            .collect();
+        let results = join_all(futures).await;
+        println!("{} --> {results:?}\n", results.len());
+        for x in results {
+            println!("HERE: {x:?}");
+            match x {
                 SerializedMessage::TransactionResp(reply) => {
                     // We got a reply from the Sui authority.
                     break 'main *reply;
@@ -70,14 +97,16 @@ async fn submit_shared_object_transaction(
                 SerializedMessage::Error(error) => match *error {
                     SuiError::ConsensusConnectionBroken(_) => {
                         // This is the (confusing) error message returned by the consensus
-                        // adapter timed out and didn't hear back from consensus.
+                        // adapter. It means it didn't hear back from consensus and timed out.
                     }
                     error => panic!("{error}"),
                 },
-                message => panic!("Unexpected protocol message {message:?}"),
+                message => panic!("Unexpected protocol message: {message:?}"),
             }
         }
+        println!("LOOP!");
     }
+    */
 }
 
 #[tokio::test]

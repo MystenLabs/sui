@@ -82,7 +82,7 @@ where
     let states = test_authority_states(objects).await;
     let consensus_committee = make_default_narwhal_committee(configs).unwrap();
     let consensus_parameters = ConsensusParameters {
-        max_header_delay: std::time::Duration::from_millis(100),
+        max_header_delay: std::time::Duration::from_millis(200),
         header_size: 1,
         ..ConsensusParameters::default()
     };
