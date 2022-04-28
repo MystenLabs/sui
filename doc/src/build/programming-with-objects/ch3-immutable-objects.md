@@ -45,7 +45,7 @@ Since immutable objects can never be mutated, there will never be a data race ev
 ### Test immutable object
 Let's take a look at how we interact with immutable objects in unit tests.
 
-Previously, we used the `TestScenario::take_object` API to take an object from the global storage that's owned by the sender of the transaction in a unit test. Since immutable objects are not owned by anyone, `TestScenario::take_object` works for immutable objects as well! That is, if there exists an immutable object of type `T` in the global storage, `take_object<T>` will return that object.
+Previously, we used the `TestScenario::take_owned` API to take an object from the global storage that's owned by the sender of the transaction in a unit test. Since immutable objects are not owned by anyone, `TestScenario::take_owned` works for immutable objects as well! That is, if there exists an immutable object of type `T` in the global storage, `take_owned<T>` will return that object.
 
 Let's see it work in action:
 ```rust
@@ -59,12 +59,12 @@ public(script) fun test_immutable() {
     };
     TestScenario::next_tx(scenario, &sender1);
     {
-        assert!(TestScenario::can_take_object<ColorObject>(scenario), 0);
+        assert!(TestScenario::can_take_owned<ColorObject>(scenario), 0);
     };
     let sender2 = @0x2;
     TestScenario::next_tx(scenario, &sender2);
     {
-        assert!(TestScenario::can_take_object<ColorObject>(scenario), 0);
+        assert!(TestScenario::can_take_owned<ColorObject>(scenario), 0);
     };
 }
 ```
@@ -95,10 +95,10 @@ public(script) fun test_mutate_immutable() {
     };
     TestScenario::next_tx(scenario, &sender1);
     {
-        let object = TestScenario::take_object<ColorObject>(scenario);
+        let object = TestScenario::take_owned<ColorObject>(scenario);
         let ctx = TestScenario::ctx(scenario);
         ColorObject::update(&mut object, 0, 0, 0, ctx);
-        TestScenario::return_object(scenario, object);
+        TestScenario::return_owned(scenario, object);
     };
 }
 ```

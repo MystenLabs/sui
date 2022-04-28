@@ -20,7 +20,7 @@ module FungibleTokens::BASKETTests {
         };
         TestScenario::next_tx(scenario, &user);
         {
-            let reserve_wrapper = TestScenario::take_shared_object<Reserve>(scenario);
+            let reserve_wrapper = TestScenario::take_shared<Reserve>(scenario);
             let reserve = TestScenario::borrow_mut(&mut reserve_wrapper);
             let ctx = TestScenario::ctx(scenario);
             assert!(BASKET::total_supply(reserve) == 0, 0);
@@ -38,7 +38,7 @@ module FungibleTokens::BASKETTests {
 
             Coin::keep(sui, ctx);
             Coin::keep(managed, ctx);
-            TestScenario::return_shared_object(scenario, reserve_wrapper);
+            TestScenario::return_shared(scenario, reserve_wrapper);
         }
     }
 
