@@ -14,8 +14,7 @@ use sui_network::{
     network::NetworkServer,
     tonic,
 };
-use sui_types::{
-    batch::UpdateItem, crypto::VerificationObligation, error::*, messages::*, serialize::*,
+use sui_types::{crypto::VerificationObligation, error::*, messages::*, serialize::*,
 };
 use tokio::{net::TcpListener, sync::mpsc::Sender};
 use tracing::{info, Instrument};
@@ -359,7 +358,7 @@ impl Validator for AuthorityServer {
                 let skip = match item {
                     Ok(item) => {
                         let seq = match item {
-                            UpdateItem::Transaction((seq, _)) => *seq,
+                            UpdateItem::Transaction((seq, _)) => seq,
                             UpdateItem::Batch(signed_batch) => {
                                 signed_batch.batch.next_sequence_number
                             }

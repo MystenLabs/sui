@@ -66,7 +66,7 @@ pub trait AuthorityAPI {
     async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, io::Error>;
+    ) -> Result<BatchInfoResponseItemStream, SuiError>;
 }
 
 pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoResponseItem, SuiError>>;
@@ -240,7 +240,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
                     .deserialize::<BatchInfoResponseItem>()
                     .map_err(|_| SuiError::UnexpectedMessage);
                 futures::future::ready(response_item)
-            });
+        });
 
         Ok(Box::pin(stream))
     }
@@ -323,11 +323,7 @@ impl AuthorityAPI for LocalAuthorityClient {
     ) -> Result<AccountInfoResponse, SuiError> {
         let state = self.state.clone();
 
-        let result = state
-            .lock()
-            .await
-            .handle_account_info_request(request)
-            .await;
+        let result = state.handle_account_info_request(request).await;
         result
     }
 
@@ -347,11 +343,7 @@ impl AuthorityAPI for LocalAuthorityClient {
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.state.clone();
 
-        let result = state
-            .lock()
-            .await
-            .handle_transaction_info_request(request)
-            .await;
+        let result = state.handle_transaction_info_request(request).await;
         result
     }
 
@@ -362,7 +354,7 @@ impl AuthorityAPI for LocalAuthorityClient {
     ) -> Result<BatchInfoResponseItemStream, io::Error> {
         let state = self.state.clone();
 
-        let update_items = state.lock().await.handle_batch_info_request(request).await;
+        let update_items = state.handle_batch_info_request(request).await;
 
         let (items, _): (VecDeque<_>, VecDeque<_>) = update_items.into_iter().unzip();
         let stream = stream::iter(items.into_iter()).then(|mut item| async move {
@@ -415,9 +407,14 @@ impl LocalAuthorityClient {
         {
             let client_ref = client.state.as_ref().try_lock().unwrap();
             for object in objects {
-                client_ref.insert_genesis_object(object).await;
+                client.0.insert_genesis_object(object).await;
             }
         }
         client
+    }
+
+    #[cfg(test)]
+    pub fn state(&self) -> &Arc<AuthorityState> {
+        &self.0
     }
 }

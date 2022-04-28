@@ -253,8 +253,8 @@ async fn run_follower(network_client: NetworkClient) {
         loop {
             let receiver = authority_client
                 .handle_batch_stream(BatchInfoRequest {
-                    start,
-                    end: start + FOLLOWER_BATCH_SIZE,
+                    start: Some(start),
+                    length: FOLLOWER_BATCH_SIZE,
                 })
                 .await;
 
