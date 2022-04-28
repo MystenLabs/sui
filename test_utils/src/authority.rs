@@ -90,6 +90,7 @@ where
             &consensus_committee,
             /* consensus_store_path */ tempfile::tempdir().unwrap().path(),
             &ConsensusParameters::default(),
+            None,
         )
         .await
         .unwrap()
