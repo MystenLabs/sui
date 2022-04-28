@@ -199,10 +199,11 @@ module Games::SharedTicTacToeTests {
         TestScenario::next_tx(scenario, player);
         let status;
         {
-            let game = TestScenario::take_object<TicTacToe>(scenario);
-            SharedTicTacToe::place_mark(&mut game, row, col, TestScenario::ctx(scenario));
-            status = SharedTicTacToe::get_status(&game);
-            TestScenario::return_object(scenario, game);
+            let game_wrapper = TestScenario::take_shared_object<TicTacToe>(scenario);
+            let game = TestScenario::borrow_mut(&mut game_wrapper);
+            SharedTicTacToe::place_mark(game, row, col, TestScenario::ctx(scenario));
+            status = SharedTicTacToe::get_status(game);
+            TestScenario::return_shared_object(scenario, game_wrapper);
         };
         status
     }

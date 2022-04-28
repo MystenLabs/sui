@@ -12,6 +12,7 @@ use move_core_types::gas_schedule::{
 };
 use move_vm_types::gas_schedule::{GasStatus, INITIAL_COST_SCHEDULE};
 use once_cell::sync::Lazy;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
@@ -25,7 +26,7 @@ macro_rules! ok_or_gas_error {
     };
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct GasCostSummary {
     pub computation_cost: u64,
     pub storage_cost: u64,

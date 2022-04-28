@@ -12,8 +12,8 @@ use move_core_types::identifier::Identifier;
 use sui::config::{PersistedConfig, WalletConfig};
 use sui::keystore::{Keystore, SuiKeystore};
 use sui::rest_gateway::responses::ObjectResponse;
+use sui::rpc_gateway::RpcGatewayClient;
 use sui::rpc_gateway::TransactionBytes;
-use sui::rpc_gateway::{Base64EncodedBytes, RpcGatewayClient};
 use sui::rpc_gateway::{RpcCallArg, RpcGatewayServer};
 use sui::rpc_gateway::{RpcGatewayImpl, SignedTransaction};
 use sui::sui_commands::SuiNetwork;
@@ -22,6 +22,7 @@ use sui::{SUI_GATEWAY_CONFIG, SUI_WALLET_CONFIG};
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::json_schema::Base64;
 use sui_types::object::ObjectRead;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
@@ -103,7 +104,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         false,
     )?
     .into_iter()
-    .map(Base64EncodedBytes)
+    .map(Base64)
     .collect::<Vec<_>>();
 
     let tx_data: TransactionBytes = http_client
@@ -155,7 +156,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let mut args = Vec::with_capacity(json_args.len());
     for json_arg in json_args {
         args.push(match json_arg {
-            SuiJsonCallArg::Pure(bytes) => RpcCallArg::Pure(Base64EncodedBytes(bytes)),
+            SuiJsonCallArg::Pure(bytes) => RpcCallArg::Pure(Base64(bytes)),
             SuiJsonCallArg::Object(id) => match http_client.get_object_info(id).await? {
                 ObjectRead::Exists(_, obj, _) if obj.is_shared() => RpcCallArg::SharedObject(id),
                 _ => RpcCallArg::ImmOrOwnedObject(id),
@@ -165,14 +166,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
 
     let tx_data: TransactionBytes = http_client
         .move_call(
-            *address,
-            package_id,
-            module,
-            function,
-            Vec::new(),
-            args,
-            gas.0,
-            1000,
+            *address, package_id, module, function, None, args, gas.0, 1000,
         )
         .await?;
 

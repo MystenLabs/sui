@@ -24,13 +24,13 @@ module DeFi::SharedEscrow {
 
     // Error codes
     /// An attempt to cancel escrow by a different user than the owner
-    const EWRONG_OWNER: u64 = 0;
+    const EWrongOwner: u64 = 0;
     /// Exchange by a different user than the `recipient` of the escrowed object
-    const EWRONG_RECIPIENT: u64 = 1;
+    const EWrongRecipient: u64 = 1;
     /// Exchange with a different item than the `exchange_for` field
-    const EWRONG_EXCHANGE_OBJECT: u64 = 2;
+    const EWrongExchangeObject: u64 = 2;
     /// The escrow has already been exchanged or cancelled
-    const EALREADY_EXCHANGED_OR_CANCELLED: u64 = 3;
+    const EAlreadyExchangedOrCancelled: u64 = 3;
 
     /// Create an escrow for exchanging goods with counterparty
     public fun create<T: key + store, ExchangeForT: key + store>(
@@ -55,10 +55,10 @@ module DeFi::SharedEscrow {
         escrow: &mut EscrowedObj<T, ExchangeForT>,
         ctx: &mut TxContext
     ) {
-        assert!(Option::is_some(&escrow.escrowed), EALREADY_EXCHANGED_OR_CANCELLED);
+        assert!(Option::is_some(&escrow.escrowed), EAlreadyExchangedOrCancelled);
         let escrowed_item = Option::extract<T>(&mut escrow.escrowed);
-        assert!(&TxContext::sender(ctx) == &escrow.recipient, EWRONG_RECIPIENT);
-        assert!(ID::id(&obj) == &escrow.exchange_for, EWRONG_EXCHANGE_OBJECT);
+        assert!(&TxContext::sender(ctx) == &escrow.recipient, EWrongRecipient);
+        assert!(ID::id(&obj) == &escrow.exchange_for, EWrongExchangeObject);
         // everything matches. do the swap!
         Transfer::transfer(escrowed_item, TxContext::sender(ctx));
         Transfer::transfer(obj, escrow.creator);
@@ -69,8 +69,8 @@ module DeFi::SharedEscrow {
         escrow: &mut EscrowedObj<T, ExchangeForT>,
         ctx: &mut TxContext
     ) {
-        assert!(&TxContext::sender(ctx) == &escrow.creator, EWRONG_OWNER);
-        assert!(Option::is_some(&escrow.escrowed), EALREADY_EXCHANGED_OR_CANCELLED);
+        assert!(&TxContext::sender(ctx) == &escrow.creator, EWrongOwner);
+        assert!(Option::is_some(&escrow.escrowed), EAlreadyExchangedOrCancelled);
         Transfer::transfer(Option::extract<T>(&mut escrow.escrowed), escrow.creator);
     }
 }

@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::config::{make_default_narwhal_committee, CONSENSUS_DB_NAME};
+use crate::config::{make_default_narwhal_committee, AuthorityInfo, CONSENSUS_DB_NAME};
 use crate::config::{
     AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
 };
@@ -20,11 +20,15 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use sui_adapter::adapter::generate_package_id;
 use sui_adapter::genesis;
 use sui_core::authority::{AuthorityState, AuthorityStore};
+use sui_core::authority_active::ActiveAuthority;
+use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::authority_server::AuthorityServer;
 use sui_core::consensus_adapter::ConsensusListener;
+use sui_network::network::NetworkClient;
 use sui_network::transport::SpawnedServer;
 use sui_network::transport::DEFAULT_MAX_DATAGRAM_SIZE;
 use sui_types::base_types::decode_bytes_hex;
@@ -287,6 +291,9 @@ impl SuiNetwork {
         let consensus_committee = make_default_narwhal_committee(&config.authorities)?;
         let consensus_parameters = ConsensusParameters::default();
 
+        // Pass in the newtwork parameters of all authorities
+        let net = config.get_authority_infos();
+
         let mut spawned_authorities = Vec::new();
         for authority in &config.authorities {
             let consensus_store_path = sui_config_dir()?
@@ -300,6 +307,7 @@ impl SuiNetwork {
                 &consensus_committee,
                 &consensus_store_path,
                 &consensus_parameters,
+                Some(net.clone()),
             )
             .await?;
             spawned_authorities.push(server.spawn().await?);
@@ -445,6 +453,7 @@ pub async fn make_server(
     consensus_committee: &ConsensusCommittee<Ed25519PublicKey>,
     consensus_store_path: &Path,
     consensus_parameters: &ConsensusParameters,
+    net_parameters: Option<Vec<AuthorityInfo>>,
 ) -> SuiResult<AuthorityServer> {
     let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
     let name = *authority.key_pair.public_key_bytes();
@@ -463,6 +472,7 @@ pub async fn make_server(
         consensus_committee,
         consensus_store_path,
         consensus_parameters,
+        net_parameters,
     )
     .await
 }
@@ -512,6 +522,7 @@ pub async fn make_authority(
     consensus_committee: &ConsensusCommittee<Ed25519PublicKey>,
     consensus_store_path: &Path,
     consensus_parameters: &ConsensusParameters,
+    net_parameters: Option<Vec<AuthorityInfo>>,
 ) -> SuiResult<AuthorityServer> {
     let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1_000);
     let (tx_sui_to_consensus, rx_sui_to_consensus) = channel(1_000);
@@ -543,6 +554,29 @@ pub async fn make_authority(
     // Spawn a consensus listener. It listen for consensus outputs and notifies the
     // authority server when a sequenced transaction is ready for execution.
     ConsensusListener::spawn(rx_sui_to_consensus, rx_consensus_to_sui);
+
+    // If we have network information make authority clients
+    // to all authorities in the system.
+    let _active_authority = if let Some(network) = net_parameters {
+        let mut authority_clients = BTreeMap::new();
+        for info in &network {
+            let client = NetworkAuthorityClient::new(NetworkClient::new(
+                info.host.clone(),
+                info.base_port,
+                buffer_size,
+                Duration::from_secs(5),
+                Duration::from_secs(5),
+            ));
+            authority_clients.insert(info.name, client);
+        }
+
+        let active_authority = ActiveAuthority::new(authority_state.clone(), authority_clients)?;
+
+        let join_handle = active_authority.spawn_all_active_processes().await;
+        Some(join_handle)
+    } else {
+        None
+    };
 
     // Return new authority server. It listen to users transactions and send back replies.
     Ok(AuthorityServer::new(
