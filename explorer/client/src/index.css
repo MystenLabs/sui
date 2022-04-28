@@ -11,7 +11,7 @@
 }
 
 body {
-    @apply bg-offwhite m-0 text-offblack;
+    @apply bg-[#e6effe] m-0 text-offblack;
 }
 
 /* TODO - The below CSS alters how smart contract code is displayed in the Ace Editor

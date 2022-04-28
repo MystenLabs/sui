@@ -1,5 +1,5 @@
 .footer {
-    @apply fixed bottom-0 bg-offblack w-full px-[5vw] z-10;
+    @apply fixed bottom-0 bg-suidarktwo w-full px-[5vw] z-10;
 }
 
 nav.links {

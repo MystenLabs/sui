@@ -1,14 +1,23 @@
 div.txcard {
     @apply bg-white px-6 pt-0 pb-0  bg-center rounded-lg shadow-md
-    font-sans break-all tracking-tight font-semibold block pl-0 pr-0 m-auto mt-10 mb-10;
+    font-sans break-all tracking-tight font-semibold block pl-0 pr-0 m-auto mt-0 mb-10;
+    @apply pr-0 pl-0 w-full block !important;
+}
+
+div.columnheader > div {
+    @apply font-sans text-white;
 }
 
 div.txcardgrid {
-    @apply grid md:grid-cols-3 sm:grid-cols-1 gap-2 border-0 border-b border-solid border-suilight pt-3 pb-3 pl-8 pr-8 items-center;
+    @apply grid md:grid-cols-3 sm:grid-cols-1 gap-2 border-0  pt-3 pb-3 pl-8 pr-8 items-center;
+}
+
+div.txcardgrid:nth-child(2n + 1) {
+    @apply bg-[#f8f8f8];
 }
 
 div.txcardgrid:first-child {
-    @apply bg-suilight rounded-lg rounded-b-none items-center;
+    @apply bg-suidarktwo  rounded-b-none items-center pt-5 pb-5 font-black;
 }
 
 div.txcardgrid > div:first-child {

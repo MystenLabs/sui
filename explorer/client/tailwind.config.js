@@ -16,6 +16,7 @@ module.exports = {
             sui: '#6fbcf0',
             suidark: '#1670b8',
             suilight: '#e6effe',
+            suidarktwo: '#34526e',
             offwhite: '#fefefe',
             offblack: '#111111',
             ...defaultColors,

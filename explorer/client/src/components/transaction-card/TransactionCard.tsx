@@ -19,9 +19,10 @@ function formatTxResponse(data: any) {
         {
             label: 'Transaction ID',
             value: data.txId,
+            className: 'columnheader',
         },
         {
-            // May change later 
+            // May change later
             label: 'Status',
             value: 'Success',
             classAttr: 'status-success',
@@ -85,9 +86,9 @@ function formatTxResponse(data: any) {
 
         {
             label: 'Gas Payment',
-            value: tx.data.gas_payment,
+            value: tx.data.gas_payment[0],
             link: true,
-            list: true,
+            className: 'grouped',
         },
         {
             label: 'Gas Budget',
