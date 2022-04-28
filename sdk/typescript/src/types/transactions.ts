@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { TransactionDigest } from './common';
 import { RawObjectRef } from './objects';
 
 export type Transfer = {
@@ -31,7 +32,6 @@ export type CertifiedTransaction = {
   signatures: RawAuthoritySignInfo[];
 };
 
-export type TransactionDigest = string;
 export type GatewayTxSeqNumber = number;
 
 export type GetTxnDigestsResponse = [GatewayTxSeqNumber, TransactionDigest][];

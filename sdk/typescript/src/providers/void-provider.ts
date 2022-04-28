@@ -5,17 +5,11 @@ import {
   CertifiedTransaction,
   TransactionDigest,
   GetTxnDigestsResponse,
-  GatewayTxSeqNumber
-} from '../types/transactions';
-import {
-  Provider,
-  SignedTransaction,
-  TransactionResponse,
-} from './provider';
-import {
+  GatewayTxSeqNumber,
   ObjectRef,
   GetObjectInfoResponse,
-} from '../types/objects';
+} from '../types';
+import { Provider, SignedTransaction, TransactionResponse } from './provider';
 
 export class VoidProvider extends Provider {
   // Objects
