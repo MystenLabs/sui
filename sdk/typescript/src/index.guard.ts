@@ -5,7 +5,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignedTransaction, TransactionResponse, TransferTransaction, TxnDataSerializer, ObjectRef, ObjectExistsInfo, ObjectNotExistsInfo, ObjectStatus, GetOwnedObjectRefsResponse, GetObjectInfoResponse, ObjectDigest, ObjectId, SequenceNumber, RawObjectRef, Transfer, RawAuthoritySignInfo, SingleTransactionKind, TransactionKind, TransactionData, Transaction, CertifiedTransaction, TransactionDigest, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveModulePublish, MoveTypeTag, MoveCall, EmptySignInfo, AuthorityName, AuthoritySignature } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignedTransaction, TransactionResponse, TransferTransaction, TxnDataSerializer, ObjectRef, ObjectExistsInfo, ObjectNotExistsInfo, ObjectStatus, ObjectType, GetOwnedObjectRefsResponse, GetObjectInfoResponse, ObjectDigest, ObjectId, SequenceNumber, RawObjectRef, Transfer, RawAuthoritySignInfo, SingleTransactionKind, TransactionKind, TransactionData, Transaction, CertifiedTransaction, TransactionDigest, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveModulePublish, MoveTypeTag, MoveCall, EmptySignInfo, AuthorityName, AuthoritySignature } from "./index";
 import { BN } from "bn.js";
 
 export function isEd25519KeypairData(obj: any, _argumentName?: string): obj is Ed25519KeypairData {
@@ -106,7 +106,8 @@ export function isObjectExistsInfo(obj: any, _argumentName?: string): obj is Obj
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
-        isObjectRef(obj.objectRef) as boolean
+        isObjectRef(obj.objectRef) as boolean &&
+        isObjectType(obj.objectType) as boolean
     )
 }
 
@@ -123,6 +124,13 @@ export function isObjectStatus(obj: any, _argumentName?: string): obj is ObjectS
         (obj === "Exists" ||
             obj === "NotExists" ||
             obj === "Deleted")
+    )
+}
+
+export function isObjectType(obj: any, _argumentName?: string): obj is ObjectType {
+    return (
+        (obj === "moveObject" ||
+            obj === "movePackage")
     )
 }
 
@@ -246,8 +254,7 @@ export function isTransaction(obj: any, _argumentName?: string): obj is Transact
             typeof obj === "object" ||
             typeof obj === "function") &&
         isTransactionData(obj.data) as boolean &&
-        isTransactionResponse(obj.tx_signature) as boolean &&
-        isTransactionResponse(obj.auth_signature) as boolean
+        isTransactionResponse(obj.tx_signature) as boolean
     )
 }
 

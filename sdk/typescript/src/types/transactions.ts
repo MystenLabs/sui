@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-
 import { RawObjectRef } from './objects';
 
 export type Transfer = {
@@ -25,7 +24,6 @@ export type TransactionData = {
 export type Transaction = {
   data: TransactionData;
   tx_signature: string;
-  auth_signature: string;
 };
 
 export type CertifiedTransaction = {
@@ -39,27 +37,27 @@ export type GatewayTxSeqNumber = number;
 export type GetTxnDigestsResponse = [GatewayTxSeqNumber, TransactionDigest][];
 
 export type MoveModulePublish = {
-  modules: any,
+  modules: any;
 };
 
 export type MoveTypeTag =
-  'bool' |
-  'u8' |
-  'u64' |
-  'u128' |
-  'address' |
-  'signer' |
-  'vector' |
-  'struct';
+  | 'bool'
+  | 'u8'
+  | 'u64'
+  | 'u128'
+  | 'address'
+  | 'signer'
+  | 'vector'
+  | 'struct';
 
 export type MoveCall = {
-  packages: RawObjectRef,
-  module: string,
-  function: string,
-  type_arguments: MoveTypeTag[],
-  object_arguments: RawObjectRef[],
-  shared_object_arguments: string[],
-  pure_arguments: any[],
+  packages: RawObjectRef;
+  module: string;
+  function: string;
+  type_arguments: MoveTypeTag[];
+  object_arguments: RawObjectRef[];
+  shared_object_arguments: string[];
+  pure_arguments: any[];
 };
 
 export type EmptySignInfo = object;
