@@ -8,7 +8,6 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use narwhal_executor::ExecutionIndices;
 use sui_adapter::genesis;
-use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::crypto::Signature;
 use sui_types::gas_coin::GasCoin;
@@ -40,11 +39,7 @@ pub fn test_gas_objects() -> Vec<Object> {
 pub fn test_shared_object() -> Object {
     let seed = "0x6666666666666660";
     let shared_object_id = ObjectID::from_hex_literal(seed).unwrap();
-    let content = GasCoin::new(
-        shared_object_id,
-        SequenceNumber::from(OBJECT_START_VERSION),
-        10,
-    );
+    let content = GasCoin::new(shared_object_id, OBJECT_START_VERSION, 10);
     let obj = MoveObject::new(/* type */ GasCoin::type_(), content.to_bcs_bytes());
     Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
 }
