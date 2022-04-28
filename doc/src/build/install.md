@@ -19,6 +19,7 @@ This will put these binaries in your `PATH` (ex. under `~/.cargo/bin`) that prov
 * [`sui-move`](move.md): Build and test Move packages.
 * [`wallet`](wallet.md): Run a local Sui network and gateway service accessible via the wallet CLI. The wallet CLI manage keypairs to sign/send transactions.
 * [`rest_server`](rest-api.md): Run a local Sui network and gateway service accessible via a REST interface.
+* [`rpc-server`](json-rpc.md): Run a local Sui network and gateway service accessible via an RPC interface.
 
 Confirm the install with:
 
