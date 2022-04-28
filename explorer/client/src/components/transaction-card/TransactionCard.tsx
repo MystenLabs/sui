@@ -87,13 +87,11 @@ function formatTxResponse(data: any) {
             value: tx.data.gas_payment,
             link: true,
             list: true,
-            // group: 'grouped_el',
         },
         {
             label: 'Gas Budget',
             value: tx.data.gas_budget,
         },
-
         {
             label: 'Signatures',
             value: data.signatures,

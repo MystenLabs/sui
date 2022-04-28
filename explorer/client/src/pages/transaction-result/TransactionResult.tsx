@@ -58,14 +58,17 @@ const isStatic = process.env.REACT_APP_DATA !== 'static';
 function TransactionResult() {
     const { id } = useParams();
     const [showTxState, setTxState] = useState(initState);
-    // if static fetch data from mock_data.json
+
+    // if dev fetch data from mock_data.json
     // add delay to simulate barckend service
     // Remove this section in production
     const fetchTransactionData = async (txId: string | undefined) => {
         try {
             if (!txId) {
-                throw new Error('Error');
+                throw new Error('No Txid found');
             }
+
+            // Use Mockdata in dev 
             if (!isStatic) {
                 // resolve after one second
                 return new Promise((resolve, reject) => {
@@ -78,6 +81,7 @@ function TransactionResult() {
                     }, 1000);
                 });
             }
+            
             // TODO add BackendService API
             // Test response data using Sui.js
             // throw error for now
