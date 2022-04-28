@@ -40,7 +40,7 @@ struct FaucetConfig {
     #[clap(long, default_value = "127.0.0.1")]
     host_ip: Ipv4Addr,
 
-    #[clap(long, default_value_t = 2000)]
+    #[clap(long, default_value_t = 50000)]
     amount: u64,
 
     #[clap(long, default_value_t = 5)]
