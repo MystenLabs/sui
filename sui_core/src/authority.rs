@@ -190,7 +190,9 @@ impl AuthorityState {
         let transaction_digest = transaction.digest();
 
         // Ensure an idempotent answer.
-        if self._database.transaction_exists(&transaction_digest)? {
+        if self._database.transaction_exists(&transaction_digest)?
+            || self._database.effects_exists(&transaction_digest)?
+        {
             let transaction_info = self.make_transaction_info(&transaction_digest).await?;
             return Ok(transaction_info);
         }
