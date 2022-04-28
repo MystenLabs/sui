@@ -575,15 +575,15 @@ impl SignedTransaction {
 impl Hash for SignedTransaction {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.data.hash(state);
-        self.auth_signature.authority.hash(state);
+        self.auth_signature.hash(state);
     }
 }
 
 impl PartialEq for SignedTransaction {
     fn eq(&self, other: &Self) -> bool {
-        // We do not compare the signatures, because there can be multiple
+        // We do not compare the tx_signature, because there can be multiple
         // valid signatures for the same data and signer.
-        self.data == other.data && self.auth_signature.authority == other.auth_signature.authority
+        self.data == other.data && self.auth_signature == other.auth_signature
     }
 }
 
@@ -849,7 +849,7 @@ impl ExecutionStatus {
 pub struct TransactionEffects {
     // The status of the execution
     pub status: ExecutionStatus,
-    // The object references of the shared objects used in this trasnaction. Empty if no shared objects were used.
+    // The object references of the shared objects used in this transaction. Empty if no shared objects were used.
     pub shared_objects: Vec<ObjectRef>,
     // The transaction digest
     pub transaction_digest: TransactionDigest,
@@ -986,10 +986,7 @@ impl SignedTransactionEffects {
 
 impl PartialEq for SignedTransactionEffects {
     fn eq(&self, other: &Self) -> bool {
-        // We do not compare the authority signatures, because there can be multiple
-        // valid signatures for the same data and signer.
-        self.effects == other.effects
-            && self.auth_signature.authority == other.auth_signature.authority
+        self.effects == other.effects && self.auth_signature == other.auth_signature
     }
 }
 
