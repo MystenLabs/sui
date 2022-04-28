@@ -25,7 +25,6 @@ in [Genesis customization](#customize-genesis).
 
 1. Optionally, set `RUST_LOG=debug` for verbose logging.
 1. Initiate `genesis`:
-
    ```shell
    $ sui genesis
    ```
@@ -51,7 +50,7 @@ $ sui genesis --working-dir /path/to/sui/config/dir
 :note: That path and directory must already exist and will not be
 created with the `--working-dir` argument.
 
-### Recreating Genesis
+### Recreating genesis
 
 To recreate Sui genesis state in the same location, which will remove
 existing configuration files, pass the `--force` option to the `sui
@@ -127,13 +126,13 @@ The Sui Network Gateway (or simply, Sui Gateway) is an abstraction layer that ac
 point to the Sui network. Different gateway implementations can be used by the application layer
 based on their use cases.
 
-#### Embedded Gateway
+#### Embedded gateway
 
 As the name suggests, embedded gateway embeds the gateway logic into the application;
 all data will be stored locally and the application will make direct
 connection to the validators.
 
-#### Rest Gateway
+#### Rest gateway
 You can also connect the wallet to the Sui network via a [Rest Gateway](rest-api.md#start-local-rest-server);
 To use the rest gateway, update `wallet.conf`'s `gateway` section to:
 ```json
@@ -299,16 +298,25 @@ at the start, but this can be changed later.
 
 In order to see what the current active address is, use the command `active-address`
 
+```shell
+$ wallet active-address
 ```
-wallet active-address
+
+Which will reveal and address resembing:
+
+```shell
 562F07CF6369E8D22DBF226A5BFEDC6300014837
 ```
 
-Changing the default address is as easy as calling the `switch` command
+Changing the default address is as easy as calling the `switch` command:
 
+```shell
+$ wallet switch --address 913CF36F370613ED131868AC6F9DA2420166062E
 ```
 
-wallet switch --address 913CF36F370613ED131868AC6F9DA2420166062E
+You will see out like:
+
+```shell
 Active address switched to 913CF36F370613ED131868AC6F9DA2420166062E
 ```
 
@@ -347,8 +355,13 @@ transaction with gas object X. The gas selection logic checks for this and rejec
 To see how much gas is in an account, use the `gas` command. Note that this command uses the
 `active-address`, unless otherwise specified.
 
+```shell
+$ wallet gas
 ```
-wallet gas
+
+You will see output like:
+
+```
                 Object ID                 |  Version   |  Gas Value
 ----------------------------------------------------------------------
  0B8A4620426E526FA42995CF26EB610BFE6BF063 |     0      |   100000
@@ -360,8 +373,8 @@ wallet gas
 
 If one does not want to use the active address, the addresses can be specified:
 
-```
-/wallet gas --address 562F07CF6369E8D22DBF226A5BFEDC6300014837
+```shell
+$ wallet gas --address 562F07CF6369E8D22DBF226A5BFEDC6300014837
                 Object ID                 |  Version   |  Gas Value
 ----------------------------------------------------------------------
  A8DDC2661A19010E5F85CBF6D905DDFBE4DD0320 |     0      |   100000
@@ -741,8 +754,8 @@ Showing 5 results.
 (B6E55F0EB3B820CB848B3BBB6DB4BC34E54F2413, SequenceNumber(0), o#4c6be9267d9aeb43f024c1604c765e3f127f8bc2dc4174a5fea5f26d1f7ed03e)
 ```
 
-Now that we know which objects are owned by the address starting with,
-we can transfer one of them to another address, say one the fresh one
+Now that we know which objects are owned by that address,
+we can transfer one of them to another address, say the fresh one
 we created in the [Generating a new account](#generating-a-new-account) section
 (`C72CF3ADCC4D11C03079CEF2C8992AEA5268677A`). We can try any object,
 but for the sake of this exercise, let's choose the last one on the
@@ -752,7 +765,7 @@ We will perform the transfer by calling the `transfer` function from
 the SUI module using the following Sui Wallet command:
 
 ```shell
-wallet call --function transfer --module SUI --package 0x2 --args \"0x5044DC15D3C71D500116EB026E8B70D0A180F3AC\" \"0xF456EBEF195E4A231488DF56B762AC90695BE2DD\" --gas-budget 1000
+$ wallet call --function transfer --module SUI --package 0x2 --args \"0x5044DC15D3C71D500116EB026E8B70D0A180F3AC\" \"0xF456EBEF195E4A231488DF56B762AC90695BE2DD\" --gas-budget 1000
 ```
 
 This is a pretty complicated command so let's explain all of its
@@ -877,7 +890,7 @@ that the location of the package's sources is in the `PATH_TO_PACKAGE`
 environment variable):
 
 ```shell
-wallet publish --path $PATH_TO_PACKAGE/my_move_package --gas-budget 30000
+$ wallet publish --path $PATH_TO_PACKAGE/my_move_package --gas-budget 30000
 ```
 
 The result of running this command should look as follows:
@@ -920,7 +933,7 @@ The genesis process can be customized by providing a genesis configuration
 file using the `--config` flag.
 
 ```shell
-sui genesis --config <Path to genesis config file>
+$ sui genesis --config <Path to genesis config file>
 ```
 
 Example `genesis.conf`:
