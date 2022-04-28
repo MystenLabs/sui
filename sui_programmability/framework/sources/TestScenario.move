@@ -74,6 +74,16 @@ module Sui::TestScenario {
         event_start_indexes: vector<u64>,
     }
 
+    /// A wrapper for TestScenario to return an immutable object from the inventory
+    struct ImmutableWrapper<T: key> {
+        object: T,
+    }
+
+    /// A wrapper for TestScenario to return a shared object from the inventory
+    struct SharedWrapper<T: key> {
+        object: T,
+    }
+
     /// Begin a new multi-transaction test scenario in a context where `sender` is the tx sender
     public fun begin(sender: &address): Scenario {
         Scenario {
@@ -112,26 +122,74 @@ module Sui::TestScenario {
     /// Remove the object of type `T` from the inventory of the current tx sender in `scenario`.
     /// An object is in the sender's inventory if:
     /// - The object is in the global event log
-    /// - The sender owns the object, or the object is immutable
+    /// - The sender owns the object
     /// - If the object was previously removed, it was subsequently replaced via a call to `return_object`.
     /// Aborts if there is no object of type `T` in the inventory of the tx sender
     /// Aborts if there is >1 object of type `T` in the inventory of the tx sender--this function
     /// only succeeds when the object to choose is unambiguous. In cases where there are multiple `T`'s,
     /// the caller should resolve the ambiguity by using `take_object_by_id`.
     public fun take_object<T: key>(scenario: &mut Scenario): T {
-        let sender = sender(scenario);
-        remove_unique_object(scenario, sender)
+        let signer_address = sender(scenario);
+        let objects: vector<T> = get_account_owned_inventory<T>(
+            signer_address,
+            last_tx_start_index(scenario)
+        );
+        remove_unique_object_from_inventory(scenario, objects)
+    }
+
+    /// Similar to take_object, but only return objects that are immutable with type `T`.
+    /// In this case, the sender is irrelevant.
+    /// Returns a wrapper that only supports a `borrow` API to get the read-only reference.
+    public fun take_immutable_object<T: key>(scenario: &mut Scenario): ImmutableWrapper<T> {
+        let objects: vector<T> = get_unowned_inventory<T>(
+            true /* immutable */,
+            last_tx_start_index(scenario),
+        );
+        let object = remove_unique_object_from_inventory(scenario, objects);
+        ImmutableWrapper {
+            object,
+        }
+    }
+
+    /// Returns the underlying reference of an immutable object wrapper returned above.
+    public fun borrow<T: key>(wrapper: &ImmutableWrapper<T>): &T {
+        &wrapper.object
+    }
+
+    /// Similar to take_object, but only return objects that are shared with type `T`.
+    /// In this case, the sender is irrelevant.
+    /// Returns a wrapper that only supports a `borrow_mut` API to get the mutable reference.
+    public fun take_shared_object<T: key>(scenario: &mut Scenario): SharedWrapper<T> {
+        let objects: vector<T> = get_unowned_inventory<T>(
+            false /* immutable */,
+            last_tx_start_index(scenario),
+        );
+        let object = remove_unique_object_from_inventory(scenario, objects);
+        SharedWrapper {
+            object,
+        }
+    }
+
+    /// Returns the underlying mutable reference of a shared object.
+    public fun borrow_mut<T: key>(wrapper: &mut SharedWrapper<T>): &mut T {
+        &mut wrapper.object
     }
 
     /// Remove and return the child object of type `T2` owned by `parent_obj`.
     /// Aborts if there is no object of type `T2` owned by `parent_obj`
     /// Aborts if there is >1 object of type `T2` owned by `parent_obj`--this function
     /// only succeeds when the object to choose is unambiguous. In cases where there are are multiple `T`'s
-    /// owned by `parent_obj`, the caller should resolve the ambiguity using `take_nested_object_by_id`.
-    public fun take_nested_object<T1: key, T2: key>(
+    /// owned by `parent_obj`, the caller should resolve the ambiguity using `take_child_object_by_id`.
+    public fun take_child_object<T1: key, T2: key>(
         scenario: &mut Scenario, parent_obj: &T1
     ): T2 {
-        remove_unique_object(scenario, ID::id_address(ID::id(parent_obj)))
+        let signer_address = sender(scenario);
+        let objects = get_object_owned_inventory<T2>(
+            signer_address,
+            ID::id_address(ID::id(parent_obj)),
+            last_tx_start_index(scenario),
+        );
+        remove_unique_object_from_inventory(scenario, objects)
     }
 
     /// Same as `take_object`, but returns the object of type `T` with object ID `id`.
@@ -167,7 +225,7 @@ module Sui::TestScenario {
 
     /// Same as `take_nested_object`, but returns the child object of type `T` with object ID `id`.
     /// Should only be used in cases where the parent object has more than one child of type `T`.
-    public fun take_nested_object_by_id<T1: key, T2: key>(
+    public fun take_child_object_by_id<T1: key, T2: key>(
         _scenario: &mut Scenario, _parent_obj: &T1, _child_id: ID
     ): T2 {
         // TODO: implement me
@@ -194,9 +252,21 @@ module Sui::TestScenario {
         update_object(t)
     }
 
+    /// Similar to return_object, return a shared object to the inventory.
+    public fun return_shared_object<T: key>(scenario: &mut Scenario, object_wrapper: SharedWrapper<T>) {
+        let SharedWrapper { object } = object_wrapper;
+        return_object(scenario, object)
+    }
+
+    /// Return an immutable object to the inventory.
+    public fun return_immutable_object<T: key>(scenario: &mut Scenario, object_wrapper: ImmutableWrapper<T>) {
+        let ImmutableWrapper { object } = object_wrapper;
+        return_object(scenario, object)
+    }
+
     /// Return `true` if a call to `take_object<T>(scenario)` will succeed
     public fun can_take_object<T: key>(scenario: &Scenario): bool {
-        let objects: vector<T> = get_inventory<T>(
+        let objects: vector<T> = get_account_owned_inventory<T>(
             sender(scenario),
             last_tx_start_index(scenario)
         );
@@ -242,24 +312,13 @@ module Sui::TestScenario {
         *Vector::borrow(idxs, Vector::length(idxs) - 1)
     }
 
-    /// Remove and return the unique object of type `T` that can be accessed by `signer_address`
-    /// Aborts if there are no objects of type `T` that can be be accessed by `signer_address`
-    /// Aborts if there is >1 object of type `T` that can be accessed by `signer_address`
-    fun remove_unique_object<T: key>(scenario: &mut Scenario, signer_address: address): T {
-        let num_concluded_txes = num_concluded_txes(scenario);
-        // Can't remove objects transferred by previous transactions if there are none
-        assert!(num_concluded_txes != 0, ENO_CONCLUDED_TRANSACTIONS);
-
-        let objects: vector<T> = get_inventory<T>(
-            signer_address,
-            last_tx_start_index(scenario)
-        );
-        let objects_len = Vector::length(&objects);
+    fun remove_unique_object_from_inventory<T: key>(scenario: &mut Scenario, inventory: vector<T>): T {
+        let objects_len = Vector::length(&inventory);
         if (objects_len == 1) {
             // found a unique object. ensure that it hasn't already been removed, then return it
-            let t = Vector::pop_back(&mut objects);
+            let t = Vector::pop_back(&mut inventory);
             let id = ID::id(&t);
-            Vector::destroy_empty(objects);
+            Vector::destroy_empty(inventory);
 
             assert!(!Vector::contains(&scenario.removed, id), EALREADY_REMOVED_OBJECT);
             Vector::push_back(&mut scenario.removed, *id);
@@ -273,7 +332,7 @@ module Sui::TestScenario {
 
     fun find_object_by_id_in_inventory<T: key>(scenario: &Scenario, id: &ID): Option<T> {
         let sender = sender(scenario);
-        let objects: vector<T> = get_inventory<T>(
+        let objects: vector<T> = get_account_owned_inventory<T>(
             sender,
             last_tx_start_index(scenario)
         );
@@ -300,7 +359,21 @@ module Sui::TestScenario {
 
     /// Return all live objects of type `T` that can be accessed by `signer_address` in the current transaction
     /// Events at or beyond `tx_end_index` in the log should not be processed to build this inventory
-    native fun get_inventory<T: key>(signer_address: address, tx_end_index: u64): vector<T>;
+    native fun get_account_owned_inventory<T: key>(signer_address: address, tx_end_index: u64): vector<T>;
+
+    /// Return all live objects of type `T` that's owned by another object `parent_object_id`, with
+    /// signer account `signer_address`.
+    /// Events at or beyond `tx_end_index` in the log should not be processed to build this inventory
+    native fun get_object_owned_inventory<T: key>(
+        signer_address: address,
+        parent_object_id: address,
+        tx_end_index: u64,
+    ): vector<T>;
+
+    /// Return all live objects of type `T` that's not owned, i.e. either immutable or shared.
+    /// `immutable` indicates whether we want to return immutable object or shared.
+    /// Events at or beyond `tx_end_index` in the log should not be processed to build this inventory
+    native fun get_unowned_inventory<T: key>(immutable: bool, tx_end_index: u64): vector<T>;
 
     /// Test-only function for discarding an arbitrary object.
     /// Useful for eliminating objects without the `drop` ability.

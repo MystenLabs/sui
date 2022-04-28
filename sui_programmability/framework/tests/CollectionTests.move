@@ -72,7 +72,7 @@ module Sui::CollectionTests {
         {
             let collection = TestScenario::take_object<Collection<Object>>(scenario);
             let bag = TestScenario::take_object<Bag>(scenario);
-            let obj = TestScenario::take_nested_object<Collection<Object>, Object>(scenario, &collection);
+            let obj = TestScenario::take_child_object<Collection<Object>, Object>(scenario, &collection);
             let id = *ID::id(&obj);
 
             let (obj, child_ref) = Collection::remove(&mut collection, obj);
@@ -91,7 +91,7 @@ module Sui::CollectionTests {
         {
             let collection = TestScenario::take_object<Collection<Object>>(scenario);
             let bag = TestScenario::take_object<Bag>(scenario);
-            let obj = TestScenario::take_nested_object<Bag, Object>(scenario, &bag);
+            let obj = TestScenario::take_child_object<Bag, Object>(scenario, &bag);
             let id = *ID::id(&obj);
 
             let obj = Bag::remove(&mut bag, obj);

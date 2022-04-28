@@ -118,23 +118,25 @@ module DeFi::SharedEscrowTests {
     public(script) fun cancel(scenario: &mut Scenario, initiator: &address) {
         TestScenario::next_tx(scenario, initiator);
         {
-            let escrow = TestScenario::take_object<EscrowedObj<ItemA, ItemB>>(scenario);
+            let escrow_wrapper = TestScenario::take_shared_object<EscrowedObj<ItemA, ItemB>>(scenario);
+            let escrow = TestScenario::borrow_mut(&mut escrow_wrapper);
             let ctx = TestScenario::ctx(scenario);
-            SharedEscrow::cancel(&mut escrow, ctx);
-            TestScenario::return_object(scenario, escrow);
+            SharedEscrow::cancel(escrow, ctx);
+            TestScenario::return_shared_object(scenario, escrow_wrapper);
         };
     }
 
     public(script) fun exchange(scenario: &mut Scenario, bob: &address, item_b_verioned_id: VersionedID) {
         TestScenario::next_tx(scenario, bob);
         {
-            let escrow = TestScenario::take_object<EscrowedObj<ItemA, ItemB>>(scenario);
+            let escrow_wrapper = TestScenario::take_shared_object<EscrowedObj<ItemA, ItemB>>(scenario);
+            let escrow = TestScenario::borrow_mut(&mut escrow_wrapper);
             let item_b = ItemB {
                 id: item_b_verioned_id
             };
             let ctx = TestScenario::ctx(scenario);
-            SharedEscrow::exchange(item_b, &mut escrow, ctx);
-            TestScenario::return_object(scenario, escrow);
+            SharedEscrow::exchange(item_b, escrow, ctx);
+            TestScenario::return_shared_object(scenario, escrow_wrapper);
         };
     }
 
