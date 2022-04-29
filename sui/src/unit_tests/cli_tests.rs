@@ -437,7 +437,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
         .execute(&mut context)
         .await?
         .print(true);
-    let obj_owner = format!("{:?}", address);
+    let obj_owner = format!("{}", address);
 
     retry_assert!(
         logs_contain(obj_owner.as_str()),
