@@ -188,8 +188,8 @@ async fn extract_cert<A: AuthorityAPI>(
             .await
         {
             votes.push((
-                signed.auth_signature.authority,
-                signed.auth_signature.signature,
+                signed.auth_sign_info.authority,
+                signed.auth_sign_info.signature,
             ));
             if let Some(inner_transaction) = transaction {
                 assert!(inner_transaction.data == signed.data);

@@ -36,7 +36,7 @@ module NFTs::SharedAuction {
     // Error codes.
 
     /// An attempt to end auction by a different user than the owner
-    const EWRONG_OWNER: u64 = 1;
+    const EWrongOwner: u64 = 1;
 
     // Entry functions.
 
@@ -70,7 +70,7 @@ module NFTs::SharedAuction {
         auction: &mut Auction<T>, ctx: &mut TxContext
     ) {
         let owner = AuctionLib::auction_owner(auction);
-        assert!(TxContext::sender(ctx) == owner, EWRONG_OWNER);
+        assert!(TxContext::sender(ctx) == owner, EWrongOwner);
         AuctionLib::end_shared_auction(auction, ctx);
     }
 

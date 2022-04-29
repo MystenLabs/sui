@@ -72,11 +72,11 @@ module Games::SharedTicTacToeTests {
 
         // X has the Trophy
         TestScenario::next_tx(scenario, &player_x);
-        assert!(TestScenario::can_take_object<Trophy>(scenario), 1);
+        assert!(TestScenario::can_take_owned<Trophy>(scenario), 1);
 
         TestScenario::next_tx(scenario, &player_o);
         // O has no Trophy
-        assert!(!TestScenario::can_take_object<Trophy>(scenario), 2);
+        assert!(!TestScenario::can_take_owned<Trophy>(scenario), 2);
     }
 
 
@@ -182,9 +182,9 @@ module Games::SharedTicTacToeTests {
 
         // No one has the trophy
         TestScenario::next_tx(scenario, &player_x);
-        assert!(!TestScenario::can_take_object<Trophy>(scenario), 1);
+        assert!(!TestScenario::can_take_owned<Trophy>(scenario), 1);
         TestScenario::next_tx(scenario, &player_o);
-        assert!(!TestScenario::can_take_object<Trophy>(scenario), 1);
+        assert!(!TestScenario::can_take_owned<Trophy>(scenario), 1);
     }
 
 
@@ -199,11 +199,11 @@ module Games::SharedTicTacToeTests {
         TestScenario::next_tx(scenario, player);
         let status;
         {
-            let game_wrapper = TestScenario::take_shared_object<TicTacToe>(scenario);
+            let game_wrapper = TestScenario::take_shared<TicTacToe>(scenario);
             let game = TestScenario::borrow_mut(&mut game_wrapper);
             SharedTicTacToe::place_mark(game, row, col, TestScenario::ctx(scenario));
             status = SharedTicTacToe::get_status(game);
-            TestScenario::return_shared_object(scenario, game_wrapper);
+            TestScenario::return_shared(scenario, game_wrapper);
         };
         status
     }

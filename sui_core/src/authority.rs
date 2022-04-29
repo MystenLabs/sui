@@ -180,19 +180,13 @@ impl AuthorityState {
         }
     }
 
-    /// Initiate a new transaction.
-    pub async fn handle_transaction(
+    async fn handle_transaction_impl(
         &self,
         transaction: Transaction,
+        transaction_digest: TransactionDigest,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        // Check the sender's signature.
-        transaction.check_signature()?;
-        let transaction_digest = transaction.digest();
-
         // Ensure an idempotent answer.
-        if self._database.transaction_exists(&transaction_digest)?
-            || self._database.effects_exists(&transaction_digest)?
-        {
+        if self._database.transaction_exists(&transaction_digest)? {
             let transaction_info = self.make_transaction_info(&transaction_digest).await?;
             return Ok(transaction_info);
         }
@@ -226,6 +220,32 @@ impl AuthorityState {
 
         // Return the signed Transaction or maybe a cert.
         self.make_transaction_info(&transaction_digest).await
+    }
+
+    /// Initiate a new transaction.
+    pub async fn handle_transaction(
+        &self,
+        transaction: Transaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        // Check the sender's signature.
+        transaction.check_signature()?;
+        let transaction_digest = transaction.digest();
+
+        let response = self
+            .handle_transaction_impl(transaction, transaction_digest)
+            .await;
+        match response {
+            Ok(r) => Ok(r),
+            // If we see an error, it is possible that a certificate has already been processed.
+            // In that case, we could still return Ok to avoid showing confusing errors.
+            Err(err) => {
+                if self._database.effects_exists(&transaction_digest)? {
+                    Ok(self.make_transaction_info(&transaction_digest).await?)
+                } else {
+                    Err(err)
+                }
+            }
+        }
     }
 
     /// Confirm a transfer.

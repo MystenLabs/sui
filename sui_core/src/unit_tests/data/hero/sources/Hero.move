@@ -313,32 +313,32 @@ module Examples::Hero {
         // Admin mints 500 coins and sends them to the Player so they can buy game items
         TestScenario::next_tx(scenario, &admin);
         {
-            let treasury_cap = TestScenario::take_object<TreasuryCap<EXAMPLE>>(scenario);
+            let treasury_cap = TestScenario::take_owned<TreasuryCap<EXAMPLE>>(scenario);
             let ctx = TestScenario::ctx(scenario);
             let coins = Coin::mint(500, &mut treasury_cap, ctx);
             Coin::transfer(coins, copy player);
-            TestScenario::return_object(scenario, treasury_cap);
+            TestScenario::return_owned(scenario, treasury_cap);
         };
         // Player purchases a hero with the coins
         TestScenario::next_tx(scenario, &player);
         {
-            let coin = TestScenario::take_object<Coin<EXAMPLE>>(scenario);
+            let coin = TestScenario::take_owned<Coin<EXAMPLE>>(scenario);
             acquire_hero(coin, TestScenario::ctx(scenario));
         };
         // Admin sends a boar to the Player
         TestScenario::next_tx(scenario, &admin);
         {
-            let admin_cap = TestScenario::take_object<GameAdmin>(scenario);
+            let admin_cap = TestScenario::take_owned<GameAdmin>(scenario);
             send_boar(&mut admin_cap, 10, 10, player, TestScenario::ctx(scenario));
-            TestScenario::return_object(scenario, admin_cap)
+            TestScenario::return_owned(scenario, admin_cap)
         };
         // Player slays the boar!
         TestScenario::next_tx(scenario, &player);
         {
-            let hero = TestScenario::take_object<Hero>(scenario);
-            let boar = TestScenario::take_object<Boar>(scenario);
+            let hero = TestScenario::take_owned<Hero>(scenario);
+            let boar = TestScenario::take_owned<Boar>(scenario);
             slay(&mut hero, boar, TestScenario::ctx(scenario));
-            TestScenario::return_object(scenario, hero)
+            TestScenario::return_owned(scenario, hero)
         };
     }
 }

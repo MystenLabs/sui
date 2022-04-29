@@ -24,6 +24,7 @@ use serde_with::Bytes;
 use sha3::Sha3_256;
 use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
@@ -461,13 +462,28 @@ pub trait AuthoritySignInfoTrait: private::SealedAuthoritySignInfoTrait {}
 pub struct EmptySignInfo {}
 impl AuthoritySignInfoTrait for EmptySignInfo {}
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Serialize, Deserialize)]
 pub struct AuthoritySignInfo {
     pub epoch: EpochId,
     pub authority: AuthorityName,
     pub signature: AuthoritySignature,
 }
 impl AuthoritySignInfoTrait for AuthoritySignInfo {}
+
+impl Hash for AuthoritySignInfo {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.epoch.hash(state);
+        self.authority.hash(state);
+    }
+}
+
+impl PartialEq for AuthoritySignInfo {
+    fn eq(&self, other: &Self) -> bool {
+        // We do not compare the signature, because there can be multiple
+        // valid signatures for the same epoch and authority.
+        self.epoch == other.epoch && self.authority == other.authority
+    }
+}
 
 mod private {
     pub trait SealedAuthoritySignInfoTrait {}

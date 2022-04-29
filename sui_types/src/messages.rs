@@ -334,8 +334,8 @@ pub struct TransactionEnvelope<S> {
     pub data: TransactionData,
     /// tx_signature is signed by the transaction sender, applied on `data`.
     pub tx_signature: Signature,
-    /// auth_signature, if available, is signed by an authority, applied on `data`.
-    pub auth_signature: S,
+    /// authority signature information, if available, is signed by an authority, applied on `data`.
+    pub auth_sign_info: S,
     // Note: If any new field is added here, make sure the Hash and PartialEq
     // implementation are adjusted to include that new field (unless the new field
     // does not participate in the hash and comparison).
@@ -511,7 +511,7 @@ impl Transaction {
             is_checked: false,
             data,
             tx_signature: signature,
-            auth_signature: EmptySignInfo {},
+            auth_sign_info: EmptySignInfo {},
         }
     }
 }
@@ -545,7 +545,7 @@ impl SignedTransaction {
             is_checked: transaction.is_checked,
             data: transaction.data,
             tx_signature: transaction.tx_signature,
-            auth_signature: AuthoritySignInfo {
+            auth_sign_info: AuthoritySignInfo {
                 epoch,
                 authority,
                 signature,
@@ -556,11 +556,11 @@ impl SignedTransaction {
     /// Verify the signature and return the non-zero voting right of the authority.
     pub fn check(&self, committee: &Committee) -> Result<usize, SuiError> {
         self.check_signature()?;
-        let weight = committee.weight(&self.auth_signature.authority);
+        let weight = committee.weight(&self.auth_sign_info.authority);
         fp_ensure!(weight > 0, SuiError::UnknownSigner);
-        self.auth_signature
+        self.auth_sign_info
             .signature
-            .check(&self.data, self.auth_signature.authority)?;
+            .check(&self.data, self.auth_sign_info.authority)?;
         Ok(weight)
     }
 
@@ -575,15 +575,15 @@ impl SignedTransaction {
 impl Hash for SignedTransaction {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.data.hash(state);
-        self.auth_signature.authority.hash(state);
+        self.auth_sign_info.hash(state);
     }
 }
 
 impl PartialEq for SignedTransaction {
     fn eq(&self, other: &Self) -> bool {
-        // We do not compare the signatures, because there can be multiple
+        // We do not compare the tx_signature, because there can be multiple
         // valid signatures for the same data and signer.
-        self.data == other.data && self.auth_signature.authority == other.auth_signature.authority
+        self.data == other.data && self.auth_sign_info == other.auth_sign_info
     }
 }
 
@@ -849,7 +849,7 @@ impl ExecutionStatus {
 pub struct TransactionEffects {
     // The status of the execution
     pub status: ExecutionStatus,
-    // The object references of the shared objects used in this trasnaction. Empty if no shared objects were used.
+    // The object references of the shared objects used in this transaction. Empty if no shared objects were used.
     pub shared_objects: Vec<ObjectRef>,
     // The transaction digest
     pub transaction_digest: TransactionDigest,
@@ -986,10 +986,7 @@ impl SignedTransactionEffects {
 
 impl PartialEq for SignedTransactionEffects {
     fn eq(&self, other: &Self) -> bool {
-        // We do not compare the authority signatures, because there can be multiple
-        // valid signatures for the same data and signer.
-        self.effects == other.effects
-            && self.auth_signature.authority == other.auth_signature.authority
+        self.effects == other.effects && self.auth_signature == other.auth_signature
     }
 }
 

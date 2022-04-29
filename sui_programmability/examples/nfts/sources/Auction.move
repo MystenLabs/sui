@@ -45,7 +45,7 @@ module NFTs::Auction {
     // Error codes.
 
     /// A bid submitted for the wrong (e.g. non-existent) auction.
-    const EWRONG_AUCTION: u64 = 1;
+    const EWrongAuction: u64 = 1;
 
     /// Represents a bid sent by a bidder to the auctioneer.
     struct Bid has key {
@@ -94,7 +94,7 @@ module NFTs::Auction {
         auction: &mut Auction<T>, bid: Bid, ctx: &mut TxContext
     ) {
         let Bid { id, bidder, auction_id, bid: balance } = bid;
-        assert!(AuctionLib::auction_id(auction) == &auction_id, EWRONG_AUCTION);
+        assert!(AuctionLib::auction_id(auction) == &auction_id, EWrongAuction);
         AuctionLib::update_auction(auction, bidder, balance, ctx);
 
         ID::delete(id);

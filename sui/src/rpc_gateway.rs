@@ -31,8 +31,9 @@ use sui_types::json_schema::Base64;
 
 use crate::config::PersistedConfig;
 use crate::gateway_config::GatewayConfig;
-use crate::rest_gateway::responses::GetObjectInfoResponse;
-use crate::rest_gateway::responses::{NamedObjectRef, ObjectResponse};
+use crate::rpc_gateway::responses::{GetObjectInfoResponse, NamedObjectRef, ObjectResponse};
+
+pub mod responses;
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub enum RpcCallArg {

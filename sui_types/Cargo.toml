@@ -31,6 +31,7 @@ sha2 = "0.10.2"
 zeroize = "1.5.4"
 hkdf = "0.12.3"
 digest = "0.10.3"
+schemars ="0.8.8"
 
 name_variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "97a056f85555fa2afe497d6abb7cf6bf8faa63cf" }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d2976a45420147ad821baae96e6fe4b12215f743" }
@@ -42,6 +43,5 @@ move-disassembler = { git = "https://github.com/move-language/move", rev = "4e02
 move-ir-types = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
 
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "8ae2164f0510349cbac2770e50e853bce5ab0e02", package = "executor" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "8ae2164f0510349cbac2770e50e853bce5ab0e02", package = "crypto" }
-schemars ="0.8.8"
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "976355d2ff75aefc6b7ec7fd32742d3d7188c4e0", package = "executor" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "976355d2ff75aefc6b7ec7fd32742d3d7188c4e0", package = "crypto" }

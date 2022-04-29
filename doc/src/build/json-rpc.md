@@ -211,10 +211,10 @@ curl --location --request POST $SUI_RPC_HOST \
 ```
 
 #### 2, Sign the transaction
-Follow the instructions to [sign the transaction](rest-api.md#2-sign-the-transaction-using-the-sui-signtool).
+Follow the instructions to [sign the transaction](#2-sign-the-transaction-using-the-sui-signtool).
 
 #### 3, Execute the transaction
-Follow the instructions to [execute the transaction](rest-api.md#3-execute-the-transaction-using-the-transaction-data-signature-and-public-key).
+Follow the instructions to [execute the transaction](#3-execute-the-transaction-using-the-transaction-data-signature-and-public-key).
 
 Arguments are passed in, and type will be inferred from function
 signature.  Gas usage is capped by the gas_budget. The `transfer`
@@ -282,10 +282,10 @@ Copy the outputting base64 representation of the compiled Move module into the
 REST publish endpoint.
 
 #### 2, Sign the transaction
-Follow the instructions to [sign the transaction](json-rpc.md#2-sign-the-transaction-using-the-sui-signtool).
+Follow the instructions to [sign the transaction](#2-sign-the-transaction-using-the-sui-signtool).
 
 #### 3, Execute the transaction
-Follow the instructions to [execute the transaction](rest-api.md#3-execute-the-transaction-using-the-transaction-data-signature-and-public-key).
+Follow the instructions to [execute the transaction](#3-execute-the-transaction-using-the-transaction-data-signature-and-public-key).
 
 Below you can see a truncated sample output of [sui_publish](#sui_publish). One of the results of executing this command is generation of a package object representing the published Move code. An ID of the package object can be used as an argument for subsequent Move calls to functions defined in this package.
 

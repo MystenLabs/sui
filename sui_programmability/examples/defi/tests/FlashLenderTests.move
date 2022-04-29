@@ -23,7 +23,7 @@ module DeFi::FlashLenderTests {
         // borrower requests and repays a loan of 10 coins + the fee
         TestScenario::next_tx(scenario, &borrower);
         {
-            let lender_wrapper = TestScenario::take_shared_object<FlashLender<SUI>>(scenario);
+            let lender_wrapper = TestScenario::take_shared<FlashLender<SUI>>(scenario);
             let lender = TestScenario::borrow_mut(&mut lender_wrapper);
             let ctx = TestScenario::ctx(scenario);
 
@@ -36,14 +36,14 @@ module DeFi::FlashLenderTests {
             Coin::keep(to_keep, ctx);
             FlashLender::repay(lender, profit, receipt);
 
-            TestScenario::return_shared_object(scenario, lender_wrapper);
+            TestScenario::return_shared(scenario, lender_wrapper);
         };
         // admin withdraws the 1 coin profit from lending
         TestScenario::next_tx(scenario, &admin);
         {
-            let lender_wrapper = TestScenario::take_shared_object<FlashLender<SUI>>(scenario);
+            let lender_wrapper = TestScenario::take_shared<FlashLender<SUI>>(scenario);
             let lender = TestScenario::borrow_mut(&mut lender_wrapper);
-            let admin_cap = TestScenario::take_object<AdminCap>(scenario);
+            let admin_cap = TestScenario::take_owned<AdminCap>(scenario);
             let ctx = TestScenario::ctx(scenario);
 
             // max loan size should have increased because of the fee payment
@@ -54,8 +54,8 @@ module DeFi::FlashLenderTests {
             assert!(FlashLender::max_loan(lender) == 100, 0);
             Coin::keep(coin, ctx);
 
-            TestScenario::return_shared_object(scenario, lender_wrapper);
-            TestScenario::return_object(scenario, admin_cap);
+            TestScenario::return_shared(scenario, lender_wrapper);
+            TestScenario::return_owned(scenario, admin_cap);
         }
     }
 }

@@ -32,7 +32,7 @@ In the above function signature, `from_object` can be a read-only reference beca
 > :bulb: Although `from_object` is a read-only reference in this transaction, it is still a mutable object in Sui storage--another transaction could be sent to mutate the object at the same time! To prevent this, Sui must lock any mutable object used as a transaction input, even when it's passed as a read-only reference. In addition, only an object's owner can send a transaction that locks the object.
 
 Let's write a unit test to see how we could interact with multiple objects of the same type in tests.
-In the previous chapter, we introduced the `take_object<T>` API, which takes an object of type `T` from the global storage created by previous transactions. However, what if there are multiple objects of the same type? `take_object<T>` will no longer be able to tell which one to return. To solve this problem, we need to use two new APIs. The first is `TxContext::last_created_object_id(ctx)`, which returns the ID of the most recent created object. The second is `TestScenario::take_object_by_id<T>`, which returns an object of type `T` with a specific object ID.
+In the previous chapter, we introduced the `take_owned<T>` API, which takes an object of type `T` from the global storage created by previous transactions. However, what if there are multiple objects of the same type? `take_owned<T>` will no longer be able to tell which one to return. To solve this problem, we need to use two new APIs. The first is `TxContext::last_created_object_id(ctx)`, which returns the ID of the most recent created object. The second is `TestScenario::take_owned_by_id<T>`, which returns an object of type `T` with a specific object ID.
 Now let's take a look at the test (`test_copy_into`):
 ```rust
 let owner = @0x1;
@@ -51,25 +51,25 @@ The above code created two objects. Note that right after each call, we make a c
 ```rust
 TestScenario::next_tx(scenario, &owner);
 {
-    let obj1 = TestScenario::take_object_by_id<ColorObject>(scenario, id1);
-    let obj2 = TestScenario::take_object_by_id<ColorObject>(scenario, id2);
+    let obj1 = TestScenario::take_owned_by_id<ColorObject>(scenario, id1);
+    let obj2 = TestScenario::take_owned_by_id<ColorObject>(scenario, id2);
     let (red, green, blue) = ColorObject::get_color(&obj1);
     assert!(red == 255 && green == 255 && blue == 255, 0);
 
     let ctx = TestScenario::ctx(scenario);
     ColorObject::copy_into(&obj2, &mut obj1, ctx);
-    TestScenario::return_object(scenario, obj1);
-    TestScenario::return_object(scenario, obj2);
+    TestScenario::return_owned(scenario, obj1);
+    TestScenario::return_owned(scenario, obj2);
 };
 ```
-We used `take_object_by_id` to take both objects using different IDs. We then used `copy_into` to update `obj1`'s value using `obj2`'s. We can verify that the mutation works:
+We used `take_owned_by_id` to take both objects using different IDs. We then used `copy_into` to update `obj1`'s value using `obj2`'s. We can verify that the mutation works:
 ```rust
 TestScenario::next_tx(scenario, &owner);
 {
-    let obj1 = TestScenario::take_object_by_id<ColorObject>(scenario, id1);
+    let obj1 = TestScenario::take_owned_by_id<ColorObject>(scenario, id1);
     let (red, green, blue) = ColorObject::get_color(&obj1);
     assert!(red == 0 && green == 0 && blue == 0, 0);
-    TestScenario::return_object(scenario, obj1);
+    TestScenario::return_owned(scenario, obj1);
 }
 ```
 
@@ -108,14 +108,14 @@ let scenario = &mut TestScenario::begin(&owner);
 // Delete the ColorObject we just created.
 TestScenario::next_tx(scenario, &owner);
 {
-    let object = TestScenario::take_object<ColorObject>(scenario);
+    let object = TestScenario::take_owned<ColorObject>(scenario);
     let ctx = TestScenario::ctx(scenario);
     ColorObject::delete(object, ctx);
 };
 // Verify that the object was indeed deleted.
 TestScenario::next_tx(scenario, &owner);
 {
-    assert!(!TestScenario::can_take_object<ColorObject>(scenario), 0);
+    assert!(!TestScenario::can_take_owned<ColorObject>(scenario), 0);
 }
 ```
 The first part is the same as what we have seen in [Chapter 1](./ch1-object-basics.md#writing-unit-tests), which creates a new `ColorObject` and puts it in the owner's account. The second transaction is what we are testing: retrieve the object from the storage and then delete it. Since the object is deleted, there is no need (in fact, it is impossible) to return it to the storage. The last part of the test checks that the object is indeed no longer in the global storage and hence cannot be retrieved from there.
@@ -142,7 +142,7 @@ let scenario = &mut TestScenario::begin(&owner);
 let recipient = @0x2;
 TestScenario::next_tx(scenario, &owner);
 {
-    let object = TestScenario::take_object<ColorObject>(scenario);
+    let object = TestScenario::take_owned<ColorObject>(scenario);
     let ctx = TestScenario::ctx(scenario);
     ColorObject::transfer(object, recipient, ctx);
 };
@@ -152,12 +152,12 @@ Note that in the second transaction, the sender of the transaction should still 
 // Check that owner no longer owns the object.
 TestScenario::next_tx(scenario, &owner);
 {
-    assert!(!TestScenario::can_take_object<ColorObject>(scenario), 0);
+    assert!(!TestScenario::can_take_owned<ColorObject>(scenario), 0);
 };
 // Check that recipient now owns the object.
 TestScenario::next_tx(scenario, &recipient);
 {
-    assert!(TestScenario::can_take_object<ColorObject>(scenario), 0);
+    assert!(TestScenario::can_take_owned<ColorObject>(scenario), 0);
 };
 ```
 

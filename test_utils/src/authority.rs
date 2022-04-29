@@ -81,6 +81,11 @@ where
 {
     let states = test_authority_states(objects).await;
     let consensus_committee = make_default_narwhal_committee(configs).unwrap();
+    let consensus_parameters = ConsensusParameters {
+        max_header_delay: std::time::Duration::from_millis(200),
+        header_size: 1,
+        ..ConsensusParameters::default()
+    };
     let mut handles = Vec::new();
     for (state, config) in states.into_iter().zip(configs.iter()) {
         let handle = make_authority(
@@ -89,8 +94,8 @@ where
             state,
             &consensus_committee,
             /* consensus_store_path */ tempfile::tempdir().unwrap().path(),
-            &ConsensusParameters::default(),
-            None,
+            &consensus_parameters,
+            /* net_parameters */ None,
         )
         .await
         .unwrap()
