@@ -4,12 +4,18 @@
 use sui_types::base_types::*;
 use sui_types::batch::*;
 use sui_types::error::{SuiError, SuiResult};
+use sui_types::messages::BatchInfoRequest;
+use sui_types::messages::BatchInfoResponseItem;
 
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::interval;
 
+use futures::stream::{self, Stream};
 use futures::StreamExt;
 use typed_store::Map;
+
+use tokio::sync::broadcast::error::RecvError;
 
 #[cfg(test)]
 #[path = "unit_tests/batch_tests.rs"]
@@ -190,5 +196,102 @@ impl crate::authority::AuthorityState {
         // When a new batch is created we send a notification to all who have
         // registered an interest.
         Ok(())
+    }
+
+    pub async fn handle_batch_streaming(
+        self: Arc<Self>,
+        request: BatchInfoRequest,
+    ) -> Result<impl Stream<Item = Result<BatchInfoResponseItem, SuiError>>, SuiError> {
+        // Register a subscriber to not miss any updates
+        let subscriber = self.subscribe_batch();
+
+        // Get the historical data requested
+        let (items, (should_subscribe, _start, end)) =
+            self.handle_batch_info_request(request).await?;
+
+        let last_seq_sent: u64 = 0;
+        let exit = false;
+        let stream1 = stream::unfold(
+            (items, last_seq_sent, subscriber, exit, should_subscribe),
+            move |(mut items, mut last_seq_sent, mut subscriber, mut exit, should_subscribe)| async move {
+                // We have sent the last item
+                if exit {
+                    return None;
+                }
+
+                // If there are still items send them
+                if let Some(item) = items.pop_front() {
+                    if let UpdateItem::Transaction((seq, _)) = &item {
+                        last_seq_sent = *seq;
+                    }
+
+                    Some((
+                        Ok(BatchInfoResponseItem(item)),
+                        (items, last_seq_sent, subscriber, exit, should_subscribe),
+                    ))
+                } else {
+                    // When there are no more items potentially subscribe
+                    if !should_subscribe {
+                        None
+                    } else {
+                        loop {
+                            match subscriber.recv().await {
+                                Ok(item) => {
+                                    let seq = match &item {
+                                        UpdateItem::Transaction((seq, _)) => *seq,
+                                        UpdateItem::Batch(signed_batch) => {
+                                            signed_batch.batch.next_sequence_number
+                                        }
+                                    };
+
+                                    // Do not re-send transactions already sent from the database
+                                    if seq <= last_seq_sent {
+                                        continue;
+                                    }
+
+                                    let response = BatchInfoResponseItem(item);
+
+                                    if let BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) =
+                                        &response
+                                    {
+                                        if end < signed_batch.batch.next_sequence_number {
+                                            exit = true;
+                                        }
+                                    }
+
+                                    return Some((
+                                        Ok(response),
+                                        (items, last_seq_sent, subscriber, exit, should_subscribe),
+                                    ));
+                                }
+                                Err(RecvError::Closed) => {
+                                    // The service closed the channel, so we tell the client.
+                                    let err_response = Err(SuiError::SubscriptionServiceClosed);
+                                    exit = true;
+                                    return Some((
+                                        err_response,
+                                        (items, last_seq_sent, subscriber, exit, should_subscribe),
+                                    ));
+                                }
+                                Err(RecvError::Lagged(number_skipped)) => {
+                                    // We tell the client they are too slow to consume, and
+                                    // stop.
+                                    let err_response = Err(
+                                        SuiError::SubscriptionItemsDroppedError(number_skipped),
+                                    );
+                                    exit = true;
+                                    return Some((
+                                        err_response,
+                                        (items, last_seq_sent, subscriber, exit, should_subscribe),
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+        );
+
+        Ok(stream1)
     }
 }

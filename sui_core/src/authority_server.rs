@@ -11,8 +11,7 @@ use sui_network::{
     network::NetworkServer,
     transport::{spawn_server, MessageHandler, RwChannel, SpawnedServer},
 };
-use sui_types::{
-    batch::UpdateItem, crypto::VerificationObligation, error::*, messages::*, serialize::*,
+use sui_types::{crypto::VerificationObligation, error::*, messages::*, serialize::*,
 };
 use tokio::sync::mpsc::Sender;
 
@@ -22,7 +21,6 @@ use tracing::{error, info, warn, Instrument};
 use crate::consensus_adapter::{ConsensusAdapter, ConsensusInput};
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
-use tokio::sync::broadcast::error::RecvError;
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -107,89 +105,6 @@ impl AuthorityServer {
         spawn_server(address, guarded_state, buffer_size).await
     }
 
-    async fn handle_batch_streaming<'a, 'b, A>(
-        &'a self,
-        request: BatchInfoRequest,
-        channel: &mut A,
-    ) -> Result<(), SuiError>
-    where
-        A: RwChannel<'b>,
-    {
-        // Register a subscriber to not miss any updates
-        let mut subscriber = self.state.subscribe_batch();
-
-        // Get the historical data requested
-        let (mut items, (should_subscribe, _start, end)) =
-            self.state.handle_batch_info_request(request).await?;
-
-        let mut last_seq_sent = 0;
-        while let Some(item) = items.pop_front() {
-            // Remember the last transaction sequence number sent
-            if let UpdateItem::Transaction((seq, _)) = &item {
-                last_seq_sent = *seq;
-            }
-
-            // Send all items back to the client
-            let item = serialize_batch_item(&BatchInfoResponseItem(item));
-            channel
-                .sink()
-                .send(Bytes::from(item))
-                .await
-                .map_err(|_| SuiError::CannotSendClientMessageError)?;
-        }
-
-        // No need to send live events.
-        if !should_subscribe {
-            return Ok(());
-        }
-
-        // Now we read from the live updates.
-        loop {
-            match subscriber.recv().await {
-                Ok(item) => {
-                    let seq = match &item {
-                        UpdateItem::Transaction((seq, _)) => *seq,
-                        UpdateItem::Batch(signed_batch) => signed_batch.batch.next_sequence_number,
-                    };
-
-                    // Do not re-send transactions already sent from the database
-                    if seq <= last_seq_sent {
-                        continue;
-                    }
-
-                    let response = BatchInfoResponseItem(item);
-
-                    // Send back the item from the subscription
-                    let resp = serialize_batch_item(&response);
-                    channel
-                        .sink()
-                        .send(Bytes::from(resp))
-                        .await
-                        .map_err(|_| SuiError::CannotSendClientMessageError)?;
-
-                    // We always stop sending at batch boundaries, so that we try to always
-                    // start with a batch and end with a batch to allow signature verification.
-                    if let BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) = &response {
-                        if end < signed_batch.batch.next_sequence_number {
-                            break;
-                        }
-                    }
-                }
-                Err(RecvError::Closed) => {
-                    // The service closed the channel, so we tell the client.
-                    return Err(SuiError::SubscriptionServiceClosed);
-                }
-                Err(RecvError::Lagged(number_skipped)) => {
-                    // We tell the client they are too slow to consume, and
-                    // stop.
-                    return Err(SuiError::SubscriptionItemsDroppedError(number_skipped));
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     async fn handle_one_message<'a, 'b, A>(
         &'a self,
         message: SerializedMessage,
@@ -252,16 +167,33 @@ impl AuthorityServer {
                 .handle_transaction_info_request(*message)
                 .await
                 .map(|info| Some(serialize_transaction_info(&info))),
-            SerializedMessage::BatchInfoReq(message) => self
-                .handle_batch_streaming(*message, channel)
-                .await
-                .map(|_| None),
-            SerializedMessage::ConsensusTransaction(message) => self
-                .consensus_adapter
-                .submit(&message)
-                .await
-                .map(|info| Some(serialize_transaction_info(&info))),
+            SerializedMessage::BatchInfoReq(message) => {
+                let stream1 = self.state.clone().handle_batch_streaming(*message).await;
 
+                match stream1 {
+                    Ok(stream1) => {
+                        let stream1 = Box::pin(stream1);
+                        channel
+                            .sink()
+                            .send_all(&mut stream1.map(|item| match item {
+                                Ok(item) => {
+                                    let resp = serialize_batch_item(&item);
+                                    Ok(Bytes::from(resp))
+                                }
+                                Err(err) => {
+                                    let ser_err = serialize_error(&err);
+                                    Ok(Bytes::from(ser_err))
+                                }
+                            }))
+                            .await
+                            .map(|_| None)
+                            .map_err(|_e| SuiError::GenericAuthorityError {
+                                error: "Sink Error".to_string(),
+                            })
+                    }
+                    Err(e) => Err(e),
+                }
+            },
             _ => Err(SuiError::UnexpectedMessage),
         };
 
