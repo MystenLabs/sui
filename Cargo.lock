@@ -806,7 +806,7 @@ dependencies = [
 [[package]]
 name = "config"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?branch=alberto-dev-20#3c3d20c3afec160437bceb3a832022330dd6d0c3"
+source = "git+https://github.com/MystenLabs/narwhal?rev=72efe71f0615f91f861cc658e031b763ba30fd5b#72efe71f0615f91f861cc658e031b763ba30fd5b"
 dependencies = [
  "crypto",
  "serde 1.0.136",
@@ -834,7 +834,7 @@ dependencies = [
 [[package]]
 name = "consensus"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?branch=alberto-dev-20#3c3d20c3afec160437bceb3a832022330dd6d0c3"
+source = "git+https://github.com/MystenLabs/narwhal?rev=72efe71f0615f91f861cc658e031b763ba30fd5b#72efe71f0615f91f861cc658e031b763ba30fd5b"
 dependencies = [
  "bincode",
  "blake2",
@@ -980,7 +980,7 @@ dependencies = [
 [[package]]
 name = "crypto"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?branch=alberto-dev-20#3c3d20c3afec160437bceb3a832022330dd6d0c3"
+source = "git+https://github.com/MystenLabs/narwhal?rev=72efe71f0615f91f861cc658e031b763ba30fd5b#72efe71f0615f91f861cc658e031b763ba30fd5b"
 dependencies = [
  "ark-bls12-377",
  "ark-ec",
@@ -1511,7 +1511,7 @@ checksum = "77f3309417938f28bf8228fcff79a4a37103981e3e186d2ccd19c74b38f4eb71"
 [[package]]
 name = "executor"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?branch=alberto-dev-20#3c3d20c3afec160437bceb3a832022330dd6d0c3"
+source = "git+https://github.com/MystenLabs/narwhal?rev=72efe71f0615f91f861cc658e031b763ba30fd5b#72efe71f0615f91f861cc658e031b763ba30fd5b"
 dependencies = [
  "async-trait",
  "bincode",
@@ -3228,7 +3228,7 @@ dependencies = [
 [[package]]
 name = "network"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?branch=alberto-dev-20#3c3d20c3afec160437bceb3a832022330dd6d0c3"
+source = "git+https://github.com/MystenLabs/narwhal?rev=72efe71f0615f91f861cc658e031b763ba30fd5b#72efe71f0615f91f861cc658e031b763ba30fd5b"
 dependencies = [
  "async-trait",
  "bytes",
@@ -3265,7 +3265,7 @@ dependencies = [
 [[package]]
 name = "node"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?branch=alberto-dev-20#3c3d20c3afec160437bceb3a832022330dd6d0c3"
+source = "git+https://github.com/MystenLabs/narwhal?rev=72efe71f0615f91f861cc658e031b763ba30fd5b#72efe71f0615f91f861cc658e031b763ba30fd5b"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3888,7 +3888,7 @@ dependencies = [
 [[package]]
 name = "primary"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?branch=alberto-dev-20#3c3d20c3afec160437bceb3a832022330dd6d0c3"
+source = "git+https://github.com/MystenLabs/narwhal?rev=72efe71f0615f91f861cc658e031b763ba30fd5b#72efe71f0615f91f861cc658e031b763ba30fd5b"
 dependencies = [
  "async-recursion",
  "async-trait",
@@ -5819,7 +5819,7 @@ checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 [[package]]
 name = "types"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?branch=alberto-dev-20#3c3d20c3afec160437bceb3a832022330dd6d0c3"
+source = "git+https://github.com/MystenLabs/narwhal?rev=72efe71f0615f91f861cc658e031b763ba30fd5b#72efe71f0615f91f861cc658e031b763ba30fd5b"
 dependencies = [
  "base64",
  "bincode",
@@ -6346,7 +6346,7 @@ dependencies = [
 [[package]]
 name = "worker"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?branch=alberto-dev-20#3c3d20c3afec160437bceb3a832022330dd6d0c3"
+source = "git+https://github.com/MystenLabs/narwhal?rev=72efe71f0615f91f861cc658e031b763ba30fd5b#72efe71f0615f91f861cc658e031b763ba30fd5b"
 dependencies = [
  "async-trait",
  "bincode",
