@@ -588,6 +588,49 @@
                     }
                 }
             }
+        },
+
+        {
+            "id": "37196de8502e6d80e6a31fba1a5d6986cc018805",
+            "category": "object",
+            "status": "Exists",
+            "details": {
+                "objectRef": {
+                    "objectId": "37196de8502e6d80e6a31fba1a5d6986cc018805",
+                    "version": 0,
+                    "digest": "uP1J4ntsoN5bzSVEV+StOrzYNUXPFQ4hQVdLowPDYuM="
+                },
+                "objectType": "moveObject",
+                "object": {
+                    "contents": {
+                        "fields": {
+                            "id": {
+                                "fields": {
+                                    "id": {
+                                        "fields": {
+                                            "id": {
+                                                "fields": {
+                                                    "bytes": "37196de8502e6d80e6a31fba1a5d6986cc018805"
+                                                },
+                                                "type": "0x2::ID::ID"
+                                            }
+                                        },
+                                        "type": "0x2::ID::UniqueID"
+                                    },
+                                    "version": 0
+                                },
+                                "type": "0x2::ID::VersionedID"
+                            },
+                            "value": 100000
+                        },
+                        "type": "0x2::Coin::Coin<0x2::SUI::SUI>"
+                    },
+                    "owner": {
+                        "AddressOwner": "3997c1099d2961e09c2a302d8e3644d6ce1237ce"
+                    },
+                    "tx_digest": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                }
+            }
         }
     ]
 }
