@@ -9,7 +9,6 @@ use crate::{
     primary::PrimaryMessage,
     utils, PayloadToken, PrimaryWorkerMessage,
 };
-use bytes::Bytes;
 use config::{BlockSynchronizerParameters, Committee, WorkerId};
 use crypto::{traits::VerifyingKey, Hash};
 use futures::{
@@ -17,7 +16,7 @@ use futures::{
     stream::FuturesUnordered,
     FutureExt, StreamExt,
 };
-use network::SimpleSender;
+use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
 use rand::{rngs::SmallRng, SeedableRng};
 use std::{collections::HashMap, time::Duration};
 use store::Store;
@@ -154,7 +153,8 @@ pub struct BlockSynchronizer<PublicKey: VerifyingKey> {
         HashMap<RequestID, Sender<PayloadAvailabilityResponse<PublicKey>>>,
 
     /// Send network requests
-    network: SimpleSender,
+    primary_network: PrimaryNetwork,
+    worker_network: PrimaryToWorkerNetwork,
 
     /// The persistent storage for payload markers from workers
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -176,7 +176,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         rx_commands: Receiver<Command<PublicKey>>,
         rx_certificate_responses: Receiver<CertificatesResponse<PublicKey>>,
         rx_payload_availability_responses: Receiver<PayloadAvailabilityResponse<PublicKey>>,
-        network: SimpleSender,
+        network: PrimaryNetwork,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         parameters: BlockSynchronizerParameters,
     ) {
@@ -190,7 +190,8 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                 pending_requests: HashMap::new(),
                 map_certificate_responses_senders: HashMap::new(),
                 map_payload_availability_responses_senders: HashMap::new(),
-                network,
+                primary_network: network,
+                worker_network: PrimaryToWorkerNetwork::default(),
                 payload_store,
                 certificates_synchronize_timeout: parameters.certificates_synchronize_timeout,
                 payload_synchronize_timeout: parameters.payload_availability_timeout,
@@ -431,7 +432,6 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         message: PrimaryMessage<PublicKey>,
     ) -> Vec<PublicKey> {
         // Naively now just broadcast the request to all the primaries
-        let bytes = bincode::serialize(&message).expect("Failed to serialize request");
 
         let (primaries_names, primaries_addresses) = self
             .committee
@@ -440,8 +440,8 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
             .map(|(name, address)| (name, address.primary_to_primary))
             .unzip();
 
-        self.network
-            .broadcast(primaries_addresses, Bytes::from(bytes))
+        self.primary_network
+            .unreliable_broadcast(primaries_addresses, &message)
             .await;
 
         primaries_names
@@ -504,9 +504,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                 .primary_to_worker;
 
             let message = PrimaryWorkerMessage::Synchronize(batch_ids, primary_peer_name.clone());
-            let bytes =
-                bincode::serialize(&message).expect("Failed to serialize batch sync request");
-            self.network.send(worker_address, Bytes::from(bytes)).await;
+            self.worker_network.send(worker_address, &message).await;
         }
     }
 

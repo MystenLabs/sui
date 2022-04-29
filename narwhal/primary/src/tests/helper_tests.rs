@@ -1,21 +1,17 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{common::create_db_stores, helper::Helper, primary::PrimaryMessage};
-use bincode::deserialize;
 use crypto::{ed25519::Ed25519PublicKey, Hash};
 use ed25519_dalek::Signer;
-use futures::StreamExt;
 use std::{
     collections::{HashMap, HashSet},
-    net::SocketAddr,
     time::Duration,
 };
 use test_utils::{
     certificate, fixture_batch_with_transactions, fixture_header_builder, keys,
-    resolve_name_and_committee,
+    resolve_name_and_committee, PrimaryToPrimaryMockServer,
 };
-use tokio::{net::TcpListener, sync::mpsc::channel, task::JoinHandle, time::timeout};
-use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use tokio::{sync::mpsc::channel, time::timeout};
 use types::CertificateDigest;
 
 #[tokio::test]
@@ -23,7 +19,7 @@ async fn test_process_certificates_stream_mode() {
     // GIVEN
     let (_, certificate_store, _) = create_db_stores();
     let key = keys().pop().unwrap();
-    let (name, committee) = resolve_name_and_committee(13010);
+    let (name, committee) = resolve_name_and_committee(13080);
     let (tx_primaries, rx_primaries) = channel(10);
 
     // AND a helper
@@ -47,7 +43,7 @@ async fn test_process_certificates_stream_mode() {
 
     // AND spin up a mock node
     let address = committee.primary(&name).unwrap();
-    let handler = listener(certificates.len(), address.primary_to_primary);
+    let mut handler = PrimaryToPrimaryMockServer::spawn(address.primary_to_primary);
 
     // WHEN requesting the certificates
     tx_primaries
@@ -58,31 +54,28 @@ async fn test_process_certificates_stream_mode() {
         .await
         .expect("Couldn't send message");
 
-    if let Ok(result) = timeout(Duration::from_millis(4_000), handler).await {
-        assert!(result.is_ok(), "Error returned");
-
-        let result_digests: HashSet<CertificateDigest> = result
+    let mut digests = HashSet::new();
+    for _ in 0..certificates.len() {
+        let received = timeout(Duration::from_millis(4_000), handler.recv())
+            .await
             .unwrap()
-            .into_iter()
-            .map(|message| match message {
-                PrimaryMessage::Certificate(certificate) => certificate,
-                msg => {
-                    panic!("Didn't expect message {:?}", msg);
-                }
-            })
-            .map(|c| c.digest())
-            .collect();
+            .unwrap();
+        let message: PrimaryMessage<Ed25519PublicKey> = received.deserialize().unwrap();
+        let cert = match message {
+            PrimaryMessage::Certificate(certificate) => certificate,
+            msg => {
+                panic!("Didn't expect message {:?}", msg);
+            }
+        };
 
-        assert_eq!(
-            result_digests.len(),
-            certificates.len(),
-            "Returned unique number of certificates don't match the expected"
-        );
-    } else {
-        panic!(
-            "Timed out while waiting for results. Did not receive all the expected certificates."
-        );
+        digests.insert(cert.digest());
     }
+
+    assert_eq!(
+        digests.len(),
+        certificates.len(),
+        "Returned unique number of certificates don't match the expected"
+    );
 }
 
 #[tokio::test]
@@ -90,7 +83,7 @@ async fn test_process_certificates_batch_mode() {
     // GIVEN
     let (_, certificate_store, _) = create_db_stores();
     let key = keys().pop().unwrap();
-    let (name, committee) = resolve_name_and_committee(13010);
+    let (name, committee) = resolve_name_and_committee(13020);
     let (tx_primaries, rx_primaries) = channel(10);
 
     // AND a helper
@@ -123,7 +116,7 @@ async fn test_process_certificates_batch_mode() {
 
     // AND spin up a mock node
     let address = committee.primary(&name).unwrap();
-    let handler = listener(1, address.primary_to_primary);
+    let mut handler = PrimaryToPrimaryMockServer::spawn(address.primary_to_primary);
 
     // WHEN requesting the certificates in batch mode
     tx_primaries
@@ -134,79 +127,38 @@ async fn test_process_certificates_batch_mode() {
         .await
         .expect("Couldn't send message");
 
-    if let Ok(result) = timeout(Duration::from_millis(4_000), handler).await {
-        assert!(result.is_ok(), "Error returned");
-
-        for message in result.unwrap() {
-            match message {
-                PrimaryMessage::CertificatesBatchResponse {
-                    certificates: result_certificates,
-                } => {
-                    let result_digests: HashSet<CertificateDigest> = result_certificates
-                        .iter()
-                        .map(|(digest, _)| *digest)
-                        .collect();
-
-                    assert_eq!(
-                        result_digests.len(),
-                        certificates.len(),
-                        "Returned unique number of certificates don't match the expected"
-                    );
-
-                    // ensure that we have non found certificates
-                    let non_found_certificates: usize = result_certificates
-                        .into_iter()
-                        .filter(|(digest, certificate)| {
-                            missing_certificates.contains(digest) && certificate.is_none()
-                        })
-                        .count();
-                    assert_eq!(
-                        non_found_certificates, 5,
-                        "Expected to have non found certificates"
-                    );
-                }
-                msg => {
-                    panic!("Didn't expect message {:?}", msg);
-                }
-            }
+    let received = timeout(Duration::from_millis(4_000), handler.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let message: PrimaryMessage<Ed25519PublicKey> = received.deserialize().unwrap();
+    let result_certificates = match message {
+        PrimaryMessage::CertificatesBatchResponse { certificates } => certificates,
+        msg => {
+            panic!("Didn't expect message {:?}", msg);
         }
-    } else {
-        panic!(
-            "Timed out while waiting for results. Did not receive all the expected certificates."
-        );
-    }
-}
+    };
 
-pub fn listener(
-    num_of_expected_responses: usize,
-    address: SocketAddr,
-) -> JoinHandle<Vec<PrimaryMessage<Ed25519PublicKey>>> {
-    tokio::spawn(async move {
-        let listener = TcpListener::bind(&address).await.unwrap();
-        let (socket, _) = listener.accept().await.unwrap();
-        let transport = Framed::new(socket, LengthDelimitedCodec::new());
-        let (_writer, mut reader) = transport.split();
+    let result_digests: HashSet<CertificateDigest> = result_certificates
+        .iter()
+        .map(|(digest, _)| *digest)
+        .collect();
 
-        let mut responses = Vec::new();
-        loop {
-            match reader.next().await {
-                Some(Ok(received)) => {
-                    let message = received.freeze();
-                    match deserialize(&message) {
-                        Ok(msg) => {
-                            responses.push(msg);
+    assert_eq!(
+        result_digests.len(),
+        certificates.len(),
+        "Returned unique number of certificates don't match the expected"
+    );
 
-                            if responses.len() == num_of_expected_responses {
-                                return responses;
-                            }
-                        }
-                        Err(err) => {
-                            panic!("Error occurred {err}");
-                        }
-                    }
-                }
-                _ => panic!("Failed to receive network message"),
-            }
-        }
-    })
+    // ensure that we have non found certificates
+    let non_found_certificates: usize = result_certificates
+        .into_iter()
+        .filter(|(digest, certificate)| {
+            missing_certificates.contains(digest) && certificate.is_none()
+        })
+        .count();
+    assert_eq!(
+        non_found_certificates, 5,
+        "Expected to have non found certificates"
+    );
 }

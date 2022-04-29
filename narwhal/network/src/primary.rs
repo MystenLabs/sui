@@ -111,6 +111,29 @@ impl PrimaryNetwork {
 
     /// Pick a few addresses at random (specified by `nodes`) and try (best-effort) to send the
     /// message only to them. This is useful to pick nodes with whom to sync.
+    pub async fn unreliable_broadcast<T: VerifyingKey>(
+        &mut self,
+        addresses: Vec<SocketAddr>,
+        message: &PrimaryMessage<T>,
+    ) -> Vec<JoinHandle<()>> {
+        let message =
+            BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
+        let mut handlers = Vec::new();
+        for address in addresses {
+            let handle = {
+                let mut client = self.client(address);
+                let message = message.clone();
+                tokio::spawn(async move {
+                    let _ = client.send_message(message).await;
+                })
+            };
+            handlers.push(handle);
+        }
+        handlers
+    }
+
+    /// Pick a few addresses at random (specified by `nodes`) and try (best-effort) to send the
+    /// message only to them. This is useful to pick nodes with whom to sync.
     pub async fn lucky_broadcast<T: VerifyingKey>(
         &mut self,
         mut addresses: Vec<SocketAddr>,
