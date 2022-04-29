@@ -43,15 +43,7 @@ function Loaded({ data }: { data: DataType }) {
             </div>
             <div>
                 <div>Owned Objects</div>
-                <div>
-                    {
-                        <OwnedObjects
-                            objects={data.objects.map(
-                                ({ objectId }) => objectId
-                            )}
-                        />
-                    }
-                </div>
+                <div>{<OwnedObjects id={data.id} />}</div>
             </div>
         </div>
     );

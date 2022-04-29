@@ -7,7 +7,10 @@ import { useNavigate } from 'react-router-dom';
 import { DefaultRpcClient as rpc } from '../../utils/api/SuiRpcClient';
 import { parseImageURL } from '../../utils/objectUtils';
 import { navigateWithUnknown } from '../../utils/searchUtil';
-import { findDataFromID } from '../../utils/static/searchUtil';
+import {
+    findDataFromID,
+    findOwnedObjectsfromID,
+} from '../../utils/static/searchUtil';
 import { trimStdLibPrefix, processDisplayValue } from '../../utils/stringUtils';
 import DisplayBox from '../displaybox/DisplayBox';
 
@@ -139,7 +142,21 @@ function OwnedObjectView({ results }: { results: resultType }) {
     );
 }
 
-function OwnedObject({ objects }: { objects: string[] }) {
+function OwnedObject({ id }: { id: string }) {
+    let objects;
+    if (process.env.REACT_APP_DATA === 'static') {
+        objects = findOwnedObjectsfromID(id);
+        if (objects === undefined) return <div />;
+    } else {
+        objects = [{ objectId: 'apples' }];
+    }
+
+    return (
+        <OwnedObjectSection objects={objects.map(({ objectId }) => objectId)} />
+    );
+}
+
+function OwnedObjectSection({ objects }: { objects: string[] }) {
     const [pageIndex, setPageIndex] = useState(0);
 
     const ITEMS_PER_PAGE = 12;
