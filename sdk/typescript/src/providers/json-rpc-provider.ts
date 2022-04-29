@@ -1,17 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-  SignedTransaction,
-  TransactionResponse,
-  Provider,
-} from './provider';
+import { SignedTransaction, TransactionResponse, Provider } from './provider';
 import { JsonRpcClient } from '../rpc/client';
-import { isGetObjectInfoResponse, isGetOwnedObjectRefsResponse, isGetTxnDigestsResponse, isCertifiedTransaction } from '../index.guard';
-import { CertifiedTransaction, GatewayTxSeqNumber, GetTxnDigestsResponse, TransactionDigest } from '../types/transactions';
-import { GetObjectInfoResponse, ObjectRef } from '../types/objects';
+import {
+  isGetObjectInfoResponse,
+  isGetOwnedObjectRefsResponse,
+  isGetTxnDigestsResponse,
+  isCertifiedTransaction,
+} from '../index.guard';
+import {
+  CertifiedTransaction,
+  GatewayTxSeqNumber,
+  GetTxnDigestsResponse,
+  GetObjectInfoResponse,
+  ObjectRef,
+  TransactionDigest,
+} from '../types';
 
-const isNumber = (val: any): val is number => typeof(val) === 'number';
+const isNumber = (val: any): val is number => typeof val === 'number';
 
 export class JsonRpcProvider extends Provider {
   private client: JsonRpcClient;
