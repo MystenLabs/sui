@@ -41,6 +41,14 @@ pub struct ConsensusInput {
     replier: Replier,
 }
 
+/// Message to notify the consensus listener that a new transaction has been sent to consensus
+/// or that the caller timed out on a specific transaction.
+#[derive(Debug)]
+pub enum ConsensusListenerMessage {
+    New(ConsensusInput),
+    Cleanup(SerializedConsensusTransaction),
+}
+
 /// The message returned by the consensus to notify that a Sui certificate has been sequenced
 /// and all its shared objects are locked.
 type ConsensusOutput = (
@@ -56,8 +64,8 @@ pub struct ConsensusAdapter {
     buffer_size: usize,
     /// The Sui committee information.
     committee: Committee,
-    /// A channel to notify the consensus listener of new transactions.
-    tx_consensus_listener: Sender<ConsensusInput>,
+    /// A channel to notify the consensus listener to take action for a transactions.
+    tx_consensus_listener: Sender<ConsensusListenerMessage>,
     /// The maximum duration to wait from consensus before aborting the transaction.
     max_delay: Duration,
 }
@@ -68,7 +76,7 @@ impl ConsensusAdapter {
         consensus_address: SocketAddr,
         buffer_size: usize,
         committee: Committee,
-        tx_consensus_listener: Sender<ConsensusInput>,
+        tx_consensus_listener: Sender<ConsensusListenerMessage>,
         max_delay: Duration,
     ) -> Self {
         Self {
@@ -109,10 +117,10 @@ impl ConsensusAdapter {
 
         // Notify the consensus listener that we are expecting to process this certificate.
         let (sender, receiver) = oneshot::channel();
-        let consensus_input = ConsensusInput {
-            serialized,
+        let consensus_input = ConsensusListenerMessage::New(ConsensusInput {
+            serialized: serialized.clone(),
             replier: sender,
-        };
+        });
         self.tx_consensus_listener
             .send(consensus_input)
             .await
@@ -131,10 +139,17 @@ impl ConsensusAdapter {
         }
 
         // Wait for the consensus to sequence the certificate and assign locks to shared objects.
-        timeout(self.max_delay, receiver)
-            .await
-            .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))?
-            .expect("Channel with consensus listener dropped")
+        match timeout(self.max_delay, receiver).await {
+            Ok(reply) => reply.expect("Channel with consensus listener dropped"),
+            Err(e) => {
+                let message = ConsensusListenerMessage::Cleanup(serialized);
+                self.tx_consensus_listener
+                    .send(message)
+                    .await
+                    .expect("Channel with consensus listener dropped");
+                Err(SuiError::ConsensusConnectionBroken(e.to_string()))
+            }
+        }
     }
 }
 
@@ -142,9 +157,11 @@ impl ConsensusAdapter {
 /// notify the called when they are sequenced.
 pub struct ConsensusListener {
     /// Receive messages input to the consensus.
-    rx_consensus_input: Receiver<ConsensusInput>,
+    rx_consensus_input: Receiver<ConsensusListenerMessage>,
     /// Receive consensus outputs.
     rx_consensus_output: Receiver<ConsensusOutput>,
+    /// The maximum number of pending replies.
+    max_pending_transactions: usize,
     /// Keep a map of all consensus inputs that are currently being sequenced.
     pending: HashMap<ConsensusTransactionDigest, Vec<Replier>>,
 }
@@ -152,14 +169,16 @@ pub struct ConsensusListener {
 impl ConsensusListener {
     /// Spawn a new consensus adapter in a dedicated tokio task.
     pub fn spawn(
-        rx_consensus_input: Receiver<ConsensusInput>,
+        rx_consensus_input: Receiver<ConsensusListenerMessage>,
         rx_consensus_output: Receiver<ConsensusOutput>,
+        max_pending_transactions: usize,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
                 rx_consensus_input,
                 rx_consensus_output,
-                pending: HashMap::new(),
+                max_pending_transactions,
+                pending: HashMap::with_capacity(2 * max_pending_transactions),
             }
             .run()
             .await
@@ -171,12 +190,28 @@ impl ConsensusListener {
     async fn run(&mut self) {
         loop {
             tokio::select! {
-                // Keep track of this certificates so we can notify the user later.
-                Some(consensus_input) = self.rx_consensus_input.recv() => {
-                    let serialized = consensus_input.serialized;
-                    let replier = consensus_input.replier;
-                    let digest = Self::hash(&serialized);
-                    self.pending.entry(digest).or_insert_with(Vec::new).push(replier);
+                // A new transaction has been sent to consensus or is no longer needed.
+                Some(message) = self.rx_consensus_input.recv() => {
+                    match message {
+                        // Keep track of this certificates so we can notify the user later.
+                        ConsensusListenerMessage::New(input) => {
+                            if self.pending.len() < self.max_pending_transactions {
+                                let serialized = input.serialized;
+                                let replier = input.replier;
+                                let digest = Self::hash(&serialized);
+                                self.pending.entry(digest).or_insert_with(Vec::new).push(replier);
+                            }
+                        },
+
+                        // Stop waiting for a consensus transaction.
+                        ConsensusListenerMessage::Cleanup(transaction) => {
+                            let digest = Self::hash(&transaction);
+                            let _ = self.pending.get_mut(&digest).and_then(|x| x.pop());
+                            if self.pending.get(&digest).map_or_else(|| false, |x| x.is_empty()) {
+                                self.pending.remove(&digest);
+                            }
+                        }
+                    }
                 },
 
                 // Notify the caller that the transaction has been sequenced (if there is a caller).

@@ -19,7 +19,7 @@ use tokio::sync::mpsc::Sender;
 use std::time::Duration;
 use tracing::{error, info, warn, Instrument};
 
-use crate::consensus_adapter::{ConsensusAdapter, ConsensusInput};
+use crate::consensus_adapter::{ConsensusAdapter, ConsensusListenerMessage};
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use tokio::sync::broadcast::error::RecvError;
@@ -51,7 +51,7 @@ impl AuthorityServer {
         buffer_size: usize,
         state: Arc<AuthorityState>,
         consensus_address: SocketAddr,
-        tx_consensus_listener: Sender<ConsensusInput>,
+        tx_consensus_listener: Sender<ConsensusListenerMessage>,
     ) -> Self {
         let consensus_adapter = ConsensusAdapter::new(
             consensus_address,

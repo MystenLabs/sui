@@ -118,6 +118,7 @@ async fn listen_to_sequenced_transaction() {
     ConsensusListener::spawn(
         /* rx_consensus_input */ rx_sui_to_consensus,
         /* rx_consensus_output */ rx_consensus_to_sui,
+        /* max_pending_transactions */ 100,
     );
 
     // Submit a sample consensus transaction.
@@ -126,7 +127,8 @@ async fn listen_to_sequenced_transaction() {
         serialized: serialized.clone(),
         replier: sender,
     };
-    tx_sui_to_consensus.send(input).await.unwrap();
+    let message = ConsensusListenerMessage::New(input);
+    tx_sui_to_consensus.send(message).await.unwrap();
 
     // Notify the consensus listener that the transaction has been sequenced.
     tokio::task::yield_now().await;
@@ -165,10 +167,14 @@ async fn submit_transaction_to_consensus() {
 
     // Notify the submitter when a consensus transaction has been sequenced and executed.
     tokio::spawn(async move {
-        let ConsensusInput {
-            replier,
-            serialized,
-        } = rx_consensus_listener.recv().await.unwrap();
+        let (replier, serialized) = match rx_consensus_listener.recv().await.unwrap() {
+            ConsensusListenerMessage::New(ConsensusInput {
+                replier,
+                serialized,
+            }) => (replier, serialized),
+            message => panic!("Unexpected message {message:?}"),
+        };
+
         let message =
             bincode::deserialize(&serialized).expect("Failed to deserialize consensus tx");
         let ConsensusTransaction::UserTransaction(certificate) = message;
