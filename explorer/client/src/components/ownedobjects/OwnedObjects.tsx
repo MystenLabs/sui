@@ -149,28 +149,35 @@ function OwnedObjectView({ results }: { results: resultType }) {
     );
 }
 
-function OwnedObject({ id }: { id: string }) {
-    const [component, setComponent] = useState(<div />);
+function GetObjectsStatic({ id }: { id: string }) {
+    const objects = findOwnedObjectsfromID(id);
 
-    if (process.env.REACT_APP_DATA === 'static') {
-        const objects = findOwnedObjectsfromID(id);
-        if (objects === undefined) return <div />;
-        setComponent(
+    if (objects !== undefined) {
+        return (
             <OwnedObjectSection
                 objects={objects.map(({ objectId }) => objectId)}
             />
         );
-    } else {
-        rpc.getOwnedObjectRefs(id).then((objects) =>
-            setComponent(
-                <OwnedObjectSection
-                    objects={objects.map(({ objectId }) => objectId)}
-                />
-            )
-        );
     }
 
-    return component;
+    return <div />;
+}
+
+function GetObjectsAPI({ id }: { id: string }) {
+    const [objects, setObjects] = useState([{ objectId: 'Please Wait' }]);
+    useEffect(() => {
+        rpc.getOwnedObjectRefs(id).then((objects) => setObjects(objects));
+    }, [id]);
+    return (
+        <OwnedObjectSection objects={objects.map(({ objectId }) => objectId)} />
+    );
+}
+function OwnedObject({ id }: { id: string }) {
+    if (process.env.REACT_APP_DATA === 'static') {
+        return <GetObjectsStatic id={id} />;
+    } else {
+        return <GetObjectsAPI id={id} />;
+    }
 }
 
 function OwnedObjectSection({ objects }: { objects: string[] }) {
