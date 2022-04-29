@@ -101,8 +101,8 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let consensus_committee = network_config.make_narwhal_committee();
     let consensus_parameters = ConsensusParameters {
-        max_header_delay: 5_000,
-        max_batch_delay: 5_000,
+        max_header_delay: std::time::Duration::from_millis(5_000),
+        max_batch_delay: std::time::Duration::from_millis(5_000),
         ..ConsensusParameters::default()
     };
     let consensus_store_path = sui_config_dir()?

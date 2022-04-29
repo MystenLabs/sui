@@ -553,7 +553,11 @@ pub async fn make_authority(
 
     // Spawn a consensus listener. It listen for consensus outputs and notifies the
     // authority server when a sequenced transaction is ready for execution.
-    ConsensusListener::spawn(rx_sui_to_consensus, rx_consensus_to_sui);
+    ConsensusListener::spawn(
+        authority_state.clone(),
+        rx_sui_to_consensus,
+        rx_consensus_to_sui,
+    );
 
     // If we have network information make authority clients
     // to all authorities in the system.
