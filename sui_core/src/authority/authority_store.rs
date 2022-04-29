@@ -821,6 +821,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         &self,
         certificate: CertifiedTransaction,
         consensus_index: ExecutionIndices,
+        name: &AuthorityName,
     ) -> Result<(), SuiError> {
         // Make an iterator to save the certificate.
         let transaction_digest = *certificate.digest();
@@ -838,11 +839,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                 // sequence number (`OBJECT_START_VERSION`). Otherwise use the `scheduled` map to
                 // to assign the next sequence number.
                 let version = v.unwrap_or_else(|| OBJECT_START_VERSION);
-                let next_version = v
-                    .map(|v| v.increment())
-                    .unwrap_or_else(|| SequenceNumber::from(2));
+                let next_version = version.increment();
 
                 let sequenced = ((transaction_digest, *id), version);
+                println!("{name:?} locked {sequenced:?}");
                 let scheduled = (id, next_version);
 
                 (sequenced, scheduled)
@@ -860,6 +860,31 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         write_batch = write_batch.insert_batch(&self.last_consensus_index, index_to_write)?;
         write_batch.write().map_err(SuiError::from)
     }
+
+    /*
+    pub fn update_shared_locks(&self, certificate: CertifiedTransaction) -> Result<(), SuiError> {
+        // Make an iterator to update the locks of the transaction's shared objects.
+        let ids: Vec<_> = certificate
+            .transaction
+            .shared_input_objects()
+            .cloned()
+            .collect();
+
+        // UNWRAP!! All objects should exist
+        let mut objects: Vec<_> = self
+            .get_objects(&ids)?
+            .into_iter()
+            .map(|x| x.unwrap())
+            .collect();
+        for object in &mut objects {
+            object.data.try_as_move_mut().unwrap().increment_version();
+        }
+
+        let mut write_batch = self.objects.batch();
+        write_batch = write_batch.insert_batch(&self.objects, ids.iter().zip(objects.iter()))?;
+        write_batch.write().map_err(SuiError::from)
+    }
+    */
 
     pub fn transactions_in_seq_range(
         &self,

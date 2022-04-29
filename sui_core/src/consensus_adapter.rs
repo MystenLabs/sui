@@ -16,6 +16,7 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::ConfirmationTransaction;
 use sui_types::messages::ConsensusTransaction;
 use sui_types::messages::TransactionInfoResponse;
+use sui_types::serialize::deserialize_transaction_info;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -34,7 +35,7 @@ type ConsensusTransactionDigest = u64;
 
 /// The message returned by the consensus to notify that a Sui certificate has been sequenced
 /// and all its shared objects are locked.
-type ConsensusOutput = (SubscriberResult<()>, SerializedConsensusTransaction);
+type ConsensusOutput = (SubscriberResult<Vec<u8>>, SerializedConsensusTransaction);
 
 /// Channel to notify the called when the Sui certificate has been sequenced.
 type Replier = oneshot::Sender<SuiResult<TransactionInfoResponse>>;
@@ -173,18 +174,69 @@ impl ConsensusListener {
         let (result, serialized) = output;
 
         // Execute the transaction (if the consensus successfully sequenced it).
+        /*
         let outcome = match result {
             Ok(()) => {
                 let message =
                     bincode::deserialize(&serialized).expect("Failed to deserialize consensus tx");
                 let ConsensusTransaction::UserTransaction(certificate) = message;
                 let confirmation_transaction = ConfirmationTransaction { certificate };
-                self.state
-                    .handle_confirmation_transaction(confirmation_transaction)
-                    .await
+
+                // Can the following issue happen? (i) Consensus attributes locks to a shared objects
+                // then (ii) We execute the transaction. However, the store didn't finish to persist
+                // the locks.
+                //tokio::task::yield_now().await;
+
+                let transaction_digest = confirmation_transaction.certificate.transaction.digest();
+                if self
+                    .state
+                    ._database
+                    .effects_exists(&transaction_digest)
+                    .unwrap()
+                // UNWRAP!!
+                {
+                    let transaction_info =
+                        self.state.make_transaction_info(&transaction_digest).await;
+
+                    // Need to increment the sequence number.
+                    self.state
+                        ._database
+                        .update_shared_locks(confirmation_transaction.certificate.clone())
+                        .unwrap();
+
+                    println!(
+                        "{:?}: {transaction_digest:?} already executed, returning Ok & updating seq",
+                        self.state.name
+                    );
+                    transaction_info
+                } else {
+                    let x = self
+                        .state
+                        .handle_confirmation_transaction(confirmation_transaction.clone())
+                        .await;
+                    println!(
+                        "{:?} executed (success={}) {:?}",
+                        self.state.name,
+                        x.is_ok(),
+                        confirmation_transaction.certificate.digest()
+                    );
+                    if x.is_err() {
+                        println!("{x:?}");
+                    }
+                    x
+                }
             }
             Err(e) => Err(SuiError::from(e)),
         };
+        */
+
+        // MANY UNWRAP!!!
+        let outcome = result
+            .map(|x| {
+                let message = sui_types::serialize::deserialize_message(&x[..]).unwrap();
+                deserialize_transaction_info(message).unwrap()
+            })
+            .map_err(SuiError::from);
 
         // Notify the caller that the transaction has been sequenced (if there is a caller).
         let digest = Self::hash(&serialized);

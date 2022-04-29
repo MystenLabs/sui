@@ -51,7 +51,7 @@ async fn submit_single_owner_transaction(
 // Keep submitting the certificate until it is sequenced by consensus. We use the loop
 // since some consensus protocols (like Tusk) are not guaranteed to include the transaction
 // (but it has high probability to do so, so it should virtually never be used).
-async fn submit_shared_object_transaction(
+async fn submit_shared_object_transaction_all(
     transaction: Transaction,
     configs: &[AuthorityPrivateInfo],
 ) -> TransactionInfoResponse {
@@ -77,6 +77,51 @@ async fn submit_shared_object_transaction(
     }
 }
 
+async fn submit_shared_object_transaction_all2(
+    transaction: Transaction,
+    configs: &[AuthorityPrivateInfo],
+) -> TransactionInfoResponse {
+    let tx_digest = transaction.digest();
+    let certificate = make_certificates(vec![transaction]).pop().unwrap();
+    let message = ConsensusTransaction::UserTransaction(certificate);
+    let serialized = Bytes::from(serialize_consensus_transaction(&message));
+
+    'main: loop {
+        let futures: Vec<_> = configs
+            .iter()
+            .map(|config| transmit(serialized.clone(), config))
+            .collect();
+
+        for (result, config) in futures::future::join_all(futures)
+            .await
+            .into_iter()
+            .zip(configs.iter())
+        {
+            match result {
+                SerializedMessage::TransactionResp(reply) => {
+                    // We got a reply from the Sui authority.
+                    break 'main *reply;
+                }
+                SerializedMessage::Error(error) => match *error {
+                    SuiError::ConsensusConnectionBroken(_) => {
+                        // This is the (confusing) error message returned by the consensus
+                        // adapter. It means it didn't hear back from consensus and timed out.
+                    }
+                    error => {
+                        println!("\n\nError is about to happen:");
+                        println!(
+                            "{:?}: tx {tx_digest:?}\n",
+                            config.key_pair.public_key_bytes()
+                        );
+                        panic!("{error}")
+                    }
+                },
+                message => panic!("Unexpected protocol message: {message:?}"),
+            }
+        }
+    }
+}
+
 #[tokio::test]
 #[ignore = "Flaky, see #1624"]
 async fn shared_object_transaction() {
@@ -94,12 +139,12 @@ async fn shared_object_transaction() {
     // Submit the transaction. Note that this transaction is random and we do not expect
     // it to be successfully executed by the Move execution engine.
     tokio::task::yield_now().await;
-    let reply = submit_shared_object_transaction(transaction, &configs).await;
+    let reply = submit_shared_object_transaction_all(transaction, &configs).await;
     assert!(reply.signed_effects.is_some());
 }
 
 #[tokio::test]
-#[ignore = "Flaky, see #1624"]
+//#[ignore = "Flaky, see #1624"]
 async fn call_shared_object_contract() {
     let mut gas_objects = test_gas_objects();
 
@@ -141,6 +186,7 @@ async fn call_shared_object_contract() {
 
     // Ensure the value of the counter is `0`.
     tokio::task::yield_now().await;
+    println!("\n --- checking counter=0 ---\n");
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "Counter",
@@ -151,12 +197,13 @@ async fn call_shared_object_contract() {
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
-    let reply = submit_shared_object_transaction(transaction, &configs).await;
+    let reply = submit_shared_object_transaction_all(transaction, &configs).await;
     let effects = reply.signed_effects.unwrap().effects;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
     // Make a transaction to increment the counter.
     tokio::task::yield_now().await;
+    println!("\n --- incrementing counter ---\n");
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "Counter",
@@ -164,12 +211,13 @@ async fn call_shared_object_contract() {
         package_ref,
         vec![CallArg::SharedObject(counter_id)],
     );
-    let reply = submit_shared_object_transaction(transaction, &configs).await;
+    let reply = submit_shared_object_transaction_all(transaction, &configs).await;
     let effects = reply.signed_effects.unwrap().effects;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
     // Ensure the value of the counter is `1`.
     tokio::task::yield_now().await;
+    println!("\n --- checking counter=1 ---\n");
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "Counter",
@@ -180,7 +228,7 @@ async fn call_shared_object_contract() {
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
-    let reply = submit_shared_object_transaction(transaction, &configs).await;
+    let reply = submit_shared_object_transaction_all(transaction, &configs).await;
     let effects = reply.signed_effects.unwrap().effects;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 }

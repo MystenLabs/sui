@@ -24,6 +24,7 @@ use std::{
     sync::Arc,
 };
 use sui_adapter::adapter;
+use sui_types::serialize::serialize_transaction_info;
 use sui_types::{
     base_types::*,
     batch::UpdateItem,
@@ -238,6 +239,10 @@ impl AuthorityState {
         // Ensure an idempotent answer.
         if self._database.effects_exists(&transaction_digest)? {
             let transaction_info = self.make_transaction_info(&transaction_digest).await?;
+            println!(
+                "{:?}: {transaction_digest:?} already executed, returning Ok",
+                self.name
+            );
             return Ok(transaction_info);
         }
 
@@ -282,7 +287,9 @@ impl AuthorityState {
                 } else if shared_locks[object_id] != *version {
                     Some(SuiError::UnexpectedSequenceNumber {
                         object_id: *object_id,
+                        // This sequence number is the one attributed by consensus.
                         expected_sequence: shared_locks[object_id],
+                        // This sequence number is the one we currently have in the database.
                         given_sequence: *version,
                     })
                 } else {
@@ -293,6 +300,8 @@ impl AuthorityState {
 
         fp_ensure!(
             lock_errors.is_empty(),
+            // NOTE: the error message here will say 'Error acquiring lock' but what it means is
+            // 'error checking lock'.
             SuiError::LockErrors {
                 errors: lock_errors
             }
@@ -413,8 +422,11 @@ impl AuthorityState {
         // this function and that the last consensus index is also kept in memory. It is
         // thus ok to only persist now (despite this function may have returned earlier).
         // In the worst case, the synchronizer of the consensus client will catch up.
-        self._database
-            .persist_certificate_and_lock_shared_objects(certificate, last_consensus_index)
+        self._database.persist_certificate_and_lock_shared_objects(
+            certificate,
+            last_consensus_index,
+            &self.name,
+        )
     }
 
     pub async fn handle_transaction_info_request(
@@ -700,7 +712,7 @@ impl AuthorityState {
     }
 
     /// Make an information response for a transaction
-    async fn make_transaction_info(
+    pub async fn make_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
     ) -> Result<TransactionInfoResponse, SuiError> {
@@ -818,10 +830,45 @@ impl ExecutionState for AuthorityState {
         &self,
         execution_indices: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<Vec<u8>, Self::Error> {
         let ConsensusTransaction::UserTransaction(certificate) = transaction;
-        self.handle_consensus_certificate(certificate, execution_indices)
-            .await
+
+        // Ensure an idempotent answer.
+        let transaction_digest = certificate.digest();
+        if self._database.effects_exists(transaction_digest)? {
+            let info = self.make_transaction_info(&transaction_digest).await?;
+            println!(
+                "{:?}: {transaction_digest:?} already executed, returning Ok",
+                self.name
+            );
+            return Ok(serialize_transaction_info(&info));
+        }
+
+        let x = self
+            .handle_consensus_certificate(certificate.clone(), execution_indices)
+            .await;
+        if x.is_err() {
+            println!("ASSIGN LOCKED FAILED: {x:?}");
+        }
+        x?;
+
+        let confirmation_transaction = ConfirmationTransaction {
+            certificate: certificate.clone(),
+        };
+        let x = self
+            .handle_confirmation_transaction(confirmation_transaction.clone())
+            .await;
+        println!(
+            "{:?} executed (success={}) {:?}",
+            self.name,
+            x.is_ok(),
+            transaction_digest
+        );
+        if x.is_err() {
+            println!("{x:?}");
+        }
+        let info = x?;
+        Ok(serialize_transaction_info(&info))
     }
 
     fn ask_consensus_write_lock(&self) -> bool {
