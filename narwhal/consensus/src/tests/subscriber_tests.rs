@@ -1,16 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use super::*;
 use crate::{
     tusk::consensus_tests::*, Consensus, ConsensusOutput, ConsensusSyncRequest, SubscriberHandler,
 };
 use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair, Hash};
-use primary::Certificate;
 use std::collections::{BTreeSet, VecDeque};
+use test_utils::keys;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
-
-#[cfg(any(test, feature = "benchmark"))]
-#[path = "tests/subscriber_tests.rs"]
-pub mod subscriber_tests;
 
 /// Make enough certificates to commit a leader.
 pub fn commit_certificates() -> VecDeque<Certificate<Ed25519PublicKey>> {
@@ -43,9 +40,9 @@ pub async fn spawn_node(
     let committee = mock_committee(&keys[..]);
 
     // Create the storages.
-    let consensus_store_path = temp_testdir::TempDir::default();
+    let consensus_store_path = test_utils::temp_dir();
     let consensus_store = make_consensus_store(&consensus_store_path);
-    let certificate_store_path = temp_testdir::TempDir::default();
+    let certificate_store_path = test_utils::temp_dir();
     let certificate_store = make_certificate_store(&certificate_store_path);
 
     // Persist the certificates to storage (they may be require by the synchronizer).
@@ -130,14 +127,12 @@ async fn subscribe() {
         tx_consensus_input.send(certificate).await.unwrap();
     }
 
-    // Ensure the first 4 ordered certificates are from round 1 (they are the parents of the committed
-    // leader); then the leader's certificate should be committed.
-    for i in 1..=4 {
+    // Ensure the first 4 ordered certificates have the expected consensus index. Note that we
+    // need to feed 5 certificates to consensus to trigger a commit.
+    for i in 0..=4 {
         let output = rx_consensus_to_client.recv().await.unwrap();
         assert_eq!(output.consensus_index, i);
     }
-    let output = rx_consensus_to_client.recv().await.unwrap();
-    assert_eq!(output.consensus_index, 5);
 }
 
 #[tokio::test]
@@ -165,7 +160,7 @@ async fn subscribe_sync() {
 
     // Read first 4 certificates. Then pretend we crashed after reading the first certificate and
     // try to sync to get up to speed.
-    for i in 1..=4 {
+    for i in 0..=4 {
         let output = rx_consensus_to_client.recv().await.unwrap();
         assert_eq!(output.consensus_index, i);
     }

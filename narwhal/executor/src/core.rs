@@ -34,7 +34,7 @@ pub struct Core<State: ExecutionState, PublicKey: VerifyingKey> {
     /// Receive ordered consensus output to execute.
     rx_subscriber: Receiver<ConsensusOutput<PublicKey>>,
     /// Outputs executed transactions.
-    tx_output: Sender<(SubscriberResult<()>, SerializedTransaction)>,
+    tx_output: Sender<(SubscriberResult<Vec<u8>>, SerializedTransaction)>,
     /// The indices ensuring we do not execute twice the same transaction.
     execution_indices: ExecutionIndices,
 }
@@ -55,7 +55,7 @@ where
         store: Store<BatchDigest, SerializedBatchMessage>,
         execution_state: Arc<State>,
         rx_subscriber: Receiver<ConsensusOutput<PublicKey>>,
-        tx_output: Sender<(SubscriberResult<()>, SerializedTransaction)>,
+        tx_output: Sender<(SubscriberResult<Vec<u8>>, SerializedTransaction)>,
     ) -> JoinHandle<SubscriberResult<()>> {
         tokio::spawn(async move {
             let execution_indices = execution_state.load_execution_indices().await?;
@@ -79,9 +79,7 @@ where
             self.execute_certificate(&message).await?;
 
             // Cleanup the temporary persistent storage.
-            for digest in message.certificate.header.payload.into_keys() {
-                self.store.remove(digest).await;
-            }
+            // TODO [issue #191]: Security cleanup the store.
         }
         Ok(())
     }
@@ -158,7 +156,7 @@ where
                 }
 
                 match result {
-                    Ok(()) => (),
+                    Ok(_) => (),
 
                     // We may want to log the errors that are the user's fault (i.e., that are neither
                     // our fault or the fault of consensus) for debug purposes. It is safe to continue
@@ -181,7 +179,7 @@ where
         serialized: SerializedTransaction,
         total_transactions: usize,
         total_batches: usize,
-    ) -> SubscriberResult<()> {
+    ) -> SubscriberResult<Vec<u8>> {
         // Compute the next expected indices. Those will be persisted upon transaction execution
         // and are only used for crash-recovery.
         self.execution_indices

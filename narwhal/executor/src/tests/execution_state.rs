@@ -43,7 +43,7 @@ impl ExecutionState for TestState {
         &self,
         execution_indices: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<Vec<u8>, Self::Error> {
         if transaction == MALFORMED_TRANSACTION {
             Err(Self::Error::ClientError)
         } else if transaction == KILLER_TRANSACTION {
@@ -52,7 +52,7 @@ impl ExecutionState for TestState {
             self.store
                 .write(Self::INDICES_ADDRESS, execution_indices)
                 .await;
-            Ok(())
+            Ok(Vec::default())
         }
     }
 

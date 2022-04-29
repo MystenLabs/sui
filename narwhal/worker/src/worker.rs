@@ -309,6 +309,9 @@ impl<PublicKey: VerifyingKey> MessageHandler for WorkerReceiverHandler<PublicKey
                 let _ = writer.send(Bytes::from("Ack")).await;
             }
             Ok(WorkerMessage::ClientBatchRequest(missing)) => {
+                if missing.is_empty() {
+                    return Ok(());
+                }
                 // TODO [issue #7]: Do some accounting to prevent bad actors from use all our
                 // resources (in this case allocate a gigantic channel).
                 let (sender, mut receiver) = channel(missing.len());

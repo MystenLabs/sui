@@ -13,6 +13,10 @@ use tokio::{
 use tracing::{debug, error};
 use types::{Certificate, CertificateDigest};
 
+#[cfg(test)]
+#[path = "tests/subscriber_tests.rs"]
+pub mod subscriber_tests;
+
 /// Convenience alias indicating the persistent storage holding certificates.
 type CertificateStore<PublicKey> = store::Store<CertificateDigest, Certificate<PublicKey>>;
 

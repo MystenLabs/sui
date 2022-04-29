@@ -54,12 +54,13 @@ pub trait ExecutionState {
     /// The error type to return in case something went wrong during execution.
     type Error: ExecutionStateError;
 
-    /// Execute the transaction and atomically persist the consensus index.
+    /// Execute the transaction and atomically persist the consensus index. This function
+    /// returns a serialized result (Vec<u8>) that will be output by the executor channel.
     async fn handle_consensus_transaction(
         &self,
         execution_indices: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<Vec<u8>, Self::Error>;
 
     /// Simple guardrail ensuring there is a single instance using the state
     /// to call `handle_consensus_transaction`. Many instances may read the state,
@@ -86,7 +87,7 @@ impl Executor {
         execution_state: Arc<State>,
         rx_consensus: Receiver<ConsensusOutput<PublicKey>>,
         tx_consensus: Sender<ConsensusSyncRequest>,
-        tx_output: Sender<(SubscriberResult<()>, SerializedTransaction)>,
+        tx_output: Sender<(SubscriberResult<Vec<u8>>, SerializedTransaction)>,
     ) -> SubscriberResult<(
         JoinHandle<SubscriberResult<()>>,
         JoinHandle<SubscriberResult<()>>,

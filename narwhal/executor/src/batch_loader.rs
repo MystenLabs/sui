@@ -158,6 +158,10 @@ impl SyncConnection {
                             }
                         }
 
+                        if missing.is_empty() {
+                            continue;
+                        }
+
                         // Request the batch from the worker.
                         let message = WorkerMessage::<PublicKey>::ClientBatchRequest(missing.clone());
                         let serialized = bincode::serialize(&message).expect("Failed to serialize request");
@@ -179,7 +183,7 @@ impl SyncConnection {
                         match result {
                             Ok(batch) => {
                                 // Store the batch in the temporary store.
-                                // TODO: We can probably avoid re-computing the hash of the bach since we trust the worker.
+                                // TODO: We can probably avoid re-computing the hash of the batch since we trust the worker.
                                 let digest = BatchDigest::new(crypto::blake2b_256(|hasher| hasher.update(&batch)));
                                 self.store.write(digest, batch.to_vec()).await;
 
