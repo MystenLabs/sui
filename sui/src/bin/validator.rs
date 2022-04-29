@@ -113,14 +113,6 @@ async fn main() -> Result<(), anyhow::Error> {
         .listen_address
         .unwrap_or(format!("{}:{}", authority.host, authority.port));
 
-    info!(
-        "authority {:?} listening on {} (public addr: {}:{})",
-        authority.key_pair.public_key_bytes(),
-        listen_address,
-        authority.host,
-        authority.port
-    );
-
     let consensus_committee = network_config.make_narwhal_committee();
     let consensus_parameters = ConsensusParameters {
         max_header_delay: 5_000,
@@ -130,6 +122,14 @@ async fn main() -> Result<(), anyhow::Error> {
     let consensus_store_path = sui_config_dir()?
         .join(CONSENSUS_DB_NAME)
         .join(encode_bytes_hex(authority.key_pair.public_key_bytes()));
+
+    info!(
+        "Initializing authority {:?} listening on {} (public addr: {}:{})",
+        authority.key_pair.public_key_bytes(),
+        listen_address,
+        authority.host,
+        authority.port
+    );
 
     if let Err(e) = make_server(
         authority,

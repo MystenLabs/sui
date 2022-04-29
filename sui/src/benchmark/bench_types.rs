@@ -143,11 +143,16 @@ pub enum MicroBenchmarkResult {
     Throughput {
         chunk_throughput: f64,
     },
-    Latency {
+    CombinedLatency {
         load_chunk_size: usize,
         tick_period_us: usize,
         load_latencies: Vec<u128>,
         chunk_latencies: Vec<u128>,
+    },
+    Latency {
+        load_chunk_size: usize,
+        tick_period_us: usize,
+        latencies: Vec<u128>,
     },
 }
 
@@ -157,7 +162,7 @@ impl std::fmt::Display for MicroBenchmarkResult {
             MicroBenchmarkResult::Throughput { chunk_throughput } => {
                 write!(f, "Throughout: {} tps", chunk_throughput)
             }
-            MicroBenchmarkResult::Latency {
+            MicroBenchmarkResult::CombinedLatency {
                 chunk_latencies,
                 load_chunk_size,
                 tick_period_us: tick_period,
@@ -174,6 +179,21 @@ impl std::fmt::Display for MicroBenchmarkResult {
                     tracer_avg,
                     calculate_throughput(*load_chunk_size, *tick_period as u128),
                     chunk_latencies.len()
+                )
+            }
+            MicroBenchmarkResult::Latency {
+                load_chunk_size,
+                tick_period_us,
+                latencies,
+            } => {
+                let tracer_avg = latencies.iter().sum::<u128>() as f64 / latencies.len() as f64;
+
+                write!(
+                    f,
+                    "Average Latency {} us @ {} tps ({} samples)",
+                    tracer_avg,
+                    calculate_throughput(*load_chunk_size, *tick_period_us as u128),
+                    latencies.len()
                 )
             }
         }

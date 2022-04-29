@@ -218,7 +218,7 @@ fn run_latency_microbench(
     validator_preparer.clean_up();
 
     match result {
-        Ok((load_latencies, tracer_latencies)) => MicroBenchmarkResult::Latency {
+        Ok((load_latencies, tracer_latencies)) => MicroBenchmarkResult::CombinedLatency {
             load_chunk_size: chunk_size,
             load_latencies,
             tick_period_us: period_us as usize,

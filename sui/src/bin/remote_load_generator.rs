@@ -123,16 +123,6 @@ fn run_latency_microbench(
         &mut validator_preparer,
     );
 
-    // These are probe TXes used for measuring latency
-    let probe_txes = tx_cr.generate_transactions(
-        1,
-        use_move,
-        1,
-        num_chunks,
-        Some(sender),
-        &mut validator_preparer,
-    );
-
     let result = panic::catch_unwind(|| {
         let runtime = Builder::new_multi_thread()
             .enable_all()
@@ -141,40 +131,26 @@ fn run_latency_microbench(
             .build()
             .unwrap();
         // Prep the generators
-        let (mut load_gen, mut probe_gen) = runtime.block_on(async move {
-            join!(
-                MultiFixedRateLoadGenerator::new(
-                    load_gen_txes,
-                    period_us,
-                    connections,
-                    &network_config,
-                    recv_timeout,
-                    send_timeout,
-                ),
-                MultiFixedRateLoadGenerator::new(
-                    probe_txes,
-                    period_us,
-                    1,
-                    &network_config,
-                    recv_timeout,
-                    send_timeout,
-                ),
-            )
+        let mut load_gen = runtime.block_on(async move {
+            join!(MultiFixedRateLoadGenerator::new(
+                load_gen_txes,
+                period_us,
+                connections,
+                &network_config,
+                recv_timeout,
+                send_timeout,
+            ))
         });
 
-        // Run the load gen and probes
-        let (load_latencies, probe_latencies) =
-            runtime.block_on(async move { join!(load_gen.start(), probe_gen.start()) });
-
-        (load_latencies, probe_latencies)
+        // Run the load gen
+        runtime.block_on(async move { join!(load_gen.0.start()) })
     });
 
     match result {
-        Ok((load_latencies, probe_latencies)) => MicroBenchmarkResult::Latency {
+        Ok(load_latencies) => MicroBenchmarkResult::Latency {
             load_chunk_size: chunk_size,
-            load_latencies,
             tick_period_us: period_us as usize,
-            chunk_latencies: probe_latencies,
+            latencies: load_latencies.0,
         },
         Err(err) => {
             panic::resume_unwind(err);
