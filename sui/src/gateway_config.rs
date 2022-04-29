@@ -18,14 +18,12 @@ use sui_types::base_types::AuthorityName;
 use sui_types::committee::{Committee, EpochId};
 
 use crate::config::{AuthorityInfo, Config};
-use crate::rest_gateway::RestGatewayClient;
 use crate::rpc_gateway_client::RpcGatewayClient;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum GatewayType {
     Embedded(GatewayConfig),
-    Rest(String),
     RPC(String),
 }
 
@@ -51,10 +49,6 @@ impl Display for GatewayType {
                     authorities.collect::<Vec<_>>()
                 )?;
             }
-            GatewayType::Rest(url) => {
-                writeln!(writer, "Gateway Type : RestAPI")?;
-                writeln!(writer, "Gateway URL : {}", url)?;
-            }
             GatewayType::RPC(url) => {
                 writeln!(writer, "Gateway Type : JSON-RPC")?;
                 writeln!(writer, "Gateway URL : {}", url)?;
@@ -73,7 +67,6 @@ impl GatewayType {
                 let authority_clients = config.make_authority_clients();
                 Box::new(GatewayState::new(path, committee, authority_clients)?)
             }
-            GatewayType::Rest(url) => Box::new(RestGatewayClient { url: url.clone() }),
             GatewayType::RPC(url) => Box::new(RpcGatewayClient::new(url.clone())?),
         })
     }

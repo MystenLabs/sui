@@ -132,14 +132,14 @@ As the name suggests, embedded gateway embeds the gateway logic into the applica
 all data will be stored locally and the application will make direct
 connection to the validators.
 
-#### Rest gateway
-You can also connect the wallet to the Sui network via a [Rest Gateway](rest-api.md#start-local-rest-server);
-To use the rest gateway, update `wallet.conf`'s `gateway` section to:
+#### RPC gateway
+You can also connect the wallet to the Sui network via an [RPC Gateway](json-rpc.md#start-local-rpc-server);
+To use the RPC gateway, update `wallet.conf`'s `gateway` section to:
 ```json
 {
   ...
   "gateway": {
-    "rest":"http://127.0.0.1:5001"
+    "rpc":"http://127.0.0.1:5001"
   },
   ...
 }

@@ -18,7 +18,6 @@ $ cargo install --git https://github.com/MystenLabs/sui.git sui
 This will put these binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
 * [`sui-move`](move.md): Build and test Move packages.
 * [`wallet`](wallet.md): Run a local Sui network and gateway service accessible via the wallet CLI. The wallet CLI manage keypairs to sign/send transactions.
-* [`rest_server`](rest-api.md): Run a local Sui network and gateway service accessible via a REST interface.
 * [`rpc-server`](json-rpc.md): Run a local Sui network and gateway service accessible via an RPC interface.
 
 Confirm the install with:
@@ -65,5 +64,5 @@ Continue your journey through:
 
 * [Smart Contracts with Move](move.md)
 * [Wallet Quick Start](wallet.md)
-* [REST Server API](rest-api.md)
+* [RPC Server API](json-rpc.md)
 * [End-to-End tutorial](../explore/tutorials.md)
