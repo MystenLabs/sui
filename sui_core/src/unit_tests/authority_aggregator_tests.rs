@@ -14,6 +14,7 @@ use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
 
 use super::*;
 use crate::authority_client::LocalAuthorityClient;
+use crate::authority_client::LocalAuthorityClientFaultConfig;
 
 pub fn authority_genesis_objects(
     authority_count: usize,
@@ -51,6 +52,38 @@ pub async fn init_local_authorities(
         clients.insert(authority_name, client);
     }
     AuthorityAggregator::new(committee, clients)
+}
+
+pub fn get_local_client(
+    authorities: &mut AuthorityAggregator<LocalAuthorityClient>,
+    index: usize,
+) -> &mut LocalAuthorityClient {
+    let mut clients = authorities.authority_clients.values_mut();
+    let mut i = 0;
+    while i < index {
+        clients.next();
+        i += 1;
+    }
+    clients.next().unwrap().authority_client()
+}
+
+fn transfer_coin_transaction(
+    src: SuiAddress,
+    secret: &dyn signature::Signer<Signature>,
+    dest: SuiAddress,
+    object_ref: ObjectRef,
+    gas_object_ref: ObjectRef,
+) -> Transaction {
+    to_transaction(
+        TransactionData::new_transfer(
+            dest,
+            object_ref,
+            src,
+            gas_object_ref,
+            GAS_VALUE_FOR_TESTING / 2,
+        ),
+        secret,
+    )
 }
 
 fn transfer_object_move_transaction(
@@ -234,6 +267,46 @@ async fn get_latest_ref<A: AuthorityAPI>(authority: &A, object_id: ObjectID) -> 
         return object_ref;
     }
     panic!("Object not found!");
+}
+
+async fn execute_transaction_with_fault_configs(
+    configs_before_process_transaction: &[(usize, LocalAuthorityClientFaultConfig)],
+    configs_before_process_certificate: &[(usize, LocalAuthorityClientFaultConfig)],
+) -> SuiResult {
+    let (addr1, key1) = get_key_pair();
+    let (addr2, _) = get_key_pair();
+    let gas_object1 = Object::with_owner_for_testing(addr1);
+    let gas_object2 = Object::with_owner_for_testing(addr1);
+    let genesis_objects =
+        authority_genesis_objects(4, vec![gas_object1.clone(), gas_object2.clone()]);
+    let mut authorities = init_local_authorities(genesis_objects).await;
+
+    for (index, config) in configs_before_process_transaction {
+        get_local_client(&mut authorities, *index).fault_config = *config;
+    }
+
+    let tx = transfer_coin_transaction(
+        addr1,
+        &key1,
+        addr2,
+        gas_object1.compute_object_reference(),
+        gas_object2.compute_object_reference(),
+    );
+    let cert = authorities
+        .process_transaction(tx, Duration::from_secs(5))
+        .await?;
+
+    for client in authorities.authority_clients.values_mut() {
+        client.authority_client().fault_config.reset();
+    }
+    for (index, config) in configs_before_process_certificate {
+        get_local_client(&mut authorities, *index).fault_config = *config;
+    }
+
+    authorities
+        .process_certificate(cert, Duration::from_secs(5))
+        .await?;
+    Ok(())
 }
 
 #[tokio::test]
@@ -668,4 +741,66 @@ async fn test_process_certificate() {
     // Check this is the latest version.
     let new_object_version = authorities.get_latest_sequence_number(new_ref_1.0).await;
     assert_eq!(SequenceNumber::from(2), new_object_version);
+}
+
+#[tokio::test]
+async fn test_process_transaction_fault_success() {
+    // This test exercises the 4 different possible fauling case when one authority is faulty.
+    // A transaction is sent to all authories, however one of them will error out either before or after processing the transaction.
+    // A cert should still be created, and sent out to all authorities again. This time
+    // a different authority errors out either before or after processing the cert.
+    for i in 0..4 {
+        let mut config_before_process_transaction = LocalAuthorityClientFaultConfig::default();
+        if i % 2 == 0 {
+            config_before_process_transaction.fail_before_handle_transaction = true;
+        } else {
+            config_before_process_transaction.fail_after_handle_transaction = true;
+        }
+        let mut config_before_process_certificate = LocalAuthorityClientFaultConfig::default();
+        if i < 2 {
+            config_before_process_certificate.fail_before_handle_confirmation = true;
+        } else {
+            config_before_process_certificate.fail_after_handle_confirmation = true;
+        }
+        execute_transaction_with_fault_configs(
+            &[(0, config_before_process_transaction)],
+            &[(1, config_before_process_certificate)],
+        )
+        .await
+        .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn test_process_transaction_fault_fail() {
+    // This test exercises the cases when there are 2 authorities faulty,
+    // and hence no quorum could be formed. This is tested on both the
+    // process_transaction phase and process_certificate phase.
+    let fail_before_process_transaction_config = LocalAuthorityClientFaultConfig {
+        fail_before_handle_transaction: true,
+        ..Default::default()
+    };
+    assert!(execute_transaction_with_fault_configs(
+        &[
+            (0, fail_before_process_transaction_config),
+            (1, fail_before_process_transaction_config),
+        ],
+        &[],
+    )
+    .await
+    .is_err());
+
+    let fail_before_process_certificate_config = LocalAuthorityClientFaultConfig {
+        fail_before_handle_confirmation: true,
+        ..Default::default()
+    };
+    assert!(execute_transaction_with_fault_configs(
+        &[],
+        &[
+            (0, fail_before_process_certificate_config),
+            (1, fail_before_process_certificate_config),
+        ],
+    )
+    .await
+    .is_err());
 }
