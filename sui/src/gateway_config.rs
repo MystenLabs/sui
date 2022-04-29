@@ -15,17 +15,15 @@ use sui_core::gateway_state::{GatewayClient, GatewayState};
 use sui_network::network::NetworkClient;
 use sui_network::transport;
 use sui_types::base_types::AuthorityName;
-use sui_types::committee::Committee;
+use sui_types::committee::{Committee, EpochId};
 
 use crate::config::{AuthorityInfo, Config};
-use crate::rest_gateway::RestGatewayClient;
 use crate::rpc_gateway_client::RpcGatewayClient;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum GatewayType {
     Embedded(GatewayConfig),
-    Rest(String),
     RPC(String),
 }
 
@@ -51,10 +49,6 @@ impl Display for GatewayType {
                     authorities.collect::<Vec<_>>()
                 )?;
             }
-            GatewayType::Rest(url) => {
-                writeln!(writer, "Gateway Type : RestAPI")?;
-                writeln!(writer, "Gateway URL : {}", url)?;
-            }
             GatewayType::RPC(url) => {
                 writeln!(writer, "Gateway Type : JSON-RPC")?;
                 writeln!(writer, "Gateway URL : {}", url)?;
@@ -73,7 +67,6 @@ impl GatewayType {
                 let authority_clients = config.make_authority_clients();
                 Box::new(GatewayState::new(path, committee, authority_clients)?)
             }
-            GatewayType::Rest(url) => Box::new(RestGatewayClient { url: url.clone() }),
             GatewayType::RPC(url) => Box::new(RpcGatewayClient::new(url.clone())?),
         })
     }
@@ -81,6 +74,7 @@ impl GatewayType {
 
 #[derive(Serialize, Deserialize)]
 pub struct GatewayConfig {
+    pub epoch: EpochId,
     pub authorities: Vec<AuthorityInfo>,
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
@@ -97,7 +91,7 @@ impl GatewayConfig {
             .iter()
             .map(|authority| (authority.name, 1))
             .collect();
-        Committee::new(voting_rights)
+        Committee::new(self.epoch, voting_rights)
     }
 
     pub fn make_authority_clients(&self) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
@@ -119,6 +113,7 @@ impl GatewayConfig {
 impl Default for GatewayConfig {
     fn default() -> Self {
         Self {
+            epoch: 0,
             authorities: vec![],
             send_timeout: Duration::from_micros(4000000),
             recv_timeout: Duration::from_micros(4000000),

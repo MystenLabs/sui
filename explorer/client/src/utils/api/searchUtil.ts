@@ -17,6 +17,7 @@ export const navigateWithUnknown = async (
         };
     });
 
+    // TODO:(Chirs) replace this after we can fetch `getObjectInfo` with the SDK
     const objInfoPromise = rpc.getObjectInfo(input).then((data) => ({
         category: 'objects',
         data: data,

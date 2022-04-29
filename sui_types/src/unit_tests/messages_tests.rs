@@ -32,7 +32,7 @@ fn test_signed_values() {
         /* address */ *sec2.public_key_bytes(),
         /* voting right */ 0,
     );
-    let committee = Committee::new(authorities);
+    let committee = Committee::new(0, authorities);
 
     let transaction = Transaction::from_data(
         TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
@@ -43,16 +43,36 @@ fn test_signed_values() {
         &sec2,
     );
 
-    let v = SignedTransaction::new(transaction.clone(), *sec1.public_key_bytes(), &sec1);
+    let v = SignedTransaction::new(
+        committee.epoch(),
+        transaction.clone(),
+        *sec1.public_key_bytes(),
+        &sec1,
+    );
     assert!(v.check(&committee).is_ok());
 
-    let v = SignedTransaction::new(transaction.clone(), *sec2.public_key_bytes(), &sec2);
+    let v = SignedTransaction::new(
+        committee.epoch(),
+        transaction.clone(),
+        *sec2.public_key_bytes(),
+        &sec2,
+    );
     assert!(v.check(&committee).is_err());
 
-    let v = SignedTransaction::new(transaction, *sec3.public_key_bytes(), &sec3);
+    let v = SignedTransaction::new(
+        committee.epoch(),
+        transaction,
+        *sec3.public_key_bytes(),
+        &sec3,
+    );
     assert!(v.check(&committee).is_err());
 
-    let v = SignedTransaction::new(bad_transaction, *sec1.public_key_bytes(), &sec1);
+    let v = SignedTransaction::new(
+        committee.epoch(),
+        bad_transaction,
+        *sec1.public_key_bytes(),
+        &sec1,
+    );
     assert!(v.check(&committee).is_err());
 }
 
@@ -71,7 +91,7 @@ fn test_certificates() {
         /* address */ *sec2.public_key_bytes(),
         /* voting right */ 1,
     );
-    let committee = Committee::new(authorities);
+    let committee = Committee::new(0, authorities);
 
     let transaction = Transaction::from_data(
         TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
@@ -82,17 +102,32 @@ fn test_certificates() {
         &sec2,
     );
 
-    let v1 = SignedTransaction::new(transaction.clone(), *sec1.public_key_bytes(), &sec1);
-    let v2 = SignedTransaction::new(transaction.clone(), *sec2.public_key_bytes(), &sec2);
-    let v3 = SignedTransaction::new(transaction.clone(), *sec3.public_key_bytes(), &sec3);
+    let v1 = SignedTransaction::new(
+        committee.epoch(),
+        transaction.clone(),
+        *sec1.public_key_bytes(),
+        &sec1,
+    );
+    let v2 = SignedTransaction::new(
+        committee.epoch(),
+        transaction.clone(),
+        *sec2.public_key_bytes(),
+        &sec2,
+    );
+    let v3 = SignedTransaction::new(
+        committee.epoch(),
+        transaction.clone(),
+        *sec3.public_key_bytes(),
+        &sec3,
+    );
 
     let mut builder = SignatureAggregator::try_new(transaction.clone(), &committee).unwrap();
     assert!(builder
-        .append(v1.auth_signature.authority, v1.auth_signature.signature)
+        .append(v1.auth_sign_info.authority, v1.auth_sign_info.signature)
         .unwrap()
         .is_none());
     let mut c = builder
-        .append(v2.auth_signature.authority, v2.auth_signature.signature)
+        .append(v2.auth_sign_info.authority, v2.auth_sign_info.signature)
         .unwrap()
         .unwrap();
     assert!(c.check(&committee).is_ok());
@@ -101,11 +136,11 @@ fn test_certificates() {
 
     let mut builder = SignatureAggregator::try_new(transaction, &committee).unwrap();
     assert!(builder
-        .append(v1.auth_signature.authority, v1.auth_signature.signature)
+        .append(v1.auth_sign_info.authority, v1.auth_sign_info.signature)
         .unwrap()
         .is_none());
     assert!(builder
-        .append(v3.auth_signature.authority, v3.auth_signature.signature)
+        .append(v3.auth_sign_info.authority, v3.auth_sign_info.signature)
         .is_err());
 
     assert!(SignatureAggregator::try_new(bad_transaction, &committee).is_err());

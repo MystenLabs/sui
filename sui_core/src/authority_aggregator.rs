@@ -836,12 +836,13 @@ where
                             }) => {
                                 state.signatures.push((
                                     name,
-                                    inner_signed_transaction.auth_signature.signature,
+                                    inner_signed_transaction.auth_sign_info.signature,
                                 ));
                                 state.good_stake += weight;
                                 if state.good_stake >= threshold {
                                     state.certificate =
                                         Some(CertifiedTransaction::new_with_signatures(
+                                            self.committee.epoch(),
                                             transaction_ref.clone(),
                                             state.signatures.clone(),
                                         ));

@@ -1,21 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use clap::Parser;
-use jsonrpsee::{
-    http_server::{AccessControlBuilder, HttpServerBuilder},
-    RpcModule,
-};
 use std::{
     env,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
 };
+
+use clap::Parser;
+use jsonrpsee::{
+    http_server::{AccessControlBuilder, HttpServerBuilder},
+    RpcModule,
+};
+use tracing::info;
+
+use sui::rpc_gateway::RpcGatewayOpenRpc;
 use sui::{
     rpc_gateway::{RpcGatewayImpl, RpcGatewayServer},
     sui_config_dir,
 };
-use tracing::info;
 
 const DEFAULT_RPC_SERVER_PORT: &str = "5001";
 const DEFAULT_RPC_SERVER_ADDR_IPV4: &str = "127.0.0.1";
@@ -66,12 +69,17 @@ async fn main() -> anyhow::Result<()> {
         ac_builder = ac_builder.set_allowed_origins(list)?;
     }
 
+    let acl = ac_builder.build();
+    info!("{:?}", acl);
+
     let server = server_builder
-        .set_access_control(ac_builder.build())
+        .set_access_control(acl)
         .build(SocketAddr::new(IpAddr::V4(options.host), options.port))
         .await?;
 
     let mut module = RpcModule::new(());
+    let open_rpc = RpcGatewayOpenRpc::open_rpc();
+    module.register_method("rpc.discover", move |_, _| Ok(open_rpc.clone()))?;
     module.merge(RpcGatewayImpl::new(&config_path)?.into_rpc())?;
 
     info!(

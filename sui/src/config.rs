@@ -17,14 +17,14 @@ use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::fs::{self, File};
 use std::io::BufReader;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_network::network::PortAllocator;
 use sui_types::base_types::*;
-use sui_types::committee::Committee;
+use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::{get_key_pair, KeyPair};
 use tracing::log::trace;
 
@@ -34,7 +34,7 @@ pub const AUTHORITIES_DB_NAME: &str = "authorities_db";
 pub const DEFAULT_STARTING_PORT: u16 = 10000;
 pub const CONSENSUS_DB_NAME: &str = "consensus_db";
 
-static PORT_ALLOCATOR: Lazy<Mutex<PortAllocator>> =
+pub static PORT_ALLOCATOR: Lazy<Mutex<PortAllocator>> =
     Lazy::new(|| Mutex::new(PortAllocator::new(DEFAULT_STARTING_PORT)));
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -47,12 +47,23 @@ pub struct AuthorityInfo {
 
 #[derive(Serialize, Debug)]
 pub struct AuthorityPrivateInfo {
+    pub address: SuiAddress,
     pub key_pair: KeyPair,
     pub host: String,
     pub port: u16,
     pub db_path: PathBuf,
     pub stake: usize,
     pub consensus_address: SocketAddr,
+}
+
+// Warning: to_socket_addrs() is blocking and can fail.  Be careful where you use it.
+fn socket_addr_from_hostport(host: &str, port: u16) -> SocketAddr {
+    let mut addresses = format!("{host}:{port}")
+        .to_socket_addrs()
+        .expect("Cannot parse {host} and {port} into socket address");
+    addresses
+        .next()
+        .expect("Hostname/IP resolution failed for {host}")
 }
 
 // Custom deserializer with optional default fields
@@ -103,10 +114,11 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
                 .map_err(serde::de::Error::custom)?
                 .next_port()
                 .ok_or_else(|| serde::de::Error::custom("No available port."))?;
-            format!("127.0.0.1:{port}").parse().unwrap()
+            socket_addr_from_hostport("localhost", port)
         };
 
         Ok(AuthorityPrivateInfo {
+            address: SuiAddress::from(key_pair.public_key_bytes()),
             key_pair,
             host,
             port,
@@ -148,6 +160,7 @@ impl Display for WalletConfig {
 
 #[derive(Serialize, Deserialize)]
 pub struct NetworkConfig {
+    pub epoch: EpochId,
     pub authorities: Vec<AuthorityPrivateInfo>,
     pub buffer_size: usize,
     pub loaded_move_packages: Vec<(PathBuf, ObjectID)>,
@@ -175,17 +188,15 @@ impl NetworkConfig {
                 .map(|x| {
                     let name = x.key_pair.make_narwhal_keypair().name;
                     let primary = PrimaryAddresses {
-                        primary_to_primary: format!("{}:{}", x.host, x.port + 1).parse().unwrap(),
-                        worker_to_primary: format!("{}:{}", x.host, x.port + 2).parse().unwrap(),
+                        primary_to_primary: socket_addr_from_hostport(&x.host, x.port + 100),
+                        worker_to_primary: socket_addr_from_hostport(&x.host, x.port + 200),
                     };
                     let workers = [(
                         /* worker_id */ 0,
                         WorkerAddresses {
-                            primary_to_worker: format!("{}:{}", x.host, x.port + 3)
-                                .parse()
-                                .unwrap(),
+                            primary_to_worker: socket_addr_from_hostport(&x.host, x.port + 300),
                             transactions: x.consensus_address,
-                            worker_to_worker: format!("{}:{}", x.host, x.port + 4).parse().unwrap(),
+                            worker_to_worker: socket_addr_from_hostport(&x.host, x.port + 400),
                         },
                     )]
                     .iter()
@@ -210,7 +221,7 @@ impl From<&NetworkConfig> for Committee {
             .iter()
             .map(|authority| (*authority.key_pair.public_key_bytes(), authority.stake))
             .collect();
-        Committee::new(voting_rights)
+        Committee::new(network_config.epoch, voting_rights)
     }
 }
 
@@ -389,15 +400,15 @@ pub fn make_default_narwhal_committee(
                 let name = x.key_pair.make_narwhal_keypair().name;
 
                 let primary = PrimaryAddresses {
-                    primary_to_primary: format!("127.0.0.1:{}", ports[i][0]).parse().unwrap(),
-                    worker_to_primary: format!("127.0.0.1:{}", ports[i][1]).parse().unwrap(),
+                    primary_to_primary: socket_addr_from_hostport("127.0.0.1", ports[i][0]),
+                    worker_to_primary: socket_addr_from_hostport("127.0.0.1", ports[i][1]),
                 };
                 let workers = [(
                     /* worker_id */ 0,
                     WorkerAddresses {
-                        primary_to_worker: format!("127.0.0.1:{}", ports[i][2]).parse().unwrap(),
+                        primary_to_worker: socket_addr_from_hostport("127.0.0.1", ports[i][2]),
                         transactions: x.consensus_address,
-                        worker_to_worker: format!("127.0.0.1:{}", ports[i][3]).parse().unwrap(),
+                        worker_to_worker: socket_addr_from_hostport("127.0.0.1", ports[i][3]),
                     },
                 )]
                 .iter()

@@ -12,11 +12,11 @@ module Sui::TestCoin {
     fun type_morphing() {
         let test = &mut TestScenario::begin(&@0x1);
 
-        let balance = Balance::empty<SUI>();
+        let balance = Balance::zero<SUI>();
         let coin = Coin::from_balance(balance, ctx(test));
         let balance = Coin::into_balance(coin);
 
-        Balance::destroy_empty(balance);
+        Balance::destroy_zero(balance);
 
         let coin = Coin::mint_for_testing<SUI>(100, ctx(test));
         let balance_mut = Coin::balance_mut(&mut coin);

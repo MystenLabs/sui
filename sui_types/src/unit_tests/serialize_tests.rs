@@ -150,6 +150,7 @@ fn test_vote() {
 
     let (_, authority_key) = get_key_pair();
     let vote = SignedTransaction::new(
+        0,
         transaction,
         *authority_key.public_key_bytes(),
         &authority_key,
@@ -213,7 +214,12 @@ fn test_info_response() {
     );
 
     let (_, auth_key) = get_key_pair();
-    let vote = SignedTransaction::new(transaction.clone(), *auth_key.public_key_bytes(), &auth_key);
+    let vote = SignedTransaction::new(
+        0,
+        transaction.clone(),
+        *auth_key.public_key_bytes(),
+        &auth_key,
+    );
 
     let mut cert = CertifiedTransaction::new(transaction);
 
@@ -310,6 +316,7 @@ fn test_time_vote() {
     let now = Instant::now();
     for _ in 0..100 {
         let vote = SignedTransaction::new(
+            0,
             transaction.clone(),
             *authority_key.public_key_bytes(),
             &authority_key,
@@ -322,9 +329,9 @@ fn test_time_vote() {
     let now = Instant::now();
     for _ in 0..100 {
         if let SerializedMessage::Vote(vote) = deserialize_message(&mut buf2).unwrap() {
-            vote.auth_signature
+            vote.auth_sign_info
                 .signature
-                .check(&vote.data, vote.auth_signature.authority)
+                .check(&vote.data, vote.auth_sign_info.authority)
                 .unwrap();
         }
     }

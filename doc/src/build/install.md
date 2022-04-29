@@ -5,20 +5,20 @@ title: Install Sui
 Sui is written in Rust, and we are using Cargo to build and manage the
 dependencies.  As a prerequisite, you will need to [install
 Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
-version 1.59.0 or higher in order to build and install Sui on your machine.
+version 1.60.0 or higher in order to build and install Sui on your machine.
 
 ## Binaries
 
 To develop in Sui, you will need the Sui binaries. After installing `cargo`, run:
 
 ```shell
-$ cargo install --git https://github.com/MystenLabs/sui.git
+$ cargo install --git https://github.com/MystenLabs/sui.git sui
 ```
 
-This will put three binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
+This will put these binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
 * [`sui-move`](move.md): Build and test Move packages.
 * [`wallet`](wallet.md): Run a local Sui network and gateway service accessible via the wallet CLI. The wallet CLI manage keypairs to sign/send transactions.
-* [`rest_server`](rest-api.md): Run a local Sui network and gateway service accessible via a REST interface.
+* [`rpc-server`](json-rpc.md): Run a local Sui network and gateway service accessible via an RPC interface.
 
 Confirm the install with:
 
@@ -32,7 +32,7 @@ And ensure the `.cargo/bin` directory appears.
 For Move development, we recommend the [Visual Studio Code (vscode)](https://code.visualstudio.com/) IDE with the Move Analyzer language server plugin installed:
 
 ```shell
-$ cargo install --git https://github.com/diem/move move-analyzer
+$ cargo install --git https://github.com/move-language/move move-analyzer
 ```
 
 Then follow the Visual Studio Marketplace instructions to install the [Move Analyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer). (The `cargo install` command for the language server is broken there; hence, we include the correct command above.)
@@ -64,5 +64,5 @@ Continue your journey through:
 
 * [Smart Contracts with Move](move.md)
 * [Wallet Quick Start](wallet.md)
-* [REST Server API](rest-api.md)
+* [RPC Server API](json-rpc.md)
 * [End-to-End tutorial](../explore/tutorials.md)

@@ -143,12 +143,12 @@
       {
         "name": "See what's New",
         "sublist": [{
-            "name": "Learn Sui Consensus",
-            "url": "/learn/architecture/consensus"
+            "name": "Interact with local network",
+            "url": "/build/json-rpc"
           },
           {
-            "name": "Publish Move modules via Rest",
-            "url": "/build/rest-api#post-apipublish"
+            "name": "Learn Sui consensus",
+            "url": "/learn/architecture/consensus"
           },
           {
             "name": "Use gas objects for transactions",

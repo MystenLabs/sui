@@ -11,6 +11,7 @@ export type ObjectRef = {
 
 export type ObjectExistsInfo = {
   objectRef: ObjectRef,
+  objectType: ObjectType,
   object: any,
 };
 
@@ -19,6 +20,7 @@ export type ObjectNotExistsInfo = {
 };
 
 export type ObjectStatus = 'Exists' | 'NotExists' | 'Deleted';
+export type ObjectType = 'moveObject' | 'movePackage';
 
 
 export type GetOwnedObjectRefsResponse = {

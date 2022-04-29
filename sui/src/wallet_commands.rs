@@ -508,21 +508,6 @@ impl WalletCommands {
                 WalletCommandResult::CreateExampleNFT(object_read)
             }
         });
-        // Sync all managed addresses
-        // This is wasteful because not all addresses might be modified
-        // but will be removed as part of https://github.com/MystenLabs/sui/issues/1045
-        match self {
-            WalletCommands::Publish { .. }
-            | WalletCommands::Call { .. }
-            | WalletCommands::Transfer { .. }
-            | WalletCommands::SplitCoin { .. }
-            | WalletCommands::MergeCoin { .. } => {
-                for address in context.config.accounts.clone() {
-                    context.gateway.sync_account_state(address).await?;
-                }
-            }
-            _ => {}
-        }
         ret
     }
 }
@@ -571,7 +556,7 @@ impl WalletContext {
 
     /// Get all the gas objects (and conveniently, gas amounts) for the address
     pub async fn gas_objects(
-        &mut self,
+        &self,
         address: SuiAddress,
     ) -> Result<Vec<(u64, Object)>, anyhow::Error> {
         let object_refs = self.gateway.get_owned_objects(address).await?;
@@ -627,7 +612,7 @@ impl WalletContext {
 
     /// Find a gas object which fits the budget
     pub async fn gas_for_owner_budget(
-        &mut self,
+        &self,
         address: SuiAddress,
         budget: u64,
         forbidden_gas_objects: BTreeSet<ObjectID>,
