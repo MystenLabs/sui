@@ -11,7 +11,14 @@ function App() {
     return (
         <div className={styles.app}>
             <div className={styles.search}>
-                <h2 className={styles.suititle}>SuiExplorer</h2>
+                <h2 className={styles.suititle}>
+                    <img
+                        className={styles.suilogo}
+                        src="/assets/SuiLogo.png"
+                        alt="Sui Logo"
+                    />
+                    suiexplorer
+                </h2>
                 <Search />
             </div>
             <main>

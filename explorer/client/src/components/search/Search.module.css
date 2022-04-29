@@ -4,7 +4,7 @@
 
 .searchbtn {
     @apply bg-sui hover:bg-suidark hover:text-white 
-  border-none text-black rounded-r-md 
+  border-none text-black rounded-r-sm 
   cursor-pointer font-sans
   leading-8 flex-initial mr-[5vw] ml-0;
 }
@@ -14,6 +14,6 @@
 }
 
 .searchtext {
-    @apply border-none rounded-l-md font-mono leading-8 flex-1 ml-[5vw]
-    text-xs mr-0 bg-offwhite;
+    @apply border-none rounded-l-sm font-mono leading-8 flex-1 ml-[5vw]
+    text-sm mr-0 bg-offwhite h-12;
 }

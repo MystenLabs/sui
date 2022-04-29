@@ -19,7 +19,7 @@ function Footer() {
                     label="Mysten Labs"
                 />
                 <ExternalLink
-                    href="https://devportal-30dd0.web.app/"
+                    href="https://docs.sui.io/"
                     label="Developer Hub"
                 />
             </nav>
