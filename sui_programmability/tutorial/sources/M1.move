@@ -78,11 +78,11 @@ module MyFirstPackage::M1 {
         TestScenario::next_tx(scenario, &admin);
         {
             // extract the Forge object
-            let forge = TestScenario::take_object<Forge>(scenario);
+            let forge = TestScenario::take_owned<Forge>(scenario);
             // verify number of created swords
             assert!(swords_created(&forge) == 0, 1);
             // return the Forge object to the object pool
-            TestScenario::return_object(scenario, forge)
+            TestScenario::return_owned(scenario, forge)
         }
     }
 
@@ -103,16 +103,16 @@ module MyFirstPackage::M1 {
         // second transaction executed by admin to create the sword
         TestScenario::next_tx(scenario, &admin);
         {
-            let forge = TestScenario::take_object<Forge>(scenario);
+            let forge = TestScenario::take_owned<Forge>(scenario);
             // create the sword and transfer it to the initial owner
             sword_create(&mut forge, 42, 7, initial_owner, TestScenario::ctx(scenario));
-            TestScenario::return_object(scenario, forge)
+            TestScenario::return_owned(scenario, forge)
         };
         // third transaction executed by the initial sword owner
         TestScenario::next_tx(scenario, &initial_owner);
         {
             // extract the sword owned by the initial owner
-            let sword = TestScenario::take_object<Sword>(scenario);
+            let sword = TestScenario::take_owned<Sword>(scenario);
             // transfer the sword to the final owner
             sword_transfer(sword, final_owner, TestScenario::ctx(scenario));
         };
@@ -121,11 +121,11 @@ module MyFirstPackage::M1 {
         {
 
             // extract the sword owned by the final owner
-            let sword = TestScenario::take_object<Sword>(scenario);
+            let sword = TestScenario::take_owned<Sword>(scenario);
             // verify that the sword has expected properties
             assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
             // return the sword to the object pool (it cannot be simply "dropped")
-            TestScenario::return_object(scenario, sword)
+            TestScenario::return_owned(scenario, sword)
         }
     }
 

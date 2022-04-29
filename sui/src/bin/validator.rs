@@ -101,14 +101,16 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let consensus_committee = network_config.make_narwhal_committee();
     let consensus_parameters = ConsensusParameters {
-        max_header_delay: 5_000,
-        max_batch_delay: 5_000,
+        max_header_delay: std::time::Duration::from_millis(5_000),
+        max_batch_delay: std::time::Duration::from_millis(5_000),
         ..ConsensusParameters::default()
     };
     let consensus_store_path = sui_config_dir()?
         .join(CONSENSUS_DB_NAME)
         .join(encode_bytes_hex(net_cfg.key_pair.public_key_bytes()));
 
+    // Pass in the newtwork parameters of all authorities
+    let net = network_config.get_authority_infos();
     if let Err(e) = make_server(
         net_cfg,
         &Committee::from(&network_config),
@@ -116,6 +118,7 @@ async fn main() -> Result<(), anyhow::Error> {
         &consensus_committee,
         &consensus_store_path,
         &consensus_parameters,
+        Some(net),
     )
     .await
     .unwrap()

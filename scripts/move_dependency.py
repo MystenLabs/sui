@@ -77,6 +77,7 @@ def switch_to_local():
         "move-unit-test": "tools/move-unit-test",
         "move-vm-runtime": "move-vm/runtime",
         "move-vm-types": "move-vm/types",
+        "move-transactional-test-runner": "testing-infra/transactional-test-runner",
     }
 
     def process_line(line, depth):

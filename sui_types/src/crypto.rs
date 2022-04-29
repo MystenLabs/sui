@@ -3,6 +3,7 @@
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::EpochId;
 use crate::error::{SuiError, SuiResult};
+use crate::json_schema;
 use crate::readable_serde::encoding::Base64;
 use crate::readable_serde::Readable;
 use anyhow::anyhow;
@@ -16,12 +17,14 @@ use narwhal_crypto::ed25519::Ed25519PrivateKey;
 use narwhal_crypto::ed25519::Ed25519PublicKey;
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 use sha3::Sha3_256;
 use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
@@ -129,9 +132,13 @@ impl signature::Signer<AuthoritySignature> for KeyPair {
 }
 
 #[serde_as]
-#[derive(Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
+#[derive(
+    Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema,
+)]
 pub struct PublicKeyBytes(
-    #[serde_as(as = "Readable<Base64, Bytes>")] [u8; dalek::PUBLIC_KEY_LENGTH],
+    #[schemars(with = "json_schema::Base64")]
+    #[serde_as(as = "Readable<Base64, Bytes>")]
+    [u8; dalek::PUBLIC_KEY_LENGTH],
 );
 
 impl PublicKeyBytes {
@@ -209,8 +216,12 @@ pub const SUI_SIGNATURE_LENGTH: usize =
     ed25519_dalek::PUBLIC_KEY_LENGTH + ed25519_dalek::SIGNATURE_LENGTH;
 
 #[serde_as]
-#[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
-pub struct Signature(#[serde_as(as = "Readable<Base64, Bytes>")] [u8; SUI_SIGNATURE_LENGTH]);
+#[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct Signature(
+    #[schemars(with = "json_schema::Base64")]
+    #[serde_as(as = "Readable<Base64, Bytes>")]
+    [u8; SUI_SIGNATURE_LENGTH],
+);
 
 impl AsRef<[u8]> for Signature {
     fn as_ref(&self) -> &[u8] {
@@ -342,8 +353,12 @@ impl Signature {
 /// A signature emitted by an authority. It's useful to decouple this from user signatures,
 /// as their set of supported schemes will probably diverge
 #[serde_as]
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
-pub struct AuthoritySignature(#[serde_as(as = "Readable<Base64, _>")] pub dalek::Signature);
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct AuthoritySignature(
+    #[schemars(with = "json_schema::Base64")]
+    #[serde_as(as = "Readable<Base64, _>")]
+    pub dalek::Signature,
+);
 impl AsRef<[u8]> for AuthoritySignature {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
@@ -443,17 +458,32 @@ impl AuthoritySignature {
 ///       This will make CertifiedTransaction also an instance of the same struct.
 pub trait AuthoritySignInfoTrait: private::SealedAuthoritySignInfoTrait {}
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct EmptySignInfo {}
 impl AuthoritySignInfoTrait for EmptySignInfo {}
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Serialize, Deserialize)]
 pub struct AuthoritySignInfo {
     pub epoch: EpochId,
     pub authority: AuthorityName,
     pub signature: AuthoritySignature,
 }
 impl AuthoritySignInfoTrait for AuthoritySignInfo {}
+
+impl Hash for AuthoritySignInfo {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.epoch.hash(state);
+        self.authority.hash(state);
+    }
+}
+
+impl PartialEq for AuthoritySignInfo {
+    fn eq(&self, other: &Self) -> bool {
+        // We do not compare the signature, because there can be multiple
+        // valid signatures for the same epoch and authority.
+        self.epoch == other.epoch && self.authority == other.authority
+    }
+}
 
 mod private {
     pub trait SealedAuthoritySignInfoTrait {}

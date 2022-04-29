@@ -42,7 +42,7 @@ impl<C> SafeClient<C> {
             signed_transaction.check(&self.committee)?;
             // Check it has the right signer
             fp_ensure!(
-                signed_transaction.auth_signature.authority == self.address,
+                signed_transaction.auth_sign_info.authority == self.address,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
@@ -159,7 +159,7 @@ impl<C> SafeClient<C> {
                 signed_transaction.check(&self.committee)?;
                 // Check it has the right signer
                 fp_ensure!(
-                    signed_transaction.auth_signature.authority == self.address,
+                    signed_transaction.auth_sign_info.authority == self.address,
                     SuiError::ByzantineAuthoritySuspicion {
                         authority: self.address
                     }
@@ -302,6 +302,16 @@ where
         Ok(transaction_info)
     }
 
+    async fn handle_consensus_transaction(
+        &self,
+        transaction: ConsensusTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        // TODO: Add safety checks on the response.
+        self.authority_client
+            .handle_consensus_transaction(transaction)
+            .await
+    }
+
     async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
@@ -378,7 +388,7 @@ where
                             client.report_client_error(err.clone());
                             Some(Err(err))
                         } else {
-                            // Save the seqeunce number of this batch
+                            // Save the sequence number of this batch
                             *seq = signed_batch.batch.next_sequence_number;
                             // Insert a fresh vector for the new batch of transactions
                             let _ =
