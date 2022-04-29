@@ -108,7 +108,7 @@ async fn call_shared_object_contract() {
     let configs = test_authority_configs();
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
 
-    // Publish the move package to all authorities and get the new pacakge ref.
+    // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;
     let transaction = publish_move_package_transaction(gas_objects.pop().unwrap());
     let replies = submit_single_owner_transaction(transaction, &configs).await;
