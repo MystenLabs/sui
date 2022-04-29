@@ -4,10 +4,8 @@
 
 use crate::authority::AuthorityState;
 use async_trait::async_trait;
-use futures::stream::{self, BoxStream};
+use futures::stream::BoxStream;
 use futures::StreamExt;
-use std::collections::VecDeque;
-use std::io;
 use std::sync::Arc;
 use sui_network::network::NetworkClient;
 use sui_network::transport::TcpDataStream;
@@ -59,7 +57,7 @@ pub trait AuthorityAPI {
     async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, io::Error>;
+    ) -> Result<BatchInfoResponseItemStream, SuiError>;
 }
 
 pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoResponseItem, SuiError>>;
@@ -137,11 +135,14 @@ impl AuthorityAPI for NetworkAuthorityClient {
     async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, io::Error> {
+    ) -> Result<BatchInfoResponseItemStream, SuiError> {
         let tcp_stream = self
             .0
             .connect_for_stream(serialize_batch_request(&request))
-            .await?;
+            .await
+            .map_err(|e| SuiError::ClientIoError {
+                error: e.to_string(),
+            })?;
 
         let mut error_count = 0;
         let TcpDataStream { framed_read, .. } = tcp_stream;
@@ -245,20 +246,9 @@ impl AuthorityAPI for LocalAuthorityClient {
     async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, io::Error> {
+    ) -> Result<BatchInfoResponseItemStream, SuiError> {
         let state = self.0.clone();
-
-        let update_items = state.handle_batch_info_request(request).await;
-
-        let (items, _): (VecDeque<_>, VecDeque<_>) = update_items.into_iter().unzip();
-        let stream = stream::iter(items.into_iter()).then(|mut item| async move {
-            let i = item.pop_front();
-            match i {
-                Some(i) => Ok(BatchInfoResponseItem(i)),
-                None => Result::Err(SuiError::BatchErrorSender),
-            }
-        });
-        Ok(Box::pin(stream))
+        Ok(Box::pin(state.handle_batch_streaming(request).await?))
     }
 }
 

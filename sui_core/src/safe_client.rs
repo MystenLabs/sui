@@ -5,7 +5,6 @@
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use async_trait::async_trait;
 use futures::StreamExt;
-use std::io;
 use sui_types::crypto::PublicKeyBytes;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 
@@ -350,7 +349,7 @@ where
     async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, io::Error> {
+    ) -> Result<BatchInfoResponseItemStream, SuiError> {
         let batch_info_items = self
             .authority_client
             .handle_batch_stream(request.clone())

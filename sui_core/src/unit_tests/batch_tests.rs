@@ -18,9 +18,9 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use futures::stream;
 use std::collections::BTreeMap;
+use std::env;
 use std::fs;
 use std::sync::Arc;
-use std::{env, io};
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
     ConfirmationTransaction, ObjectInfoRequest, ObjectInfoResponse, Transaction,
@@ -480,7 +480,7 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
     async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, io::Error> {
+    ) -> Result<BatchInfoResponseItemStream, SuiError> {
         let secret = self.0.lock().await.secret.clone();
         let name = self.0.lock().await.name;
         let batch_size = 3;
@@ -589,7 +589,7 @@ impl AuthorityAPI for ByzantineAuthorityClient {
     async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, io::Error> {
+    ) -> Result<BatchInfoResponseItemStream, SuiError> {
         let secret = self.0.lock().await.secret.clone();
         let name = self.0.lock().await.name;
         let batch_size = 3;

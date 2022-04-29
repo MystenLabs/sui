@@ -7,7 +7,6 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::BatchInfoRequest;
 use sui_types::messages::BatchInfoResponseItem;
 
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::interval;
 
@@ -199,7 +198,7 @@ impl crate::authority::AuthorityState {
     }
 
     pub async fn handle_batch_streaming(
-        self: Arc<Self>,
+        &self,
         request: BatchInfoRequest,
     ) -> Result<impl Stream<Item = Result<BatchInfoResponseItem, SuiError>>, SuiError> {
         // Register a subscriber to not miss any updates
