@@ -114,7 +114,6 @@ async fn submit_shared_object_transaction_all(
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[tokio::test]
-#[ignore = "Flaky, see #1624"]
 async fn shared_object_transaction() {
     let mut objects = test_gas_objects();
     objects.push(test_shared_object());
