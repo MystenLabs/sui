@@ -1,37 +1,25 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use bytes::Bytes;
-use futures::{sink::SinkExt, stream::StreamExt};
 use sui::config::AuthorityPrivateInfo;
-use sui_types::base_types::ObjectRef;
-use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::CallArg;
-use sui_types::messages::Transaction;
-use sui_types::messages::TransactionInfoResponse;
-use sui_types::messages::{ConsensusTransaction, ExecutionStatus};
-use sui_types::object::Object;
-use sui_types::serialize::{
-    deserialize_message, deserialize_transaction_info, serialize_cert,
-    serialize_consensus_transaction, SerializedMessage,
+use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
+use sui_network::network::NetworkClient;
+use sui_types::{
+    base_types::ObjectRef,
+    error::SuiResult,
+    messages::{
+        CallArg, ConfirmationTransaction, ConsensusTransaction, ExecutionStatus, Transaction,
+        TransactionInfoResponse,
+    },
+    object::Object,
 };
-use test_utils::authority::{spawn_test_authorities, test_authority_configs};
-use test_utils::messages::{make_certificates, move_transaction, publish_move_package_transaction};
-use test_utils::messages::{parse_package_ref, test_shared_object_transactions};
-use test_utils::objects::{test_gas_objects, test_shared_object};
-use tokio::net::TcpStream;
-use tokio_util::codec::Framed;
-use tokio_util::codec::LengthDelimitedCodec;
-
-/// Send bytes to a Sui authority.
-async fn transmit(transaction: Bytes, config: &AuthorityPrivateInfo) -> SerializedMessage {
-    let authority_address = format!("{}:{}", config.host, config.port);
-    let stream = TcpStream::connect(authority_address).await.unwrap();
-    let mut connection = Framed::new(stream, LengthDelimitedCodec::new());
-
-    connection.send(transaction).await.unwrap();
-    let bytes = connection.next().await.unwrap().unwrap();
-    deserialize_message(&bytes[..]).unwrap()
-}
+use test_utils::{
+    authority::{spawn_test_authorities, test_authority_configs},
+    messages::{
+        make_certificates, move_transaction, parse_package_ref, publish_move_package_transaction,
+        test_shared_object_transactions,
+    },
+    objects::{test_gas_objects, test_shared_object},
+};
 
 /// Submit a certificate containing only owned-objects to all authorities.
 async fn submit_single_owner_transaction(
@@ -39,15 +27,30 @@ async fn submit_single_owner_transaction(
     configs: &[AuthorityPrivateInfo],
 ) -> Vec<TransactionInfoResponse> {
     let certificate = make_certificates(vec![transaction]).pop().unwrap();
-    let serialized = Bytes::from(serialize_cert(&certificate));
+    let txn = ConfirmationTransaction { certificate };
 
     let mut responses = Vec::new();
     for config in configs {
-        let bytes = transmit(serialized.clone(), config).await;
-        let reply = deserialize_transaction_info(bytes).unwrap();
+        let client = get_client(config);
+        let reply = client
+            .handle_confirmation_transaction(txn.clone())
+            .await
+            .unwrap();
         responses.push(reply);
     }
     responses
+}
+
+fn get_client(config: &AuthorityPrivateInfo) -> NetworkAuthorityClient {
+    let network_config = NetworkClient::new(
+        config.host.clone(),
+        config.port,
+        0,
+        std::time::Duration::from_secs(30),
+        std::time::Duration::from_secs(30),
+    );
+
+    NetworkAuthorityClient::new(network_config)
 }
 
 /// Keep submitting the certificates of a shared-object transaction until it is sequenced by
@@ -59,31 +62,20 @@ async fn submit_shared_object_transaction(
 ) -> Vec<SuiResult<TransactionInfoResponse>> {
     let certificate = make_certificates(vec![transaction]).pop().unwrap();
     let message = ConsensusTransaction::UserTransaction(certificate);
-    let serialized = Bytes::from(serialize_consensus_transaction(&message));
 
     loop {
         let futures: Vec<_> = configs
             .iter()
-            .map(|config| transmit(serialized.clone(), config))
+            .map(|config| {
+                let client = get_client(config);
+                let txn = message.clone();
+                async move { client.handle_consensus_transaction(txn).await }
+            })
             .collect();
 
         let mut replies = Vec::new();
         for result in futures::future::join_all(futures).await {
-            match result {
-                SerializedMessage::TransactionResp(reply) => {
-                    // We got a reply from the Sui authority.
-                    replies.push(Some(Ok(*reply)));
-                }
-                SerializedMessage::Error(error) => match *error {
-                    SuiError::ConsensusConnectionBroken(_) => {
-                        // This is the (confusing, #1489) error message returned by the consensus
-                        // adapter. It means it didn't hear back from consensus and timed out.
-                        replies.push(None);
-                    }
-                    error => replies.push(Some(Err(error))),
-                },
-                message => panic!("Unexpected protocol message: {message:?}"),
-            }
+            replies.push(Some(result))
         }
         if replies.iter().any(|x| x.is_some()) {
             // Remove all `ConsensusConnectionBroken` replies.
@@ -407,7 +399,9 @@ async fn shared_object_sync() {
             .await;
     for reply in replies {
         match reply {
-            Err(SuiError::SharedObjectLockingFailure(_)) => (),
+            // Right now grpc doesn't send back the error message in a recoverable way
+            // Err(SuiError::SharedObjectLockingFailure(_)) => (),
+            Err(_) => (),
             _ => panic!("Unexpected protocol message"),
         }
     }

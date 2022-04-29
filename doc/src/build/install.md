@@ -54,7 +54,7 @@ You can start exploring Sui's source code by looking into the following primary 
 * [sui_core](https://github.com/MystenLabs/sui/tree/main/sui_core) - authority server and Sui Gateway
 * [sui_types](https://github.com/MystenLabs/sui/tree/main/sui_types) - coins, gas, and other object types
 * [explorer](https://github.com/MystenLabs/sui/tree/main/explorer) - object explorer for the Sui network
-* [network_utils](https://github.com/MystenLabs/sui/tree/main/network_utils) - networking utilities and related unit tests
+* [sui-network](https://github.com/MystenLabs/sui/tree/main/crates/sui-network) - networking interfaces
 
 To contribute updates to Sui code, [send pull requests](../contribute/index.md#send-pull-requests) our way.
 

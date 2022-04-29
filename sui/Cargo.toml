@@ -38,7 +38,7 @@ bcs = "0.1.3"
 sui_core = { path = "../sui_core" }
 sui-adapter = { path = "../sui_programmability/adapter" }
 sui-framework = { path = "../sui_programmability/framework" }
-sui-network = { path = "../network_utils" }
+sui-network = { path = "../crates/sui-network" }
 sui-types = { path = "../sui_types" }
 sui-verifier = { path = "../sui_programmability/verifier" }
 sui-open-rpc = { path = "open_rpc" }
@@ -72,7 +72,6 @@ pretty_assertions = "1.2.0"
 tokio-util = { version = "0.7.1", features = ["codec"] }
 
 test_utils = { path = "../test_utils" }
-sui-network = { path = "../network_utils" }
 
 [features]
 benchmark = ["narwhal-node/benchmark"]

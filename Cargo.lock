@@ -262,6 +262,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-stream"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dad5c83079eae9969be7fadefe640a1c566901f05ff91ab221de4b6f68d9507e"
+dependencies = [
+ "async-stream-impl",
+ "futures-core",
+]
+
+[[package]]
+name = "async-stream-impl"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10f203db73a71dfa2fb6dd22763990fa26f3d2625a6da2da900d23b87d26be27"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -768,6 +789,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ddfc5b9aa5d4507acaf872de71051dfd0e309860e88966e1051e462a077aac4f"
 dependencies = [
  "bitflags",
+]
+
+[[package]]
+name = "cmake"
+version = "0.1.48"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8ad8cef104ac57b68b89df3208164d228503abbdce70f6880ffa3d970e7443a"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
@@ -1464,7 +1494,7 @@ dependencies = [
  "serde 1.0.137",
  "thiserror",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.1",
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=808de09203d147b43d59114b8afd9e51cbcf5778)",
  "types",
@@ -1748,7 +1778,7 @@ dependencies = [
  "indexmap",
  "slab",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.1",
  "tracing",
 ]
 
@@ -1911,6 +1941,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyper-timeout"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbb958482e8c7be4bc3cf272a766a2b0bf1a6755e7a6ae777f017a31d11b13b1"
+dependencies = [
+ "hyper",
+ "pin-project-lite",
+ "tokio",
+ "tokio-io-timeout",
+]
+
+[[package]]
 name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2069,7 +2111,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-rustls",
- "tokio-util",
+ "tokio-util 0.7.1",
  "tracing",
  "webpki-roots",
 ]
@@ -2189,7 +2231,7 @@ dependencies = [
  "serde_json",
  "soketto",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.1",
  "tracing",
 ]
 
@@ -3098,6 +3140,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "multimap"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
+
+[[package]]
 name = "name_variant"
 version = "1.0.0"
 source = "git+https://github.com/MystenLabs/mysten-infra?rev=97a056f85555fa2afe497d6abb7cf6bf8faa63cf#97a056f85555fa2afe497d6abb7cf6bf8faa63cf"
@@ -3132,7 +3180,7 @@ dependencies = [
  "rand 0.7.3",
  "thiserror",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.1",
  "tracing",
 ]
 
@@ -3178,7 +3226,7 @@ dependencies = [
  "rand 0.7.3",
  "thiserror",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.1",
  "tracing",
  "tracing-log",
  "tracing-subscriber 0.3.11",
@@ -3744,6 +3792,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "prettyplease"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9e07e3a46d0771a8a06b5f4441527802830b43e679ba12f44960f48dd4c6803"
+dependencies = [
+ "proc-macro2",
+ "syn",
+]
+
+[[package]]
 name = "primary"
 version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=72efe71f0615f91f861cc658e031b763ba30fd5b#72efe71f0615f91f861cc658e031b763ba30fd5b"
@@ -3764,7 +3822,7 @@ dependencies = [
  "serde 1.0.137",
  "thiserror",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.1",
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=808de09203d147b43d59114b8afd9e51cbcf5778)",
  "types",
@@ -3811,6 +3869,61 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec757218438d5fda206afc041538b2f6d889286160d649a86a24d37e1235afd1"
 dependencies = [
  "unicode-xid",
+]
+
+[[package]]
+name = "prost"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a07b0857a71a8cb765763950499cae2413c3f9cede1133478c43600d9e146890"
+dependencies = [
+ "bytes",
+ "prost-derive",
+]
+
+[[package]]
+name = "prost-build"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "120fbe7988713f39d780a58cf1a7ef0d7ef66c6d87e5aa3438940c05357929f4"
+dependencies = [
+ "bytes",
+ "cfg-if 1.0.0",
+ "cmake",
+ "heck 0.4.0",
+ "itertools",
+ "lazy_static 1.4.0",
+ "log",
+ "multimap",
+ "petgraph 0.6.0",
+ "prost",
+ "prost-types",
+ "regex",
+ "tempfile",
+ "which",
+]
+
+[[package]]
+name = "prost-derive"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b670f45da57fb8542ebdbb6105a925fe571b67f9e7ed9f47a06a84e72b4e7cc"
+dependencies = [
+ "anyhow",
+ "itertools",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "prost-types"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d0a014229361011dc8e69c8a1ec6c2e8d0f2af7c91e3ea3f5b2170298461e68"
+dependencies = [
+ "bytes",
+ "prost",
 ]
 
 [[package]]
@@ -4809,7 +4922,7 @@ dependencies = [
  "tempfile",
  "test_utils",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.1",
  "toml",
  "tracing",
  "tracing-subscriber 0.3.11",
@@ -4890,14 +5003,17 @@ dependencies = [
 
 [[package]]
 name = "sui-network"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "async-trait",
+ "bincode",
  "bytes",
- "futures",
- "sui-types",
+ "prost",
+ "prost-build",
+ "serde 1.0.137",
  "tokio",
- "tokio-util",
+ "tonic",
+ "tonic-build",
  "tracing",
 ]
 
@@ -5046,6 +5162,8 @@ dependencies = [
  "tempfile",
  "test_utils",
  "tokio",
+ "tokio-stream",
+ "tokio-util 0.7.1",
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=d2976a45420147ad821baae96e6fe4b12215f743)",
 ]
@@ -5165,7 +5283,7 @@ dependencies = [
  "sui_core",
  "tempfile",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.1",
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=d2976a45420147ad821baae96e6fe4b12215f743)",
 ]
@@ -5288,6 +5406,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-io-timeout"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30b74022ada614a1b4834de765f9bb43877f910cc8ce4be40e89042c9223a8bf"
+dependencies = [
+ "pin-project-lite",
+ "tokio",
+]
+
+[[package]]
 name = "tokio-macros"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5318,6 +5446,21 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util 0.6.9",
+]
+
+[[package]]
+name = "tokio-util"
+version = "0.6.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e99e1983e5d376cd8eb4b66604d2e99e79f5bd988c3055891dcd8c9e2604cc0"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "futures-sink",
+ "log",
+ "pin-project-lite",
+ "tokio",
 ]
 
 [[package]]
@@ -5345,6 +5488,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "tonic"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30fb54bf1e446f44d870d260d99957e7d11fb9d0a0f5bd1a662ad1411cc103f9"
+dependencies = [
+ "async-stream",
+ "async-trait",
+ "axum",
+ "base64",
+ "bytes",
+ "futures-core",
+ "futures-util",
+ "h2",
+ "http",
+ "http-body",
+ "hyper",
+ "hyper-timeout",
+ "percent-encoding",
+ "pin-project",
+ "prost",
+ "prost-derive",
+ "tokio",
+ "tokio-stream",
+ "tokio-util 0.7.1",
+ "tower",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+ "tracing-futures",
+]
+
+[[package]]
+name = "tonic-build"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c03447cdc9eaf8feffb6412dcb27baf2db11669a6c4789f29da799aabfb99547"
+dependencies = [
+ "prettyplease",
+ "proc-macro2",
+ "prost-build",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "tower"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5352,10 +5540,13 @@ checksum = "9a89fd63ad6adf737582df5db40d286574513c69a11dac5214dc3b5603d6713e"
 dependencies = [
  "futures-core",
  "futures-util",
+ "indexmap",
  "pin-project",
  "pin-project-lite",
+ "rand 0.8.5",
+ "slab",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.1",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -5435,6 +5626,16 @@ checksum = "f54c8ca710e81886d498c2fd3331b56c93aa248d49de2222ad2742247c60072f"
 dependencies = [
  "lazy_static 1.4.0",
  "valuable",
+]
+
+[[package]]
+name = "tracing-futures"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
+dependencies = [
+ "pin-project",
+ "tracing",
 ]
 
 [[package]]
@@ -5858,6 +6059,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "which"
+version = "4.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c4fb54e6113b6a8772ee41c3404fb0301ac79604489467e0a9ce1f3e97c24ae"
+dependencies = [
+ "either",
+ "lazy_static 1.4.0",
+ "libc",
+]
+
+[[package]]
 name = "widestring"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5997,7 +6209,7 @@ dependencies = [
  "primary",
  "serde 1.0.137",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.1",
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=808de09203d147b43d59114b8afd9e51cbcf5778)",
  "types",

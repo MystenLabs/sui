@@ -8,7 +8,8 @@ members = [
         "sui_programmability/adapter/transactional-tests",
 	"sui_types",
         "faucet",
-        "test_utils"
+        "test_utils",
+        "crates/sui-network",
 ]
 
 [profile.release]

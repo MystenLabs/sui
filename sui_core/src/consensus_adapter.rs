@@ -3,19 +3,26 @@
 use bytes::Bytes;
 use futures::SinkExt;
 use narwhal_executor::SubscriberResult;
-use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
-use std::net::SocketAddr;
-use sui_network::transport;
-use sui_network::transport::{RwChannel, TcpDataStream};
-use sui_types::committee::Committee;
-use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::ConsensusTransaction;
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::oneshot;
-use tokio::task::JoinHandle;
-use tokio::time::{timeout, Duration};
+use std::{
+    collections::{hash_map::DefaultHasher, HashMap},
+    hash::{Hash, Hasher},
+    net::SocketAddr,
+};
+use sui_types::{
+    committee::Committee,
+    error::{SuiError, SuiResult},
+    messages::ConsensusTransaction,
+};
+use tokio::{
+    net::TcpStream,
+    sync::{
+        mpsc::{Receiver, Sender},
+        oneshot,
+    },
+    task::JoinHandle,
+    time::{timeout, Duration},
+};
+use tokio_util::codec::{FramedWrite, LengthDelimitedCodec};
 use tracing::debug;
 
 #[cfg(test)]
@@ -84,10 +91,21 @@ impl ConsensusAdapter {
     }
 
     /// Attempt to reconnect with a the consensus node.
-    async fn reconnect(address: SocketAddr, buffer_size: usize) -> SuiResult<TcpDataStream> {
-        transport::connect(address.to_string(), buffer_size)
+    async fn reconnect(
+        address: SocketAddr,
+        buffer_size: usize,
+    ) -> SuiResult<FramedWrite<TcpStream, LengthDelimitedCodec>> {
+        let stream = TcpStream::connect(address)
             .await
-            .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))
+            .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))?;
+
+        let stream = FramedWrite::new(
+            stream,
+            LengthDelimitedCodec::builder()
+                .max_frame_length(buffer_size)
+                .new_codec(),
+        );
+        Ok(stream)
     }
 
     /// Check if this authority should submit the transaction to consensus.
@@ -124,7 +142,6 @@ impl ConsensusAdapter {
             // does not require to take self as a mutable reference.
             Self::reconnect(self.consensus_address, self.buffer_size)
                 .await?
-                .sink()
                 .send(bytes)
                 .await
                 .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))?;

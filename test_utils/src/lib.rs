@@ -4,13 +4,13 @@ pub mod authority;
 pub mod messages;
 pub mod network;
 pub mod objects;
-pub mod sequencer;
 
-use rand::rngs::StdRng;
-use rand::SeedableRng;
-use sui_types::base_types::SuiAddress;
-use sui_types::committee::Committee;
-use sui_types::crypto::{get_key_pair_from_rng, KeyPair};
+use rand::{rngs::StdRng, SeedableRng};
+use sui_types::{
+    base_types::SuiAddress,
+    committee::Committee,
+    crypto::{get_key_pair_from_rng, KeyPair},
+};
 
 /// The size of the committee used for tests.
 pub const TEST_COMMITTEE_SIZE: usize = 4;

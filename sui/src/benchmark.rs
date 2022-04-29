@@ -3,26 +3,31 @@
 
 use futures::{join, StreamExt};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use std::panic;
-use std::thread;
-use std::{thread::sleep, time::Duration};
+use std::{panic, thread, thread::sleep, time::Duration};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
-use sui_network::network::{NetworkClient, NetworkServer};
-use sui_types::batch::UpdateItem;
-use sui_types::messages::{BatchInfoRequest, BatchInfoResponseItem};
-use sui_types::serialize::*;
+use sui_network::{
+    network::{NetworkClient, NetworkServer},
+    tonic,
+};
+use sui_types::{
+    batch::UpdateItem,
+    messages::{BatchInfoRequest, BatchInfoResponseItem},
+    serialize::*,
+};
 use tokio::runtime::{Builder, Runtime};
 use tracing::{error, info};
 pub mod bench_types;
 pub mod load_generator;
 pub mod transaction_creator;
 pub mod validator_preparer;
-use crate::benchmark::bench_types::{Benchmark, BenchmarkType};
-use crate::benchmark::load_generator::{
-    calculate_throughput, check_transaction_response, send_tx_chunks, FixedRateLoadGenerator,
+use crate::benchmark::{
+    bench_types::{Benchmark, BenchmarkType},
+    load_generator::{
+        calculate_throughput, check_transaction_response, send_tx_chunks, FixedRateLoadGenerator,
+    },
+    transaction_creator::TransactionCreator,
+    validator_preparer::ValidatorPreparer,
 };
-use crate::benchmark::transaction_creator::TransactionCreator;
-use crate::benchmark::validator_preparer::ValidatorPreparer;
 
 use self::bench_types::{BenchmarkResult, MicroBenchmarkResult, MicroBenchmarkType};
 
@@ -228,7 +233,20 @@ fn run_latency_microbench(
 async fn run_follower(network_client: NetworkClient) {
     // We spawn a second client that listens to the batch interface
     let _batch_client_handle = tokio::task::spawn(async move {
-        let authority_client = NetworkAuthorityClient::new(network_client);
+        let uri = format!(
+            "http://{}:{}",
+            network_client.base_address(),
+            network_client.base_port()
+        )
+        .parse()
+        .unwrap();
+        let channel = tonic::transport::Channel::builder(uri)
+            .connect_timeout(network_client.send_timeout())
+            .timeout(network_client.recv_timeout())
+            .connect()
+            .await
+            .unwrap();
+        let authority_client = NetworkAuthorityClient::with_channel(channel, network_client);
 
         let mut start = 0;
 

@@ -2,30 +2,31 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::gateway_config::GatewayType;
-use crate::keystore::KeystoreType;
-use narwhal_config::Committee as ConsensusCommittee;
-use narwhal_config::{Authority, PrimaryAddresses, Stake, WorkerAddresses};
+use crate::{gateway_config::GatewayType, keystore::KeystoreType};
+use narwhal_config::{
+    Authority, Committee as ConsensusCommittee, PrimaryAddresses, Stake, WorkerAddresses,
+};
 use narwhal_crypto::ed25519::Ed25519PublicKey;
 use once_cell::sync::Lazy;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
-use serde_with::hex::Hex;
-use serde_with::serde_as;
-use std::fmt::Write;
-use std::fmt::{Display, Formatter};
-use std::fs::{self, File};
-use std::io::BufReader;
-use std::net::{SocketAddr, ToSocketAddrs};
-use std::ops::{Deref, DerefMut};
-use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use serde_with::{hex::Hex, serde_as};
+use std::{
+    fmt::{Display, Formatter, Write},
+    fs::{self, File},
+    io::BufReader,
+    net::{SocketAddr, ToSocketAddrs},
+    ops::{Deref, DerefMut},
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_network::network::PortAllocator;
-use sui_types::base_types::*;
-use sui_types::committee::{Committee, EpochId};
-use sui_types::crypto::{get_key_pair, KeyPair, PublicKeyBytes};
+use sui_types::{
+    base_types::*,
+    committee::{Committee, EpochId},
+    crypto::{get_key_pair, KeyPair, PublicKeyBytes},
+};
 use tracing::log::trace;
 
 const DEFAULT_WEIGHT: usize = 1;
