@@ -172,6 +172,7 @@ impl AuthorityServer {
                 match stream1 {
                     Ok(stream1) => {
                         let stream1 = Box::pin(stream1);
+                        // Feed the stream into the sink until completion
                         channel
                             .sink()
                             .send_all(&mut stream1.map(|item| match item {
@@ -192,7 +193,12 @@ impl AuthorityServer {
                     }
                     Err(e) => Err(e),
                 }
-            },
+            }
+            SerializedMessage::ConsensusTransaction(message) => self
+                .consensus_adapter
+                .submit(&message)
+                .await
+                .map(|info| Some(serialize_transaction_info(&info))),
             _ => Err(SuiError::UnexpectedMessage),
         };
 
