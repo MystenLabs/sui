@@ -805,7 +805,7 @@ dependencies = [
 [[package]]
 name = "config"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02#8ae2164f0510349cbac2770e50e853bce5ab0e02"
+source = "git+https://github.com/MystenLabs/narwhal?rev=976355d2ff75aefc6b7ec7fd32742d3d7188c4e0#976355d2ff75aefc6b7ec7fd32742d3d7188c4e0"
 dependencies = [
  "crypto",
  "serde 1.0.136",
@@ -833,7 +833,7 @@ dependencies = [
 [[package]]
 name = "consensus"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02#8ae2164f0510349cbac2770e50e853bce5ab0e02"
+source = "git+https://github.com/MystenLabs/narwhal?rev=976355d2ff75aefc6b7ec7fd32742d3d7188c4e0#976355d2ff75aefc6b7ec7fd32742d3d7188c4e0"
 dependencies = [
  "bincode",
  "blake2",
@@ -981,7 +981,7 @@ dependencies = [
 [[package]]
 name = "crypto"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02#8ae2164f0510349cbac2770e50e853bce5ab0e02"
+source = "git+https://github.com/MystenLabs/narwhal?rev=976355d2ff75aefc6b7ec7fd32742d3d7188c4e0#976355d2ff75aefc6b7ec7fd32742d3d7188c4e0"
 dependencies = [
  "ark-bls12-377",
  "ark-ec",
@@ -1433,7 +1433,7 @@ checksum = "77f3309417938f28bf8228fcff79a4a37103981e3e186d2ccd19c74b38f4eb71"
 [[package]]
 name = "executor"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02#8ae2164f0510349cbac2770e50e853bce5ab0e02"
+source = "git+https://github.com/MystenLabs/narwhal?rev=976355d2ff75aefc6b7ec7fd32742d3d7188c4e0#976355d2ff75aefc6b7ec7fd32742d3d7188c4e0"
 dependencies = [
  "async-trait",
  "bincode",
@@ -3069,7 +3069,7 @@ dependencies = [
 [[package]]
 name = "network"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02#8ae2164f0510349cbac2770e50e853bce5ab0e02"
+source = "git+https://github.com/MystenLabs/narwhal?rev=976355d2ff75aefc6b7ec7fd32742d3d7188c4e0#976355d2ff75aefc6b7ec7fd32742d3d7188c4e0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -3106,7 +3106,7 @@ dependencies = [
 [[package]]
 name = "node"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02#8ae2164f0510349cbac2770e50e853bce5ab0e02"
+source = "git+https://github.com/MystenLabs/narwhal?rev=976355d2ff75aefc6b7ec7fd32742d3d7188c4e0#976355d2ff75aefc6b7ec7fd32742d3d7188c4e0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3691,7 +3691,7 @@ dependencies = [
 [[package]]
 name = "primary"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02#8ae2164f0510349cbac2770e50e853bce5ab0e02"
+source = "git+https://github.com/MystenLabs/narwhal?rev=976355d2ff75aefc6b7ec7fd32742d3d7188c4e0#976355d2ff75aefc6b7ec7fd32742d3d7188c4e0"
 dependencies = [
  "async-recursion",
  "async-trait",
@@ -3705,6 +3705,7 @@ dependencies = [
  "ed25519-dalek",
  "futures",
  "network",
+ "rand 0.7.3",
  "serde 1.0.136",
  "thiserror",
  "tokio",
@@ -5454,7 +5455,7 @@ checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 [[package]]
 name = "types"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02#8ae2164f0510349cbac2770e50e853bce5ab0e02"
+source = "git+https://github.com/MystenLabs/narwhal?rev=976355d2ff75aefc6b7ec7fd32742d3d7188c4e0#976355d2ff75aefc6b7ec7fd32742d3d7188c4e0"
 dependencies = [
  "base64",
  "bincode",
@@ -5866,7 +5867,7 @@ checksum = "d19538ccc21819d01deaf88d6a17eae6596a12e9aafdbb97916fb49896d89de9"
 [[package]]
 name = "worker"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=8ae2164f0510349cbac2770e50e853bce5ab0e02#8ae2164f0510349cbac2770e50e853bce5ab0e02"
+source = "git+https://github.com/MystenLabs/narwhal?rev=976355d2ff75aefc6b7ec7fd32742d3d7188c4e0#976355d2ff75aefc6b7ec7fd32742d3d7188c4e0"
 dependencies = [
  "async-trait",
  "bincode",
