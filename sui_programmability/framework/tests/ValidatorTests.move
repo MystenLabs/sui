@@ -15,7 +15,7 @@ module Sui::ValidatorTests {
         {
             let ctx = TestScenario::ctx(scenario);
 
-            let init_stake = Coin::mint_for_testing(10, ctx);
+            let init_stake = Coin::into_balance(Coin::mint_for_testing(10, ctx));
             let validator = Validator::new(
                 sender,
                 b"Validator1",
@@ -25,7 +25,7 @@ module Sui::ValidatorTests {
             assert!(Validator::stake_amount(&validator) == 10, 0);
             assert!(Validator::sui_address(&validator) == sender, 0);
 
-            Validator::destroy(validator);
+            Validator::destroy(validator, ctx);
         };
 
         // Check that after destroy, the original stake still exists.
@@ -42,7 +42,7 @@ module Sui::ValidatorTests {
         let sender = @0x1;
         let scenario = &mut TestScenario::begin(&sender);
         let ctx = TestScenario::ctx(scenario);
-        let init_stake = Coin::mint_for_testing(10, ctx);
+        let init_stake = Coin::into_balance(Coin::mint_for_testing(10, ctx));
         let validator = Validator::new(
             sender,
             b"Validator1",
@@ -50,7 +50,7 @@ module Sui::ValidatorTests {
             init_stake,
         );
 
-        let new_stake = Coin::mint_for_testing(30, ctx);
+        let new_stake = Coin::into_balance(Coin::mint_for_testing(30, ctx));
         Validator::request_add_stake(&mut validator, new_stake, 100);
 
         assert!(Validator::stake_amount(&validator) == 10, 0);
@@ -75,6 +75,6 @@ module Sui::ValidatorTests {
             TestScenario::return_owned(scenario, withdraw);
         };
 
-        Validator::destroy(validator)
+        Validator::destroy(validator, TestScenario::ctx(scenario));
     }
 }

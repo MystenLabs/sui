@@ -102,11 +102,8 @@ module Basics::Sandwich {
 
         assert!(amount > 0, ENoProfits);
 
-        // Take sub balance from the `Grocery.profits`
-        let balance = Balance::split(&mut grocery.profits, amount);
-
-        // Wrap a balance into transferable `Coin` so it can be transfered
-        let coin = Coin::from_balance(balance, ctx);
+        // Take a transferable `Coin` from a `Balance`
+        let coin = Coin::withdraw(&mut grocery.profits, amount, ctx);
 
         Transfer::transfer(coin, TxContext::sender(ctx));
     }

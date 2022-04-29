@@ -129,16 +129,24 @@ module Sui::Coin {
     }
 
     /// Create a coin worth `value`. and increase the total supply
-    /// in `cap` accordingly
-    /// Aborts if `value` + `cap.total_supply` >= U64_MAX
+    /// in `cap` accordingly.
     public fun mint<T>(
         value: u64, cap: &mut TreasuryCap<T>, ctx: &mut TxContext,
     ): Coin<T> {
-        cap.total_supply = cap.total_supply + value;
         Coin {
             id: TxContext::new_id(ctx),
-            balance: Balance::create_with_value(value)
+            balance: mint_balance(value, cap)
         }
+    }
+
+    /// Mint some amount of T as a `Balance` and increase the total
+    /// supply in `cap` accordingly.
+    /// Aborts if `value` + `cap.total_supply` >= U64_MAX
+    public fun mint_balance<T>(
+        value: u64, cap: &mut TreasuryCap<T>
+    ): Balance<T> {
+        cap.total_supply = cap.total_supply + value;
+        Balance::create_with_value(value)
     }
 
     /// Destroy the coin `c` and decrease the total supply in `cap`
