@@ -114,7 +114,7 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
                 .map_err(serde::de::Error::custom)?
                 .next_port()
                 .ok_or_else(|| serde::de::Error::custom("No available port."))?;
-            socket_addr_from_hostport("localhost", port)
+            socket_addr_from_hostport("127.0.0.1", port)
         };
 
         Ok(AuthorityPrivateInfo {

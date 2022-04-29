@@ -302,6 +302,16 @@ where
         Ok(transaction_info)
     }
 
+    async fn handle_consensus_transaction(
+        &self,
+        transaction: ConsensusTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        // TODO: Add safety checks on the response.
+        self.authority_client
+            .handle_consensus_transaction(transaction)
+            .await
+    }
+
     async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,

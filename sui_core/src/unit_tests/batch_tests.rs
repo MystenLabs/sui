@@ -23,8 +23,8 @@ use std::sync::Arc;
 use std::{env, io};
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    ConfirmationTransaction, ObjectInfoRequest, ObjectInfoResponse, Transaction,
-    TransactionInfoRequest, TransactionInfoResponse,
+    ConfirmationTransaction, ConsensusTransaction, ObjectInfoRequest, ObjectInfoResponse,
+    Transaction, TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::object::Object;
 
@@ -443,6 +443,17 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         })
     }
 
+    async fn handle_consensus_transaction(
+        &self,
+        _transaction: ConsensusTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        Ok(TransactionInfoResponse {
+            signed_transaction: None,
+            certified_transaction: None,
+            signed_effects: None,
+        })
+    }
+
     async fn handle_account_info_request(
         &self,
         _request: AccountInfoRequest,
@@ -543,6 +554,17 @@ impl AuthorityAPI for ByzantineAuthorityClient {
     async fn handle_confirmation_transaction(
         &self,
         _transaction: ConfirmationTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        Ok(TransactionInfoResponse {
+            signed_transaction: None,
+            certified_transaction: None,
+            signed_effects: None,
+        })
+    }
+
+    async fn handle_consensus_transaction(
+        &self,
+        _transaction: ConsensusTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         Ok(TransactionInfoResponse {
             signed_transaction: None,
