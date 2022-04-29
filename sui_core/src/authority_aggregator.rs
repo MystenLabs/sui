@@ -38,7 +38,7 @@ pub struct AuthorityAggregator<A> {
     /// Our Sui committee.
     pub committee: Committee,
     /// How to talk to this committee.
-    authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
+    pub authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
 }
 
 impl<A> AuthorityAggregator<A> {
@@ -69,7 +69,7 @@ where
     /// Note: Both source and destination may be byzantine, therefore one should always
     /// time limit the call to this function to avoid byzantine authorities consuming
     /// an unbounded amount of resources.
-    async fn sync_authority_source_to_destination(
+    pub async fn sync_authority_source_to_destination(
         &self,
         cert: ConfirmationTransaction,
         source_authority: AuthorityName,
