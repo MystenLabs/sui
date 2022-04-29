@@ -1,19 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::test_committee;
-use crate::test_keys;
+use crate::{test_committee, test_keys};
 use narwhal_config::Parameters as ConsensusParameters;
-use std::path::PathBuf;
-use std::sync::Arc;
-use sui::config::{make_default_narwhal_committee, AuthorityPrivateInfo, PORT_ALLOCATOR};
-use sui::sui_commands::make_authority;
+use std::{path::PathBuf, sync::Arc};
+use sui::{
+    config::{make_default_narwhal_committee, AuthorityPrivateInfo, PORT_ALLOCATOR},
+    sui_commands::make_authority,
+};
 use sui_adapter::genesis;
-use sui_core::authority::AuthorityState;
-use sui_core::authority::AuthorityStore;
-use sui_core::authority_server::AuthorityServer;
-use sui_network::transport::SpawnedServer;
-use sui_types::crypto::KeyPair;
-use sui_types::object::Object;
+use sui_core::{
+    authority::{AuthorityState, AuthorityStore},
+    authority_server::AuthorityServerHandle,
+};
+use sui_types::{crypto::KeyPair, object::Object};
 
 /// The default network buffer size of a test authority.
 pub const NETWORK_BUFFER_SIZE: usize = 65_000;
@@ -83,7 +82,7 @@ pub async fn spawn_test_authorities<I>(
     objects: I,
     authorities: &[AuthorityPrivateInfo],
     key_pairs: &[KeyPair],
-) -> Vec<SpawnedServer<AuthorityServer>>
+) -> Vec<AuthorityServerHandle>
 where
     I: IntoIterator<Item = Object> + Clone,
 {
