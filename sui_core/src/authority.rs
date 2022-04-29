@@ -238,12 +238,9 @@ impl AuthorityState {
 
         // Ensure an idempotent answer.
         if self._database.effects_exists(&transaction_digest)? {
-            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
-            println!(
-                "{:?}: {transaction_digest:?} already executed, returning Ok",
-                self.name
-            );
-            return Ok(transaction_info);
+            let info = self.make_transaction_info(&transaction_digest).await?;
+            debug!("Transaction {transaction_digest:?} already executed");
+            return Ok(info);
         }
 
         // Check the certificate and retrieve the transfer data.
@@ -422,11 +419,8 @@ impl AuthorityState {
         // this function and that the last consensus index is also kept in memory. It is
         // thus ok to only persist now (despite this function may have returned earlier).
         // In the worst case, the synchronizer of the consensus client will catch up.
-        self._database.persist_certificate_and_lock_shared_objects(
-            certificate,
-            last_consensus_index,
-            &self.name,
-        )
+        self._database
+            .persist_certificate_and_lock_shared_objects(certificate, last_consensus_index)
     }
 
     pub async fn handle_transaction_info_request(
@@ -834,40 +828,29 @@ impl ExecutionState for AuthorityState {
         let ConsensusTransaction::UserTransaction(certificate) = transaction;
 
         // Ensure an idempotent answer.
-        let transaction_digest = certificate.digest();
-        if self._database.effects_exists(transaction_digest)? {
-            let info = self.make_transaction_info(&transaction_digest).await?;
-            println!(
-                "{:?}: {transaction_digest:?} already executed, returning Ok",
-                self.name
-            );
+        let digest = certificate.digest();
+        if self._database.effects_exists(digest)? {
+            let info = self.make_transaction_info(digest).await?;
+            debug!("Shared-object transaction {digest:?} already executed");
             return Ok(serialize_transaction_info(&info));
         }
 
-        let x = self
-            .handle_consensus_certificate(certificate.clone(), execution_indices)
-            .await;
-        if x.is_err() {
-            println!("ASSIGN LOCKED FAILED: {x:?}");
-        }
-        x?;
+        // Assign locks to shared objects.
+        self.handle_consensus_certificate(certificate.clone(), execution_indices)
+            .await?;
+        debug!("Shared objects locks successfully attributed to transaction {digest:?}");
 
+        // Attempt to execute the transaction. This will only succeed if the authority
+        // already executed all its dependencies.
         let confirmation_transaction = ConfirmationTransaction {
             certificate: certificate.clone(),
         };
-        let x = self
+        let info = self
             .handle_confirmation_transaction(confirmation_transaction.clone())
-            .await;
-        println!(
-            "{:?} executed (success={}) {:?}",
-            self.name,
-            x.is_ok(),
-            transaction_digest
-        );
-        if x.is_err() {
-            println!("{x:?}");
-        }
-        let info = x?;
+            .await?;
+        debug!("Executed transaction {digest:?}");
+
+        // Return a serialized transaction info response. This will be sent back to the client.
         Ok(serialize_transaction_info(&info))
     }
 

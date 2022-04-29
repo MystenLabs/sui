@@ -11,11 +11,13 @@ use sui_adapter::genesis;
 use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::crypto::Signature;
 use sui_types::gas_coin::GasCoin;
+use sui_types::messages::ConfirmationTransaction;
 use sui_types::messages::{
     CallArg, CertifiedTransaction, SignatureAggregator, Transaction, TransactionData,
 };
 use sui_types::object::OBJECT_START_VERSION;
 use sui_types::object::{MoveObject, Object, Owner};
+use sui_types::serialize::serialize_transaction_info;
 use test_utils::network::test_listener;
 use test_utils::test_keys;
 use tokio::sync::mpsc::channel;
@@ -114,7 +116,6 @@ async fn listen_to_sequenced_transaction() {
 
     // Spawn a consensus listener.
     ConsensusListener::spawn(
-        Arc::new(state),
         /* rx_consensus_input */ rx_sui_to_consensus,
         /* rx_consensus_output */ rx_consensus_to_sui,
     );
@@ -129,7 +130,7 @@ async fn listen_to_sequenced_transaction() {
 
     // Notify the consensus listener that the transaction has been sequenced.
     tokio::task::yield_now().await;
-    let output = (Ok(()), serialized);
+    let output = (Ok(Vec::default()), serialized);
     tx_consensus_to_sui.send(output).await.unwrap();
 
     // Ensure the caller get notified from the consensus listener.
@@ -181,7 +182,8 @@ async fn submit_transaction_to_consensus() {
         let confirmation_transaction = ConfirmationTransaction { certificate };
         let result = state
             .handle_confirmation_transaction(confirmation_transaction)
-            .await;
+            .await
+            .map(|info| serialize_transaction_info(&info));
 
         // Reply to the submitter.
         replier.send(result).unwrap();

@@ -9,9 +9,9 @@ use sui_types::messages::Transaction;
 use sui_types::messages::TransactionInfoResponse;
 use sui_types::messages::{ConsensusTransaction, ExecutionStatus};
 use sui_types::serialize::{
-    deserialize_message, deserialize_transaction_info, serialize_consensus_transaction,
+    deserialize_message, deserialize_transaction_info, serialize_cert,
+    serialize_consensus_transaction, SerializedMessage,
 };
-use sui_types::serialize::{serialize_cert, SerializedMessage};
 use test_utils::authority::{spawn_test_authorities, test_authority_configs};
 use test_utils::messages::{make_certificates, move_transaction, publish_move_package_transaction};
 use test_utils::messages::{parse_package_ref, test_shared_object_transactions};
@@ -51,7 +51,7 @@ async fn submit_single_owner_transaction(
 // Keep submitting the certificate until it is sequenced by consensus. We use the loop
 // since some consensus protocols (like Tusk) are not guaranteed to include the transaction
 // (but it has high probability to do so, so it should virtually never be used).
-async fn submit_shared_object_transaction_all(
+async fn submit_shared_object_transaction(
     transaction: Transaction,
     configs: &[AuthorityPrivateInfo],
 ) -> TransactionInfoResponse {
@@ -77,11 +77,12 @@ async fn submit_shared_object_transaction_all(
     }
 }
 
-async fn submit_shared_object_transaction_all2(
+/// Same as `submit_shared_object_transaction` but the transaction is submitted to every
+/// authority rather than only the first.
+async fn submit_shared_object_transaction_all(
     transaction: Transaction,
     configs: &[AuthorityPrivateInfo],
 ) -> TransactionInfoResponse {
-    let tx_digest = transaction.digest();
     let certificate = make_certificates(vec![transaction]).pop().unwrap();
     let message = ConsensusTransaction::UserTransaction(certificate);
     let serialized = Bytes::from(serialize_consensus_transaction(&message));
@@ -92,11 +93,7 @@ async fn submit_shared_object_transaction_all2(
             .map(|config| transmit(serialized.clone(), config))
             .collect();
 
-        for (result, config) in futures::future::join_all(futures)
-            .await
-            .into_iter()
-            .zip(configs.iter())
-        {
+        for result in futures::future::join_all(futures).await {
             match result {
                 SerializedMessage::TransactionResp(reply) => {
                     // We got a reply from the Sui authority.
@@ -107,14 +104,7 @@ async fn submit_shared_object_transaction_all2(
                         // This is the (confusing) error message returned by the consensus
                         // adapter. It means it didn't hear back from consensus and timed out.
                     }
-                    error => {
-                        println!("\n\nError is about to happen:");
-                        println!(
-                            "{:?}: tx {tx_digest:?}\n",
-                            config.key_pair.public_key_bytes()
-                        );
-                        panic!("{error}")
-                    }
+                    error => panic!("{error}"),
                 },
                 message => panic!("Unexpected protocol message: {message:?}"),
             }
@@ -122,6 +112,7 @@ async fn submit_shared_object_transaction_all2(
     }
 }
 
+/// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[tokio::test]
 #[ignore = "Flaky, see #1624"]
 async fn shared_object_transaction() {
@@ -143,8 +134,9 @@ async fn shared_object_transaction() {
     assert!(reply.signed_effects.is_some());
 }
 
+/// End-to-end shared transaction test for a Sui validator. It does not test the client, wallet,
+/// or gateway but tests the end-to-end flow from Sui to consensus.
 #[tokio::test]
-//#[ignore = "Flaky, see #1624"]
 async fn call_shared_object_contract() {
     let mut gas_objects = test_gas_objects();
 
@@ -186,7 +178,94 @@ async fn call_shared_object_contract() {
 
     // Ensure the value of the counter is `0`.
     tokio::task::yield_now().await;
-    println!("\n --- checking counter=0 ---\n");
+    let transaction = move_transaction(
+        gas_objects.pop().unwrap(),
+        "Counter",
+        "assert_value",
+        package_ref,
+        vec![
+            CallArg::SharedObject(counter_id),
+            CallArg::Pure(0u64.to_le_bytes().to_vec()),
+        ],
+    );
+    let reply = submit_shared_object_transaction(transaction, &configs).await;
+    let effects = reply.signed_effects.unwrap().effects;
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+
+    // Make a transaction to increment the counter.
+    tokio::task::yield_now().await;
+    let transaction = move_transaction(
+        gas_objects.pop().unwrap(),
+        "Counter",
+        "increment",
+        package_ref,
+        vec![CallArg::SharedObject(counter_id)],
+    );
+    let reply = submit_shared_object_transaction(transaction, &configs).await;
+    let effects = reply.signed_effects.unwrap().effects;
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+
+    // Ensure the value of the counter is `1`.
+    tokio::task::yield_now().await;
+    let transaction = move_transaction(
+        gas_objects.pop().unwrap(),
+        "Counter",
+        "assert_value",
+        package_ref,
+        vec![
+            CallArg::SharedObject(counter_id),
+            CallArg::Pure(1u64.to_le_bytes().to_vec()),
+        ],
+    );
+    let reply = submit_shared_object_transaction(transaction, &configs).await;
+    let effects = reply.signed_effects.unwrap().effects;
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+}
+
+/// Same test as `call_shared_object_contract` but the clients submits many times the same
+/// transaction (one copy per authority).
+#[tokio::test]
+async fn call_shared_object_contract_flood() {
+    let mut gas_objects = test_gas_objects();
+
+    // Get the authority configs and spawn them. Note that it is important to not drop
+    // the handles (or the authorities will stop).
+    let configs = test_authority_configs();
+    let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
+
+    // Publish the move package to all authorities and get the new pacakge ref.
+    tokio::task::yield_now().await;
+    let transaction = publish_move_package_transaction(gas_objects.pop().unwrap());
+    let replies = submit_single_owner_transaction(transaction, &configs).await;
+    let mut package_refs = Vec::new();
+    for reply in replies {
+        let effects = reply.signed_effects.unwrap().effects;
+        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+        package_refs.push(parse_package_ref(&effects).unwrap());
+    }
+    let package_ref = package_refs.pop().unwrap();
+
+    // Make a transaction to create a counter.
+    tokio::task::yield_now().await;
+    let transaction = move_transaction(
+        gas_objects.pop().unwrap(),
+        "Counter",
+        "create",
+        package_ref,
+        /* arguments */ Vec::default(),
+    );
+    let replies = submit_single_owner_transaction(transaction, &configs).await;
+    let mut counter_ids = Vec::new();
+    for reply in replies {
+        let effects = reply.signed_effects.unwrap().effects;
+        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+        let ((shared_object_id, _, _), _) = effects.created[0];
+        counter_ids.push(shared_object_id);
+    }
+    let counter_id = counter_ids.pop().unwrap();
+
+    // Ensure the value of the counter is `0`.
+    tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "Counter",
@@ -203,7 +282,6 @@ async fn call_shared_object_contract() {
 
     // Make a transaction to increment the counter.
     tokio::task::yield_now().await;
-    println!("\n --- incrementing counter ---\n");
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "Counter",
@@ -217,7 +295,6 @@ async fn call_shared_object_contract() {
 
     // Ensure the value of the counter is `1`.
     tokio::task::yield_now().await;
-    println!("\n --- checking counter=1 ---\n");
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "Counter",
