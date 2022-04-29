@@ -138,15 +138,17 @@ impl Display for PublishResponse {
         writeln!(writer, "----- Publish Results ----")?;
         writeln!(
             writer,
-            "The newly published package object: {:?}",
-            self.package
+            "The newly published package object ID: {:?}",
+            self.package.0
         )?;
-        writeln!(
-            writer,
-            "List of objects created by running module initializers:"
-        )?;
-        for obj in &self.created_objects {
-            writeln!(writer, "{}", obj)?;
+        if !self.created_objects.is_empty() {
+            writeln!(
+                writer,
+                "List of objects created by running module initializers:\n"
+            )?;
+            for obj in &self.created_objects {
+                writeln!(writer, "{}\n", obj)?;
+            }
         }
         let gas_coin = GasCoin::try_from(&self.updated_gas).map_err(fmt::Error::custom)?;
         writeln!(writer, "Updated Gas : {}", gas_coin)?;
