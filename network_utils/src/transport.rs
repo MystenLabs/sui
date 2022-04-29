@@ -97,7 +97,15 @@ where
     S: MessageHandler<TcpDataStream> + Send + Sync + 'static,
 {
     let (tx_cancellation, rx_cancellation) = futures::channel::oneshot::channel();
-    let std_listener = std::net::TcpListener::bind(address)?;
+    info!(address =% address, "Attempting to spawn server and bind to address...");
+    let std_listener = std::net::TcpListener::bind(address).map_err(|e| match e.kind() {
+        // Wrap custom error to give information about the address that could not be bbound
+        ErrorKind::AddrInUse => std::io::Error::new(
+            ErrorKind::AddrInUse,
+            format!("Address {address} was in use!"),
+        ),
+        _ => e,
+    })?;
 
     let local_addr = std_listener.local_addr()?;
     let host = local_addr.ip();
