@@ -15,6 +15,8 @@ rand = "0.7.3"
 bytes = "1.1.0"
 serde = { version = "1.0.137", features = ["derive"] }
 tokio = { version = "1.17.0", features = ["full", "tracing"] }
+tokio-stream = { version = "0.1.8", features = ["sync", "net"] }
+tokio-util = { version = "0.7.1", features = ["codec"] }
 parking_lot = "0.12.0"
 itertools = "0.10.3"
 async-trait = "0.1.53"
@@ -30,7 +32,7 @@ schemars = "0.8.8"
 
 sui-adapter = { path = "../sui_programmability/adapter" }
 sui-framework = { path = "../sui_programmability/framework" }
-sui-network = { path = "../network_utils" }
+sui-network = { path = "../crates/sui-network" }
 sui-types = { path = "../sui_types" }
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }

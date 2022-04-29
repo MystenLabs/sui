@@ -3,10 +3,8 @@
 
 use super::load_generator::calculate_throughput;
 use clap::*;
-use std::default::Default;
-use std::path::PathBuf;
+use std::{default::Default, path::PathBuf};
 use strum_macros::EnumString;
-use sui_network::transport;
 
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -18,13 +16,13 @@ pub struct Benchmark {
     #[clap(long, default_value = "1", global = true)]
     pub committee_size: usize,
     /// Timeout for sending queries (us)
-    #[clap(long, default_value = "40000000", global = true)]
+    #[clap(long, default_value = "400000000", global = true)]
     pub send_timeout_us: u64,
     /// Timeout for receiving responses (us)
-    #[clap(long, default_value = "40000000", global = true)]
+    #[clap(long, default_value = "400000000", global = true)]
     pub recv_timeout_us: u64,
     /// Maximum size of datagrams received and sent (bytes)
-    #[clap(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE_STR, global = true)]
+    #[clap(long, default_value = "65000", global = true)]
     pub buffer_size: usize,
     /// Number of connections to the server
     #[clap(long, default_value = "0", global = true)]

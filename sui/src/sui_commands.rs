@@ -1,12 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::config::{make_default_narwhal_committee, AuthorityInfo, CONSENSUS_DB_NAME};
-use crate::config::{
-    AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
+use crate::{
+    config::{
+        make_default_narwhal_committee, AuthorityInfo, AuthorityPrivateInfo, Config, GenesisConfig,
+        NetworkConfig, PersistedConfig, WalletConfig, CONSENSUS_DB_NAME,
+    },
+    gateway_config::{GatewayConfig, GatewayType},
+    keystore::{Keystore, KeystoreType, SuiKeystore},
+    sui_config_dir, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
 };
-use crate::gateway_config::{GatewayConfig, GatewayType};
-use crate::keystore::{Keystore, KeystoreType, SuiKeystore};
-use crate::{sui_config_dir, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use anyhow::{anyhow, bail};
 use base64ct::{Base64, Encoding};
 use clap::*;
@@ -15,30 +17,29 @@ use move_binary_format::CompiledModule;
 use move_package::BuildConfig;
 use narwhal_config::{Committee as ConsensusCommittee, Parameters as ConsensusParameters};
 use narwhal_crypto::ed25519::Ed25519PublicKey;
-use std::collections::BTreeMap;
-use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
-use sui_adapter::adapter::generate_package_id;
-use sui_adapter::genesis;
-use sui_core::authority::{AuthorityState, AuthorityStore};
-use sui_core::authority_active::ActiveAuthority;
-use sui_core::authority_client::NetworkAuthorityClient;
-use sui_core::authority_server::AuthorityServer;
-use sui_core::consensus_adapter::ConsensusListener;
+use std::{
+    collections::{BTreeMap, HashMap},
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
+use sui_adapter::{adapter::generate_package_id, genesis};
+use sui_core::{
+    authority::{AuthorityState, AuthorityStore},
+    authority_active::ActiveAuthority,
+    authority_client::NetworkAuthorityClient,
+    authority_server::{AuthorityServer, AuthorityServerHandle},
+    consensus_adapter::ConsensusListener,
+};
 use sui_network::network::NetworkClient;
-use sui_network::transport::SpawnedServer;
-use sui_network::transport::DEFAULT_MAX_DATAGRAM_SIZE;
-use sui_types::base_types::decode_bytes_hex;
-use sui_types::base_types::encode_bytes_hex;
-use sui_types::base_types::{SequenceNumber, SuiAddress, TxContext};
-use sui_types::committee::Committee;
-use sui_types::crypto::{random_key_pairs, KeyPair};
-use sui_types::error::SuiResult;
-use sui_types::object::Object;
+use sui_types::{
+    base_types::{decode_bytes_hex, encode_bytes_hex, SequenceNumber, SuiAddress, TxContext},
+    committee::Committee,
+    crypto::{random_key_pairs, KeyPair},
+    error::SuiResult,
+    object::Object,
+};
 use tokio::sync::mpsc::channel;
 use tracing::{error, info};
 
@@ -279,7 +280,7 @@ impl SuiCommand {
 }
 
 pub struct SuiNetwork {
-    pub spawned_authorities: Vec<SpawnedServer<AuthorityServer>>,
+    pub spawned_authorities: Vec<AuthorityServerHandle>,
 }
 
 impl SuiNetwork {
@@ -389,7 +390,7 @@ pub async fn genesis(
     let mut network_config = NetworkConfig {
         epoch: 0,
         authorities: vec![],
-        buffer_size: DEFAULT_MAX_DATAGRAM_SIZE,
+        buffer_size: 650000,
         loaded_move_packages: vec![],
         key_pair: genesis_conf.key_pair,
     };
