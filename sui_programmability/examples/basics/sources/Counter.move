@@ -71,7 +71,7 @@ module Basics::CounterTest {
 
         TestScenario::next_tx(scenario, &user1);
         {
-            let counter_wrapper = TestScenario::take_shared_object<Counter::Counter>(scenario);
+            let counter_wrapper = TestScenario::take_shared<Counter::Counter>(scenario);
             let counter = TestScenario::borrow_mut(&mut counter_wrapper);
 
             assert!(Counter::owner(counter) == owner, 0);
@@ -80,12 +80,12 @@ module Basics::CounterTest {
             Counter::increment(counter, TestScenario::ctx(scenario));
             Counter::increment(counter, TestScenario::ctx(scenario));
             Counter::increment(counter, TestScenario::ctx(scenario));
-            TestScenario::return_shared_object(scenario, counter_wrapper);
+            TestScenario::return_shared(scenario, counter_wrapper);
         };
 
         TestScenario::next_tx(scenario, &owner);
         {
-            let counter_wrapper = TestScenario::take_shared_object<Counter::Counter>(scenario);
+            let counter_wrapper = TestScenario::take_shared<Counter::Counter>(scenario);
             let counter = TestScenario::borrow_mut(&mut counter_wrapper);
 
             assert!(Counter::owner(counter) == owner, 0);
@@ -93,12 +93,12 @@ module Basics::CounterTest {
 
             Counter::set_value(counter, 100, TestScenario::ctx(scenario));
 
-            TestScenario::return_shared_object(scenario, counter_wrapper);
+            TestScenario::return_shared(scenario, counter_wrapper);
         };
 
         TestScenario::next_tx(scenario, &user1);
         {
-            let counter_wrapper = TestScenario::take_shared_object<Counter::Counter>(scenario);
+            let counter_wrapper = TestScenario::take_shared<Counter::Counter>(scenario);
             let counter = TestScenario::borrow_mut(&mut counter_wrapper);
 
             assert!(Counter::owner(counter) == owner, 0);
@@ -108,7 +108,7 @@ module Basics::CounterTest {
 
             assert!(Counter::value(counter) == 101, 2);
 
-            TestScenario::return_shared_object(scenario, counter_wrapper);
+            TestScenario::return_shared(scenario, counter_wrapper);
         };
     }
 }

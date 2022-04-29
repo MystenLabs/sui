@@ -47,11 +47,11 @@ module DeFi::EscrowTests {
         // The third party returns item A to Alice, item B to Bob
         TestScenario::next_tx(scenario, &THIRD_PARTY_ADDRESS);
         {
-            let item_a = TestScenario::take_object<EscrowedObj<ItemA, ItemB>>(scenario);
+            let item_a = TestScenario::take_owned<EscrowedObj<ItemA, ItemB>>(scenario);
             let ctx = TestScenario::ctx(scenario);
             Escrow::return_to_sender<ItemA, ItemB>(item_a, ctx);
 
-            let item_b = TestScenario::take_object<EscrowedObj<ItemB, ItemA>>(scenario);
+            let item_b = TestScenario::take_owned<EscrowedObj<ItemB, ItemA>>(scenario);
             let ctx = TestScenario::ctx(scenario);
             Escrow::return_to_sender<ItemB, ItemA>(item_b, ctx);
         };
@@ -82,8 +82,8 @@ module DeFi::EscrowTests {
     public(script) fun swap(scenario: &mut Scenario, third_party: &address) {
         TestScenario::next_tx(scenario, third_party);
         {
-            let item_a = TestScenario::take_object<EscrowedObj<ItemA, ItemB>>(scenario);
-            let item_b = TestScenario::take_object<EscrowedObj<ItemB, ItemA>>(scenario);
+            let item_a = TestScenario::take_owned<EscrowedObj<ItemA, ItemB>>(scenario);
+            let item_b = TestScenario::take_owned<EscrowedObj<ItemB, ItemA>>(scenario);
             let ctx = TestScenario::ctx(scenario);
             Escrow::swap(item_a, item_b, ctx);
         };
@@ -157,6 +157,6 @@ module DeFi::EscrowTests {
 
     fun owns_object<T: key + store>(scenario: &mut Scenario, owner: &address): bool{
         TestScenario::next_tx(scenario, owner);
-        TestScenario::can_take_object<T>(scenario)
+        TestScenario::can_take_owned<T>(scenario)
     }
 }

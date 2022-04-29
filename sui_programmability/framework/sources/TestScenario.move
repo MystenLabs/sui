@@ -13,8 +13,8 @@ module Sui::TestScenario {
 
     /// Attempted to return an object to the inventory that was not previously removed from the
     /// inventory during the current transaction. Can happen if the user attempts to call
-    /// `return_object` on a locally constructed object rather than one returned from a `TestScenario`
-    /// function such as `take_object`.
+    /// `return_owned` on a locally constructed object rather than one returned from a `TestScenario`
+    /// function such as `take_owned`.
     const ECantReturnObject: u64 = 2;
 
     /// Attempted to retrieve an object of a particular type from the inventory, but it is empty.
@@ -23,8 +23,8 @@ module Sui::TestScenario {
     const EEmptyInventory: u64 = 3;
 
     /// Expected 1 object of this type in the tx sender's inventory, but found >1.
-    /// Consider using TestScenario::take_object_by_id to select a specific object
-    const EInventoryAbiguity: u64 = 4;
+    /// Consider using TestScenario::take_owned_by_id to select a specific object
+    const EInventoryAmbiguity: u64 = 4;
 
     /// The inventory previously contained an object of this type, but it was removed during the current
     /// transaction.
@@ -35,7 +35,7 @@ module Sui::TestScenario {
 
     /// Utility for mocking a multi-transaction Sui execution in a single Move procedure.
     /// A `Scenario` maintains a view of the global object pool built up by the execution.
-    /// These objects can be accessed via functions like `take_object`, which gives the
+    /// These objects can be accessed via functions like `take_owned`, which gives the
     /// transaction sender access to (only) objects in their inventory.
     /// Example usage:
     /// ```
@@ -52,7 +52,7 @@ module Sui::TestScenario {
     /// TestScenario::next_tx(scenario, &addr2)
     /// {
     ///     // remove the SomeObject value from addr2's inventory
-    ///     let obj = TestScenario::take_object<SomeObject>(scenario);
+    ///     let obj = TestScenario::take_owned<SomeObject>(scenario);
     ///     // use it to test some function that needs this value
     ///     SomeObject::some_function(obj)
     /// }
@@ -117,12 +117,12 @@ module Sui::TestScenario {
     /// An object is in the sender's inventory if:
     /// - The object is in the global event log
     /// - The sender owns the object
-    /// - If the object was previously removed, it was subsequently replaced via a call to `return_object`.
+    /// - If the object was previously removed, it was subsequently replaced via a call to `return_owned`.
     /// Aborts if there is no object of type `T` in the inventory of the tx sender
     /// Aborts if there is >1 object of type `T` in the inventory of the tx sender--this function
     /// only succeeds when the object to choose is unambiguous. In cases where there are multiple `T`'s,
-    /// the caller should resolve the ambiguity by using `take_object_by_id`.
-    public fun take_object<T: key>(scenario: &mut Scenario): T {
+    /// the caller should resolve the ambiguity by using `take_owned_by_id`.
+    public fun take_owned<T: key>(scenario: &mut Scenario): T {
         let signer_address = sender(scenario);
         let objects: vector<T> = get_account_owned_inventory<T>(
             signer_address,
@@ -131,10 +131,10 @@ module Sui::TestScenario {
         remove_unique_object_from_inventory(scenario, objects)
     }
 
-    /// Similar to take_object, but only return objects that are immutable with type `T`.
+    /// Similar to take_owned, but only return objects that are immutable with type `T`.
     /// In this case, the sender is irrelevant.
     /// Returns a wrapper that only supports a `borrow` API to get the read-only reference.
-    public fun take_immutable_object<T: key>(scenario: &mut Scenario): ImmutableWrapper<T> {
+    public fun take_immutable<T: key>(scenario: &mut Scenario): ImmutableWrapper<T> {
         let objects: vector<T> = get_unowned_inventory<T>(
             true /* immutable */,
             last_tx_start_index(scenario),
@@ -150,10 +150,10 @@ module Sui::TestScenario {
         &wrapper.object
     }
 
-    /// Similar to take_object, but only return objects that are shared with type `T`.
+    /// Similar to take_owned, but only return objects that are shared with type `T`.
     /// In this case, the sender is irrelevant.
     /// Returns a wrapper that only supports a `borrow_mut` API to get the mutable reference.
-    public fun take_shared_object<T: key>(scenario: &mut Scenario): SharedWrapper<T> {
+    public fun take_shared<T: key>(scenario: &mut Scenario): SharedWrapper<T> {
         let objects: vector<T> = get_unowned_inventory<T>(
             false /* immutable */,
             last_tx_start_index(scenario),
@@ -186,10 +186,10 @@ module Sui::TestScenario {
         remove_unique_object_from_inventory(scenario, objects)
     }
 
-    /// Same as `take_object`, but returns the object of type `T` with object ID `id`.
+    /// Same as `take_owned`, but returns the object of type `T` with object ID `id`.
     /// Should only be used in cases where current tx sender has more than one object of
     /// type `T` in their inventory.
-    public fun take_object_by_id<T: key>(scenario: &mut Scenario, id: ID): T {
+    public fun take_owned_by_id<T: key>(scenario: &mut Scenario, id: ID): T {
         let object_opt: Option<T> = find_object_by_id_in_inventory(scenario, &id);
 
         assert!(Option::is_some(&object_opt), EObjectIDNotFound);
@@ -202,9 +202,9 @@ module Sui::TestScenario {
         object
     }
 
-    /// This function tells you whether calling `take_object_by_id` would succeed.
+    /// This function tells you whether calling `take_owned_by_id` would succeed.
     /// It provides a way to check without triggering assertions.
-    public fun can_take_object_by_id<T: key>(scenario: &Scenario, id: ID): bool {
+    public fun can_take_owned_by_id<T: key>(scenario: &Scenario, id: ID): bool {
         let object_opt: Option<T> = find_object_by_id_in_inventory(scenario, &id);
         if (Option::is_none(&object_opt)) {
             Option::destroy_none(object_opt);
@@ -227,10 +227,10 @@ module Sui::TestScenario {
     }
 
     /// Return `t` to the global object pool maintained by `scenario`.
-    /// Subsequent calls to `take_object<T>` will succeed if the object is in the inventory of the current
+    /// Subsequent calls to `take_owned<T>` will succeed if the object is in the inventory of the current
     /// transaction sender.
-    /// Aborts if `t` was not previously taken from the inventory via a call to `take_object` or similar.
-    public fun return_object<T: key>(scenario: &mut Scenario, t: T) {
+    /// Aborts if `t` was not previously taken from the inventory via a call to `take_owned` or similar.
+    public fun return_owned<T: key>(scenario: &mut Scenario, t: T) {
         let id = ID::id(&t);
         let removed = &mut scenario.removed;
         // TODO: add Vector::remove_element to Std that does this 3-liner
@@ -246,20 +246,20 @@ module Sui::TestScenario {
         update_object(t)
     }
 
-    /// Similar to return_object, return a shared object to the inventory.
-    public fun return_shared_object<T: key>(scenario: &mut Scenario, object_wrapper: SharedWrapper<T>) {
+    /// Similar to return_owned, return a shared object to the inventory.
+    public fun return_shared<T: key>(scenario: &mut Scenario, object_wrapper: SharedWrapper<T>) {
         let SharedWrapper { object } = object_wrapper;
-        return_object(scenario, object)
+        return_owned(scenario, object)
     }
 
     /// Return an immutable object to the inventory.
-    public fun return_immutable_object<T: key>(scenario: &mut Scenario, object_wrapper: ImmutableWrapper<T>) {
+    public fun return_immutable<T: key>(scenario: &mut Scenario, object_wrapper: ImmutableWrapper<T>) {
         let ImmutableWrapper { object } = object_wrapper;
-        return_object(scenario, object)
+        return_owned(scenario, object)
     }
 
-    /// Return `true` if a call to `take_object<T>(scenario)` will succeed
-    public fun can_take_object<T: key>(scenario: &Scenario): bool {
+    /// Return `true` if a call to `take_owned<T>(scenario)` will succeed
+    public fun can_take_owned<T: key>(scenario: &Scenario): bool {
         let objects: vector<T> = get_account_owned_inventory<T>(
             sender(scenario),
             last_tx_start_index(scenario)
@@ -320,7 +320,7 @@ module Sui::TestScenario {
         } else if (objects_len == 0) {
             abort(EEmptyInventory)
         } else { // objects_len > 1
-            abort(EInventoryAbiguity)
+            abort(EInventoryAmbiguity)
         }
     }
 
