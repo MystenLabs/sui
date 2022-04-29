@@ -11,7 +11,7 @@ use move_core_types::identifier::Identifier;
 
 use sui::config::{PersistedConfig, WalletConfig};
 use sui::keystore::{Keystore, SuiKeystore};
-use sui::rest_gateway::responses::ObjectResponse;
+use sui::rpc_gateway::responses::ObjectResponse;
 use sui::rpc_gateway::RpcGatewayClient;
 use sui::rpc_gateway::TransactionBytes;
 use sui::rpc_gateway::{RpcCallArg, RpcGatewayServer};

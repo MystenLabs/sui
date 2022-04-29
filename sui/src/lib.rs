@@ -12,7 +12,6 @@ pub mod benchmark;
 pub mod config;
 pub mod gateway_config;
 pub mod keystore;
-pub mod rest_gateway;
 pub mod rpc_gateway;
 pub mod rpc_gateway_client;
 pub mod shell;
