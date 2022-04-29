@@ -48,6 +48,17 @@ pub type BroadcastReceiver = tokio::sync::broadcast::Receiver<UpdateItem>;
 pub type BroadcastPair = (BroadcastSender, BroadcastReceiver);
 
 impl crate::authority::AuthorityState {
+    pub fn last_batch(&self) -> Result<Option<SignedBatch>, SuiError> {
+        let last_batch = self
+            .db()
+            .batches
+            .iter()
+            .skip_prior_to(&TxSequenceNumber::MAX)?
+            .next()
+            .map(|(_, batch)| batch);
+        Ok(last_batch)
+    }
+
     /// Initializes the database to handle batches, and recovers from a potential
     /// crash by creating a last batch to include any trailing trasnactions not
     /// in a batch.
@@ -128,6 +139,8 @@ impl crate::authority::AuthorityState {
         // of transactions in order, following the last batch. The loose transactions holds
         // transactions we may have received out of order.
         let mut current_batch: Vec<(TxSequenceNumber, TransactionDigest)> = Vec::new();
+
+        println!("RUNNING BATCH SERVICE!");
 
         while !exit {
             // Reset the flags.

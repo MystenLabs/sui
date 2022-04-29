@@ -532,9 +532,15 @@ impl AuthorityState {
         }
 
         // If we do not have a start, pick the low watermark from the notifier.
-        let start = request
-            .start
-            .unwrap_or_else(|| self.batch_notifier.low_watermark());
+        let start = match request.start {
+            Some(start) => start,
+            None => {
+                self.last_batch()?
+                    .expect("Authority is always initialized with a batch")
+                    .batch
+                    .next_sequence_number
+            }
+        };
         let end = start + request.length;
 
         let (batches, transactions) = self._database.batches_and_transactions(start, end)?;

@@ -171,7 +171,7 @@ impl<C> SafeClient<C> {
 
     fn check_update_item_batch_response(
         &self,
-        request: BatchInfoRequest,
+        _request: BatchInfoRequest,
         signed_batch: &SignedBatch,
         transactions_and_last_batch: &Option<(
             Vec<(TxSequenceNumber, TransactionDigest)>,
@@ -184,6 +184,11 @@ impl<C> SafeClient<C> {
             .check(&signed_batch.batch, signed_batch.authority)?;
 
         // ensure transactions enclosed match requested range
+        /*
+
+        TODO: check that the batch is within bounds given that the
+              bounds may now not be known by the requester.
+
         if let Some(start) = &request.start {
             fp_ensure!(
                 signed_batch.batch.initial_sequence_number >= *start
@@ -194,6 +199,7 @@ impl<C> SafeClient<C> {
                 }
             );
         }
+        */
 
         // If we have seen a previous batch, use it to make sure the next batch
         // is constructed correctly:
@@ -365,7 +371,8 @@ where
                 let client = client.clone();
 
                 // We check if we have exceeded the batch boundary for this request.
-                if *count > request.length {
+                // This is to protect against server DoS
+                if *count > 10 * request.length {
                     // If we exceed it return None to end stream
                     return futures::future::ready(None);
                 }

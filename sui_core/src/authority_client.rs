@@ -173,10 +173,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
                         start = start.or(Some(signed_batch.batch.next_sequence_number));
                         signed_batch.batch.next_sequence_number < start.unwrap() + request.length
                     }
-                    Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest)))) => {
-                        start = start.or(Some(*seq));
-                        *seq < start.unwrap() + request.length
-                    }
+                    Ok(BatchInfoResponseItem(UpdateItem::Transaction((_seq, _digest)))) => true,
                     Err(_e) => {
                         // TODO: record e
                         error_count += 1;

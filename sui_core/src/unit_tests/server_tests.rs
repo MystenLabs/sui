@@ -4,8 +4,9 @@
 use std::sync::Arc;
 
 use crate::authority::authority_tests::init_state_with_object_id;
+use crate::authority_client::AuthorityAPI;
+use crate::authority_client::LocalAuthorityClient;
 use crate::safe_client::SafeClient;
-use sui_network::network::NetworkClient;
 use sui_types::base_types::{dbg_addr, dbg_object_id, TransactionDigest};
 use sui_types::batch::UpdateItem;
 use sui_types::object::ObjectFormatOptions;
@@ -368,13 +369,7 @@ async fn test_subscription_safe_client() {
     let db3 = server.state.db().clone();
 
     let _master_safe_client = SafeClient::new(
-        NetworkClient::new(
-            "127.0.0.1".to_string(),
-            998,
-            65000,
-            Duration::from_secs(5),
-            Duration::from_secs(5),
-        ),
+        LocalAuthorityClient(state.clone()),
         state.committee.clone(),
         state.name,
     );
@@ -393,12 +388,7 @@ async fn test_subscription_safe_client() {
     }
     println!("Sent tickets.");
 
-    let (channel, (mut tx, mut rx)) = TestChannel::new();
-
-    let inner_server1 = server.clone();
-    let handle1 = tokio::spawn(async move {
-        inner_server1.handle_messages(channel).await;
-    });
+    tokio::task::yield_now().await;
 
     println!("Started messahe handling.");
     // TEST 1: Get historical data
@@ -408,29 +398,29 @@ async fn test_subscription_safe_client() {
         length: 22,
     };
 
-    let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);
-    tx.send(Ok(bytes)).await.expect("Problem sending");
+    let mut stream1 = _master_safe_client
+        .handle_batch_stream(req)
+        .await
+        .expect("Error following");
+
+    //let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);
+    //tx.send(Ok(bytes)).await.expect("Problem sending");
 
     println!("TEST1: Send request.");
 
     let mut num_batches = 0;
     let mut num_transactions = 0;
 
-    while let Some(data) = rx.next().await {
-        match deserialize_message(&data[..]).expect("Bad response") {
-            SerializedMessage::BatchInfoResp(resp) => match *resp {
-                BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
-                    num_batches += 1;
-                    if signed_batch.batch.next_sequence_number >= 34 {
-                        break;
-                    }
+    while let Some(data) = stream1.next().await {
+        match data.expect("Bad response") {
+            BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                num_batches += 1;
+                if signed_batch.batch.next_sequence_number >= 34 {
+                    break;
                 }
-                BatchInfoResponseItem(UpdateItem::Transaction((_seq, _digest))) => {
-                    num_transactions += 1;
-                }
-            },
-            _ => {
-                panic!("Bad response");
+            }
+            BatchInfoResponseItem(UpdateItem::Transaction((_seq, _digest))) => {
+                num_transactions += 1;
             }
         }
     }
@@ -466,30 +456,27 @@ async fn test_subscription_safe_client() {
         length: 11,
     };
 
-    let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);
-    tx.send(Ok(bytes)).await.expect("Problem sending");
+    let mut stream1 = _master_safe_client
+        .handle_batch_stream(req)
+        .await
+        .expect("Error following");
 
     println!("TEST2: Send request.");
 
     let mut num_batches = 0;
     let mut num_transactions = 0;
 
-    while let Some(data) = rx.next().await {
-        match deserialize_message(&data[..]).expect("Bad response") {
-            SerializedMessage::BatchInfoResp(resp) => match *resp {
-                BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
-                    num_batches += 1;
-                    if signed_batch.batch.next_sequence_number >= 112 {
-                        break;
-                    }
+    while let Some(data) = stream1.next().await {
+        match &data.expect("No error") {
+            BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                num_batches += 1;
+                if signed_batch.batch.next_sequence_number >= 112 {
+                    break;
                 }
-                BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
-                    println!("Received {seq}");
-                    num_transactions += 1;
-                }
-            },
-            _ => {
-                panic!("Bad response");
+            }
+            BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
+                println!("Received {seq}");
+                num_transactions += 1;
             }
         }
     }
@@ -507,8 +494,10 @@ async fn test_subscription_safe_client() {
         length: 10,
     };
 
-    let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);
-    tx.send(Ok(bytes)).await.expect("Problem sending");
+    let mut stream1 = _master_safe_client
+        .handle_batch_stream(req)
+        .await
+        .expect("Error following");
 
     println!("TEST3: Send request.");
 
@@ -518,7 +507,7 @@ async fn test_subscription_safe_client() {
     let inner_server2 = server.clone();
 
     loop {
-        // Send a trasnaction
+        // Send a transaction
         let ticket = inner_server2
             .state
             .batch_notifier
@@ -531,22 +520,17 @@ async fn test_subscription_safe_client() {
         i += 1;
 
         // Then we wait to receive
-        if let Some(data) = rx.next().await {
-            match deserialize_message(&data[..]).expect("Bad response") {
-                SerializedMessage::BatchInfoResp(resp) => match *resp {
-                    BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
-                        num_batches += 1;
-                        if signed_batch.batch.next_sequence_number >= 129 {
-                            break;
-                        }
+        if let Some(data) = stream1.next().await {
+            match data.expect("Bad response") {
+                BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                    num_batches += 1;
+                    if signed_batch.batch.next_sequence_number >= 129 {
+                        break;
                     }
-                    BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
-                        println!("Received {seq}");
-                        num_transactions += 1;
-                    }
-                },
-                _ => {
-                    panic!("Bad response");
+                }
+                BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
+                    println!("Received {seq}");
+                    num_transactions += 1;
                 }
             }
         }
@@ -556,6 +540,4 @@ async fn test_subscription_safe_client() {
     assert_eq!(10, num_transactions);
 
     server.state.batch_notifier.close();
-    drop(tx);
-    handle1.await.expect("Problem closing task");
 }
