@@ -3,15 +3,16 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getObjectExistsResponse } from 'sui.js';
 
-import { DefaultRpcClient as rpc } from '../../utils/api/SuiRpcClient';
+import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { parseImageURL } from '../../utils/objectUtils';
 import { navigateWithUnknown } from '../../utils/searchUtil';
 import {
     findDataFromID,
     findOwnedObjectsfromID,
 } from '../../utils/static/searchUtil';
-import { trimStdLibPrefix, processDisplayValue } from '../../utils/stringUtils';
+import { processDisplayValue, trimStdLibPrefix } from '../../utils/stringUtils';
 import DisplayBox from '../displaybox/DisplayBox';
 
 import styles from './OwnedObjects.module.css';
@@ -19,7 +20,7 @@ import styles from './OwnedObjects.module.css';
 type resultType = {
     id: string;
     Type: string;
-    Version: string;
+    Version?: string;
     display?: string;
 }[];
 
@@ -27,8 +28,6 @@ const DATATYPE_DEFAULT: resultType = [
     {
         id: '',
         Type: '',
-        Version: '',
-        display: '',
     },
 ];
 
@@ -54,14 +53,22 @@ function OwnedObjectAPI({ objects }: { objects: string[] }) {
         Promise.all(objects.map((objID) => rpc.getObjectInfo(objID))).then(
             (results) => {
                 setResults(
-                    results.map(({ id, objType, version, data }) => ({
-                        id: id,
-                        Type: objType,
-                        Version: version,
-                        display: parseImageURL(data)
-                            ? processDisplayValue(parseImageURL(data))
-                            : undefined,
-                    }))
+                    results
+                        .filter(({ status }) => status === 'Exists')
+                        .map(
+                            (resp) => {
+                                const info = getObjectExistsResponse(resp)!;
+                                const url = parseImageURL(info.object);
+                                return {
+                                    id: info.objectRef.objectId,
+                                    Type: info.object.contents.type,
+                                    display: url
+                                        ? processDisplayValue(url)
+                                        : undefined,
+                                };
+                            }
+                            //TO DO - add back display and version
+                        )
                 );
                 setIsLoaded(true);
             }
@@ -143,17 +150,27 @@ function OwnedObjectView({ results }: { results: resultType }) {
 }
 
 function OwnedObject({ id }: { id: string }) {
-    let objects;
+    const [component, setComponent] = useState(<div />);
+
     if (process.env.REACT_APP_DATA === 'static') {
-        objects = findOwnedObjectsfromID(id);
+        const objects = findOwnedObjectsfromID(id);
         if (objects === undefined) return <div />;
+        setComponent(
+            <OwnedObjectSection
+                objects={objects.map(({ objectId }) => objectId)}
+            />
+        );
     } else {
-        objects = [{ objectId: 'apples' }];
+        rpc.getOwnedObjectRefs(id).then((objects) =>
+            setComponent(
+                <OwnedObjectSection
+                    objects={objects.map(({ objectId }) => objectId)}
+                />
+            )
+        );
     }
 
-    return (
-        <OwnedObjectSection objects={objects.map(({ objectId }) => objectId)} />
-    );
+    return component;
 }
 
 function OwnedObjectSection({ objects }: { objects: string[] }) {
