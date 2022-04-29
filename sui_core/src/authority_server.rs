@@ -11,8 +11,7 @@ use sui_network::{
     network::NetworkServer,
     transport::{spawn_server, MessageHandler, RwChannel, SpawnedServer},
 };
-use sui_types::{crypto::VerificationObligation, error::*, messages::*, serialize::*,
-};
+use sui_types::{crypto::VerificationObligation, error::*, messages::*, serialize::*};
 use tokio::sync::mpsc::Sender;
 
 use std::time::Duration;

@@ -4,7 +4,6 @@
 
 use crate::authority::AuthorityState;
 use async_trait::async_trait;
-use futures::lock::Mutex;
 use futures::stream::{self, BoxStream};
 use futures::StreamExt;
 use std::collections::VecDeque;
@@ -190,7 +189,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
 }
 
 #[derive(Clone)]
-pub struct LocalAuthorityClient(pub Arc<Mutex<AuthorityState>>);
+pub struct LocalAuthorityClient(pub Arc<AuthorityState>);
 
 #[async_trait]
 impl AuthorityAPI for LocalAuthorityClient {
@@ -199,7 +198,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.0.clone();
-        let result = state.lock().await.handle_transaction(transaction).await;
+        let result = state.handle_transaction(transaction).await;
         result
     }
 
@@ -208,11 +207,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         transaction: ConfirmationTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.0.clone();
-        let result = state
-            .lock()
-            .await
-            .handle_confirmation_transaction(transaction)
-            .await;
+        let result = state.handle_confirmation_transaction(transaction).await;
         result
     }
 
@@ -222,11 +217,7 @@ impl AuthorityAPI for LocalAuthorityClient {
     ) -> Result<AccountInfoResponse, SuiError> {
         let state = self.0.clone();
 
-        let result = state
-            .lock()
-            .await
-            .handle_account_info_request(request)
-            .await;
+        let result = state.handle_account_info_request(request).await;
         result
     }
 
@@ -235,7 +226,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
         let state = self.0.clone();
-        let x = state.lock().await.handle_object_info_request(request).await;
+        let x = state.handle_object_info_request(request).await;
         x
     }
 
@@ -246,11 +237,7 @@ impl AuthorityAPI for LocalAuthorityClient {
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.0.clone();
 
-        let result = state
-            .lock()
-            .await
-            .handle_transaction_info_request(request)
-            .await;
+        let result = state.handle_transaction_info_request(request).await;
         result
     }
 
@@ -261,7 +248,7 @@ impl AuthorityAPI for LocalAuthorityClient {
     ) -> Result<BatchInfoResponseItemStream, io::Error> {
         let state = self.0.clone();
 
-        let update_items = state.lock().await.handle_batch_info_request(request).await;
+        let update_items = state.handle_batch_info_request(request).await;
 
         let (items, _): (VecDeque<_>, VecDeque<_>) = update_items.into_iter().unzip();
         let stream = stream::iter(items.into_iter()).then(|mut item| async move {
@@ -297,7 +284,7 @@ impl LocalAuthorityClient {
             &mut genesis::get_genesis_context(),
         )
         .await;
-        Self(Arc::new(Mutex::new(state)))
+        Self(Arc::new(state))
     }
 
     #[cfg(test)]
@@ -309,9 +296,8 @@ impl LocalAuthorityClient {
     ) -> Self {
         let client = Self::new(committee, address, secret).await;
         {
-            let client_ref = client.0.as_ref().try_lock().unwrap();
             for object in objects {
-                client_ref.insert_genesis_object(object).await;
+                client.0.insert_genesis_object(object).await;
             }
         }
         client
