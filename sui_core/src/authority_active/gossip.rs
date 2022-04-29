@@ -55,7 +55,7 @@ where
             gossip_tasks.push(async move {
                 let peer_gossip = PeerGossip::new(*name, active_authority);
                 // Add more duration if we make more than 1 to ensure overlap
-                peer_gossip.spawn(Duration::from_secs(30 + k * 30)).await
+                peer_gossip.spawn(Duration::from_secs(60 + k * 15)).await
             });
             k += 1;
         }
