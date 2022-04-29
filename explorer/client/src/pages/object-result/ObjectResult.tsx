@@ -6,7 +6,7 @@ import { useLocation, useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import theme from '../../styles/theme.module.css';
-import { DefaultRpcClient as rpc } from '../../utils/api/SuiRpcClient';
+import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import ObjectLoaded from './ObjectLoaded';
 import {
     instanceOfDataType,
@@ -43,7 +43,7 @@ const ObjectResultAPI = ({ objID }: { objID: string }): JSX.Element => {
         rpc.getObjectInfo(objID as string)
             .then((objState) => {
                 setObjectState({
-                    ...(objState as DataType),
+                    ...(translate(objState) as DataType),
                     loadState: 'loaded',
                 });
             })
