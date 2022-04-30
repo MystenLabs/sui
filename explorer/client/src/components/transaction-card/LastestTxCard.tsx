@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
-import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 
@@ -52,18 +52,23 @@ function LastestTxCard() {
     return (
         <>
             <div className={theme.textresults}>
-                <div className={theme.txdetailstitle}>
-                    <h3>Latest transaction</h3>{' '}
-                </div>
                 <div className={styles.transactioncard}>
                     <div className={styles.txcard}>
+                        <div className={styles.txcardgrid}>
+                            <h3>Latest transaction</h3>
+                        </div>
                         {results.lastestTx.map((tx: any, index: number) => (
-                            <Longtext
-                                text={encodeURIComponent(tx[1])}
-                                key={index}
-                                category="transactions"
-                                isLink={true}
-                            />
+                            <div key={index} className={styles.txcardgrid}>
+                                <Link
+                                    className={styles.txlink}
+                                    to={
+                                        'transactions/' +
+                                        encodeURIComponent(tx[1])
+                                    }
+                                >
+                                    {tx[1]}
+                                </Link>
+                            </div>
                         ))}
                     </div>
                 </div>

@@ -37,9 +37,12 @@ export const navigateWithUnknown = async (
                         pac?.category === 'addresses' ||
                         pac?.category === 'transactions')
                 ) {
-                    navigate(`../${pac.category}/${encodeURIComponent(input)}`, {
-                        state: pac.data,
-                    });
+                    navigate(
+                        `../${pac.category}/${encodeURIComponent(input)}`,
+                        {
+                            state: pac.data,
+                        }
+                    );
                 } else {
                     throw new Error(
                         'Something wrong with navigateWithUnknown function'
@@ -48,7 +51,7 @@ export const navigateWithUnknown = async (
             })
             //if none of the queries find a result, show missing page
             .catch((error) => {
-                // encode url in 
+                // encode url in
                 navigate(`../missing/${encodeURIComponent(input)}`);
             })
     );

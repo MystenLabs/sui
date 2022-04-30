@@ -80,7 +80,7 @@ function TransactionResult() {
                 });
             })
             .catch((err) => {
-                //  remove this console.log in production
+                //  remove this section in production
                 console.log(err);
                 setTxState({
                     ...initState,

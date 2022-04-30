@@ -9,7 +9,16 @@ div.columnheader > div {
 }
 
 div.txcardgrid {
-    @apply grid md:grid-cols-3 sm:grid-cols-1 gap-2 border-0  pt-3 pb-3 pl-8 pr-8 items-center;
+    @apply flex border-0  pt-5 pb-5 pl-8 pr-8 items-center;
+}
+
+div.txcardgrid a {
+    width: 100%;
+    @apply font-mono tracking-tight font-normal block;
+}
+
+div.txcardgrid h3 {
+    @apply text-offwhite font-normal leading-3 font-mono;
 }
 
 div.txcardgrid:nth-child(2n + 1) {
@@ -17,7 +26,7 @@ div.txcardgrid:nth-child(2n + 1) {
 }
 
 div.txcardgrid:first-child {
-    @apply bg-suidarktwo  rounded-b-none items-center pt-5 pb-5 font-black;
+    @apply bg-offblack rounded-b-none items-center pt-2 pb-2 font-black shadow-md border-2 border-coolGray-400 rounded-lg;
 }
 
 div.txcardgrid > div:first-child {
@@ -70,4 +79,8 @@ ul.listitems {
 
 .listitems .sublist {
     @apply mt-2 list-none p-0;
+}
+
+.txlink {
+    @apply no-underline text-sky-600 hover:text-sky-900 cursor-pointer break-all;
 }

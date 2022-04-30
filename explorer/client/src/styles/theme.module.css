@@ -35,5 +35,5 @@ div.txdetailstitle {
 }
 
 .txdetailstitle h3 {
-    @apply text-suidarktwo uppercase font-semibold;
+    @apply text-offblack uppercase font-semibold;
 }

@@ -38,16 +38,19 @@ function formatTxResponse(data: any) {
                       label: 'Object Reference',
                       value: txKind.Single.Transfer.object_ref[0],
                       link: true,
+                      category: 'objects',
                   },
                   {
-                      label: 'From',
+                      label: 'Sender',
                       value: tx.data.sender,
                       link: true,
-                      className: 'grouped',
+                      category: 'addresses',
+                      className: 'Receiver',
                   },
                   {
                       label: 'To',
                       value: txKind.Single.Transfer.recipient,
+                      category: 'addresses',
                       link: true,
                   },
               ]
@@ -56,6 +59,7 @@ function formatTxResponse(data: any) {
                       label: 'From',
                       value: tx.data.sender,
                       link: true,
+                      category: 'addresses',
                   },
                   {
                       label: 'Package',
@@ -80,7 +84,7 @@ function formatTxResponse(data: any) {
               ]),
 
         {
-            label: 'Tx Signature',
+            label: 'Transactions Signature',
             value: tx.tx_signature,
         },
 
@@ -175,7 +179,11 @@ function TransactionCard({ txdata }: any) {
                                         ) : itm.link ? (
                                             <Longtext
                                                 text={itm.value}
-                                                category="unknown"
+                                                category={
+                                                    itm.category
+                                                        ? itm.category
+                                                        : 'unknown'
+                                                }
                                                 isLink={true}
                                             />
                                         ) : (
