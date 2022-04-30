@@ -183,8 +183,8 @@ impl AuthorityState {
     async fn handle_transaction_impl(
         &self,
         transaction: Transaction,
-        transaction_digest: TransactionDigest,
     ) -> Result<TransactionInfoResponse, SuiError> {
+        let transaction_digest = *transaction.digest();
         // Ensure an idempotent answer.
         if self._database.transaction_exists(&transaction_digest)? {
             let transaction_info = self.make_transaction_info(&transaction_digest).await?;
@@ -215,7 +215,7 @@ impl AuthorityState {
         // The call to self.set_transaction_lock checks the lock is not conflicting,
         // and returns ConflictingTransaction error in case there is a lock on a different
         // existing transaction.
-        self.set_transaction_lock(&owned_objects, transaction_digest, signed_transaction)
+        self.set_transaction_lock(&owned_objects, signed_transaction)
             .await?;
 
         // Return the signed Transaction or maybe a cert.
@@ -229,11 +229,9 @@ impl AuthorityState {
     ) -> Result<TransactionInfoResponse, SuiError> {
         // Check the sender's signature.
         transaction.check_signature()?;
-        let transaction_digest = transaction.digest();
+        let transaction_digest = *transaction.digest();
 
-        let response = self
-            .handle_transaction_impl(transaction, transaction_digest)
-            .await;
+        let response = self.handle_transaction_impl(transaction).await;
         match response {
             Ok(r) => Ok(r),
             // If we see an error, it is possible that a certificate has already been processed.
@@ -744,11 +742,10 @@ impl AuthorityState {
     pub async fn set_transaction_lock(
         &self,
         mutable_input_objects: &[ObjectRef],
-        tx_digest: TransactionDigest,
         signed_transaction: SignedTransaction,
     ) -> Result<(), SuiError> {
         self._database
-            .set_transaction_lock(mutable_input_objects, tx_digest, signed_transaction)
+            .set_transaction_lock(mutable_input_objects, signed_transaction)
     }
 
     /// Update state and signals that a new transactions has been processed

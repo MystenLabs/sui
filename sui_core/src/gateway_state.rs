@@ -242,11 +242,10 @@ where
     async fn set_transaction_lock(
         &self,
         mutable_input_objects: &[ObjectRef],
-        tx_digest: TransactionDigest,
         transaction: Transaction,
     ) -> Result<(), SuiError> {
         self.store
-            .set_transaction_lock(mutable_input_objects, tx_digest, transaction)
+            .set_transaction_lock(mutable_input_objects, transaction)
     }
 
     async fn check_gas(
@@ -268,7 +267,6 @@ where
         transaction: Transaction,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         transaction.check_signature()?;
-        let transaction_digest = transaction.digest();
         self.check_gas(
             transaction.gas_payment_object_ref().0,
             transaction.data.gas_budget,
@@ -294,7 +292,7 @@ where
                 .instrument(tracing::trace_span!("tx_check_locks"))
                 .await?;
         let owned_objects = transaction_input_checker::filter_owned_objects(&objects_by_kind);
-        self.set_transaction_lock(&owned_objects, transaction_digest, transaction.clone())
+        self.set_transaction_lock(&owned_objects, transaction.clone())
             .instrument(tracing::trace_span!("db_set_transaction_lock"))
             .await?;
         // If execute_transaction ever fails due to panic, we should fix the panic and make sure it doesn't.

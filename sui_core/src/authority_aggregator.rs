@@ -83,7 +83,7 @@ where
         // represent certificates that earlier insertions depend on. Thus updating an
         // authority in the order we pop() the certificates from this stack should ensure
         // certificates are uploaded in causal order.
-        let digest = cert.certificate.transaction.digest();
+        let digest = *cert.certificate.transaction.digest();
         let mut missing_certificates: Vec<_> = vec![cert.clone()];
 
         // We keep a list of certificates already processed to avoid duplicates
@@ -109,10 +109,10 @@ where
             // we try to get its dependencies. But the second time we have already tried
             // to update its dependencies, so we should just admit failure.
             let cert_digest = target_cert.certificate.transaction.digest();
-            if attempted_certificates.contains(&cert_digest) {
+            if attempted_certificates.contains(cert_digest) {
                 return Err(SuiError::AuthorityInformationUnavailable);
             }
-            attempted_certificates.insert(cert_digest);
+            attempted_certificates.insert(*cert_digest);
 
             // TODO: Eventually the client will store more information, and we could
             // first try to read certificates and parents from a local cache before
@@ -140,7 +140,7 @@ where
 
                 source_client
                     .handle_transaction_info_request(TransactionInfoRequest {
-                        transaction_digest: cert_digest,
+                        transaction_digest: *cert_digest,
                     })
                     .await?
             };
@@ -239,7 +239,7 @@ where
                     let inner_err = SuiError::PairwiseSyncFailed {
                         xsource: source_authority,
                         destination: destination_authority,
-                        tx_digest: cert.certificate.transaction.digest(),
+                        tx_digest: *cert.certificate.transaction.digest(),
                         error: Box::new(err.clone()),
                     };
 
@@ -476,7 +476,7 @@ where
                 };
 
                 let (transaction_digest, cert_option) = if let Some(cert) = parent_certificate {
-                    (cert.transaction.digest(), Some(cert))
+                    (*cert.transaction.digest(), Some(cert))
                 } else {
                     (TransactionDigest::genesis(), None)
                 };
@@ -504,7 +504,7 @@ where
                 entry.2.push((name, signed_transaction_option));
 
                 if let Some(cert) = cert_option {
-                    certificates.insert(cert.transaction.digest(), cert);
+                    certificates.insert(*cert.transaction.digest(), cert);
                 }
             } else {
                 error_list.push((name, result));
@@ -681,7 +681,7 @@ where
 
                 // Add authorities that need to be updated
                 let entry = certs_to_sync
-                    .entry(cert.transaction.digest())
+                    .entry(*cert.transaction.digest())
                     .or_insert((cert.clone(), HashSet::new()));
                 entry.1.extend(authorities);
 

@@ -5,8 +5,8 @@
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
 use crate::committee::EpochId;
 use crate::crypto::{
-    sha3_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature, BcsSignable,
-    EmptySignInfo, Signable, Signature, VerificationObligation,
+    sha3_hash, AuthoritySignInfo, AuthoritySignature, BcsSignable, EmptySignInfo, Signable,
+    Signature, VerificationObligation,
 };
 use crate::gas::GasCostSummary;
 use crate::json_schema;
@@ -327,6 +327,10 @@ where
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(remote = "TransactionEnvelope")]
 pub struct TransactionEnvelope<S> {
+    // This is a cache of an otherwise expensive to compute value.
+    // DO NOT serialize or deserialize from the network or disk.
+    #[serde(skip)]
+    transaction_digest: OnceCell<TransactionDigest>,
     // Deserialization sets this to "false"
     #[serde(skip)]
     pub is_checked: bool,
@@ -341,7 +345,7 @@ pub struct TransactionEnvelope<S> {
     // does not participate in the hash and comparison).
 }
 
-impl<S: AuthoritySignInfoTrait> TransactionEnvelope<S> {
+impl<S> TransactionEnvelope<S> {
     pub fn check_signature(&self) -> Result<(), SuiError> {
         // We use this flag to see if someone has checked this before
         // and therefore we can skip the check. Note that the flag has
@@ -432,9 +436,10 @@ impl<S: AuthoritySignInfoTrait> TransactionEnvelope<S> {
         }
     }
 
-    // Derive a cryptographic hash of the transaction.
-    pub fn digest(&self) -> TransactionDigest {
-        TransactionDigest::new(sha3_hash(&self.data))
+    /// Get the transaction digest and write it to the cache
+    pub fn digest(&self) -> &TransactionDigest {
+        self.transaction_digest
+            .get_or_init(|| TransactionDigest::new(sha3_hash(&self.data)))
     }
 
     pub fn input_objects_in_compiled_modules(
@@ -508,6 +513,7 @@ impl Transaction {
 
     pub fn new(data: TransactionData, signature: Signature) -> Self {
         Self {
+            transaction_digest: OnceCell::new(),
             is_checked: false,
             data,
             tx_signature: signature,
@@ -542,6 +548,7 @@ impl SignedTransaction {
     ) -> Self {
         let signature = AuthoritySignature::new(&transaction.data, secret);
         Self {
+            transaction_digest: OnceCell::new(),
             is_checked: transaction.is_checked,
             data: transaction.data,
             tx_signature: transaction.tx_signature,
@@ -1119,7 +1126,7 @@ impl CertifiedTransaction {
     /// Get the transaction digest and write it to the cache
     pub fn digest(&self) -> &TransactionDigest {
         self.transaction_digest
-            .get_or_init(|| self.transaction.digest())
+            .get_or_init(|| *self.transaction.digest())
     }
 
     /// Verify the certificate.

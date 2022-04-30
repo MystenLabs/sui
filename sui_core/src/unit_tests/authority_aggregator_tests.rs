@@ -208,7 +208,7 @@ async fn do_transaction<A: AuthorityAPI>(authority: &A, transaction: &Transactio
 async fn extract_cert<A: AuthorityAPI>(
     authorities: &[&A],
     committee: &Committee,
-    transaction_digest: TransactionDigest,
+    transaction_digest: &TransactionDigest,
 ) -> CertifiedTransaction {
     let mut votes = vec![];
     let mut transaction: Option<SignedTransaction> = None;
@@ -217,7 +217,7 @@ async fn extract_cert<A: AuthorityAPI>(
             signed_transaction: Some(signed),
             ..
         }) = authority
-            .handle_transaction_info_request(TransactionInfoRequest::from(transaction_digest))
+            .handle_transaction_info_request(TransactionInfoRequest::from(*transaction_digest))
             .await
         {
             votes.push((

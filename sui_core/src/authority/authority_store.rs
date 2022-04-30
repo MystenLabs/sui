@@ -459,9 +459,9 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     pub fn set_transaction_lock(
         &self,
         owned_input_objects: &[ObjectRef],
-        tx_digest: TransactionDigest,
         transaction: TransactionEnvelope<S>,
     ) -> Result<(), SuiError> {
+        let tx_digest = *transaction.digest();
         let lock_batch = self
             .transaction_lock
             .batch()
