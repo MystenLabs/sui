@@ -126,6 +126,10 @@ export function isObjectContent(obj: any, _argumentName?: string): obj is Object
                 isSequenceNumber(value) as boolean ||
                 value === false ||
                 value === true ||
+                Array.isArray(value) &&
+                value.every((e: any) =>
+                    isSequenceNumber(e) as boolean
+                ) ||
                 isObjectContent(value) as boolean) &&
                 isTransactionResponse(key) as boolean)) &&
         isTransactionResponse(obj.type) as boolean

@@ -11,7 +11,7 @@ export type ObjectRef = {
 };
 
 export type ObjectContent = {
-  fields: Record<string, ObjectContent | string | boolean | number>;
+  fields: Record<string, ObjectContent | string | boolean | number | number[]>;
   type: string;
 };
 export type ObjectOwner =
