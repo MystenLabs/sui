@@ -1,5 +1,5 @@
 [package]
-name = "USDC"
+name = "RegulatedCoin"
 version = "0.0.1"
 
 [dependencies]
