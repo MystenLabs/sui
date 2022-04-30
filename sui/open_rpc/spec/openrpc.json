@@ -576,12 +576,12 @@
         }
       ],
       "result": {
-        "name": "CertifiedTransaction",
+        "name": "TransactionEffects",
         "summary": "",
         "description": "",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionEnvelope_for_AuthorityQuorumSignInfo"
+          "$ref": "#/components/schemas/TransactionEffects"
         }
       }
     },

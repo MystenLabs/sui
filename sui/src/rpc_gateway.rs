@@ -21,8 +21,8 @@ use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::crypto;
 use sui_types::crypto::SignableBytes;
-use sui_types::messages::CallArg;
-use sui_types::messages::{CertifiedTransaction, Transaction, TransactionData};
+use sui_types::messages::{CallArg, TransactionEffects};
+use sui_types::messages::{Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 use tracing::debug;
 
@@ -147,7 +147,7 @@ pub trait RpcGateway {
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
 
     #[method(name = "getTransaction")]
-    async fn get_transaction(&self, digest: TransactionDigest) -> RpcResult<CertifiedTransaction>;
+    async fn get_transaction(&self, digest: TransactionDigest) -> RpcResult<TransactionEffects>;
 
     /// Low level API to get object info. Client Applications should prefer to use
     /// `get_object_typed_info` instead.
@@ -387,7 +387,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
         Ok(self.gateway.get_recent_transactions(count)?)
     }
 
-    async fn get_transaction(&self, digest: TransactionDigest) -> RpcResult<CertifiedTransaction> {
+    async fn get_transaction(&self, digest: TransactionDigest) -> RpcResult<TransactionEffects> {
         Ok(self.gateway.get_transaction(digest).await?)
     }
 }

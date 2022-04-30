@@ -27,6 +27,7 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 
+use crate::authority_aggregator::AUTHORITY_REQUEST_TIMEOUT;
 use crate::transaction_input_checker;
 use crate::{
     authority::GatewayStore, authority_aggregator::AuthorityAggregator,
@@ -212,7 +213,7 @@ pub trait GatewayAPI {
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<CertifiedTransaction, anyhow::Error>;
+    ) -> Result<TransactionEffects, anyhow::Error>;
 }
 
 impl<A> GatewayState<A>
@@ -807,10 +808,13 @@ where
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<CertifiedTransaction, anyhow::Error> {
+    ) -> Result<TransactionEffects, anyhow::Error> {
         let opt = self.store.get_certified_transaction(&digest)?;
         match opt {
-            Some(t) => Ok(t),
+            Some(t) => Ok(self
+                .authorities
+                .process_certificate(t, AUTHORITY_REQUEST_TIMEOUT)
+                .await?),
             None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
         }
     }

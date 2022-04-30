@@ -24,7 +24,7 @@ use tokio::sync::mpsc::Receiver;
 use tokio::time::timeout;
 
 // TODO: Make timeout duration configurable.
-const AUTHORITY_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+pub const AUTHORITY_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const OBJECT_DOWNLOAD_CHANNEL_BOUND: usize = 1024;
 pub const DEFAULT_RETRIES: usize = 4;
 
@@ -925,7 +925,7 @@ where
     /// At that point (and after) enough authorities are up to date with all objects
     /// needed to process the certificate that a submission should succeed. However,
     /// in case an authority returns an error, we do try to bring it up to speed.
-    async fn process_certificate(
+    pub async fn process_certificate(
         &self,
         certificate: CertifiedTransaction,
         timeout_after_quorum: Duration,
