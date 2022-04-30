@@ -1,8 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TransactionDigest } from './common';
-import { RawObjectRef } from './objects';
+import { SuiAddress, TransactionDigest } from './common';
+import { ObjectId, RawObjectRef } from './objects';
 
 export type Transfer = {
   recipient: string;
@@ -27,7 +27,11 @@ export type Transaction = {
   tx_signature: string;
 };
 
+// TODO: support u64
+export type EpochId = number;
+
 export type CertifiedTransaction = {
+  epoch: EpochId;
   transaction: Transaction;
   signatures: RawAuthoritySignInfo[];
 };
@@ -40,6 +44,12 @@ export type MoveModulePublish = {
   modules: any;
 };
 
+export type StructTag = {
+  address: SuiAddress;
+  module: string;
+  name: string;
+  type_args: MoveTypeTag[];
+};
 export type MoveTypeTag =
   | 'bool'
   | 'u8'
@@ -47,18 +57,22 @@ export type MoveTypeTag =
   | 'u128'
   | 'address'
   | 'signer'
-  | 'vector'
-  | 'struct';
+  | { vector: MoveTypeTag[] }
+  | { struct: StructTag };
 
 export type MoveCall = {
-  packages: RawObjectRef;
+  package: RawObjectRef;
   module: string;
   function: string;
   type_arguments: MoveTypeTag[];
-  object_arguments: RawObjectRef[];
-  shared_object_arguments: string[];
-  pure_arguments: any[];
+  arguments: MoveCallArg[];
 };
+
+export type MoveCallArg =
+  // TODO: convert to Uint8Array
+  | { Pure: number[] }
+  | { ImmOrOwnedObject: RawObjectRef }
+  | { SharedObject: ObjectId };
 
 export type EmptySignInfo = object;
 export type AuthorityName = string;
