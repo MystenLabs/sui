@@ -35,7 +35,10 @@ macro_rules! exit_main {
     ($result:expr) => {
         match $result {
             Ok(_) => (),
-            Err(_) => std::process::exit(1),
+            Err(err) => {
+                println!("{}", err.to_string().bold().red());
+                std::process::exit(1);
+            }
         }
     };
 }
