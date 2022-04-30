@@ -33,7 +33,7 @@ export type ObjectExistsInfo = {
 };
 
 export type ObjectNotExistsInfo = {
-  objectId: any;
+  objectId: ObjectId;
 };
 
 export type ObjectStatus = 'Exists' | 'NotExists' | 'Deleted';
