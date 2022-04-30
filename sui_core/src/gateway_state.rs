@@ -273,7 +273,7 @@ where
         )
         .await?;
 
-        let input_objects = transaction.input_objects()?;
+        let input_objects = transaction.data.input_objects()?;
         let mut objects = self.read_objects_from_store(&input_objects).await?;
         for (object_opt, kind) in objects.iter_mut().zip(&input_objects) {
             // If any object does not exist in the store, give it a chance
@@ -288,7 +288,7 @@ where
         }
 
         let objects_by_kind =
-            transaction_input_checker::check_locks(&transaction, input_objects, objects)
+            transaction_input_checker::check_locks(&transaction.data, input_objects, objects)
                 .instrument(tracing::trace_span!("tx_check_locks"))
                 .await?;
         let owned_objects = transaction_input_checker::filter_owned_objects(&objects_by_kind);
@@ -457,8 +457,8 @@ where
         effects: TransactionEffects,
     ) -> Result<TransactionResponse, anyhow::Error> {
         let call = Self::try_get_move_call(&certificate)?;
-        let signer = certificate.transaction.data.signer();
-        let (gas_payment, _, _) = certificate.transaction.data.gas();
+        let signer = certificate.data.signer();
+        let (gas_payment, _, _) = certificate.data.gas();
         let (coin_object_id, split_arg) = match call.arguments.as_slice() {
             [CallArg::ImmOrOwnedObject((id, _, _)), CallArg::Pure(arg)] => (id, arg),
             _ => {
@@ -512,7 +512,7 @@ where
                 .into())
             }
         };
-        let (gas_payment, _, _) = certificate.transaction.data.gas();
+        let (gas_payment, _, _) = certificate.data.gas();
 
         if let ExecutionStatus::Failure { gas_cost: _, error } = effects.status {
             return Err(error.into());
@@ -535,7 +535,7 @@ where
 
     fn try_get_move_call(certificate: &CertifiedTransaction) -> Result<&MoveCall, anyhow::Error> {
         if let TransactionKind::Single(SingleTransactionKind::Call(ref call)) =
-            certificate.transaction.data.kind
+            certificate.data.kind
         {
             Ok(call)
         } else {

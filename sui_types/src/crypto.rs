@@ -485,7 +485,7 @@ impl PartialEq for AuthoritySignInfo {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct QuorumSignInfo {
     pub epoch: EpochId,
     pub signatures: Vec<(AuthorityName, AuthoritySignature)>,

@@ -35,9 +35,9 @@ const MAX_GAS: u64 = 10000;
 
 // Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
 fn compare_certified_transactions(o1: &CertifiedTransaction, o2: &CertifiedTransaction) {
-    assert_eq!(o1.transaction.digest(), o2.transaction.digest());
+    assert_eq!(o1.digest(), o2.digest());
     // in this ser/de context it's relevant to compare signatures
-    assert_eq!(o1.signatures, o2.signatures);
+    assert_eq!(o1.auth_sign_info.signatures, o2.auth_sign_info.signatures);
 }
 
 // Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
@@ -49,8 +49,11 @@ fn compare_transaction_info_responses(o1: &TransactionInfoResponse, o2: &Transac
         o2.certified_transaction.as_ref(),
     ) {
         (Some(cert1), Some(cert2)) => {
-            assert_eq!(cert1.transaction.digest(), cert2.transaction.digest());
-            assert_eq!(cert1.signatures, cert2.signatures);
+            assert_eq!(cert1.digest(), cert2.digest());
+            assert_eq!(
+                cert1.auth_sign_info.signatures,
+                cert2.auth_sign_info.signatures
+            );
         }
         (None, None) => (),
         _ => panic!("certificate structure between responses differs"),
@@ -878,7 +881,7 @@ async fn test_handle_confirmation_transaction_idempotent() {
     // Now check the transaction info request is also the same
     let info3 = authority_state
         .handle_transaction_info_request(TransactionInfoRequest {
-            transaction_digest: *certified_transfer_transaction.transaction.digest(),
+            transaction_digest: *certified_transfer_transaction.digest(),
         })
         .await
         .unwrap();
@@ -1202,7 +1205,7 @@ async fn test_idempotent_reversed_confirmation() {
         .await;
     assert!(result1.is_ok());
     let result2 = authority_state
-        .handle_transaction(certified_transfer_transaction.transaction)
+        .handle_transaction(certified_transfer_transaction.to_transaction())
         .await;
     assert!(result2.is_ok());
     assert_eq!(

@@ -677,7 +677,7 @@ async fn test_process_transaction() {
 
     // The transaction still only has 3 votes, as only these are needed.
     let cert2 = extract_cert(&authority_clients, &authorities.committee, create2.digest()).await;
-    assert_eq!(3, cert2.signatures.len());
+    assert_eq!(3, cert2.auth_sign_info.signatures.len());
 }
 
 #[tokio::test]

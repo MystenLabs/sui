@@ -140,7 +140,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     async fn check_locks(
         &self,
-        transaction: &Transaction,
+        transaction: &TransactionData,
         gas_object: Object,
         gas_status: &mut SuiGasStatus<'_>,
     ) -> Result<Vec<(InputObjectKind, Object)>, SuiError> {
@@ -199,7 +199,7 @@ impl AuthorityState {
             .await?;
 
         let all_objects: Vec<_> = self
-            .check_locks(&transaction, gas_object, &mut gas_status)
+            .check_locks(&transaction.data, gas_object, &mut gas_status)
             .await?;
         if transaction.contains_shared_object() {
             // It's important that we do this here to make sure there is enough
@@ -326,17 +326,16 @@ impl AuthorityState {
     ) -> Result<TransactionInfoResponse, SuiError> {
         let certificate = confirmation_transaction.certificate;
         let transaction_digest = *certificate.digest();
-        let transaction = &certificate.transaction;
 
         let (gas_object, mut gas_status) = self
             .check_gas(
-                transaction.gas_payment_object_ref().0,
-                transaction.data.gas_budget,
+                certificate.gas_payment_object_ref().0,
+                certificate.data.gas_budget,
             )
             .await?;
 
         let objects_by_kind = self
-            .check_locks(transaction, gas_object, &mut gas_status)
+            .check_locks(&certificate.data, gas_object, &mut gas_status)
             .await?;
 
         // At this point we need to check if any shared objects need locks,
@@ -372,7 +371,7 @@ impl AuthorityState {
         let effects = execution_engine::execute_transaction_to_effects(
             shared_object_refs,
             &mut temporary_store,
-            transaction.clone(),
+            certificate.data.clone(),
             transaction_digest,
             transaction_dependencies,
             &self.move_vm,
@@ -402,20 +401,19 @@ impl AuthorityState {
         last_consensus_index: ExecutionIndices,
     ) -> SuiResult<()> {
         // Ensure it is a shared object certificate
-        if !certificate.transaction.contains_shared_object() {
+        if !certificate.contains_shared_object() {
             log::debug!(
                 "Transaction without shared object has been sequenced: {:?}",
-                certificate.transaction
+                certificate
             );
             return Ok(());
         }
 
         // Ensure it is the first time we see this certificate.
         let transaction_digest = *certificate.digest();
-        if self._database.sequenced(
-            &transaction_digest,
-            certificate.transaction.shared_input_objects(),
-        )?[0]
+        if self
+            ._database
+            .sequenced(&transaction_digest, certificate.shared_input_objects())?[0]
             .is_some()
         {
             return Ok(());
