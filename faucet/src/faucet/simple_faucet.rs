@@ -31,7 +31,9 @@ const DEFAULT_GAS_BUDGET: u64 = 1000;
 
 impl SimpleFaucet {
     pub async fn new(mut wallet: WalletContext) -> Result<Self, FaucetError> {
-        let active_address = wallet.active_address().unwrap();
+        let active_address = wallet
+            .active_address()
+            .map_err(|err| FaucetError::Wallet(err.to_string()))?;
         info!("SimpleFaucet::new with active address: {active_address}");
 
         let mut coins = wallet
