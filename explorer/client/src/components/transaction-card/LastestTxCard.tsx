@@ -20,11 +20,11 @@ const getRecentTransactions = async (txNum:number) => {
         // Get the lastest transactions
         const transactions = await rpc.getRecentTransactions(txNum).then((res: any) => res);
         console.log(transactions);
-        return Promise.all(transactions.map(async (tx: any) => {
+        return await Promise.all(transactions.map(async (tx: any) => {
              return {
                  block: tx[0],
                  txId: tx[1],
-                 txData: await rpc.getTransaction(tx[1]).then((res: any) => res.result),
+                 txData: await rpc.getTransaction(tx[1]).then((res: any) => res).catch((err: any) => false),
              }
             }));  
     } catch (error) {
