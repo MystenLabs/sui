@@ -2,266 +2,224 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Stable::RegulatedCoin {
-    use Std::Vector;
     use Sui::Balance::{Self, Balance};
-    use Sui::Coin::{Self, TreasuryCap};
-    use Sui::Transfer;
-    use Sui::ID::{Self, VersionedID};
     use Sui::TxContext::{Self, TxContext};
+    use Sui::ID::VersionedID;
 
-    /// The Balance of a regulated Coin. Can be refilled only by
-    /// applying a regulated `Transfer` using a verification `Registry`.
-    struct OwnedBalance<phantom T> has key {
-        id: VersionedID,
-        /// A stored `Balance`; since it uses the same type as
-        /// `Sui::Balance`, regulated coins are not reimplementing
-        /// anything and rely on the existing system.
-        balance: Balance<T>,
-        /// Only owner can use his balance;
-        /// Even though it is currently transferable, no one else
-        /// should be able to use this Balance until it is moved
-        /// to another owner.
-        owner: address,
-    }
-
-    /// A restricted transfer. Holds a `Balance` of a regulated Coin.
-    /// Can only be `accept`ed by the receiver.
-    struct Transfer<phantom T> has key {
+    struct RegulatedCoin<phantom T> has key {
         id: VersionedID,
         balance: Balance<T>,
-        receiver: address,
-        sender: address,
+        owner: address
     }
 
-    /// This struct is going to hold addresses which have been
-    /// banned from making transactions on the network. Technically
-    /// we cannot forbid anyone to make transactions, but what we
-    /// can do is make their funds unusable by restricting unwrapping.
-    struct Registry<phantom T> has key {
-        id: VersionedID,
-        /// List of banned addresses which are not allowed to transfer/unwrap
-        /// their coins.
-        banned: vector<address>,
-        /// Holds a TreasureCap of a Coin module, which opens the door
-        /// for conversions between a regulated currency and non-regulated
-        /// ones. Also it allows for using unified minting/burning security
-        /// methods.
-        treasury_cap: TreasuryCap<T>,
-        /// For simplicity's sake use address auth for Registry operations.
-        /// Further it can be extended to an AuthorityCap {} (possibly with
-        /// voting system)
-        owner: address,
+    /// Get the `RegulatedCoin.owner` field;
+    public fun owner<T>(c: &RegulatedCoin<T>): address {
+        c.owner
     }
 
-    /// Create an empty balance. Open to everyone as the procedure is equal
-    /// to issuing new coin/balance. OwnedBalance gets its owner field from
-    /// the transaction sender.
-    public(script) fun create_balance<T>(ctx: &mut TxContext) {
-        let sender = TxContext::sender(ctx);
-
-        Transfer::transfer(OwnedBalance<T> {
-            id: TxContext::new_id(ctx),
-            balance: Balance::empty(),
-            owner: sender
-        }, sender);
+    /// Get an immutable reference to the Balance of a RegulatedCoin;
+    public fun borrow<T: drop>(_: T, coin: &RegulatedCoin<T>): &Balance<T> {
+        &coin.balance
     }
 
-    /// Allows merging two balances together if they're owned by the same
-    /// account (currently, the only case where it can be applied is when
-    /// the owner of the `Registry` mints more coin and needs to do a merge).
-    ///
-    /// TODO: possibly rename to `join_balances`.
-    public fun join<T>(
-        b1: &mut OwnedBalance<T>,
-        b2: OwnedBalance<T>,
-    ) {
-        assert!(b1.owner == b2.owner, 5); // EOWNER_MISMATCH
-
-        let OwnedBalance { id, balance, owner: _ } = b2;
-        Balance::join(&mut b1.balance, balance);
-        ID::delete(id);
+    /// Get a mutable reference to the Balance of a RegulatedCoin;
+    public fun borrow_mut<T: drop>(_: T, coin: &mut RegulatedCoin<T>): &mut Balance<T> {
+        &mut coin.balance
     }
 
-    /// Create a new regulated currency. To do so, first create a new
-    /// currency through Coin module, and then share an object representing
-    /// a regulated currency's Registry.
-    public(script) fun create_currency<T: drop>(
-        witness: T,
-        ctx: &mut TxContext
-    ) {
-        Transfer::share_object(Registry<T> {
-            id: TxContext::new_id(ctx),
-            banned: Vector::empty(),
-            treasury_cap: Coin::create_currency<T>(witness, ctx),
-            owner: TxContext::sender(ctx)
-        })
+    /// Author of the currency can restrict who is allowed to create new balances;
+    public fun zero<T: drop>(_: T, owner: address, ctx: &mut TxContext): RegulatedCoin<T> {
+        RegulatedCoin { id: TxContext::new_id(ctx), balance: Balance::zero(), owner }
     }
 
-    /// Mint some amount of the regulated currency.
-    /// Only owner of the `Registry` can perform this action.
-    public fun mint<T>(
-        registry: &mut Registry<T>,
-        value: u64,
-        ctx: &mut TxContext
-    ): OwnedBalance<T> {
-        let owner = TxContext::sender(ctx);
-
-        assert!(owner == registry.owner, 0); // ENOT_ALLOWED
-
-        let treasury = &mut registry.treasury_cap;
-        let generic_coin = Coin::mint(value, treasury, ctx);
-        let balance = Coin::into_balance(generic_coin);
-
-        OwnedBalance {
-            owner,
-            balance,
-            id: TxContext::new_id(ctx),
-        }
+    /// Build a transferable `RegulatedCoin` from a `Balance`;
+    public fun from_balance<T: drop>(_: T, balance: Balance<T>, owner: address, ctx: &mut TxContext): RegulatedCoin<T> {
+        RegulatedCoin { id: TxContext::new_id(ctx), balance, owner }
     }
 
-    /// A protected transfer.
-    /// Fails if one of the following conditions is not met:
-    /// - Tx sender doesn't own OwnedBalance
-    /// - Either sender or receiver are banned in the Registry
-    /// - If transfered amount is bigger than the one held on a balance
-    public(script) fun transfer<T>(
-        registry: &Registry<T>,
-        owned_balance: &mut OwnedBalance<T>,
-        value: u64,
-        receiver: address,
-        ctx: &mut TxContext
-    ) {
-        let sender = TxContext::sender(ctx);
-
-        assert!(Vector::contains(&registry.banned, &sender) == false, 1); // EADDRESS_BANNED
-        assert!(Vector::contains(&registry.banned, &receiver) == false, 2); // EADDRESS_BANNED_REC
-        assert!(owned_balance.owner == sender, 3); // ESTOLEN_BALANCE
-        assert!(value <= Balance::value(&owned_balance.balance), 4); // ENOT_ENOUGH_FUNDS
-
-        Transfer::transfer(Transfer<T> {
-            sender,
-            receiver,
-            id: TxContext::new_id(ctx),
-            balance: Balance::split(&mut owned_balance.balance, value),
-        }, receiver);
+    /// Turn `RegulatedCoin` into a `Balance`;
+    public fun into_balance<T: drop>(_: T, coin: RegulatedCoin<T>): Balance<T> {
+        let RegulatedCoin { balance, owner: _, id } = coin;
+        Sui::ID::delete(id);
+        balance
     }
 
-    /// Accept a transfer from another account and put it to an `OwnedBalance`.
-    /// Fails if one of the following conditions is not met:
-    /// - Transfer object was stolen
-    /// - OwnedBalance is not owned by tx sender
-    /// - Either receiver or sender of the tx is banned in the Registry
-    public(script) fun accept<T>(
-        registry: &Registry<T>,
-        owned_balance: &mut OwnedBalance<T>,
-        transfer: Transfer<T>,
-        ctx: &mut TxContext
-    ) {
-        let tx_sender = TxContext::sender(ctx);
-        let Transfer { id, balance, receiver, sender } = transfer;
-
-        assert!(Vector::contains(&registry.banned, &sender) == false, 1); // EADDRESS_BANNED
-        assert!(Vector::contains(&registry.banned, &receiver) == false, 2); // EADDRESS_BANNED_REC
-        assert!(owned_balance.owner == tx_sender, 3); // ESTOLEN_BALANCE
-        assert!(receiver == tx_sender, 4); // ESOLEN_TRANSFER
-
-        Balance::join(&mut owned_balance.balance, balance);
-        ID::delete(id);
+    public fun join<T: drop>(_: T, c1: &mut RegulatedCoin<T>, c2: RegulatedCoin<T>) {
+        let RegulatedCoin { id, balance, owner: _ } = c2;
+        Balance::join(&mut c1.balance, balance);
+        Sui::ID::delete(id);
     }
 
-    /// Add an address to the list of banned addresses.
-    /// Only owner of the Registry is allowed to do that.
-    public(script) fun ban<T>(
-        registry: &mut Registry<T>,
-        account: address,
-        ctx: &mut TxContext
-    ) {
-        assert!(registry.owner == TxContext::sender(ctx), 5); // ENOT_ALLOWED
-        Vector::push_back(&mut registry.banned, account);
-    }
-
-    /// This method allows building on top of the regulated coin by
-    /// authorizing borrows with a witness (which can only be created in
-    /// the custom coin module).
-    ///
-    /// TODO: make a tutorial on Witness auth somewhere.
-    public fun borrow_balance<T: drop>(
-        _witness: T,
-        owned_balance: &mut OwnedBalance<T>,
-    ): &mut Balance<T> {
-        &mut owned_balance.balance
+    public fun split<T: drop>(witness: T, c1: &mut RegulatedCoin<T>, owner: address, value: u64, ctx: &mut TxContext): RegulatedCoin<T> {
+        let balance = Balance::split(&mut c1.balance, value);
+        from_balance(witness, balance, owner, ctx)
     }
 }
 
-#[test_only]
-module Stable::RegulatedCoinTests {
-    use Sui::TestScenario::{Self, Scenario, ctx, next_tx};
-    use Stable::RegulatedCoin::{Self, OwnedBalance, Transfer, Registry};
+module Stable::FREE {
+    use Sui::Balance::Balance;
+    use Sui::TxContext::{Self, TxContext};
+    use Stable::RegulatedCoin::{Self as C, RegulatedCoin};
 
-    struct Stable has drop {}
+    struct FREE has drop {}
 
-    fun people(): (address, address, address) {
-        (@Stable, @0xADD1, @0xADD2)
+    // === implement the interface for the RegulatedCoin ===
+
+    public fun borrow(coin: &RegulatedCoin<FREE>): &Balance<FREE> { C::borrow(FREE {}, coin) }
+    public fun borrow_mut(coin: &mut RegulatedCoin<FREE>): &mut Balance<FREE> { C::borrow_mut(FREE {}, coin) }
+    public fun from_balance(balance: Balance<FREE>, ctx: &mut TxContext): RegulatedCoin<FREE> { C::from_balance(FREE {}, balance, TxContext::sender(ctx), ctx) }
+    public fun into_balance(coin: RegulatedCoin<FREE>): Balance<FREE> { C::into_balance(FREE {}, coin) }
+
+    // === and that's it (+ minting and currency creation) ===
+}
+
+// A very RESTricted coin.
+module Stable::REST {
+    use Stable::RegulatedCoin::{Self as C, RegulatedCoin};
+
+    use Sui::Balance::{Self, Balance};
+    use Sui::Coin::{Self, TreasuryCap};
+    use Sui::TxContext::{Self, TxContext};
+    use Sui::Transfer;
+
+    const ENotImplemented: u64 = 0;
+    const ENotAllowed: u64 = 1;
+    const ENotOwner: u64 = 2;
+
+    struct REST has drop {}
+
+    /// A restricted transfer of the Balance
+    struct CoinTransfer has key {
+        id: Sui::ID::VersionedID,
+        balance: Balance<REST>,
+        to: address
     }
 
-    #[test]
-    #[expected_failure(abort_code = 3)]
-    public(script) fun test_balance_transfer_mismatch() {
-        let (admin, user1, _user2) = people();
-        let test = &mut TestScenario::begin(&admin);
-
-        init(test);
-        mint(test);
-
-        next_tx(test, &admin);
-        {
-            let registry = TestScenario::take_object<Registry<Stable>>(test);
-            let balance = TestScenario::take_object<OwnedBalance<Stable>>(test);
-
-            // Make a safe transfer to the user1
-            RegulatedCoin::transfer<Stable>(&registry, &mut balance, 666, user1, ctx(test));
-
-            TestScenario::return_object(test, registry);
-            TestScenario::return_object(test, balance);
-        };
-
-        next_tx(test, &user1);
-        {
-            let registry = TestScenario::take_object<Registry<Stable>>(test);
-            let balance = TestScenario::take_object<OwnedBalance<Stable>>(test);
-            let transfer = TestScenario::take_object<Transfer<Stable>>(test);
-
-            // BALANCE IS ACTUALLY ADMIN'S (USER1 HASN'T CREATED A BALANCE YET)
-            RegulatedCoin::accept<Stable>(&registry, &mut balance, transfer, ctx(test));
-
-            TestScenario::return_object(test, registry);
-            TestScenario::return_object(test, balance);
-        };
+    /// Currently let's just use Coin::TreasuryCap functionality
+    fun init(ctx: &mut TxContext) {
+        Transfer::transfer(
+            Coin::create_currency(REST {}, ctx),
+            TxContext::sender(ctx)
+        )
     }
 
-    // Init currency, create admin balance
-    public(script) fun init(test: &mut Scenario) {
-        let (admin, _, _) = people();
-
-        next_tx(test, &admin);
-
-        RegulatedCoin::create_currency(Stable {}, ctx(test));
-        RegulatedCoin::create_balance<Stable>(ctx(test));
+    /// Only owner of the treasury cap can create new Balances; for example, after a KYC process;
+    public fun create_empty_for(_cap: &TreasuryCap<REST>, for: address, ctx: &mut TxContext) {
+        Transfer::transfer(C::zero(REST {}, for, ctx), for)
     }
 
-    // Mint some coin to the admin address
-    public(script) fun mint(test: &mut Scenario) {
-        let (admin, _, _) = people();
+    /// Allow borrowing as is, by default
+    public fun borrow(coin: &RegulatedCoin<REST>): &Balance<REST> { C::borrow(REST {}, coin) }
+    public fun borrow_mut(coin: &mut RegulatedCoin<REST>, ctx: &mut TxContext): &mut Balance<REST> {
+        assert!(TxContext::sender(ctx) == C::owner(coin), ENotOwner); // only owner can access the balance
+        C::borrow_mut(REST {}, coin)
+    }
 
-        next_tx(test, &admin);
+    // === Coin Transfers ===
 
-        let registry = TestScenario::take_object<Registry<Stable>>(test);
-        let balance = TestScenario::take_object<OwnedBalance<Stable>>(test);
-        let usdc = RegulatedCoin::mint(&mut registry, 1000, ctx(test));
+    public(script) fun transfer(
+        coin: &mut RegulatedCoin<REST>, value: u64, to: address, ctx: &mut TxContext
+    ) {
+        Transfer::transfer(CoinTransfer {
+            id: TxContext::new_id(ctx),
+            balance: Balance::split(borrow_mut(coin, ctx), value),
+            to
+        }, to)
+    }
 
-        RegulatedCoin::join(&mut balance, usdc);
+    public(script) fun accept_transfer(
+        coin: &mut RegulatedCoin<REST>, transfer: CoinTransfer, ctx: &mut TxContext
+    ) {
+        let CoinTransfer { id, balance, to } = transfer;
+        assert!(C::owner(coin) == to, ENotOwner);
+        Balance::join(borrow_mut(coin, ctx), balance);
+        Sui::ID::delete(id);
+    }
 
-        TestScenario::return_object(test, registry);
-        TestScenario::return_object(test, balance);
+    // === Explicit "Not Implemented" part ===
+
+    public fun join() { abort ENotImplemented }
+    public fun split() { abort ENotImplemented }
+    public fun into_balance() { abort ENotImplemented }
+    public fun from_balance() { abort ENotImplemented }
+}
+
+module Stable::RestrictedStake {
+    use Stable::REST::{Self, REST};
+    use Stable::RegulatedCoin::RegulatedCoin;
+
+    use Sui::Coin::{Self, Coin, TreasuryCap};
+    use Sui::Balance::{Self, Balance};
+    use Sui::TxContext::{Self, TxContext};
+    use Sui::Transfer;
+
+    // stake token - get your money back once
+    struct STAKE has drop {}
+
+    struct StableStake has key {
+        id: Sui::ID::VersionedID,
+        balance: Balance<REST>,
+        treasury_cap: TreasuryCap<STAKE>,
+    }
+
+    fun init(ctx: &mut TxContext) {
+        Transfer::share_object(StableStake {
+            id: TxContext::new_id(ctx),
+            balance: Balance::zero<REST>(),
+            treasury_cap: Coin::create_currency<STAKE>(STAKE{}, ctx)
+        });
+    }
+
+    public(script) fun fill(
+        stake: &mut StableStake,
+        coin: &mut RegulatedCoin<REST>,
+        value: u64,
+        ctx: &mut TxContext
+    ) {
+        let to_fill = Balance::split(REST::borrow_mut(coin, ctx), value);
+        let coin = Coin::mint<STAKE>(value, &mut stake.treasury_cap, ctx);
+
+        Balance::join(&mut stake.balance, to_fill);
+        Transfer::transfer(coin, TxContext::sender(ctx))
+    }
+
+    public(script) fun withdraw(
+        stake: &mut StableStake,
+        stable: &mut RegulatedCoin<REST>,
+        coin: Coin<STAKE>,
+        ctx: &mut TxContext
+    ) {
+        let balance = Balance::split(&mut stake.balance, Coin::value(&coin));
+
+        Coin::burn(coin, &mut stake.treasury_cap);
+        Balance::join(REST::borrow_mut(stable, ctx), balance);
+    }
+}
+
+module Stable::Hack {
+    use Stable::FREE::{Self, FREE};
+    use Stable::RegulatedCoin::RegulatedCoin;
+    use Sui::Balance::{Self, Balance};
+    use Sui::TxContext::TxContext;
+    use Sui::Coin::{Self, Coin};
+
+    // assume it is a shared object
+    struct DApp {
+        balance: Balance<FREE>
+    }
+
+    // a public method
+    public fun add(dapp: &mut DApp, coin: RegulatedCoin<FREE>) {
+        Balance::join(&mut dapp.balance, FREE::into_balance(coin));
+    }
+
+    public fun take(dapp: &mut DApp, value: u64, ctx: &mut TxContext): RegulatedCoin<FREE> {
+        let balance = Balance::split(&mut dapp.balance, value);
+        FREE::from_balance(balance, ctx)
+    }
+
+    public fun take_bad(dapp: &mut DApp, value: u64, ctx: &mut TxContext): Coin<FREE> { // the problem
+        let balance = Balance::split(&mut dapp.balance, value);
+        Coin::from_balance(balance, ctx)
     }
 }
