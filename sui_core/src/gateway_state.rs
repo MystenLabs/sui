@@ -213,7 +213,7 @@ pub trait GatewayAPI {
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<TransactionEffects, anyhow::Error>;
+    ) -> Result<TransactionResponse, anyhow::Error>;
 }
 
 impl<A> GatewayState<A>
@@ -808,13 +808,16 @@ where
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<TransactionEffects, anyhow::Error> {
+    ) -> Result<TransactionResponse, anyhow::Error> {
         let opt = self.store.get_certified_transaction(&digest)?;
         match opt {
-            Some(t) => Ok(self
-                .authorities
-                .process_certificate(t, AUTHORITY_REQUEST_TIMEOUT)
-                .await?),
+            Some(t) => {
+                let effect = self
+                    .authorities
+                    .process_certificate(t.clone(), AUTHORITY_REQUEST_TIMEOUT)
+                    .await?;
+                Ok(TransactionResponse::EffectResponse(t, effect))
+            }
             None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
         }
     }

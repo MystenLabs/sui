@@ -576,12 +576,12 @@
         }
       ],
       "result": {
-        "name": "TransactionEffects",
+        "name": "TransactionResponse",
         "summary": "",
         "description": "",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionEffects"
+          "$ref": "#/components/schemas/TransactionResponse"
         }
       }
     },
