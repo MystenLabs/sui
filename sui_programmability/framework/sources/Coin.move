@@ -8,8 +8,8 @@ module Sui::Coin {
     use Sui::TxContext::{Self, TxContext};
     use Std::Vector;
 
-    /// A coin of type `T` worth `value`. Transferrable
-    struct Coin<phantom T> has key, store {
+    /// A coin of type `T` worth `value`. Transferrable but not storable
+    struct Coin<phantom T> has key {
         id: VersionedID,
         balance: Balance<T>
     }
