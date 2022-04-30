@@ -485,8 +485,9 @@ impl PartialEq for AuthoritySignInfo {
     }
 }
 
+/// Represents at least a quorum (could be more) of authority signatures.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-pub struct QuorumSignInfo {
+pub struct AuthorityQuorumSignInfo {
     pub epoch: EpochId,
     pub signatures: Vec<(AuthorityName, AuthoritySignature)>,
 }
@@ -501,14 +502,14 @@ pub struct QuorumSignInfo {
 //
 // see also https://github.com/MystenLabs/sui/issues/266
 //
-static_assertions::assert_not_impl_any!(QuorumSignInfo: Hash, Eq, PartialEq);
-impl AuthoritySignInfoTrait for QuorumSignInfo {}
+static_assertions::assert_not_impl_any!(AuthorityQuorumSignInfo: Hash, Eq, PartialEq);
+impl AuthoritySignInfoTrait for AuthorityQuorumSignInfo {}
 
 mod private {
     pub trait SealedAuthoritySignInfoTrait {}
     impl SealedAuthoritySignInfoTrait for super::EmptySignInfo {}
     impl SealedAuthoritySignInfoTrait for super::AuthoritySignInfo {}
-    impl SealedAuthoritySignInfoTrait for super::QuorumSignInfo {}
+    impl SealedAuthoritySignInfoTrait for super::AuthorityQuorumSignInfo {}
 }
 
 /// Something that we know how to hash and sign.
