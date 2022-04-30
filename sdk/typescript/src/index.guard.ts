@@ -5,7 +5,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignedTransaction, TransactionResponse, TransferTransaction, TxnDataSerializer, TransactionDigest, SuiAddress, ObjectRef, ObjectContent, ObjectOwner, SuiObject, ObjectExistsInfo, ObjectNotExistsInfo, ObjectStatus, ObjectType, GetOwnedObjectRefsResponse, GetObjectInfoResponse, ObjectDigest, ObjectId, SequenceNumber, RawObjectRef, Transfer, RawAuthoritySignInfo, SingleTransactionKind, TransactionKind, TransactionData, Transaction, CertifiedTransaction, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveModulePublish, MoveTypeTag, MoveCall, EmptySignInfo, AuthorityName, AuthoritySignature } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignedTransaction, TransactionResponse, TransferTransaction, TxnDataSerializer, TransactionDigest, SuiAddress, ObjectRef, ObjectContent, ObjectOwner, SuiObject, ObjectExistsInfo, ObjectNotExistsInfo, ObjectStatus, ObjectType, GetOwnedObjectRefsResponse, GetObjectInfoResponse, ObjectDigest, ObjectId, SequenceNumber, RawObjectRef, Transfer, RawAuthoritySignInfo, SingleTransactionKind, TransactionKind, TransactionData, Transaction, EpochId, CertifiedTransaction, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveModulePublish, StructTag, MoveTypeTag, MoveCall, MoveCallArg, EmptySignInfo, AuthorityName, AuthoritySignature } from "./index";
 import { BN } from "bn.js";
 
 export function isEd25519KeypairData(obj: any, _argumentName?: string): obj is Ed25519KeypairData {
@@ -173,7 +173,8 @@ export function isObjectNotExistsInfo(obj: any, _argumentName?: string): obj is 
     return (
         (obj !== null &&
             typeof obj === "object" ||
-            typeof obj === "function")
+            typeof obj === "function") &&
+        isTransactionResponse(obj.objectId) as boolean
     )
 }
 
@@ -316,11 +317,18 @@ export function isTransaction(obj: any, _argumentName?: string): obj is Transact
     )
 }
 
+export function isEpochId(obj: any, _argumentName?: string): obj is EpochId {
+    return (
+        typeof obj === "number"
+    )
+}
+
 export function isCertifiedTransaction(obj: any, _argumentName?: string): obj is CertifiedTransaction {
     return (
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
+        isSequenceNumber(obj.epoch) as boolean &&
         isTransaction(obj.transaction) as boolean &&
         Array.isArray(obj.signatures) &&
         obj.signatures.every((e: any) =>
@@ -354,6 +362,21 @@ export function isMoveModulePublish(obj: any, _argumentName?: string): obj is Mo
     )
 }
 
+export function isStructTag(obj: any, _argumentName?: string): obj is StructTag {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionResponse(obj.address) as boolean &&
+        isTransactionResponse(obj.module) as boolean &&
+        isTransactionResponse(obj.name) as boolean &&
+        Array.isArray(obj.type_args) &&
+        obj.type_args.every((e: any) =>
+            isMoveTypeTag(e) as boolean
+        )
+    )
+}
+
 export function isMoveTypeTag(obj: any, _argumentName?: string): obj is MoveTypeTag {
     return (
         (obj === "bool" ||
@@ -362,8 +385,17 @@ export function isMoveTypeTag(obj: any, _argumentName?: string): obj is MoveType
             obj === "u128" ||
             obj === "address" ||
             obj === "signer" ||
-            obj === "vector" ||
-            obj === "struct")
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            Array.isArray(obj.vector) &&
+            obj.vector.every((e: any) =>
+                isMoveTypeTag(e) as boolean
+            ) ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isStructTag(obj.struct) as boolean)
     )
 }
 
@@ -372,22 +404,37 @@ export function isMoveCall(obj: any, _argumentName?: string): obj is MoveCall {
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
-        isRawObjectRef(obj.packages) as boolean &&
+        isRawObjectRef(obj.package) as boolean &&
         isTransactionResponse(obj.module) as boolean &&
         isTransactionResponse(obj.function) as boolean &&
         Array.isArray(obj.type_arguments) &&
         obj.type_arguments.every((e: any) =>
             isMoveTypeTag(e) as boolean
         ) &&
-        Array.isArray(obj.object_arguments) &&
-        obj.object_arguments.every((e: any) =>
-            isRawObjectRef(e) as boolean
-        ) &&
-        Array.isArray(obj.shared_object_arguments) &&
-        obj.shared_object_arguments.every((e: any) =>
-            isTransactionResponse(e) as boolean
-        ) &&
-        Array.isArray(obj.pure_arguments)
+        Array.isArray(obj.arguments) &&
+        obj.arguments.every((e: any) =>
+            isMoveCallArg(e) as boolean
+        )
+    )
+}
+
+export function isMoveCallArg(obj: any, _argumentName?: string): obj is MoveCallArg {
+    return (
+        ((obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+            Array.isArray(obj.Pure) &&
+            obj.Pure.every((e: any) =>
+                isSequenceNumber(e) as boolean
+            ) ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isRawObjectRef(obj.ImmOrOwnedObject) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isTransactionResponse(obj.SharedObject) as boolean)
     )
 }
 
