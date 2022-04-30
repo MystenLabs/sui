@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
-use sui_core::gateway_state::gateway_responses::TransactionResponse;
+use sui_core::gateway_state::gateway_responses::{TransactionEffectsResponse, TransactionResponse};
 use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::json_schema::Base64;
@@ -197,7 +197,7 @@ impl GatewayAPI for RpcGatewayClient {
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<TransactionResponse, Error> {
+    ) -> Result<TransactionEffectsResponse, Error> {
         Ok(self.client.get_transaction(digest).await?)
     }
 }
