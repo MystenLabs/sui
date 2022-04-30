@@ -123,11 +123,7 @@ async fn listen_to_sequenced_transaction() {
 
     // Submit a sample consensus transaction.
     let (sender, receiver) = oneshot::channel();
-    let input = ConsensusInput {
-        serialized: serialized.clone(),
-        replier: sender,
-    };
-    let message = ConsensusListenerMessage::New(input);
+    let message = ConsensusListenerMessage::New(serialized.clone(), sender);
     tx_sui_to_consensus.send(message).await.unwrap();
 
     // Notify the consensus listener that the transaction has been sequenced.
@@ -167,11 +163,8 @@ async fn submit_transaction_to_consensus() {
 
     // Notify the submitter when a consensus transaction has been sequenced and executed.
     tokio::spawn(async move {
-        let (replier, serialized) = match rx_consensus_listener.recv().await.unwrap() {
-            ConsensusListenerMessage::New(ConsensusInput {
-                replier,
-                serialized,
-            }) => (replier, serialized),
+        let (serialized, replier) = match rx_consensus_listener.recv().await.unwrap() {
+            ConsensusListenerMessage::New(serialized, replier) => (serialized, replier),
             message => panic!("Unexpected message {message:?}"),
         };
 

@@ -34,18 +34,11 @@ type SerializedTransactionInfoResponse = Vec<u8>;
 /// Channel to notify the called when the Sui certificate has been sequenced.
 type Replier = oneshot::Sender<SuiResult<SerializedTransactionInfoResponse>>;
 
-/// Message to notify the consensus adapter of a new certificate sent to consensus.
-#[derive(Debug)]
-pub struct ConsensusInput {
-    serialized: SerializedConsensusTransaction,
-    replier: Replier,
-}
-
 /// Message to notify the consensus listener that a new transaction has been sent to consensus
 /// or that the caller timed out on a specific transaction.
 #[derive(Debug)]
 pub enum ConsensusListenerMessage {
-    New(ConsensusInput),
+    New(SerializedConsensusTransaction, Replier),
     Cleanup(SerializedConsensusTransaction),
 }
 
@@ -117,10 +110,7 @@ impl ConsensusAdapter {
 
         // Notify the consensus listener that we are expecting to process this certificate.
         let (sender, receiver) = oneshot::channel();
-        let consensus_input = ConsensusListenerMessage::New(ConsensusInput {
-            serialized: serialized.clone(),
-            replier: sender,
-        });
+        let consensus_input = ConsensusListenerMessage::New(serialized.clone(), sender);
         self.tx_consensus_listener
             .send(consensus_input)
             .await
@@ -194,11 +184,9 @@ impl ConsensusListener {
                 Some(message) = self.rx_consensus_input.recv() => {
                     match message {
                         // Keep track of this certificates so we can notify the user later.
-                        ConsensusListenerMessage::New(input) => {
+                        ConsensusListenerMessage::New(transaction, replier) => {
                             if self.pending.len() < self.max_pending_transactions {
-                                let serialized = input.serialized;
-                                let replier = input.replier;
-                                let digest = Self::hash(&serialized);
+                                let digest = Self::hash(&transaction);
                                 self.pending.entry(digest).or_insert_with(Vec::new).push(replier);
                             }
                         },
