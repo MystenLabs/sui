@@ -144,9 +144,9 @@ impl PublicKeyBytes {
         self.0.to_vec()
     }
     /// Make a Narwhal-compatible public key from a Sui pub.
-    pub fn make_narwhal_public_key(&self) -> Ed25519PublicKey {
-        let pub_key = dalek::PublicKey::from_bytes(&self.0).unwrap();
-        Ed25519PublicKey(pub_key)
+    pub fn make_narwhal_public_key(&self) -> Result<Ed25519PublicKey, signature::Error> {
+        let pub_key = dalek::PublicKey::from_bytes(&self.0)?;
+        Ok(Ed25519PublicKey(pub_key))
     }
 }
 

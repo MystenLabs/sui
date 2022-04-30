@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use std::path::Path;
 use sui::config::{AuthorityPrivateInfo, Config, GenesisConfig, WalletConfig};
 use sui::gateway_config::{GatewayConfig, GatewayType};
@@ -21,7 +21,7 @@ use sui_types::{
 /*  NOTE: Below is copied from sui/src/unit_tests, we should consolidate them */
 /* -------------------------------------------------------------------------- */
 
-const NUM_VALIDAOTR: usize = 4;
+const NUM_VALIDATOR: usize = 4;
 
 pub async fn setup_network_and_wallet(
 ) -> Result<(SuiNetwork, WalletContext, SuiAddress), anyhow::Error> {
@@ -59,7 +59,7 @@ pub async fn start_test_network(
             "genesis_config and key_pairs should be absent/present in tandem."
         ));
     }
-    let key_pairs = key_pairs.unwrap_or_else(|| random_key_pairs(NUM_VALIDAOTR));
+    let key_pairs = key_pairs.unwrap_or_else(|| random_key_pairs(NUM_VALIDATOR));
 
     let mut genesis_config = match genesis_config {
         Some(genesis_config) => genesis_config,
@@ -69,9 +69,7 @@ pub async fn start_test_network(
         }
     };
     if genesis_config.authorities.len() != key_pairs.len() {
-        return Err(anyhow!(
-            "genesis_config's authority num should match key_pairs's length."
-        ));
+        bail!("genesis_config's authority num should match key_pairs's length.");
     }
 
     let authorities = genesis_config

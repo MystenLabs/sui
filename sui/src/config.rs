@@ -187,7 +187,10 @@ impl NetworkConfig {
                 .authorities
                 .iter()
                 .map(|x| {
-                    let name = x.public_key.make_narwhal_public_key();
+                    let name = x
+                        .public_key
+                        .make_narwhal_public_key()
+                        .expect("Can't get narwhal public key");
                     let primary = PrimaryAddresses {
                         primary_to_primary: socket_addr_from_hostport(&x.host, x.port + 100),
                         worker_to_primary: socket_addr_from_hostport(&x.host, x.port + 200),
@@ -438,7 +441,10 @@ pub fn make_default_narwhal_committee(
             .iter()
             .enumerate()
             .map(|(i, x)| {
-                let name = x.public_key.make_narwhal_public_key();
+                let name = x
+                    .public_key
+                    .make_narwhal_public_key()
+                    .expect("Can't get narwhal public key");
 
                 let primary = PrimaryAddresses {
                     primary_to_primary: socket_addr_from_hostport("127.0.0.1", ports[i][0]),

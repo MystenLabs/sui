@@ -16,6 +16,7 @@ use move_package::BuildConfig;
 use narwhal_config::{Committee as ConsensusCommittee, Parameters as ConsensusParameters};
 use narwhal_crypto::ed25519::Ed25519PublicKey;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -297,20 +298,10 @@ impl SuiNetwork {
             ));
         }
 
-        // Align key_pairs' order with config.authorities'
-        let mut ordered_key_pairs = Vec::with_capacity(key_pairs.len());
-        for authority in &config.authorities {
-            let key_pair = key_pairs
-                .iter()
-                .find(|p| SuiAddress::from(p.public_key_bytes()) == authority.address)
-                .ok_or_else(|| {
-                    anyhow!(
-                        "Can't find keypair for authority {:?}",
-                        authority.public_key,
-                    )
-                })?;
-            ordered_key_pairs.push(key_pair);
-        }
+        let key_pairs = key_pairs
+            .iter()
+            .map(|kp| (kp.public_key_bytes(), kp))
+            .collect::<HashMap<_, _>>();
 
         info!(
             "Starting network with {} authorities",
@@ -333,12 +324,14 @@ impl SuiNetwork {
         let net = config.get_authority_infos();
 
         let mut spawned_authorities = Vec::new();
-        for (i, key_pair) in ordered_key_pairs
-            .iter()
-            .enumerate()
-            .take(config.authorities.len())
-        {
-            let authority = &config.authorities[i];
+
+        for authority in &config.authorities {
+            let key_pair = key_pairs.get(&authority.public_key).unwrap_or_else(|| {
+                panic!(
+                    "Can't find key pair for authority {:?}",
+                    &authority.public_key
+                )
+            });
             let consensus_store_path = sui_config_dir()?
                 .join(CONSENSUS_DB_NAME)
                 .join(encode_bytes_hex(&authority.public_key));
