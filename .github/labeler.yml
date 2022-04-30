@@ -1,0 +1,3 @@
+# Add 'Type: Documentation' to any changes within 'doc' folder or any subfolders
+"Type: Documentation":
+- doc/**/*
