@@ -10,6 +10,7 @@ TOPLEVEL="${DIR}/../"
 # Iterate over rust files not in the target directory
 for i in $(find "$TOPLEVEL" -path "$TOPLEVEL/target" -prune -o -iname "*.rs" -print) 
 do
+	echo "hello $i"
   CNT=$(head -n3 "$i" | grep -oEe '// (Copyright \(c\) 2022, Mysten Labs, Inc.|SPDX-License-Identifier: Apache-2.0)' | wc -l)
   if [ "$CNT" -lt 2 ]
   then

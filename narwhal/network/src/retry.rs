@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{future::Future, time::Duration};
 
 /// Retry configurations for establishing connections and sending messages.

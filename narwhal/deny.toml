@@ -75,6 +75,7 @@ allow = [
     "BSD-3-Clause",
     "CC0-1.0",
     "Apache-2.0",
+    "LicenseRef-ring",
     "ISC",
     #"Apache-2.0 WITH LLVM-exception",
 ]
@@ -135,6 +136,12 @@ name = "bls-crypto"
 version = "*"
 expression = "MIT AND Apache-2.0"
 license-files = [
+]
+[[licenses.clarify]]
+name = "ring"
+expression = "LicenseRef-ring"
+license-files = [
+    { path = "LICENSE", hash = 0xbd0eed23 }
 ]
 
 [licenses.private]
