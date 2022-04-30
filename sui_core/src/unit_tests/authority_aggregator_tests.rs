@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use move_core_types::{account_address::AccountAddress, ident_str};
 use signature::Signer;
@@ -13,6 +14,7 @@ use sui_types::messages::Transaction;
 use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
 
 use super::*;
+use crate::authority::AuthorityState;
 use crate::authority_client::LocalAuthorityClient;
 
 pub fn authority_genesis_objects(
@@ -28,7 +30,10 @@ pub fn authority_genesis_objects(
 
 pub async fn init_local_authorities(
     genesis_objects: Vec<Vec<Object>>,
-) -> AuthorityAggregator<LocalAuthorityClient> {
+) -> (
+    AuthorityAggregator<LocalAuthorityClient>,
+    Vec<Arc<AuthorityState>>,
+) {
     let mut key_pairs = Vec::new();
     let mut voting_rights = BTreeMap::new();
     for _ in 0..genesis_objects.len() {
@@ -40,6 +45,7 @@ pub async fn init_local_authorities(
     let committee = Committee::new(0, voting_rights);
 
     let mut clients = BTreeMap::new();
+    let mut states = Vec::new();
     for ((authority_name, secret), objects) in key_pairs.into_iter().zip(genesis_objects) {
         let client = LocalAuthorityClient::new_with_objects(
             committee.clone(),
@@ -48,12 +54,13 @@ pub async fn init_local_authorities(
             objects,
         )
         .await;
+        states.push(client.state().clone());
         clients.insert(authority_name, client);
     }
-    AuthorityAggregator::new(committee, clients)
+    (AuthorityAggregator::new(committee, clients), states)
 }
 
-fn transfer_object_move_transaction(
+pub fn transfer_object_move_transaction(
     src: SuiAddress,
     secret: &dyn signature::Signer<Signature>,
     dest: SuiAddress,
@@ -110,7 +117,7 @@ pub fn crate_object_move_transaction(
     )
 }
 
-fn delete_object_move_transaction(
+pub fn delete_object_move_transaction(
     src: SuiAddress,
     secret: &dyn signature::Signer<Signature>,
     object_ref: ObjectRef,
@@ -132,7 +139,7 @@ fn delete_object_move_transaction(
     )
 }
 
-fn set_object_move_transaction(
+pub fn set_object_move_transaction(
     src: SuiAddress,
     secret: &dyn signature::Signer<Signature>,
     object_ref: ObjectRef,
@@ -160,19 +167,19 @@ fn set_object_move_transaction(
     )
 }
 
-fn to_transaction(data: TransactionData, signer: &dyn Signer<Signature>) -> Transaction {
+pub fn to_transaction(data: TransactionData, signer: &dyn Signer<Signature>) -> Transaction {
     let signature = Signature::new(&data, signer);
     Transaction::new(data, signature)
 }
 
-async fn do_transaction<A: AuthorityAPI>(authority: &A, transaction: &Transaction) {
+pub async fn do_transaction<A: AuthorityAPI>(authority: &A, transaction: &Transaction) {
     authority
         .handle_transaction(transaction.clone())
         .await
         .unwrap();
 }
 
-async fn extract_cert<A: AuthorityAPI>(
+pub async fn extract_cert<A: AuthorityAPI>(
     authorities: &[&A],
     committee: &Committee,
     transaction_digest: TransactionDigest,
@@ -208,7 +215,7 @@ async fn extract_cert<A: AuthorityAPI>(
     )
 }
 
-async fn do_cert<A: AuthorityAPI>(
+pub async fn do_cert<A: AuthorityAPI>(
     authority: &A,
     cert: &CertifiedTransaction,
 ) -> TransactionEffects {
@@ -221,7 +228,7 @@ async fn do_cert<A: AuthorityAPI>(
         .effects
 }
 
-async fn get_latest_ref<A: AuthorityAPI>(authority: &A, object_id: ObjectID) -> ObjectRef {
+pub async fn get_latest_ref<A: AuthorityAPI>(authority: &A, object_id: ObjectID) -> ObjectRef {
     if let Ok(ObjectInfoResponse {
         requested_object_reference: Some(object_ref),
         ..
@@ -238,7 +245,7 @@ async fn get_latest_ref<A: AuthorityAPI>(authority: &A, object_id: ObjectID) -> 
 
 #[tokio::test]
 async fn test_map_reducer() {
-    let authorities = init_local_authorities(authority_genesis_objects(4, vec![])).await;
+    let (authorities, _) = init_local_authorities(authority_genesis_objects(4, vec![])).await;
 
     // Test: reducer errors get propagated up
     let res = authorities
@@ -369,7 +376,7 @@ async fn test_get_all_owned_objects() {
     let gas_object2 = Object::with_owner_for_testing(addr2);
     let genesis_objects =
         authority_genesis_objects(4, vec![gas_object1.clone(), gas_object2.clone()]);
-    let authorities = init_local_authorities(genesis_objects).await;
+    let (authorities, _) = init_local_authorities(genesis_objects).await;
     let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
 
     // Make a schedule of transactions
@@ -457,7 +464,7 @@ async fn test_sync_all_owned_objects() {
     let gas_object2 = Object::with_owner_for_testing(addr1);
     let genesis_objects =
         authority_genesis_objects(4, vec![gas_object1.clone(), gas_object2.clone()]);
-    let authorities = init_local_authorities(genesis_objects).await;
+    let (authorities, _) = init_local_authorities(genesis_objects).await;
     let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
 
     let framework_obj_ref = genesis::get_framework_object_ref();
@@ -568,7 +575,7 @@ async fn test_process_transaction() {
     let gas_object2 = Object::with_owner_for_testing(addr1);
     let genesis_objects =
         authority_genesis_objects(4, vec![gas_object1.clone(), gas_object2.clone()]);
-    let authorities = init_local_authorities(genesis_objects).await;
+    let (authorities, _) = init_local_authorities(genesis_objects).await;
     let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
 
     let framework_obj_ref = genesis::get_framework_object_ref();
@@ -614,7 +621,7 @@ async fn test_process_certificate() {
     let gas_object2 = Object::with_owner_for_testing(addr1);
     let genesis_objects =
         authority_genesis_objects(4, vec![gas_object1.clone(), gas_object2.clone()]);
-    let authorities = init_local_authorities(genesis_objects).await;
+    let (authorities, _) = init_local_authorities(genesis_objects).await;
     let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
 
     let framework_obj_ref = genesis::get_framework_object_ref();

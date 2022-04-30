@@ -40,6 +40,10 @@ use crate::{
 pub mod gossip;
 use gossip::gossip_process;
 
+#[cfg(test)]
+#[path = "unit_tests/gossip_tests.rs"]
+mod gossip_tests;
+
 pub struct ActiveAuthority<A> {
     // The local authority state
     pub state: Arc<AuthorityState>,

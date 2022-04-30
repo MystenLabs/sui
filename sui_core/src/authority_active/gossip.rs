@@ -61,6 +61,7 @@ where
         }
 
         // Let the peer gossip task finish
+        debug_assert!(!gossip_tasks.is_empty());
         let (finished_name, _result) = gossip_tasks.select_next_some().await;
         peer_names.remove(&finished_name);
     }
@@ -103,13 +104,14 @@ where
         };
 
         // Get a client
-        let mut streamx = self.client.handle_batch_stream(req).await?;
+        let mut streamx = Box::pin(self.client.handle_batch_stream(req).await?);
 
         loop {
             tokio::select! {
                 _ = &mut timeout => {
                     // No matter what happens we do not spend too much time
                     // for any peer.
+
                     break },
 
                 items = &mut streamx.next() => {
@@ -121,8 +123,7 @@ where
                         },
                         // Upon receiving a trasnaction digest we store it, if it is not processed already.
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((_seq, _digest))))) => {
-
-                            if self.state._database.effects_exists(&_digest)? {
+                            if !self.state._database.effects_exists(&_digest)? {
                                 queue.push(async move {
                                     tokio::time::sleep(Duration::from_millis(1_000)).await;
                                     _digest
@@ -144,13 +145,14 @@ where
                             };
 
                             // Get a client
-                            streamx = self.client.handle_batch_stream(req).await?;
+                            streamx = Box::pin(self.client.handle_batch_stream(req).await?);
                         },
                     }
                 },
 
-                digest = &mut queue.select_next_some() => {
-                    if self.state._database.effects_exists(&digest)? {
+                digest = &mut queue.next() , if !queue.is_empty() => {
+                    let digest = digest.unwrap();
+                    if !self.state._database.effects_exists(&digest)? {
                         // We still do not have a transaction others have after some time
 
                         // Download the certificate
@@ -168,11 +170,8 @@ where
                             // But it should know the certificate!
                             return Err(SuiError::ByzantineAuthoritySuspicion { authority :  self.peer_name });
                         }
-
-
                     }
                 },
-
             };
         }
 

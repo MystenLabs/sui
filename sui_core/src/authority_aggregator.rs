@@ -34,6 +34,7 @@ pub mod authority_aggregator_tests;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
+#[derive(Clone)]
 pub struct AuthorityAggregator<A> {
     /// Our Sui committee.
     pub committee: Committee,

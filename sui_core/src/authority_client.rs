@@ -282,11 +282,14 @@ impl LocalAuthorityClient {
         objects: Vec<Object>,
     ) -> Self {
         let client = Self::new(committee, address, secret).await;
-        {
-            for object in objects {
-                client.0.insert_genesis_object(object).await;
-            }
+        for object in objects {
+            client.0.insert_genesis_object(object).await;
         }
         client
+    }
+
+    #[cfg(test)]
+    pub fn state(&self) -> &Arc<AuthorityState> {
+        &self.0
     }
 }

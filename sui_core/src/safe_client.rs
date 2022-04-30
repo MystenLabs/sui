@@ -205,6 +205,12 @@ impl<C> SafeClient<C> {
         // is constructed correctly:
 
         if let Some((transactions, prev_batch)) = transactions_and_last_batch {
+            fp_ensure!(
+                !transactions.is_empty(),
+                SuiError::GenericAuthorityError {
+                    error: "Safe Client: Batches must have some contents.".to_string()
+                }
+            );
             let reconstructed_batch = AuthorityBatch::make_next(prev_batch, transactions)?;
 
             fp_ensure!(

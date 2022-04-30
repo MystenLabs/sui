@@ -1,6 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// I really want to express some predicates in a natural
+// human form rather than the mnimal one - G
+#![allow(clippy::nonminimal_bool)]
+
 use sui_types::base_types::*;
 use sui_types::batch::*;
 use sui_types::error::{SuiError, SuiResult};
@@ -140,8 +144,6 @@ impl crate::authority::AuthorityState {
         // transactions we may have received out of order.
         let mut current_batch: Vec<(TxSequenceNumber, TransactionDigest)> = Vec::new();
 
-        println!("RUNNING BATCH SERVICE!");
-
         while !exit {
             // Reset the flags.
             make_batch = false;
@@ -221,11 +223,26 @@ impl crate::authority::AuthorityState {
         let (items, (should_subscribe, _start, end)) =
             self.handle_batch_info_request(request).await?;
 
-        let last_seq_sent: u64 = 0;
+        let next_expected_seq: u64 = 0;
+        let next_expected_batch: u64 = 0;
         let exit = false;
         let stream1 = stream::unfold(
-            (items, last_seq_sent, subscriber, exit, should_subscribe),
-            move |(mut items, mut last_seq_sent, mut subscriber, mut exit, should_subscribe)| async move {
+            (
+                items,
+                next_expected_seq,
+                next_expected_batch,
+                subscriber,
+                exit,
+                should_subscribe,
+            ),
+            move |(
+                mut items,
+                mut next_expected_seq,
+                mut next_expected_batch,
+                mut subscriber,
+                mut exit,
+                should_subscribe,
+            )| async move {
                 // We have sent the last item
                 if exit {
                     return None;
@@ -234,12 +251,23 @@ impl crate::authority::AuthorityState {
                 // If there are still items send them
                 if let Some(item) = items.pop_front() {
                     if let UpdateItem::Transaction((seq, _)) = &item {
-                        last_seq_sent = *seq;
+                        next_expected_seq = *seq + 1;
+                    }
+
+                    if let UpdateItem::Batch(signed_batch) = &item {
+                        next_expected_batch = signed_batch.batch.next_sequence_number + 1;
                     }
 
                     Some((
                         Ok(BatchInfoResponseItem(item)),
-                        (items, last_seq_sent, subscriber, exit, should_subscribe),
+                        (
+                            items,
+                            next_expected_seq,
+                            next_expected_batch,
+                            subscriber,
+                            exit,
+                            should_subscribe,
+                        ),
                     ))
                 } else {
                     // When there are no more items potentially subscribe
@@ -249,17 +277,22 @@ impl crate::authority::AuthorityState {
                         loop {
                             match subscriber.recv().await {
                                 Ok(item) => {
-                                    let seq = match &item {
-                                        UpdateItem::Transaction((seq, _)) => *seq,
+                                    match &item {
+                                        UpdateItem::Transaction((seq, _)) => {
+                                            // Do not re-send transactions already sent from the database
+                                            if !(next_expected_seq <= *seq) {
+                                                continue;
+                                            }
+                                        }
                                         UpdateItem::Batch(signed_batch) => {
-                                            signed_batch.batch.next_sequence_number
+                                            // Do not re-send transactions already sent from the database
+                                            if !(next_expected_batch
+                                                <= signed_batch.batch.next_sequence_number)
+                                            {
+                                                continue;
+                                            }
                                         }
                                     };
-
-                                    // Do not re-send transactions already sent from the database
-                                    if seq <= last_seq_sent {
-                                        continue;
-                                    }
 
                                     let response = BatchInfoResponseItem(item);
 
@@ -273,7 +306,14 @@ impl crate::authority::AuthorityState {
 
                                     return Some((
                                         Ok(response),
-                                        (items, last_seq_sent, subscriber, exit, should_subscribe),
+                                        (
+                                            items,
+                                            next_expected_seq,
+                                            next_expected_batch,
+                                            subscriber,
+                                            exit,
+                                            should_subscribe,
+                                        ),
                                     ));
                                 }
                                 Err(RecvError::Closed) => {
@@ -282,7 +322,14 @@ impl crate::authority::AuthorityState {
                                     exit = true;
                                     return Some((
                                         err_response,
-                                        (items, last_seq_sent, subscriber, exit, should_subscribe),
+                                        (
+                                            items,
+                                            next_expected_seq,
+                                            next_expected_batch,
+                                            subscriber,
+                                            exit,
+                                            should_subscribe,
+                                        ),
                                     ));
                                 }
                                 Err(RecvError::Lagged(number_skipped)) => {
@@ -294,7 +341,14 @@ impl crate::authority::AuthorityState {
                                     exit = true;
                                     return Some((
                                         err_response,
-                                        (items, last_seq_sent, subscriber, exit, should_subscribe),
+                                        (
+                                            items,
+                                            next_expected_seq,
+                                            next_expected_batch,
+                                            subscriber,
+                                            exit,
+                                            should_subscribe,
+                                        ),
                                     ));
                                 }
                             }
