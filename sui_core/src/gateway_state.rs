@@ -27,7 +27,6 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::authority_aggregator::AUTHORITY_REQUEST_TIMEOUT;
 use crate::transaction_input_checker;
 use crate::{
     authority::GatewayStore, authority_aggregator::AuthorityAggregator,
@@ -333,7 +332,7 @@ where
             objects_by_kind,
             mutated_objects,
             new_certificate.clone(),
-            effects.clone(),
+            effects.clone().to_unsigned_effects(),
             self.next_tx_seq_number
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
         )?;
@@ -816,16 +815,10 @@ where
     ) -> Result<TransactionEffectsResponse, anyhow::Error> {
         let opt = self.store.get_certified_transaction(&digest)?;
         match opt {
-            Some(certificate) => {
-                let effects = self
-                    .authorities
-                    .process_certificate(certificate.clone(), AUTHORITY_REQUEST_TIMEOUT)
-                    .await?;
-                Ok(TransactionEffectsResponse {
-                    certificate,
-                    effects,
-                })
-            }
+            Some(certificate) => Ok(TransactionEffectsResponse {
+                certificate,
+                effects: self.store.get_effects(&digest)?,
+            }),
             None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
         }
     }
