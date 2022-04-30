@@ -63,7 +63,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let mut app: Command = ClientOpt::command();
     app = app.no_binary_name(false);
-    let options: ClientOpt = ClientOpt::from_arg_matches(&app.get_matches()).unwrap();
+    let options: ClientOpt = ClientOpt::from_arg_matches(&app.get_matches())?;
     let wallet_conf_path = options
         .config
         .clone()
