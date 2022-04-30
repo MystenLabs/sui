@@ -1,13 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::rpc_gateway::responses::ObjectResponse;
-use crate::rpc_gateway::{RpcGatewayClient as RpcGateway, SignedTransaction, TransactionBytes};
 use anyhow::Error;
 use async_trait::async_trait;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
+use tokio::runtime::Handle;
+
 use sui_core::gateway_state::gateway_responses::{TransactionEffectsResponse, TransactionResponse};
 use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
 use sui_core::sui_json::SuiJsonValue;
@@ -15,7 +15,9 @@ use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::json_schema::Base64;
 use sui_types::messages::{CallArg, CertifiedTransaction, Transaction, TransactionData};
 use sui_types::object::ObjectRead;
-use tokio::runtime::Handle;
+
+use crate::rpc_gateway::responses::ObjectResponse;
+use crate::rpc_gateway::{RpcGatewayClient as RpcGateway, SignedTransaction, TransactionBytes};
 
 pub struct RpcGatewayClient {
     client: HttpClient,
@@ -79,7 +81,10 @@ impl GatewayAPI for RpcGatewayClient {
                 package_object_ref.0,
                 module,
                 function,
-                Some(type_arguments),
+                type_arguments
+                    .into_iter()
+                    .map(|tag| tag.try_into())
+                    .collect::<Result<Vec<_>, _>>()?,
                 arguments,
                 gas_object_ref.0,
                 gas_budget,

@@ -902,6 +902,12 @@ fn struct_tag_equals_sig_token(
         SignatureToken::StructInstantiation(idx, args) => {
             struct_tag_equals_struct_inst(module, function_type_arguments, arg_type, *idx, args)
         }
+        SignatureToken::TypeParameter(_) => type_tag_equals_sig_token(
+            module,
+            function_type_arguments,
+            &TypeTag::Struct(arg_type.clone()),
+            param_type,
+        ),
         _ => false,
     }
 }

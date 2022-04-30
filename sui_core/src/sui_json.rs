@@ -278,12 +278,12 @@ fn resolve_call_arg(
 
         SignatureToken::Struct(_)
         | SignatureToken::StructInstantiation(_, _)
+        | SignatureToken::TypeParameter(_)
         | SignatureToken::Reference(_)
         | SignatureToken::MutableReference(_) => {
             SuiJsonCallArg::Object(resolve_object_arg(idx, arg)?)
         }
 
-        SignatureToken::TypeParameter(_) => unreachable!("Not yet supported and already gated"),
         SignatureToken::Signer => unreachable!(),
     })
 }
@@ -334,13 +334,6 @@ pub fn resolve_move_function_args(
     if fdef.visibility != Visibility::Script {
         bail!(
             "{}::{} does not have public(script) visibility",
-            module.self_id(),
-            function,
-        )
-    }
-    if !function_signature.type_parameters.is_empty() {
-        bail!(
-            "{}::{} has type arguments, which are not yet supported in sui_json",
             module.self_id(),
             function,
         )

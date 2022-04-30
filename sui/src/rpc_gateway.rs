@@ -76,9 +76,7 @@ pub trait RpcGateway {
         package_object_id: ObjectID,
         #[schemars(with = "json_schema::Identifier")] module: Identifier,
         #[schemars(with = "json_schema::Identifier")] function: Identifier,
-        #[schemars(with = "Option<Vec<json_schema::TypeTag>>")] type_arguments: Option<
-            Vec<TypeTag>,
-        >,
+        type_arguments: Vec<SuiTypeTag>,
         arguments: Vec<SuiJsonValue>,
         gas_object_id: ObjectID,
         gas_budget: u64,
@@ -314,7 +312,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
         package_object_id: ObjectID,
         module: Identifier,
         function: Identifier,
-        type_arguments: Option<Vec<TypeTag>>,
+        type_arguments: Vec<SuiTypeTag>,
         rpc_arguments: Vec<SuiJsonValue>,
         gas_object_id: ObjectID,
         gas_budget: u64,
@@ -338,7 +336,10 @@ impl RpcGatewayServer for RpcGatewayImpl {
                     package_object_ref,
                     module,
                     function,
-                    type_arguments.unwrap_or_default(),
+                    type_arguments
+                        .into_iter()
+                        .map(|tag| tag.try_into())
+                        .collect::<Result<Vec<_>, _>>()?,
                     rpc_arguments,
                     gas_obj_ref,
                     gas_budget,

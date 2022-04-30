@@ -202,10 +202,10 @@ curl --location --request POST $SUI_RPC_HOST \
               "params": [
                   "{{owner_address}}",
                   "0000000000000000000000000000000000000002",
-                  "ObjectBasics",
-                  "transfer",
-                  null,
-                  ["0x{{coin_object_id}}", "0x{{recipient_address}}"],
+                  "Coin",
+                  "transfer_",
+                  ["0x2::SUI::SUI"],
+                  ["0x{{coin_object_id}}",10000, "0x{{recipient_address}}"],
                   "{{gas_object_id}}",
                   2000
               ],
@@ -223,13 +223,13 @@ signature.  Gas usage is capped by the gas_budget. The `transfer`
 function is described in more detail in
 the [Sui Wallet](wallet.md#calling-move-code) documentation.
 
-Calling the `transfer` function in the `GAS` module serves the same
+Calling the `transfer_` function in the `Coin` module serves the same
 purpose as the native coin transfer ([`sui_transferCoin`](#sui_transfercoin)), and is mostly used for illustration
 purposes as native transfer is more efficient when it's applicable
 (i.e., we are transferring coins rather than non-coin
 objects). Consequently, you should fill out argument placeholders
 (`{{owner_address}}`, `{{coin_object_id}`, etc.) the same way you
-would for [`sui_transferCoin`](#sui_transfercoin) - please not additional
+would for [`sui_transferCoin`](#sui_transfercoin) - please note additional
 `0x` prepended to function arguments.
 
 To learn more about what `args` are accepted in a Move call, refer to the [SuiJSON](sui-json.md) documentation.
