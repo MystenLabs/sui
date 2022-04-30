@@ -56,6 +56,8 @@ pub struct AuthorityPrivateInfo {
     pub consensus_address: SocketAddr,
 }
 
+type AuthorityKeys = (Vec<PublicKeyBytes>, KeyPair);
+
 // Warning: to_socket_addrs() is blocking and can fail.  Be careful where you use it.
 fn socket_addr_from_hostport(host: &str, port: u16) -> SocketAddr {
     let mut addresses = format!("{host}:{port}")
@@ -272,10 +274,10 @@ const DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT: usize = 5;
 impl GenesisConfig {
     pub fn default_genesis(
         working_dir: &Path,
-        key_pairs: Option<Vec<KeyPair>>,
+        authority_keys: Option<AuthorityKeys>,
     ) -> Result<Self, anyhow::Error> {
-        let num_authorities = match &key_pairs {
-            Some(keypairs) => keypairs.len(),
+        let num_authorities = match &authority_keys {
+            Some((public_keys, _)) => public_keys.len(),
             None => DEFAULT_NUMBER_OF_AUTHORITIES,
         };
 
@@ -284,7 +286,7 @@ impl GenesisConfig {
             num_authorities,
             DEFAULT_NUMBER_OF_ACCOUNT,
             DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT,
-            key_pairs,
+            authority_keys,
         )
     }
 
@@ -293,7 +295,7 @@ impl GenesisConfig {
         num_authorities: usize,
         num_accounts: usize,
         num_objects_per_account: usize,
-        key_pairs: Option<Vec<KeyPair>>,
+        authority_keys: Option<AuthorityKeys>,
     ) -> Result<Self, anyhow::Error> {
         assert!(
             num_authorities > 0,
@@ -309,17 +311,21 @@ impl GenesisConfig {
             authorities.push(authority)
         }
         let authority_key_pair;
-        if let Some(keypairs) = key_pairs {
+        if let Some((public_keys, keypair)) = authority_keys {
             // Use key pairs if given
             assert_eq!(
-                keypairs.len(),
+                public_keys.len(),
                 num_authorities,
                 "Number of key pairs does not maych num_authorities"
             );
-            authority_key_pair = keypairs[0].copy();
+            public_keys
+                .iter()
+                .find(|pk| pk == &keypair.public_key_bytes())
+                .expect("Keypair should be part of thte committee");
+            authority_key_pair = keypair;
             for i in 0..num_authorities {
-                authorities[i].public_key = *keypairs[i].public_key_bytes();
-                authorities[i].address = SuiAddress::from(keypairs[i].public_key_bytes());
+                authorities[i].public_key = public_keys[i];
+                authorities[i].address = SuiAddress::from(&public_keys[i]);
             }
         } else {
             let (address, key_pair) = get_key_pair();

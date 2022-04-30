@@ -338,8 +338,17 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     // Create and save genesis config file
     // Create 4 authorities, 1 account with 1 gas object with custom id
     let key_pairs = random_key_pairs(4);
-    let key_pairs_clone = key_pairs.iter().map(|kp| kp.copy()).collect::<Vec<_>>();
-    let mut config = GenesisConfig::default_genesis(working_dir.path(), Some(key_pairs))?;
+
+    let mut config = GenesisConfig::default_genesis(
+        working_dir.path(),
+        Some((
+            key_pairs
+                .iter()
+                .map(|kp| *kp.public_key_bytes())
+                .collect::<Vec<_>>(),
+            key_pairs[0].copy(),
+        )),
+    )?;
     config.accounts.clear();
     let object_id = ObjectID::random();
     config.accounts.push(AccountConfig {
@@ -350,8 +359,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
         }],
     });
 
-    let network =
-        start_test_network(working_dir.path(), Some(config), Some(key_pairs_clone)).await?;
+    let network = start_test_network(working_dir.path(), Some(config), Some(key_pairs)).await?;
 
     // Wallet config
     let mut context = WalletContext::new(&working_dir.path().join(SUI_WALLET_CONFIG))?;
@@ -393,9 +401,19 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     // Create 4 authorities and 1 account
     let num_authorities = 4;
     let key_pairs = random_key_pairs(num_authorities);
-    let key_pairs_clone = key_pairs.iter().map(|kp| kp.copy()).collect::<Vec<_>>();
-    let mut config =
-        GenesisConfig::custom_genesis(working_dir, num_authorities, 1, 1, Some(key_pairs))?;
+    let mut config = GenesisConfig::custom_genesis(
+        working_dir,
+        num_authorities,
+        1,
+        1,
+        Some((
+            key_pairs
+                .iter()
+                .map(|kp| *kp.public_key_bytes())
+                .collect::<Vec<_>>(),
+            key_pairs[0].copy(),
+        )),
+    )?;
     config
         .move_packages
         .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_1"));
@@ -404,7 +422,7 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
         .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_2"));
 
     // Start network
-    let network = start_test_network(working_dir, Some(config), Some(key_pairs_clone)).await?;
+    let network = start_test_network(working_dir, Some(config), Some(key_pairs)).await?;
 
     assert!(logs_contain("Loading 2 Move packages"));
     // Checks network config contains package ids

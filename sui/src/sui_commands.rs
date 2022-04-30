@@ -647,16 +647,18 @@ fn create_genesis_config_from_scratch(
     let key_pairs = random_key_pairs(4);
     let mut authority_key_store = SuiKeystore::default();
     authority_key_store.set_path(&authority_key_pairs_path);
-    for key_pair in &key_pairs {
-        authority_key_store.add_key(
-            SuiAddress::from(key_pair.public_key_bytes()),
-            key_pair.copy(),
-        )?;
+    let key_pair = key_pairs[0].copy();
+    let public_keys = key_pairs
+        .iter()
+        .map(|kp| *kp.public_key_bytes())
+        .collect::<Vec<_>>();
+    for key_pair in key_pairs {
+        authority_key_store.add_key(SuiAddress::from(key_pair.public_key_bytes()), key_pair)?;
     }
     authority_key_store.save()?;
     info!(
         "Authority keystore is stored in {:?}.",
         authority_key_pairs_path
     );
-    GenesisConfig::default_genesis(sui_config_dir, Some(key_pairs))
+    GenesisConfig::default_genesis(sui_config_dir, Some((public_keys, key_pair)))
 }

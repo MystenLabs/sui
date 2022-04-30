@@ -3,8 +3,7 @@
 
 use crate::benchmark::bench_types::RunningMode;
 use crate::benchmark::load_generator::spawn_authority_server;
-use crate::config::{AccountConfig, ObjectConfig};
-use crate::config::{Config, GenesisConfig};
+use crate::config::{AccountConfig, Config, GenesisConfig, ObjectConfig};
 use rocksdb::Options;
 use std::env;
 use std::fs;
@@ -44,16 +43,20 @@ fn set_up_authorities_and_committee(
 ) -> Result<(Vec<KeyPair>, GenesisConfig), anyhow::Error> {
     let temp_dir = tempfile::tempdir()?;
     let key_pairs = random_key_pairs(committee_size);
-    let key_pairs_clone = key_pairs.iter().map(|kp| kp.copy()).collect::<Vec<_>>();
-    let mut config = GenesisConfig::custom_genesis(
+    let key_pair = key_pairs[0].copy();
+    let config = GenesisConfig::custom_genesis(
         temp_dir.path(),
         committee_size,
         0,
         0,
-        Some(key_pairs_clone),
+        Some((
+            key_pairs
+                .iter()
+                .map(|kp| *kp.public_key_bytes())
+                .collect::<Vec<_>>(),
+            key_pair,
+        )),
     )?;
-
-    config.key_pair = key_pairs[0].copy();
 
     Ok((key_pairs, config))
 }

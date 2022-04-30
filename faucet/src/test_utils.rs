@@ -63,10 +63,16 @@ pub async fn start_test_network(
 
     let mut genesis_config = match genesis_config {
         Some(genesis_config) => genesis_config,
-        None => {
-            let key_pairs_clone = key_pairs.iter().map(|kp| kp.copy()).collect::<Vec<_>>();
-            GenesisConfig::default_genesis(&working_dir, Some(key_pairs_clone))?
-        }
+        None => GenesisConfig::default_genesis(
+            &working_dir,
+            Some((
+                key_pairs
+                    .iter()
+                    .map(|kp| *kp.public_key_bytes())
+                    .collect::<Vec<_>>(),
+                key_pairs[0].copy(),
+            )),
+        )?,
     };
     if genesis_config.authorities.len() != key_pairs.len() {
         bail!("genesis_config's authority num should match key_pairs's length.");
