@@ -42,7 +42,7 @@ move-vm-types = { git = "https://github.com/move-language/move", rev = "4e025186
 
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d2976a45420147ad821baae96e6fe4b12215f743"}
 
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "976355d2ff75aefc6b7ec7fd32742d3d7188c4e0", package = "executor" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "72efe71f0615f91f861cc658e031b763ba30fd5b", package = "executor" }
 
 [dev-dependencies]
 serde-reflection = "0.3.5"

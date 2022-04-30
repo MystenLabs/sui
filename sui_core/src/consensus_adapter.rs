@@ -1,6 +1,5 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::authority::AuthorityState;
 use bytes::Bytes;
 use futures::SinkExt;
 use narwhal_executor::SubscriberResult;
@@ -8,14 +7,11 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::net::SocketAddr;
-use std::sync::Arc;
 use sui_network::transport;
 use sui_network::transport::{RwChannel, TcpDataStream};
 use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::ConfirmationTransaction;
 use sui_types::messages::ConsensusTransaction;
-use sui_types::messages::TransactionInfoResponse;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -29,15 +25,14 @@ pub mod consensus_tests;
 /// A serialized consensus transaction.
 type SerializedConsensusTransaction = Vec<u8>;
 
-/// The digest of a consensus transactions
+/// The digest of a consensus transactions.
 type ConsensusTransactionDigest = u64;
 
-/// The message returned by the consensus to notify that a Sui certificate has been sequenced
-/// and all its shared objects are locked.
-type ConsensusOutput = (SubscriberResult<()>, SerializedConsensusTransaction);
+/// Transaction info response serialized by Sui.
+type SerializedTransactionInfoResponse = Vec<u8>;
 
 /// Channel to notify the called when the Sui certificate has been sequenced.
-type Replier = oneshot::Sender<SuiResult<TransactionInfoResponse>>;
+type Replier = oneshot::Sender<SuiResult<SerializedTransactionInfoResponse>>;
 
 /// Message to notify the consensus adapter of a new certificate sent to consensus.
 #[derive(Debug)]
@@ -45,6 +40,13 @@ pub struct ConsensusInput {
     serialized: SerializedConsensusTransaction,
     replier: Replier,
 }
+
+/// The message returned by the consensus to notify that a Sui certificate has been sequenced
+/// and all its shared objects are locked.
+type ConsensusOutput = (
+    /* result */ SubscriberResult<SerializedTransactionInfoResponse>,
+    /* transaction */ SerializedConsensusTransaction,
+);
 
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusAdapter {
@@ -95,7 +97,7 @@ impl ConsensusAdapter {
     pub async fn submit(
         &self,
         certificate: &ConsensusTransaction,
-    ) -> SuiResult<TransactionInfoResponse> {
+    ) -> SuiResult<SerializedTransactionInfoResponse> {
         // Check the Sui certificate (submitted by the user).
         certificate.check(&self.committee)?;
 
@@ -139,8 +141,6 @@ impl ConsensusAdapter {
 /// This module interfaces the consensus with Sui. It receives certificates input to consensus and
 /// notify the called when they are sequenced.
 pub struct ConsensusListener {
-    /// The authority state to execute shared-object transactions.
-    state: Arc<AuthorityState>,
     /// Receive messages input to the consensus.
     rx_consensus_input: Receiver<ConsensusInput>,
     /// Receive consensus outputs.
@@ -152,13 +152,11 @@ pub struct ConsensusListener {
 impl ConsensusListener {
     /// Spawn a new consensus adapter in a dedicated tokio task.
     pub fn spawn(
-        state: Arc<AuthorityState>,
         rx_consensus_input: Receiver<ConsensusInput>,
         rx_consensus_output: Receiver<ConsensusOutput>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
-                state,
                 rx_consensus_input,
                 rx_consensus_output,
                 pending: HashMap::new(),
@@ -166,35 +164,6 @@ impl ConsensusListener {
             .run()
             .await
         })
-    }
-
-    /// Execute sequenced transactions and notify the end-user (if any).
-    async fn process_consensus_output(&mut self, output: ConsensusOutput) {
-        let (result, serialized) = output;
-
-        // Execute the transaction (if the consensus successfully sequenced it).
-        let outcome = match result {
-            Ok(()) => {
-                let message =
-                    bincode::deserialize(&serialized).expect("Failed to deserialize consensus tx");
-                let ConsensusTransaction::UserTransaction(certificate) = message;
-                let confirmation_transaction = ConfirmationTransaction { certificate };
-                self.state
-                    .handle_confirmation_transaction(confirmation_transaction)
-                    .await
-            }
-            Err(e) => Err(SuiError::from(e)),
-        };
-
-        // Notify the caller that the transaction has been sequenced (if there is a caller).
-        let digest = Self::hash(&serialized);
-        if let Some(repliers) = self.pending.remove(&digest) {
-            for replier in repliers {
-                if replier.send(outcome.clone()).is_err() {
-                    debug!("No replier to listen to consensus output {digest}");
-                }
-            }
-        }
     }
 
     /// Main loop receiving messages input to consensus and notifying the caller once the inputs
@@ -210,10 +179,18 @@ impl ConsensusListener {
                     self.pending.entry(digest).or_insert_with(Vec::new).push(replier);
                 },
 
-                // Execute sequenced transactions and notify the end-user (if any).
-                Some(output) = self.rx_consensus_output.recv() => self
-                    .process_consensus_output(output)
-                    .await
+                // Notify the caller that the transaction has been sequenced (if there is a caller).
+                Some((result, serialized)) = self.rx_consensus_output.recv() => {
+                    let outcome = result.map_err(SuiError::from);
+                    let digest = Self::hash(&serialized);
+                    if let Some(repliers) = self.pending.remove(&digest) {
+                        for replier in repliers {
+                            if replier.send(outcome.clone()).is_err() {
+                                debug!("No replier to listen to consensus output {digest}");
+                            }
+                        }
+                    }
+                }
             }
         }
     }
