@@ -58,7 +58,7 @@ Unsigned Integer (128 bit max)
   <tr>
    <td>Array
    </td>
-   <td>Must be homogenous JSON and of SuiJSON type
+   <td>Must be homogeneous JSON and of SuiJSON type
    </td>
    <td>Vector
    </td>
@@ -262,7 +262,7 @@ Two formats are supported
 <code>[[3,600],[],[0,7,4]]</code>: nested U64 vector
 
    </td>
-   <td><code>[1,2,3,false]</code>: not homogenous JSON
+   <td><code>[1,2,3,false]</code>: not homogeneous JSON
 
 <code>[1,2,null,4]</code>: invalid elements
 
