@@ -13,7 +13,7 @@ use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
 use sui_core::sui_json::SuiJsonValue;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::json_schema::Base64;
-use sui_types::messages::{CallArg, CertifiedTransaction, Transaction, TransactionData};
+use sui_types::messages::{Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 
 use crate::rpc_gateway::responses::ObjectResponse;
