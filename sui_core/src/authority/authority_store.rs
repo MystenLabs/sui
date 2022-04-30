@@ -838,9 +838,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                 // sequence number (`OBJECT_START_VERSION`). Otherwise use the `scheduled` map to
                 // to assign the next sequence number.
                 let version = v.unwrap_or_else(|| OBJECT_START_VERSION);
-                let next_version = v
-                    .map(|v| v.increment())
-                    .unwrap_or_else(|| SequenceNumber::from(2));
+                let next_version = version.increment();
 
                 let sequenced = ((transaction_digest, *id), version);
                 let scheduled = (id, next_version);

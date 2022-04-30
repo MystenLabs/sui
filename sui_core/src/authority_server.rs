@@ -256,11 +256,9 @@ impl AuthorityServer {
                 .handle_batch_streaming(*message, channel)
                 .await
                 .map(|_| None),
-            SerializedMessage::ConsensusTransaction(message) => self
-                .consensus_adapter
-                .submit(&message)
-                .await
-                .map(|info| Some(serialize_transaction_info(&info))),
+            SerializedMessage::ConsensusTransaction(message) => {
+                self.consensus_adapter.submit(&message).await.map(Some)
+            }
 
             _ => Err(SuiError::UnexpectedMessage),
         };
