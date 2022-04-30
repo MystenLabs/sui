@@ -35,7 +35,7 @@ function formatTxResponse(data: any) {
         ...(txKindName === 'Transfer'
             ? [
                   {
-                      label: 'Object Reference',
+                      label: 'Object',
                       value: txKind.Single.Transfer.object_ref[0],
                       link: true,
                       category: 'objects',
@@ -79,7 +79,7 @@ function formatTxResponse(data: any) {
                       value: txKind.Single.Call.arguments.map((data: any) =>
                           Buffer.from(data['Pure']).toString('base64')
                       ),
-                      list: true,
+                      // list: true,
                   },
               ]),
 
