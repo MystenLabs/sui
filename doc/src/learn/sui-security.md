@@ -79,7 +79,7 @@ on which address and how the shared assets may be used.
 
 A valid transaction submitted to all validators to be certified and its certificate also has to be submitted to all validators
 to be finalized. Even if a subset of validators do not follow the protocol, the transaction can be finalized through the
-remaining validators that correctly follow the Sui protocol. This is achieved throught the use of cryptographic
+remaining validators that correctly follow the Sui protocol. This is achieved through the use of cryptographic
 Byzantine fault tolerant agremment protocols for broadcast and consensus defined by the Sui protocol. These protocols
 ensure both safety, meaning that the incorrect validators cannot convince correct clients of incorrect state, and
 liveness, meaning that incorrect validators cannot prevent transaction processing.
@@ -88,7 +88,7 @@ All transactions in Sui have to be associated with a gas asset to cover the cost
 transaction may result in a status of successful execution or an aborted execution. An execution may abort due to a 
 condition within the smart contract defining the asset, or because it has ran out of sufficient gas to pay for
 the cost of execution. In cases of success, the effects of the operation will be finalized; otherwise, the state of 
-assets in the transaction is not changed. However, the gas asset is always charged some amount of gas, to aleviate
+assets in the transaction is not changed. However, the gas asset is always charged some amount of gas, to alleviate
 denial-of-service attacks on the system as a whole.
 
 A user client can perform the process of submitting the transaction and certificate itself or rely on third party 
