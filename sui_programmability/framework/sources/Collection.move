@@ -20,20 +20,20 @@ module Sui::Collection {
     use Sui::TxContext::{Self, TxContext};
 
     // Error codes
-    /// When removing an object from the collection, EOBJECT_NOT_FOUND
+    /// When removing an object from the collection, EObjectNotFound
     /// will be triggered if the object is not owned by the collection.
-    const EOBJECT_NOT_FOUND: u64 = 0;
+    const EObjectNotFound: u64 = 0;
 
     /// Adding the same object to the collection twice is not allowed.
-    const EOBJECT_DOUBLE_ADD: u64 = 1;
+    const EObjectDoubleAdd: u64 = 1;
 
     /// The max capacity set for the collection cannot exceed the hard limit
     /// which is DEFAULT_MAX_CAPACITY.
-    const EINVALID_MAX_CAPACITY: u64 = 2;
+    const EInvalidMaxCapacity: u64 = 2;
 
     /// Trying to add object to the collection when the collection is
     /// already at its maximum capacity.
-    const EMAX_CAPACITY_EXCEEDED: u64 = 3;
+    const EMaxCapacityExceeded: u64 = 3;
 
     // TODO: this is a placeholder number
     // We want to limit the capacity of collection because it requires O(N)
@@ -56,7 +56,7 @@ module Sui::Collection {
     public fun new_with_max_capacity<T: key>(ctx: &mut TxContext, max_capacity: u64): Collection<T> {
         assert!(
             max_capacity <= DEFAULT_MAX_CAPACITY && max_capacity > 0 ,
-            Errors::limit_exceeded(EINVALID_MAX_CAPACITY)
+            Errors::limit_exceeded(EInvalidMaxCapacity)
         );
         Collection {
             id: TxContext::new_id(ctx),
@@ -82,10 +82,10 @@ module Sui::Collection {
     fun add_impl<T: key>(c: &mut Collection<T>, object: T, old_child_ref: Option<ChildRef<T>>) {
         assert!(
             size(c) + 1 <= c.max_capacity,
-            Errors::limit_exceeded(EMAX_CAPACITY_EXCEEDED)
+            Errors::limit_exceeded(EMaxCapacityExceeded)
         );
         let id = ID::id(&object);
-        assert!(!contains(c, id), EOBJECT_DOUBLE_ADD);
+        assert!(!contains(c, id), EObjectDoubleAdd);
         let child_ref = if (Option::is_none(&old_child_ref)) {
             Transfer::transfer_to_object(object, c)
         } else {
@@ -119,7 +119,7 @@ module Sui::Collection {
     /// Abort if the object is not found.
     public fun remove<T: key>(c: &mut Collection<T>, object: T): (T, ChildRef<T>) {
         let idx = find(c, ID::id(&object));
-        assert!(Option::is_some(&idx), EOBJECT_NOT_FOUND);
+        assert!(Option::is_some(&idx), EObjectNotFound);
         let child_ref = Vector::remove(&mut c.objects, *Option::borrow(&idx));
         (object, child_ref)
     }

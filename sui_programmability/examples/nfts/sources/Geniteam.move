@@ -12,16 +12,16 @@ module NFTs::Geniteam {
     use Std::Vector;
 
     /// Trying to add more than 1 farm to a Player
-    const ETOO_MANY_FARMS: u64 = 1;
+    const ETooManyFarms: u64 = 1;
 
     /// Monster collection not owned by farm
-    const EMONSTER_COLLECTION_NOT_OWNED_BY_FARM: u64 = 2;
+    const EMonsterCollectionNotOwnedByFarm: u64 = 2;
 
     /// Inventory not owned by player
-    const EINVENTORY_NOT_OWNED_BY_PLAYER: u64 = 3;
+    const EInventoryNotOwnedByPlayer: u64 = 3;
 
     /// Invalid cosmetic slot
-    const EINVALID_COSMETICS_SLOT: u64 = 4;
+    const EInvalidCosmeticsSlot: u64 = 4;
 
     struct Player has key {
         id: VersionedID,
@@ -108,7 +108,7 @@ module NFTs::Geniteam {
         total_monster_slots: u64, ctx: &mut TxContext
     ) {
         // We only allow one farm for now
-        assert!(Option::is_none(&player.owned_farm), ETOO_MANY_FARMS);
+        assert!(Option::is_none(&player.owned_farm), ETooManyFarms);
 
         let farm = new_farm(farm_name, farm_img_index, total_monster_slots, ctx);
 
@@ -145,7 +145,7 @@ module NFTs::Geniteam {
         // Check if this is the right collection
         assert!(
             Transfer::is_child(&farm.pet_monsters, pet_monsters),
-            EMONSTER_COLLECTION_NOT_OWNED_BY_FARM,
+            EMonsterCollectionNotOwnedByFarm,
         );
 
         // TODO: Decouple adding monster to farm from creating a monster.
@@ -161,7 +161,7 @@ module NFTs::Geniteam {
         // Check if this is the right collection
         assert!(
             Transfer::is_child(&player.inventory, inventory),
-            EINVENTORY_NOT_OWNED_BY_PLAYER,
+            EInventoryNotOwnedByPlayer,
         );
 
         // Create the farm cosmetic object
@@ -183,7 +183,7 @@ module NFTs::Geniteam {
         // Check if this is the right collection
         assert!(
             Transfer::is_child(&player.inventory, inventory),
-            EINVENTORY_NOT_OWNED_BY_PLAYER,
+            EInventoryNotOwnedByPlayer,
         );
 
         // Create the farm cosmetic object
@@ -252,7 +252,7 @@ module NFTs::Geniteam {
         farm_cosmetic: FarmCosmetic, cosmetic_slot_id: u64, _ctx: &mut TxContext
     ) {
         // Only 2 slots allowed
-        assert!(cosmetic_slot_id <= 1 , EINVALID_COSMETICS_SLOT);
+        assert!(cosmetic_slot_id <= 1 , EInvalidCosmeticsSlot);
 
         // Transfer ownership of cosmetic to this farm
         let child_ref = Transfer::transfer_to_object(farm_cosmetic, farm);
@@ -275,7 +275,7 @@ module NFTs::Geniteam {
          _ctx: &mut TxContext
     ) {
         // Only 2 slots allowed
-        assert!(cosmetic_slot_id <= 1 , EINVALID_COSMETICS_SLOT);
+        assert!(cosmetic_slot_id <= 1 , EInvalidCosmeticsSlot);
 
         // Transfer ownership of cosmetic to this monster
         let child_ref = Transfer::transfer_to_object(monster_cosmetic, monster);

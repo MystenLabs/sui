@@ -8,6 +8,7 @@ use std::fmt::{Display, Formatter};
 use serde::ser::Error;
 use serde::Serialize;
 
+use schemars::JsonSchema;
 use serde::Deserialize;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::error::SuiError;
@@ -15,7 +16,7 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{CertifiedTransaction, TransactionEffects};
 use sui_types::object::Object;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum TransactionResponse {
     EffectResponse(CertifiedTransaction, TransactionEffects),
     PublishResponse(PublishResponse),
@@ -55,7 +56,7 @@ impl TransactionResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct SplitCoinResponse {
     /// Certificate of the transaction
     pub certificate: CertifiedTransaction,
@@ -92,7 +93,7 @@ impl Display for SplitCoinResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct MergeCoinResponse {
     /// Certificate of the transaction
     pub certificate: CertifiedTransaction,
@@ -117,7 +118,7 @@ impl Display for MergeCoinResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PublishResponse {
     /// Certificate of the transaction
     pub certificate: CertifiedTransaction,
@@ -137,15 +138,17 @@ impl Display for PublishResponse {
         writeln!(writer, "----- Publish Results ----")?;
         writeln!(
             writer,
-            "The newly published package object: {:?}",
-            self.package
+            "The newly published package object ID: {:?}",
+            self.package.0
         )?;
-        writeln!(
-            writer,
-            "List of objects created by running module initializers:"
-        )?;
-        for obj in &self.created_objects {
-            writeln!(writer, "{}", obj)?;
+        if !self.created_objects.is_empty() {
+            writeln!(
+                writer,
+                "List of objects created by running module initializers:\n"
+            )?;
+            for obj in &self.created_objects {
+                writeln!(writer, "{}\n", obj)?;
+            }
         }
         let gas_coin = GasCoin::try_from(&self.updated_gas).map_err(fmt::Error::custom)?;
         writeln!(writer, "Updated Gas : {}", gas_coin)?;

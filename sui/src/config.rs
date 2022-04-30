@@ -60,10 +60,10 @@ pub struct AuthorityPrivateInfo {
 fn socket_addr_from_hostport(host: &str, port: u16) -> SocketAddr {
     let mut addresses = format!("{host}:{port}")
         .to_socket_addrs()
-        .expect("Cannot parse {host} and {port} into socket address");
+        .unwrap_or_else(|e| panic!("Cannot parse or resolve hostnames for {host}:{port}: {e}"));
     addresses
         .next()
-        .expect("Hostname/IP resolution failed for {host}")
+        .unwrap_or_else(|| panic!("Hostname/IP resolution failed for {host}"))
 }
 
 // Custom deserializer with optional default fields
@@ -114,7 +114,7 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
                 .map_err(serde::de::Error::custom)?
                 .next_port()
                 .ok_or_else(|| serde::de::Error::custom("No available port."))?;
-            socket_addr_from_hostport("localhost", port)
+            socket_addr_from_hostport("127.0.0.1", port)
         };
 
         Ok(AuthorityPrivateInfo {

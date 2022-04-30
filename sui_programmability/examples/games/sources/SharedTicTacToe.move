@@ -35,13 +35,13 @@ module Games::SharedTicTacToe {
 
     // Error codes
     /// Trying to place a mark when it's not your turn.
-    const EINVALID_TURN: u64 = 0;
+    const EInvalidTurn: u64 = 0;
     /// Trying to place a mark when the game has already ended.
-    const EGAME_ENDED: u64 = 1;
+    const EGameEnded: u64 = 1;
     /// Trying to place a mark in an invalid location, i.e. row/column out of bound.
-    const EINVALID_LOCATION: u64 = 2;
+    const EInvalidLocation: u64 = 2;
     /// The cell to place a new mark at is already oocupied.
-    const ECELL_OCCUPIED: u64 = 3;
+    const ECellOccupied: u64 = 3;
 
     struct TicTacToe has key {
         id: VersionedID,
@@ -84,13 +84,13 @@ module Games::SharedTicTacToe {
     }
 
     public(script) fun place_mark(game: &mut TicTacToe, row: u8, col: u8, ctx: &mut TxContext) {
-        assert!(row < 3 && col < 3, EINVALID_LOCATION);
-        assert!(game.game_status == IN_PROGRESS, EGAME_ENDED);
+        assert!(row < 3 && col < 3, EInvalidLocation);
+        assert!(game.game_status == IN_PROGRESS, EGameEnded);
         let addr = get_cur_turn_address(game);
-        assert!(addr == TxContext::sender(ctx), EINVALID_TURN);
+        assert!(addr == TxContext::sender(ctx), EInvalidTurn);
 
         let cell = Vector::borrow_mut(Vector::borrow_mut(&mut game.gameboard, (row as u64)), (col as u64));
-        assert!(*cell == MARK_EMPTY, ECELL_OCCUPIED);
+        assert!(*cell == MARK_EMPTY, ECellOccupied);
 
         *cell = game.cur_turn % 2;
         update_winner(game);

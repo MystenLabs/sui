@@ -341,7 +341,7 @@ pub async fn send_and_confirm_transaction(
     // Collect signatures from a quorum of authorities
     let mut builder = SignatureAggregator::try_new(transaction, &authority.committee).unwrap();
     let certificate = builder
-        .append(vote.auth_signature.authority, vote.auth_signature.signature)
+        .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
         .unwrap()
         .unwrap();
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
@@ -1173,6 +1173,44 @@ async fn test_authority_persist() {
     assert_eq!(obj2.owner, recipient);
 }
 
+#[tokio::test]
+async fn test_idempotent_reversed_confirmation() {
+    // In this test we exercise the case where an authority first receive the certificate,
+    // and then receive the raw transaction latter. We should still ensure idempotent
+    // response and be able to get back the same result.
+    let recipient = dbg_addr(2);
+    let (sender, sender_key) = get_key_pair();
+
+    let object = Object::with_owner_for_testing(sender);
+    let object_ref = object.compute_object_reference();
+    let gas_object = Object::with_owner_for_testing(sender);
+    let gas_object_ref = gas_object.compute_object_reference();
+    let authority_state = init_state_with_objects([object, gas_object]).await;
+
+    let certified_transfer_transaction = init_certified_transfer_transaction(
+        sender,
+        &sender_key,
+        recipient,
+        object_ref,
+        gas_object_ref,
+        &authority_state,
+    );
+    let result1 = authority_state
+        .handle_confirmation_transaction(ConfirmationTransaction::new(
+            certified_transfer_transaction.clone(),
+        ))
+        .await;
+    assert!(result1.is_ok());
+    let result2 = authority_state
+        .handle_transaction(certified_transfer_transaction.transaction)
+        .await;
+    assert!(result2.is_ok());
+    assert_eq!(
+        result1.unwrap().signed_effects.unwrap().effects,
+        result2.unwrap().signed_effects.unwrap().effects
+    );
+}
+
 // helpers
 
 #[cfg(test)]
@@ -1269,7 +1307,7 @@ fn init_certified_transfer_transaction(
     let mut builder =
         SignatureAggregator::try_new(transfer_transaction, &authority_state.committee).unwrap();
     builder
-        .append(vote.auth_signature.authority, vote.auth_signature.signature)
+        .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
         .unwrap()
         .unwrap()
 }
@@ -1454,7 +1492,7 @@ async fn shared_object() {
     let vote = response.signed_transaction.unwrap();
     let certificate = SignatureAggregator::try_new(transaction, &authority.committee)
         .unwrap()
-        .append(vote.auth_signature.authority, vote.auth_signature.signature)
+        .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
         .unwrap()
         .unwrap();
     let confirmation_transaction = ConfirmationTransaction::new(certificate.clone());

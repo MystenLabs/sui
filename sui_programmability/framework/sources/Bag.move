@@ -18,20 +18,20 @@ module Sui::Bag {
     use Sui::TxContext::{Self, TxContext};
 
     // Error codes
-    /// When removing an object from the collection, EOBJECT_NOT_FOUND
+    /// When removing an object from the collection, EObjectNotFound
     /// will be triggered if the object is not owned by the collection.
-    const EOBJECT_NOT_FOUND: u64 = 0;
+    const EObjectNotFound: u64 = 0;
 
     /// Adding the same object to the collection twice is not allowed.
-    const EOBJECT_DOUBLE_ADD: u64 = 1;
+    const EObjectDoubleAdd: u64 = 1;
 
     /// The max capacity set for the collection cannot exceed the hard limit
     /// which is DEFAULT_MAX_CAPACITY.
-    const EINVALID_MAX_CAPACITY: u64 = 2;
+    const EInvalidMaxCapacity: u64 = 2;
 
     /// Trying to add object to the collection when the collection is
     /// already at its maximum capacity.
-    const EMAX_CAPACITY_EXCEEDED: u64 = 3;
+    const EMaxCapacityExceeded: u64 = 3;
 
     // TODO: this is a placeholder number
     const DEFAULT_MAX_CAPACITY: u64 = 65536;
@@ -51,7 +51,7 @@ module Sui::Bag {
     public fun new_with_max_capacity(ctx: &mut TxContext, max_capacity: u64): Bag {
         assert!(
             max_capacity <= DEFAULT_MAX_CAPACITY && max_capacity > 0 ,
-            Errors::limit_exceeded(EINVALID_MAX_CAPACITY)
+            Errors::limit_exceeded(EInvalidMaxCapacity)
         );
         Bag {
             id: TxContext::new_id(ctx),
@@ -77,11 +77,11 @@ module Sui::Bag {
     fun add_impl<T: key>(c: &mut Bag, object: T, old_child_ref: Option<ChildRef<T>>) {
         assert!(
             size(c) + 1 <= c.max_capacity,
-            Errors::limit_exceeded(EMAX_CAPACITY_EXCEEDED)
+            Errors::limit_exceeded(EMaxCapacityExceeded)
         );
         let id = ID::id(&object);
         if (contains(c, id)) {
-            abort EOBJECT_DOUBLE_ADD
+            abort EObjectDoubleAdd
         };
         Vector::push_back(&mut c.objects, *id);
         Transfer::transfer_to_object_unsafe(object, old_child_ref, c);
@@ -111,7 +111,7 @@ module Sui::Bag {
     public fun remove<T: key>(c: &mut Bag, object: T): T {
         let idx = find(c, ID::id(&object));
         if (Option::is_none(&idx)) {
-            abort EOBJECT_NOT_FOUND
+            abort EObjectNotFound
         };
         Vector::remove(&mut c.objects, *Option::borrow(&idx));
         object

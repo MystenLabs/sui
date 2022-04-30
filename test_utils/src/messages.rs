@@ -135,7 +135,7 @@ pub fn make_certificates(transactions: Vec<Transaction>) -> Vec<CertifiedTransac
                 &key,
             );
             if let Some(certificate) = aggregator
-                .append(vote.auth_signature.authority, vote.auth_signature.signature)
+                .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
                 .unwrap()
             {
                 certificates.push(certificate);

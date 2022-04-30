@@ -41,38 +41,34 @@ sui-framework = { path = "../sui_programmability/framework" }
 sui-network = { path = "../network_utils" }
 sui-types = { path = "../sui_types" }
 sui-verifier = { path = "../sui_programmability/verifier" }
+sui-open-rpc = { path = "open_rpc" }
+sui-open-rpc-macros = { path = "open_rpc/macros" }
 
 rustyline = "9.1.2"
 rustyline-derive = "0.6.0"
 colored = "2.0.0"
 unescape = "0.1.0"
 
-# Deps for rest server
-dropshot = "0.6.0"
-http = "0.2.6"
-hyper = "0.14.18"
-schemars = "0.8.8"
+move-package = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc", features = ["address20"] }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
+move-unit-test = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
 
-move-package = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646", features = ["address20"] }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
-move-binary-format = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
-move-unit-test = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
-
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "8ae2164f0510349cbac2770e50e853bce5ab0e02", package = "node" }
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "8ae2164f0510349cbac2770e50e853bce5ab0e02", package = "config" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "8ae2164f0510349cbac2770e50e853bce5ab0e02", package = "crypto" }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "976355d2ff75aefc6b7ec7fd32742d3d7188c4e0", package = "node" }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "976355d2ff75aefc6b7ec7fd32742d3d7188c4e0", package = "config" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "976355d2ff75aefc6b7ec7fd32742d3d7188c4e0", package = "crypto" }
 
 once_cell = "1.10.0"
-reqwest = { version = "0.11.10", features = ["json", "serde_json", "blocking"] }
 
 jsonrpsee = { version = "0.11.0", features = ["full"] }
-
 jsonrpsee-proc-macros = "0.11.0"
+schemars = "0.8.8"
 
 [dev-dependencies]
 tracing-test = "0.2.1"
+pretty_assertions = "1.2.0"
 tokio-util = { version = "0.7.1", features = ["codec"] }
 
 test_utils = { path = "../test_utils" }
@@ -80,3 +76,8 @@ sui-network = { path = "../network_utils" }
 
 [features]
 benchmark = ["narwhal-node/benchmark"]
+
+[[example]]
+name = "generate-json-rpc-spec"
+path = "src/generate_json_rpc_spec.rs"
+test = false
