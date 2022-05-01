@@ -1,24 +1,34 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 import { Buffer } from 'buffer';
 import cl from 'classnames';
+import {
+    getMoveCallTransaction,
+    getPublishTransaction,
+    getTransactionKind,
+    getTransferTransaction,
+} from 'sui.js';
 
 import Longtext from '../../components/longtext/Longtext';
+
+import type {
+    CertifiedTransaction,
+    TransactionData,
+    TransactionKindName,
+} from 'sui.js';
 
 import styles from './TransactionCard.module.css';
 
 // Generate an Arr of Obj with Label and Value
 // TODO rewrite to use sue.js, verify tx types and dynamically generate list
-function formatTxResponse(data: any) {
-    const tx = data.transaction;
-
+function formatTxResponse(tx: CertifiedTransaction, txId: string) {
     // Todo add batch kind
-    const txKind = tx.data.kind;
-    const txKindName = Object.keys(txKind.Single)[0];
+    const txKindName = getTransactionKind(tx.data);
     return [
         {
             label: 'Transaction ID',
-            value: data.txId,
+            value: txId,
             className: 'columnheader',
         },
         {
@@ -32,71 +42,7 @@ function formatTxResponse(data: any) {
             value: txKindName,
         },
         // txKind Transfer or Call
-        ...(txKindName === 'Transfer'
-            ? [
-                  {
-                      label: 'Object',
-                      value: txKind.Single.Transfer.object_ref[0],
-                      link: true,
-                      category: 'objects',
-                  },
-                  {
-                      label: 'Sender',
-                      value: tx.data.sender,
-                      link: true,
-                      category: 'addresses',
-                      className: 'Receiver',
-                  },
-                  {
-                      label: 'To',
-                      value: txKind.Single.Transfer.recipient,
-                      category: 'addresses',
-                      link: true,
-                  },
-              ]
-            : txKindName === 'Call'
-            ? [
-                  {
-                      label: 'From',
-                      value: tx.data.sender,
-                      link: true,
-                      category: 'addresses',
-                  },
-                  {
-                      label: 'Package',
-                      value: txKind.Single.Call.package,
-                      list: true,
-                  },
-                  {
-                      label: 'Module',
-                      value: txKind.Single.Call.module,
-                  },
-                  {
-                      label: 'Function',
-                      value: txKind.Single.Call.function,
-                  },
-                  {
-                      label: 'Arguments',
-                      // convert pure type
-                      value: txKind.Single.Call.arguments
-                          .filter((itm: any) => itm['Pure'])
-                          .map((data: any) =>
-                              Buffer.from(data['Pure']).toString('base64')
-                          ),
-                      // list: true,
-                  },
-              ]
-            : txKindName === 'Publish'
-            ? [
-                  {
-                      label: 'Modules',
-                      value: txKind.Single.Publish.modules,
-                      list: true,
-                      //  sublist: true,
-                  },
-              ]
-            : []),
-
+        ...(formatByTransactionKind(txKindName, tx.data) ?? []),
         {
             label: 'Transactions Signature',
             value: tx.tx_signature,
@@ -114,20 +60,100 @@ function formatTxResponse(data: any) {
         },
         {
             label: 'Validator Signatures',
-            value: data.signatures,
+            value: tx.auth_sign_info.signatures,
             list: true,
             sublist: true,
         },
     ];
 }
 
-function TransactionCard({ txdata }: any) {
+function formatByTransactionKind(
+    kind: TransactionKindName | undefined,
+    data: TransactionData
+) {
+    switch (kind) {
+        case 'Transfer':
+            const transfer = getTransferTransaction(data)!;
+            return [
+                {
+                    label: 'Object',
+                    value: transfer.object_ref[0],
+                    link: true,
+                    category: 'objects',
+                },
+                {
+                    label: 'Sender',
+                    value: data.sender,
+                    link: true,
+                    category: 'addresses',
+                    className: 'Receiver',
+                },
+                {
+                    label: 'To',
+                    value: transfer.recipient,
+                    category: 'addresses',
+                    link: true,
+                },
+            ];
+        case 'Call':
+            const moveCall = getMoveCallTransaction(data)!;
+            return [
+                {
+                    label: 'From',
+                    value: data.sender,
+                    link: true,
+                    category: 'addresses',
+                },
+                {
+                    label: 'Package',
+                    value: moveCall.package,
+                    list: true,
+                },
+                {
+                    label: 'Module',
+                    value: moveCall.module,
+                },
+                {
+                    label: 'Function',
+                    value: moveCall.function,
+                },
+                {
+                    label: 'Arguments',
+                    // convert pure type
+                    value: moveCall.arguments
+                        .filter((itm: any) => itm['Pure'])
+                        .map((data: any) =>
+                            Buffer.from(data['Pure']).toString('base64')
+                        ),
+                    // list: true,
+                },
+            ];
+        case 'Publish':
+            const publish = getPublishTransaction(data)!;
+            return [
+                {
+                    label: 'Modules',
+                    value: publish.modules,
+                    list: true,
+                    //  sublist: true,
+                },
+            ];
+        default:
+            return [];
+    }
+}
+
+type Props = {
+    txdata: CertifiedTransaction & { loadState: string; txId: string };
+};
+
+function TransactionCard({ txdata }: Props) {
     return (
         <>
-            {txdata?.transaction && (
+            {txdata && (
                 <div className={styles.transactioncard}>
                     <div className={styles.txcard}>
-                        {formatTxResponse(txdata).map(
+                        {formatTxResponse(txdata, txdata.txId).map(
                             (itm: any, index: number) => (
                                 <div
                                     key={index}
