@@ -581,7 +581,7 @@
         "description": "",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/CertifiedTransaction"
+          "$ref": "#/components/schemas/TransactionEnvelope_for_AuthorityQuorumSignInfo"
         }
       }
     },
@@ -615,6 +615,37 @@
     "schemas": {
       "AccountAddress": {
         "$ref": "#/components/schemas/Hex"
+      },
+      "AuthorityQuorumSignInfo": {
+        "description": "Represents at least a quorum (could be more) of authority signatures.",
+        "type": "object",
+        "required": [
+          "epoch",
+          "signatures"
+        ],
+        "properties": {
+          "epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "signatures": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/PublicKeyBytes"
+                },
+                {
+                  "$ref": "#/components/schemas/AuthoritySignature"
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            }
+          }
+        }
       },
       "AuthoritySignature": {
         "description": "A signature emitted by an authority. It's useful to decouple this from user signatures, as their set of supported schemes will probably diverge",
@@ -685,41 +716,6 @@
           }
         ]
       },
-      "CertifiedTransaction": {
-        "description": "An transaction signed by a quorum of authorities\n\nNote: the signature set of this data structure is not necessarily unique in the system, i.e. there can be several valid certificates per transaction.\n\nAs a consequence, we check this struct does not implement Hash or Eq, see the note below.",
-        "type": "object",
-        "required": [
-          "epoch",
-          "signatures",
-          "transaction"
-        ],
-        "properties": {
-          "epoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "signatures": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": [
-                {
-                  "$ref": "#/components/schemas/PublicKeyBytes"
-                },
-                {
-                  "$ref": "#/components/schemas/AuthoritySignature"
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
-            }
-          },
-          "transaction": {
-            "$ref": "#/components/schemas/TransactionEnvelope_for_EmptySignInfo"
-          }
-        }
-      },
       "Data": {
         "oneOf": [
           {
@@ -749,9 +745,6 @@
             "additionalProperties": false
           }
         ]
-      },
-      "EmptySignInfo": {
-        "type": "object"
       },
       "Event": {
         "description": "User-defined event emitted by executing Move code. Executing a transaction produces an ordered log of these",
@@ -918,7 +911,7 @@
             "description": "Certificate of the transaction",
             "allOf": [
               {
-                "$ref": "#/components/schemas/CertifiedTransaction"
+                "$ref": "#/components/schemas/TransactionEnvelope_for_AuthorityQuorumSignInfo"
               }
             ]
           },
@@ -1425,7 +1418,7 @@
             "description": "Certificate of the transaction",
             "allOf": [
               {
-                "$ref": "#/components/schemas/CertifiedTransaction"
+                "$ref": "#/components/schemas/TransactionEnvelope_for_AuthorityQuorumSignInfo"
               }
             ]
           },
@@ -1586,7 +1579,7 @@
             "description": "Certificate of the transaction",
             "allOf": [
               {
-                "$ref": "#/components/schemas/CertifiedTransaction"
+                "$ref": "#/components/schemas/TransactionEnvelope_for_AuthorityQuorumSignInfo"
               }
             ]
           },
@@ -1910,7 +1903,7 @@
           }
         }
       },
-      "TransactionEnvelope_for_EmptySignInfo": {
+      "TransactionEnvelope_for_AuthorityQuorumSignInfo": {
         "description": "A transaction signed by a client, optionally signed by an authority (depending on `S`). `S` indicates the authority signing state. It can be either empty or signed. We make the authority signature templated so that `TransactionEnvelope<S>` can be used universally in the transactions storage in `SuiDataStore`, shared by both authorities and non-authorities: authorities store signed transactions, while non-authorities store unsigned transactions.",
         "type": "object",
         "required": [
@@ -1923,7 +1916,7 @@
             "description": "authority signature information, if available, is signed by an authority, applied on `data`.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/EmptySignInfo"
+                "$ref": "#/components/schemas/AuthorityQuorumSignInfo"
               }
             ]
           },
@@ -1985,7 +1978,7 @@
                 "type": "array",
                 "items": [
                   {
-                    "$ref": "#/components/schemas/CertifiedTransaction"
+                    "$ref": "#/components/schemas/TransactionEnvelope_for_AuthorityQuorumSignInfo"
                   },
                   {
                     "$ref": "#/components/schemas/TransactionEffects"
