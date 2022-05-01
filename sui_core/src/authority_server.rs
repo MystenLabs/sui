@@ -222,7 +222,7 @@ impl AuthorityServer {
                 let span = tracing::debug_span!(
                     "process_cert",
                     ?tx_digest,
-                    tx_kind = message.transaction.data.kind_as_str()
+                    tx_kind = message.data.kind_as_str()
                 );
                 match self
                     .state
@@ -304,7 +304,7 @@ impl AuthorityServer {
                     match message {
                         SerializedMessage::Transaction(message) => {
                             message.is_checked = true;
-                            message.add_to_verification_obligation(&mut obligation)?;
+                            message.add_tx_sig_to_verification_obligation(&mut obligation)?;
                         }
                         SerializedMessage::Cert(message) => {
                             message.is_checked = true;
@@ -361,7 +361,7 @@ where
             /*
                 If this is an error send back the error and drop the connection.
                 Here we make the choice to bail out as soon as either any parsing
-                or signature / commitee verification operation fails. The client
+                or signature / committee verification operation fails. The client
                 should know better than give invalid input. All conditions can be
                 trivially checked on the client side, so there should be no surprises
                 here for well behaved clients.

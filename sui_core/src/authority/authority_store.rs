@@ -459,9 +459,9 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     pub fn set_transaction_lock(
         &self,
         owned_input_objects: &[ObjectRef],
-        tx_digest: TransactionDigest,
         transaction: TransactionEnvelope<S>,
     ) -> Result<(), SuiError> {
+        let tx_digest = *transaction.digest();
         let lock_batch = self
             .transaction_lock
             .batch()
@@ -544,11 +544,8 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         )?;
 
         // Cleanup the lock of the shared objects.
-        let write_batch = self.remove_shared_objects_locks(
-            write_batch,
-            transaction_digest,
-            &certificate.transaction,
-        )?;
+        let write_batch =
+            self.remove_shared_objects_locks(write_batch, transaction_digest, certificate)?;
 
         // Safe to unwrap since the "true" flag ensures we get a sequence value back.
         self.batch_update_objects(
@@ -800,7 +797,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         &self,
         mut write_batch: DBBatch,
         transaction_digest: &TransactionDigest,
-        transaction: &Transaction,
+        transaction: &CertifiedTransaction,
     ) -> SuiResult<DBBatch> {
         let mut sequenced_to_delete = Vec::new();
         let mut schedule_to_delete = Vec::new();
@@ -827,10 +824,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         let certificate_to_write = std::iter::once((transaction_digest, &certificate));
 
         // Make an iterator to update the locks of the transaction's shared objects.
-        let ids = certificate.transaction.shared_input_objects();
+        let ids = certificate.shared_input_objects();
         let versions = self.schedule.multi_get(ids)?;
 
-        let ids = certificate.transaction.shared_input_objects();
+        let ids = certificate.shared_input_objects();
         let (sequenced_to_write, schedule_to_write): (Vec<_>, Vec<_>) = ids
             .zip(versions.iter())
             .map(|(id, v)| {

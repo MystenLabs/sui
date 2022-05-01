@@ -242,11 +242,10 @@ where
     async fn set_transaction_lock(
         &self,
         mutable_input_objects: &[ObjectRef],
-        tx_digest: TransactionDigest,
         transaction: Transaction,
     ) -> Result<(), SuiError> {
         self.store
-            .set_transaction_lock(mutable_input_objects, tx_digest, transaction)
+            .set_transaction_lock(mutable_input_objects, transaction)
     }
 
     async fn check_gas(
@@ -268,14 +267,13 @@ where
         transaction: Transaction,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         transaction.check_signature()?;
-        let transaction_digest = transaction.digest();
         self.check_gas(
             transaction.gas_payment_object_ref().0,
             transaction.data.gas_budget,
         )
         .await?;
 
-        let input_objects = transaction.input_objects()?;
+        let input_objects = transaction.data.input_objects()?;
         let mut objects = self.read_objects_from_store(&input_objects).await?;
         for (object_opt, kind) in objects.iter_mut().zip(&input_objects) {
             // If any object does not exist in the store, give it a chance
@@ -290,11 +288,11 @@ where
         }
 
         let objects_by_kind =
-            transaction_input_checker::check_locks(&transaction, input_objects, objects)
+            transaction_input_checker::check_locks(&transaction.data, input_objects, objects)
                 .instrument(tracing::trace_span!("tx_check_locks"))
                 .await?;
         let owned_objects = transaction_input_checker::filter_owned_objects(&objects_by_kind);
-        self.set_transaction_lock(&owned_objects, transaction_digest, transaction.clone())
+        self.set_transaction_lock(&owned_objects, transaction.clone())
             .instrument(tracing::trace_span!("db_set_transaction_lock"))
             .await?;
         // If execute_transaction ever fails due to panic, we should fix the panic and make sure it doesn't.
@@ -459,8 +457,8 @@ where
         effects: TransactionEffects,
     ) -> Result<TransactionResponse, anyhow::Error> {
         let call = Self::try_get_move_call(&certificate)?;
-        let signer = certificate.transaction.data.signer();
-        let (gas_payment, _, _) = certificate.transaction.data.gas();
+        let signer = certificate.data.signer();
+        let (gas_payment, _, _) = certificate.data.gas();
         let (coin_object_id, split_arg) = match call.arguments.as_slice() {
             [CallArg::ImmOrOwnedObject((id, _, _)), CallArg::Pure(arg)] => (id, arg),
             _ => {
@@ -514,7 +512,7 @@ where
                 .into())
             }
         };
-        let (gas_payment, _, _) = certificate.transaction.data.gas();
+        let (gas_payment, _, _) = certificate.data.gas();
 
         if let ExecutionStatus::Failure { gas_cost: _, error } = effects.status {
             return Err(error.into());
@@ -537,7 +535,7 @@ where
 
     fn try_get_move_call(certificate: &CertifiedTransaction) -> Result<&MoveCall, anyhow::Error> {
         if let TransactionKind::Single(SingleTransactionKind::Call(ref call)) =
-            certificate.transaction.data.kind
+            certificate.data.kind
         {
             Ok(call)
         } else {

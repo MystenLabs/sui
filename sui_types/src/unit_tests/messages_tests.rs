@@ -131,7 +131,7 @@ fn test_certificates() {
         .unwrap()
         .unwrap();
     assert!(c.check(&committee).is_ok());
-    c.signatures.pop();
+    c.auth_sign_info.signatures.pop();
     assert!(c.check(&committee).is_err());
 
     let mut builder = SignatureAggregator::try_new(transaction, &committee).unwrap();

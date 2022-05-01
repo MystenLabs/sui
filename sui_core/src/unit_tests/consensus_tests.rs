@@ -149,7 +149,7 @@ async fn submit_transaction_to_consensus() {
     objects.push(test_shared_object());
     let state = init_state_with_objects(objects).await;
     let certificate = test_certificates(&state).await.pop().unwrap();
-    let expected_transaction = certificate.transaction.clone();
+    let expected_transaction = certificate.clone().to_transaction();
 
     // Make a new consensus submitter instance.
     let submitter = ConsensusAdapter::new(
@@ -199,7 +199,7 @@ async fn submit_transaction_to_consensus() {
     let bytes = handle.await.unwrap();
     match bincode::deserialize(&bytes).unwrap() {
         ConsensusTransaction::UserTransaction(x) => {
-            assert_eq!(x.transaction, expected_transaction)
+            assert_eq!(x.to_transaction(), expected_transaction)
         }
     }
 }
