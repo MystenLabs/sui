@@ -206,9 +206,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
     const properties = Object.entries(viewedData.data?.contents)
         //TO DO: remove when have distinct 'name' field in Description
         .filter(([key, _]) => !/name/i.test(key))
-        .filter(([_, value]) => checkIsPropertyType(value))
-        // TODO: 'display' is a object property added during demo, replace with metadata ptr?
-        .filter(([key, _]) => key !== 'display');
+        .filter(([_, value]) => checkIsPropertyType(value));
 
     return (
         <>
@@ -223,7 +221,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                 )}
                 <div
                     className={`${styles.textbox} ${
-                        data?.data.contents.display
+                        data?.data.contents?.url
                             ? styles.accommodate
                             : styles.noaccommodate
                     }`}
