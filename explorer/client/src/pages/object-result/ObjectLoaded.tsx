@@ -105,7 +105,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
     type SuiIdBytes = { bytes: number[] };
 
     function handleSpecialDemoNameArrays(data: {
-        name?: SuiIdBytes | string;
+        name?: string;
         player_name?: SuiIdBytes | string;
         monster_name?: SuiIdBytes | string;
         farm_name?: SuiIdBytes | string;
@@ -128,9 +128,10 @@ function ObjectLoaded({ data }: { data: DataType }) {
             delete data.farm_name;
             return ascii;
         } else if ('name' in data) {
-            bytesObj = data.name as SuiIdBytes;
-            return asciiFromNumberBytes(bytesObj.bytes);
-        } else bytesObj = { bytes: [] };
+            return data['name'] as string;
+        } else {
+            bytesObj = { bytes: [] };
+        }
 
         return asciiFromNumberBytes(bytesObj.bytes);
     }
@@ -212,10 +213,10 @@ function ObjectLoaded({ data }: { data: DataType }) {
     return (
         <>
             <div className={styles.resultbox}>
-                {viewedData.data?.contents?.display && (
+                {viewedData.data?.contents?.url && (
                     <div className={styles.display}>
                         <DisplayBox
-                            display={viewedData.data.contents.display}
+                            display={viewedData.data.contents.url.fields['url']}
                             tag="imageURL"
                         />
                     </div>
@@ -227,7 +228,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             : styles.noaccommodate
                     }`}
                 >
-                    {data.name && <h1>{data.name}</h1>} {' '}
+                    {data.name && <h1>{data.name}</h1>}{' '}
                     {typeof nameKeyValue[0] === 'string' && (
                         <h1>{nameKeyValue}</h1>
                     )}
