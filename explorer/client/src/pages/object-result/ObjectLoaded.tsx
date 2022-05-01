@@ -8,6 +8,7 @@ import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
 import { type AddressOwner } from '../../utils/api/SuiRpcClient';
+import { parseImageURL } from '../../utils/objectUtils';
 import {
     asciiFromNumberBytes,
     trimStdLibPrefix,
@@ -15,7 +16,6 @@ import {
 import { type DataType } from './ObjectResultType';
 
 import styles from './ObjectResult.module.css';
-import { parseImageURL } from '../../utils/objectUtils';
 
 function ObjectLoaded({ data }: { data: DataType }) {
     // TODO - restore or remove this functionality
