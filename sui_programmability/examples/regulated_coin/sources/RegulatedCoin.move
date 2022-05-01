@@ -225,12 +225,6 @@ module ABC::Tests {
     #[test] public(script) fun test_ban_() { test_ban(&mut scenario()) }
 
     #[test]
-    #[expected_failure(abort_code = 1)]
-    public(script) fun test_stolen_balance_fail_() {
-        test_stolen_balance_fail(&mut scenario())
-    }
-
-    #[test]
     #[expected_failure(abort_code = 2)]
     public(script) fun test_address_banned_fail_() {
         test_address_banned_fail(&mut scenario())
@@ -240,6 +234,12 @@ module ABC::Tests {
     #[expected_failure(abort_code = 2)]
     public(script) fun test_different_account_fail_() {
         test_different_account_fail(&mut scenario())
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 1)]
+    public(script) fun test_not_owned_balance_fail_() {
+        test_not_owned_balance_fail(&mut scenario())
     }
 
     // === Helpers and basic test organization ===
@@ -325,30 +325,6 @@ module ABC::Tests {
         };
     }
 
-    // User1 transfers his RegulatedCoin to User2.
-    // User2 tries to withdraw from its balance and fails.
-    public(script) fun test_stolen_balance_fail(test: &mut Scenario) {
-        let (_, user1, user2) = people();
-
-        test_transfer(test);
-
-        next_tx(test, &user1); {
-            let coin = TestScenario::take_owned<RC<ABC>>(test);
-            Sui::Transfer::transfer(coin, user2);
-        };
-
-        next_tx(test, &user2); {
-            let coin = TestScenario::take_owned<RC<ABC>>(test);
-            let reg = TestScenario::take_shared<Registry>(test);
-            let reg_ref = TestScenario::borrow_mut(&mut reg);
-
-            ABC::transfer(reg_ref, &mut coin, 500000, user1, ctx(test));
-
-            TestScenario::return_shared(test, reg);
-            TestScenario::return_owned(test, coin);
-        }
-    }
-
     // Admin bans user1 by adding his address to the registry.
     public(script) fun test_ban(test: &mut Scenario) {
         let (admin, user1, _) = people();
@@ -401,6 +377,30 @@ module ABC::Tests {
             TestScenario::return_shared(test, reg);
             TestScenario::return_owned(test, coin);
         };
+    }
+
+    // User1 is banned and transfers the whole balance to User2.
+    // User2 at to make a Transfer from this balance and fails.
+    public(script) fun test_not_owned_balance_fail(test: &mut Scenario) {
+        let (_, user1, user2) = people();
+
+        test_ban(test);
+
+        next_tx(test, &user1); {
+            let coin = TestScenario::take_owned<RC<ABC>>(test);
+            Sui::Transfer::transfer(coin, user2);
+        };
+
+        next_tx(test, &user2); {
+            let coin = TestScenario::take_owned<RC<ABC>>(test);
+            let reg = TestScenario::take_shared<Registry>(test);
+            let reg_ref = TestScenario::borrow_mut(&mut reg);
+
+            ABC::transfer(reg_ref, &mut coin, 500000, user1, ctx(test));
+
+            TestScenario::return_shared(test, reg);
+            TestScenario::return_owned(test, coin);
+        }
     }
 }
 
