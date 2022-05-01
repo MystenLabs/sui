@@ -17,6 +17,7 @@ import {
   ObjectRef,
   TransactionDigest,
 } from '../types';
+import { transformGetObjectInfoResponse } from '../types/framework/transformer';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 
@@ -56,7 +57,7 @@ export class JsonRpcProvider extends Provider {
         [objectId],
         isGetObjectInfoResponse
       );
-      return resp;
+      return transformGetObjectInfoResponse(resp);
     } catch (err) {
       throw new Error(`Error fetching object info: ${err} for id ${objectId}`);
     }
