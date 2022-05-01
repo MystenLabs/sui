@@ -4,11 +4,17 @@
 import mockObjectData from '../mocks/data/objects.json';
 
 import { isGetObjectInfoResponse } from '../../src/index.guard';
+import { GetObjectInfoResponse } from '../../src';
 
 describe('Test Objects Definition', () => {
   it('Test against different object definitions', () => {
-    const objects = mockObjectData;
-    expect(isGetObjectInfoResponse(objects['coin'])).toBeTruthy();
-    expect(isGetObjectInfoResponse(objects['example_nft'])).toBeTruthy();
+    validate('coin');
+    validate('example_nft');
   });
 });
+
+function validate(key: 'coin' | 'example_nft'): GetObjectInfoResponse {
+  const data = mockObjectData[key];
+  expect(isGetObjectInfoResponse(data)).toBeTruthy();
+  return data as GetObjectInfoResponse;
+}
