@@ -5,7 +5,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignedTransaction, TransactionResponse, TransferTransaction, TxnDataSerializer, TransactionDigest, SuiAddress, ObjectRef, ObjectContent, ObjectOwner, SuiObject, ObjectExistsInfo, ObjectNotExistsInfo, ObjectStatus, ObjectType, GetOwnedObjectRefsResponse, GetObjectInfoResponse, ObjectDigest, ObjectId, SequenceNumber, RawObjectRef, Transfer, RawAuthoritySignInfo, SingleTransactionKind, TransactionKind, TransactionData, Transaction, EpochId, CertifiedTransaction, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveModulePublish, StructTag, MoveTypeTag, MoveCall, MoveCallArg, EmptySignInfo, AuthorityName, AuthoritySignature } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignedTransaction, TransactionResponse, TransferTransaction, TxnDataSerializer, TransactionDigest, SuiAddress, ObjectRef, ObjectContentField, ObjectContentFields, ObjectContent, ObjectOwner, SuiObject, ObjectExistsInfo, ObjectNotExistsInfo, ObjectStatus, ObjectType, GetOwnedObjectRefsResponse, GetObjectInfoResponse, ObjectDigest, ObjectId, SequenceNumber, RawObjectRef, Transfer, RawAuthoritySignInfo, SingleTransactionKind, TransactionKind, TransactionData, Transaction, EpochId, CertifiedTransaction, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveModulePublish, StructTag, MoveTypeTag, MoveCall, MoveCallArg, EmptySignInfo, AuthorityName, AuthoritySignature } from "./index";
 import { BN } from "bn.js";
 
 export function isEd25519KeypairData(obj: any, _argumentName?: string): obj is Ed25519KeypairData {
@@ -113,21 +113,37 @@ export function isObjectRef(obj: any, _argumentName?: string): obj is ObjectRef 
     )
 }
 
+export function isObjectContentField(obj: any, _argumentName?: string): obj is ObjectContentField {
+    return (
+        (isTransactionResponse(obj) as boolean ||
+            isSequenceNumber(obj) as boolean ||
+            obj === false ||
+            obj === true ||
+            Array.isArray(obj) &&
+            obj.every((e: any) =>
+                isSequenceNumber(e) as boolean
+            ) ||
+            isObjectContent(obj) as boolean)
+    )
+}
+
+export function isObjectContentFields(obj: any, _argumentName?: string): obj is ObjectContentFields {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        Object.entries<any>(obj)
+            .every(([key, value]) => (isObjectContentField(value) as boolean &&
+                isTransactionResponse(key) as boolean))
+    )
+}
+
 export function isObjectContent(obj: any, _argumentName?: string): obj is ObjectContent {
     return (
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
-        (obj.fields !== null &&
-            typeof obj.fields === "object" ||
-            typeof obj.fields === "function") &&
-        Object.entries<any>(obj.fields)
-            .every(([key, value]) => ((isTransactionResponse(value) as boolean ||
-                isSequenceNumber(value) as boolean ||
-                value === false ||
-                value === true ||
-                isObjectContent(value) as boolean) &&
-                isTransactionResponse(key) as boolean)) &&
+        isObjectContentFields(obj.fields) as boolean &&
         isTransactionResponse(obj.type) as boolean
     )
 }
