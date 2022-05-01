@@ -73,7 +73,10 @@ function Longtext({
             );
         } else {
             textComponent = (
-                <Link className={styles.longtext} to={`/${category}/${encodeURIComponent(text)}`}>
+                <Link
+                    className={styles.longtext}
+                    to={`/${category}/${encodeURIComponent(text)}`}
+                >
                     {alttext ? alttext : text}
                 </Link>
             );
