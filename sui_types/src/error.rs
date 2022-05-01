@@ -30,6 +30,19 @@ macro_rules! fp_ensure {
 }
 pub(crate) use fp_ensure;
 
+#[macro_export]
+macro_rules! exit_main {
+    ($result:expr) => {
+        match $result {
+            Ok(_) => (),
+            Err(err) => {
+                println!("{}", err.to_string().bold().red());
+                std::process::exit(1);
+            }
+        }
+    };
+}
+
 /// Custom error type for Sui.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, JsonSchema)]
 #[allow(clippy::large_enum_variant)]
