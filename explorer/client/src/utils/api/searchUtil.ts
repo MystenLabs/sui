@@ -23,22 +23,36 @@ export const navigateWithUnknown = async (
         data: data,
     }));
 
-    //if none of the queries find a result, show missing page
-    return Promise.any([objInfoPromise, addrPromise])
-        .then((pac) => {
-            if (
-                pac?.data &&
-                (pac?.category === 'objects' || pac?.category === 'addresses')
-            ) {
-                navigate(`../${pac.category}/${input}`, { state: pac.data });
-            } else {
-                throw new Error(
-                    'Something wrong with navigateWithUnknown function'
-                );
-            }
-        })
-        .catch((error) => {
-            console.log(error);
-            navigate(`../missing/${input}`);
-        });
+    const txDetailsPromise = rpc.getTransaction(input).then((data) => ({
+        category: 'transactions',
+        data: data,
+    }));
+
+    return (
+        Promise.any([objInfoPromise, addrPromise, txDetailsPromise])
+            .then((pac) => {
+                if (
+                    pac?.data &&
+                    (pac?.category === 'objects' ||
+                        pac?.category === 'addresses' ||
+                        pac?.category === 'transactions')
+                ) {
+                    navigate(
+                        `../${pac.category}/${encodeURIComponent(input)}`,
+                        {
+                            state: pac.data,
+                        }
+                    );
+                } else {
+                    throw new Error(
+                        'Something wrong with navigateWithUnknown function'
+                    );
+                }
+            })
+            //if none of the queries find a result, show missing page
+            .catch((error) => {
+                // encode url in
+                navigate(`../missing/${encodeURIComponent(input)}`);
+            })
+    );
 };

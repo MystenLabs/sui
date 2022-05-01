@@ -11,8 +11,6 @@ export type AddressOwner = { AddressOwner: AddressBytes };
 export type AnyVec = { vec: any[] };
 export type JsonBytes = { bytes: number[] };
 
-const rpcUrl = tryGetRpcSetting() ?? 'http://127.0.0.1:5001';
+const rpcUrl = tryGetRpcSetting() ?? 'http://34.105.36.61:9000';
 
 export const DefaultRpcClient = new JsonRpcProvider(rpcUrl);
-
-console.log(DefaultRpcClient);
