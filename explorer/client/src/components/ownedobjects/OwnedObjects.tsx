@@ -57,7 +57,7 @@ function OwnedObjectAPI({ objects }: { objects: string[] }) {
                         Version: version,
                         display: parseImageURL(data)
                             ? processDisplayValue(parseImageURL(data))
-                            : '',
+                            : undefined,
                     }))
                 );
                 setIsLoaded(true);
@@ -91,7 +91,15 @@ function OwnedObjectView({ results }: { results: resultType }) {
                         <div className={styles.previewimage}>
                             <DisplayBox
                                 display={entryObj.display}
-                                tag="imageURL"
+                                // TODO: clean this logic
+                                tag={
+                                    typeof entryObj.display === 'object' &&
+                                    'category' in entryObj.display &&
+                                    entryObj.display['category'] ===
+                                        'moveScript'
+                                        ? 'moveScript'
+                                        : 'imageURL'
+                                }
                             />
                         </div>
                     )}

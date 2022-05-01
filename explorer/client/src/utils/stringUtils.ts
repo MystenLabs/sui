@@ -24,7 +24,7 @@ export const processDisplayValue = (display: { bytes: number[] } | string) => {
         typeof display === 'object' && 'bytes' in display
             ? asciiFromNumberBytes(display.bytes)
             : display;
-    return transformURL(url);
+    return typeof url === 'string' ? transformURL(url) : url;
 };
 
 function transformURL(url: string) {
