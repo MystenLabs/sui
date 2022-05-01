@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiAddress } from './common';
+import { ObjectOwner } from './common';
 import { TransactionDigest } from './common';
 
 export type ObjectRef = {
@@ -23,11 +23,6 @@ export type ObjectContent = {
   fields: ObjectContentFields;
   type: string;
 };
-export type ObjectOwner =
-  | { AddressOwner: SuiAddress }
-  | { ObjectOwner: SuiAddress }
-  | 'Shared'
-  | 'Immutable';
 
 export type SuiObject = {
   contents: ObjectContent;

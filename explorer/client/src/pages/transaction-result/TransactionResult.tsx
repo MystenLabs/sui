@@ -4,6 +4,7 @@
 import cl from 'classnames';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { getSingleTransactionKind } from 'sui.js';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import TransactionCard from '../../components/transaction-card/TransactionCard';
@@ -11,30 +12,33 @@ import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { findDataFromID } from '../../utils/static/searchUtil';
 
+import type { CertifiedTransaction } from 'sui.js';
+
 import styles from './TransactionResult.module.css';
 
+type TxnState = CertifiedTransaction & { loadState: string; txId: string };
 // Todo update state to include Call types
-const initState = {
+const initState: TxnState = {
     loadState: 'pending',
-    txId: false,
-    transaction: {
-        data: {
-            kind: {
-                Single: {
-                    Transfer: {
-                        recipient: '',
-                        object_ref: ['', 0, ''],
-                    },
+    txId: '',
+    data: {
+        kind: {
+            Single: {
+                Transfer: {
+                    recipient: '',
+                    object_ref: ['', 0, ''],
                 },
             },
-            sender: '',
-            gas_payment: ['', 0, ''],
-            gas_budget: 0,
         },
-        tx_signature: '',
-        auth_signature: '',
+        sender: '',
+        gas_payment: ['', 0, ''],
+        gas_budget: 0,
     },
-    signatures: [],
+    tx_signature: '',
+    auth_sign_info: {
+        epoch: 0,
+        signatures: [],
+    },
 };
 
 const isStatic = process.env.REACT_APP_DATA !== 'static';
@@ -101,7 +105,7 @@ function TransactionResult() {
     if (
         !id ||
         showTxState.loadState === 'fail' ||
-        !showTxState.transaction.data.kind.Single
+        getSingleTransactionKind(showTxState.data) == null
     ) {
         return (
             <ErrorResult

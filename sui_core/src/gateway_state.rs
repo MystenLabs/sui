@@ -212,7 +212,7 @@ pub trait GatewayAPI {
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<CertifiedTransaction, anyhow::Error>;
+    ) -> Result<TransactionEffectsResponse, anyhow::Error>;
 }
 
 impl<A> GatewayState<A>
@@ -332,7 +332,7 @@ where
             objects_by_kind,
             mutated_objects,
             new_certificate.clone(),
-            effects.clone(),
+            effects.clone().to_unsigned_effects(),
             self.next_tx_seq_number
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
         )?;
@@ -596,7 +596,12 @@ where
                 _ => {}
             }
         }
-        return Ok(TransactionResponse::EffectResponse(certificate, effects));
+        return Ok(TransactionResponse::EffectResponse(
+            TransactionEffectsResponse {
+                certificate,
+                effects,
+            },
+        ));
     }
 
     async fn transfer_coin(
@@ -807,10 +812,13 @@ where
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<CertifiedTransaction, anyhow::Error> {
+    ) -> Result<TransactionEffectsResponse, anyhow::Error> {
         let opt = self.store.get_certified_transaction(&digest)?;
         match opt {
-            Some(t) => Ok(t),
+            Some(certificate) => Ok(TransactionEffectsResponse {
+                certificate,
+                effects: self.store.get_effects(&digest)?,
+            }),
             None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
         }
     }
