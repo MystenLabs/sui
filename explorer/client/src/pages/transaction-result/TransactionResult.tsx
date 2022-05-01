@@ -118,7 +118,7 @@ function TransactionResult() {
     return (
         <div className={cl(theme.textresults, styles.txdetailsbg)}>
             <div className={theme.txdetailstitle}>
-                <h3>Transaction Details</h3>{' '}
+                <h3>Transaction Details</h3>
             </div>
             {showTxState.loadState === 'loaded' && (
                 <TransactionCard txdata={showTxState} />

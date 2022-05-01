@@ -22,6 +22,7 @@ const getRecentTransactions = async (txNum: number) => {
     try {
         // Get the lastest transactions
         // TODO add batch transaction kind
+        // TODO sui.js to get the lastest transactions meta data
         const transactions = await rpc
             .getRecentTransactions(txNum)
             .then((res: any) => res);
@@ -32,6 +33,12 @@ const getRecentTransactions = async (txNum: number) => {
                     .getTransaction(tx[1])
                     .then((res: any) => res)
                     .catch((err: any) => false);
+
+                // For tx with errors or not found
+                // return false and skip the transaction
+                if (!txData) {
+                    return false;
+                }
                 const txKind = Object.keys(
                     txData.transaction.data.kind.Single
                 )[0];
@@ -39,7 +46,7 @@ const getRecentTransactions = async (txNum: number) => {
                 return {
                     block: tx[0],
                     txId: tx[1],
-                    success: txData ? true : false,
+                    // success: txData ? true : false,
                     kind: txKind,
                     From: txData.transaction.data.sender,
                     ...(txKind === 'Transfer'
@@ -51,8 +58,9 @@ const getRecentTransactions = async (txNum: number) => {
                 };
             })
         );
+        // Remove failed transactions and sort by block number
         return txLatest
-            .filter((itm) => itm.success)
+            .filter((itm) => itm)
             .sort((a: any, b: any) => b.block - a.block);
     } catch (error) {
         throw error;
@@ -162,7 +170,7 @@ function LastestTxCard() {
                                         className={styles.txlink}
                                         to={'addresses/' + tx.From}
                                     >
-                                        {truncate(tx.From, 25, '...')}{' '}
+                                        {truncate(tx.From, 25, '...')}
                                     </Link>
                                 </div>
                                 {tx.To && (
@@ -172,7 +180,7 @@ function LastestTxCard() {
                                             className={styles.txlink}
                                             to={'addresses/' + tx.To}
                                         >
-                                            {truncate(tx.To, 25, '...')}{' '}
+                                            {truncate(tx.To, 25, '...')}
                                         </Link>
                                     </div>
                                 )}
