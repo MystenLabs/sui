@@ -197,7 +197,10 @@ fn call(
     // TODO improve API here
     let args = object_args
         .into_iter()
-        .map(|obj| CallArg::ImmOrOwnedObject(obj.compute_object_reference()))
+        .map(|obj| match obj.owner {
+            Owner::Shared => CallArg::SharedObject(obj.id()),
+            _ => CallArg::ImmOrOwnedObject(obj.compute_object_reference()),
+        })
         .chain(pure_args.into_iter().map(CallArg::Pure))
         .collect();
     adapter::execute(
@@ -899,6 +902,110 @@ fn test_simple_call() {
         u64::from_le_bytes(move_obj.type_specific_contents().try_into().unwrap()),
         obj_val
     );
+}
+
+#[test]
+fn test_child_of_shared_object() {
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_packages();
+    let mut storage = InMemoryStorage::new(genesis_objects);
+
+    // crate gas object for payment
+    let gas_object =
+        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
+
+    publish_from_src(
+        &mut storage,
+        &native_functions,
+        "src/unit_tests/data/child_of_shared_object",
+        gas_object,
+        GAS_BUDGET,
+    )
+    .unwrap();
+    storage.flush();
+
+    call(
+        &mut storage,
+        &native_functions,
+        "O3",
+        "create",
+        GAS_BUDGET,
+        vec![],
+        vec![],
+        vec![],
+    )
+    .unwrap();
+
+    let o3_id = storage.get_created_keys().pop().unwrap();
+    storage.flush();
+    let o3 = storage.read_object(&o3_id).unwrap().clone();
+
+    call(
+        &mut storage,
+        &native_functions,
+        "O2",
+        "create_shared",
+        GAS_BUDGET,
+        vec![],
+        vec![o3],
+        vec![],
+    )
+    .unwrap();
+
+    let o2_id = storage.get_created_keys().pop().unwrap();
+    storage.flush();
+    let o2_shared = storage.read_object(&o2_id).unwrap().clone();
+    let o3 = storage.read_object(&o3_id).unwrap().clone();
+
+    call(
+        &mut storage,
+        &native_functions,
+        "O2",
+        "use_o2_o3",
+        GAS_BUDGET,
+        vec![],
+        vec![o2_shared, o3],
+        vec![],
+    )
+    .unwrap();
+
+    storage.flush();
+    let o2_shared = storage.read_object(&o2_id).unwrap().clone();
+    let o3 = storage.read_object(&o3_id).unwrap().clone();
+
+    let result = call(
+        &mut storage,
+        &native_functions,
+        "O1",
+        "use_o2_o3",
+        GAS_BUDGET,
+        vec![],
+        vec![o2_shared, o3],
+        vec![],
+    );
+    // Using O2 and O3 in O1 is illegable when O2 is a shared object and O3 is its child.
+    assert!(matches!(
+        result,
+        Err(SuiError::InvalidSharedChildUse { .. })
+    ));
+
+    storage.flush();
+    let o2_shared = storage.read_object(&o2_id).unwrap().clone();
+    let o3 = storage.read_object(&o3_id).unwrap().clone();
+
+    // Using O2 and O3 in O2 should be OK.
+    call(
+        &mut storage,
+        &native_functions,
+        "O2",
+        "use_o2_o3",
+        GAS_BUDGET,
+        vec![],
+        vec![o2_shared, o3],
+        vec![],
+    )
+    .unwrap();
 }
 
 #[test]
