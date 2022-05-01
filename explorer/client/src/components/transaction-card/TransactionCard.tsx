@@ -54,7 +54,8 @@ function formatTxResponse(data: any) {
                       link: true,
                   },
               ]
-            : [
+            : txKindName === 'Call'
+            ? [
                   {
                       label: 'From',
                       value: tx.data.sender,
@@ -76,12 +77,25 @@ function formatTxResponse(data: any) {
                   },
                   {
                       label: 'Arguments',
-                      value: txKind.Single.Call.arguments.map((data: any) =>
-                          Buffer.from(data['Pure']).toString('base64')
-                      ),
+                      // convert pure type
+                      value: txKind.Single.Call.arguments
+                          .filter((itm: any) => itm['Pure'])
+                          .map((data: any) =>
+                              Buffer.from(data['Pure']).toString('base64')
+                          ),
                       // list: true,
                   },
-              ]),
+              ]
+            : txKindName === 'Publish'
+            ? [
+                  {
+                      label: 'Modules',
+                      value: txKind.Single.Publish.modules,
+                      list: true,
+                      //  sublist: true,
+                  },
+              ]
+            : []),
 
         {
             label: 'Transactions Signature',

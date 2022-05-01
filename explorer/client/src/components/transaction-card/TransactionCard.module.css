@@ -17,7 +17,7 @@ div.txcardgrid:nth-child(2n + 1) {
 }
 
 div.txcardgrid:first-child {
-    @apply bg-offblack rounded-b-none items-center pt-5 pb-5 font-black shadow-md border-2 border-coolGray-400 rounded-lg;
+    @apply bg-offblack rounded-none items-center pt-5 pb-5 font-black shadow-md border-2 border-coolGray-400 h-10;
 }
 
 div.txcardgrid > div:first-child {

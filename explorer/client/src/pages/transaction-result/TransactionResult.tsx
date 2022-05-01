@@ -1,11 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import cl from 'classnames';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
-// import Longtext from '../../components/longtext/Longtext';
 import TransactionCard from '../../components/transaction-card/TransactionCard';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
@@ -81,7 +81,6 @@ function TransactionResult() {
             })
             .catch((err) => {
                 //  remove this section in production
-                console.log(err);
                 setTxState({
                     ...initState,
                     loadState: 'fail',
@@ -97,9 +96,13 @@ function TransactionResult() {
             </div>
         );
     }
-
-    // TODO update Error screen
-    if (!id || showTxState.loadState === 'fail') {
+    // For Batch transactions show error
+    // TODO update Error screen and account for Batch transactions
+    if (
+        !id ||
+        showTxState.loadState === 'fail' ||
+        !showTxState.transaction.data.kind.Single
+    ) {
         return (
             <ErrorResult
                 id={id}
@@ -113,7 +116,7 @@ function TransactionResult() {
     }
 
     return (
-        <div className={theme.textresults}>
+        <div className={cl(theme.textresults, styles.txdetailsbg)}>
             <div className={theme.txdetailstitle}>
                 <h3>Transaction Details</h3>{' '}
             </div>

@@ -14,4 +14,3 @@ export type JsonBytes = { bytes: number[] };
 const rpcUrl = tryGetRpcSetting() ?? ' http://34.105.36.61:9000';
 
 export const DefaultRpcClient = new JsonRpcProvider(rpcUrl);
-
