@@ -23,7 +23,7 @@ enum Action {
     about = "Trace serde (de)serialization to generate format descriptions for Sui types"
 )]
 struct Options {
-    #[clap(arg_enum, default_value = "Print", ignore_case = true)]
+    #[clap(arg_enum, default_value = "Record", ignore_case = true)]
     action: Action,
 }
 

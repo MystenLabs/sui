@@ -17,8 +17,14 @@ use sui_types::messages::{CertifiedTransaction, TransactionEffects};
 use sui_types::object::Object;
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct TransactionEffectsResponse {
+    pub certificate: CertifiedTransaction,
+    pub effects: TransactionEffects,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum TransactionResponse {
-    EffectResponse(CertifiedTransaction, TransactionEffects),
+    EffectResponse(TransactionEffectsResponse),
     PublishResponse(PublishResponse),
     MergeCoinResponse(MergeCoinResponse),
     SplitCoinResponse(SplitCoinResponse),
@@ -50,7 +56,10 @@ impl TransactionResponse {
         self,
     ) -> Result<(CertifiedTransaction, TransactionEffects), SuiError> {
         match self {
-            TransactionResponse::EffectResponse(cert, effects) => Ok((cert, effects)),
+            TransactionResponse::EffectResponse(TransactionEffectsResponse {
+                certificate,
+                effects,
+            }) => Ok((certificate, effects)),
             _ => Err(SuiError::UnexpectedMessage),
         }
     }
