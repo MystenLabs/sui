@@ -15,6 +15,7 @@ import {
 import { type DataType } from './ObjectResultType';
 
 import styles from './ObjectResult.module.css';
+import { parseImageURL } from '../../utils/objectUtils';
 
 function ObjectLoaded({ data }: { data: DataType }) {
     // TODO - restore or remove this functionality
@@ -176,6 +177,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                 ? toHexString(data.data.tx_digest as number[])
                 : data.data.tx_digest,
         owner: processOwner(data.owner),
+        url: parseImageURL(data.data),
     };
 
     //TO DO remove when have distinct name field under Description
@@ -211,17 +213,14 @@ function ObjectLoaded({ data }: { data: DataType }) {
     return (
         <>
             <div className={styles.resultbox}>
-                {viewedData.data?.contents?.url && (
+                {viewedData.url && (
                     <div className={styles.display}>
-                        <DisplayBox
-                            display={viewedData.data.contents.url.fields['url']}
-                            tag="imageURL"
-                        />
+                        <DisplayBox display={viewedData.url} tag="imageURL" />
                     </div>
                 )}
                 <div
                     className={`${styles.textbox} ${
-                        data?.data.contents?.url
+                        viewedData.url
                             ? styles.accommodate
                             : styles.noaccommodate
                     }`}
