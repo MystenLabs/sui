@@ -576,12 +576,12 @@
         }
       ],
       "result": {
-        "name": "CertifiedTransaction",
+        "name": "TransactionEffectsResponse",
         "summary": "",
         "description": "",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionEnvelope_for_AuthorityQuorumSignInfo"
+          "$ref": "#/components/schemas/TransactionEffectsResponse"
         }
       }
     },
@@ -1903,6 +1903,21 @@
           }
         }
       },
+      "TransactionEffectsResponse": {
+        "type": "object",
+        "required": [
+          "certificate",
+          "effects"
+        ],
+        "properties": {
+          "certificate": {
+            "$ref": "#/components/schemas/TransactionEnvelope_for_AuthorityQuorumSignInfo"
+          },
+          "effects": {
+            "$ref": "#/components/schemas/TransactionEffects"
+          }
+        }
+      },
       "TransactionEnvelope_for_AuthorityQuorumSignInfo": {
         "description": "A transaction signed by a client, optionally signed by an authority (depending on `S`). `S` indicates the authority signing state. It can be either empty or signed. We make the authority signature templated so that `TransactionEnvelope<S>` can be used universally in the transactions storage in `SuiDataStore`, shared by both authorities and non-authorities: authorities store signed transactions, while non-authorities store unsigned transactions.",
         "type": "object",
@@ -1975,17 +1990,7 @@
             ],
             "properties": {
               "EffectResponse": {
-                "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/TransactionEnvelope_for_AuthorityQuorumSignInfo"
-                  },
-                  {
-                    "$ref": "#/components/schemas/TransactionEffects"
-                  }
-                ],
-                "maxItems": 2,
-                "minItems": 2
+                "$ref": "#/components/schemas/TransactionEffectsResponse"
               }
             },
             "additionalProperties": false

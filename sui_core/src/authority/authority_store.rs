@@ -209,6 +209,19 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         }
     }
 
+    /// Returns the TransactionEffects if we have a signed_effects structure for this transaction digest
+    pub fn get_effects(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<TransactionEffects> {
+        self.effects
+            .get(transaction_digest)?
+            .map(|data| data.effects)
+            .ok_or(SuiError::TransactionNotFound {
+                digest: *transaction_digest,
+            })
+    }
+
     /// Returns true if we have a signed_effects structure for this transaction digest
     pub fn effects_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
         self.effects
@@ -575,7 +588,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         active_inputs: Vec<(InputObjectKind, Object)>,
         mutated_objects: HashMap<ObjectRef, Object>,
         certificate: CertifiedTransaction,
-        effects: TransactionEffects,
+        effects: TransactionEffectsEnvelope<S>,
         sequence_number: GatewayTxSeqNumber,
     ) -> SuiResult {
         let transaction_digest = certificate.digest();
@@ -584,10 +597,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         for (_, object) in mutated_objects {
             temporary_store.write_object(object);
         }
-        for obj_ref in &effects.deleted {
+        for obj_ref in &effects.effects.deleted {
             temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Normal);
         }
-        for obj_ref in &effects.wrapped {
+        for obj_ref in &effects.effects.wrapped {
             temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Wrap);
         }
 
@@ -597,6 +610,12 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         write_batch = write_batch.insert_batch(
             &self.certificates,
             std::iter::once((transaction_digest, &certificate)),
+        )?;
+
+        // Store the unsigned effects of the transaction
+        write_batch = write_batch.insert_batch(
+            &self.effects,
+            std::iter::once((transaction_digest, effects)),
         )?;
 
         // Once a transaction is done processing and effects committed, we no longer

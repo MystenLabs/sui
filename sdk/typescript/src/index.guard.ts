@@ -5,7 +5,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignedTransaction, TransactionResponse, TransferTransaction, TxnDataSerializer, TransactionDigest, SuiAddress, ObjectRef, ObjectContentField, ObjectContentFields, ObjectContent, ObjectOwner, SuiObject, ObjectExistsInfo, ObjectNotExistsInfo, ObjectStatus, ObjectType, GetOwnedObjectRefsResponse, GetObjectInfoResponse, ObjectDigest, ObjectId, SequenceNumber, RawObjectRef, Transfer, RawAuthoritySignInfo, SingleTransactionKind, TransactionKind, TransactionData, Transaction, EpochId, CertifiedTransaction, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveModulePublish, StructTag, MoveTypeTag, MoveCall, MoveCallArg, EmptySignInfo, AuthorityName, AuthoritySignature } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignedTransaction, TransactionResponse, TransferTransaction, TxnDataSerializer, TransactionDigest, SuiAddress, ObjectOwner, ObjectRef, ObjectContentField, ObjectContentFields, ObjectContent, SuiObject, ObjectExistsInfo, ObjectNotExistsInfo, ObjectStatus, ObjectType, GetOwnedObjectRefsResponse, GetObjectInfoResponse, ObjectDigest, ObjectId, SequenceNumber, RawObjectRef, Transfer, RawAuthoritySignInfo, TransactionKindName, SingleTransactionKind, TransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatus, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveModulePublish, Event, StructTag, MoveTypeTag, MoveCall, MoveCallArg, EmptySignInfo, AuthorityName, AuthoritySignature } from "./index";
 import { BN } from "bn.js";
 
 export function isEd25519KeypairData(obj: any, _argumentName?: string): obj is Ed25519KeypairData {
@@ -102,6 +102,21 @@ export function isSuiAddress(obj: any, _argumentName?: string): obj is SuiAddres
     )
 }
 
+export function isObjectOwner(obj: any, _argumentName?: string): obj is ObjectOwner {
+    return (
+        ((obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+            isTransactionResponse(obj.AddressOwner) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isTransactionResponse(obj.ObjectOwner) as boolean ||
+            obj === "Shared" ||
+            obj === "Immutable")
+    )
+}
+
 export function isObjectRef(obj: any, _argumentName?: string): obj is ObjectRef {
     return (
         (obj !== null &&
@@ -145,21 +160,6 @@ export function isObjectContent(obj: any, _argumentName?: string): obj is Object
             typeof obj === "function") &&
         isObjectContentFields(obj.fields) as boolean &&
         isTransactionResponse(obj.type) as boolean
-    )
-}
-
-export function isObjectOwner(obj: any, _argumentName?: string): obj is ObjectOwner {
-    return (
-        ((obj !== null &&
-            typeof obj === "object" ||
-            typeof obj === "function") &&
-            isTransactionResponse(obj.AddressOwner) as boolean ||
-            (obj !== null &&
-                typeof obj === "object" ||
-                typeof obj === "function") &&
-            isTransactionResponse(obj.ObjectOwner) as boolean ||
-            obj === "Shared" ||
-            obj === "Immutable")
     )
 }
 
@@ -278,6 +278,14 @@ export function isRawAuthoritySignInfo(obj: any, _argumentName?: string): obj is
     )
 }
 
+export function isTransactionKindName(obj: any, _argumentName?: string): obj is TransactionKindName {
+    return (
+        (obj === "Transfer" ||
+            obj === "Publish" ||
+            obj === "Call")
+    )
+}
+
 export function isSingleTransactionKind(obj: any, _argumentName?: string): obj is SingleTransactionKind {
     return (
         ((obj !== null &&
@@ -323,19 +331,22 @@ export function isTransactionData(obj: any, _argumentName?: string): obj is Tran
     )
 }
 
-export function isTransaction(obj: any, _argumentName?: string): obj is Transaction {
+export function isEpochId(obj: any, _argumentName?: string): obj is EpochId {
+    return (
+        typeof obj === "number"
+    )
+}
+
+export function isAuthorityQuorumSignInfo(obj: any, _argumentName?: string): obj is AuthorityQuorumSignInfo {
     return (
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
-        isTransactionData(obj.data) as boolean &&
-        isTransactionResponse(obj.tx_signature) as boolean
-    )
-}
-
-export function isEpochId(obj: any, _argumentName?: string): obj is EpochId {
-    return (
-        typeof obj === "number"
+        isSequenceNumber(obj.epoch) as boolean &&
+        Array.isArray(obj.signatures) &&
+        obj.signatures.every((e: any) =>
+            isRawAuthoritySignInfo(e) as boolean
+        )
     )
 }
 
@@ -344,12 +355,101 @@ export function isCertifiedTransaction(obj: any, _argumentName?: string): obj is
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
-        isSequenceNumber(obj.epoch) as boolean &&
-        isTransaction(obj.transaction) as boolean &&
-        Array.isArray(obj.signatures) &&
-        obj.signatures.every((e: any) =>
-            isRawAuthoritySignInfo(e) as boolean
+        isTransactionData(obj.data) as boolean &&
+        isTransactionResponse(obj.tx_signature) as boolean &&
+        isAuthorityQuorumSignInfo(obj.auth_sign_info) as boolean
+    )
+}
+
+export function isGasCostSummary(obj: any, _argumentName?: string): obj is GasCostSummary {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isSequenceNumber(obj.computation_cost) as boolean &&
+        isSequenceNumber(obj.storage_cost) as boolean &&
+        isSequenceNumber(obj.storage_rebate) as boolean
+    )
+}
+
+export function isExecutionStatus(obj: any, _argumentName?: string): obj is ExecutionStatus {
+    return (
+        ((obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+            (obj.Success !== null &&
+                typeof obj.Success === "object" ||
+                typeof obj.Success === "function") &&
+            isGasCostSummary(obj.Success.gas_cost) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            (obj.Failure !== null &&
+                typeof obj.Failure === "object" ||
+                typeof obj.Failure === "function") &&
+            isGasCostSummary(obj.Failure.gas_cost) as boolean &&
+            isTransactionResponse(obj.Failure.error) as boolean)
+    )
+}
+
+export function isOwnedObjectRef(obj: any, _argumentName?: string): obj is OwnedObjectRef {
+    return (
+        Array.isArray(obj) &&
+        isRawObjectRef(obj[0]) as boolean &&
+        isObjectOwner(obj[1]) as boolean
+    )
+}
+
+export function isTransactionEffects(obj: any, _argumentName?: string): obj is TransactionEffects {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isExecutionStatus(obj.status) as boolean &&
+        Array.isArray(obj.shared_objects) &&
+        obj.shared_objects.every((e: any) =>
+            isRawObjectRef(e) as boolean
+        ) &&
+        isTransactionResponse(obj.transaction_digest) as boolean &&
+        Array.isArray(obj.created) &&
+        obj.created.every((e: any) =>
+            isOwnedObjectRef(e) as boolean
+        ) &&
+        Array.isArray(obj.mutated) &&
+        obj.mutated.every((e: any) =>
+            isOwnedObjectRef(e) as boolean
+        ) &&
+        Array.isArray(obj.unwrapped) &&
+        obj.unwrapped.every((e: any) =>
+            isOwnedObjectRef(e) as boolean
+        ) &&
+        Array.isArray(obj.deleted) &&
+        obj.deleted.every((e: any) =>
+            isRawObjectRef(e) as boolean
+        ) &&
+        Array.isArray(obj.wrapped) &&
+        obj.wrapped.every((e: any) =>
+            isRawObjectRef(e) as boolean
+        ) &&
+        isOwnedObjectRef(obj.gas_object) as boolean &&
+        Array.isArray(obj.events) &&
+        obj.events.every((e: any) =>
+            isEvent(e) as boolean
+        ) &&
+        Array.isArray(obj.dependencies) &&
+        obj.dependencies.every((e: any) =>
+            isTransactionResponse(e) as boolean
         )
+    )
+}
+
+export function isTransactionEffectsResponse(obj: any, _argumentName?: string): obj is TransactionEffectsResponse {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isCertifiedTransaction(obj.certificate) as boolean &&
+        isTransactionEffects(obj.effects) as boolean
     )
 }
 
@@ -375,6 +475,16 @@ export function isMoveModulePublish(obj: any, _argumentName?: string): obj is Mo
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function")
+    )
+}
+
+export function isEvent(obj: any, _argumentName?: string): obj is Event {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isStructTag(obj.type_) as boolean &&
+        isTransactionResponse(obj.contents) as boolean
     )
 }
 
