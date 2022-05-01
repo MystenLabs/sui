@@ -4,6 +4,11 @@
 import cl from 'classnames';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+    getSingleTransactionKind,
+    getTransactionKind,
+    getTransferTransaction,
+} from 'sui.js';
 
 import Longtext from '../../components/longtext/Longtext';
 import Search from '../../components/search/Search';
@@ -11,51 +16,62 @@ import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import ErrorResult from '../error-result/ErrorResult';
 
+import type { CertifiedTransaction, GetTxnDigestsResponse } from 'sui.js';
+
 import styles from './RecentTxCard.module.css';
 
 const initState = {
     loadState: 'pending',
-    lastestTx: [],
+    latestTx: [],
 };
 
 const getRecentTransactions = async (txNum: number) => {
     try {
-        // Get the lastest transactions
+        // Get the latest transactions
         // TODO add batch transaction kind
-        // TODO sui.js to get the lastest transactions meta data
+        // TODO sui.js to get the latest transactions meta data
         const transactions = await rpc
             .getRecentTransactions(txNum)
-            .then((res: any) => res);
+            .then((res: GetTxnDigestsResponse) => res);
         const txLatest = await Promise.all(
-            transactions.map(async (tx: any) => {
-                //
-                const txData = await rpc
+            transactions.map(async (tx) => {
+                return await rpc
                     .getTransaction(tx[1])
-                    .then((res: any) => res)
-                    .catch((err: any) => false);
+                    .then((res: CertifiedTransaction) => {
+                        const singleTransaction = getSingleTransactionKind(
+                            res.data
+                        );
+                        if (!singleTransaction) {
+                            throw new Error(
+                                `Transaction kind not supported yet ${res.data.kind}`
+                            );
+                        }
+                        const txKind = getTransactionKind(res.data);
+                        const recipient = getTransferTransaction(
+                            res.data
+                        )?.recipient;
 
-                // For tx with errors or not found
-                // return false and skip the transaction
-                if (!txData) {
-                    return false;
-                }
-                const txKind = Object.keys(
-                    txData.transaction.data.kind.Single
-                )[0];
-
-                return {
-                    block: tx[0],
-                    txId: tx[1],
-                    // success: txData ? true : false,
-                    kind: txKind,
-                    From: txData.transaction.data.sender,
-                    ...(txKind === 'Transfer'
-                        ? {
-                              To: txData.transaction.data.kind.Single.Transfer
-                                  .recipient,
-                          }
-                        : {}),
-                };
+                        return {
+                            block: tx[0],
+                            txId: tx[1],
+                            // success: txData ? true : false,
+                            kind: txKind,
+                            From: res.data.sender,
+                            ...(recipient
+                                ? {
+                                      To: recipient,
+                                  }
+                                : {}),
+                        };
+                    })
+                    .catch((err) => {
+                        console.error(
+                            'Failed to get transaction details for txn digest',
+                            tx[1],
+                            err
+                        );
+                        return false;
+                    });
             })
         );
         // Remove failed transactions and sort by block number
@@ -84,7 +100,7 @@ function truncate(fullStr: string, strLen: number, separator: string) {
     );
 }
 
-function LastestTxCard() {
+function LatestTxCard() {
     const [isLoaded, setIsLoaded] = useState(false);
     const [results, setResults] = useState(initState);
     useEffect(() => {
@@ -96,7 +112,7 @@ function LastestTxCard() {
                 }
                 setResults({
                     loadState: 'loaded',
-                    lastestTx: resp,
+                    latestTx: resp,
                 });
             })
             .catch((err) => {
@@ -120,8 +136,8 @@ function LastestTxCard() {
     if (!isLoaded && results.loadState === 'fail') {
         return (
             <ErrorResult
-                id="lastestTx"
-                errorMsg="There was an issue getting the lastest transaction"
+                id="latestTx"
+                errorMsg="There was an issue getting the latest transaction"
             />
         );
     }
@@ -144,9 +160,9 @@ function LastestTxCard() {
                         <div className={styles.txcardgridlarge}>TxId</div>
                         <div className={styles.txtype}>Tx Type</div>
                         <div className={styles.txgas}>Gas</div>
-                        <div className={styles.txadd}>Sender & Reciever</div>
+                        <div className={styles.txadd}>Sender & Receiver</div>
                     </div>
-                    {results.lastestTx.map((tx: any, index: number) => (
+                    {results.latestTx.map((tx: any, index: number) => (
                         <div
                             key={index}
                             className={cl(styles.txcardgrid, styles.txcard)}
@@ -193,4 +209,4 @@ function LastestTxCard() {
     );
 }
 
-export default LastestTxCard;
+export default LatestTxCard;

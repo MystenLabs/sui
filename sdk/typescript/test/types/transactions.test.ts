@@ -3,13 +3,13 @@
 
 import mockTransactionData from '../mocks/data/transactions.json';
 
-import { isCertifiedTransaction } from '../../src/index.guard';
+import { isTransactionEffectsResponse } from '../../src/index.guard';
 
 describe('Test Transaction Definition', () => {
   it('Test against different transaction definitions', () => {
     const txns = mockTransactionData;
-    expect(isCertifiedTransaction(txns['transfer'])).toBeTruthy();
-    expect(isCertifiedTransaction(txns['move_call'])).toBeTruthy();
-    expect(isCertifiedTransaction(txns['coin_split'])).toBeTruthy();
+    expect(isTransactionEffectsResponse(txns['move_call'])).toBeTruthy();
+    expect(isTransactionEffectsResponse(txns['transfer'])).toBeTruthy();
+    expect(isTransactionEffectsResponse(txns['coin_split'])).toBeTruthy();
   });
 });
