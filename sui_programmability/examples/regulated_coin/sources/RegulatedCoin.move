@@ -378,7 +378,7 @@ module ABC::Tests {
     }
 
     // User1 is banned and transfers the whole balance to User2.
-    // User2 at to make a Transfer from this balance and fails.
+    // User2 tries to use this balance and fails.
     public(script) fun test_not_owned_balance_fail(test: &mut Scenario) {
         let (_, user1, user2) = people();
 
