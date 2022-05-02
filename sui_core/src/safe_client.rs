@@ -31,6 +31,11 @@ impl<C> SafeClient<C> {
         }
     }
 
+    #[cfg(test)]
+    pub fn authority_client(&mut self) -> &mut C {
+        &mut self.authority_client
+    }
+
     // Here we centralize all checks for transaction info responses
     fn check_transaction_response(
         &self,
@@ -49,7 +54,7 @@ impl<C> SafeClient<C> {
             );
             // Check it's the right transaction
             fp_ensure!(
-                signed_transaction.digest() == digest,
+                signed_transaction.digest() == &digest,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
@@ -61,7 +66,7 @@ impl<C> SafeClient<C> {
             certificate.check(&self.committee)?;
             // Check it's the right transaction
             fp_ensure!(
-                certificate.transaction.digest() == digest,
+                certificate.digest() == &digest,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
@@ -272,7 +277,7 @@ where
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let digest = transaction.digest();
+        let digest = *transaction.digest();
         let transaction_info = self
             .authority_client
             .handle_transaction(transaction)
@@ -289,7 +294,7 @@ where
         &self,
         transaction: ConfirmationTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let digest = transaction.certificate.transaction.digest();
+        let digest = *transaction.certificate.digest();
         let transaction_info = self
             .authority_client
             .handle_confirmation_transaction(transaction)

@@ -5,6 +5,7 @@ use clap::*;
 use colored::Colorize;
 use move_unit_test::UnitTestingConfig;
 use std::path::Path;
+use sui_types::exit_main;
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -74,8 +75,8 @@ struct MoveOpt {
     cmd: MoveCommands,
 }
 
-fn main() -> Result<(), anyhow::Error> {
+fn main() {
     let options = MoveOpt::parse();
     let path = options.path;
-    options.cmd.execute(path.as_ref(), options.std)
+    exit_main!(options.cmd.execute(path.as_ref(), options.std))
 }

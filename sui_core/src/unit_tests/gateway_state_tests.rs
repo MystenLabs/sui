@@ -7,15 +7,18 @@ use std::{collections::HashSet, path::Path};
 use signature::Signer;
 
 use sui_framework::build_move_package_to_bytes;
+use sui_types::crypto::KeyPair;
 use sui_types::{crypto::get_key_pair, object::Owner};
 
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::Transaction;
 use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
+use typed_store::Map;
 
 use super::*;
 use crate::authority_aggregator::authority_aggregator_tests::{
-    authority_genesis_objects, crate_object_move_transaction, init_local_authorities,
+    authority_genesis_objects, crate_object_move_transaction, get_local_client,
+    init_local_authorities,
 };
 use crate::authority_client::LocalAuthorityClient;
 use crate::gateway_state::{GatewayAPI, GatewayState};
@@ -36,6 +39,32 @@ async fn create_gateway_state(
     gateway
 }
 
+async fn transfer_coin(
+    gateway: &GatewayState<LocalAuthorityClient>,
+    signer: SuiAddress,
+    key: &KeyPair,
+    coin_object_id: ObjectID,
+    gas_object_id: ObjectID,
+    recipient: SuiAddress,
+) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+    let data = gateway
+        .transfer_coin(
+            signer,
+            coin_object_id,
+            gas_object_id,
+            GAS_VALUE_FOR_TESTING,
+            recipient,
+        )
+        .await?;
+
+    let signature = key.sign(&data.to_bytes());
+    let result = gateway
+        .execute_transaction(Transaction::new(data, signature))
+        .await?
+        .to_effect_response()?;
+    Ok(result)
+}
+
 #[tokio::test]
 async fn test_transfer_coin() {
     let (addr1, key1) = get_key_pair();
@@ -48,24 +77,16 @@ async fn test_transfer_coin() {
         authority_genesis_objects(4, vec![coin_object.clone(), gas_object.clone()]);
     let gateway = create_gateway_state(genesis_objects).await;
 
-    let data = gateway
-        .transfer_coin(
-            addr1,
-            coin_object.id(),
-            gas_object.id(),
-            GAS_VALUE_FOR_TESTING,
-            addr2,
-        )
-        .await
-        .unwrap();
-
-    let signature = key1.sign(&data.to_bytes());
-    let (_cert, effects) = gateway
-        .execute_transaction(Transaction::new(data, signature))
-        .await
-        .unwrap()
-        .to_effect_response()
-        .unwrap();
+    let (_cert, effects) = transfer_coin(
+        &gateway,
+        addr1,
+        &key1,
+        coin_object.id(),
+        gas_object.id(),
+        addr2,
+    )
+    .await
+    .unwrap();
     assert_eq!(effects.mutated.len(), 2);
     assert_eq!(
         effects.mutated_excluding_gas().next().unwrap().1,
@@ -289,4 +310,122 @@ async fn test_recent_transactions() -> Result<(), anyhow::Error> {
     assert_eq!(txs, digests);
 
     Ok(())
+}
+
+#[tokio::test]
+async fn test_equivocation_resilient() {
+    let (addr1, key1) = get_key_pair();
+    let coin_object = Object::with_owner_for_testing(addr1);
+    let gas_object = Object::with_owner_for_testing(addr1);
+    let genesis_objects =
+        authority_genesis_objects(4, vec![coin_object.clone(), gas_object.clone()]);
+    let gateway = Arc::new(Box::new(create_gateway_state(genesis_objects).await));
+
+    let mut handles = vec![];
+    // We create 20 requests that try to touch the same object to the gateway.
+    // Make sure that one of them succeeds and there are no pending tx in the end.
+    for _ in 0..20 {
+        let (recipient, _) = get_key_pair();
+        let data = gateway
+            .transfer_coin(
+                addr1,
+                coin_object.id(),
+                gas_object.id(),
+                GAS_VALUE_FOR_TESTING,
+                recipient,
+            )
+            .await
+            .unwrap();
+        let signature = key1.sign(&data.to_bytes());
+        let handle = tokio::task::spawn({
+            let gateway_copy = gateway.clone();
+            async move {
+                gateway_copy
+                    .execute_transaction(Transaction::new(data, signature))
+                    .await
+            }
+        });
+        handles.push(handle);
+    }
+    let results = futures::future::join_all(handles).await;
+    assert_eq!(
+        results
+            .into_iter()
+            .filter(|r| r.as_ref().unwrap().is_ok())
+            .count(),
+        1
+    );
+    assert_eq!(gateway.store().pending_transactions().iter().count(), 0);
+}
+
+#[tokio::test]
+async fn test_transfer_coin_with_retry() {
+    let (addr1, key1) = get_key_pair();
+    let (addr2, _key2) = get_key_pair();
+
+    let coin_object = Object::with_owner_for_testing(addr1);
+    let gas_object = Object::with_owner_for_testing(addr1);
+
+    let genesis_objects =
+        authority_genesis_objects(4, vec![coin_object.clone(), gas_object.clone()]);
+    let mut gateway = create_gateway_state(genesis_objects).await;
+    // Make two authorities fail at the end of certificate processing.
+    get_local_client(&mut gateway.authorities, 0)
+        .fault_config
+        .fail_after_handle_confirmation = true;
+    get_local_client(&mut gateway.authorities, 1)
+        .fault_config
+        .fail_after_handle_confirmation = true;
+
+    // Transfer will fail because we would not be able to reach quorum on cert processing.
+    assert!(transfer_coin(
+        &gateway,
+        addr1,
+        &key1,
+        coin_object.id(),
+        gas_object.id(),
+        addr2,
+    )
+    .await
+    .is_err());
+
+    // The tx is stuck in the gateway, with objects locked to this tx.
+    assert_eq!(gateway.store().pending_transactions().iter().count(), 1);
+    let (_tx_diget, tx) = gateway
+        .store()
+        .pending_transactions()
+        .iter()
+        .next()
+        .unwrap();
+    assert_eq!(
+        gateway
+            .store()
+            .get_transaction_lock(&coin_object.compute_object_reference())
+            .unwrap(),
+        Some(tx)
+    );
+
+    // Recover one of the authorities.
+    get_local_client(&mut gateway.authorities, 1)
+        .fault_config
+        .fail_after_handle_confirmation = false;
+
+    // Retry transaction, and this time it should succeed.
+    assert!(transfer_coin(
+        &gateway,
+        addr1,
+        &key1,
+        coin_object.id(),
+        gas_object.id(),
+        addr2,
+    )
+    .await
+    .is_ok());
+
+    // The tx is no longer stuck after the retry.
+    assert_eq!(gateway.store().pending_transactions().iter().count(), 0);
+    assert!(gateway
+        .store()
+        .get_transaction_lock(&coin_object.compute_object_reference())
+        .is_err());
 }

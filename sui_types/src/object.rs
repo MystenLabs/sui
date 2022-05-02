@@ -330,6 +330,25 @@ impl std::cmp::PartialEq<ObjectID> for Owner {
     }
 }
 
+impl Display for Owner {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::AddressOwner(address) => {
+                write!(f, "Account Address ( {} )", address)
+            }
+            Self::ObjectOwner(address) => {
+                write!(f, "Object ID: ( {} )", address)
+            }
+            Self::Immutable => {
+                write!(f, "Immutable")
+            }
+            Self::Shared => {
+                write!(f, "Shared")
+            }
+        }
+    }
+}
+
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema)]
 pub struct Object {
     /// The meat of the object
@@ -357,12 +376,13 @@ impl Object {
         }
     }
 
+    // Note: this will panic if `modules` is empty
     pub fn new_package(
         modules: Vec<CompiledModule>,
         previous_transaction: TransactionDigest,
     ) -> Self {
         Object {
-            data: Data::Package(MovePackage::from(&modules)),
+            data: Data::Package(MovePackage::from_iter(modules)),
             owner: Owner::Immutable,
             previous_transaction,
             storage_rebate: 0,
@@ -639,11 +659,10 @@ impl Display for Object {
 
         write!(
             f,
-            "Owner: {:?}\nVersion: {:?}\nID: {:?}\nReadonly: {:?}\nType: {}",
-            self.owner,
-            self.version().value(),
+            "ID: {:?}\nVersion: {:?}\nOwner: {}\nType: {}",
             self.id(),
-            self.is_immutable(),
+            self.version().value(),
+            self.owner,
             type_string
         )
     }

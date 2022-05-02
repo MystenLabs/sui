@@ -24,6 +24,7 @@ use std::{
     sync::Arc,
 };
 use sui_adapter::adapter;
+use sui_types::serialize::serialize_transaction_info;
 use sui_types::{
     base_types::*,
     batch::UpdateItem,
@@ -140,7 +141,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     async fn check_locks(
         &self,
-        transaction: &Transaction,
+        transaction: &TransactionData,
         gas_object: Object,
         gas_status: &mut SuiGasStatus<'_>,
     ) -> Result<Vec<(InputObjectKind, Object)>, SuiError> {
@@ -183,8 +184,8 @@ impl AuthorityState {
     async fn handle_transaction_impl(
         &self,
         transaction: Transaction,
-        transaction_digest: TransactionDigest,
     ) -> Result<TransactionInfoResponse, SuiError> {
+        let transaction_digest = *transaction.digest();
         // Ensure an idempotent answer.
         if self._database.transaction_exists(&transaction_digest)? {
             let transaction_info = self.make_transaction_info(&transaction_digest).await?;
@@ -199,7 +200,7 @@ impl AuthorityState {
             .await?;
 
         let all_objects: Vec<_> = self
-            .check_locks(&transaction, gas_object, &mut gas_status)
+            .check_locks(&transaction.data, gas_object, &mut gas_status)
             .await?;
         if transaction.contains_shared_object() {
             // It's important that we do this here to make sure there is enough
@@ -215,7 +216,7 @@ impl AuthorityState {
         // The call to self.set_transaction_lock checks the lock is not conflicting,
         // and returns ConflictingTransaction error in case there is a lock on a different
         // existing transaction.
-        self.set_transaction_lock(&owned_objects, transaction_digest, signed_transaction)
+        self.set_transaction_lock(&owned_objects, signed_transaction)
             .await?;
 
         // Return the signed Transaction or maybe a cert.
@@ -229,11 +230,9 @@ impl AuthorityState {
     ) -> Result<TransactionInfoResponse, SuiError> {
         // Check the sender's signature.
         transaction.check_signature()?;
-        let transaction_digest = transaction.digest();
+        let transaction_digest = *transaction.digest();
 
-        let response = self
-            .handle_transaction_impl(transaction, transaction_digest)
-            .await;
+        let response = self.handle_transaction_impl(transaction).await;
         match response {
             Ok(r) => Ok(r),
             // If we see an error, it is possible that a certificate has already been processed.
@@ -257,8 +256,9 @@ impl AuthorityState {
 
         // Ensure an idempotent answer.
         if self._database.effects_exists(&transaction_digest)? {
-            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
-            return Ok(transaction_info);
+            let info = self.make_transaction_info(&transaction_digest).await?;
+            debug!("Transaction {transaction_digest:?} already executed");
+            return Ok(info);
         }
 
         // Check the certificate and retrieve the transfer data.
@@ -302,7 +302,9 @@ impl AuthorityState {
                 } else if shared_locks[object_id] != *version {
                     Some(SuiError::UnexpectedSequenceNumber {
                         object_id: *object_id,
+                        // This sequence number is the one attributed by consensus.
                         expected_sequence: shared_locks[object_id],
+                        // This sequence number is the one we currently have in the database.
                         given_sequence: *version,
                     })
                 } else {
@@ -313,6 +315,8 @@ impl AuthorityState {
 
         fp_ensure!(
             lock_errors.is_empty(),
+            // NOTE: the error message here will say 'Error acquiring lock' but what it means is
+            // 'error checking lock'.
             SuiError::LockErrors {
                 errors: lock_errors
             }
@@ -328,17 +332,16 @@ impl AuthorityState {
     ) -> Result<TransactionInfoResponse, SuiError> {
         let certificate = confirmation_transaction.certificate;
         let transaction_digest = *certificate.digest();
-        let transaction = &certificate.transaction;
 
         let (gas_object, mut gas_status) = self
             .check_gas(
-                transaction.gas_payment_object_ref().0,
-                transaction.data.gas_budget,
+                certificate.gas_payment_object_ref().0,
+                certificate.data.gas_budget,
             )
             .await?;
 
         let objects_by_kind = self
-            .check_locks(transaction, gas_object, &mut gas_status)
+            .check_locks(&certificate.data, gas_object, &mut gas_status)
             .await?;
 
         // At this point we need to check if any shared objects need locks,
@@ -374,7 +377,7 @@ impl AuthorityState {
         let effects = execution_engine::execute_transaction_to_effects(
             shared_object_refs,
             &mut temporary_store,
-            transaction.clone(),
+            certificate.data.clone(),
             transaction_digest,
             transaction_dependencies,
             &self.move_vm,
@@ -404,20 +407,19 @@ impl AuthorityState {
         last_consensus_index: ExecutionIndices,
     ) -> SuiResult<()> {
         // Ensure it is a shared object certificate
-        if !certificate.transaction.contains_shared_object() {
+        if !certificate.contains_shared_object() {
             log::debug!(
                 "Transaction without shared object has been sequenced: {:?}",
-                certificate.transaction
+                certificate
             );
             return Ok(());
         }
 
         // Ensure it is the first time we see this certificate.
         let transaction_digest = *certificate.digest();
-        if self._database.sequenced(
-            &transaction_digest,
-            certificate.transaction.shared_input_objects(),
-        )?[0]
+        if self
+            ._database
+            .sequenced(&transaction_digest, certificate.shared_input_objects())?[0]
             .is_some()
         {
             return Ok(());
@@ -720,7 +722,7 @@ impl AuthorityState {
     }
 
     /// Make an information response for a transaction
-    async fn make_transaction_info(
+    pub(crate) async fn make_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
     ) -> Result<TransactionInfoResponse, SuiError> {
@@ -744,11 +746,10 @@ impl AuthorityState {
     pub async fn set_transaction_lock(
         &self,
         mutable_input_objects: &[ObjectRef],
-        tx_digest: TransactionDigest,
         signed_transaction: SignedTransaction,
     ) -> Result<(), SuiError> {
         self._database
-            .set_transaction_lock(mutable_input_objects, tx_digest, signed_transaction)
+            .set_transaction_lock(mutable_input_objects, signed_transaction)
     }
 
     /// Update state and signals that a new transactions has been processed
@@ -838,10 +839,34 @@ impl ExecutionState for AuthorityState {
         &self,
         execution_indices: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<Vec<u8>, Self::Error> {
         let ConsensusTransaction::UserTransaction(certificate) = transaction;
-        self.handle_consensus_certificate(certificate, execution_indices)
-            .await
+
+        // Ensure an idempotent answer.
+        let digest = certificate.digest();
+        if self._database.effects_exists(digest)? {
+            let info = self.make_transaction_info(digest).await?;
+            debug!("Shared-object transaction {digest:?} already executed");
+            return Ok(serialize_transaction_info(&info));
+        }
+
+        // Assign locks to shared objects.
+        self.handle_consensus_certificate(certificate.clone(), execution_indices)
+            .await?;
+        debug!("Shared objects locks successfully attributed to transaction {digest:?}");
+
+        // Attempt to execute the transaction. This will only succeed if the authority
+        // already executed all its dependencies.
+        let confirmation_transaction = ConfirmationTransaction {
+            certificate: certificate.clone(),
+        };
+        let info = self
+            .handle_confirmation_transaction(confirmation_transaction.clone())
+            .await?;
+        debug!("Executed transaction {digest:?}");
+
+        // Return a serialized transaction info response. This will be sent back to the client.
+        Ok(serialize_transaction_info(&info))
     }
 
     fn ask_consensus_write_lock(&self) -> bool {

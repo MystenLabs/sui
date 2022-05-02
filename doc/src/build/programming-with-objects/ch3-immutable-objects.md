@@ -45,30 +45,39 @@ Since immutable objects can never be mutated, there will never be a data race ev
 ### Test immutable object
 Let's take a look at how we interact with immutable objects in unit tests.
 
-Previously, we used the `TestScenario::take_owned` API to take an object from the global storage that's owned by the sender of the transaction in a unit test. Since immutable objects are not owned by anyone, `TestScenario::take_owned` works for immutable objects as well! That is, if there exists an immutable object of type `T` in the global storage, `take_owned<T>` will return that object.
+Previously, we used the `TestScenario::take_owned<T>` API to take an object from the global storage that's owned by the sender of the transaction in a unit test. And `take_owned` returns an object by value, which allows you to mutate, delete or transfer it.
 
-Let's see it work in action:
+To take an immutable object, we will need to use a new API: `TestScenario::take_immutable<T>`. This is required because immutable objects can be accessed only through read-only references. To ensure this, instead of returning the object directly, `take_immutable<T>` returns a wrapper, which we will need to make another call to get a read-only reference: `TestScenario::borrow`.
+
+Let's see it work in action (`ColorObjectTests::test_immutable`):
 ```rust
-#[test]
-public(script) fun test_immutable() {
-    let sender1 = @0x1;
-    let scenario = &mut TestScenario::begin(&sender1);
-    {
-        let ctx = TestScenario::ctx(scenario);
-        ColorObject::create_immutable(255, 0, 255, ctx);
-    };
-    TestScenario::next_tx(scenario, &sender1);
-    {
-        assert!(TestScenario::can_take_owned<ColorObject>(scenario), 0);
-    };
-    let sender2 = @0x2;
-    TestScenario::next_tx(scenario, &sender2);
-    {
-        assert!(TestScenario::can_take_owned<ColorObject>(scenario), 0);
-    };
-}
+let sender1 = @0x1;
+let scenario = &mut TestScenario::begin(&sender1);
+{
+    let ctx = TestScenario::ctx(scenario);
+    ColorObject::create_immutable(255, 0, 255, ctx);
+};
+TestScenario::next_tx(scenario, &sender1);
+{
+    // take_owned does not work for immutable objects.
+    assert!(!TestScenario::can_take_owned<ColorObject>(scenario), 0);
+};
 ```
-In this test, we submit a transaction as `sender1`, which would create an immutable object. To show that this object can indeed be used by anyone, we start two new transactions, one with `sender1` and another with `sender2`. In both transactions, we are able to take the object.
+In this test, we submit a transaction as `sender1`, which would create an immutable object.
+As we can see above, `can_take_owned<ColorObject>` will no longer return `true`, because the object is no longer owned. To take this object, we need to:
+```rust
+// Any sender can work.
+let sender2 = @0x2;
+TestScenario::next_tx(scenario, &sender2);
+{
+    let object_wrapper = TestScenario::take_immutable<ColorObject>(scenario);
+    let object = TestScenario::borrow(&object_wrapper);
+    let (red, green, blue) = ColorObject::get_color(object);
+    assert!(red == 255 && green == 0 && blue == 255, 0);
+    TestScenario::return_immutable(scenario, object_wrapper);
+};
+```
+ To show that this object is indeed not owned by anyone, we start the next transaction with `sender2`. As explained earlier, we used `take_immutable` and subsequently `borrow` to obtain a read-only reference to the object. It succeeded! This means that any sender will be able to take an immutable object. In the end, to return the object, we also need to call a new API: `return_immutable`.
 
 Next let's examine if this object is indeed immutable. To test this, let's first introduce a function that would mutate a `ColorObject`:
 ```rust
@@ -82,31 +91,11 @@ public(script) fun update(
     object.blue = blue;
 }
 ```
-Now let's see what happens if we try to call the `update` function on an immutable object:
-```rust
-#[test]
-#[expected_failure(abort_code = 101)]
-public(script) fun test_mutate_immutable() {
-    let sender1 = @0x1;
-    let scenario = &mut TestScenario::begin(&sender1);
-    {
-        let ctx = TestScenario::ctx(scenario);
-        ColorObject::create_immutable(255, 0, 255, ctx);
-    };
-    TestScenario::next_tx(scenario, &sender1);
-    {
-        let object = TestScenario::take_owned<ColorObject>(scenario);
-        let ctx = TestScenario::ctx(scenario);
-        ColorObject::update(&mut object, 0, 0, 0, ctx);
-        TestScenario::return_owned(scenario, object);
-    };
-}
-```
-Here we defined a test that we expect to fail. `#[expected_failure(abort_code = N)]` is a function attribute that tells Move we expect this test to fail with `abort_code = N`. `101` is the abort code when we try to mutate an immutable object in Move unit tests.
+To summarize, we introduced three new API functions to interact with immutable objects in unit tests:
+- `TestScenario::take_immutable<T>` to take an immutable object wrapper from global storage.
+- `TestScenario::borrow` to obtain a read-only reference from the wrapper above.
+- `TestScenario::return_mmutable` to return the wrapper back to the global storage.
 
-In this test, we first created an immutable object, and latter we try to mutate its value. When we return this object back to the test storage, it will detect that we were mutating an immutable object and abort.
-
-> :bulb: Note that in actual transactions, trying to mutate an immutable object will fail much earlier, even before it has a chance to enter Move VM. We catch this issue when checking the function arguments against the provided objects.
 
 ### On-chain interactions
 First of all, take a look at the current list of objects you own:
