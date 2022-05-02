@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{gateway_config::GatewayType, keystore::KeystoreType};
+use crate::keystore::KeystoreType;
 use narwhal_config::{
     Authority, Committee as ConsensusCommittee, PrimaryAddresses, Stake, WorkerAddresses,
 };
@@ -26,7 +26,10 @@ use sui_types::{
 };
 use tracing::log::trace;
 
+pub mod gateway;
 pub mod utils;
+
+pub use gateway::{GatewayConfig, GatewayType};
 
 const DEFAULT_WEIGHT: usize = 1;
 const DEFAULT_GAS_AMOUNT: u64 = 100000;
