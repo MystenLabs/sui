@@ -31,14 +31,14 @@ type ConsensusTransactionDigest = u64;
 /// Transaction info response serialized by Sui.
 type SerializedTransactionInfoResponse = Vec<u8>;
 
-/// Channel to notify the called when the Sui certificate has been sequenced.
-type Replier = oneshot::Sender<SuiResult<SerializedTransactionInfoResponse>>;
+/// Channel to notify the caller when the Sui certificate has been sequenced.
+type TxSequencedNotifier = oneshot::Sender<SuiResult<SerializedTransactionInfoResponse>>;
 
 /// Message to notify the consensus listener that a new transaction has been sent to consensus
 /// or that the caller timed out on a specific transaction.
 #[derive(Debug)]
 pub enum ConsensusListenerMessage {
-    New(SerializedConsensusTransaction, Replier),
+    New(SerializedConsensusTransaction, TxSequencedNotifier),
     Cleanup(SerializedConsensusTransaction),
 }
 
@@ -129,6 +129,10 @@ impl ConsensusAdapter {
         }
 
         // Wait for the consensus to sequence the certificate and assign locks to shared objects.
+        // Since the consensus protocol may drop some messages, it is not guaranteed that our
+        // certificate will be sequenced. So the best we can do is to set a timer and notify the
+        // client to retry if we timeout without hearing back from consensus (this module does not
+        // handle retries). The best timeout value depends on the consensus protocol.
         match timeout(self.max_delay, receiver).await {
             Ok(reply) => reply.expect("Channel with consensus listener dropped"),
             Err(e) => {
@@ -153,7 +157,7 @@ pub struct ConsensusListener {
     /// The maximum number of pending replies.
     max_pending_transactions: usize,
     /// Keep a map of all consensus inputs that are currently being sequenced.
-    pending: HashMap<ConsensusTransactionDigest, Vec<Replier>>,
+    pending: HashMap<ConsensusTransactionDigest, Vec<TxSequencedNotifier>>,
 }
 
 impl ConsensusListener {
