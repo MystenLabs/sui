@@ -56,7 +56,10 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
-      - uses: KyleMayes/install-llvm-action@v1
+      - uses: egor-tensin/setup-clang@v1
+        with:
+          version: latest
+          platform: x64
       # Disable caching on self-hosted jobs
       # Enable caching of the 'librocksdb-sys' crate by additionally caching the
       # 'librocksdb-sys' src directory which is managed by cargo
