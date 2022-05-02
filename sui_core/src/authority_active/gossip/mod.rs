@@ -18,6 +18,7 @@ use crate::{
 };
 
 use futures::stream::FuturesOrdered;
+use tracing::{error, info};
 
 #[cfg(test)]
 mod tests;
@@ -62,6 +63,7 @@ where
             gossip_tasks.push(async move {
                 let peer_gossip = PeerGossip::new(*name, active_authority);
                 // Add more duration if we make more than 1 to ensure overlap
+                info!("Gossip: Start gossip from peer {:?}", *name);
                 peer_gossip.spawn(Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS + k * 15)).await
             });
             k += 1;
@@ -70,6 +72,12 @@ where
         // Let the peer gossip task finish
         debug_assert!(!gossip_tasks.is_empty());
         let (finished_name, _result) = gossip_tasks.select_next_some().await;
+        if let Err(err) = _result {
+            error!("Gossip: Peer {:?} finished with error: {}", finished_name, err);
+        }
+        else {
+            info!("Gossip: End gossip from peer {:?}", finished_name);
+        }
         peer_names.remove(&finished_name);
     }
 }
