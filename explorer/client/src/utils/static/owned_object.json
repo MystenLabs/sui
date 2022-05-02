@@ -1,0 +1,139 @@
+{
+    "data": [
+        {
+            "id": "ownsAllAddress",
+            "objects": [
+                {
+                    "objectId": "playerOne"
+                },
+                {
+                    "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
+                },
+                {
+                    "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
+                },
+                {
+                    "objectId": "ComponentObject"
+                },
+                {
+                    "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
+                },
+                {
+                    "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
+                },
+                {
+                    "objectId": "ComponentObject"
+                },
+                {
+                    "objectId": "ComponentObject"
+                },
+                {
+                    "objectId": "ComponentObject"
+                },
+                {
+                    "objectId": "ComponentObject"
+                },
+                {
+                    "objectId": "ComponentObject"
+                },
+                {
+                    "objectId": "ComponentObject"
+                },
+                {
+                    "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
+                },
+                {
+                    "objectId": "playerTwo"
+                },
+                {
+                    "objectId": "CollectionObject"
+                },
+                {
+                    "objectId": "CollectionObject"
+                },
+                {
+                    "objectId": "CollectionObject"
+                },
+                {
+                    "objectId": "CollectionObject"
+                },
+                {
+                    "objectId": "CollectionObject"
+                },
+                {
+                    "objectId": "CollectionObject"
+                },
+                {
+                    "objectId": "CollectionObject"
+                },
+                {
+                    "objectId": "CollectionObject"
+                },
+                {
+                    "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
+                },
+                {
+                    "objectId": "CollectionObject"
+                },
+                {
+                    "objectId": "standaloneObject"
+                },
+                {
+                    "objectId": "CollectionObject"
+                },
+                {
+                    "objectId": "CollectionObject"
+                }
+            ]
+        },
+        {
+            "id": "CollectionObject",
+            "objects": [
+                {
+                    "objectId": "ComponentObject",
+                    "version": 1
+                }
+            ]
+        },
+        {
+            "id": "playerTwo",
+            "objects": [
+                {
+                    "objectId": "standaloneObject",
+                    "version": 1
+                }
+            ]
+        },
+        {
+            "id": "ObjectThatOwns",
+            "objects": [
+                {
+                    "objectId": "ChildObjectWImage",
+                    "version": 1
+                },
+                {
+                    "objectId": "ChildObjectWBrokenImage",
+                    "version": 1
+                }
+            ]
+        },
+
+        {
+            "id": "receiverAddress",
+            "objects": [
+                {
+                    "objectId": "playerOne",
+                    "version": 6
+                },
+                {
+                    "objectId": "playerTwo",
+                    "version": 5
+                }
+            ]
+        },
+        {
+            "id": "senderAddress",
+            "objects": []
+        }
+    ]
+}
