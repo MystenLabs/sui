@@ -25,7 +25,7 @@
           },
           {
             "title": "SDK Reference",
-            "link": "https://app.swaggerhub.com/apis/MystenLabs/sui-api/",
+            "link": "https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/sui/open_rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false",
             "external": true
           },
           {
