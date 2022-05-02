@@ -401,6 +401,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bimap"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc0455254eb5c6964c4545d8bac815e1a1be4f3afe0ae695ea539c12d728d44b"
+
+[[package]]
 name = "bincode"
 version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1161,6 +1167,18 @@ dependencies = [
  "cfg-if 1.0.0",
  "hashbrown 0.12.0",
  "lock_api 0.4.7",
+]
+
+[[package]]
+name = "datatest-stable"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0ff02642cff6f40d39f61c8d51cb394fd313e1aa2057833b91ad788c4e9331f"
+dependencies = [
+ "regex",
+ "structopt",
+ "termcolor",
+ "walkdir",
 ]
 
 [[package]]
@@ -2674,6 +2692,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-ir-compiler"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884df53c11bf34a664bc#4e025186af502c931318884df53c11bf34a664bc"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "clap 3.1.14",
+ "move-binary-format",
+ "move-bytecode-source-map",
+ "move-bytecode-verifier",
+ "move-command-line-common",
+ "move-core-types",
+ "move-ir-to-bytecode",
+ "move-ir-types",
+ "move-symbol-pool",
+ "serde_json",
+]
+
+[[package]]
 name = "move-ir-to-bytecode"
 version = "0.1.0"
 source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884df53c11bf34a664bc#4e025186af502c931318884df53c11bf34a664bc"
@@ -2958,6 +2995,37 @@ dependencies = [
  "once_cell",
  "sha3 0.9.1",
  "smallvec",
+]
+
+[[package]]
+name = "move-transactional-test-runner"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884df53c11bf34a664bc#4e025186af502c931318884df53c11bf34a664bc"
+dependencies = [
+ "anyhow",
+ "clap 3.1.14",
+ "colored",
+ "move-binary-format",
+ "move-bytecode-source-map",
+ "move-bytecode-utils",
+ "move-cli",
+ "move-command-line-common",
+ "move-compiler",
+ "move-core-types",
+ "move-disassembler",
+ "move-ir-compiler",
+ "move-ir-types",
+ "move-resource-viewer",
+ "move-stackless-bytecode-interpreter",
+ "move-stdlib",
+ "move-symbol-pool",
+ "move-vm-runtime",
+ "move-vm-test-utils",
+ "move-vm-types",
+ "once_cell",
+ "rayon",
+ "regex",
+ "tempfile",
 ]
 
 [[package]]
@@ -4639,6 +4707,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
+name = "structopt"
+version = "0.3.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c6b5c64445ba8094a6ab0c3cd2ad323e07171012d9c98b0b15651daf1787a10"
+dependencies = [
+ "clap 2.34.0",
+ "lazy_static 1.4.0",
+ "structopt-derive",
+]
+
+[[package]]
+name = "structopt-derive"
+version = "0.4.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcb5ae327f9cc13b68763b5749770cb9e048a99bd9dfdfa58d0cf05d5f64afe0"
+dependencies = [
+ "heck 0.3.3",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "strum"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4747,6 +4839,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-adapter-transactional-tests"
+version = "0.1.0"
+dependencies = [
+ "datatest-stable",
+ "sui-transactional-test-runner",
+]
+
+[[package]]
 name = "sui-faucet"
 version = "0.1.0"
 dependencies = [
@@ -4818,6 +4918,39 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "sui-transactional-test-runner"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bimap",
+ "clap 3.1.14",
+ "colored",
+ "hex",
+ "itertools",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier",
+ "move-cli",
+ "move-command-line-common",
+ "move-compiler",
+ "move-core-types",
+ "move-stdlib",
+ "move-symbol-pool",
+ "move-transactional-test-runner",
+ "move-vm-runtime",
+ "move-vm-types",
+ "once_cell",
+ "rayon",
+ "regex",
+ "sui-adapter",
+ "sui-framework",
+ "sui-types",
+ "sui-verifier",
+ "sui_core",
+ "tempfile",
 ]
 
 [[package]]
