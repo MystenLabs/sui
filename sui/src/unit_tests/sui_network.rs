@@ -6,10 +6,10 @@ use std::path::Path;
 use sui::{
     config::{
         AuthorityPrivateInfo, Config, GatewayConfig, GatewayType, GenesisConfig, WalletConfig,
+        SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
     },
     keystore::KeystoreType,
     sui_commands::{genesis, SuiNetwork},
-    SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
 };
 use sui_types::crypto::{random_key_pairs, KeyPair};
 
