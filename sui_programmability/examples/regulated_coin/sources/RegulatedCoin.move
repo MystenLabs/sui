@@ -67,10 +67,8 @@ module RC::RegulatedCoin {
     // === Optional Methods (can be used for simpler implementation of basic operations) ===
 
     /// Join Balances of a `RegulatedCoin` c1 and `RegulatedCoin` c2.
-    public fun join<T: drop>(_: T, c1: &mut RegulatedCoin<T>, c2: RegulatedCoin<T>) {
-        let RegulatedCoin { id, balance, owner: _ } = c2;
-        Balance::join(&mut c1.balance, balance);
-        Sui::ID::delete(id);
+    public fun join<T: drop>(witness: T, c1: &mut RegulatedCoin<T>, c2: RegulatedCoin<T>) {
+        Balance::join(&mut c1.balance, into_balance(witness, c2))
     }
 
     /// Subtract `RegulatedCoin` with `value` from `RegulatedCoin`.
