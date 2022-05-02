@@ -1,8 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// [Todd Fiala] This comment will be removed, testing the explorer build.
-
 import cl from 'classnames';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
