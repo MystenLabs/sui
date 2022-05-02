@@ -58,7 +58,6 @@ const getRecentTransactions = async (txNum: number) => {
                     .getTransactionWithEffects(tx[1])
                     .then((txEff: TransactionEffectsResponse) => {
                         const res: CertifiedTransaction = txEff.certificate;
-
                         const singleTransaction = getSingleTransactionKind(
                             res.data
                         );

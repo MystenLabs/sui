@@ -37,7 +37,7 @@ div.status-success {
 }
 
 div.status-fail {
-    @apply bg-red-300;
+    @apply text-red-300;
 }
 
 div.status-pending {
@@ -53,7 +53,7 @@ div.action-mutate {
 }
 
 div.grouped {
-    @apply border-transparent;
+    @apply border-transparent  !important;
 }
 
 ul.listitems {
@@ -69,5 +69,9 @@ ul.listitems {
 }
 
 .listitems .sublist {
-    @apply mt-2 list-none p-0;
+    @apply mt-2 list-none p-0 md:flex grid gap-2;
+}
+
+.sublist .sublistlabel {
+    @apply w-[100px] font-bold;
 }

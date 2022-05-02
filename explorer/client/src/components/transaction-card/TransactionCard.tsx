@@ -20,11 +20,18 @@ import type {
 
 import styles from './TransactionCard.module.css';
 
+type TxDataProps = CertifiedTransaction & {
+    txSuccess: boolean;
+    gasFee: number;
+    txError: string;
+};
+
 // Generate an Arr of Obj with Label and Value
 // TODO rewrite to use sue.js, verify tx types and dynamically generate list
-function formatTxResponse(tx: CertifiedTransaction, txId: string) {
+function formatTxResponse(tx: TxDataProps, txId: string) {
     // Todo add batch kind
     const txKindName = getTransactionKind(tx.data);
+
     return [
         {
             label: 'Transaction ID',
@@ -34,8 +41,8 @@ function formatTxResponse(tx: CertifiedTransaction, txId: string) {
         {
             // May change later
             label: 'Status',
-            value: 'Success',
-            classAttr: 'status-success',
+            value: tx.txSuccess ? 'Success' : `Failed - ${tx.txError}`,
+            classAttr: tx.txSuccess ? 'status-success' : 'status-fail',
         },
         {
             label: 'Transaction Type',
@@ -52,7 +59,6 @@ function formatTxResponse(tx: CertifiedTransaction, txId: string) {
             label: 'Gas Payment',
             value: tx.data.gas_payment[0],
             link: true,
-            className: 'grouped',
         },
         {
             label: 'Gas Budget',
@@ -63,6 +69,8 @@ function formatTxResponse(tx: CertifiedTransaction, txId: string) {
             value: tx.auth_sign_info.signatures,
             list: true,
             sublist: true,
+            // Todo - assumes only two itmes in list ['A', 'B']
+            subLabel: ['Name', 'Signature'],
         },
     ];
 }
@@ -144,7 +152,13 @@ function formatByTransactionKind(
 }
 
 type Props = {
-    txdata: CertifiedTransaction & { loadState: string; txId: string };
+    txdata: CertifiedTransaction & {
+        loadState: string;
+        txId: string;
+        txSuccess: boolean;
+        gasFee: number;
+        txError: string;
+    };
 };
 
 function TransactionCard({ txdata }: Props) {
@@ -197,9 +211,40 @@ function TransactionCard({ txdata }: Props) {
                                                                                 l
                                                                             }
                                                                         >
-                                                                            {
-                                                                                sublist
-                                                                            }
+                                                                            <div
+                                                                                className={
+                                                                                    styles.sublist
+                                                                                }
+                                                                            >
+                                                                                {itm.subLabel ? (
+                                                                                    <div
+                                                                                        className={
+                                                                                            styles.sublistlabel
+                                                                                        }
+                                                                                    >
+                                                                                        {' '}
+                                                                                        {
+                                                                                            itm
+                                                                                                .subLabel[
+                                                                                                l
+                                                                                            ]
+                                                                                        }
+
+                                                                                        :
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    ''
+                                                                                )}
+                                                                                <div
+                                                                                    className={
+                                                                                        styles.sublistvalue
+                                                                                    }
+                                                                                >
+                                                                                    {
+                                                                                        sublist
+                                                                                    }
+                                                                                </div>
+                                                                            </div>
                                                                         </li>
                                                                     )
                                                                 )}

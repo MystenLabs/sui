@@ -12,11 +12,21 @@ import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { findDataFromID } from '../../utils/static/searchUtil';
 
-import type { CertifiedTransaction } from 'sui.js';
+import type {
+    CertifiedTransaction,
+    TransactionEffectsResponse,
+    ExecutionStatus,
+} from 'sui.js';
 
 import styles from './TransactionResult.module.css';
 
-type TxnState = CertifiedTransaction & { loadState: string; txId: string };
+type TxnState = CertifiedTransaction & {
+    loadState: string;
+    txId: string;
+    txSuccess: boolean;
+    gasFee: number;
+    txError: string;
+};
 // Todo update state to include Call types
 const initState: TxnState = {
     loadState: 'pending',
@@ -39,6 +49,24 @@ const initState: TxnState = {
         epoch: 0,
         signatures: [],
     },
+    txSuccess: false,
+    gasFee: 0,
+    txError: '',
+};
+
+const getGasFeesAndStatus = (txStatusData: ExecutionStatus) => {
+    const istxSucces = Object.keys(txStatusData)[0].toLowerCase();
+    const txGasObj = Object.values(txStatusData)[0];
+    const txGas =
+        txGasObj.gas_cost.computation_cost +
+        txGasObj.gas_cost.storage_cost -
+        txGasObj.gas_cost.storage_rebate;
+
+    return {
+        istxSucces,
+        txGas,
+        //  txErr: txStatusData.Failure || '',
+    };
 };
 
 const isStatic = process.env.REACT_APP_DATA !== 'static';
@@ -55,18 +83,24 @@ function fetchTransactionData(txId: string | undefined) {
             // resolve after one second
             return new Promise((resolve, reject) => {
                 setTimeout(() => {
-                    const staticObj = findDataFromID(txId, undefined);
+                    const staticObj: CertifiedTransaction = findDataFromID(
+                        txId,
+                        undefined
+                    );
                     if (!staticObj) {
                         reject('txid not found');
                     }
-                    resolve(staticObj);
+                    resolve({
+                        certificate: staticObj,
+                        effects: {},
+                    });
                 }, 1000);
             });
         }
 
         return rpc
-            .getTransaction(txId)
-            .then((objState: CertifiedTransaction) => objState);
+            .getTransactionWithEffects(txId)
+            .then((txEff: TransactionEffectsResponse) => txEff);
     } catch (error) {
         throw error;
     }
@@ -78,9 +112,20 @@ function TransactionResult() {
 
     useEffect(() => {
         fetchTransactionData(id)
-            .then((resp: any) => {
+            .then((txObj: any) => {
+                const txMeta = getGasFeesAndStatus(txObj.effects.status);
                 setTxState({
-                    ...resp,
+                    ...txObj.certificate,
+                    txSuccess: txMeta.istxSucces === 'success',
+                    gasFee: txMeta.txGas,
+                    txError:
+                        txMeta.istxSucces !== 'success'
+                            ? txObj.effects.status.Failure.error[
+                                  Object.keys(
+                                      txObj.effects.status.Failure.error
+                                  )[0]
+                              ].error
+                            : '',
                     txId: id,
                     loadState: 'loaded',
                 });
