@@ -2,14 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { DefaultRpcClient as rpc } from './DefaultRpcClient';
-import { DefaultRpcClient as legacyAPI } from './SuiRpcClient';
 
 export const navigateWithUnknown = async (
     input: string,
     navigate: Function
 ) => {
-    // TODO - replace multi-request search with backend function when ready
-    const addrPromise = legacyAPI.getAddressObjects(input).then((data) => {
+    const addrPromise = rpc.getOwnedObjectRefs(input).then((data) => {
         if (data.length <= 0) throw new Error('No objects for Address');
 
         return {
@@ -17,7 +15,6 @@ export const navigateWithUnknown = async (
             data: data,
         };
     });
-
     const objInfoPromise = rpc.getObjectInfo(input).then((data) => ({
         category: 'objects',
         data: data,
