@@ -303,11 +303,11 @@ async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
     let (network, mut context, address) = setup_network_and_wallet().await?;
 
     let result = WalletCommands::CreateExampleNFT {
-        name: Option::None,
-        description: Option::None,
-        url: Option::None,
-        gas: Option::None,
-        gas_budget: Option::None,
+        name: None,
+        description: None,
+        url: None,
+        gas: None,
+        gas_budget: None,
     }
     .execute(&mut context)
     .await?;
@@ -1059,16 +1059,22 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
 
     // Switch the address
     let addr2 = context.config.accounts.get(1).cloned().unwrap();
-    let resp = WalletCommands::Switch { address: addr2 }
-        .execute(&mut context)
-        .await?;
+    let resp = WalletCommands::Switch {
+        address: Some(addr2),
+        gateway: None,
+    }
+    .execute(&mut context)
+    .await?;
     assert_eq!(addr2, context.active_address()?);
     assert_ne!(addr1, context.active_address()?);
     assert_eq!(
         format!("{resp}"),
         format!(
             "{}",
-            WalletCommandResult::Switch(SwitchResponse { address: addr2 })
+            WalletCommandResult::Switch(SwitchResponse {
+                address: Some(addr2),
+                gateway: None
+            })
         )
     );
 
@@ -1086,15 +1092,21 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
 
     // Check that we can switch to this address
     // Switch the address
-    let resp = WalletCommands::Switch { address: new_addr }
-        .execute(&mut context)
-        .await?;
+    let resp = WalletCommands::Switch {
+        address: Some(new_addr),
+        gateway: None,
+    }
+    .execute(&mut context)
+    .await?;
     assert_eq!(new_addr, context.active_address()?);
     assert_eq!(
         format!("{resp}"),
         format!(
             "{}",
-            WalletCommandResult::Switch(SwitchResponse { address: new_addr })
+            WalletCommandResult::Switch(SwitchResponse {
+                address: Some(new_addr),
+                gateway: None
+            })
         )
     );
     network.kill().await?;
@@ -1136,14 +1148,20 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
     assert_eq!(a, addr1);
 
     let addr2 = context.config.accounts.get(1).cloned().unwrap();
-    let resp = WalletCommands::Switch { address: addr2 }
-        .execute(&mut context)
-        .await?;
+    let resp = WalletCommands::Switch {
+        address: Some(addr2),
+        gateway: None,
+    }
+    .execute(&mut context)
+    .await?;
     assert_eq!(
         format!("{resp}"),
         format!(
             "{}",
-            WalletCommandResult::Switch(SwitchResponse { address: addr2 })
+            WalletCommandResult::Switch(SwitchResponse {
+                address: Some(addr2),
+                gateway: None
+            })
         )
     );
     network.kill().await?;

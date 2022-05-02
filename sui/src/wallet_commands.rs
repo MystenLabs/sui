@@ -33,6 +33,7 @@ use sui_types::object::{Object, ObjectRead};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 use crate::config::{Config, PersistedConfig, WalletConfig};
+use crate::gateway_config::GatewayType;
 use crate::keystore::Keystore;
 use crate::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 
@@ -53,12 +54,17 @@ pub struct WalletOpts {
 #[derive(StructOpt, Debug)]
 #[clap(rename_all = "kebab-case", no_binary_name = true)]
 pub enum WalletCommands {
-    /// Switch active address
+    /// Switch active address and network(e.g., devnet, local rpc server)
     #[clap(name = "switch")]
     Switch {
-        /// Address to switch wallet commands to
+        /// An Sui address to be used as the active address for subsequent
+        /// commands.
         #[clap(long, parse(try_from_str = decode_bytes_hex))]
-        address: SuiAddress,
+        address: Option<SuiAddress>,
+        /// The gateway URL (e.g., local rpc server, devnet rpc server, etc) to be
+        /// used for subsequent commands.
+        #[clap(long, value_hint = ValueHint::Url)]
+        gateway: Option<String>,
     },
 
     /// Default address used for commands when none specified
@@ -462,13 +468,31 @@ impl WalletCommands {
 
                 WalletCommandResult::MergeCoin(response)
             }
-            WalletCommands::Switch { address } => {
-                if !context.config.accounts.contains(address) {
-                    return Err(anyhow!("Address {} not managed by wallet", address));
+            WalletCommands::Switch { address, gateway } => {
+                if let Some(addr) = address {
+                    if !context.config.accounts.contains(addr) {
+                        return Err(anyhow!("Address {} not managed by wallet", addr));
+                    }
+                    context.config.active_address = Some(*addr);
+                    context.config.save()?;
                 }
-                context.config.active_address = Some(*address);
-                context.config.save()?;
-                WalletCommandResult::Switch(SwitchResponse { address: *address })
+
+                if let Some(gateway) = gateway {
+                    // TODO: handle embedded gateway
+                    context.config.gateway = GatewayType::RPC(gateway.clone());
+                    context.config.save()?;
+                }
+
+                if Option::is_none(address) && Option::is_none(gateway) {
+                    return Err(anyhow!(
+                        "No address or gateway specified. Please Specify one."
+                    ));
+                }
+
+                WalletCommandResult::Switch(SwitchResponse {
+                    address: *address,
+                    gateway: gateway.clone(),
+                })
             }
             WalletCommands::ActiveAddress {} => {
                 WalletCommandResult::ActiveAddress(context.active_address().ok())
