@@ -18,8 +18,8 @@ Use these online resources:
 
 * Sui Website: [https://sui.io/](https://sui.io/)
 * Sui Developer Portal: [https://docs.sui.io/](https://docs.sui.io/)
-* Sui Smart Contract White Paper: [https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) 
-* SDK reference: [https://app.swaggerhub.com/apis/MystenLabs/sui-api/](https://app.swaggerhub.com/apis/MystenLabs/sui-api/)  
+* Sui Smart Contract White Paper: [https://sui.io/whitepaper](https://sui.io/whitepaper) 
+* SDK reference: [Sui JSON-RPC](https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/sui/open_rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false)  
 
 
 ### What does Sui offer over other blockchains?
