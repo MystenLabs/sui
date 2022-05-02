@@ -2,12 +2,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-extern crate core;
-
-use std::fs::create_dir_all;
-use std::path::PathBuf;
-
 use anyhow::bail;
+use std::{fs::create_dir_all, path::PathBuf};
 
 pub mod benchmark;
 pub mod config;
