@@ -184,7 +184,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
 
 async fn setup_test_network() -> Result<TestNetwork, anyhow::Error> {
     let working_dir = tempfile::tempdir()?.path().to_path_buf();
-    let _network = start_test_network(&working_dir, None).await?;
+    let _network = start_test_network(&working_dir, None, None).await?;
     let (server_addr, rpc_server_handle) =
         start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;
     let wallet_conf: WalletConfig = PersistedConfig::read(&working_dir.join(SUI_WALLET_CONFIG))?;

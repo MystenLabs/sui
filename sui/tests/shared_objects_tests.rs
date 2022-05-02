@@ -116,8 +116,8 @@ async fn shared_object_transaction() {
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let configs = test_authority_configs();
-    let _handles = spawn_test_authorities(objects, &configs).await;
+    let (configs, key_pairs) = test_authority_configs();
+    let _handles = spawn_test_authorities(objects, &configs, &key_pairs).await;
 
     // Make a test shared object certificate.
     let transaction = test_shared_object_transactions().pop().unwrap();
@@ -141,8 +141,8 @@ async fn many_shared_object_transactions() {
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let configs = test_authority_configs();
-    let _handles = spawn_test_authorities(objects, &configs).await;
+    let (configs, key_pairs) = test_authority_configs();
+    let _handles = spawn_test_authorities(objects, &configs, &key_pairs).await;
 
     // Make a test shared object certificate.
     let transaction = test_shared_object_transactions().pop().unwrap();
@@ -167,8 +167,8 @@ async fn call_shared_object_contract() {
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let configs = test_authority_configs();
-    let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
+    let (configs, key_pairs) = test_authority_configs();
+    let _handles = spawn_test_authorities(gas_objects.clone(), &configs, &key_pairs).await;
 
     // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;
@@ -259,8 +259,8 @@ async fn shared_object_flood() {
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let configs = test_authority_configs();
-    let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
+    let (configs, key_pairs) = test_authority_configs();
+    let _handles = spawn_test_authorities(gas_objects.clone(), &configs, &key_pairs).await;
 
     // Publish the move package to all authorities and get the new pacakge ref.
     tokio::task::yield_now().await;
@@ -358,8 +358,8 @@ async fn shared_object_sync() {
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let configs = test_authority_configs();
-    let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
+    let (configs, key_pairs) = test_authority_configs();
+    let _handles = spawn_test_authorities(gas_objects.clone(), &configs, &key_pairs).await;
 
     // Publish the move package to all authorities and get the new pacakge ref.
     tokio::task::yield_now().await;
