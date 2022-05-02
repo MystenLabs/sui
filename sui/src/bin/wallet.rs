@@ -89,19 +89,20 @@ async fn try_main() -> Result<(), anyhow::Error> {
 
             // Check url is valid
             HttpClientBuilder::default().build(&url)?;
-
             let keystore_path = wallet_conf_path
                 .parent()
                 .unwrap_or(&sui_config_dir()?)
                 .join("wallet.key");
+            let keystore = KeystoreType::File(keystore_path);
+            let new_address = keystore.init()?.add_random_key()?;
             WalletConfig {
-                accounts: vec![],
-                keystore: KeystoreType::File(keystore_path),
+                accounts: vec![new_address],
+                keystore,
                 gateway: GatewayType::RPC(url),
                 active_address: None,
             }
             .persisted(&wallet_conf_path)
-            .save()?
+            .save()?;
         }
     }
 
