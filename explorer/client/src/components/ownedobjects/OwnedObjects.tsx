@@ -15,6 +15,8 @@ import {
 import { processDisplayValue, trimStdLibPrefix } from '../../utils/stringUtils';
 import DisplayBox from '../displaybox/DisplayBox';
 
+import type { ObjectRef } from 'sui.js';
+
 import styles from './OwnedObjects.module.css';
 
 type resultType = {
@@ -164,7 +166,7 @@ function GetObjectsStatic({ id }: { id: string }) {
 }
 
 function GetObjectsAPI({ id }: { id: string }) {
-    const [objects, setObjects] = useState([{ objectId: 'Please Wait' }]);
+    const [objects, setObjects] = useState<ObjectRef[]>([]);
     useEffect(() => {
         rpc.getOwnedObjectRefs(id).then((objects) => setObjects(objects));
     }, [id]);
