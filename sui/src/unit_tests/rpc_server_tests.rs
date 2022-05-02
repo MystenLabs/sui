@@ -1,32 +1,35 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
-
-use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
-use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
+use crate::rpc_server_tests::sui_network::start_test_network;
+use jsonrpsee::{
+    http_client::{HttpClient, HttpClientBuilder},
+    http_server::{HttpServerBuilder, HttpServerHandle},
+};
 use move_core_types::identifier::Identifier;
-
-use sui::config::{PersistedConfig, WalletConfig};
-use sui::keystore::{Keystore, SuiKeystore};
-use sui::rpc_gateway::responses::ObjectResponse;
-use sui::rpc_gateway::RpcGatewayClient;
-use sui::rpc_gateway::TransactionBytes;
-use sui::rpc_gateway::{RpcCallArg, RpcGatewayServer};
-use sui::rpc_gateway::{RpcGatewayImpl, SignedTransaction};
-use sui::sui_commands::SuiNetwork;
-use sui::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
-use sui::{SUI_GATEWAY_CONFIG, SUI_WALLET_CONFIG};
+use std::{
+    net::SocketAddr,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+use sui::{
+    config::{PersistedConfig, WalletConfig, SUI_GATEWAY_CONFIG, SUI_WALLET_CONFIG},
+    keystore::{Keystore, SuiKeystore},
+    rpc_gateway::{
+        responses::ObjectResponse, RpcCallArg, RpcGatewayClient, RpcGatewayImpl, RpcGatewayServer,
+        SignedTransaction, TransactionBytes,
+    },
+    sui_commands::SuiNetwork,
+    sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue},
+};
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_framework::build_move_package_to_bytes;
-use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::json_schema::Base64;
-use sui_types::object::ObjectRead;
-use sui_types::SUI_FRAMEWORK_ADDRESS;
-
-use crate::rpc_server_tests::sui_network::start_test_network;
+use sui_types::{
+    base_types::{ObjectID, SuiAddress},
+    json_schema::Base64,
+    object::ObjectRead,
+    SUI_FRAMEWORK_ADDRESS,
+};
 
 mod sui_network;
 
