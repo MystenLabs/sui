@@ -1,41 +1,39 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use core::fmt;
-use std::collections::{BTreeMap, BTreeSet};
-use std::fmt::{Debug, Display, Formatter, Write};
-use std::path::Path;
-use std::sync::{Arc, RwLock};
-use std::time::Instant;
 
+use crate::{
+    config::{Config, GatewayType, PersistedConfig, WalletConfig},
+    keystore::Keystore,
+    sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue},
+};
 use anyhow::anyhow;
 use clap::*;
 use colored::Colorize;
-use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::TypeTag;
-use move_core_types::parser::parse_type_tag;
+use core::fmt;
+use move_core_types::{identifier::Identifier, language_storage::TypeTag, parser::parse_type_tag};
 use serde::Serialize;
 use serde_json::json;
-use tracing::info;
-
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::{Debug, Display, Formatter, Write},
+    path::Path,
+    sync::{Arc, RwLock},
+    time::Instant,
+};
 use sui_adapter::adapter::resolve_and_type_check;
-use sui_core::gateway_state::gateway_responses::{
-    MergeCoinResponse, PublishResponse, SplitCoinResponse, SwitchResponse,
+use sui_core::gateway_state::{
+    gateway_responses::{MergeCoinResponse, PublishResponse, SplitCoinResponse, SwitchResponse},
+    GatewayClient,
 };
-use sui_core::gateway_state::GatewayClient;
 use sui_framework::build_move_package_to_bytes;
-use sui_types::base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress};
-use sui_types::gas_coin::GasCoin;
-use sui_types::messages::{
-    CallArg, CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects,
+use sui_types::{
+    base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress},
+    gas_coin::GasCoin,
+    messages::{CallArg, CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects},
+    object::{Object, ObjectRead, ObjectRead::Exists},
+    SUI_FRAMEWORK_ADDRESS,
 };
-use sui_types::object::ObjectRead::Exists;
-use sui_types::object::{Object, ObjectRead};
-use sui_types::SUI_FRAMEWORK_ADDRESS;
-
-use crate::config::{Config, PersistedConfig, WalletConfig};
-use crate::gateway_config::GatewayType;
-use crate::keystore::Keystore;
-use crate::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
+use tracing::info;
 
 const EXAMPLE_NFT_NAME: &str = "Example NFT";
 const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the wallet Command Line Tool";

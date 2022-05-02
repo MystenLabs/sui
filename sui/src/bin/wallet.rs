@@ -1,23 +1,19 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_trait::async_trait;
+use clap::*;
+use colored::Colorize;
+use jsonrpsee::http_client::HttpClientBuilder;
 use std::{
     io,
     io::{stderr, stdout, Write},
     ops::Deref,
     path::PathBuf,
 };
-
-use async_trait::async_trait;
-use clap::*;
-use colored::Colorize;
-use jsonrpsee::http_client::HttpClientBuilder;
-use tracing::debug;
-
-use sui::config::{Config, WalletConfig};
-use sui::gateway_config::GatewayType;
-use sui::keystore::KeystoreType;
 use sui::{
+    config::{Config, GatewayType, WalletConfig},
+    keystore::KeystoreType,
     shell::{
         install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
     },
@@ -26,6 +22,7 @@ use sui::{
     SUI_DEV_NET_URL, SUI_WALLET_CONFIG,
 };
 use sui_types::exit_main;
+use tracing::debug;
 
 const SUI: &str = "   _____       _    _       __      ____     __
   / ___/__  __(_)  | |     / /___ _/ / /__  / /_
