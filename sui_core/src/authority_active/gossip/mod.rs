@@ -19,6 +19,9 @@ use crate::{
 
 use futures::stream::FuturesOrdered;
 
+#[cfg(test)]
+mod tests;
+
 struct PeerGossip<A> {
     peer_name: AuthorityName,
     client: SafeClient<A>,
@@ -26,6 +29,10 @@ struct PeerGossip<A> {
     max_seq: Option<TxSequenceNumber>,
     aggregator: Arc<AuthorityAggregator<A>>,
 }
+
+const EACH_ITEM_DELAY_MS : u64 = 1_000;
+const REQUEST_FOLLOW_NUM_DIGESTS: u64 = 100_000;
+const REFRESH_FOLLOWER_PERIOD_SECS: u64 = 60;
 
 use super::ActiveAuthority;
 
@@ -55,7 +62,7 @@ where
             gossip_tasks.push(async move {
                 let peer_gossip = PeerGossip::new(*name, active_authority);
                 // Add more duration if we make more than 1 to ensure overlap
-                peer_gossip.spawn(Duration::from_secs(60 + k * 15)).await
+                peer_gossip.spawn(Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS + k * 15)).await
             });
             k += 1;
         }
@@ -100,7 +107,7 @@ where
 
         let req = BatchInfoRequest {
             start: self.max_seq,
-            length: 100_000,
+            length: REQUEST_FOLLOW_NUM_DIGESTS,
         };
 
         // Get a client
@@ -125,7 +132,7 @@ where
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((_seq, _digest))))) => {
                             if !self.state._database.effects_exists(&_digest)? {
                                 queue.push(async move {
-                                    tokio::time::sleep(Duration::from_millis(1_000)).await;
+                                    tokio::time::sleep(Duration::from_millis(EACH_ITEM_DELAY_MS)).await;
                                     _digest
                                 });
 
@@ -141,7 +148,7 @@ where
 
                             let req = BatchInfoRequest {
                                 start: self.max_seq,
-                                length: 100_000,
+                                length: REQUEST_FOLLOW_NUM_DIGESTS,
                             };
 
                             // Get a client
