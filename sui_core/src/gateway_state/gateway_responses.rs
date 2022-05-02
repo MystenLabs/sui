@@ -168,13 +168,19 @@ impl Display for PublishResponse {
 #[derive(Serialize, Clone, Debug)]
 pub struct SwitchResponse {
     /// Active address
-    pub address: SuiAddress,
+    pub address: Option<SuiAddress>,
+    pub gateway: Option<String>,
 }
 
 impl Display for SwitchResponse {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
-        writeln!(writer, "Active address switched to {}", self.address)?;
+        if let Some(addr) = self.address {
+            writeln!(writer, "Active address switched to {}", addr)?;
+        }
+        if let Some(gateway) = &self.gateway {
+            writeln!(writer, "Active gateway switched to {}", gateway)?;
+        }
         write!(f, "{}", writer)
     }
 }
