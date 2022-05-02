@@ -136,13 +136,13 @@ impl ConsensusAdapter {
         // client to retry if we timeout without hearing back from consensus (this module does not
         // handle retries). The best timeout value depends on the consensus protocol.
         match timeout(self.max_delay, receiver).await {
-            Ok(reply) => reply.expect("Channel with consensus listener dropped"),
+            Ok(reply) => reply.expect("Failed to read back from consensus listener"),
             Err(e) => {
                 let message = ConsensusListenerMessage::Cleanup(serialized);
                 self.tx_consensus_listener
                     .send(message)
                     .await
-                    .expect("Channel with consensus listener dropped");
+                    .expect("Cleanup channel with consensus listener dropped");
                 Err(SuiError::ConsensusConnectionBroken(e.to_string()))
             }
         }

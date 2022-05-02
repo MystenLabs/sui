@@ -56,7 +56,7 @@ async fn submit_single_owner_transaction(
 async fn submit_shared_object_transaction(
     transaction: Transaction,
     configs: &[AuthorityPrivateInfo],
-) -> Vec<Option<SuiResult<TransactionInfoResponse>>> {
+) -> Vec<SuiResult<TransactionInfoResponse>> {
     let certificate = make_certificates(vec![transaction]).pop().unwrap();
     let message = ConsensusTransaction::UserTransaction(certificate);
     let serialized = Bytes::from(serialize_consensus_transaction(&message));
@@ -76,7 +76,7 @@ async fn submit_shared_object_transaction(
                 }
                 SerializedMessage::Error(error) => match *error {
                     SuiError::ConsensusConnectionBroken(_) => {
-                        // This is the (confusing) error message returned by the consensus
+                        // This is the (confusing, #1489) error message returned by the consensus
                         // adapter. It means it didn't hear back from consensus and timed out.
                         replies.push(None);
                     }
@@ -86,7 +86,8 @@ async fn submit_shared_object_transaction(
             }
         }
         if replies.iter().any(|x| x.is_some()) {
-            break replies;
+            // Remove all `ConsensusConnectionBroken` replies.
+            break replies.into_iter().flatten().collect();
         }
     }
 }
@@ -128,7 +129,7 @@ async fn shared_object_transaction() {
         .await
         .pop()
         .unwrap();
-    let info = reply.unwrap().unwrap();
+    let info = reply.unwrap();
     assert!(info.signed_effects.is_some());
 }
 
@@ -152,9 +153,8 @@ async fn many_shared_object_transactions() {
     let replies = submit_shared_object_transaction(transaction, &configs).await;
     for reply in replies {
         match reply {
-            Some(Ok(_)) => (),
-            Some(Err(error)) => panic!("{error}"),
-            None => (), // May happen rarely (see above comment on consensus)
+            Ok(_) => (),
+            Err(error) => panic!("{error}"),
         }
     }
 }
@@ -209,7 +209,7 @@ async fn call_shared_object_contract() {
         .await
         .pop()
         .unwrap();
-    let info = reply.unwrap().unwrap();
+    let info = reply.unwrap();
     let effects = info.signed_effects.unwrap().effects;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
@@ -226,7 +226,7 @@ async fn call_shared_object_contract() {
         .await
         .pop()
         .unwrap();
-    let info = reply.unwrap().unwrap();
+    let info = reply.unwrap();
     let effects = info.signed_effects.unwrap().effects;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
@@ -246,7 +246,7 @@ async fn call_shared_object_contract() {
         .await
         .pop()
         .unwrap();
-    let info = reply.unwrap().unwrap();
+    let info = reply.unwrap();
     let effects = info.signed_effects.unwrap().effects;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 }
@@ -300,12 +300,11 @@ async fn shared_object_flood() {
     let replies = submit_shared_object_transaction(transaction, &configs).await;
     for reply in replies {
         match reply {
-            Some(Ok(info)) => {
+            Ok(info) => {
                 let effects = info.signed_effects.unwrap().effects;
                 assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
             }
-            Some(Err(error)) => panic!("{error}"),
-            None => (), // May happen rarely (see above comment on consensus)
+            Err(error) => panic!("{error}"),
         }
     }
 
@@ -321,12 +320,11 @@ async fn shared_object_flood() {
     let replies = submit_shared_object_transaction(transaction, &configs).await;
     for reply in replies {
         match reply {
-            Some(Ok(info)) => {
+            Ok(info) => {
                 let effects = info.signed_effects.unwrap().effects;
                 assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
             }
-            Some(Err(error)) => panic!("{error}"),
-            None => (), // May happen rarely (see above comment on consensus)
+            Err(error) => panic!("{error}"),
         }
     }
 
@@ -345,12 +343,11 @@ async fn shared_object_flood() {
     let replies = submit_shared_object_transaction(transaction, &configs).await;
     for reply in replies {
         match reply {
-            Some(Ok(info)) => {
+            Ok(info) => {
                 let effects = info.signed_effects.unwrap().effects;
                 assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
             }
-            Some(Err(error)) => panic!("{error}"),
-            None => (), // May happen rarely (see above comment on consensus)
+            Err(error) => panic!("{error}"),
         }
     }
 }
@@ -400,7 +397,7 @@ async fn shared_object_sync() {
             .await
             .pop()
             .unwrap();
-    let info = reply.unwrap().unwrap();
+    let info = reply.unwrap();
     let effects = info.signed_effects.unwrap().effects;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
@@ -410,9 +407,8 @@ async fn shared_object_sync() {
             .await;
     for reply in replies {
         match reply {
-            Some(Err(SuiError::SharedObjectLockingFailure(_))) => (),
-            Some(_) => panic!("Unexpected protocol message"),
-            None => (), // May happen rarely (see above comment on consensus)
+            Err(SuiError::SharedObjectLockingFailure(_)) => (),
+            _ => panic!("Unexpected protocol message"),
         }
     }
 
@@ -431,12 +427,11 @@ async fn shared_object_sync() {
         submit_shared_object_transaction(increment_counter_transaction, &configs[1..]).await;
     for reply in replies {
         match reply {
-            Some(Ok(info)) => {
+            Ok(info) => {
                 let effects = info.signed_effects.unwrap().effects;
                 assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
             }
-            Some(Err(error)) => panic!("{error}"),
-            None => (), // May happen rarely (see above comment on consensus)
+            Err(error) => panic!("{error}"),
         }
     }
 }
