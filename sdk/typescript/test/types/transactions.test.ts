@@ -11,5 +11,6 @@ describe('Test Transaction Definition', () => {
     expect(isTransactionEffectsResponse(txns['move_call'])).toBeTruthy();
     expect(isTransactionEffectsResponse(txns['transfer'])).toBeTruthy();
     expect(isTransactionEffectsResponse(txns['coin_split'])).toBeTruthy();
+    expect(isTransactionEffectsResponse(txns['fail'])).toBeTruthy();
   });
 });

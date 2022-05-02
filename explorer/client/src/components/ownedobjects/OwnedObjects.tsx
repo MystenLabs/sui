@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { DefaultRpcClient as rpc } from '../../utils/api/SuiRpcClient';
+import { parseImageURL } from '../../utils/objectUtils';
 import { navigateWithUnknown } from '../../utils/searchUtil';
 import { findDataFromID } from '../../utils/static/searchUtil';
 import { trimStdLibPrefix, processDisplayValue } from '../../utils/stringUtils';
@@ -54,7 +55,9 @@ function OwnedObjectAPI({ objects }: { objects: string[] }) {
                         id: id,
                         Type: objType,
                         Version: version,
-                        display: processDisplayValue(data.contents?.display),
+                        display: parseImageURL(data)
+                            ? processDisplayValue(parseImageURL(data))
+                            : undefined,
                     }))
                 );
                 setIsLoaded(true);
@@ -88,7 +91,15 @@ function OwnedObjectView({ results }: { results: resultType }) {
                         <div className={styles.previewimage}>
                             <DisplayBox
                                 display={entryObj.display}
-                                tag="imageURL"
+                                // TODO: clean this logic
+                                tag={
+                                    typeof entryObj.display === 'object' &&
+                                    'category' in entryObj.display &&
+                                    entryObj.display['category'] ===
+                                        'moveScript'
+                                        ? 'moveScript'
+                                        : 'imageURL'
+                                }
                             />
                         </div>
                     )}

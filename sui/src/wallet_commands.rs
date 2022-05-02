@@ -495,7 +495,7 @@ impl WalletCommands {
                     &Identifier::new("mint").unwrap(),
                     &[],
                     gas,
-                    &gas_budget.unwrap_or(1000),
+                    &gas_budget.unwrap_or(3000),
                     &args,
                     context,
                 )

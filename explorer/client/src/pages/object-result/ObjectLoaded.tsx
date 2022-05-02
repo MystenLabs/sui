@@ -8,6 +8,7 @@ import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
 import { type AddressOwner } from '../../utils/api/SuiRpcClient';
+import { parseImageURL } from '../../utils/objectUtils';
 import {
     asciiFromNumberBytes,
     trimStdLibPrefix,
@@ -105,7 +106,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
     type SuiIdBytes = { bytes: number[] };
 
     function handleSpecialDemoNameArrays(data: {
-        name?: SuiIdBytes | string;
+        name?: string;
         player_name?: SuiIdBytes | string;
         monster_name?: SuiIdBytes | string;
         farm_name?: SuiIdBytes | string;
@@ -128,9 +129,10 @@ function ObjectLoaded({ data }: { data: DataType }) {
             delete data.farm_name;
             return ascii;
         } else if ('name' in data) {
-            bytesObj = data.name as SuiIdBytes;
-            return asciiFromNumberBytes(bytesObj.bytes);
-        } else bytesObj = { bytes: [] };
+            return data['name'] as string;
+        } else {
+            bytesObj = { bytes: [] };
+        }
 
         return asciiFromNumberBytes(bytesObj.bytes);
     }
@@ -175,6 +177,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                 ? toHexString(data.data.tx_digest as number[])
                 : data.data.tx_digest,
         owner: processOwner(data.owner),
+        url: parseImageURL(data.data),
     };
 
     //TO DO remove when have distinct name field under Description
@@ -205,29 +208,24 @@ function ObjectLoaded({ data }: { data: DataType }) {
     const properties = Object.entries(viewedData.data?.contents)
         //TO DO: remove when have distinct 'name' field in Description
         .filter(([key, _]) => !/name/i.test(key))
-        .filter(([_, value]) => checkIsPropertyType(value))
-        // TODO: 'display' is a object property added during demo, replace with metadata ptr?
-        .filter(([key, _]) => key !== 'display');
+        .filter(([_, value]) => checkIsPropertyType(value));
 
     return (
         <>
             <div className={styles.resultbox}>
-                {viewedData.data?.contents?.display && (
+                {viewedData.url !== '' && (
                     <div className={styles.display}>
-                        <DisplayBox
-                            display={viewedData.data.contents.display}
-                            tag="imageURL"
-                        />
+                        <DisplayBox display={viewedData.url} tag="imageURL" />
                     </div>
                 )}
                 <div
                     className={`${styles.textbox} ${
-                        data?.data.contents.display
+                        viewedData.url
                             ? styles.accommodate
                             : styles.noaccommodate
                     }`}
                 >
-                    {data.name && <h1>{data.name}</h1>} {' '}
+                    {data.name && <h1>{data.name}</h1>}{' '}
                     {typeof nameKeyValue[0] === 'string' && (
                         <h1>{nameKeyValue}</h1>
                     )}
