@@ -207,7 +207,8 @@ async fn test_publish_gas() -> SuiResult {
         .certified_transaction
         .as_ref()
         .unwrap()
-        .transaction
+        .data
+        .kind
         .single_transactions()
         .next()
         .unwrap()

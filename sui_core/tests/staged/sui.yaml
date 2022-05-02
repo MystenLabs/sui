@@ -32,6 +32,14 @@ AuthorityBatch:
         TUPLEARRAY:
           CONTENT: U8
           SIZE: 32
+AuthorityQuorumSignInfo:
+  STRUCT:
+    - epoch: U64
+    - signatures:
+        SEQ:
+          TUPLE:
+            - TYPENAME: PublicKeyBytes
+            - TYPENAME: AuthoritySignature
 AuthoritySignInfo:
   STRUCT:
     - epoch: U64
@@ -68,16 +76,6 @@ CallArg:
       SharedObject:
         NEWTYPE:
           TYPENAME: ObjectID
-CertifiedTransaction:
-  STRUCT:
-    - epoch: U64
-    - transaction:
-        TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::EmptySignInfo>"
-    - signatures:
-        SEQ:
-          TUPLE:
-            - TYPENAME: PublicKeyBytes
-            - TYPENAME: AuthoritySignature
 ConsensusOutput:
   STRUCT:
     - message: BYTES
@@ -92,7 +90,7 @@ ConsensusTransaction:
     0:
       UserTransaction:
         NEWTYPE:
-          TYPENAME: CertifiedTransaction
+          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthorityQuorumSignInfo>"
 Data:
   ENUM:
     0:
@@ -251,7 +249,7 @@ ObjectInfoResponse:
   STRUCT:
     - parent_certificate:
         OPTION:
-          TYPENAME: CertifiedTransaction
+          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthorityQuorumSignInfo>"
     - requested_object_reference:
         OPTION:
           TUPLE:
@@ -302,7 +300,7 @@ SerializedMessage:
     2:
       Cert:
         NEWTYPE:
-          TYPENAME: CertifiedTransaction
+          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthorityQuorumSignInfo>"
     3:
       Error:
         NEWTYPE:
@@ -831,7 +829,7 @@ TransactionInfoResponse:
           TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthoritySignInfo>"
     - certified_transaction:
         OPTION:
-          TYPENAME: CertifiedTransaction
+          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthorityQuorumSignInfo>"
     - signed_effects:
         OPTION:
           TYPENAME: TransactionEffectsEnvelope
@@ -902,6 +900,14 @@ UpdateItem:
       Batch:
         NEWTYPE:
           TYPENAME: SignedBatch
+"sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthorityQuorumSignInfo>":
+  STRUCT:
+    - data:
+        TYPENAME: TransactionData
+    - tx_signature:
+        TYPENAME: Signature
+    - auth_sign_info:
+        TYPENAME: AuthorityQuorumSignInfo
 "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthoritySignInfo>":
   STRUCT:
     - data:

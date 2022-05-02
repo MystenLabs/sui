@@ -3,3 +3,8 @@
 
 export type TransactionDigest = string;
 export type SuiAddress = string;
+export type ObjectOwner =
+  | { AddressOwner: SuiAddress }
+  | { ObjectOwner: SuiAddress }
+  | 'Shared'
+  | 'Immutable';

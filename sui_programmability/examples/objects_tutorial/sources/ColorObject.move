@@ -207,8 +207,10 @@ module Tutorial::ColorObjectTests {
         };
         TestScenario::next_tx(scenario, &sender1);
         {
+            // take_owned does not work for immutable objects.
             assert!(!TestScenario::can_take_owned<ColorObject>(scenario), 0);
         };
+        // Any sender can work.
         let sender2 = @0x2;
         TestScenario::next_tx(scenario, &sender2);
         {

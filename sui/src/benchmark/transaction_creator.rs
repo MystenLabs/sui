@@ -64,12 +64,12 @@ fn create_object(object_id: ObjectID, owner: SuiAddress, use_move: bool) -> Obje
 fn make_serialized_cert(keys: &[KeyPair], committee: &Committee, tx: Transaction) -> Vec<u8> {
     // Make certificate
     let mut certificate = CertifiedTransaction::new(tx);
-    certificate.epoch = committee.epoch();
+    certificate.auth_sign_info.epoch = committee.epoch();
     for i in 0..committee.quorum_threshold() {
         let secx = keys.get(i).unwrap();
         let pubx = secx.public_key_bytes();
-        let sig = AuthoritySignature::new(&certificate.transaction.data, secx);
-        certificate.signatures.push((*pubx, sig));
+        let sig = AuthoritySignature::new(&certificate.data, secx);
+        certificate.auth_sign_info.signatures.push((*pubx, sig));
     }
 
     let serialized_certificate = serialize_cert(&certificate);

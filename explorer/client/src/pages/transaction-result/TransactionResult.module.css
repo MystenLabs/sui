@@ -30,3 +30,7 @@ div.action-mutate {
 div.action-delete {
     @apply bg-orange-300;
 }
+
+.txdetailsbg {
+    @apply bg-[#f8f8f8];
+}

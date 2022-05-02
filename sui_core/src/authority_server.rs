@@ -19,7 +19,7 @@ use tokio::sync::mpsc::Sender;
 use std::time::Duration;
 use tracing::{error, info, warn, Instrument};
 
-use crate::consensus_adapter::{ConsensusAdapter, ConsensusInput};
+use crate::consensus_adapter::{ConsensusAdapter, ConsensusListenerMessage};
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use tokio::sync::broadcast::error::RecvError;
@@ -51,7 +51,7 @@ impl AuthorityServer {
         buffer_size: usize,
         state: Arc<AuthorityState>,
         consensus_address: SocketAddr,
-        tx_consensus_listener: Sender<ConsensusInput>,
+        tx_consensus_listener: Sender<ConsensusListenerMessage>,
     ) -> Self {
         let consensus_adapter = ConsensusAdapter::new(
             consensus_address,
@@ -222,7 +222,7 @@ impl AuthorityServer {
                 let span = tracing::debug_span!(
                     "process_cert",
                     ?tx_digest,
-                    tx_kind = message.transaction.data.kind_as_str()
+                    tx_kind = message.data.kind_as_str()
                 );
                 match self
                     .state
@@ -256,11 +256,9 @@ impl AuthorityServer {
                 .handle_batch_streaming(*message, channel)
                 .await
                 .map(|_| None),
-            SerializedMessage::ConsensusTransaction(message) => self
-                .consensus_adapter
-                .submit(&message)
-                .await
-                .map(|info| Some(serialize_transaction_info(&info))),
+            SerializedMessage::ConsensusTransaction(message) => {
+                self.consensus_adapter.submit(&message).await.map(Some)
+            }
 
             _ => Err(SuiError::UnexpectedMessage),
         };
@@ -306,7 +304,7 @@ impl AuthorityServer {
                     match message {
                         SerializedMessage::Transaction(message) => {
                             message.is_checked = true;
-                            message.add_to_verification_obligation(&mut obligation)?;
+                            message.add_tx_sig_to_verification_obligation(&mut obligation)?;
                         }
                         SerializedMessage::Cert(message) => {
                             message.is_checked = true;
@@ -363,7 +361,7 @@ where
             /*
                 If this is an error send back the error and drop the connection.
                 Here we make the choice to bail out as soon as either any parsing
-                or signature / commitee verification operation fails. The client
+                or signature / committee verification operation fails. The client
                 should know better than give invalid input. All conditions can be
                 trivially checked on the client side, so there should be no surprises
                 here for well behaved clients.

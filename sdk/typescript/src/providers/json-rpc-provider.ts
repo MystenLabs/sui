@@ -7,7 +7,7 @@ import {
   isGetObjectInfoResponse,
   isGetOwnedObjectRefsResponse,
   isGetTxnDigestsResponse,
-  isCertifiedTransaction,
+  isTransactionEffectsResponse,
 } from '../index.guard';
 import {
   CertifiedTransaction,
@@ -16,7 +16,9 @@ import {
   GetObjectInfoResponse,
   ObjectRef,
   TransactionDigest,
+  TransactionEffectsResponse,
 } from '../types';
+import { transformGetObjectInfoResponse } from '../types/framework/transformer';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 
@@ -56,13 +58,30 @@ export class JsonRpcProvider extends Provider {
         [objectId],
         isGetObjectInfoResponse
       );
-      return resp;
+      return transformGetObjectInfoResponse(resp);
     } catch (err) {
       throw new Error(`Error fetching object info: ${err} for id ${objectId}`);
     }
   }
 
   // Transactions
+  async getTransactionWithEffects(
+    digest: TransactionDigest
+  ): Promise<TransactionEffectsResponse> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getTransaction',
+        [digest],
+        isTransactionEffectsResponse
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(
+        `Error getting transaction with effects: ${err} for digest ${digest}`
+      );
+    }
+  }
+
   async getTransaction(
     digest: TransactionDigest
   ): Promise<CertifiedTransaction> {
@@ -70,9 +89,9 @@ export class JsonRpcProvider extends Provider {
       const resp = await this.client.requestWithType(
         'sui_getTransaction',
         [digest],
-        isCertifiedTransaction
+        isTransactionEffectsResponse
       );
-      return resp;
+      return resp.certificate;
     } catch (err) {
       throw new Error(`Error getting transaction: ${err} for digest ${digest}`);
     }
