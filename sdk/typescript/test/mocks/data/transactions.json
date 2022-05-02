@@ -528,5 +528,258 @@
       "events": [],
       "dependencies": []
     }
+  },
+
+  "fail": {
+    "certificate": {
+      "data": {
+        "kind": {
+          "Single": {
+            "Call": {
+              "package": [
+                "0000000000000000000000000000000000000002",
+                1,
+                "0YGqZ5DhiIVttKzuC3lirSE/EHi8rHT9rrcAzpf5Muw="
+              ],
+              "module": "DevNetNFT",
+              "function": "mint",
+              "type_arguments": [],
+              "arguments": [
+                {
+                  "Pure": [
+                    13,
+                    71,
+                    114,
+                    101,
+                    97,
+                    116,
+                    101,
+                    115,
+                    116,
+                    32,
+                    67,
+                    104,
+                    101,
+                    102
+                  ]
+                },
+                {
+                  "Pure": [
+                    30,
+                    84,
+                    104,
+                    101,
+                    32,
+                    103,
+                    114,
+                    101,
+                    97,
+                    116,
+                    101,
+                    115,
+                    116,
+                    32,
+                    99,
+                    104,
+                    101,
+                    102,
+                    32,
+                    105,
+                    110,
+                    32,
+                    116,
+                    104,
+                    101,
+                    32,
+                    119,
+                    111,
+                    114,
+                    108,
+                    100
+                  ]
+                },
+                {
+                  "Pure": [
+                    101,
+                    104,
+                    116,
+                    116,
+                    112,
+                    115,
+                    58,
+                    47,
+                    47,
+                    117,
+                    115,
+                    101,
+                    114,
+                    45,
+                    105,
+                    109,
+                    97,
+                    103,
+                    101,
+                    115,
+                    46,
+                    103,
+                    105,
+                    116,
+                    104,
+                    117,
+                    98,
+                    117,
+                    115,
+                    101,
+                    114,
+                    99,
+                    111,
+                    110,
+                    116,
+                    101,
+                    110,
+                    116,
+                    46,
+                    99,
+                    111,
+                    109,
+                    47,
+                    55,
+                    54,
+                    48,
+                    54,
+                    55,
+                    49,
+                    53,
+                    56,
+                    47,
+                    49,
+                    54,
+                    54,
+                    49,
+                    51,
+                    54,
+                    50,
+                    56,
+                    54,
+                    45,
+                    99,
+                    54,
+                    48,
+                    102,
+                    101,
+                    55,
+                    48,
+                    101,
+                    45,
+                    98,
+                    57,
+                    56,
+                    50,
+                    45,
+                    52,
+                    56,
+                    49,
+                    51,
+                    45,
+                    57,
+                    51,
+                    50,
+                    97,
+                    45,
+                    48,
+                    52,
+                    49,
+                    52,
+                    100,
+                    48,
+                    102,
+                    53,
+                    53,
+                    99,
+                    102,
+                    98,
+                    46,
+                    112,
+                    110,
+                    103
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "sender": "813ec1ab1e1797c79d1e1fcbebebc27a1fd21f07",
+        "gas_payment": [
+          "003e1d8b91a4cb1538cdb50c3cae8e62e1960b1c",
+          0,
+          "HGSxZaaBFyRVSWgyvzxXw9W7kqsWeQCVrpO1mdRH3bs="
+        ],
+        "gas_budget": 1000
+      },
+      "tx_signature": "y0xGKqG4zKKdGStb6Kej0NuG0Ex2n7o5h34h287GDAT0aADdZN38Vk4xmWVNXEFsIC7DNgpQQ7GuJg5tqsf4CdRj4Rx5FZRehqwrctiLgZDPrY/3tI5+uJLCdaXPCj6C",
+      "auth_sign_info": {
+        "epoch": 0,
+        "signatures": [
+          [
+            "ImYYav2doQpD3T7XPRA5xnk9LYUU22okB/z4NRMuhjs=",
+            "RzxVVfKp468Bl+CXznmb48JshKhyJ5y6vh9C5+m1DkHSp73Nma5HBSYMmz8DKVNgXtexEa+qIr+0UIrlRIKNAA=="
+          ],
+          [
+            "J2E+G3jRyOuxrCY+9xgPF+uc/6OrVUTNNp+L4XmwMn4=",
+            "vS5KV5kujZC/Rew9BjoPVm9ABMMlEwtPtkPRUsSObqmPLhir6o3UbpCglUYsQLXyKewA+1qK0KZFfhA8hBskDQ=="
+          ],
+          [
+            "HUetNOK8VYmILFADRclTtYN+MNZknTFcYWkLp6HijSM=",
+            "G+S5s07mk8aKeMnAT7aBkMOZ0OutkM2V8TD8EvHlMM9KPPKPUITjrGJr5aThczg5sRLAm7tpjMpYlSCRf0vACQ=="
+          ]
+        ]
+      }
+    },
+    "effects": {
+      "status": {
+        "Failure": {
+          "gas_cost": {
+            "computation_cost": 1000,
+            "storage_cost": 0,
+            "storage_rebate": 0
+          },
+          "error": {
+            "InsufficientGas": {
+              "error": "Ran out of gas while deducting computation cost"
+            }
+          }
+        }
+      },
+      "shared_objects": [],
+      "transaction_digest": "EnpPw9jQI4/k8IIoWFtMhoZKIOeXVsBWPbbMG07QvDM=",
+      "created": [],
+      "mutated": [
+        [
+          [
+            "003e1d8b91a4cb1538cdb50c3cae8e62e1960b1c",
+            1,
+            "jtJSPH26Z/iwtaFEGpd4CQFR4G/fNR1yyb2BV2F3pd4="
+          ],
+          {
+            "AddressOwner": "813ec1ab1e1797c79d1e1fcbebebc27a1fd21f07"
+          }
+        ]
+      ],
+      "unwrapped": [],
+      "deleted": [],
+      "wrapped": [],
+      "gas_object": [
+        [
+          "003e1d8b91a4cb1538cdb50c3cae8e62e1960b1c",
+          1,
+          "jtJSPH26Z/iwtaFEGpd4CQFR4G/fNR1yyb2BV2F3pd4="
+        ],
+        {
+          "AddressOwner": "813ec1ab1e1797c79d1e1fcbebebc27a1fd21f07"
+        }
+      ],
+      "events": [],
+      "dependencies": []
+    }
   }
 }
