@@ -1,4 +1,6 @@
 #!/bin/zsh
+# Copyright (c) 2022, Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
 
 # generate TS type guards for project
 npx ts-auto-guard --export-all src/rpc/client.ts src/**.ts
