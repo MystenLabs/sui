@@ -29,3 +29,11 @@ div.textresults > div > div:nth-child(2) > div {
 div.pending {
     @apply font-sans mt-2 ml-[5vw];
 }
+
+div.txdetailstitle {
+    @apply pt-5 pb-0 mt-0 mb-0 !important;
+}
+
+.txdetailstitle h3 {
+    @apply text-offblack uppercase font-semibold;
+}

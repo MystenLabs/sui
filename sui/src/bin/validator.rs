@@ -119,8 +119,7 @@ async fn main() -> Result<(), anyhow::Error> {
         &consensus_parameters,
         Some(net),
     )
-    .await
-    .unwrap()
+    .await?
     .spawn_with_bind_address(&listen_address)
     .await
     .unwrap()
