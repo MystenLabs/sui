@@ -8,7 +8,7 @@ use bytes::Bytes;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use rayon::prelude::*;
-use sui_types::crypto::{get_key_pair, AuthoritySignature, KeyPair, PublicKeyBytes, Signature};
+use sui_types::crypto::{get_key_pair, AuthoritySignature, KeyPair, Signature};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
 
@@ -61,16 +61,13 @@ fn create_object(object_id: ObjectID, owner: SuiAddress, use_move: bool) -> Obje
 }
 
 /// This builds, signs a cert and serializes it
-fn make_serialized_cert(
-    keys: &[(PublicKeyBytes, KeyPair)],
-    committee: &Committee,
-    tx: Transaction,
-) -> Vec<u8> {
+fn make_serialized_cert(keys: &[KeyPair], committee: &Committee, tx: Transaction) -> Vec<u8> {
     // Make certificate
     let mut certificate = CertifiedTransaction::new(tx);
     certificate.auth_sign_info.epoch = committee.epoch();
     for i in 0..committee.quorum_threshold() {
-        let (pubx, secx) = keys.get(i).unwrap();
+        let secx = keys.get(i).unwrap();
+        let pubx = secx.public_key_bytes();
         let sig = AuthoritySignature::new(&certificate.data, secx);
         certificate.auth_sign_info.signatures.push((*pubx, sig));
     }
@@ -118,7 +115,7 @@ fn make_serialized_transactions(
     keypair: KeyPair,
     committee: &Committee,
     account_gas_objects: &[(Vec<Object>, Object)],
-    authority_keys: &[(PublicKeyBytes, KeyPair)],
+    authority_keys: &[KeyPair],
     batch_size: usize,
     use_move: bool,
 ) -> Vec<Bytes> {
@@ -179,7 +176,7 @@ fn make_transactions(
     conn: usize,
     use_move: bool,
     object_id_offset: usize,
-    auth_keys: &[(PublicKeyBytes, KeyPair)],
+    auth_keys: &[KeyPair],
     committee: &Committee,
 ) -> (Vec<Bytes>, Vec<Object>) {
     assert_eq!(chunk_size % conn, 0);

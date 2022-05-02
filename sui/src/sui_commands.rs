@@ -16,6 +16,7 @@ use move_package::BuildConfig;
 use narwhal_config::{Committee as ConsensusCommittee, Parameters as ConsensusParameters};
 use narwhal_crypto::ed25519::Ed25519PublicKey;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -35,10 +36,13 @@ use sui_types::base_types::decode_bytes_hex;
 use sui_types::base_types::encode_bytes_hex;
 use sui_types::base_types::{SequenceNumber, SuiAddress, TxContext};
 use sui_types::committee::Committee;
+use sui_types::crypto::{random_key_pairs, KeyPair};
 use sui_types::error::SuiResult;
 use sui_types::object::Object;
 use tokio::sync::mpsc::channel;
 use tracing::{error, info};
+
+pub const SUI_AUTHORITY_KEYS: &str = "authorities.key";
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -86,18 +90,29 @@ impl SuiCommand {
         match self {
             SuiCommand::Start { config } => {
                 // Load the config of the Sui authority.
-                let config_path = config
+                let network_config_path = config
                     .clone()
                     .unwrap_or(sui_config_dir()?.join(SUI_NETWORK_CONFIG));
-                let config: NetworkConfig = PersistedConfig::read(&config_path).map_err(|err| {
-                    err.context(format!(
-                        "Cannot open Sui network config file at {:?}",
-                        config_path
-                    ))
-                })?;
+                let network_config: NetworkConfig = PersistedConfig::read(&network_config_path)
+                    .map_err(|err| {
+                        err.context(format!(
+                            "Cannot open Sui network config file at {:?}",
+                            network_config_path
+                        ))
+                    })?;
+
+                let authority_key_path = config
+                    .clone()
+                    .unwrap_or(sui_config_dir()?.join(SUI_AUTHORITY_KEYS));
+                assert!(
+                    authority_key_path.exists(),
+                    "{:?} does not exist, you may want to re-genesis from scratch",
+                    authority_key_path
+                );
+                let authority_keys = SuiKeystore::load_or_create(&authority_key_path)?;
 
                 // Start a sui validator (including its consensus node).
-                SuiNetwork::start(&config)
+                SuiNetwork::start(&network_config, authority_keys.key_pairs())
                     .await?
                     .wait_for_completion()
                     .await
@@ -118,7 +133,7 @@ impl SuiCommand {
 
                 if *dump_addresses {
                     for auth in config.authorities.iter() {
-                        let addr = SuiAddress::from(auth.key_pair.public_key_bytes());
+                        let addr = SuiAddress::from(&auth.public_key);
                         println!("{}:{} - {}", auth.host, auth.port, addr);
                     }
                 }
@@ -184,7 +199,7 @@ impl SuiCommand {
 
                 let genesis_conf = match from_config {
                     Some(q) => PersistedConfig::read(q)?,
-                    None => GenesisConfig::default_genesis(sui_config_dir)?,
+                    None => create_genesis_config_from_scratch(sui_config_dir)?,
                 };
 
                 if let Some(path) = write_config {
@@ -268,12 +283,26 @@ pub struct SuiNetwork {
 }
 
 impl SuiNetwork {
-    pub async fn start(config: &NetworkConfig) -> Result<Self, anyhow::Error> {
+    pub async fn start(
+        config: &NetworkConfig,
+        key_pairs: Vec<&KeyPair>,
+    ) -> Result<Self, anyhow::Error> {
         if config.authorities.is_empty() {
             return Err(anyhow!(
                 "No authority configured for the network, please run genesis."
             ));
         }
+        if config.authorities.len() != key_pairs.len() {
+            return Err(anyhow!(
+                "Num of authorities does not match num of key_pairs."
+            ));
+        }
+
+        let key_pairs = key_pairs
+            .iter()
+            .map(|kp| (kp.public_key_bytes(), kp))
+            .collect::<HashMap<_, _>>();
+
         info!(
             "Starting network with {} authorities",
             config.authorities.len()
@@ -284,7 +313,7 @@ impl SuiNetwork {
             config
                 .authorities
                 .iter()
-                .map(|info| (*info.key_pair.public_key_bytes(), info.stake))
+                .map(|info| (info.public_key, info.stake))
                 .collect(),
         );
 
@@ -295,13 +324,21 @@ impl SuiNetwork {
         let net = config.get_authority_infos();
 
         let mut spawned_authorities = Vec::new();
+
         for authority in &config.authorities {
+            let key_pair = key_pairs.get(&authority.public_key).unwrap_or_else(|| {
+                panic!(
+                    "Can't find key pair for authority {:?}",
+                    &authority.public_key
+                )
+            });
             let consensus_store_path = sui_config_dir()?
                 .join(CONSENSUS_DB_NAME)
-                .join(encode_bytes_hex(authority.key_pair.public_key_bytes()));
+                .join(encode_bytes_hex(&authority.public_key));
 
             let server = make_server(
                 authority,
+                key_pair,
                 &committee,
                 config.buffer_size,
                 &consensus_committee,
@@ -354,10 +391,11 @@ pub async fn genesis(
         authorities: vec![],
         buffer_size: DEFAULT_MAX_DATAGRAM_SIZE,
         loaded_move_packages: vec![],
+        key_pair: genesis_conf.key_pair,
     };
     let mut voting_right = BTreeMap::new();
     for authority in genesis_conf.authorities {
-        voting_right.insert(*authority.key_pair.public_key_bytes(), authority.stake);
+        voting_right.insert(authority.public_key, authority.stake);
         network_config.authorities.push(authority);
     }
 
@@ -434,6 +472,7 @@ pub async fn genesis(
     for authority in &network_config.authorities {
         make_server_with_genesis_ctx(
             authority,
+            &network_config.key_pair,
             &committee,
             preload_modules.clone(),
             &preload_objects,
@@ -448,6 +487,7 @@ pub async fn genesis(
 
 pub async fn make_server(
     authority: &AuthorityPrivateInfo,
+    key_pair: &KeyPair,
     committee: &Committee,
     buffer_size: usize,
     consensus_committee: &ConsensusCommittee<Ed25519PublicKey>,
@@ -456,17 +496,18 @@ pub async fn make_server(
     net_parameters: Option<Vec<AuthorityInfo>>,
 ) -> SuiResult<AuthorityServer> {
     let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
-    let name = *authority.key_pair.public_key_bytes();
+    let name = authority.public_key;
     let state = AuthorityState::new_without_genesis(
         committee.clone(),
         name,
-        Arc::pin(authority.key_pair.copy()),
+        Arc::pin(key_pair.copy()),
         store,
     )
     .await;
 
     make_authority(
         authority,
+        key_pair,
         buffer_size,
         state,
         consensus_committee,
@@ -479,6 +520,7 @@ pub async fn make_server(
 
 async fn make_server_with_genesis_ctx(
     authority: &AuthorityPrivateInfo,
+    key_pair: &KeyPair,
     committee: &Committee,
     preload_modules: Vec<Vec<CompiledModule>>,
     preload_objects: &[Object],
@@ -486,12 +528,12 @@ async fn make_server_with_genesis_ctx(
     genesis_ctx: &mut TxContext,
 ) -> SuiResult<AuthorityServer> {
     let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
-    let name = *authority.key_pair.public_key_bytes();
+    let name = authority.public_key;
 
     let state = AuthorityState::new(
         committee.clone(),
         name,
-        Arc::pin(authority.key_pair.copy()),
+        Arc::pin(key_pair.copy()),
         store,
         preload_modules,
         genesis_ctx,
@@ -517,6 +559,7 @@ async fn make_server_with_genesis_ctx(
 /// and a consensus listener bridging the consensus node and the sui authority.
 pub async fn make_authority(
     authority: &AuthorityPrivateInfo,
+    key_pair: &KeyPair,
     buffer_size: usize,
     state: AuthorityState,
     consensus_committee: &ConsensusCommittee<Ed25519PublicKey>,
@@ -530,7 +573,7 @@ pub async fn make_authority(
     let authority_state = Arc::new(state);
 
     // Spawn the consensus node of this authority.
-    let consensus_keypair = authority.key_pair.make_narwhal_keypair();
+    let consensus_keypair = key_pair.make_narwhal_keypair();
     let consensus_name = consensus_keypair.name.clone();
     let consensus_store = narwhal_node::NodeStorage::reopen(consensus_store_path);
     narwhal_node::Node::spawn_primary(
@@ -591,4 +634,31 @@ pub async fn make_authority(
         authority.consensus_address,
         /* tx_consensus_listener */ tx_sui_to_consensus,
     ))
+}
+
+/// Generate a genesis config
+/// Side effect: create an authorities.key file that contains all authority key pairs.
+///              the file is only for local testing's convenience, and not supposed to
+///              exist in testnet/mainnet.
+fn create_genesis_config_from_scratch(
+    sui_config_dir: &Path,
+) -> Result<GenesisConfig, anyhow::Error> {
+    let authority_key_pairs_path = sui_config_dir.join(SUI_AUTHORITY_KEYS);
+    let key_pairs = random_key_pairs(4);
+    let mut authority_key_store = SuiKeystore::default();
+    authority_key_store.set_path(&authority_key_pairs_path);
+    let key_pair = key_pairs[0].copy();
+    let public_keys = key_pairs
+        .iter()
+        .map(|kp| *kp.public_key_bytes())
+        .collect::<Vec<_>>();
+    for key_pair in key_pairs {
+        authority_key_store.add_key(SuiAddress::from(key_pair.public_key_bytes()), key_pair)?;
+    }
+    authority_key_store.save()?;
+    info!(
+        "Authority keystore is stored in {:?}.",
+        authority_key_pairs_path
+    );
+    GenesisConfig::default_genesis(sui_config_dir, Some((public_keys, key_pair)))
 }
