@@ -12,6 +12,7 @@ use sui_core::authority::AuthorityState;
 use sui_core::authority::AuthorityStore;
 use sui_core::authority_server::AuthorityServer;
 use sui_network::transport::SpawnedServer;
+use sui_types::crypto::KeyPair;
 use sui_types::object::Object;
 
 /// The default network buffer size of a test authority.
@@ -24,8 +25,13 @@ pub fn test_authority_store() -> AuthorityStore {
 }
 
 /// Make an authority config for each of the `TEST_COMMITTEE_SIZE` authorities in the test committee.
-pub fn test_authority_configs() -> Vec<AuthorityPrivateInfo> {
-    test_keys()
+pub fn test_authority_configs() -> (Vec<AuthorityPrivateInfo>, Vec<KeyPair>) {
+    let test_keys = test_keys();
+    let key_pair = test_keys
+        .iter()
+        .map(|(_, key_pair)| key_pair.copy())
+        .collect();
+    let authorities = test_keys
         .into_iter()
         .map(|(address, key)| {
             let authority_port = PORT_ALLOCATOR.lock().unwrap().next_port().unwrap();
@@ -33,7 +39,7 @@ pub fn test_authority_configs() -> Vec<AuthorityPrivateInfo> {
 
             AuthorityPrivateInfo {
                 address,
-                key_pair: key,
+                public_key: *key.public_key_bytes(),
                 host: "127.0.0.1".to_string(),
                 port: authority_port,
                 db_path: PathBuf::new(),
@@ -41,7 +47,8 @@ pub fn test_authority_configs() -> Vec<AuthorityPrivateInfo> {
                 consensus_address: format!("127.0.0.1:{consensus_port}").parse().unwrap(),
             }
         })
-        .collect()
+        .collect();
+    (authorities, key_pair)
 }
 
 /// Make a test authority state for each committee member.
@@ -74,22 +81,28 @@ where
 /// Spawn all authorities in the test committee into a separate tokio task.
 pub async fn spawn_test_authorities<I>(
     objects: I,
-    configs: &[AuthorityPrivateInfo],
+    authorities: &[AuthorityPrivateInfo],
+    key_pairs: &[KeyPair],
 ) -> Vec<SpawnedServer<AuthorityServer>>
 where
     I: IntoIterator<Item = Object> + Clone,
 {
     let states = test_authority_states(objects).await;
-    let consensus_committee = make_default_narwhal_committee(configs).unwrap();
+    let consensus_committee = make_default_narwhal_committee(authorities).unwrap();
     let consensus_parameters = ConsensusParameters {
         max_header_delay: std::time::Duration::from_millis(200),
         header_size: 1,
         ..ConsensusParameters::default()
     };
     let mut handles = Vec::new();
-    for (state, config) in states.into_iter().zip(configs.iter()) {
+    for ((state, config), key_pair) in states
+        .into_iter()
+        .zip(authorities.iter())
+        .zip(key_pairs.iter())
+    {
         let handle = make_authority(
             /* authority */ config,
+            key_pair,
             NETWORK_BUFFER_SIZE,
             state,
             &consensus_committee,

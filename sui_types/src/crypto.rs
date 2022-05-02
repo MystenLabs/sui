@@ -11,10 +11,8 @@ use anyhow::Error;
 use base64ct::Encoding;
 use digest::Digest;
 use ed25519_dalek as dalek;
-use ed25519_dalek::{Keypair as DalekKeypair, PublicKey, Verifier};
-use narwhal_crypto::ed25519::Ed25519KeyPair;
-use narwhal_crypto::ed25519::Ed25519PrivateKey;
-use narwhal_crypto::ed25519::Ed25519PublicKey;
+use ed25519_dalek::{Keypair as DalekKeypair, Verifier};
+use narwhal_crypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use schemars::JsonSchema;
@@ -145,6 +143,11 @@ impl PublicKeyBytes {
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
     }
+    /// Make a Narwhal-compatible public key from a Sui pub.
+    pub fn make_narwhal_public_key(&self) -> Result<Ed25519PublicKey, signature::Error> {
+        let pub_key = dalek::PublicKey::from_bytes(&self.0)?;
+        Ok(Ed25519PublicKey(pub_key))
+    }
 }
 
 impl AsRef<[u8]> for PublicKeyBytes {
@@ -153,13 +156,13 @@ impl AsRef<[u8]> for PublicKeyBytes {
     }
 }
 
-impl TryInto<PublicKey> for PublicKeyBytes {
+impl TryInto<dalek::PublicKey> for PublicKeyBytes {
     type Error = SuiError;
 
-    fn try_into(self) -> Result<PublicKey, Self::Error> {
+    fn try_into(self) -> Result<dalek::PublicKey, Self::Error> {
         // TODO(https://github.com/MystenLabs/sui/issues/101): Do better key validation
         // to ensure the bytes represent a point on the curve.
-        PublicKey::from_bytes(self.as_ref()).map_err(|_| SuiError::InvalidAuthenticator)
+        dalek::PublicKey::from_bytes(self.as_ref()).map_err(|_| SuiError::InvalidAuthenticator)
     }
 }
 
@@ -181,6 +184,21 @@ impl std::fmt::Debug for PublicKeyBytes {
         write!(f, "k#{}", s)?;
         Ok(())
     }
+}
+
+pub fn random_key_pairs(num: usize) -> Vec<KeyPair> {
+    let mut items = num;
+    let mut rng = OsRng;
+
+    std::iter::from_fn(|| {
+        if items == 0 {
+            None
+        } else {
+            items -= 1;
+            Some(get_key_pair_from_rng(&mut rng).1)
+        }
+    })
+    .collect::<Vec<_>>()
 }
 
 // TODO: get_key_pair() and get_key_pair_from_bytes() should return KeyPair only.
@@ -287,12 +305,11 @@ impl Signature {
 
         // is this a cryptographically correct public key?
         // TODO: perform stricter key validation, sp. small order points, see https://github.com/MystenLabs/sui/issues/101
-        let public_key =
-            ed25519_dalek::PublicKey::from_bytes(self.public_key_bytes()).map_err(|err| {
-                SuiError::InvalidSignature {
-                    error: err.to_string(),
-                }
-            })?;
+        let public_key = dalek::PublicKey::from_bytes(self.public_key_bytes()).map_err(|err| {
+            SuiError::InvalidSignature {
+                error: err.to_string(),
+            }
+        })?;
 
         // deserialize the signature
         let signature =
@@ -390,7 +407,7 @@ impl AuthoritySignature {
         T: Signable<Vec<u8>>,
     {
         // is this a cryptographically valid public Key?
-        let public_key: PublicKey = author.try_into()?;
+        let public_key: dalek::PublicKey = author.try_into()?;
 
         // access the signature
         let signature = self.0;
@@ -414,7 +431,7 @@ impl AuthoritySignature {
     pub fn verify_batch<T, I, K>(
         value: &T,
         votes: I,
-        key_cache: &HashMap<PublicKeyBytes, PublicKey>,
+        key_cache: &HashMap<PublicKeyBytes, dalek::PublicKey>,
     ) -> Result<(), SuiError>
     where
         T: Signable<Vec<u8>>,
@@ -552,7 +569,7 @@ where
     }
 }
 
-pub type PubKeyLookup = HashMap<PublicKeyBytes, PublicKey>;
+pub type PubKeyLookup = HashMap<PublicKeyBytes, dalek::PublicKey>;
 
 pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
     let mut digest = Sha3_256::default();
@@ -578,7 +595,10 @@ impl VerificationObligation {
         }
     }
 
-    pub fn lookup_public_key(&mut self, key_bytes: &PublicKeyBytes) -> Result<PublicKey, SuiError> {
+    pub fn lookup_public_key(
+        &mut self,
+        key_bytes: &PublicKeyBytes,
+    ) -> Result<dalek::PublicKey, SuiError> {
         match self.lookup.get(key_bytes) {
             Some(v) => Ok(*v),
             None => {

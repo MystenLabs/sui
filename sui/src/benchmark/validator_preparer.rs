@@ -1,12 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![deny(warnings)]
-
+#![allow(clippy::large_enum_variant)]
 use crate::benchmark::bench_types::RunningMode;
 use crate::benchmark::load_generator::spawn_authority_server;
-use crate::config::{AccountConfig, ObjectConfig};
-use crate::config::{Config, GenesisConfig};
+use crate::config::{AccountConfig, Config, GenesisConfig, ObjectConfig};
 use rocksdb::Options;
 use std::env;
 use std::fs;
@@ -20,13 +18,13 @@ use std::{thread::sleep, time::Duration};
 use sui_adapter::genesis;
 use sui_core::authority::*;
 use sui_network::network::NetworkServer;
-use sui_types::crypto::{KeyPair, PublicKeyBytes};
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::{random_key_pairs, KeyPair, PublicKeyBytes};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Object;
 use sui_types::{base_types::*, committee::*};
 use tokio::runtime::{Builder, Runtime};
 use tracing::{error, info};
-
 const GENESIS_CONFIG_NAME: &str = "genesis_config.json";
 
 pub const VALIDATOR_BINARY_NAME: &str = "validator";
@@ -35,7 +33,7 @@ pub const VALIDATOR_BINARY_NAME: &str = "validator";
 #[allow(unused)]
 pub struct ValidatorPreparer {
     running_mode: RunningMode,
-    pub keys: Vec<(PublicKeyBytes, KeyPair)>,
+    pub keys: Vec<KeyPair>,
     main_authority_address_hex: String,
     pub committee: Committee,
     validator_config: ValidatorConfig,
@@ -45,13 +43,23 @@ fn set_up_authorities_and_committee(
     committee_size: usize,
 ) -> Result<(Vec<KeyPair>, GenesisConfig), anyhow::Error> {
     let temp_dir = tempfile::tempdir()?;
-    let config = GenesisConfig::custom_genesis(temp_dir.path(), committee_size, 0, 0)?;
-    let keypairs: Vec<_> = config
-        .authorities
-        .iter()
-        .map(|authority| authority.key_pair.copy())
-        .collect();
-    Ok((keypairs, config))
+    let key_pairs = random_key_pairs(committee_size);
+    let key_pair = key_pairs[0].copy();
+    let config = GenesisConfig::custom_genesis(
+        temp_dir.path(),
+        committee_size,
+        0,
+        0,
+        Some((
+            key_pairs
+                .iter()
+                .map(|kp| *kp.public_key_bytes())
+                .collect::<Vec<_>>(),
+            key_pair,
+        )),
+    )?;
+
+    Ok((key_pairs, config))
 }
 
 pub enum ValidatorConfig {
@@ -75,20 +83,23 @@ impl ValidatorPreparer {
         validator_port: u16,
         db_cpus: usize,
     ) -> Self {
-        let (key_pairs, mut genesis_config) = set_up_authorities_and_committee(committee_size)
+        let (keys, mut genesis_config) = set_up_authorities_and_committee(committee_size)
             .expect("Got error in setting up committee");
 
-        // pick the first keypair as main validator
-        let main_authority_address_hex =
-            format!("{}", SuiAddress::from(key_pairs[0].public_key_bytes()));
+        let main_authority_address_hex = format!(
+            "{}",
+            SuiAddress::from(genesis_config.key_pair.public_key_bytes())
+        );
         info!("authority address hex: {}", main_authority_address_hex);
 
-        let mut keys = Vec::new();
-        for key_pair in key_pairs {
-            let name = *key_pair.public_key_bytes();
-            keys.push((name, key_pair));
-        }
-        let committee = Committee::new(0, keys.iter().map(|(k, _)| (*k, 1)).collect());
+        let committee = Committee::new(
+            0,
+            genesis_config
+                .authorities
+                .iter()
+                .map(|api| (api.public_key, 1))
+                .collect(),
+        );
 
         match running_mode {
             RunningMode::LocalSingleValidatorProcess => {
@@ -110,8 +121,8 @@ impl ValidatorPreparer {
 
             RunningMode::LocalSingleValidatorThread => {
                 // Pick the first validator and create state.
-                let public_auth0 = keys[0].0;
-                let secret_auth0 = keys[0].1.copy();
+                let public_auth0 = keys[0].public_key_bytes();
+                let secret_auth0 = keys[0].copy();
 
                 // Create a random directory to store the DB
                 let path = env::temp_dir().join(format!("DB_{:?}", ObjectID::random()));
@@ -119,8 +130,8 @@ impl ValidatorPreparer {
                     &path,
                     db_cpus as i32,
                     &committee,
-                    &public_auth0,
-                    secret_auth0.copy(),
+                    public_auth0,
+                    secret_auth0,
                 );
 
                 Self {
