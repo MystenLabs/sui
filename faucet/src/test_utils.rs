@@ -3,15 +3,15 @@
 
 use anyhow::{anyhow, bail};
 use std::path::Path;
-use sui::config::{AuthorityPrivateInfo, Config, GenesisConfig, WalletConfig};
-use sui::gateway_config::{GatewayConfig, GatewayType};
-use sui::keystore::KeystoreType;
-use sui::sui_commands::genesis;
 use sui::{
-    sui_commands::SuiNetwork,
+    config::{
+        AuthorityPrivateInfo, Config, GatewayConfig, GatewayType, GenesisConfig, WalletConfig,
+    },
+    keystore::KeystoreType,
+    sui_commands::{genesis, SuiNetwork},
     wallet_commands::{WalletCommands, WalletContext},
+    SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
 };
-use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use sui_types::{
     base_types::SuiAddress,
     crypto::{random_key_pairs, KeyPair},

@@ -7,7 +7,6 @@ use std::{fs::create_dir_all, path::PathBuf};
 
 pub mod benchmark;
 pub mod config;
-pub mod gateway_config;
 pub mod keystore;
 pub mod rpc_gateway;
 pub mod rpc_gateway_client;
