@@ -16,7 +16,7 @@ Find the latest updates to these contents in this section:
 
 * [JSON-RPC API](../build/json-rpc.md) - Set up your own local Sui RPC Server and use the Sui JSON-RPC API to interact with a local Sui network.
 * [Narwhal and Tusk for consensus](../learn/architecture/consensus.md) - Learn about Narwhal and Tusk, Sui's high-throughput mempool and consensus engine.
-* [REST API publishing](../build/json-rpc.md#sui_publish) - Instructions exist for publishing Move modules via the Publish endpoint.
+* [RPC API publishing](../build/json-rpc.md#sui_publish) - Instructions exist for publishing Move modules via the Publish endpoint.
 * [Wallet improvements](../build/wallet.md#active-address)- Active (default) addresses and [using gas objects for transactions](../build/wallet.md#paying-for-transactions-with-gas-objects) are supported.
 
 See the Sui `doc/src` [history](https://github.com/MystenLabs/sui/commits/main/doc/src) for a complete changelog of updates to this site. 
