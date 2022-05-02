@@ -180,39 +180,44 @@
     "status": "Exists",
     "details": {
       "objectRef": {
-        "objectId": "07db46736b11cc9e46ea2bbcaf4b71bea706ea4e",
-        "version": 10,
-        "digest": "DfpEDDD2HEyLnSDsAw1q9t8+8Pxh557hu+m0x0a3RGM="
+        "objectId": "dbe11ea56da16992d8e68d07427fe74a85606d5e",
+        "version": 2,
+        "digest": "hobnw2DdC2quOLZf7D7QiRtAJGPP3GeAJA3iPmEoEaA="
       },
       "objectType": "moveObject",
       "object": {
         "contents": {
           "fields": {
+            "balance": {
+              "fields": {
+                "value": 50000
+              },
+              "type": "0x2::Balance::Balance<0x2::SUI::SUI>"
+            },
             "id": {
               "fields": {
                 "id": {
                   "fields": {
                     "id": {
                       "fields": {
-                        "bytes": "07db46736b11cc9e46ea2bbcaf4b71bea706ea4e"
+                        "bytes": "dbe11ea56da16992d8e68d07427fe74a85606d5e"
                       },
                       "type": "0x2::ID::ID"
                     }
                   },
                   "type": "0x2::ID::UniqueID"
                 },
-                "version": 10
+                "version": 2
               },
               "type": "0x2::ID::VersionedID"
-            },
-            "value": 93122
+            }
           },
           "type": "0x2::Coin::Coin<0x2::SUI::SUI>"
         },
         "owner": {
-          "AddressOwner": "ccdd6ef735e9d2081da41e6c112e9b0c45bb1f0a"
+          "AddressOwner": "f16a5aedcdf9f2a9c2bd0f077279ec3d5ff0dfee"
         },
-        "tx_digest": "xTvGzQA/4oKdq74Ny/r+Ms8vhIynA7LfuD7lf+dtJoU="
+        "tx_digest": "vU/KG88bjX8VgdNtflBjNUFNZAqYv2qMCwP9S0+tQRc="
       }
     }
   }
