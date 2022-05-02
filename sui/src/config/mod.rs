@@ -7,7 +7,6 @@ use narwhal_config::{
     Authority, Committee as ConsensusCommittee, PrimaryAddresses, Stake, WorkerAddresses,
 };
 use narwhal_crypto::ed25519::Ed25519PublicKey;
-use once_cell::sync::Lazy;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::{hex::Hex, serde_as};
@@ -18,10 +17,8 @@ use std::{
     net::{SocketAddr, ToSocketAddrs},
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
-    sync::Mutex,
 };
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_network::network::PortAllocator;
 use sui_types::{
     base_types::*,
     committee::{Committee, EpochId},
@@ -29,14 +26,13 @@ use sui_types::{
 };
 use tracing::log::trace;
 
+pub mod utils;
+
 const DEFAULT_WEIGHT: usize = 1;
 const DEFAULT_GAS_AMOUNT: u64 = 100000;
 pub const AUTHORITIES_DB_NAME: &str = "authorities_db";
 pub const DEFAULT_STARTING_PORT: u16 = 10000;
 pub const CONSENSUS_DB_NAME: &str = "consensus_db";
-
-pub static PORT_ALLOCATOR: Lazy<Mutex<PortAllocator>> =
-    Lazy::new(|| Mutex::new(PortAllocator::new(DEFAULT_STARTING_PORT)));
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AuthorityInfo {
@@ -91,11 +87,7 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
         let port = if let Some(val) = json.get("port") {
             u16::deserialize(val).map_err(serde::de::Error::custom)?
         } else {
-            PORT_ALLOCATOR
-                .lock()
-                .map_err(serde::de::Error::custom)?
-                .next_port()
-                .ok_or_else(|| serde::de::Error::custom("No available port."))?
+            utils::get_available_port()
         };
         let db_path = if let Some(val) = json.get("db_path") {
             PathBuf::deserialize(val).map_err(serde::de::Error::custom)?
@@ -112,11 +104,7 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
         let consensus_address = if let Some(val) = json.get("consensus_address") {
             SocketAddr::deserialize(val).map_err(serde::de::Error::custom)?
         } else {
-            let port = PORT_ALLOCATOR
-                .lock()
-                .map_err(serde::de::Error::custom)?
-                .next_port()
-                .ok_or_else(|| serde::de::Error::custom("No available port."))?;
+            let port = utils::get_available_port();
             socket_addr_from_hostport("127.0.0.1", port)
         };
 
@@ -431,15 +419,12 @@ pub fn make_default_narwhal_committee(
 ) -> Result<ConsensusCommittee<Ed25519PublicKey>, anyhow::Error> {
     let mut ports = Vec::new();
     for _ in authorities {
-        let mut authority_ports = Vec::new();
-        for _ in 0..4 {
-            let port = PORT_ALLOCATOR
-                .lock()
-                .map_err(|e| anyhow::anyhow!("{e}"))?
-                .next_port()
-                .ok_or_else(|| anyhow::anyhow!("No available ports"))?;
-            authority_ports.push(port + 100);
-        }
+        let authority_ports = [
+            utils::get_available_port(),
+            utils::get_available_port(),
+            utils::get_available_port(),
+            utils::get_available_port(),
+        ];
         ports.push(authority_ports);
     }
 
