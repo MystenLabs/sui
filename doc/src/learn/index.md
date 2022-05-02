@@ -45,6 +45,7 @@ Navigate and search this site however you see fit. Here is the order we recommen
 
 Take note of these related repositories of information to make best use of the knowledge here:
 
+* [Move & Sui podcast](https://zeroknowledge.fm/228-2/) on Zero Knowledge where programmable objects are described in detail.
 * Original [Move Book](https://move-book.com/index.html) written by a member of the Sui team.
 * [Core Move](https://github.com/diem/move/tree/main/language/documentation) documentation, including:
   * [Tutorial](https://github.com/diem/move/blob/main/language/documentation/tutorial/README.md) - A step-by-step guide through writing a Move module.
