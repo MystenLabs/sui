@@ -23,7 +23,7 @@ use sui::{
     },
     sui_config_dir,
     wallet_commands::*,
-    SUI_WALLET_CONFIG,
+    SUI_DEV_NET_URL, SUI_WALLET_CONFIG,
 };
 use sui_types::exit_main;
 
@@ -84,11 +84,16 @@ async fn try_main() -> Result<(), anyhow::Error> {
             wallet_conf_path
         );
         if matches!(read_line(), Ok(line) if line.to_lowercase() == "y") {
-            print!("Sui Gateway Url : ");
+            print!("Sui Gateway Url (Default to Sui DevNet if not specified) : ");
             let url = read_line()?;
+            let url = if url.trim().is_empty() {
+                SUI_DEV_NET_URL
+            } else {
+                &url
+            };
 
             // Check url is valid
-            HttpClientBuilder::default().build(&url)?;
+            HttpClientBuilder::default().build(url)?;
             let keystore_path = wallet_conf_path
                 .parent()
                 .unwrap_or(&sui_config_dir()?)
@@ -98,7 +103,7 @@ async fn try_main() -> Result<(), anyhow::Error> {
             WalletConfig {
                 accounts: vec![new_address],
                 keystore,
-                gateway: GatewayType::RPC(url),
+                gateway: GatewayType::RPC(url.to_string()),
                 active_address: None,
             }
             .persisted(&wallet_conf_path)
