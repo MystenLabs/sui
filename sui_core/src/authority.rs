@@ -722,7 +722,7 @@ impl AuthorityState {
     }
 
     /// Make an information response for a transaction
-    pub async fn make_transaction_info(
+    pub(crate) async fn make_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
     ) -> Result<TransactionInfoResponse, SuiError> {
