@@ -1,0 +1,61 @@
+div.txcardgrid a {
+    @apply no-underline text-sky-600 hover:text-sky-900 cursor-pointer break-all;
+}
+
+div.txcardgrid h3 {
+    @apply font-normal leading-3 font-mono text-center;
+}
+
+div.txcard {
+    @apply font-mono md:flex grid items-center bg-center shadow-sm pt-5 pb-5 h-auto border-solid border border-gray-100 pl-5 pr-5 bg-white mt-5 mb-5 text-left;
+}
+
+div.txcardgridlarge {
+    @apply font-mono text-left;
+}
+
+div.txcardgrid > div {
+    @apply block pr-5;
+}
+
+div.txcardgrid > div:first-child {
+    @apply w-full md:w-1/3;
+}
+
+.txlatestesults {
+    @apply w-11/12 md:w-10/12  mx-auto mb-28 mt-10 m-auto;
+
+    max-width: 1200px;
+}
+
+div.txadd {
+    @apply flex md:flex-col flex-row;
+}
+
+.txheader {
+    @apply bg-offblack text-offwhite rounded-none md:h-10 shadow-none !important;
+}
+
+.txtype {
+    @apply md:w-2/12 max-w-sm;
+}
+
+.txgas {
+    @apply md:w-1/12 max-w-sm;
+}
+
+.txsearch {
+    @apply w-full;
+}
+
+.txsearch form {
+    @apply w-full;
+}
+
+.txsearch input {
+    @apply h-16 shadow-sm mr-0 ml-0 rounded-none pl-2 pr-2 border-solid border border-gray-100 text-base;
+}
+
+.txsearch [type='submit'] {
+    @apply md:w-1/12 w-20 bg-offblack text-offwhite hover:text-offblack hover:bg-sui;
+}

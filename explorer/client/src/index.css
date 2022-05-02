@@ -11,7 +11,13 @@
 }
 
 body {
-    @apply bg-offwhite m-0 text-offblack;
+    @apply bg-[#f8f8f8] m-0 text-offblack;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+    outline: none;
 }
 
 /* TODO - The below CSS alters how smart contract code is displayed in the Ace Editor

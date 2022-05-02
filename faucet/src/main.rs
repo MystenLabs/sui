@@ -98,8 +98,7 @@ async fn main() -> Result<(), anyhow::Error> {
     info!("listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
-        .await
-        .unwrap();
+        .await?;
     Ok(())
 }
 
@@ -138,7 +137,12 @@ async fn create_wallet_context() -> Result<WalletContext, anyhow::Error> {
     let wallet_conf = sui_config_dir()?.join(SUI_WALLET_CONFIG);
     info!("Initialize wallet from config path: {:?}", wallet_conf);
     let mut context = WalletContext::new(&wallet_conf)?;
-    let address = context.config.accounts.first().cloned().unwrap();
+    let address = context
+        .config
+        .accounts
+        .first()
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("Empty wallet context!"))?;
 
     // Sync client to retrieve objects from the network.
     WalletCommands::SyncClientState {

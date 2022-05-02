@@ -17,6 +17,7 @@ use sui::{
     wallet_commands::*,
     SUI_WALLET_CONFIG,
 };
+use sui_types::exit_main;
 use tracing::debug;
 
 const SUI: &str = "   _____       _    _       __      ____     __
@@ -46,8 +47,7 @@ struct ClientOpt {
     json: bool,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
+async fn try_main() -> Result<(), anyhow::Error> {
     let config = telemetry_subscribers::TelemetryConfig {
         service_name: "wallet".into(),
         enable_tracing: std::env::var("SUI_TRACING_ENABLE").is_ok(),
@@ -57,13 +57,13 @@ async fn main() -> Result<(), anyhow::Error> {
     };
     #[allow(unused)]
     let guard = telemetry_subscribers::init(config);
-    if let Ok(git_rev) = std::env::var("GIT_REV") {
+    if let Some(git_rev) = std::option_env!("GIT_REV") {
         debug!("Wallet built at git revision {git_rev}");
     }
 
     let mut app: Command = ClientOpt::command();
     app = app.no_binary_name(false);
-    let options: ClientOpt = ClientOpt::from_arg_matches(&app.get_matches()).unwrap();
+    let options: ClientOpt = ClientOpt::from_arg_matches(&app.get_matches())?;
     let wallet_conf_path = options
         .config
         .clone()
@@ -89,9 +89,9 @@ async fn main() -> Result<(), anyhow::Error> {
             .get_long_version()
             .unwrap_or_else(|| app.get_version().unwrap_or("unknown"))
             .to_owned();
-        if let Ok(git_rev) = std::env::var("GIT_REV") {
+        if let Some(git_rev) = std::option_env!("GIT_REV") {
             version.push('-');
-            version.push_str(&git_rev);
+            version.push_str(git_rev);
         }
         writeln!(out, "--- sui wallet {version} ---")?;
         writeln!(out)?;
@@ -113,6 +113,11 @@ async fn main() -> Result<(), anyhow::Error> {
         ClientOpt::command().print_long_help()?
     }
     Ok(())
+}
+
+#[tokio::main]
+async fn main() {
+    exit_main!(try_main().await)
 }
 
 struct ClientCommandHandler;

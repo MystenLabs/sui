@@ -7,7 +7,7 @@ use sui_types::{
     base_types::{ObjectRef, SequenceNumber, SuiAddress},
     error::{SuiError, SuiResult},
     fp_ensure,
-    messages::{InputObjectKind, SingleTransactionKind, Transaction},
+    messages::{InputObjectKind, SingleTransactionKind, TransactionData},
     object::{Object, Owner},
 };
 use tracing::debug;
@@ -15,7 +15,7 @@ use tracing::debug;
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
 pub async fn check_locks(
-    transaction: &Transaction,
+    transaction: &TransactionData,
     input_objects: Vec<InputObjectKind>,
     objects: Vec<Option<Object>>,
 ) -> Result<Vec<(InputObjectKind, Object)>, SuiError> {
@@ -47,6 +47,7 @@ pub async fn check_locks(
     let mut all_objects = Vec::with_capacity(input_objects.len());
     let mut errors = Vec::new();
     let transfer_object_ids: HashSet<_> = transaction
+        .kind
         .single_transactions()
         .filter_map(|s| {
             if let SingleTransactionKind::Transfer(t) = s {
@@ -71,7 +72,7 @@ pub async fn check_locks(
         // Check if the object contents match the type of lock we need for
         // this object.
         match check_one_lock(
-            transaction,
+            &transaction.signer(),
             object_kind,
             &object,
             &owned_object_authenticators,
@@ -118,7 +119,7 @@ pub fn filter_owned_objects(all_objects: &[(InputObjectKind, Object)]) -> Vec<Ob
 /// The logic to check one object against a reference, and return the object if all is well
 /// or an error if not.
 fn check_one_lock(
-    transaction: &Transaction,
+    sender: &SuiAddress,
     object_kind: InputObjectKind,
     object: &Object,
     owned_object_authenticators: &HashSet<SuiAddress>,
@@ -170,9 +171,9 @@ fn check_one_lock(
                 Owner::AddressOwner(owner) => {
                     // Check the owner is the transaction sender.
                     fp_ensure!(
-                        transaction.sender_address() == owner,
+                        sender == &owner,
                         SuiError::IncorrectSigner {
-                            error: format!("Object {:?} is owned by account address {:?}, but signer address is {:?}", object_id, owner, transaction.sender_address()),
+                            error: format!("Object {:?} is owned by account address {:?}, but signer address is {:?}", object_id, owner, sender),
                         }
                     );
                 }

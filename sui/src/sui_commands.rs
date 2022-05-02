@@ -556,7 +556,7 @@ pub async fn make_authority(
     ConsensusListener::spawn(
         rx_sui_to_consensus,
         rx_consensus_to_sui,
-        /* max_pending_transactions */ 10_000,
+        /* max_pending_transactions */ 1_000_000,
     );
 
     // If we have network information make authority clients

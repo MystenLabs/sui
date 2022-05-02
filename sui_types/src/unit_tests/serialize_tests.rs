@@ -16,9 +16,9 @@ use super::*;
 
 // Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
 fn compare_certified_transactions(o1: &CertifiedTransaction, o2: &CertifiedTransaction) {
-    assert_eq!(o1.transaction.digest(), o2.transaction.digest());
+    assert_eq!(o1.digest(), o2.digest());
     // in this ser/de context it's relevant to compare signatures
-    assert_eq!(o1.signatures, o2.signatures);
+    assert_eq!(o1.auth_sign_info.signatures, o2.auth_sign_info.signatures);
 }
 
 // Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
@@ -33,8 +33,11 @@ fn compare_object_info_responses(o1: &ObjectInfoResponse, o2: &ObjectInfoRespons
         o2.parent_certificate.as_ref(),
     ) {
         (Some(cert1), Some(cert2)) => {
-            assert_eq!(cert1.transaction.digest(), cert2.transaction.digest());
-            assert_eq!(cert1.signatures, cert2.signatures);
+            assert_eq!(cert1.digest(), cert2.digest());
+            assert_eq!(
+                cert1.auth_sign_info.signatures,
+                cert2.auth_sign_info.signatures
+            );
         }
         (None, None) => (),
         _ => panic!("certificate structure between responses differs"),
@@ -183,9 +186,10 @@ fn test_cert() {
 
     for _ in 0..3 {
         let (_, authority_key) = get_key_pair();
-        let sig = AuthoritySignature::new(&cert.transaction.data, &authority_key);
+        let sig = AuthoritySignature::new(&cert.data, &authority_key);
 
-        cert.signatures
+        cert.auth_sign_info
+            .signatures
             .push((*authority_key.public_key_bytes(), sig));
     }
 
@@ -225,9 +229,10 @@ fn test_info_response() {
 
     for _ in 0..3 {
         let (_, authority_key) = get_key_pair();
-        let sig = AuthoritySignature::new(&cert.transaction.data, &authority_key);
+        let sig = AuthoritySignature::new(&cert.data, &authority_key);
 
-        cert.signatures
+        cert.auth_sign_info
+            .signatures
             .push((*authority_key.public_key_bytes(), sig));
     }
 
@@ -362,8 +367,9 @@ fn test_time_cert() {
     let mut cache = HashMap::new();
     for _ in 0..7 {
         let (_, authority_key) = get_key_pair();
-        let sig = AuthoritySignature::new(&cert.transaction.data, &authority_key);
-        cert.signatures
+        let sig = AuthoritySignature::new(&cert.data, &authority_key);
+        cert.auth_sign_info
+            .signatures
             .push((*authority_key.public_key_bytes(), sig));
         cache.insert(
             *authority_key.public_key_bytes(),
@@ -384,7 +390,7 @@ fn test_time_cert() {
     let mut buf2 = buf.as_slice();
     for _ in 0..count {
         if let SerializedMessage::Cert(cert) = deserialize_message(&mut buf2).unwrap() {
-            AuthoritySignature::verify_batch(&cert.transaction.data, &cert.signatures, &cache)
+            AuthoritySignature::verify_batch(&cert.data, &cert.auth_sign_info.signatures, &cache)
                 .unwrap();
         }
     }
