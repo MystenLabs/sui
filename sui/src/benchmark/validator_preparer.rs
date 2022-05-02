@@ -96,7 +96,7 @@ impl ValidatorPreparer {
             genesis_config
                 .authorities
                 .iter()
-                .map(|api| (api.public_key.clone(), 1))
+                .map(|api| (api.public_key, 1))
                 .collect(),
         );
 
@@ -129,7 +129,7 @@ impl ValidatorPreparer {
                     &path,
                     db_cpus as i32,
                     &committee,
-                    &public_auth0,
+                    public_auth0,
                     secret_auth0,
                 );
 

@@ -187,11 +187,18 @@ impl std::fmt::Debug for PublicKeyBytes {
 }
 
 pub fn random_key_pairs(num: usize) -> Vec<KeyPair> {
-    let mut key_pairs = Vec::with_capacity(num);
-    for _ in 0..num {
-        key_pairs.push(get_key_pair().1);
-    }
-    key_pairs
+    let mut items = num;
+    let mut rng = OsRng;
+
+    std::iter::from_fn(|| {
+        if items == 0 {
+            None
+        } else {
+            items -= 1;
+            Some(get_key_pair_from_rng(&mut rng).1)
+        }
+    })
+    .collect::<Vec<_>>()
 }
 
 // TODO: get_key_pair() and get_key_pair_from_bytes() should return KeyPair only.
