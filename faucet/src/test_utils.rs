@@ -6,11 +6,11 @@ use std::path::Path;
 use sui::{
     config::{
         AuthorityPrivateInfo, Config, GatewayConfig, GatewayType, GenesisConfig, WalletConfig,
+        SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
     },
     keystore::KeystoreType,
     sui_commands::{genesis, SuiNetwork},
     wallet_commands::{WalletCommands, WalletContext},
-    SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
 };
 use sui_types::{
     base_types::SuiAddress,

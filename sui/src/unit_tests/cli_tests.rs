@@ -11,13 +11,13 @@ use std::{
 use sui::{
     config::{
         AccountConfig, Config, GatewayConfig, GatewayType, GenesisConfig, NetworkConfig,
-        ObjectConfig, PersistedConfig, WalletConfig, AUTHORITIES_DB_NAME,
+        ObjectConfig, PersistedConfig, WalletConfig, AUTHORITIES_DB_NAME, SUI_GATEWAY_CONFIG,
+        SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
     },
     keystore::KeystoreType,
     sui_commands::{SuiCommand, SuiNetwork, SUI_AUTHORITY_KEYS},
     sui_json::SuiJsonValue,
     wallet_commands::{WalletCommandResult, WalletCommands, WalletContext},
-    SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
 };
 use sui_core::gateway_state::gateway_responses::SwitchResponse;
 use sui_types::{

@@ -12,14 +12,14 @@ use std::{
     path::PathBuf,
 };
 use sui::{
-    config::{Config, GatewayType, WalletConfig},
+    config::{
+        sui_config_dir, Config, GatewayType, WalletConfig, SUI_DEV_NET_URL, SUI_WALLET_CONFIG,
+    },
     keystore::KeystoreType,
     shell::{
         install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
     },
-    sui_config_dir,
     wallet_commands::*,
-    SUI_DEV_NET_URL, SUI_WALLET_CONFIG,
 };
 use sui_types::exit_main;
 use tracing::debug;
