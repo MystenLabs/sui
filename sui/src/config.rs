@@ -25,7 +25,7 @@ use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_network::network::PortAllocator;
 use sui_types::base_types::*;
 use sui_types::committee::{Committee, EpochId};
-use sui_types::crypto::{get_key_pair, KeyPair};
+use sui_types::crypto::{get_key_pair, KeyPair, PublicKeyBytes};
 use tracing::log::trace;
 
 const DEFAULT_WEIGHT: usize = 1;
@@ -48,7 +48,7 @@ pub struct AuthorityInfo {
 #[derive(Serialize, Debug)]
 pub struct AuthorityPrivateInfo {
     pub address: SuiAddress,
-    pub key_pair: KeyPair,
+    pub public_key: PublicKeyBytes,
     pub host: String,
     pub port: u16,
     pub db_path: PathBuf,
@@ -56,6 +56,7 @@ pub struct AuthorityPrivateInfo {
     pub consensus_address: SocketAddr,
 }
 
+<<<<<<< HEAD
 impl AuthorityPrivateInfo {
     pub fn copy(&self) -> Self {
         Self {
@@ -69,6 +70,9 @@ impl AuthorityPrivateInfo {
         }
     }
 }
+=======
+type AuthorityKeys = (Vec<PublicKeyBytes>, KeyPair);
+>>>>>>> d3ac68acbfbc89af34f9584e52df3fb9adefe1b7
 
 // Warning: to_socket_addrs() is blocking and can fail.  Be careful where you use it.
 fn socket_addr_from_hostport(host: &str, port: u16) -> SocketAddr {
@@ -89,10 +93,10 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
         let (_, new_key_pair) = get_key_pair();
 
         let json = Value::deserialize(deserializer)?;
-        let key_pair = if let Some(val) = json.get("key_pair") {
-            KeyPair::deserialize(val).map_err(serde::de::Error::custom)?
+        let public_key_bytes = if let Some(val) = json.get("public_key") {
+            PublicKeyBytes::deserialize(val).map_err(serde::de::Error::custom)?
         } else {
-            new_key_pair
+            *new_key_pair.public_key_bytes()
         };
         let host = if let Some(val) = json.get("host") {
             String::deserialize(val).map_err(serde::de::Error::custom)?
@@ -113,7 +117,7 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
         } else {
             PathBuf::from(".")
                 .join(AUTHORITIES_DB_NAME)
-                .join(encode_bytes_hex(key_pair.public_key_bytes()))
+                .join(encode_bytes_hex(&public_key_bytes))
         };
         let stake = if let Some(val) = json.get("stake") {
             usize::deserialize(val).map_err(serde::de::Error::custom)?
@@ -132,8 +136,8 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
         };
 
         Ok(AuthorityPrivateInfo {
-            address: SuiAddress::from(key_pair.public_key_bytes()),
-            key_pair,
+            address: SuiAddress::from(&public_key_bytes),
+            public_key: public_key_bytes,
             host,
             port,
             db_path,
@@ -178,6 +182,7 @@ pub struct NetworkConfig {
     pub authorities: Vec<AuthorityPrivateInfo>,
     pub buffer_size: usize,
     pub loaded_move_packages: Vec<(PathBuf, ObjectID)>,
+    pub key_pair: KeyPair,
 }
 
 impl Config for NetworkConfig {}
@@ -187,7 +192,7 @@ impl NetworkConfig {
         self.authorities
             .iter()
             .map(|info| AuthorityInfo {
-                name: *info.key_pair.public_key_bytes(),
+                name: info.public_key,
                 host: info.host.clone(),
                 base_port: info.port,
             })
@@ -200,7 +205,10 @@ impl NetworkConfig {
                 .authorities
                 .iter()
                 .map(|x| {
-                    let name = x.key_pair.make_narwhal_keypair().name;
+                    let name = x
+                        .public_key
+                        .make_narwhal_public_key()
+                        .expect("Can't get narwhal public key");
                     let primary = PrimaryAddresses {
                         primary_to_primary: socket_addr_from_hostport(&x.host, x.port + 100),
                         worker_to_primary: socket_addr_from_hostport(&x.host, x.port + 200),
@@ -233,7 +241,7 @@ impl From<&NetworkConfig> for Committee {
         let voting_rights = network_config
             .authorities
             .iter()
-            .map(|authority| (*authority.key_pair.public_key_bytes(), authority.stake))
+            .map(|authority| (authority.public_key, authority.stake))
             .collect();
         Committee::new(network_config.epoch, voting_rights)
     }
@@ -247,6 +255,7 @@ pub struct GenesisConfig {
     pub move_packages: Vec<PathBuf>,
     pub sui_framework_lib_path: PathBuf,
     pub move_framework_lib_path: PathBuf,
+    pub key_pair: KeyPair,
 }
 
 impl Config for GenesisConfig {}
@@ -291,12 +300,21 @@ const DEFAULT_NUMBER_OF_ACCOUNT: usize = 5;
 const DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT: usize = 5;
 
 impl GenesisConfig {
-    pub fn default_genesis(working_dir: &Path) -> Result<Self, anyhow::Error> {
+    pub fn default_genesis(
+        working_dir: &Path,
+        authority_keys: Option<AuthorityKeys>,
+    ) -> Result<Self, anyhow::Error> {
+        let num_authorities = match &authority_keys {
+            Some((public_keys, _)) => public_keys.len(),
+            None => DEFAULT_NUMBER_OF_AUTHORITIES,
+        };
+
         GenesisConfig::custom_genesis(
             working_dir,
-            DEFAULT_NUMBER_OF_AUTHORITIES,
+            num_authorities,
             DEFAULT_NUMBER_OF_ACCOUNT,
             DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT,
+            authority_keys,
         )
     }
 
@@ -305,15 +323,46 @@ impl GenesisConfig {
         num_authorities: usize,
         num_accounts: usize,
         num_objects_per_account: usize,
+        authority_keys: Option<AuthorityKeys>,
     ) -> Result<Self, anyhow::Error> {
-        let mut authorities = Vec::new();
+        assert!(
+            num_authorities > 0,
+            "num_authorities should be larger than 0"
+        );
+        let mut authorities = Vec::with_capacity(num_authorities);
         for _ in 0..num_authorities {
             // Get default authority config from deserialization logic.
             let mut authority = AuthorityPrivateInfo::deserialize(Value::String(String::new()))?;
             authority.db_path = working_dir
                 .join(AUTHORITIES_DB_NAME)
-                .join(encode_bytes_hex(&authority.key_pair.public_key_bytes()));
+                .join(encode_bytes_hex(&authority.public_key));
             authorities.push(authority)
+        }
+        let authority_key_pair;
+        if let Some((public_keys, keypair)) = authority_keys {
+            // Use key pairs if given
+            assert_eq!(
+                public_keys.len(),
+                num_authorities,
+                "Number of key pairs does not maych num_authorities"
+            );
+            public_keys
+                .iter()
+                .find(|pk| pk == &keypair.public_key_bytes())
+                .expect("Keypair should be part of thte committee");
+            authority_key_pair = keypair;
+            for i in 0..num_authorities {
+                authorities[i].public_key = public_keys[i];
+                authorities[i].address = SuiAddress::from(&public_keys[i]);
+            }
+        } else {
+            let (address, key_pair) = get_key_pair();
+            // If authorities is not empty, we override the first one
+            if !authorities.is_empty() {
+                authorities[0].address = address;
+                authorities[0].public_key = *key_pair.public_key_bytes();
+            }
+            authority_key_pair = key_pair;
         }
         let mut accounts = Vec::new();
         for _ in 0..num_accounts {
@@ -330,9 +379,11 @@ impl GenesisConfig {
                 gas_object_ranges: Some(Vec::new()),
             })
         }
+
         Ok(Self {
             authorities,
             accounts,
+            key_pair: authority_key_pair,
             ..Default::default()
         })
     }
@@ -348,6 +399,7 @@ impl Default for GenesisConfig {
             move_framework_lib_path: PathBuf::from(DEFAULT_FRAMEWORK_PATH)
                 .join("deps")
                 .join("move-stdlib"),
+            key_pair: get_key_pair().1,
         }
     }
 }
@@ -424,7 +476,10 @@ pub fn make_default_narwhal_committee(
             .iter()
             .enumerate()
             .map(|(i, x)| {
-                let name = x.key_pair.make_narwhal_keypair().name;
+                let name = x
+                    .public_key
+                    .make_narwhal_public_key()
+                    .expect("Can't get narwhal public key");
 
                 let primary = PrimaryAddresses {
                     primary_to_primary: socket_addr_from_hostport("127.0.0.1", ports[i][0]),

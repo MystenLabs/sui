@@ -1,28 +1,33 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::{anyhow, bail};
 use std::path::Path;
-use sui::{
-    sui_commands::SuiNetwork,
-    wallet_commands::{WalletCommands, WalletContext},
-};
-use sui_types::base_types::SuiAddress;
-
 use sui::config::{AuthorityPrivateInfo, Config, GenesisConfig, WalletConfig};
 use sui::gateway_config::{GatewayConfig, GatewayType};
 use sui::keystore::KeystoreType;
 use sui::sui_commands::genesis;
+use sui::{
+    sui_commands::SuiNetwork,
+    wallet_commands::{WalletCommands, WalletContext},
+};
 use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
+use sui_types::{
+    base_types::SuiAddress,
+    crypto::{random_key_pairs, KeyPair},
+};
 
 /* -------------------------------------------------------------------------- */
 /*  NOTE: Below is copied from sui/src/unit_tests, we should consolidate them */
 /* -------------------------------------------------------------------------- */
 
+const NUM_VALIDATOR: usize = 4;
+
 pub async fn setup_network_and_wallet(
 ) -> Result<(SuiNetwork, WalletContext, SuiAddress), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
 
-    let network = start_test_network(working_dir.path(), None).await?;
+    let network = start_test_network(working_dir.path(), None, None).await?;
 
     // Create Wallet context.
     let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
@@ -41,6 +46,7 @@ pub async fn setup_network_and_wallet(
 pub async fn start_test_network(
     working_dir: &Path,
     genesis_config: Option<GenesisConfig>,
+    key_pairs: Option<Vec<KeyPair>>,
 ) -> Result<SuiNetwork, anyhow::Error> {
     let working_dir = working_dir.to_path_buf();
     let network_path = working_dir.join(SUI_NETWORK_CONFIG);
@@ -48,25 +54,40 @@ pub async fn start_test_network(
     let keystore_path = working_dir.join("wallet.key");
     let db_folder_path = working_dir.join("client_db");
 
-    let mut genesis_config =
-        genesis_config.unwrap_or(GenesisConfig::default_genesis(&working_dir)?);
+    if genesis_config.is_none() ^ key_pairs.is_none() {
+        return Err(anyhow!(
+            "genesis_config and key_pairs should be absent/present in tandem."
+        ));
+    }
+    let key_pairs = key_pairs.unwrap_or_else(|| random_key_pairs(NUM_VALIDATOR));
+
+    let mut genesis_config = match genesis_config {
+        Some(genesis_config) => genesis_config,
+        None => GenesisConfig::default_genesis(
+            &working_dir,
+            Some((
+                key_pairs
+                    .iter()
+                    .map(|kp| *kp.public_key_bytes())
+                    .collect::<Vec<_>>(),
+                key_pairs[0].copy(),
+            )),
+        )?,
+    };
+    if genesis_config.authorities.len() != key_pairs.len() {
+        bail!("genesis_config's authority num should match key_pairs's length.");
+    }
+
     let authorities = genesis_config
         .authorities
-        .iter()
-        .map(|info| AuthorityPrivateInfo {
-            key_pair: info.key_pair.copy(),
-            host: info.host.clone(),
-            port: 0,
-            db_path: info.db_path.clone(),
-            stake: info.stake,
-            consensus_address: info.consensus_address,
-            address: SuiAddress::from(info.key_pair.public_key_bytes()),
-        })
+        .into_iter()
+        .map(|info| AuthorityPrivateInfo { port: 0, ..info })
         .collect();
     genesis_config.authorities = authorities;
 
     let (network_config, accounts, mut keystore) = genesis(genesis_config).await?;
-    let network = SuiNetwork::start(&network_config).await?;
+    let key_pair_refs = key_pairs.iter().collect::<Vec<_>>();
+    let network = SuiNetwork::start(&network_config, key_pair_refs).await?;
 
     let network_config = network_config.persisted(&network_path);
     network_config.save()?;
