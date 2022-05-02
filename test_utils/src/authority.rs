@@ -4,7 +4,7 @@ use crate::{test_committee, test_keys};
 use narwhal_config::Parameters as ConsensusParameters;
 use std::{path::PathBuf, sync::Arc};
 use sui::{
-    config::{make_default_narwhal_committee, AuthorityPrivateInfo, PORT_ALLOCATOR},
+    config::{make_default_narwhal_committee, utils::get_available_port, AuthorityPrivateInfo},
     sui_commands::make_authority,
 };
 use sui_adapter::genesis;
@@ -33,8 +33,8 @@ pub fn test_authority_configs() -> (Vec<AuthorityPrivateInfo>, Vec<KeyPair>) {
     let authorities = test_keys
         .into_iter()
         .map(|(address, key)| {
-            let authority_port = PORT_ALLOCATOR.lock().unwrap().next_port().unwrap();
-            let consensus_port = PORT_ALLOCATOR.lock().unwrap().next_port().unwrap();
+            let authority_port = get_available_port();
+            let consensus_port = get_available_port();
 
             AuthorityPrivateInfo {
                 address,
