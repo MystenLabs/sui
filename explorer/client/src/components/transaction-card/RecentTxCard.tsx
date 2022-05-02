@@ -16,7 +16,12 @@ import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import ErrorResult from '../error-result/ErrorResult';
 
-import type { CertifiedTransaction, GetTxnDigestsResponse } from 'sui.js';
+import type {
+    CertifiedTransaction,
+    GetTxnDigestsResponse,
+    TransactionEffectsResponse,
+    ExecutionStatus,
+} from 'sui.js';
 
 import styles from './RecentTxCard.module.css';
 
@@ -25,19 +30,35 @@ const initState = {
     latestTx: [],
 };
 
+const getGasFeesAndStatus = (txStatusData: ExecutionStatus) => {
+    const istxSucces = Object.keys(txStatusData)[0].toLowerCase();
+    const txGasObj = Object.values(txStatusData)[0];
+    const txGas =
+        txGasObj.gas_cost.computation_cost +
+        txGasObj.gas_cost.storage_cost -
+        txGasObj.gas_cost.storage_rebate;
+    return {
+        istxSucces,
+        txGas,
+    };
+};
+
 const getRecentTransactions = async (txNum: number) => {
     try {
         // Get the latest transactions
-        // TODO add batch transaction kind
+        // TODO add batch transaction kind TransactionDigest
         // TODO sui.js to get the latest transactions meta data
         const transactions = await rpc
             .getRecentTransactions(txNum)
             .then((res: GetTxnDigestsResponse) => res);
+
         const txLatest = await Promise.all(
             transactions.map(async (tx) => {
                 return await rpc
-                    .getTransaction(tx[1])
-                    .then((res: CertifiedTransaction) => {
+                    .getTransactionWithEffects(tx[1])
+                    .then((txEff: TransactionEffectsResponse) => {
+                        const res: CertifiedTransaction = txEff.certificate;
+
                         const singleTransaction = getSingleTransactionKind(
                             res.data
                         );
@@ -51,10 +72,17 @@ const getRecentTransactions = async (txNum: number) => {
                             res.data
                         )?.recipient;
 
+                        // TODO use ExecutionStatus and add a method on sui.js to get the gas data
+                        const txStatusData = getGasFeesAndStatus(
+                            txEff.effects.status
+                        );
+                        // Calculate the gas used
+
                         return {
                             block: tx[0],
                             txId: tx[1],
-                            // success: txData ? true : false,
+                            success: txStatusData.istxSucces,
+                            txGas: txStatusData.txGas,
                             kind: txKind,
                             From: res.data.sender,
                             ...(recipient
@@ -158,7 +186,8 @@ function LatestTxCard() {
                         )}
                     >
                         <div className={styles.txcardgridlarge}>TxId</div>
-                        <div className={styles.txtype}>Tx Type</div>
+                        <div className={styles.txtype}>TxType</div>
+                        <div className={styles.txgas}>Status</div>
                         <div className={styles.txgas}>Gas</div>
                         <div className={styles.txadd}>Sender & Receiver</div>
                     </div>
@@ -178,7 +207,12 @@ function LatestTxCard() {
                                 </div>
                             </div>
                             <div className={styles.txtype}> {tx.kind}</div>
-                            <div className={styles.txgas}> 10</div>
+                            <div
+                                className={cl(styles[tx.success], styles.txgas)}
+                            >
+                                {tx.success === 'success' ? '✔' : '✖'}
+                            </div>
+                            <div className={styles.txgas}>{tx.txGas}</div>
                             <div className={styles.txadd}>
                                 <div>
                                     From:

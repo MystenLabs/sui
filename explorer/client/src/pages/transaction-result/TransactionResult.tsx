@@ -64,7 +64,9 @@ function fetchTransactionData(txId: string | undefined) {
             });
         }
 
-        return rpc.getTransaction(txId).then((objState) => objState);
+        return rpc
+            .getTransaction(txId)
+            .then((objState: CertifiedTransaction) => objState);
     } catch (error) {
         throw error;
     }
