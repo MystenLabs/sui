@@ -32,7 +32,7 @@ pub const VALIDATOR_BINARY_NAME: &str = "validator";
 #[allow(unused)]
 pub struct ValidatorPreparer {
     running_mode: RunningMode,
-    pub keys: Vec<(PublicKeyBytes, KeyPair)>,
+    pub keys: Vec<KeyPair>,
     main_authority_address_hex: String,
     pub committee: Committee,
     validator_config: ValidatorConfig,
@@ -82,7 +82,7 @@ impl ValidatorPreparer {
         validator_port: u16,
         db_cpus: usize,
     ) -> Self {
-        let (key_pairs, mut genesis_config) = set_up_authorities_and_committee(committee_size)
+        let (keys, mut genesis_config) = set_up_authorities_and_committee(committee_size)
             .expect("Got error in setting up committee");
 
         let main_authority_address_hex = format!(
@@ -91,12 +91,14 @@ impl ValidatorPreparer {
         );
         info!("authority address hex: {}", main_authority_address_hex);
 
-        let keys: Vec<_> = key_pairs
-            .into_iter()
-            .map(|key_pair| (*key_pair.public_key_bytes(), key_pair))
-            .collect();
-
-        let committee = Committee::new(0, keys.iter().map(|(k, _)| (*k, 1)).collect());
+        let committee = Committee::new(
+            0,
+            genesis_config
+                .authorities
+                .iter()
+                .map(|api| (api.public_key.clone(), 1))
+                .collect(),
+        );
 
         match running_mode {
             RunningMode::LocalSingleValidatorProcess => {
@@ -118,8 +120,8 @@ impl ValidatorPreparer {
 
             RunningMode::LocalSingleValidatorThread => {
                 // Pick the first validator and create state.
-                let public_auth0 = keys[0].0;
-                let secret_auth0 = keys[0].1.copy();
+                let public_auth0 = keys[0].public_key_bytes();
+                let secret_auth0 = keys[0].copy();
 
                 // Create a random directory to store the DB
                 let path = env::temp_dir().join(format!("DB_{:?}", ObjectID::random()));
@@ -128,7 +130,7 @@ impl ValidatorPreparer {
                     db_cpus as i32,
                     &committee,
                     &public_auth0,
-                    secret_auth0.copy(),
+                    secret_auth0,
                 );
 
                 Self {
