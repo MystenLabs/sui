@@ -1,6 +1,9 @@
 name: Detect Changes
 description: Defines variables indicating the parts of the code that changed
 outputs:
+  isDoc:
+    description: True when changes happened to some documentation
+    value: "${{ steps.diff.outputs.isDoc }}"
   isRust:
     description: True when changes happened to the rust code
     value: "${{ steps.diff.outputs.isRust }}"
@@ -24,3 +27,7 @@ runs:
         isExplorerClient:
           - 'explorer/client/**'
           - '.github/workflows/explorer-client-prs.yml'
+        isDoc:
+          - 'doc/**'
+          - '*.md'
+          - '.github/workflows/docs.yml'
