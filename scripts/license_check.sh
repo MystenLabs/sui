@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright (c) 2022, Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 # shellcheck disable=SC2044,SC2086,SC2016
 # This script checks each file starts with a license comment
 set -e
