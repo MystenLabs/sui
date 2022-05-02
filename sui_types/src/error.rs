@@ -215,19 +215,8 @@ pub enum SuiError {
     InvalidTxUpdate,
     #[error("Attempt to re-initialize a transaction lock.")]
     TransactionLockExists,
-
-
-    #[error("GET: Attempt to set an non-existing transaction lock..[{:?}].", object_ref)]
-    TransactionLockDoesNotExistGet  { object_ref: ObjectRef },
-
-
-    #[error("SET Attempt to set an non-existing transaction lock.[{:?}].", digest)]
-    TransactionLockDoesNotExistSet  { digest: TransactionDigest },
-
-    #[error("UPDATE Attempt to set an non-existing transaction lock..[{:?}].", digest)]
-    TransactionLockDoesNotExistUpdate  { digest: TransactionDigest },
-
-
+    #[error("Attempt to set an non-existing transaction lock.")]
+    TransactionLockDoesNotExist,
     #[error("Attempt to reset a set transaction lock to a different value.")]
     TransactionLockReset,
     #[error("Could not find the referenced transaction [{:?}].", digest)]

@@ -294,11 +294,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         &self,
         object_ref: &ObjectRef,
     ) -> Result<Option<TransactionEnvelope<S>>, SuiError> {
-        let transaction_option = self.transaction_lock.get(object_ref)?.ok_or(
-            SuiError::TransactionLockDoesNotExistGet {
-                object_ref: *object_ref,
-            },
-        )?;
+        let transaction_option = self
+            .transaction_lock
+            .get(object_ref)?
+            .ok_or(SuiError::TransactionLockDoesNotExist)?;
 
         match transaction_option {
             Some(tx_digest) => Ok(Some(
@@ -489,9 +488,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
 
             for lock in locks {
                 // The object / version must exist, and therefore lock initialized.
-                let lock =
-                    lock.ok_or(SuiError::TransactionLockDoesNotExistSet { digest: tx_digest })?;
-
+                let lock = lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
                 if let Some(previous_tx_digest) = lock {
                     if previous_tx_digest != tx_digest {
                         warn!(prev_tx_digest =? previous_tx_digest,
@@ -741,9 +738,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             // TODO: maybe we could just check if the certificate is there instead?
             let locks = self.transaction_lock.multi_get(&active_inputs[..])?;
             for object_lock in locks {
-                object_lock.ok_or(SuiError::TransactionLockDoesNotExistUpdate {
-                    digest: transaction_digest,
-                })?;
+                object_lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
             }
 
             if let Some(next_seq) = seq_opt {
