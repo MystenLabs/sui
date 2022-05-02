@@ -6,10 +6,10 @@ jobs:
     outputs:
       isClient: ${{ steps.diff.outputs.isExplorerClient }}
     steps:
-    - uses: actions/checkout@v3
-    - name: Detect Changes
-      uses: './.github/actions/diffs'
-      id: diff
+      - uses: actions/checkout@v3
+      - name: Detect Changes
+        uses: "./.github/actions/diffs"
+        id: diff
   client_checks:
     name: Lint, Test & Build
     needs: diff
@@ -21,12 +21,15 @@ jobs:
       - name: Install Nodejs
         uses: actions/setup-node@v2
         with:
-          node-version: '16'
-          cache: 'yarn'
+          node-version: "16"
+          cache: "yarn"
           cache-dependency-path: ./explorer/client/yarn.lock
+      - name: Build TS sdk
+        working-directory: ./sdk/typescript
+        run: yarn install; yarn build
       - name: Install yarn dependencies
         working-directory: ./explorer/client
-        run: yarn install 
+        run: yarn install
       - name: Lint
         working-directory: ./explorer/client
         run: yarn lint

@@ -23,7 +23,7 @@ jobs:
     name: Generate code coverage
     needs: diff
     if: github.event.pull_request.draft == false && needs.diff.outputs.isRust == 'true'
-    runs-on: [self-hosted, ubuntu-latest]
+    runs-on: [self-hosted, ubuntu]
     strategy:
       fail-fast: true
     steps:

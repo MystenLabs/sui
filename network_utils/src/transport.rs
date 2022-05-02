@@ -97,7 +97,15 @@ where
     S: MessageHandler<TcpDataStream> + Send + Sync + 'static,
 {
     let (tx_cancellation, rx_cancellation) = futures::channel::oneshot::channel();
-    let std_listener = std::net::TcpListener::bind(address)?;
+    info!(address =% address, "Attempting to spawn server and bind to address...");
+    let std_listener = std::net::TcpListener::bind(address).map_err(|e| match e.kind() {
+        // Wrap custom error to give information about the address that could not be bbound
+        ErrorKind::AddrInUse => std::io::Error::new(
+            ErrorKind::AddrInUse,
+            format!("Address {address} was in use!"),
+        ),
+        _ => e,
+    })?;
 
     let local_addr = std_listener.local_addr()?;
     let host = local_addr.ip();
@@ -132,9 +140,20 @@ pub struct TcpDataStream {
 
 impl TcpDataStream {
     async fn connect(address: String, max_data_size: usize) -> Result<Self, std::io::Error> {
-        let addr = address
-            .parse()
-            .map_err(|e| std::io::Error::new(ErrorKind::Other, e))?;
+        let addr = match address.parse() {
+            Ok(addr) => addr,
+            Err(_) => {
+                // Maybe it's a host name, try doing lookup first
+                if let Some(addr) = tokio::net::lookup_host(address.clone()).await?.next() {
+                    addr
+                } else {
+                    return Err(std::io::Error::new(
+                        ErrorKind::Other,
+                        format!("Could not lookup address {address}"),
+                    ));
+                }
+            }
+        };
         let socket = TcpSocket::new_v4()?;
         socket.set_send_buffer_size(max_data_size as u32)?;
         socket.set_recv_buffer_size(max_data_size as u32)?;

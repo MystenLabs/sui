@@ -33,10 +33,10 @@ pub trait Faucet {
     ) -> Result<FaucetReceipt, FaucetError>;
 }
 
-impl From<Vec<Object>> for FaucetReceipt {
-    fn from(v: Vec<Object>) -> Self {
-        Self {
-            sent: v.iter().map(|c| c.into()).collect(),
+impl<'a> FromIterator<&'a Object> for FaucetReceipt {
+    fn from_iter<T: IntoIterator<Item = &'a Object>>(iter: T) -> Self {
+        FaucetReceipt {
+            sent: iter.into_iter().map(|o| o.into()).collect(),
         }
     }
 }

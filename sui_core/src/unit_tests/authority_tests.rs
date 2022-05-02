@@ -35,9 +35,9 @@ const MAX_GAS: u64 = 10000;
 
 // Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
 fn compare_certified_transactions(o1: &CertifiedTransaction, o2: &CertifiedTransaction) {
-    assert_eq!(o1.transaction.digest(), o2.transaction.digest());
+    assert_eq!(o1.digest(), o2.digest());
     // in this ser/de context it's relevant to compare signatures
-    assert_eq!(o1.signatures, o2.signatures);
+    assert_eq!(o1.auth_sign_info.signatures, o2.auth_sign_info.signatures);
 }
 
 // Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
@@ -49,8 +49,11 @@ fn compare_transaction_info_responses(o1: &TransactionInfoResponse, o2: &Transac
         o2.certified_transaction.as_ref(),
     ) {
         (Some(cert1), Some(cert2)) => {
-            assert_eq!(cert1.transaction.digest(), cert2.transaction.digest());
-            assert_eq!(cert1.signatures, cert2.signatures);
+            assert_eq!(cert1.digest(), cert2.digest());
+            assert_eq!(
+                cert1.auth_sign_info.signatures,
+                cert2.auth_sign_info.signatures
+            );
         }
         (None, None) => (),
         _ => panic!("certificate structure between responses differs"),
@@ -341,7 +344,7 @@ pub async fn send_and_confirm_transaction(
     // Collect signatures from a quorum of authorities
     let mut builder = SignatureAggregator::try_new(transaction, &authority.committee).unwrap();
     let certificate = builder
-        .append(vote.auth_signature.authority, vote.auth_signature.signature)
+        .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
         .unwrap()
         .unwrap();
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
@@ -400,7 +403,7 @@ async fn test_publish_dependent_module_ok() {
     let signature = Signature::new(&data, &sender_key);
     let transaction = Transaction::new(data, signature);
 
-    let dependent_module_id = TxContext::new(&sender, &transaction.digest()).fresh_id();
+    let dependent_module_id = TxContext::new(&sender, transaction.digest()).fresh_id();
 
     // Object does not exist
     assert!(authority
@@ -436,7 +439,7 @@ async fn test_publish_module_no_dependencies_ok() {
     let data = TransactionData::new_module(sender, gas_payment_object_ref, module_bytes, MAX_GAS);
     let signature = Signature::new(&data, &sender_key);
     let transaction = Transaction::new(data, signature);
-    let _module_object_id = TxContext::new(&sender, &transaction.digest()).fresh_id();
+    let _module_object_id = TxContext::new(&sender, transaction.digest()).fresh_id();
     let response = send_and_confirm_transaction(&authority, transaction)
         .await
         .unwrap();
@@ -878,7 +881,7 @@ async fn test_handle_confirmation_transaction_idempotent() {
     // Now check the transaction info request is also the same
     let info3 = authority_state
         .handle_transaction_info_request(TransactionInfoRequest {
-            transaction_digest: certified_transfer_transaction.transaction.digest(),
+            transaction_digest: *certified_transfer_transaction.digest(),
         })
         .await
         .unwrap();
@@ -1173,6 +1176,44 @@ async fn test_authority_persist() {
     assert_eq!(obj2.owner, recipient);
 }
 
+#[tokio::test]
+async fn test_idempotent_reversed_confirmation() {
+    // In this test we exercise the case where an authority first receive the certificate,
+    // and then receive the raw transaction latter. We should still ensure idempotent
+    // response and be able to get back the same result.
+    let recipient = dbg_addr(2);
+    let (sender, sender_key) = get_key_pair();
+
+    let object = Object::with_owner_for_testing(sender);
+    let object_ref = object.compute_object_reference();
+    let gas_object = Object::with_owner_for_testing(sender);
+    let gas_object_ref = gas_object.compute_object_reference();
+    let authority_state = init_state_with_objects([object, gas_object]).await;
+
+    let certified_transfer_transaction = init_certified_transfer_transaction(
+        sender,
+        &sender_key,
+        recipient,
+        object_ref,
+        gas_object_ref,
+        &authority_state,
+    );
+    let result1 = authority_state
+        .handle_confirmation_transaction(ConfirmationTransaction::new(
+            certified_transfer_transaction.clone(),
+        ))
+        .await;
+    assert!(result1.is_ok());
+    let result2 = authority_state
+        .handle_transaction(certified_transfer_transaction.to_transaction())
+        .await;
+    assert!(result2.is_ok());
+    assert_eq!(
+        result1.unwrap().signed_effects.unwrap().effects,
+        result2.unwrap().signed_effects.unwrap().effects
+    );
+}
+
 // helpers
 
 #[cfg(test)]
@@ -1269,7 +1310,7 @@ fn init_certified_transfer_transaction(
     let mut builder =
         SignatureAggregator::try_new(transfer_transaction, &authority_state.committee).unwrap();
     builder
-        .append(vote.auth_signature.authority, vote.auth_signature.signature)
+        .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
         .unwrap()
         .unwrap()
 }
@@ -1414,7 +1455,7 @@ async fn shared_object() {
         use sui_types::gas_coin::GasCoin;
         use sui_types::object::MoveObject;
 
-        let content = GasCoin::new(shared_object_id, SequenceNumber::new(), 10);
+        let content = GasCoin::new(shared_object_id, OBJECT_START_VERSION, 10);
         let obj = MoveObject::new(/* type */ GasCoin::type_(), content.to_bcs_bytes());
         Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
     };
@@ -1444,7 +1485,7 @@ async fn shared_object() {
     );
     let signature = Signature::new(&data, &keypair);
     let transaction = Transaction::new(data, signature);
-    let transaction_digest = transaction.digest();
+    let transaction_digest = *transaction.digest();
 
     // Submit the transaction and assemble a certificate.
     let response = authority
@@ -1454,7 +1495,7 @@ async fn shared_object() {
     let vote = response.signed_transaction.unwrap();
     let certificate = SignatureAggregator::try_new(transaction, &authority.committee)
         .unwrap()
-        .append(vote.auth_signature.authority, vote.auth_signature.signature)
+        .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
         .unwrap()
         .unwrap();
     let confirmation_transaction = ConfirmationTransaction::new(certificate.clone());
@@ -1479,7 +1520,7 @@ async fn shared_object() {
         .sequenced(&transaction_digest, [shared_object_id].iter())
         .unwrap()[0]
         .unwrap();
-    assert_eq!(shared_object_version, SequenceNumber::new());
+    assert_eq!(shared_object_version, OBJECT_START_VERSION);
 
     // Finally process the certificate and execute the contract. Ensure that the
     // shared object lock is cleaned up and that its sequence number increased.
@@ -1500,5 +1541,5 @@ async fn shared_object() {
         .unwrap()
         .unwrap()
         .version();
-    assert_eq!(shared_object_version, SequenceNumber::from(1));
+    assert_eq!(shared_object_version, SequenceNumber::from(2));
 }

@@ -39,14 +39,13 @@ module Basics::Sandwich {
     const BREAD_PRICE: u64 = 2;
 
     /// Not enough funds to pay for the good in question
-    const EINSUFFICIENT_FUNDS: u64 = 0;
-
+    const EInsufficientFunds: u64 = 0;
     /// Nothing to withdraw
-    const ENO_PROFITS: u64 = 1;
+    const ENoProfits: u64 = 1;
 
     /// On module init, create a grocery
     fun init(ctx: &mut TxContext) {
-        Transfer::share_object(Grocery { 
+        Transfer::share_object(Grocery {
             id: TxContext::new_id(ctx),
             profits: Coin::zero<SUI>(ctx)
         });
@@ -58,22 +57,22 @@ module Basics::Sandwich {
 
     /// Exchange `c` for some ham
     public(script) fun buy_ham(
-        grocery: &mut Grocery, 
-        c: Coin<SUI>, 
+        grocery: &mut Grocery,
+        c: Coin<SUI>,
         ctx: &mut TxContext
     ) {
-        assert!(Coin::value(&c) == HAM_PRICE, EINSUFFICIENT_FUNDS);
+        assert!(Coin::value(&c) == HAM_PRICE, EInsufficientFunds);
         Coin::join(&mut grocery.profits, c);
         Transfer::transfer(Ham { id: TxContext::new_id(ctx) }, TxContext::sender(ctx))
     }
 
     /// Exchange `c` for some bread
     public(script) fun buy_bread(
-        grocery: &mut Grocery, 
-        c: Coin<SUI>, 
+        grocery: &mut Grocery,
+        c: Coin<SUI>,
         ctx: &mut TxContext
     ) {
-        assert!(Coin::value(&c) == BREAD_PRICE, EINSUFFICIENT_FUNDS);
+        assert!(Coin::value(&c) == BREAD_PRICE, EInsufficientFunds);
         Coin::join(&mut grocery.profits, c);
         Transfer::transfer(Bread { id: TxContext::new_id(ctx) }, TxContext::sender(ctx))
     }
@@ -97,8 +96,8 @@ module Basics::Sandwich {
     /// Owner of the grocery can collect profits by passing his capability
     public(script) fun collect_profits(_cap: &GroceryOwnerCapability, grocery: &mut Grocery, ctx: &mut TxContext) {
         let amount = Coin::value(&grocery.profits);
-        
-        assert!(amount > 0, ENO_PROFITS);
+
+        assert!(amount > 0, ENoProfits);
 
         let coin = Coin::withdraw(&mut grocery.profits, amount, ctx);
         Transfer::transfer(coin, TxContext::sender(ctx));
@@ -116,7 +115,7 @@ module Basics::TestSandwich {
     use Sui::TestScenario;
     use Sui::Coin::{Self};
     use Sui::SUI::SUI;
-    
+
     #[test]
     public(script) fun test_make_sandwich() {
         let owner = @0x1;
@@ -130,45 +129,45 @@ module Basics::TestSandwich {
 
         TestScenario::next_tx(scenario, &the_guy);
         {
-            let grocery = TestScenario::take_object<Grocery>(scenario);
+            let grocery_wrapper = TestScenario::take_shared<Grocery>(scenario);
+            let grocery = TestScenario::borrow_mut(&mut grocery_wrapper);
             let ctx = TestScenario::ctx(scenario);
-            
+
             Sandwich::buy_ham(
-                &mut grocery, 
-                Coin::mint_for_testing<SUI>(10, ctx), 
+                grocery,
+                Coin::mint_for_testing<SUI>(10, ctx),
                 ctx
             );
-            
+
             Sandwich::buy_bread(
-                &mut grocery, 
-                Coin::mint_for_testing<SUI>(2, ctx), 
+                grocery,
+                Coin::mint_for_testing<SUI>(2, ctx),
                 ctx
             );
-            
-            TestScenario::return_object(scenario, grocery);
+
+            TestScenario::return_shared(scenario, grocery_wrapper);
         };
 
         TestScenario::next_tx(scenario, &the_guy);
         {
-            let grocery = TestScenario::take_object<Grocery>(scenario);
-            let ham = TestScenario::take_object<Ham>(scenario);
-            let bread = TestScenario::take_object<Bread>(scenario);
+            let ham = TestScenario::take_owned<Ham>(scenario);
+            let bread = TestScenario::take_owned<Bread>(scenario);
 
             Sandwich::make_sandwich(ham, bread, TestScenario::ctx(scenario));
-            TestScenario::return_object(scenario, grocery);
         };
 
         TestScenario::next_tx(scenario, &owner);
-        {  
-            let grocery = TestScenario::take_object<Grocery>(scenario);
-            let capability = TestScenario::take_object<GroceryOwnerCapability>(scenario);
+        {
+            let grocery_wrapper = TestScenario::take_shared<Grocery>(scenario);
+            let grocery = TestScenario::borrow_mut(&mut grocery_wrapper);
+            let capability = TestScenario::take_owned<GroceryOwnerCapability>(scenario);
 
-            assert!(Sandwich::profits(&grocery) == 12, 0);
-            Sandwich::collect_profits(&capability, &mut grocery, TestScenario::ctx(scenario));
-            assert!(Sandwich::profits(&grocery) == 0, 0);
+            assert!(Sandwich::profits(grocery) == 12, 0);
+            Sandwich::collect_profits(&capability, grocery, TestScenario::ctx(scenario));
+            assert!(Sandwich::profits(grocery) == 0, 0);
 
-            TestScenario::return_object(scenario, capability);
-            TestScenario::return_object(scenario, grocery);
+            TestScenario::return_owned(scenario, capability);
+            TestScenario::return_shared(scenario, grocery_wrapper);
         };
     }
 }

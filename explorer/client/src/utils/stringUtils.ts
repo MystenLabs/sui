@@ -19,10 +19,21 @@ export function hexToAscii(hex: string) {
 export const trimStdLibPrefix = (str: string): string =>
     str.replace(/^0x2::/, '');
 
-export const processDisplayValue = (display: { bytes: number[] } | string) =>
-    typeof display === 'object' && 'bytes' in display
-        ? asciiFromNumberBytes(display.bytes)
-        : display;
+export const processDisplayValue = (display: { bytes: number[] } | string) => {
+    const url =
+        typeof display === 'object' && 'bytes' in display
+            ? asciiFromNumberBytes(display.bytes)
+            : display;
+    return typeof url === 'string' ? transformURL(url) : url;
+};
+
+function transformURL(url: string) {
+    const found = url.match(/^ipfs:\/\/(.*)/);
+    if (!found) {
+        return url;
+    }
+    return `https://ipfs.io/ipfs/${found[1]}`;
+}
 
 /* Currently unused but potentially useful:
  *

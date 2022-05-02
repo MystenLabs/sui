@@ -3,6 +3,7 @@
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::EpochId;
 use crate::error::{SuiError, SuiResult};
+use crate::json_schema;
 use crate::readable_serde::encoding::Base64;
 use crate::readable_serde::Readable;
 use anyhow::anyhow;
@@ -16,12 +17,14 @@ use narwhal_crypto::ed25519::Ed25519PrivateKey;
 use narwhal_crypto::ed25519::Ed25519PublicKey;
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 use sha3::Sha3_256;
 use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
@@ -129,9 +132,13 @@ impl signature::Signer<AuthoritySignature> for KeyPair {
 }
 
 #[serde_as]
-#[derive(Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
+#[derive(
+    Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema,
+)]
 pub struct PublicKeyBytes(
-    #[serde_as(as = "Readable<Base64, Bytes>")] [u8; dalek::PUBLIC_KEY_LENGTH],
+    #[schemars(with = "json_schema::Base64")]
+    #[serde_as(as = "Readable<Base64, Bytes>")]
+    [u8; dalek::PUBLIC_KEY_LENGTH],
 );
 
 impl PublicKeyBytes {
@@ -209,8 +216,12 @@ pub const SUI_SIGNATURE_LENGTH: usize =
     ed25519_dalek::PUBLIC_KEY_LENGTH + ed25519_dalek::SIGNATURE_LENGTH;
 
 #[serde_as]
-#[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
-pub struct Signature(#[serde_as(as = "Readable<Base64, Bytes>")] [u8; SUI_SIGNATURE_LENGTH]);
+#[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct Signature(
+    #[schemars(with = "json_schema::Base64")]
+    #[serde_as(as = "Readable<Base64, Bytes>")]
+    [u8; SUI_SIGNATURE_LENGTH],
+);
 
 impl AsRef<[u8]> for Signature {
     fn as_ref(&self) -> &[u8] {
@@ -342,8 +353,12 @@ impl Signature {
 /// A signature emitted by an authority. It's useful to decouple this from user signatures,
 /// as their set of supported schemes will probably diverge
 #[serde_as]
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
-pub struct AuthoritySignature(#[serde_as(as = "Readable<Base64, _>")] pub dalek::Signature);
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct AuthoritySignature(
+    #[schemars(with = "json_schema::Base64")]
+    #[serde_as(as = "Readable<Base64, _>")]
+    pub dalek::Signature,
+);
 impl AsRef<[u8]> for AuthoritySignature {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
@@ -443,11 +458,11 @@ impl AuthoritySignature {
 ///       This will make CertifiedTransaction also an instance of the same struct.
 pub trait AuthoritySignInfoTrait: private::SealedAuthoritySignInfoTrait {}
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct EmptySignInfo {}
 impl AuthoritySignInfoTrait for EmptySignInfo {}
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Serialize, Deserialize)]
 pub struct AuthoritySignInfo {
     pub epoch: EpochId,
     pub authority: AuthorityName,
@@ -455,10 +470,46 @@ pub struct AuthoritySignInfo {
 }
 impl AuthoritySignInfoTrait for AuthoritySignInfo {}
 
+impl Hash for AuthoritySignInfo {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.epoch.hash(state);
+        self.authority.hash(state);
+    }
+}
+
+impl PartialEq for AuthoritySignInfo {
+    fn eq(&self, other: &Self) -> bool {
+        // We do not compare the signature, because there can be multiple
+        // valid signatures for the same epoch and authority.
+        self.epoch == other.epoch && self.authority == other.authority
+    }
+}
+
+/// Represents at least a quorum (could be more) of authority signatures.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct AuthorityQuorumSignInfo {
+    pub epoch: EpochId,
+    pub signatures: Vec<(AuthorityName, AuthoritySignature)>,
+}
+// Note: if you meet an error due to this line it may be because you need an Eq implementation for `CertifiedTransaction`,
+// or one of the structs that include it, i.e. `ConfirmationTransaction`, `TransactionInfoResponse` or `ObjectInfoResponse`.
+//
+// Please note that any such implementation must be agnostic to the exact set of signatures in the certificate, as
+// clients are allowed to equivocate on the exact nature of valid certificates they send to the system. This assertion
+// is a simple tool to make sure certificates are accounted for correctly - should you remove it, you're on your own to
+// maintain the invariant that valid certificates with distinct signatures are equivalent, but yet-unchecked
+// certificates that differ on signers aren't.
+//
+// see also https://github.com/MystenLabs/sui/issues/266
+//
+static_assertions::assert_not_impl_any!(AuthorityQuorumSignInfo: Hash, Eq, PartialEq);
+impl AuthoritySignInfoTrait for AuthorityQuorumSignInfo {}
+
 mod private {
     pub trait SealedAuthoritySignInfoTrait {}
     impl SealedAuthoritySignInfoTrait for super::EmptySignInfo {}
     impl SealedAuthoritySignInfoTrait for super::AuthoritySignInfo {}
+    impl SealedAuthoritySignInfoTrait for super::AuthorityQuorumSignInfo {}
 }
 
 /// Something that we know how to hash and sign.

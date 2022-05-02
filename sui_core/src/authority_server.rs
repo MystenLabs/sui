@@ -19,7 +19,7 @@ use tokio::sync::mpsc::Sender;
 use std::time::Duration;
 use tracing::{error, info, warn, Instrument};
 
-use crate::consensus_adapter::{ConsensusInput, ConsensusSubmitter};
+use crate::consensus_adapter::{ConsensusAdapter, ConsensusListenerMessage};
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use tokio::sync::broadcast::error::RecvError;
@@ -41,7 +41,7 @@ const MAX_DELAY_MILLIS: u64 = 5_000; // 5 sec
 pub struct AuthorityServer {
     server: NetworkServer,
     pub state: Arc<AuthorityState>,
-    consensus_submitter: ConsensusSubmitter,
+    consensus_adapter: ConsensusAdapter,
 }
 
 impl AuthorityServer {
@@ -51,9 +51,9 @@ impl AuthorityServer {
         buffer_size: usize,
         state: Arc<AuthorityState>,
         consensus_address: SocketAddr,
-        tx_consensus_listener: Sender<ConsensusInput>,
+        tx_consensus_listener: Sender<ConsensusListenerMessage>,
     ) -> Self {
-        let consensus_submitter = ConsensusSubmitter::new(
+        let consensus_adapter = ConsensusAdapter::new(
             consensus_address,
             buffer_size,
             state.committee.clone(),
@@ -63,7 +63,7 @@ impl AuthorityServer {
         Self {
             server: NetworkServer::new(base_address, base_port, buffer_size),
             state,
-            consensus_submitter,
+            consensus_adapter,
         }
     }
 
@@ -222,7 +222,7 @@ impl AuthorityServer {
                 let span = tracing::debug_span!(
                     "process_cert",
                     ?tx_digest,
-                    tx_kind = message.transaction.data.kind_as_str()
+                    tx_kind = message.data.kind_as_str()
                 );
                 match self
                     .state
@@ -257,18 +257,7 @@ impl AuthorityServer {
                 .await
                 .map(|_| None),
             SerializedMessage::ConsensusTransaction(message) => {
-                match self.consensus_submitter.submit(&message).await {
-                    Ok(()) => match *message {
-                        ConsensusTransaction::UserTransaction(certificate) => {
-                            let confirmation_transaction = ConfirmationTransaction { certificate };
-                            self.state
-                                .handle_confirmation_transaction(confirmation_transaction)
-                                .await
-                                .map(|info| Some(serialize_transaction_info(&info)))
-                        }
-                    },
-                    Err(e) => Err(e),
-                }
+                self.consensus_adapter.submit(&message).await.map(Some)
             }
 
             _ => Err(SuiError::UnexpectedMessage),
@@ -315,7 +304,7 @@ impl AuthorityServer {
                     match message {
                         SerializedMessage::Transaction(message) => {
                             message.is_checked = true;
-                            message.add_to_verification_obligation(&mut obligation)?;
+                            message.add_tx_sig_to_verification_obligation(&mut obligation)?;
                         }
                         SerializedMessage::Cert(message) => {
                             message.is_checked = true;
@@ -372,7 +361,7 @@ where
             /*
                 If this is an error send back the error and drop the connection.
                 Here we make the choice to bail out as soon as either any parsing
-                or signature / commitee verification operation fails. The client
+                or signature / committee verification operation fails. The client
                 should know better than give invalid input. All conditions can be
                 trivially checked on the client side, so there should be no surprises
                 here for well behaved clients.
