@@ -11,7 +11,7 @@ export type AddressOwner = { AddressOwner: AddressBytes };
 export type AnyVec = { vec: any[] };
 export type JsonBytes = { bytes: number[] };
 
-const useLocal = true;
+const useLocal = false;
 const LOCAL = 'http://127.0.0.1:5001';
 const DEVNET = 'http://34.105.36.61:9000';
 

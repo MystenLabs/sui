@@ -387,8 +387,7 @@ export function isExecutionStatus(obj: any, _argumentName?: string): obj is Exec
             (obj.Failure !== null &&
                 typeof obj.Failure === "object" ||
                 typeof obj.Failure === "function") &&
-            isGasCostSummary(obj.Failure.gas_cost) as boolean &&
-            isTransactionResponse(obj.Failure.error) as boolean)
+            isGasCostSummary(obj.Failure.gas_cost) as boolean)
     )
 }
 

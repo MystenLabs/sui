@@ -47,7 +47,7 @@ export type GasCostSummary = {
 
 export type ExecutionStatus =
   | { Success: { gas_cost: GasCostSummary } }
-  | { Failure: { gas_cost: GasCostSummary; error: string } };
+  | { Failure: { gas_cost: GasCostSummary; error: any } };
 
 // TODO: change the tuple to struct from the server end
 export type OwnedObjectRef = [RawObjectRef, ObjectOwner];
