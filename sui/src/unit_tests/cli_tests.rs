@@ -1,34 +1,32 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
-use std::fs::read_dir;
-use std::ops::Add;
-use std::path::PathBuf;
-use std::str;
-use std::time::Duration;
-
 use crate::cli_tests::sui_network::start_test_network;
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use serde_json::{json, Value};
-use std::fmt::Write;
-use sui::config::{
-    AccountConfig, Config, GenesisConfig, NetworkConfig, ObjectConfig, PersistedConfig,
-    WalletConfig, AUTHORITIES_DB_NAME,
+use std::{
+    collections::BTreeSet, fmt::Write, fs::read_dir, ops::Add, path::PathBuf, str, time::Duration,
 };
-use sui::gateway_config::{GatewayConfig, GatewayType};
-use sui::keystore::KeystoreType;
-use sui::sui_commands::{SuiCommand, SuiNetwork, SUI_AUTHORITY_KEYS};
-use sui::sui_json::SuiJsonValue;
-use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
-use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
+use sui::{
+    config::{
+        AccountConfig, Config, GatewayConfig, GatewayType, GenesisConfig, NetworkConfig,
+        ObjectConfig, PersistedConfig, WalletConfig, AUTHORITIES_DB_NAME,
+    },
+    keystore::KeystoreType,
+    sui_commands::{SuiCommand, SuiNetwork, SUI_AUTHORITY_KEYS},
+    sui_json::SuiJsonValue,
+    wallet_commands::{WalletCommandResult, WalletCommands, WalletContext},
+    SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
+};
 use sui_core::gateway_state::gateway_responses::SwitchResponse;
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
-use sui_types::crypto::{get_key_pair, random_key_pairs};
-use sui_types::gas_coin::GasCoin;
-use sui_types::messages::TransactionEffects;
-use sui_types::object::{Object, ObjectRead, GAS_VALUE_FOR_TESTING};
+use sui_types::{
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    crypto::{get_key_pair, random_key_pairs},
+    gas_coin::GasCoin,
+    messages::TransactionEffects,
+    object::{Object, ObjectRead, GAS_VALUE_FOR_TESTING},
+};
 use tracing_test::traced_test;
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
