@@ -17,7 +17,7 @@ tokio = { version = "1.17.0", features = ["full"] }
 tracing = { version = "0.1.34", features = ["log"] }
 tracing-subscriber = { version = "0.3.11", features = ["time", "registry", "env-filter"] }
 serde = { version = "1.0.137", features = ["derive"] }
-serde_json = "1.0.79"
+serde_json = "1.0.80"
 tower = { version = "0.4.12", features = ["util", "timeout", "load-shed", "limit"] }
 
 sui = { path = "../sui" }
