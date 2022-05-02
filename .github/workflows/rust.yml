@@ -56,7 +56,30 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
-      - uses: egor-tensin/setup-clang@v1
+      - name: install ubuntu packages
+        run: |
+          sudo apt install -y \
+              build-essential \
+              ca-certificates \
+              clang \
+              curl \
+              git \
+              gnupg \
+              libatk-bridge2.0-0 \
+              libcairo2 \
+              libcups2 \
+              libgbm-dev \
+              libnss3 \
+              libpango-1.0-0 \
+              libssl-dev \
+              libxcomposite-dev \
+              libxdamage1 \
+              libxfixes-dev \
+              libxkbcommon-x11-0 \
+              libxrandr2 \
+              lsb-release \
+              pkg-config
+
         with:
           version: latest
           platform: x64
