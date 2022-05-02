@@ -1,9 +1,25 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{Debug, Display, Formatter};
 use std::mem::size_of;
+
+use move_binary_format::binary_views::BinaryIndexedView;
+use move_binary_format::CompiledModule;
+use move_bytecode_utils::layout::TypeLayoutBuilder;
+use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::TypeTag;
+use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue};
+use move_disassembler::disassembler::Disassembler;
+use move_ir_types::location::Spanned;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use serde_with::serde_as;
+use serde_with::Bytes;
 
 use crate::coin::Coin;
 use crate::crypto::{sha3_hash, BcsSignable};
@@ -18,20 +34,6 @@ use crate::{
     },
     gas_coin::GasCoin,
 };
-use move_binary_format::binary_views::BinaryIndexedView;
-use move_binary_format::CompiledModule;
-use move_bytecode_utils::layout::TypeLayoutBuilder;
-use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::language_storage::StructTag;
-use move_core_types::language_storage::TypeTag;
-use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout};
-use move_disassembler::disassembler::Disassembler;
-use move_ir_types::location::Spanned;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use serde_with::serde_as;
-use serde_with::Bytes;
 
 pub const GAS_VALUE_FOR_TESTING: u64 = 100000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
@@ -158,15 +160,12 @@ impl MoveObject {
     }
 
     /// Convert `self` to the JSON representation dictated by `layout`.
-    pub fn to_json(&self, layout: &MoveStructLayout) -> Result<Value, SuiError> {
-        let move_value = MoveStruct::simple_deserialize(&self.contents, layout).map_err(|e| {
-            SuiError::ObjectSerializationError {
+    pub fn to_json(&self, layout: &MoveStructLayout) -> Result<ParsedMoveData, SuiError> {
+        MoveStruct::simple_deserialize(&self.contents, layout)
+            .map_err(|e| SuiError::ObjectSerializationError {
                 error: e.to_string(),
-            }
-        })?;
-        serde_json::to_value(&move_value).map_err(|e| SuiError::ObjectSerializationError {
-            error: e.to_string(),
-        })
+            })
+            .map(|move_struct| ParsedMoveData::MoveObject(move_struct.into()))
     }
 
     /// Approximate size of the object in bytes. This is used for gas metering.
@@ -177,6 +176,73 @@ impl MoveObject {
         let seriealized_type_tag =
             bcs::to_bytes(&self.type_).expect("Serializing type tag should not fail");
         self.contents.len() + seriealized_type_tag.len()
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(untagged)]
+pub enum SuiMoveStruct {
+    Runtime(Vec<SuiMoveValue>),
+    WithFields(Vec<(String, SuiMoveValue)>),
+    WithTypes {
+        type_: String,
+        #[serde(flatten)]
+        fields: BTreeMap<String, SuiMoveValue>,
+    },
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(untagged)]
+pub enum SuiMoveValue {
+    U8(u8),
+    U64(u64),
+    U128(u128),
+    Bool(bool),
+    Address(ObjectID),
+    Vector(Vec<SuiMoveValue>),
+    Struct(SuiMoveStruct),
+    Signer(SuiAddress),
+}
+
+impl From<MoveValue> for SuiMoveValue {
+    fn from(value: MoveValue) -> Self {
+        match value {
+            MoveValue::U8(value) => SuiMoveValue::U8(value),
+            MoveValue::U64(value) => SuiMoveValue::U64(value),
+            MoveValue::U128(value) => SuiMoveValue::U128(value),
+            MoveValue::Bool(value) => SuiMoveValue::Bool(value),
+            MoveValue::Address(value) => SuiMoveValue::Address(ObjectID::from(value)),
+            MoveValue::Vector(value) => {
+                SuiMoveValue::Vector(value.into_iter().map(|value| value.into()).collect())
+            }
+            MoveValue::Struct(value) => SuiMoveValue::Struct(value.into()),
+            MoveValue::Signer(value) => {
+                SuiMoveValue::Signer(SuiAddress::from(ObjectID::from(value)))
+            }
+        }
+    }
+}
+
+impl From<MoveStruct> for SuiMoveStruct {
+    fn from(move_struct: MoveStruct) -> Self {
+        match move_struct {
+            MoveStruct::Runtime(value) => {
+                SuiMoveStruct::Runtime(value.into_iter().map(|value| value.into()).collect())
+            }
+            MoveStruct::WithFields(value) => SuiMoveStruct::WithFields(
+                value
+                    .into_iter()
+                    .map(|(id, value)| (id.into_string(), value.into()))
+                    .collect(),
+            ),
+            MoveStruct::WithTypes { type_, fields } => SuiMoveStruct::WithTypes {
+                type_: type_.to_string(),
+                fields: fields
+                    .into_iter()
+                    .map(|(id, value)| (id.into_string(), value.into()))
+                    .collect(),
+            },
+        }
     }
 }
 
@@ -230,7 +296,7 @@ impl Data {
         &self,
         format: ObjectFormatOptions,
         resolver: &impl GetModule,
-    ) -> Result<Value, SuiError> {
+    ) -> Result<ParsedMoveData, SuiError> {
         let layout = match self {
             Data::Move(m) => Some(m.get_layout(format, resolver)?),
             Data::Package(_) => None,
@@ -241,7 +307,7 @@ impl Data {
     /// Convert `self` to the JSON representation dictated by `format`.
     /// If `self` is a Move value, the `resolver` value must contain the module that declares `self.type_` and the (transitive)
     /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
-    pub fn to_json(&self, layout: &Option<MoveStructLayout>) -> Result<Value, SuiError> {
+    pub fn to_json(&self, layout: &Option<MoveStructLayout>) -> Result<ParsedMoveData, SuiError> {
         use Data::*;
         match self {
             Move(m) => match layout {
@@ -268,10 +334,22 @@ impl Data {
                             })?;
                     disassembled.insert(name.to_string(), Value::String(bytecode_str));
                 }
-                Ok(Value::Object(disassembled))
+                Ok(ParsedMoveData::Package(disassembled))
             }
         }
     }
+}
+
+struct SuiMovePackage {
+    version: String,
+    header: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(tag = "data_type", rename_all = "camelCase")]
+pub enum ParsedMoveData {
+    MoveObject(SuiMoveStruct),
+    Package(serde_json::Map<String, Value>),
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema)]
