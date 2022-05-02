@@ -33,6 +33,7 @@ export function transformObjectContent(input: ObjectContent): ObjectContent {
       return;
     }
     const parsers: typeof MoveObjectContentTransformer[] = [
+      BalanceTransformer,
       StringTransformer,
       UniqueIDTransformer,
     ];
@@ -97,6 +98,19 @@ class UniqueIDTransformer extends MoveObjectContentTransformer {
       isObjectContent(input.fields['id']) &&
       input.fields['id'].type === '0x2::ID::ID'
     );
+  }
+}
+
+class BalanceTransformer extends MoveObjectContentTransformer {
+  static toFieldValue(input: ObjectContent): ObjectContentField {
+    if (BalanceTransformer.canTransform(input)) {
+      return input.fields['value'] as number;
+    }
+    return input;
+  }
+
+  static canTransform(input: ObjectContent): boolean {
+    return input.type.startsWith('0x2::Balance::Balance');
   }
 }
 
