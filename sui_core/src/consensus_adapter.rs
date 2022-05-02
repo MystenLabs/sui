@@ -59,7 +59,9 @@ pub struct ConsensusAdapter {
     committee: Committee,
     /// A channel to notify the consensus listener to take action for a transactions.
     tx_consensus_listener: Sender<ConsensusListenerMessage>,
-    /// The maximum duration to wait from consensus before aborting the transaction.
+    /// The maximum duration to wait from consensus before aborting the transaction. After
+    /// this delay passed, the client will be notified that its transaction was probably not
+    /// sequence and it should try to resubmit its transaction.
     max_delay: Duration,
 }
 
@@ -154,7 +156,11 @@ pub struct ConsensusListener {
     rx_consensus_input: Receiver<ConsensusListenerMessage>,
     /// Receive consensus outputs.
     rx_consensus_output: Receiver<ConsensusOutput>,
-    /// The maximum number of pending replies.
+    /// The maximum number of pending replies. This cap indicates the maximum amount of client
+    /// transactions submitted to consensus for which we keep track. If we submit more transactions
+    /// than this cap, the transactions will be handled by consensus as usual but this module won't
+    /// be keeping track of when they are sequenced. Its only purpose is to ensure the field called
+    /// `pending` has a maximum size.
     max_pending_transactions: usize,
     /// Keep a map of all consensus inputs that are currently being sequenced.
     pending: HashMap<ConsensusTransactionDigest, Vec<TxSequencedNotifier>>,
