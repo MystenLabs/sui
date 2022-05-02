@@ -52,7 +52,8 @@ async fn main() -> Result<(), anyhow::Error> {
         ..Default::default()
     };
 
-    let _guard = telemetry_subscribers::init(config);
+    #[allow(unused)]
+    let guard = telemetry_subscribers::init(config);
 
     let cfg = ValidatorOpt::parse();
 

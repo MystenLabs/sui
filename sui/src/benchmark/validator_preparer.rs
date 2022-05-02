@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::large_enum_variant)]
 use crate::benchmark::bench_types::RunningMode;
 use crate::benchmark::load_generator::spawn_authority_server;
 use crate::config::{AccountConfig, Config, GenesisConfig, ObjectConfig};
