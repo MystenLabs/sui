@@ -31,8 +31,8 @@ module Games::RockPaperScissorsTests {
         // Now it's time for The Main Guy to accept his turn.
         TestScenario::next_tx(scenario, &the_main_guy);
         {
-            let game = TestScenario::take_object<Game>(scenario);
-            let cap = TestScenario::take_object<PlayerTurn>(scenario);
+            let game = TestScenario::take_owned<Game>(scenario);
+            let cap = TestScenario::take_owned<PlayerTurn>(scenario);
 
             assert!(Game::status(&game) == 0, 0); // STATUS_READY
 
@@ -40,7 +40,7 @@ module Games::RockPaperScissorsTests {
 
             assert!(Game::status(&game) == 1, 0); // STATUS_HASH_SUBMISSION
 
-            TestScenario::return_object(scenario, game);
+            TestScenario::return_owned(scenario, game);
         };
 
         // Same for Mr Lizard. He uses his secret phrase to encode his turn.
@@ -52,13 +52,13 @@ module Games::RockPaperScissorsTests {
 
         TestScenario::next_tx(scenario, &the_main_guy);
         {
-            let game = TestScenario::take_object<Game>(scenario);
-            let cap = TestScenario::take_object<PlayerTurn>(scenario);
+            let game = TestScenario::take_owned<Game>(scenario);
+            let cap = TestScenario::take_owned<PlayerTurn>(scenario);
             Game::add_hash(&mut game, cap, TestScenario::ctx(scenario));
 
             assert!(Game::status(&game) == 2, 0); // STATUS_HASHES_SUBMITTED
 
-            TestScenario::return_object(scenario, game);
+            TestScenario::return_owned(scenario, game);
         };
 
         // Now that both sides made their moves, it's time for  Mr Spock and Mr Lizard to
@@ -69,13 +69,13 @@ module Games::RockPaperScissorsTests {
 
         TestScenario::next_tx(scenario, &the_main_guy);
         {
-            let game = TestScenario::take_object<Game>(scenario);
-            let secret = TestScenario::take_object<Secret>(scenario);
+            let game = TestScenario::take_owned<Game>(scenario);
+            let secret = TestScenario::take_owned<Secret>(scenario);
             Game::match_secret(&mut game, secret, TestScenario::ctx(scenario));
 
             assert!(Game::status(&game) == 3, 0); // STATUS_REVEALING
 
-            TestScenario::return_object(scenario, game);
+            TestScenario::return_owned(scenario, game);
         };
 
         TestScenario::next_tx(scenario, &mr_lizard);
@@ -85,8 +85,8 @@ module Games::RockPaperScissorsTests {
         // calls the [`select_winner`] function to release The Prize.
         TestScenario::next_tx(scenario, &the_main_guy);
         {
-            let game = TestScenario::take_object<Game>(scenario);
-            let secret = TestScenario::take_object<Secret>(scenario);
+            let game = TestScenario::take_owned<Game>(scenario);
+            let secret = TestScenario::take_owned<Secret>(scenario);
             Game::match_secret(&mut game, secret, TestScenario::ctx(scenario));
 
             assert!(Game::status(&game) == 4, 0); // STATUS_REVEALED
@@ -96,9 +96,9 @@ module Games::RockPaperScissorsTests {
 
         TestScenario::next_tx(scenario, &mr_spock);
         // If it works, then MrSpock is in possession of the prize;
-        let prize = TestScenario::take_object<ThePrize>(scenario);
+        let prize = TestScenario::take_owned<ThePrize>(scenario);
         // Don't forget to give it back!
-        TestScenario::return_object(scenario, prize);
+        TestScenario::return_owned(scenario, prize);
     }
 
     // Copy of the hashing function from the main module.

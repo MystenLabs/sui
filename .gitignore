@@ -1,4 +1,8 @@
+# IDE
+**/.history/
 **/.vscode/
+
+# OSX
 .DS_Store
 
 # Rust build directory

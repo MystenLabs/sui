@@ -8,11 +8,11 @@ use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::adapter;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress, TransactionDigest, TxContext},
+    base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
     error::SuiResult,
     gas::{self, SuiGasStatus},
     messages::{
-        ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind, Transaction,
+        ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind, TransactionData,
         TransactionEffects, Transfer,
     },
     object::Object,
@@ -22,20 +22,21 @@ use tracing::{debug, instrument};
 
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
 pub fn execute_transaction_to_effects<S: BackingPackageStore>(
+    shared_object_refs: Vec<ObjectRef>,
     temporary_store: &mut AuthorityTemporaryStore<S>,
-    transaction: Transaction,
+    transaction_data: TransactionData,
     transaction_digest: TransactionDigest,
     mut transaction_dependencies: BTreeSet<TransactionDigest>,
     move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     gas_status: SuiGasStatus,
 ) -> SuiResult<TransactionEffects> {
-    let mut tx_ctx = TxContext::new(&transaction.sender_address(), &transaction_digest);
+    let mut tx_ctx = TxContext::new(&transaction_data.signer(), &transaction_digest);
 
-    let gas_object_id = transaction.gas_payment_object_ref().0;
+    let gas_object_id = transaction_data.gas_payment_object_ref().0;
     let status = execute_transaction(
         temporary_store,
-        transaction,
+        transaction_data,
         gas_object_id,
         &mut tx_ctx,
         move_vm,
@@ -55,6 +56,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     transaction_dependencies.remove(&TransactionDigest::genesis());
 
     let effects = temporary_store.to_effects(
+        shared_object_refs,
         &transaction_digest,
         transaction_dependencies.into_iter().collect(),
         status,
@@ -66,7 +68,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
 #[instrument(name = "tx_execute", level = "debug", skip_all)]
 fn execute_transaction<S: BackingPackageStore>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
-    transaction: Transaction,
+    transaction_data: TransactionData,
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
@@ -82,7 +84,7 @@ fn execute_transaction<S: BackingPackageStore>(
     let mut result = Ok(());
     // TODO: Since we require all mutable objects to not show up more than
     // once across single tx, we should be able to run them in parallel.
-    for single_tx in transaction.into_single_transactions() {
+    for single_tx in transaction_data.kind.into_single_transactions() {
         result = match single_tx {
             SingleTransactionKind::Transfer(Transfer {
                 recipient,

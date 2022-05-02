@@ -16,11 +16,11 @@ module Sui::TxContext {
     const TX_HASH_LENGTH: u64 = 32;
 
     /// Expected an tx hash of length 32, but found a different length
-    const EBAD_TX_HASH_LENGTH: u64 = 0;
+    const EBadTxHashLength: u64 = 0;
 
     #[test_only]
     /// Attempt to get the most recent created object ID when none has been created.
-    const ENO_IDS_CREATED: u64 = 1;
+    const ENoIDsCreated: u64 = 1;
 
     /// Information about the transaction currently being executed.
     /// This cannot be constructed by a transaction--it is a privileged object created by
@@ -70,7 +70,7 @@ module Sui::TxContext {
     public fun new(signer: signer, tx_hash: vector<u8>, ids_created: u64): TxContext {
         assert!(
             Vector::length(&tx_hash) == TX_HASH_LENGTH,
-            Errors::invalid_argument(EBAD_TX_HASH_LENGTH)
+            Errors::invalid_argument(EBadTxHashLength)
         );
         TxContext { signer, tx_hash, ids_created }
     }
@@ -110,7 +110,7 @@ module Sui::TxContext {
     /// Return the most recent created object ID.
     public fun last_created_object_id(self: &TxContext): ID {
         let ids_created = self.ids_created;
-        assert!(ids_created > 0, ENO_IDS_CREATED);
+        assert!(ids_created > 0, ENoIDsCreated);
         ID::new(derive_id(*&self.tx_hash, ids_created - 1))
     }
 

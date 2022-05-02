@@ -24,15 +24,8 @@ use sui_faucet::{Faucet, FaucetRequest, FaucetResponse, SimpleFaucet};
 use tower::ServiceBuilder;
 use tracing::info;
 
-const DEFAULT_SERVER_PORT: &str = "5003";
-const DEFAULT_SERVER_ADDR_IPV4: &str = "127.0.0.1";
-
-const DEFAULT_AMOUNT: u64 = 20;
-const DEFAULT_NUM_COINS: usize = 5;
-const REQUEST_BUFFER_SIZE: usize = 10;
 // TODO: Increase this once we use multiple gas objects
 const CONCURRENCY_LIMIT: usize = 1;
-const TIMEOUT_IN_SECONDS: u64 = 120;
 
 #[derive(Parser)]
 #[clap(
@@ -41,15 +34,28 @@ const TIMEOUT_IN_SECONDS: u64 = 120;
     rename_all = "kebab-case"
 )]
 struct FaucetConfig {
-    #[clap(long, default_value = DEFAULT_SERVER_PORT)]
+    #[clap(long, default_value_t = 5003)]
     port: u16,
 
-    #[clap(long, default_value = DEFAULT_SERVER_ADDR_IPV4)]
-    host: Ipv4Addr,
+    #[clap(long, default_value = "127.0.0.1")]
+    host_ip: Ipv4Addr,
+
+    #[clap(long, default_value_t = 50000)]
+    amount: u64,
+
+    #[clap(long, default_value_t = 5)]
+    num_coins: usize,
+
+    #[clap(long, default_value_t = 10)]
+    request_buffer_size: usize,
+
+    #[clap(long, default_value_t = 120)]
+    timeout_in_seconds: u64,
 }
 
 struct AppState<F = SimpleFaucet> {
     faucet: F,
+    config: FaucetConfig,
     // TODO: add counter
 }
 
@@ -62,8 +68,17 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let config: FaucetConfig = FaucetConfig::parse();
 
+    let FaucetConfig {
+        host_ip,
+        port,
+        request_buffer_size,
+        timeout_in_seconds,
+        ..
+    } = config;
+
     let app_state = Arc::new(AppState {
         faucet: SimpleFaucet::new(context).await.unwrap(),
+        config,
     });
 
     let app = Router::new()
@@ -72,19 +87,18 @@ async fn main() -> Result<(), anyhow::Error> {
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(handle_error))
-                .buffer(REQUEST_BUFFER_SIZE)
+                .buffer(request_buffer_size)
                 .concurrency_limit(CONCURRENCY_LIMIT)
-                .timeout(Duration::from_secs(TIMEOUT_IN_SECONDS))
+                .timeout(Duration::from_secs(timeout_in_seconds))
                 .layer(Extension(app_state))
                 .into_inner(),
         );
 
-    let addr = SocketAddr::new(IpAddr::V4(config.host), config.port);
+    let addr = SocketAddr::new(IpAddr::V4(host_ip), port);
     info!("listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
-        .await
-        .unwrap();
+        .await?;
     Ok(())
 }
 
@@ -102,7 +116,10 @@ async fn request_gas(
         FaucetRequest::FixedAmountRequest(requests) => {
             state
                 .faucet
-                .send(requests.recipient, &[DEFAULT_AMOUNT; DEFAULT_NUM_COINS])
+                .send(
+                    requests.recipient,
+                    &vec![state.config.amount; state.config.num_coins],
+                )
                 .await
         }
     };
@@ -120,7 +137,12 @@ async fn create_wallet_context() -> Result<WalletContext, anyhow::Error> {
     let wallet_conf = sui_config_dir()?.join(SUI_WALLET_CONFIG);
     info!("Initialize wallet from config path: {:?}", wallet_conf);
     let mut context = WalletContext::new(&wallet_conf)?;
-    let address = context.config.accounts.first().cloned().unwrap();
+    let address = context
+        .config
+        .accounts
+        .first()
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("Empty wallet context!"))?;
 
     // Sync client to retrieve objects from the network.
     WalletCommands::SyncClientState {

@@ -8,6 +8,7 @@ use std::fmt::{Display, Formatter};
 use serde::ser::Error;
 use serde::Serialize;
 
+use schemars::JsonSchema;
 use serde::Deserialize;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::error::SuiError;
@@ -15,9 +16,15 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{CertifiedTransaction, TransactionEffects};
 use sui_types::object::Object;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct TransactionEffectsResponse {
+    pub certificate: CertifiedTransaction,
+    pub effects: TransactionEffects,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum TransactionResponse {
-    EffectResponse(CertifiedTransaction, TransactionEffects),
+    EffectResponse(TransactionEffectsResponse),
     PublishResponse(PublishResponse),
     MergeCoinResponse(MergeCoinResponse),
     SplitCoinResponse(SplitCoinResponse),
@@ -49,13 +56,16 @@ impl TransactionResponse {
         self,
     ) -> Result<(CertifiedTransaction, TransactionEffects), SuiError> {
         match self {
-            TransactionResponse::EffectResponse(cert, effects) => Ok((cert, effects)),
+            TransactionResponse::EffectResponse(TransactionEffectsResponse {
+                certificate,
+                effects,
+            }) => Ok((certificate, effects)),
             _ => Err(SuiError::UnexpectedMessage),
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct SplitCoinResponse {
     /// Certificate of the transaction
     pub certificate: CertifiedTransaction,
@@ -92,7 +102,7 @@ impl Display for SplitCoinResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct MergeCoinResponse {
     /// Certificate of the transaction
     pub certificate: CertifiedTransaction,
@@ -117,7 +127,7 @@ impl Display for MergeCoinResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PublishResponse {
     /// Certificate of the transaction
     pub certificate: CertifiedTransaction,
@@ -137,15 +147,17 @@ impl Display for PublishResponse {
         writeln!(writer, "----- Publish Results ----")?;
         writeln!(
             writer,
-            "The newly published package object: {:?}",
-            self.package
+            "The newly published package object ID: {:?}",
+            self.package.0
         )?;
-        writeln!(
-            writer,
-            "List of objects created by running module initializers:"
-        )?;
-        for obj in &self.created_objects {
-            writeln!(writer, "{}", obj)?;
+        if !self.created_objects.is_empty() {
+            writeln!(
+                writer,
+                "List of objects created by running module initializers:\n"
+            )?;
+            for obj in &self.created_objects {
+                writeln!(writer, "{}\n", obj)?;
+            }
         }
         let gas_coin = GasCoin::try_from(&self.updated_gas).map_err(fmt::Error::custom)?;
         writeln!(writer, "Updated Gas : {}", gas_coin)?;
@@ -156,13 +168,19 @@ impl Display for PublishResponse {
 #[derive(Serialize, Clone, Debug)]
 pub struct SwitchResponse {
     /// Active address
-    pub address: SuiAddress,
+    pub address: Option<SuiAddress>,
+    pub gateway: Option<String>,
 }
 
 impl Display for SwitchResponse {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
-        writeln!(writer, "Active address switched to {}", self.address)?;
+        if let Some(addr) = self.address {
+            writeln!(writer, "Active address switched to {}", addr)?;
+        }
+        if let Some(gateway) = &self.gateway {
+            writeln!(writer, "Active gateway switched to {}", gateway)?;
+        }
         write!(f, "{}", writer)
     }
 }

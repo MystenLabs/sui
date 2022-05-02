@@ -26,7 +26,7 @@ module NFTs::Num {
     const MAX_SUPPLY: u64 = 10;
 
     /// Created more than the maximum supply of Num NFT's
-    const ETOO_MANY_NUMS: u64 = 0;
+    const ETooManyNums: u64 = 0;
 
     /// Create a unique issuer cap and give it to the transaction sender
     fun init(ctx: &mut TxContext) {
@@ -43,7 +43,7 @@ module NFTs::Num {
         let n = cap.issued_counter;
         cap.issued_counter = n + 1;
         cap.supply = cap.supply + 1;
-        assert!(n <= MAX_SUPPLY, ETOO_MANY_NUMS);
+        assert!(n <= MAX_SUPPLY, ETooManyNums);
         Num { id: TxContext::new_id(ctx), n }
     }
 

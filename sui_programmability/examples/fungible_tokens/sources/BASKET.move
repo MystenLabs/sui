@@ -30,7 +30,7 @@ module FungibleTokens::BASKET {
     }
 
     /// Needed to deposit a 1:1 ratio of SUI and MANAGED for minting, but deposited a different ratio
-    const EBAD_DEPOSIT_RATIO: u64 = 0;
+    const EBadDepositRatio: u64 = 0;
 
     fun init(ctx: &mut TxContext) {
         // Get a treasury cap for the coin put it in the reserve
@@ -50,7 +50,7 @@ module FungibleTokens::BASKET {
         reserve: &mut Reserve, sui: Coin<SUI>, managed: Coin<MANAGED>, ctx: &mut TxContext
     ): Coin<BASKET> {
         let num_sui = Coin::value(&sui);
-        assert!(num_sui == Coin::value(&managed), EBAD_DEPOSIT_RATIO);
+        assert!(num_sui == Coin::value(&managed), EBadDepositRatio);
 
         Coin::join(&mut reserve.sui, sui);
         Coin::join(&mut reserve.managed, managed);

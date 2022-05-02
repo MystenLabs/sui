@@ -1,0 +1,3 @@
+div.home {
+    @apply bg-[#f8f8f8] min-h-screen;
+}
