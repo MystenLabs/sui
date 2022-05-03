@@ -113,12 +113,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let request = BincodeEncodedPayload::try_from(&transaction).unwrap();
-        let response = self
-            .client()
-            .transaction(request)
-            .await
-            .map_err(|_| SuiError::UnexpectedMessage)?
-            .into_inner();
+        let response = self.client().transaction(request).await?.into_inner();
 
         response
             .deserialize()
@@ -134,8 +129,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
         let response = self
             .client()
             .confirmation_transaction(request)
-            .await
-            .map_err(|_| SuiError::UnexpectedMessage)?
+            .await?
             .into_inner();
 
         response
@@ -151,10 +145,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
         let response = self
             .client()
             .consensus_transaction(request)
-            .await
-            .map_err(|e| SuiError::GenericAuthorityError {
-                error: e.to_string(),
-            })?
+            .await?
             .into_inner();
 
         response
@@ -169,12 +160,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, SuiError> {
         let request = BincodeEncodedPayload::try_from(&request).unwrap();
-        let response = self
-            .client()
-            .account_info(request)
-            .await
-            .map_err(|_| SuiError::UnexpectedMessage)?
-            .into_inner();
+        let response = self.client().account_info(request).await?.into_inner();
 
         response
             .deserialize()
@@ -186,12 +172,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
         let request = BincodeEncodedPayload::try_from(&request).unwrap();
-        let response = self
-            .client()
-            .object_info(request)
-            .await
-            .map_err(|_| SuiError::UnexpectedMessage)?
-            .into_inner();
+        let response = self.client().object_info(request).await?.into_inner();
 
         response
             .deserialize()
@@ -204,12 +185,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let request = BincodeEncodedPayload::try_from(&request).unwrap();
-        let response = self
-            .client()
-            .transaction_info(request)
-            .await
-            .map_err(|_| SuiError::UnexpectedMessage)?
-            .into_inner();
+        let response = self.client().transaction_info(request).await?.into_inner();
 
         response
             .deserialize()
@@ -222,14 +198,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
         request: BatchInfoRequest,
     ) -> Result<BatchInfoResponseItemStream, SuiError> {
         let request = BincodeEncodedPayload::try_from(&request).unwrap();
-        let response_stream = self
-            .client()
-            .batch_info(request)
-            .await
-            .map_err(|e| SuiError::GenericAuthorityError {
-                error: format!("Batch error: {}", e),
-            })?
-            .into_inner();
+        let response_stream = self.client().batch_info(request).await?.into_inner();
 
         let stream = response_stream
             .map_err(|_| SuiError::UnexpectedMessage)

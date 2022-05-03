@@ -32,6 +32,7 @@ zeroize = "1.5.4"
 hkdf = "0.12.3"
 digest = "0.10.3"
 schemars ="0.8.8"
+tonic = "0.7"
 
 name_variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "97a056f85555fa2afe497d6abb7cf6bf8faa63cf" }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d2976a45420147ad821baae96e6fe4b12215f743" }
