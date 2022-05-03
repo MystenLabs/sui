@@ -1,8 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Error;
-use bytes::Bytes;
 use futures::{
     channel::mpsc::{channel as MpscChannel, Receiver, Sender as MpscSender},
     stream::StreamExt,
@@ -20,15 +18,15 @@ use sui_core::{
     authority_server::{AuthorityServer, AuthorityServerHandle},
 };
 use sui_network::network::{NetworkClient, NetworkServer};
-use sui_types::{committee::Committee, messages::*, serialize::*};
+use sui_types::{committee::Committee, messages::*};
 use tokio::{sync::Notify, time};
 use tracing::{error, info};
 
 use crate::config::NetworkConfig;
 
-pub fn check_transaction_response(reply_message: Result<SerializedMessage, Error>) {
+pub fn check_transaction_response(reply_message: Result<TransactionInfoResponse, io::Error>) {
     match reply_message {
-        Ok(SerializedMessage::TransactionResp(res)) => {
+        Ok(res) => {
             if let Some(e) = res.signed_effects {
                 if matches!(e.effects.status, ExecutionStatus::Failure { .. }) {
                     info!("Execution Error {:?}", e.effects.status);
@@ -38,15 +36,14 @@ pub fn check_transaction_response(reply_message: Result<SerializedMessage, Error
         Err(err) => {
             error!("Received Error {:?}", err);
         }
-        Ok(q) => error!("Received invalid response {:?}", q),
     };
 }
 
 pub async fn send_tx_chunks(
-    tx_chunks: Vec<Bytes>,
+    tx_chunks: Vec<(Transaction, CertifiedTransaction)>,
     net_client: NetworkClient,
     _conn: usize,
-) -> (u128, Vec<Result<Vec<u8>, io::Error>>) {
+) -> (u128, Vec<Result<TransactionInfoResponse, io::Error>>) {
     let time_start = Instant::now();
 
     // This probably isn't going to be as fast so we probably want to provide away to send a batch
@@ -54,20 +51,63 @@ pub async fn send_tx_chunks(
     let client = NetworkAuthorityClient::new(net_client);
     let mut tx_resp = Vec::new();
     for tx in tx_chunks {
-        let message = deserialize_message(&tx[..]).unwrap();
-        let resp = match message {
-            SerializedMessage::Transaction(transaction) => client
-                .handle_transaction(*transaction)
-                .await
-                .map(|resp| serialize_transaction_info(&resp))
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e)),
-            SerializedMessage::Cert(cert) => client
-                .handle_confirmation_transaction(ConfirmationTransaction { certificate: *cert })
-                .await
-                .map(|resp| serialize_transaction_info(&resp))
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e)),
-            _ => panic!("unexpected message type"),
-        };
+        let resp = client
+            .handle_transaction(tx.0)
+            .await
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e));
+        tx_resp.push(resp);
+        let resp = client
+            .handle_confirmation_transaction(ConfirmationTransaction { certificate: tx.1 })
+            .await
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e));
+        tx_resp.push(resp);
+    }
+
+    let elapsed = time_start.elapsed().as_micros();
+
+    (elapsed, tx_resp)
+}
+
+pub async fn send_transactions(
+    tx_chunks: Vec<Transaction>,
+    net_client: NetworkClient,
+    _conn: usize,
+) -> (u128, Vec<Result<TransactionInfoResponse, io::Error>>) {
+    let time_start = Instant::now();
+
+    // This probably isn't going to be as fast so we probably want to provide away to send a batch
+    // of txns to the authority at a time
+    let client = NetworkAuthorityClient::new(net_client);
+    let mut tx_resp = Vec::new();
+    for tx in tx_chunks {
+        let resp = client
+            .handle_transaction(tx)
+            .await
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e));
+        tx_resp.push(resp);
+    }
+
+    let elapsed = time_start.elapsed().as_micros();
+
+    (elapsed, tx_resp)
+}
+
+pub async fn send_confs(
+    tx_chunks: Vec<CertifiedTransaction>,
+    net_client: NetworkClient,
+    _conn: usize,
+) -> (u128, Vec<Result<TransactionInfoResponse, io::Error>>) {
+    let time_start = Instant::now();
+
+    // This probably isn't going to be as fast so we probably want to provide away to send a batch
+    // of txns to the authority at a time
+    let client = NetworkAuthorityClient::new(net_client);
+    let mut tx_resp = Vec::new();
+    for tx in tx_chunks {
+        let resp = client
+            .handle_confirmation_transaction(ConfirmationTransaction { certificate: tx })
+            .await
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e));
         tx_resp.push(resp);
     }
 
@@ -78,7 +118,7 @@ pub async fn send_tx_chunks(
 
 async fn send_tx_chunks_notif(
     notif: Arc<Notify>,
-    tx_chunk: Vec<Bytes>,
+    tx_chunk: Vec<(Transaction, CertifiedTransaction)>,
     result_chann_tx: &mut MpscSender<u128>,
     net_client: NetworkClient,
     conn: usize,
@@ -88,8 +128,8 @@ async fn send_tx_chunks_notif(
     result_chann_tx.send(r.0).await.unwrap();
 
     let _: Vec<_> =
-        r.1.par_iter()
-            .map(|q| check_transaction_response(deserialize_message(&(q.as_ref().unwrap())[..])))
+        r.1.into_par_iter()
+            .map(check_transaction_response)
             .collect();
 }
 
@@ -105,7 +145,7 @@ pub struct FixedRateLoadGenerator {
     /// Number of TCP connections to open
     pub connections: usize,
 
-    pub transactions: Vec<Bytes>,
+    pub transactions: Vec<(Transaction, CertifiedTransaction)>,
 
     pub results_chann_rx: Receiver<u128>,
 
@@ -116,7 +156,7 @@ pub struct FixedRateLoadGenerator {
 
 impl FixedRateLoadGenerator {
     pub async fn new(
-        transactions: Vec<Bytes>,
+        transactions: Vec<(Transaction, CertifiedTransaction)>,
         period_us: u64,
         network_client: NetworkClient,
         connections: usize,
@@ -207,14 +247,14 @@ pub fn calculate_throughput(num_items: usize, elapsed_time_us: u128) -> f64 {
 
 async fn send_tx_chunks_for_quorum_notif(
     notif: Arc<Notify>,
-    tx_chunk: Vec<Bytes>,
+    tx_chunk: Vec<Transaction>,
     result_chann_tx: &mut MpscSender<(u128, usize)>,
     net_client: NetworkClient,
     stake: usize,
     conn: usize,
 ) {
     notif.notified().await;
-    let r = send_tx_chunks(tx_chunk, net_client.clone(), conn).await;
+    let r = send_transactions(tx_chunk, net_client.clone(), conn).await;
 
     match result_chann_tx.send((r.0, stake)).await {
         Ok(_) => (),
@@ -227,16 +267,15 @@ async fn send_tx_chunks_for_quorum_notif(
     }
 
     let _: Vec<_> =
-        r.1.par_iter()
-            .map(|q| check_transaction_response(deserialize_message(&(q.as_ref().unwrap())[..])))
+        r.1.into_par_iter()
+            .map(check_transaction_response)
             .collect();
 }
 
 async fn send_tx_for_quorum(
     notif: Arc<Notify>,
-    order_chunk: Vec<Bytes>,
-    conf_chunk: Vec<Bytes>,
-
+    order_chunk: Vec<Transaction>,
+    conf_chunk: Vec<CertifiedTransaction>,
     result_chann_tx: &mut MpscSender<u128>,
     net_clients: Vec<(NetworkClient, usize)>,
     conn: usize,
@@ -301,7 +340,7 @@ async fn send_tx_for_quorum(
         let chunk = conf_chunk.clone();
         let mut chann_tx = conf_chann_tx.clone();
         handles.push(tokio::spawn(async move {
-            let r = send_tx_chunks(chunk, net_client.clone(), conn).await;
+            let r = send_confs(chunk, net_client.clone(), conn).await;
             match chann_tx.send((r.0, stake)).await {
                 Ok(_) => (),
                 Err(e) => {
@@ -313,10 +352,8 @@ async fn send_tx_for_quorum(
             }
 
             let _: Vec<_> =
-                r.1.par_iter()
-                    .map(|q| {
-                        check_transaction_response(deserialize_message(&(q.as_ref().unwrap())[..]))
-                    })
+                r.1.into_par_iter()
+                    .map(check_transaction_response)
                     .collect();
         }));
     }
@@ -355,7 +392,7 @@ pub struct MultiFixedRateLoadGenerator {
     pub connections: usize,
 
     /// Transactions to be sent
-    pub transactions: Vec<Bytes>,
+    pub transactions: Vec<(Transaction, CertifiedTransaction)>,
 
     /// Results are sent over this channel
     pub results_chann_rx: Receiver<u128>,
@@ -367,7 +404,7 @@ pub struct MultiFixedRateLoadGenerator {
 
 impl MultiFixedRateLoadGenerator {
     pub async fn new(
-        transactions: Vec<Bytes>,
+        transactions: Vec<(Transaction, CertifiedTransaction)>,
         period_us: u64,
         connections: usize,
 
@@ -412,9 +449,9 @@ impl MultiFixedRateLoadGenerator {
             let mut order_chunk = vec![];
             let mut conf_chunk = vec![];
 
-            for ch in tx_chunk[..].chunks(2) {
-                order_chunk.push(ch[0].clone());
-                conf_chunk.push(ch[1].clone());
+            for ch in tx_chunk {
+                order_chunk.push(ch.0.clone());
+                conf_chunk.push(ch.1.clone());
             }
 
             handles.push(tokio::spawn(async move {
