@@ -1,15 +1,25 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// I really want to express some predicates in a natural
+// human form rather than the mnimal one - G
+#![allow(clippy::nonminimal_bool)]
+
 use sui_types::base_types::*;
 use sui_types::batch::*;
 use sui_types::error::{SuiError, SuiResult};
+use sui_types::messages::BatchInfoRequest;
+use sui_types::messages::BatchInfoResponseItem;
 
+use std::collections::VecDeque;
 use std::time::Duration;
 use tokio::time::interval;
 
+use futures::stream::{self, Stream};
 use futures::StreamExt;
 use typed_store::Map;
+
+use tokio::sync::broadcast::{error::RecvError, Receiver};
 
 #[cfg(test)]
 #[path = "unit_tests/batch_tests.rs"]
@@ -43,6 +53,17 @@ pub type BroadcastReceiver = tokio::sync::broadcast::Receiver<UpdateItem>;
 pub type BroadcastPair = (BroadcastSender, BroadcastReceiver);
 
 impl crate::authority::AuthorityState {
+    pub fn last_batch(&self) -> Result<Option<SignedBatch>, SuiError> {
+        let last_batch = self
+            .db()
+            .batches
+            .iter()
+            .skip_prior_to(&TxSequenceNumber::MAX)?
+            .next()
+            .map(|(_, batch)| batch);
+        Ok(last_batch)
+    }
+
     /// Initializes the database to handle batches, and recovers from a potential
     /// crash by creating a last batch to include any trailing trasnactions not
     /// in a batch.
@@ -190,5 +211,122 @@ impl crate::authority::AuthorityState {
         // When a new batch is created we send a notification to all who have
         // registered an interest.
         Ok(())
+    }
+
+    pub async fn handle_batch_streaming(
+        &self,
+        request: BatchInfoRequest,
+    ) -> Result<impl Stream<Item = Result<BatchInfoResponseItem, SuiError>>, SuiError> {
+        // Register a subscriber to not miss any updates
+        let subscriber = self.subscribe_batch();
+
+        // Get the historical data requested
+        let (items, (should_subscribe, _start, end)) =
+            self.handle_batch_info_request(request).await?;
+
+        // Define a local structure to support the stream construction.
+        struct BatchStreamingLocals {
+            items: VecDeque<UpdateItem>,
+            next_expected_seq: TxSequenceNumber,
+            next_expected_batch: TxSequenceNumber,
+            subscriber: Receiver<UpdateItem>,
+            exit: bool,
+            should_subscribe: bool,
+        }
+
+        let local_state = BatchStreamingLocals {
+            // The historical items
+            items,
+            // The next expected tx and batch after the historical items
+            next_expected_seq: 0,
+            next_expected_batch: 0,
+            // A subscriber that listens to the latest item updates
+            subscriber,
+            // A flag signifying the loop should exit
+            exit: false,
+            // A flag indicating if real-time subscrition is needed.
+            should_subscribe,
+        };
+
+        // Construct the stream
+        let stream1 = stream::unfold(local_state, move |mut local_state| async move {
+            // We have sent the last item
+            if local_state.exit {
+                return None;
+            }
+
+            // If there are histroical items send them.
+            if let Some(item) = local_state.items.pop_front() {
+                // Update the last processed items to ensure we do not repeat them
+                match &item {
+                    UpdateItem::Transaction((seq, _)) => {
+                        local_state.next_expected_seq = *seq + 1;
+                    }
+                    UpdateItem::Batch(signed_batch) => {
+                        local_state.next_expected_batch =
+                            signed_batch.batch.next_sequence_number + 1;
+                    }
+                }
+
+                Some((Ok(BatchInfoResponseItem(item)), local_state))
+            } else {
+                // When there are no more historical items, maybe subscribe
+                if !local_state.should_subscribe {
+                    None
+                } else {
+                    loop {
+                        match local_state.subscriber.recv().await {
+                            Ok(item) => {
+                                match &item {
+                                    UpdateItem::Transaction((seq, _)) => {
+                                        // Do not re-send transactions already sent from the database
+                                        if !(local_state.next_expected_seq <= *seq) {
+                                            continue;
+                                        }
+                                    }
+                                    UpdateItem::Batch(signed_batch) => {
+                                        // Do not re-send transactions already sent from the database
+                                        if !(local_state.next_expected_batch
+                                            <= signed_batch.batch.next_sequence_number)
+                                        {
+                                            continue;
+                                        }
+                                    }
+                                };
+
+                                let response = BatchInfoResponseItem(item);
+
+                                // Only stop at the batch boundary, once we have covered the last item.
+                                if let BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) =
+                                    &response
+                                {
+                                    if end < signed_batch.batch.next_sequence_number {
+                                        local_state.exit = true;
+                                    }
+                                }
+
+                                return Some((Ok(response), local_state));
+                            }
+                            Err(RecvError::Closed) => {
+                                // The service closed the channel, so we tell the client.
+                                let err_response = Err(SuiError::SubscriptionServiceClosed);
+                                local_state.exit = true;
+                                return Some((err_response, local_state));
+                            }
+                            Err(RecvError::Lagged(number_skipped)) => {
+                                // We tell the client they are too slow to consume, and
+                                // stop.
+                                let err_response =
+                                    Err(SuiError::SubscriptionItemsDroppedError(number_skipped));
+                                local_state.exit = true;
+                                return Some((err_response, local_state));
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        Ok(stream1)
     }
 }

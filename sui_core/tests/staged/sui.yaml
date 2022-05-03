@@ -54,8 +54,9 @@ AuthoritySignature:
       SIZE: 64
 BatchInfoRequest:
   STRUCT:
-    - start: U64
-    - end: U64
+    - start:
+        OPTION: U64
+    - length: U64
 BatchInfoResponseItem:
   NEWTYPESTRUCT:
     TYPENAME: UpdateItem

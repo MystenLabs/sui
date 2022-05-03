@@ -30,7 +30,7 @@ async fn create_gateway_state(
         .iter()
         .flat_map(|v| v.iter().map(|o| o.get_single_owner().unwrap()))
         .collect();
-    let authorities = init_local_authorities(genesis_objects).await;
+    let (authorities, _) = init_local_authorities(genesis_objects).await;
     let path = tempfile::tempdir().unwrap().into_path();
     let gateway = GatewayState::new_with_authorities(path, authorities).unwrap();
     for owner in all_owners {
