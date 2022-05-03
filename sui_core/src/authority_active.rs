@@ -30,7 +30,6 @@
 */
 
 use std::{collections::BTreeMap, sync::Arc};
-
 use sui_types::{base_types::AuthorityName, error::SuiResult};
 
 use crate::{
@@ -38,11 +37,14 @@ use crate::{
     authority_client::AuthorityAPI,
 };
 
+pub mod gossip;
+use gossip::gossip_process;
+
 pub struct ActiveAuthority<A> {
     // The local authority state
-    pub authority: Arc<AuthorityState>,
+    pub state: Arc<AuthorityState>,
     // The network interfaces to other authorities
-    pub net: AuthorityAggregator<A>,
+    pub net: Arc<AuthorityAggregator<A>>,
 }
 
 impl<A> ActiveAuthority<A> {
@@ -53,8 +55,8 @@ impl<A> ActiveAuthority<A> {
         let committee = authority.committee.clone();
 
         Ok(ActiveAuthority {
-            authority,
-            net: AuthorityAggregator::new(committee, authority_clients),
+            state: authority,
+            net: Arc::new(AuthorityAggregator::new(committee, authority_clients)),
         })
     }
 }
@@ -65,6 +67,11 @@ where
 {
     // TODO: Active tasks go here + logic to spawn them all
     pub async fn spawn_all_active_processes(self) -> Option<()> {
-        None
+        // Spawn a task to take care of gossip
+        let _gossip_join = tokio::task::spawn(async move {
+            gossip_process(&self, 4).await;
+        });
+
+        Some(())
     }
 }

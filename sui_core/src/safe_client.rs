@@ -5,7 +5,6 @@
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use async_trait::async_trait;
 use futures::StreamExt;
-use std::io;
 use sui_types::crypto::PublicKeyBytes;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 
@@ -177,7 +176,7 @@ impl<C> SafeClient<C> {
 
     fn check_update_item_batch_response(
         &self,
-        request: BatchInfoRequest,
+        _request: BatchInfoRequest,
         signed_batch: &SignedBatch,
         transactions_and_last_batch: &Option<(
             Vec<(TxSequenceNumber, TransactionDigest)>,
@@ -190,19 +189,31 @@ impl<C> SafeClient<C> {
             .check(&signed_batch.batch, signed_batch.authority)?;
 
         // ensure transactions enclosed match requested range
-        fp_ensure!(
-            signed_batch.batch.initial_sequence_number >= request.start
-                && signed_batch.batch.next_sequence_number
-                    <= (request.end + signed_batch.batch.size),
-            SuiError::ByzantineAuthoritySuspicion {
-                authority: self.address
-            }
-        );
+
+        // TODO: check that the batch is within bounds given that the
+        //      bounds may now not be known by the requester.
+        //
+        // if let Some(start) = &request.start {
+        //    fp_ensure!(
+        //        signed_batch.batch.initial_sequence_number >= *start
+        //            && signed_batch.batch.next_sequence_number
+        //                <= (*start + request.length + signed_batch.batch.size),
+        //        SuiError::ByzantineAuthoritySuspicion {
+        //            authority: self.address
+        //        }
+        //    );
+        // }
 
         // If we have seen a previous batch, use it to make sure the next batch
         // is constructed correctly:
 
         if let Some((transactions, prev_batch)) = transactions_and_last_batch {
+            fp_ensure!(
+                !transactions.is_empty(),
+                SuiError::GenericAuthorityError {
+                    error: "Safe Client: Batches must have some contents.".to_string()
+                }
+            );
             let reconstructed_batch = AuthorityBatch::make_next(prev_batch, transactions)?;
 
             fp_ensure!(
@@ -363,7 +374,7 @@ where
     async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, io::Error> {
+    ) -> Result<BatchInfoResponseItemStream, SuiError> {
         let batch_info_items = self
             .authority_client
             .handle_batch_stream(request.clone())
@@ -371,19 +382,21 @@ where
 
         let client = self.clone();
         let address = self.address;
+        let count: u64 = 0;
         let stream = Box::pin(batch_info_items.scan(
-            (0u64, None),
-            move |(seq, txs_and_last_batch), batch_info_item| {
+            (0u64, None, count),
+            move |(seq, txs_and_last_batch, count), batch_info_item| {
                 let req_clone = request.clone();
                 let client = client.clone();
 
                 // We check if we have exceeded the batch boundary for this request.
-                if *seq >= request.end {
+                // This is to protect against server DoS
+                if *count > 10 * request.length {
                     // If we exceed it return None to end stream
                     return futures::future::ready(None);
                 }
 
-                let x = match &batch_info_item {
+                let result = match &batch_info_item {
                     Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
                         if let Err(err) = client.check_update_item_batch_response(
                             req_clone,
@@ -413,13 +426,14 @@ where
                             client.report_client_error(err.clone());
                             Some(Err(err))
                         } else {
+                            *count += 1;
                             Some(batch_info_item)
                         }
                     }
                     Err(e) => Some(Err(e.clone())),
                 };
 
-                futures::future::ready(x)
+                futures::future::ready(result)
             },
         ));
         Ok(Box::pin(stream))

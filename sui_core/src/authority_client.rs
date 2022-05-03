@@ -4,12 +4,8 @@
 
 use crate::authority::AuthorityState;
 use async_trait::async_trait;
-use futures::{
-    lock::Mutex,
-    stream::{self, BoxStream},
-    StreamExt, TryStreamExt,
-};
-use std::{collections::VecDeque, io, sync::Arc};
+use futures::{stream::BoxStream, TryStreamExt};
+use std::sync::Arc;
 use sui_network::{
     api::{BincodeEncodedPayload, ValidatorClient},
     network::NetworkClient,
@@ -66,7 +62,7 @@ pub trait AuthorityAPI {
     async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, io::Error>;
+    ) -> Result<BatchInfoResponseItemStream, SuiError>;
 }
 
 pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoResponseItem, SuiError>>;
@@ -224,13 +220,15 @@ impl AuthorityAPI for NetworkAuthorityClient {
     async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, io::Error> {
+    ) -> Result<BatchInfoResponseItemStream, SuiError> {
         let request = BincodeEncodedPayload::try_from(&request).unwrap();
         let response_stream = self
             .client()
             .batch_info(request)
             .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+            .map_err(|e| SuiError::GenericAuthorityError {
+                error: format!("Batch error: {}", e),
+            })?
             .into_inner();
 
         let stream = response_stream
@@ -262,7 +260,7 @@ impl LocalAuthorityClientFaultConfig {
 
 #[derive(Clone)]
 pub struct LocalAuthorityClient {
-    pub state: Arc<Mutex<AuthorityState>>,
+    pub state: Arc<AuthorityState>,
     pub fault_config: LocalAuthorityClientFaultConfig,
 }
 
@@ -278,7 +276,7 @@ impl AuthorityAPI for LocalAuthorityClient {
             });
         }
         let state = self.state.clone();
-        let result = state.lock().await.handle_transaction(transaction).await;
+        let result = state.handle_transaction(transaction).await;
         if self.fault_config.fail_after_handle_transaction {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error after handle_transaction".to_owned(),
@@ -297,11 +295,7 @@ impl AuthorityAPI for LocalAuthorityClient {
             });
         }
         let state = self.state.clone();
-        let result = state
-            .lock()
-            .await
-            .handle_confirmation_transaction(transaction)
-            .await;
+        let result = state.handle_confirmation_transaction(transaction).await;
         if self.fault_config.fail_after_handle_confirmation {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error after handle_confirmation_transaction".to_owned(),
@@ -322,12 +316,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, SuiError> {
         let state = self.state.clone();
-
-        let result = state
-            .lock()
-            .await
-            .handle_account_info_request(request)
-            .await;
+        let result = state.handle_account_info_request(request).await;
         result
     }
 
@@ -336,7 +325,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
         let state = self.state.clone();
-        let x = state.lock().await.handle_object_info_request(request).await;
+        let x = state.handle_object_info_request(request).await;
         x
     }
 
@@ -347,11 +336,7 @@ impl AuthorityAPI for LocalAuthorityClient {
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.state.clone();
 
-        let result = state
-            .lock()
-            .await
-            .handle_transaction_info_request(request)
-            .await;
+        let result = state.handle_transaction_info_request(request).await;
         result
     }
 
@@ -359,20 +344,11 @@ impl AuthorityAPI for LocalAuthorityClient {
     async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, io::Error> {
+    ) -> Result<BatchInfoResponseItemStream, SuiError> {
         let state = self.state.clone();
 
-        let update_items = state.lock().await.handle_batch_info_request(request).await;
-
-        let (items, _): (VecDeque<_>, VecDeque<_>) = update_items.into_iter().unzip();
-        let stream = stream::iter(items.into_iter()).then(|mut item| async move {
-            let i = item.pop_front();
-            match i {
-                Some(i) => Ok(BatchInfoResponseItem(i)),
-                None => Result::Err(SuiError::BatchErrorSender),
-            }
-        });
-        Ok(Box::pin(stream))
+        let update_items = state.handle_batch_streaming(request).await?;
+        Ok(Box::pin(update_items))
     }
 }
 
@@ -399,7 +375,7 @@ impl LocalAuthorityClient {
         )
         .await;
         Self {
-            state: Arc::new(Mutex::new(state)),
+            state: Arc::new(state),
             fault_config: LocalAuthorityClientFaultConfig::default(),
         }
     }
@@ -412,12 +388,11 @@ impl LocalAuthorityClient {
         objects: Vec<Object>,
     ) -> Self {
         let client = Self::new(committee, address, secret).await;
-        {
-            let client_ref = client.state.as_ref().try_lock().unwrap();
-            for object in objects {
-                client_ref.insert_genesis_object(object).await;
-            }
+
+        for object in objects {
+            client.state.insert_genesis_object(object).await;
         }
+
         client
     }
 }
