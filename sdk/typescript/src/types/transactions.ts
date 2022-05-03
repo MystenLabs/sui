@@ -117,6 +117,7 @@ export type MoveCallArg =
 export type EmptySignInfo = object;
 export type AuthorityName = string;
 export type AuthoritySignature = string;
+export type ExecutionStatusType = 'Success' | 'Failure';
 
 /* ---------------------------- Helper functions ---------------------------- */
 
@@ -152,4 +153,10 @@ export function getTransactionKind(
 ): TransactionKindName | undefined {
   const tx = getSingleTransactionKind(data);
   return tx && (Object.keys(tx)[0] as TransactionKindName);
+}
+
+export function getExecutionStatusType(
+  data: ExecutionStatus
+): ExecutionStatusType {
+  return Object.keys(data)[0] as ExecutionStatusType;
 }

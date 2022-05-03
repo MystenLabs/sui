@@ -5,7 +5,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignedTransaction, TransactionResponse, TransferTransaction, TxnDataSerializer, TransactionDigest, SuiAddress, ObjectOwner, ObjectRef, ObjectContentField, ObjectContentFields, ObjectContent, SuiObject, ObjectExistsInfo, ObjectNotExistsInfo, ObjectStatus, ObjectType, GetOwnedObjectRefsResponse, GetObjectInfoResponse, ObjectDigest, ObjectId, SequenceNumber, RawObjectRef, Transfer, RawAuthoritySignInfo, TransactionKindName, SingleTransactionKind, TransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatus, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveModulePublish, Event, StructTag, MoveTypeTag, MoveCall, MoveCallArg, EmptySignInfo, AuthorityName, AuthoritySignature } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignedTransaction, TransactionResponse, TransferTransaction, TxnDataSerializer, TransactionDigest, SuiAddress, ObjectOwner, ObjectRef, ObjectContentField, ObjectContentFields, ObjectContent, SuiObject, ObjectExistsInfo, ObjectNotExistsInfo, ObjectStatus, ObjectType, GetOwnedObjectRefsResponse, GetObjectInfoResponse, ObjectDigest, ObjectId, SequenceNumber, RawObjectRef, Transfer, RawAuthoritySignInfo, TransactionKindName, SingleTransactionKind, TransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatus, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveModulePublish, Event, StructTag, MoveTypeTag, MoveCall, MoveCallArg, EmptySignInfo, AuthorityName, AuthoritySignature, ExecutionStatusType } from "./index";
 import { BN } from "bn.js";
 
 export function isEd25519KeypairData(obj: any, _argumentName?: string): obj is Ed25519KeypairData {
@@ -578,5 +578,12 @@ export function isAuthorityName(obj: any, _argumentName?: string): obj is Author
 export function isAuthoritySignature(obj: any, _argumentName?: string): obj is AuthoritySignature {
     return (
         typeof obj === "string"
+    )
+}
+
+export function isExecutionStatusType(obj: any, _argumentName?: string): obj is ExecutionStatusType {
+    return (
+        (obj === "Success" ||
+            obj === "Failure")
     )
 }
