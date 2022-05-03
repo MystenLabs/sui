@@ -139,7 +139,7 @@ function GroupView({ results }: { results: resultType }) {
                                 key={typeV}
                                 onClick={shrinkObjList(subObjList)}
                             >
-                                <div>{typeV}</div>
+                                <div>{trimStdLibPrefix(typeV)}</div>
                                 <div>
                                     {IS_COIN_TYPE(typeV) &&
                                     subObjList.every(
