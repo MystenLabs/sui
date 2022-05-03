@@ -31,7 +31,7 @@ struct PeerGossip<A> {
     aggregator: Arc<AuthorityAggregator<A>>,
 }
 
-const EACH_ITEM_DELAY_MS : u64 = 1_000;
+const EACH_ITEM_DELAY_MS: u64 = 1_000;
 const REQUEST_FOLLOW_NUM_DIGESTS: u64 = 100_000;
 const REFRESH_FOLLOWER_PERIOD_SECS: u64 = 60;
 
@@ -64,7 +64,9 @@ where
                 let peer_gossip = PeerGossip::new(*name, active_authority);
                 // Add more duration if we make more than 1 to ensure overlap
                 info!("Gossip: Start gossip from peer {:?}", *name);
-                peer_gossip.spawn(Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS + k * 15)).await
+                peer_gossip
+                    .spawn(Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS + k * 15))
+                    .await
             });
             k += 1;
         }
@@ -73,9 +75,11 @@ where
         debug_assert!(!gossip_tasks.is_empty());
         let (finished_name, _result) = gossip_tasks.select_next_some().await;
         if let Err(err) = _result {
-            error!("Gossip: Peer {:?} finished with error: {}", finished_name, err);
-        }
-        else {
+            error!(
+                "Gossip: Peer {:?} finished with error: {}",
+                finished_name, err
+            );
+        } else {
             info!("Gossip: End gossip from peer {:?}", finished_name);
         }
         peer_names.remove(&finished_name);
