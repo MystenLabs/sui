@@ -391,7 +391,7 @@ async fn test_transfer_coin_with_retry() {
 
     // The tx is stuck in the gateway, with objects locked to this tx.
     assert_eq!(gateway.store().pending_transactions().iter().count(), 1);
-    let (_tx_diget, tx) = gateway
+    let (tx_digest, tx) = gateway
         .store()
         .pending_transactions()
         .iter()
@@ -411,7 +411,7 @@ async fn test_transfer_coin_with_retry() {
         .fail_after_handle_confirmation = false;
 
     // Retry transaction, and this time it should succeed.
-    assert!(transfer_coin(
+    let (_cert, effects) = transfer_coin(
         &gateway,
         addr1,
         &key1,
@@ -420,7 +420,9 @@ async fn test_transfer_coin_with_retry() {
         addr2,
     )
     .await
-    .is_ok());
+    .unwrap();
+    let (updated_obj_ref, new_owner) = effects.mutated_excluding_gas().next().unwrap();
+    assert_eq!(new_owner, &Owner::AddressOwner(addr2));
 
     // The tx is no longer stuck after the retry.
     assert_eq!(gateway.store().pending_transactions().iter().count(), 0);
@@ -428,4 +430,23 @@ async fn test_transfer_coin_with_retry() {
         .store()
         .get_transaction_lock(&coin_object.compute_object_reference())
         .is_err());
+    assert!(gateway.store().effects_exists(&tx_digest).unwrap());
+    // The transaction is deleted after this is done.
+    assert!(!gateway.store().transaction_exists(&tx_digest).unwrap());
+    assert_eq!(gateway.store().next_sequence_number().unwrap(), 1);
+    assert_eq!(gateway.store().get_account_objects(addr1).unwrap().len(), 1);
+    assert_eq!(gateway.store().get_account_objects(addr2).unwrap().len(), 1);
+    assert_eq!(
+        gateway
+            .store()
+            .read_certificate(&tx_digest)
+            .unwrap()
+            .unwrap()
+            .digest(),
+        &tx_digest
+    );
+    assert_eq!(
+        gateway.store().parent(updated_obj_ref).unwrap().unwrap(),
+        tx_digest
+    );
 }
