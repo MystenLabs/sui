@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isObjectNotExistsInfo, isObjectRef } from "sui.js";
+import { isObjectNotExistsInfo, isObjectRef } from 'sui.js';
 
 import { DefaultRpcClient as rpc } from './DefaultRpcClient';
 
@@ -19,14 +19,14 @@ export const navigateWithUnknown = async (
     });
     const objInfoPromise = rpc.getObjectInfo(input).then((data) => {
         const deets = data.details;
-        if(isObjectNotExistsInfo(deets) && !isObjectRef(deets)) {
+        if (isObjectNotExistsInfo(deets) && !isObjectRef(deets)) {
             throw new Error('no object found');
         }
 
         return {
             category: 'objects',
-            data: data
-        }
+            data: data,
+        };
     });
 
     const txDetailsPromise = rpc.getTransaction(input).then((data) => ({
