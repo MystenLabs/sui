@@ -60,10 +60,10 @@ pub fn main() {
     let remote_config: RemoteLoadGenConfig =
         PersistedConfig::read(&benchmark.remote_config).unwrap();
 
-    let network_config: NetworkConfig =
-        PersistedConfig::read(&remote_config.network_cfg_path).unwrap();
+    let network_config: NetworkConfig = remote_config.network_config;
 
-    let validator_preparer = ValidatorPreparer::new_for_remote(&network_config);
+    let validator_preparer =
+        ValidatorPreparer::new_for_remote(&network_config, &remote_config.validator_keypairs);
     let connections = if benchmark.tcp_connections > 0 {
         benchmark.tcp_connections
     } else {

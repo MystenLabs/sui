@@ -1,6 +1,7 @@
 #![deny(warnings)]
 
 use clap::*;
+use std::collections::BTreeMap;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::Path,
@@ -12,6 +13,7 @@ use sui::{
         ObjectConfigRange,
     },
 };
+
 use sui_types::{base_types::ObjectID, crypto::get_key_pair};
 
 const BUFFER_SIZE: usize = 650000;
@@ -36,12 +38,13 @@ fn main() {
     let bch = DistributedBenchmarkConfigurator::parse();
 
     let mut authorities = vec![];
-    let mut authorities_copy = vec![];
+    let mut authority_keys = BTreeMap::new();
 
+    // Create configs for authorities
     for b in bch.host_port_stake_triplets {
         let (host, port, stake) = parse_host_port_stake_triplet(&b);
-        let (addr, kp) = get_key_pair();
-        let db_path = format!("DB_{}", addr);
+        let (validator_address, validator_keypair) = get_key_pair();
+        let db_path = format!("DB_{}", validator_address);
         let path = Path::new(&db_path);
 
         let host_bytes: Vec<u8> = host
@@ -60,74 +63,92 @@ fn main() {
         );
 
         let auth = AuthorityPrivateInfo {
-            address: addr,
-            key_pair: kp,
+            address: validator_address,
             host,
             port,
             db_path: path.to_path_buf(),
             stake,
             consensus_address,
+            public_key: *validator_keypair.public_key_bytes(),
         };
 
-        authorities.push(auth.copy());
-        authorities_copy.push(auth);
+        authorities.push(auth);
+        authority_keys.insert(*validator_keypair.public_key_bytes(), validator_keypair);
     }
 
-    // For each load generator, create an address as the source of transfers
+    // For each load generator, create an address as the source of transfers, and configs
     let mut accounts = vec![];
     let mut obj_id_offset = bch.object_id_offset;
     let mut account_private_info = vec![];
-    for _ in 0..bch.number_of_generators {
-        let (address, kp) = get_key_pair();
 
+    // For each load gen, create an account
+    for _ in 0..bch.number_of_generators {
+        // Create a keypair for this account
+        let (account_address, account_keypair) = get_key_pair();
+
+        // Populate the range configs
         let range_cfg = ObjectConfigRange {
             offset: obj_id_offset,
             count: bch.number_of_txes_per_generator as u64,
             gas_value: u64::MAX,
         };
 
-        account_private_info.push((kp, obj_id_offset));
+        account_private_info.push((account_keypair, obj_id_offset));
 
         // Ensure no overlap
         obj_id_offset = obj_id_offset
             .advance(bch.number_of_txes_per_generator)
             .unwrap();
-
         let account = AccountConfig {
-            address: Some(address),
+            address: Some(account_address),
             gas_objects: vec![],
             gas_object_ranges: Some(vec![range_cfg]),
         };
         accounts.push(account);
     }
 
-    // Create and save the genesis configs for the validators
-    let genesis_config = GenesisConfig {
-        authorities,
-        accounts,
-        move_packages: vec![],
-        sui_framework_lib_path: Path::new("../../sui_programmability/framework").to_path_buf(),
-        move_framework_lib_path: Path::new("../../sui_programmability/framework/deps/move-stdlib")
+    // For each validator, fill in the account info inot genesis
+    for (i, (_, (_, kp))) in authorities.iter().zip(authority_keys.iter()).enumerate() {
+        // Create and save the genesis configs for the validators
+        let genesis_config = GenesisConfig {
+            authorities: authorities.clone(),
+            accounts: accounts.clone(),
+            move_packages: vec![],
+            sui_framework_lib_path: Path::new("../../sui_programmability/framework").to_path_buf(),
+            move_framework_lib_path: Path::new(
+                "../../sui_programmability/framework/deps/move-stdlib",
+            )
             .to_path_buf(),
-    };
-    let genesis_path = Path::new("distributed_bench_genesis.conf");
-    genesis_config.persisted(genesis_path).save().unwrap();
+            key_pair: kp.copy(),
+        };
+        let path_str = format!("distributed_bench_genesis_{}.conf", i);
+        let genesis_path = Path::new(&path_str);
+        genesis_config.persisted(genesis_path).save().unwrap();
+    }
 
-    let network_config = NetworkConfig {
-        epoch: 0,
-        authorities: authorities_copy,
-        buffer_size: BUFFER_SIZE,
-        loaded_move_packages: vec![],
-    };
-    let network_path = Path::new("distributed_bench_network.conf");
-    network_config.persisted(network_path).save().unwrap();
+    // For each load gen, provide configs and kps
+    for (i, (_account_cfg, (account_keypair, object_id_offset))) in accounts
+        .iter()
+        .zip(account_private_info)
+        .into_iter()
+        .enumerate()
+    {
+        // Create and save network configs
+        let network_config = NetworkConfig {
+            epoch: 0,
+            authorities: authorities.clone(),
+            buffer_size: BUFFER_SIZE,
+            loaded_move_packages: vec![],
+            // This keypair is not important in this field
+            key_pair: authority_keys.iter().last().unwrap().1.copy(),
+        };
 
-    // Generate the configs for each load generator
-    for (i, (kp, offset)) in account_private_info.into_iter().enumerate() {
+        // Create and save load gen configs
         let lg = RemoteLoadGenConfig {
-            account_keypair: kp,
-            object_id_offset: offset,
-            network_cfg_path: network_path.to_path_buf(),
+            account_keypair,
+            object_id_offset,
+            validator_keypairs: authority_keys.iter().map(|q| (*q.0, q.1.copy())).collect(),
+            network_config,
         };
         let path_str = format!("load_gen_{}.conf", i);
         let load_gen_path = Path::new(&path_str);

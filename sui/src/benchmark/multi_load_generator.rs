@@ -4,7 +4,7 @@
 #![deny(warnings)]
 
 use anyhow::Error;
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use futures::channel::mpsc::{channel as MpscChannel, Receiver, Sender as MpscSender};
 use futures::stream::StreamExt;
 use futures::SinkExt;
@@ -13,6 +13,7 @@ use rayon::prelude::*;
 use std::io;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_network::network::NetworkClient;
 use sui_types::committee::Committee;
 use sui_types::{messages::*, serialize::*};
@@ -41,15 +42,31 @@ pub fn check_transaction_response(reply_message: Result<SerializedMessage, Error
 pub async fn send_tx_chunks(
     tx_chunks: Vec<Bytes>,
     net_client: NetworkClient,
-    conn: usize,
-) -> (u128, Vec<Result<BytesMut, io::Error>>) {
+    _conn: usize,
+) -> (u128, Vec<Result<Vec<u8>, io::Error>>) {
     let time_start = Instant::now();
 
-    let tx_resp = net_client
-        .batch_send(tx_chunks, conn, 0)
-        .map(|x| x.unwrap())
-        .concat()
-        .await;
+    // This probably isn't going to be as fast so we probably want to provide away to send a batch
+    // of txns to the authority at a time
+    let client = NetworkAuthorityClient::new(net_client);
+    let mut tx_resp = Vec::new();
+    for tx in tx_chunks {
+        let message = deserialize_message(&tx[..]).unwrap();
+        let resp = match message {
+            SerializedMessage::Transaction(transaction) => client
+                .handle_transaction(*transaction)
+                .await
+                .map(|resp| serialize_transaction_info(&resp))
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e)),
+            SerializedMessage::Cert(cert) => client
+                .handle_confirmation_transaction(ConfirmationTransaction { certificate: *cert })
+                .await
+                .map(|resp| serialize_transaction_info(&resp))
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e)),
+            _ => panic!("unexpected message type"),
+        };
+        tx_resp.push(resp);
+    }
 
     let elapsed = time_start.elapsed().as_micros();
 

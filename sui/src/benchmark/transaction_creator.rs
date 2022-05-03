@@ -8,7 +8,7 @@ use bytes::Bytes;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use rayon::prelude::*;
-use sui_types::crypto::{get_key_pair, AuthoritySignature, KeyPair, PublicKeyBytes, Signature};
+use sui_types::crypto::{get_key_pair, AuthoritySignature, KeyPair, Signature};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
 
@@ -58,16 +58,13 @@ fn create_gas_object(object_id: ObjectID, owner: SuiAddress) -> Object {
 }
 
 /// This builds, signs a cert and serializes it
-fn make_serialized_cert(
-    keys: &[(PublicKeyBytes, KeyPair)],
-    committee: &Committee,
-    tx: Transaction,
-) -> Vec<u8> {
+fn make_serialized_cert(keys: &[KeyPair], committee: &Committee, tx: Transaction) -> Vec<u8> {
     // Make certificate
     let mut certificate = CertifiedTransaction::new(tx);
     certificate.auth_sign_info.epoch = committee.epoch();
     for i in 0..committee.quorum_threshold() {
-        let (pubx, secx) = keys.get(i).unwrap();
+        let secx = keys.get(i).unwrap();
+        let pubx = secx.public_key_bytes();
         let sig = AuthoritySignature::new(&certificate.data, secx);
         certificate.auth_sign_info.signatures.push((*pubx, sig));
     }
@@ -82,7 +79,7 @@ fn make_serialized_transactions(
     keypair: KeyPair,
     committee: &Committee,
     account_gas_objects: &[(Vec<Object>, Object)],
-    authority_keys: &[(PublicKeyBytes, KeyPair)],
+    authority_keys: &[KeyPair],
     batch_size: usize,
     use_move: bool,
 ) -> Vec<Bytes> {
@@ -134,6 +131,50 @@ fn make_serialized_transactions(
         .flatten()
         .collect()
 }
+
+// fn make_transactions2(
+//     address: SuiAddress,
+//     key_pair: KeyPair,
+//     chunk_size: usize,
+//     num_chunks: usize,
+//     conn: usize,
+//     use_move: bool,
+//     object_id_offset: usize,
+//     auth_keys: &[KeyPair],
+//     committee: &Committee,
+// ) -> (Vec<Bytes>, Vec<Object>) {
+//     assert_eq!(chunk_size % conn, 0);
+//     let batch_size_per_conn = chunk_size / conn;
+
+//     // The batch-adjusted number of transactions
+//     let batch_tx_count = num_chunks * conn;
+//     // Only need one gas object per batch
+//     let account_gas_objects: Vec<_> = make_gas_objects(
+//         address,
+//         batch_tx_count,
+//         batch_size_per_conn,
+//         object_id_offset,
+//         use_move,
+//     );
+
+//     // Bulk load objects
+//     let all_objects: Vec<_> = account_gas_objects
+//         .clone()
+//         .into_iter()
+//         .flat_map(|(objects, gas)| objects.into_iter().chain(std::iter::once(gas)))
+//         .collect();
+
+//     let serialized_txes = make_serialized_transactions(
+//         address,
+//         key_pair,
+//         committee,
+//         &account_gas_objects,
+//         auth_keys,
+//         batch_size_per_conn,
+//         use_move,
+//     );
+//     (serialized_txes, all_objects)
+// }
 
 pub struct TransactionCreator {
     pub object_id_offset: ObjectID,
@@ -232,7 +273,7 @@ impl TransactionCreator {
         conn: usize,
         use_move: bool,
         object_id_offset: ObjectID,
-        auth_keys: &[(PublicKeyBytes, KeyPair)],
+        auth_keys: &[KeyPair],
         committee: &Committee,
     ) -> (Vec<Bytes>, Vec<Object>) {
         assert_eq!(chunk_size % conn, 0);

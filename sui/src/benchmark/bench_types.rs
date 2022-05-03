@@ -1,18 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::Config;
+use crate::config::{Config, NetworkConfig};
 
 use super::load_generator::calculate_throughput;
 use clap::*;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::collections::BTreeMap;
 use std::default::Default;
 use std::path::PathBuf;
 use strum_macros::EnumString;
-use sui_network::transport;
 use sui_types::base_types::ObjectID;
-use sui_types::crypto::KeyPair;
+use sui_types::crypto::{KeyPair, PublicKeyBytes};
 
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -24,13 +24,13 @@ pub struct Benchmark {
     #[clap(long, default_value = "1", global = true)]
     pub committee_size: usize,
     /// Timeout for sending queries (us)
-    #[clap(long, default_value = "40000000", global = true)]
+    #[clap(long, default_value = "400000000", global = true)]
     pub send_timeout_us: u64,
     /// Timeout for receiving responses (us)
-    #[clap(long, default_value = "40000000", global = true)]
+    #[clap(long, default_value = "400000000", global = true)]
     pub recv_timeout_us: u64,
     /// Maximum size of datagrams received and sent (bytes)
-    #[clap(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE_STR, global = true)]
+    #[clap(long, default_value = "65000", global = true)]
     pub buffer_size: usize,
     /// Number of connections to the server
     #[clap(long, default_value = "0", global = true)]
@@ -203,12 +203,15 @@ impl std::fmt::Display for MicroBenchmarkResult {
 #[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct RemoteLoadGenConfig {
+    /// Keypairs of all the validators
+    /// Ideally we wouldnt need this, but sometime we pre-sign certs
+    pub validator_keypairs: BTreeMap<PublicKeyBytes, KeyPair>,
     /// Account keypair to use for transactions
     pub account_keypair: KeyPair,
     /// ObjectID offset for transaction objects
     pub object_id_offset: ObjectID,
-    /// Network config path which point to validators
-    pub network_cfg_path: PathBuf,
+    /// Network config for accessing validators
+    pub network_config: NetworkConfig,
 }
 
 impl Config for RemoteLoadGenConfig {}

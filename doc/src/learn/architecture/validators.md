@@ -31,7 +31,7 @@ As with transactions, we note that the process of sharing a certificate with val
 
 ## The role of Narwhal and Tusk
 
-Sui takes advantage of [Narwhal and Tusk: A DAG-based Mempool and Efficient BFT Consensus](https://arxiv.org/pdf/2105.11827.pdf). Narwhal/Tusk (N/T) are also being developed by [Mysten Labs](https://mystenlabs.com/) so that per the referenced white paper, “When full agreement is required we use a high-throughput DAG-based consensus, e.g. [9] to manage locks, while execution on different shared objects is parallelized.”
+Sui takes advantage of [Narwhal and Tusk: A DAG-based Mempool and Efficient BFT Consensus](consensus.md). Narwhal/Tusk (N/T) are also being implemented by [Mysten Labs](https://mystenlabs.com/) so that when Byzantine agreement is required we use a high-throughput DAG-based consensus to manage shared locks while execution on different shared objects is parallelized.
 
 Narwhal enables the parallel ordering of transactions into batches that are collected into concurrently proposed blocks, and Tusk defines an algorithm for executing the DAG that these blocks form. N/T combined builds a DAG of blocks, concurrently proposed, and creates an order between those blocks as a byproduct of the building of the DAG. But that order is overlaid on top of the causal order of Sui transactions (the "payload" of Narwhal/Tusk here), and does not substitute for it:
 

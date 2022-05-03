@@ -51,6 +51,7 @@ async fn main() -> Result<(), anyhow::Error> {
         json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
         ..Default::default()
     };
+
     #[allow(unused)]
     let guard = telemetry_subscribers::init(config);
 
@@ -65,7 +66,7 @@ async fn main() -> Result<(), anyhow::Error> {
         genesis_conf
             .authorities
             .iter()
-            .find(|x| SuiAddress::from(x.key_pair.public_key_bytes()) == address)
+            .find(|x| SuiAddress::from(&x.public_key) == address)
             .ok_or_else(|| {
                 anyhow!(
                     "Network configs must include config for address {}",
@@ -91,29 +92,12 @@ async fn main() -> Result<(), anyhow::Error> {
         }
     };
 
-    // let net_cfg = if let Some(address) = cfg.address {
-    //     // Find the network config for this validator
-    //     network_config
-    //         .authorities
-    //         .iter()
-    //         .find(|x| SuiAddress::from(x.key_pair.public_key_bytes()) == address)
-    //         .ok_or_else(|| {
-    //             anyhow!(
-    //                 "Network configs must include config for address {}",
-    //                 address
-    //             )
-    //         })?
-    // } else if let Some(index) = cfg.validator_idx {
-    //     &network_config.authorities[index]
-    // } else {
-    //     return Err(anyhow!("Must supply either --address of --validator-idx"));
-    // };
-
     let listen_address = cfg
         .listen_address
         .unwrap_or(format!("{}:{}", authority.host, authority.port));
 
     let consensus_committee = network_config.make_narwhal_committee();
+
     let consensus_parameters = ConsensusParameters {
         max_header_delay: std::time::Duration::from_millis(5_000),
         max_batch_delay: std::time::Duration::from_millis(5_000),
@@ -121,20 +105,18 @@ async fn main() -> Result<(), anyhow::Error> {
     };
     let consensus_store_path = sui_config_dir()?
         .join(CONSENSUS_DB_NAME)
-        .join(encode_bytes_hex(authority.key_pair.public_key_bytes()));
+        .join(encode_bytes_hex(&authority.public_key));
 
     info!(
         "Initializing authority {:?} listening on {} (public addr: {}:{})",
-        authority.key_pair.public_key_bytes(),
-        listen_address,
-        authority.host,
-        authority.port
+        authority.public_key, listen_address, authority.host, authority.port
     );
 
     // Pass in the newtwork parameters of all authorities
     let net = network_config.get_authority_infos();
     if let Err(e) = make_server(
         authority,
+        &network_config.key_pair,
         &Committee::from(&network_config),
         network_config.buffer_size,
         &consensus_committee,
