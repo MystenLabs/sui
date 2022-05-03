@@ -23,7 +23,7 @@ jobs:
     name: Generate code coverage
     needs: diff
     if: github.event.pull_request.draft == false && needs.diff.outputs.isRust == 'true'
-    runs-on: [self-hosted, ubuntu]
+    runs-on: [self-hosted, self-hosted-ubuntu]
     strategy:
       fail-fast: true
     steps:
@@ -33,9 +33,6 @@ jobs:
           components: llvm-tools-preview
       # Enable caching of the 'librocksdb-sys' crate by additionally caching the
       # 'librocksdb-sys' src directory which is managed by cargo
-      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-        with:
-          path: ~/.cargo/registry/src/**/librocksdb-sys-*
       - name: Install grcov, and cache the binary
         uses: baptiste0928/cargo-install@v1
         with:
