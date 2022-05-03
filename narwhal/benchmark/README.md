@@ -40,7 +40,8 @@ node_params = {
         'certificates_synchronize_timeout': '2000ms',
         'payload_synchronize_timeout': '2000ms',
         'payload_availability_timeout': '2000ms'
-    }
+    },
+    'max_concurrent_requests': 500_000
 }
 ```
 They are defined as follows:
@@ -54,6 +55,7 @@ They are defined as follows:
 * `certificates_synchronize_timeout`: The timeout configuration when requesting certificates from peers.
 * `payload_synchronize_timeout`: Timeout when has requested the payload for a certificate and is waiting to receive them.
 * `payload_availability_timeout`: The timeout configuration when for when we ask the other peers to discover who has the payload available for the dictated certificates.
+* `max_concurrent_requests`: The maximum number of concurrent requests for primary-to-primary and worker-to-worker messages.
 
 ### Run the benchmark
 Once you specified both `bench_params` and `node_params` as desired, run:

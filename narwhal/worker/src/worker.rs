@@ -209,7 +209,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             tx_client_helper,
             tx_processor,
         }
-        .spawn(address);
+        .spawn(address, self.parameters.max_concurrent_requests);
 
         // The `Helper` is dedicated to reply to batch requests from other workers.
         Helper::spawn(
@@ -294,8 +294,9 @@ struct WorkerReceiverHandler<PublicKey: VerifyingKey> {
 }
 
 impl<PublicKey: VerifyingKey> WorkerReceiverHandler<PublicKey> {
-    fn spawn(self, address: SocketAddr) {
+    fn spawn(self, address: SocketAddr, max_concurrent_requests: usize) {
         let service = tonic::transport::Server::builder()
+            .concurrency_limit_per_connection(max_concurrent_requests)
             .add_service(WorkerToWorkerServer::new(self))
             .serve(address);
         tokio::spawn(service);

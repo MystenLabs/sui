@@ -128,7 +128,7 @@ impl Primary {
             tx_primary_messages,
             tx_cert_requests,
         }
-        .spawn(address);
+        .spawn(address, parameters.max_concurrent_requests);
         info!(
             "Primary {} listening to primary messages on {}",
             name.encode_base64(),
@@ -294,8 +294,9 @@ struct PrimaryReceiverHandler<PublicKey: VerifyingKey> {
 }
 
 impl<PublicKey: VerifyingKey> PrimaryReceiverHandler<PublicKey> {
-    fn spawn(self, address: SocketAddr) {
+    fn spawn(self, address: SocketAddr, max_concurrent_requests: usize) {
         let service = tonic::transport::Server::builder()
+            .concurrency_limit_per_connection(max_concurrent_requests)
             .add_service(PrimaryToPrimaryServer::new(self))
             .serve(address);
         tokio::spawn(service);

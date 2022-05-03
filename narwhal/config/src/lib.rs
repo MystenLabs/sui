@@ -105,6 +105,8 @@ pub struct Parameters {
     pub max_batch_delay: Duration,
     /// The parameters for the block synchronizer
     pub block_synchronizer: BlockSynchronizerParameters,
+    /// The maximum number of concurrent requests for messages accepted from an un-trusted entity
+    pub max_concurrent_requests: usize,
 }
 
 #[derive(Deserialize, Clone)]
@@ -143,6 +145,7 @@ impl Default for Parameters {
             batch_size: 500_000,
             max_batch_delay: Duration::from_millis(100),
             block_synchronizer: BlockSynchronizerParameters::default(),
+            max_concurrent_requests: 500_000,
         }
     }
 }
@@ -183,6 +186,10 @@ impl Parameters {
                 .payload_synchronize_timeout
                 .as_millis()
         );
+        info!(
+            "Max concurrent requests set to {}",
+            self.max_concurrent_requests
+        )
     }
 }
 
@@ -350,7 +357,8 @@ mod tests {
                  "certificates_synchronize_timeout": "2s",
                  "payload_synchronize_timeout": "3_000ms",
                  "payload_availability_timeout": "4_000ms"
-             }
+             },
+             "max_concurrent_requests": 500000
           }"#;
 
         // AND temporary file
@@ -416,5 +424,6 @@ mod tests {
         assert!(logs_contain(
             "Synchronize payload (batches) timeout set to 2000 ms"
         ));
+        assert!(logs_contain("Max concurrent requests set to 500000"))
     }
 }

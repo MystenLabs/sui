@@ -172,6 +172,7 @@ class NodeParameters:
             inputs += [json['sync_retry_nodes']]
             inputs += [json['batch_size']]
             inputs += [json['max_batch_delay']]
+            inputs += [json['max_concurrent_requests']]
         except KeyError as e:
             raise ConfigError(f'Malformed parameters: missing key {e}')
 

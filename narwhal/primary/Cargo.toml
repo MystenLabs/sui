@@ -29,6 +29,7 @@ tonic = "0.7"
 crypto = { path = "../crypto" }
 network = { path = "../network" }
 types = { path = "../types" }
+tower = "0.4.12"
 
 [dev-dependencies]
 tempfile = "3.3.0"

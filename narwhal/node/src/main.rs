@@ -143,7 +143,8 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
                 .context("The worker id must be a positive integer")?;
 
             Node::spawn_workers(
-                /* name */ keypair.public().clone(),
+                /* name */
+                keypair.public().clone(),
                 vec![id],
                 committee,
                 &store,

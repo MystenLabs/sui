@@ -26,6 +26,7 @@ crypto = { path = "../crypto" }
 network = { path = "../network" }
 primary = { path = "../primary" }
 types = { path = "../types" }
+tower = "0.4.12"
 
 [dev-dependencies]
 rand = "0.7.3"
