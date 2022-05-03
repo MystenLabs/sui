@@ -36,8 +36,8 @@ fn main() {
 
 fn running_mode_pre_check(benchmark: &bench_types::Benchmark) {
     match benchmark.running_mode {
-        bench_types::RunningMode::LocalSingleValidatorThread => {}
-        bench_types::RunningMode::LocalSingleValidatorProcess => match &benchmark.working_dir {
+        bench_types::RunningMode::SingleValidatorThread => {}
+        bench_types::RunningMode::SingleValidatorProcess => match &benchmark.working_dir {
             Some(path) => {
                 assert!(
                     path.clone().join(VALIDATOR_BINARY_NAME).is_file(),
@@ -46,5 +46,8 @@ fn running_mode_pre_check(benchmark: &bench_types::Benchmark) {
             }
             None => panic!("working-dir option is required in local-single-authority-process mode"),
         },
+        bench_types::RunningMode::RemoteValidator => {
+            unimplemented!("Remote benchmarks not supported through this entrypoint")
+        }
     }
 }

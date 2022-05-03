@@ -69,7 +69,7 @@ pub struct AuthorityInfo {
     pub base_port: u16,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct AuthorityPrivateInfo {
     pub address: SuiAddress,
     pub public_key: PublicKeyBytes,
@@ -80,6 +80,19 @@ pub struct AuthorityPrivateInfo {
     pub consensus_address: SocketAddr,
 }
 
+impl AuthorityPrivateInfo {
+    pub fn copy(&self) -> Self {
+        Self {
+            address: self.address,
+            host: self.host.clone(),
+            port: self.port,
+            db_path: self.db_path.clone(),
+            stake: self.stake,
+            consensus_address: self.consensus_address,
+            public_key: self.public_key,
+        }
+    }
+}
 type AuthorityKeys = (Vec<PublicKeyBytes>, KeyPair);
 
 // Warning: to_socket_addrs() is blocking and can fail.  Be careful where you use it.
@@ -260,7 +273,7 @@ pub struct GenesisConfig {
 
 impl Config for GenesisConfig {}
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(default)]
 pub struct AccountConfig {
     #[serde(
@@ -270,8 +283,20 @@ pub struct AccountConfig {
     )]
     pub address: Option<SuiAddress>,
     pub gas_objects: Vec<ObjectConfig>,
+    pub gas_object_ranges: Option<Vec<ObjectConfigRange>>,
 }
-#[derive(Serialize, Deserialize)]
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ObjectConfigRange {
+    /// Starting object id
+    pub offset: ObjectID,
+    /// Number of object ids
+    pub count: u64,
+    /// Gas value per object id
+    pub gas_value: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ObjectConfig {
     #[serde(default = "ObjectID::random")]
     pub object_id: ObjectID,
@@ -364,6 +389,7 @@ impl GenesisConfig {
             accounts.push(AccountConfig {
                 address: None,
                 gas_objects: objects,
+                gas_object_ranges: Some(Vec::new()),
             })
         }
 

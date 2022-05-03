@@ -62,20 +62,11 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let network_config_path = sui_config_dir()?.join(SUI_NETWORK_CONFIG);
 
-    let network_config = match (network_config_path.exists(), cfg.force_genesis) {
-        (true, false) => PersistedConfig::<NetworkConfig>::read(&network_config_path)?,
-
-        // If network.conf is missing, or if --force-genesis is true, we run genesis.
-        _ => {
-            let genesis_conf: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
-            let (network_config, _, _) = genesis(genesis_conf).await?;
-            network_config
-        }
-    };
+    let genesis_conf: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
 
     let authority = if let Some(address) = cfg.address {
         // Find the network config for this validator
-        network_config
+        genesis_conf
             .authorities
             .iter()
             .find(|x| SuiAddress::from(&x.public_key) == address)
@@ -86,19 +77,27 @@ async fn main() -> Result<(), anyhow::Error> {
                 )
             })?
     } else if let Some(index) = cfg.validator_idx {
-        &network_config.authorities[index]
+        &genesis_conf.authorities[index]
     } else {
         return Err(anyhow!("Must supply either --address of --validator-idx"));
+    };
+
+    let genesis_conf_copy: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
+
+    let network_config = match (network_config_path.exists(), cfg.force_genesis) {
+        (true, false) => PersistedConfig::<NetworkConfig>::read(&network_config_path)?,
+
+        // If network.conf is missing, or if --force-genesis is true, we run genesis.
+        _ => {
+            let (network_config, _, _) =
+                genesis(genesis_conf_copy, Some(authority.address)).await?;
+            network_config
+        }
     };
 
     let listen_address = cfg
         .listen_address
         .unwrap_or(format!("{}:{}", authority.host, authority.port));
-
-    info!(
-        "authority {:?} listening on {} (public addr: {}:{})",
-        authority.public_key, listen_address, authority.host, authority.port
-    );
 
     let consensus_committee = network_config.make_narwhal_committee();
 
@@ -110,6 +109,11 @@ async fn main() -> Result<(), anyhow::Error> {
     let consensus_store_path = sui_config_dir()?
         .join(CONSENSUS_DB_NAME)
         .join(encode_bytes_hex(&authority.public_key));
+
+    info!(
+        "Initializing authority {:?} listening on {} (public addr: {}:{})",
+        authority.public_key, listen_address, authority.host, authority.port
+    );
 
     // Pass in the newtwork parameters of all authorities
     let net = network_config.get_authority_infos();
