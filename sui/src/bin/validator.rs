@@ -60,20 +60,19 @@ async fn main() -> Result<(), anyhow::Error> {
             network_config
         }
     };
-    let public_key_bytes=  network_config.key_pair.public_key_bytes();
+    let public_key_bytes = network_config.key_pair.public_key_bytes();
     let address = SuiAddress::from(public_key_bytes);
-    let authority = 
-        // Find the network config for this validator
-        network_config
-            .authorities
-            .iter()
-            .find(|x| SuiAddress::from(&x.public_key) == address)
-            .ok_or_else(|| {
-                anyhow!(
-                    "Keypair (pub key: {:?}) in network config is not in the validator committee",
-                    public_key_bytes,
-                )
-            })?;
+    // Find the network config for this validator
+    let authority = network_config
+        .authorities
+        .iter()
+        .find(|x| SuiAddress::from(&x.public_key) == address)
+        .ok_or_else(|| {
+            anyhow!(
+                "Keypair (pub key: {:?}) in network config is not in the validator committee",
+                public_key_bytes,
+            )
+        })?;
 
     let listen_address = cfg
         .listen_address
