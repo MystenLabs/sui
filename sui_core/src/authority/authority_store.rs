@@ -60,9 +60,8 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     owner_index: DBMap<(SuiAddress, ObjectID), ObjectRef>,
 
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
-    /// NOTE: after a lock is deleted the corresponding entry here could be deleted, but right
-    /// now this is not done. If a certificate is processed (see `certificates`) the
-    /// transaction can also be deleted from this structure.
+    /// NOTE: after a lock is deleted (after a certificate is processed) the corresponding entry here
+    /// could be deleted, but right now this is only done on gateways, not done on authorities.
     transactions: DBMap<TransactionDigest, TransactionEnvelope<S>>,
 
     /// This is a map between the transaction digest and the corresponding certificate for all
@@ -209,7 +208,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         }
     }
 
-    /// Returns the TransactionEffects if we have a signed_effects structure for this transaction digest
+    /// Returns the TransactionEffects if we have an effects structure for this transaction digest
     pub fn get_effects(
         &self,
         transaction_digest: &TransactionDigest,
@@ -222,14 +221,14 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             })
     }
 
-    /// Returns true if we have a signed_effects structure for this transaction digest
+    /// Returns true if we have an effects structure for this transaction digest
     pub fn effects_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
         self.effects
             .contains_key(transaction_digest)
             .map_err(|e| e.into())
     }
 
-    /// Returns true if we have a signed_effects structure for this transaction digest
+    /// Returns true if we have a transaction structure for this transaction digest
     pub fn transaction_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
         self.transactions
             .contains_key(transaction_digest)
