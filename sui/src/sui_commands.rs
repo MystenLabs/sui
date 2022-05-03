@@ -643,7 +643,7 @@ pub async fn make_authority(
 
     // If we have network information make authority clients
     // to all authorities in the system.
-    let _active_authority = if let Some(network) = net_parameters {
+    let _active_authority: Option<()> = if let Some(network) = net_parameters {
         let mut authority_clients = BTreeMap::new();
         for info in &network {
             let client = NetworkAuthorityClient::new(NetworkClient::new(
@@ -656,10 +656,13 @@ pub async fn make_authority(
             authority_clients.insert(info.name, client);
         }
 
-        let active_authority = ActiveAuthority::new(authority_state.clone(), authority_clients)?;
+        let _active_authority = ActiveAuthority::new(authority_state.clone(), authority_clients)?;
 
-        let join_handle = active_authority.spawn_all_active_processes().await;
-        Some(join_handle)
+        // TODO: turn on to start the active part of validators
+        //
+        // let join_handle = active_authority.spawn_all_active_processes().await;
+        // Some(join_handle)
+        None
     } else {
         None
     };
