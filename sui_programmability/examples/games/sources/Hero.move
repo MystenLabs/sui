@@ -3,7 +3,7 @@
 
 /// Example of a game character with basic attributes, inventory, and
 /// associated logic.
-module HeroGame::Hero {
+module Games::Hero {
     use Sui::Coin::{Self, Coin};
     use Sui::Event;
     use Sui::ID::{Self, ID, VersionedID};
