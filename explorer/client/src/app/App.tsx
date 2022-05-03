@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Link } from 'react-router-dom';
+
 import Footer from '../components/footer/Footer';
 import Search from '../components/search/Search';
 import AppRoutes from '../pages/config/AppRoutes';
@@ -11,7 +13,9 @@ function App() {
     return (
         <div className={styles.app}>
             <div className={styles.search}>
-                <h2 className={styles.suititle}>SuiExplorer</h2>
+                <h2 className={styles.suititle}>
+                    <Link to="/">SuiExplorer</Link>
+                </h2>
                 <Search />
             </div>
             <main>
