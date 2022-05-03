@@ -5211,6 +5211,7 @@ dependencies = [
  "scopeguard",
  "serde 1.0.137",
  "serde-reflection",
+ "serde_json",
  "serde_yaml",
  "signature",
  "sui-adapter",

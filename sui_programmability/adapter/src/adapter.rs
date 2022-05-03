@@ -902,6 +902,10 @@ fn struct_tag_equals_sig_token(
         SignatureToken::StructInstantiation(idx, args) => {
             struct_tag_equals_struct_inst(module, function_type_arguments, arg_type, *idx, args)
         }
+        SignatureToken::TypeParameter(idx) => match &function_type_arguments[*idx as usize] {
+            TypeTag::Struct(s) => arg_type == s,
+            _ => false,
+        },
         _ => false,
     }
 }
