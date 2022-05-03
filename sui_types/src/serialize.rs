@@ -105,14 +105,6 @@ where
     serialize_into(writer, &ShallowSerializedMessage::Cert(value))
 }
 
-pub fn serialize_account_info_request(value: &AccountInfoRequest) -> Vec<u8> {
-    serialize(&ShallowSerializedMessage::AccountInfoReq(value))
-}
-
-pub fn serialize_account_info_response(value: &AccountInfoResponse) -> Vec<u8> {
-    serialize(&ShallowSerializedMessage::AccountInfoResp(value))
-}
-
 pub fn serialize_object_info_request(value: &ObjectInfoRequest) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::ObjectInfoReq(value))
 }
@@ -121,20 +113,12 @@ pub fn serialize_object_info_response(value: &ObjectInfoResponse) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::ObjectInfoResp(value))
 }
 
-pub fn serialize_transaction_info_request(value: &TransactionInfoRequest) -> Vec<u8> {
-    serialize(&ShallowSerializedMessage::TransactionInfoReq(value))
-}
-
 pub fn serialize_vote(value: &SignedTransaction) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::Vote(value))
 }
 
 pub fn serialize_batch_request(request: &BatchInfoRequest) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::BatchInfoReq(request))
-}
-
-pub fn serialize_batch_item(item: &BatchInfoResponseItem) -> Vec<u8> {
-    serialize(&ShallowSerializedMessage::BatchInfoResp(item))
 }
 
 pub fn serialize_vote_into<W>(writer: W, value: &SignedTransaction) -> Result<(), anyhow::Error>
@@ -146,28 +130,6 @@ where
 
 pub fn serialize_transaction_info(value: &TransactionInfoResponse) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::TransactionResp(value))
-}
-
-pub fn serialize_transaction_info_into<W>(
-    writer: W,
-    value: &TransactionInfoResponse,
-) -> Result<(), anyhow::Error>
-where
-    W: std::io::Write,
-{
-    serialize_into(writer, &ShallowSerializedMessage::TransactionResp(value))
-}
-
-pub fn serialize_consensus_transaction(value: &ConsensusTransaction) -> Vec<u8> {
-    serialize(&ShallowSerializedMessage::ConsensusTransaction(value))
-}
-
-pub fn serialize_consensus_output(value: &ConsensusOutput) -> Vec<u8> {
-    serialize(&ShallowSerializedMessage::ConsensusOutput(value))
-}
-
-pub fn serialize_consensus_sync(value: &ConsensusSync) -> Vec<u8> {
-    serialize(&ShallowSerializedMessage::ConsensusSync(value))
 }
 
 pub fn deserialize_message<R>(reader: R) -> Result<SerializedMessage, anyhow::Error>
