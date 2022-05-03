@@ -14,7 +14,7 @@ function App() {
         <div className={styles.app}>
             <div className={styles.search}>
                 <h2 className={styles.suititle}>
-                    <Link to="/">SuiExplorer</Link>
+                    <Link to="/">Sui Explorer</Link>
                 </h2>
                 <Search />
             </div>
