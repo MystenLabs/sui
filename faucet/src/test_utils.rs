@@ -3,15 +3,15 @@
 
 use anyhow::{anyhow, bail};
 use std::path::Path;
-use sui::config::{AuthorityPrivateInfo, Config, GenesisConfig, WalletConfig};
-use sui::gateway_config::{GatewayConfig, GatewayType};
-use sui::keystore::KeystoreType;
-use sui::sui_commands::genesis;
 use sui::{
-    sui_commands::SuiNetwork,
+    config::{
+        AuthorityPrivateInfo, Config, GatewayConfig, GatewayType, GenesisConfig, WalletConfig,
+        SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
+    },
+    keystore::KeystoreType,
+    sui_commands::{genesis, SuiNetwork},
     wallet_commands::{WalletCommands, WalletContext},
 };
-use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use sui_types::{
     base_types::SuiAddress,
     crypto::{random_key_pairs, KeyPair},
@@ -85,7 +85,7 @@ pub async fn start_test_network(
         .collect();
     genesis_config.authorities = authorities;
 
-    let (network_config, accounts, mut keystore) = genesis(genesis_config).await?;
+    let (network_config, accounts, mut keystore) = genesis(genesis_config, None).await?;
     let key_pair_refs = key_pairs.iter().collect::<Vec<_>>();
     let network = SuiNetwork::start(&network_config, key_pair_refs).await?;
 

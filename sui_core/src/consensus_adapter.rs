@@ -212,9 +212,11 @@ impl ConsensusListener {
                     match message {
                         // Keep track of this certificates so we can notify the user later.
                         ConsensusListenerMessage::New(transaction, replier) => {
+                            let digest = Self::hash(&transaction);
                             if self.pending.len() < self.max_pending_transactions {
-                                let digest = Self::hash(&transaction);
                                 self.pending.entry(digest).or_insert_with(Vec::new).push(replier);
+                            } else if replier.send(Err(SuiError::ListenerCapacityExceeded)).is_err() {
+                                debug!("No replier to listen to consensus output {digest}");
                             }
                         },
 

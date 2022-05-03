@@ -54,8 +54,9 @@ AuthoritySignature:
       SIZE: 64
 BatchInfoRequest:
   STRUCT:
-    - start: U64
-    - end: U64
+    - start:
+        OPTION: U64
+    - length: U64
 BatchInfoResponseItem:
   NEWTYPESTRUCT:
     TYPENAME: UpdateItem
@@ -729,12 +730,14 @@ SuiError:
       SharedObjectLockingFailure:
         NEWTYPE: STR
     98:
+      ListenerCapacityExceeded: UNIT
+    99:
       SignatureSeedInvalidLength:
         NEWTYPE: U64
-    99:
+    100:
       HkdfError:
         NEWTYPE: STR
-    100:
+    101:
       SignatureKeyGenError:
         NEWTYPE: STR
 TransactionData:

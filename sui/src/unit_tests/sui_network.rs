@@ -1,14 +1,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
-
 use anyhow::anyhow;
-use sui::config::{AuthorityPrivateInfo, Config, GenesisConfig, WalletConfig};
-use sui::gateway_config::{GatewayConfig, GatewayType};
-use sui::keystore::KeystoreType;
-use sui::sui_commands::{genesis, SuiNetwork};
-use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
+use std::path::Path;
+use sui::{
+    config::{
+        AuthorityPrivateInfo, Config, GatewayConfig, GatewayType, GenesisConfig, WalletConfig,
+        SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
+    },
+    keystore::KeystoreType,
+    sui_commands::{genesis, SuiNetwork},
+};
 use sui_types::crypto::{random_key_pairs, KeyPair};
 
 const NUM_VALIDAOTR: usize = 4;
@@ -59,7 +61,7 @@ pub async fn start_test_network(
         .map(|info| AuthorityPrivateInfo { port: 0, ..info })
         .collect();
 
-    let (network_config, accounts, mut keystore) = genesis(genesis_config).await?;
+    let (network_config, accounts, mut keystore) = genesis(genesis_config, None).await?;
     let key_pair_refs = key_pairs.iter().collect::<Vec<_>>();
     let network = SuiNetwork::start(&network_config, key_pair_refs).await?;
 
