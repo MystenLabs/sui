@@ -740,6 +740,9 @@ SuiError:
     101:
       SignatureKeyGenError:
         NEWTYPE: STR
+    102:
+      RpcError:
+        NEWTYPE: STR
 TransactionData:
   STRUCT:
     - kind:
