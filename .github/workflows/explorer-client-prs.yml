@@ -14,14 +14,16 @@ jobs:
     name: Lint, Test & Build
     needs: diff
     if: needs.diff.outputs.isClient == 'true'
-    runs-on: [self-hosted, self-hosted-ubuntu]
+    runs-on: [ubuntu-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Install Nodejs
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v2
         with:
           node-version: "16"
+          cache: "yarn"
+          cache-dependency-path: ./explorer/client/yarn.lock
       - name: Build TS sdk
         working-directory: ./sdk/typescript
         run: yarn install; yarn build
