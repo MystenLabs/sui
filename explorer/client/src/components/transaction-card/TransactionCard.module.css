@@ -9,7 +9,7 @@ div.columnheader > div {
 }
 
 div.txcardgrid {
-    @apply grid md:grid-cols-3 sm:grid-cols-1 gap-2 border-0  pt-3 pb-3 pl-8 pr-8 items-center;
+    @apply grid md:grid-cols-3 sm:grid-cols-1 gap-2 border-0  pt-3 pb-3 md:pl-8 md:pr-8 pl-4 pr-4 items-center;
 }
 
 div.txcardgrid:nth-child(2n + 1) {
@@ -17,7 +17,7 @@ div.txcardgrid:nth-child(2n + 1) {
 }
 
 div.txcardgrid:first-child {
-    @apply bg-offblack rounded-none items-center pt-5 pb-5 font-black shadow-md border-2 border-coolGray-400 h-10;
+    @apply bg-offblack rounded-none items-center pt-5 pb-5 font-black shadow-md border-2 border-coolGray-400;
 }
 
 div.txcardgrid > div:first-child {
@@ -33,11 +33,11 @@ div.txcardgridlarge {
 }
 
 div.status-success {
-    @apply text-sui;
+    @apply text-green-600;
 }
 
 div.status-fail {
-    @apply bg-red-300;
+    @apply text-red-300;
 }
 
 div.status-pending {
@@ -53,7 +53,7 @@ div.action-mutate {
 }
 
 div.grouped {
-    @apply border-transparent;
+    @apply border-transparent  !important;
 }
 
 ul.listitems {
@@ -69,5 +69,9 @@ ul.listitems {
 }
 
 .listitems .sublist {
-    @apply mt-2 list-none p-0;
+    @apply mt-2 list-none p-0 md:flex grid gap-2 pr-0;
+}
+
+div.sublist .sublistlabel {
+    @apply w-28 flex-none;
 }

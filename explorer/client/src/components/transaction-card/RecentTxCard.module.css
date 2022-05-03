@@ -15,7 +15,7 @@ div.txcardgridlarge {
 }
 
 div.txcardgrid > div {
-    @apply block pr-5;
+    @apply block;
 }
 
 div.txcardgrid > div:first-child {
@@ -33,7 +33,7 @@ div.txadd {
 }
 
 .txheader {
-    @apply bg-offblack text-offwhite rounded-none md:h-10 shadow-none !important;
+    @apply bg-offblack text-offwhite rounded-none md:h-10 shadow-none md:flex hidden !important;
 }
 
 .txtype {
@@ -53,9 +53,17 @@ div.txadd {
 }
 
 .txsearch input {
-    @apply h-16 shadow-sm mr-0 ml-0 rounded-none pl-2 pr-2 border-solid border border-gray-100 text-base;
+    @apply shadow-sm mr-0 ml-0 rounded-none pl-2 pr-2 border-solid border border-gray-100 text-base;
 }
 
 .txsearch [type='submit'] {
-    @apply md:w-1/12 w-20 bg-offblack text-offwhite hover:text-offblack hover:bg-sui;
+    @apply md:w-1/12 w-20 bg-offblack text-offwhite hover:text-offblack hover:bg-sui h-16 shadow-sm border-solid border border-gray-100;
+}
+
+.failure {
+    @apply text-red-300;
+}
+
+.success {
+    @apply text-green-400;
 }

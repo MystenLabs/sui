@@ -5,7 +5,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignedTransaction, TransactionResponse, TransferTransaction, TxnDataSerializer, TransactionDigest, SuiAddress, ObjectOwner, ObjectRef, ObjectContentField, ObjectContentFields, ObjectContent, SuiObject, ObjectExistsInfo, ObjectNotExistsInfo, ObjectStatus, ObjectType, GetOwnedObjectRefsResponse, GetObjectInfoResponse, ObjectDigest, ObjectId, SequenceNumber, RawObjectRef, Transfer, RawAuthoritySignInfo, TransactionKindName, SingleTransactionKind, TransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatus, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveModulePublish, Event, StructTag, MoveTypeTag, MoveCall, MoveCallArg, EmptySignInfo, AuthorityName, AuthoritySignature } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignedTransaction, TransactionResponse, TransferTransaction, TxnDataSerializer, TransactionDigest, SuiAddress, ObjectOwner, ObjectRef, ObjectContentField, ObjectContentFields, ObjectContent, SuiObject, ObjectExistsInfo, ObjectNotExistsInfo, ObjectStatus, ObjectType, GetOwnedObjectRefsResponse, GetObjectInfoResponse, ObjectDigest, ObjectId, SequenceNumber, RawObjectRef, Transfer, RawAuthoritySignInfo, TransactionKindName, SingleTransactionKind, TransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, ExecutionStatusDetail, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveModulePublish, Event, StructTag, MoveTypeTag, MoveCall, MoveCallArg, EmptySignInfo, AuthorityName, AuthoritySignature } from "./index";
 import { BN } from "bn.js";
 
 export function isEd25519KeypairData(obj: any, _argumentName?: string): obj is Ed25519KeypairData {
@@ -372,22 +372,32 @@ export function isGasCostSummary(obj: any, _argumentName?: string): obj is GasCo
     )
 }
 
+export function isExecutionStatusType(obj: any, _argumentName?: string): obj is ExecutionStatusType {
+    return (
+        (obj === "Success" ||
+            obj === "Failure")
+    )
+}
+
 export function isExecutionStatus(obj: any, _argumentName?: string): obj is ExecutionStatus {
     return (
         ((obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
-            (obj.Success !== null &&
-                typeof obj.Success === "object" ||
-                typeof obj.Success === "function") &&
-            isGasCostSummary(obj.Success.gas_cost) as boolean ||
+            isExecutionStatusDetail(obj.Success) as boolean ||
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
-            (obj.Failure !== null &&
-                typeof obj.Failure === "object" ||
-                typeof obj.Failure === "function") &&
-            isGasCostSummary(obj.Failure.gas_cost) as boolean)
+            isExecutionStatusDetail(obj.Failure) as boolean)
+    )
+}
+
+export function isExecutionStatusDetail(obj: any, _argumentName?: string): obj is ExecutionStatusDetail {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isGasCostSummary(obj.gas_cost) as boolean
     )
 }
 
