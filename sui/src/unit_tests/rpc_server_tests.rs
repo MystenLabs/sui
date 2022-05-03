@@ -16,11 +16,10 @@ use sui::{
     config::{PersistedConfig, WalletConfig, SUI_GATEWAY_CONFIG, SUI_WALLET_CONFIG},
     keystore::{Keystore, SuiKeystore},
     rpc_gateway::{
-        responses::ObjectResponse, RpcCallArg, RpcGatewayClient, RpcGatewayImpl, RpcGatewayServer,
+        responses::ObjectResponse, RpcGatewayClient, RpcGatewayImpl, RpcGatewayServer,
         SignedTransaction, TransactionBytes,
     },
     sui_commands::SuiNetwork,
-    sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue},
 };
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::sui_json::SuiJsonValue;
@@ -28,7 +27,6 @@ use sui_framework::build_move_package_to_bytes;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     json_schema::Base64,
-    object::ObjectRead,
     SUI_FRAMEWORK_ADDRESS,
 };
 

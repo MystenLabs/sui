@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::rpc_gateway::responses::SuiTypeTag;
 use crate::{
     config::{GatewayConfig, PersistedConfig},
     rpc_gateway::responses::{GetObjectInfoResponse, NamedObjectRef, ObjectResponse},
@@ -10,7 +11,7 @@ use async_trait::async_trait;
 use ed25519_dalek::ed25519::signature::Signature;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
-use move_core_types::{identifier::Identifier, language_storage::TypeTag};
+use move_core_types::identifier::Identifier;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{base64, serde_as};
@@ -27,7 +28,7 @@ use sui_types::{
     crypto::SignableBytes,
     json_schema,
     json_schema::Base64,
-    messages::{CallArg, Transaction, TransactionData},
+    messages::{Transaction, TransactionData},
     object::ObjectRead,
 };
 use tracing::debug;

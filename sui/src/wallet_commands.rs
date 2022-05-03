@@ -1,18 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    config::{Config, GatewayType, PersistedConfig, WalletConfig},
-    keystore::Keystore,
-    sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue},
-};
-use anyhow::anyhow;
-use clap::*;
-use colored::Colorize;
 use core::fmt;
-use move_core_types::{identifier::Identifier, language_storage::TypeTag, parser::parse_type_tag};
-use serde::Serialize;
-use serde_json::json;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::{Debug, Display, Formatter, Write},
@@ -20,19 +9,33 @@ use std::{
     sync::{Arc, RwLock},
     time::Instant,
 };
+
+use anyhow::anyhow;
+use clap::*;
+use colored::Colorize;
+use move_core_types::{identifier::Identifier, language_storage::TypeTag, parser::parse_type_tag};
+use serde::Serialize;
+use serde_json::json;
+use tracing::info;
+
 use sui_core::gateway_state::{
     gateway_responses::{MergeCoinResponse, PublishResponse, SplitCoinResponse, SwitchResponse},
     GatewayClient,
 };
+use sui_core::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_framework::build_move_package_to_bytes;
 use sui_types::{
     base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress},
     gas_coin::GasCoin,
-    messages::{CallArg, CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects},
+    messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects},
     object::{Object, ObjectRead, ObjectRead::Exists},
     SUI_FRAMEWORK_ADDRESS,
 };
-use tracing::info;
+
+use crate::{
+    config::{Config, GatewayType, PersistedConfig, WalletConfig},
+    keystore::Keystore,
+};
 
 const EXAMPLE_NFT_NAME: &str = "Example NFT";
 const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the wallet Command Line Tool";
@@ -107,10 +110,10 @@ pub enum WalletCommands {
         function: Identifier,
         /// Function name in module
         #[clap(
-            long,
-            parse(try_from_str = parse_type_tag),
-            multiple_occurrences = false,
-            multiple_values = true
+        long,
+        parse(try_from_str = parse_type_tag),
+        multiple_occurrences = false,
+        multiple_values = true
         )]
         type_args: Vec<TypeTag>,
         /// Simplified ordered args like in the function syntax
