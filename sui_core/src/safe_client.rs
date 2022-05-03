@@ -189,22 +189,20 @@ impl<C> SafeClient<C> {
             .check(&signed_batch.batch, signed_batch.authority)?;
 
         // ensure transactions enclosed match requested range
-        /*
 
-        TODO: check that the batch is within bounds given that the
-              bounds may now not be known by the requester.
-
-        if let Some(start) = &request.start {
-            fp_ensure!(
-                signed_batch.batch.initial_sequence_number >= *start
-                    && signed_batch.batch.next_sequence_number
-                        <= (*start + request.length + signed_batch.batch.size),
-                SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address
-                }
-            );
-        }
-        */
+        // TODO: check that the batch is within bounds given that the
+        //      bounds may now not be known by the requester.
+        //
+        // if let Some(start) = &request.start {
+        //    fp_ensure!(
+        //        signed_batch.batch.initial_sequence_number >= *start
+        //            && signed_batch.batch.next_sequence_number
+        //                <= (*start + request.length + signed_batch.batch.size),
+        //        SuiError::ByzantineAuthoritySuspicion {
+        //            authority: self.address
+        //        }
+        //    );
+        // }
 
         // If we have seen a previous batch, use it to make sure the next batch
         // is constructed correctly:
