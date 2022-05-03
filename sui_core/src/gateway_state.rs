@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use futures::future;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
+use sui_adapter::adapter::resolve_and_type_check;
 use tracing::{error, Instrument};
 
 use sui_types::gas::{self, SuiGasStatus};
@@ -27,6 +28,7 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 
+use crate::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use crate::transaction_input_checker;
 use crate::{
     authority::GatewayStore, authority_aggregator::AuthorityAggregator,
@@ -136,8 +138,8 @@ pub trait GatewayAPI {
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
+        arguments: Vec<SuiJsonValue>,
         gas_object_ref: ObjectRef,
-        arguments: Vec<CallArg>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -652,10 +654,48 @@ where
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
+        arguments: Vec<SuiJsonValue>,
         gas_object_ref: ObjectRef,
-        arguments: Vec<CallArg>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
+        let package_obj = self.get_object(&package_object_ref.0).await?;
+        let json_args =
+            resolve_move_function_args(&package_obj, module.clone(), function.clone(), arguments)?;
+
+        // Fetch all the objects needed for this call
+        let mut objects = BTreeMap::new();
+        let mut args = Vec::with_capacity(json_args.len());
+
+        for json_arg in json_args {
+            args.push(match json_arg {
+                SuiJsonCallArg::Object(id) => {
+                    let obj = self.get_object(&id).await?;
+                    let arg = if obj.is_shared() {
+                        CallArg::SharedObject(id)
+                    } else {
+                        CallArg::ImmOrOwnedObject(obj.compute_object_reference())
+                    };
+                    objects.insert(id, obj);
+                    arg
+                }
+                SuiJsonCallArg::Pure(bytes) => CallArg::Pure(bytes),
+            })
+        }
+
+        // Pass in the objects for a deeper check
+        let compiled_module = package_obj
+            .data
+            .try_as_package()
+            .ok_or_else(|| anyhow!("Cannot get package from object"))?
+            .deserialize_module(&module)?;
+        resolve_and_type_check(
+            &objects,
+            &compiled_module,
+            &function,
+            &type_arguments,
+            args.clone(),
+        )?;
+
         let data = TransactionData::new_move_call(
             signer,
             package_object_ref,
@@ -663,7 +703,7 @@ where
             function,
             type_arguments,
             gas_object_ref,
-            arguments,
+            args,
             gas_budget,
         );
         Ok(data)

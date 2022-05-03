@@ -197,17 +197,19 @@ the [Move](move.md#move) language):
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
---data-raw '{ "jsonrpc":"2.0", 
-              "method":"sui_moveCall", 
-              "params":["{{owner_address}}",
-                        "0x2",
-                        "GAS",
-                        "transfer",
-                        [],
-                        ["Pure": "{{coin_object_id_base64}}", "Pure": "{{to_address_base64}}"}],
-                        "{{gas_object_id}}",
-                        2000], 
-              "id":1}' | json_pp
+--data-raw '{ "jsonrpc": "2.0",
+              "method": "sui_moveCall",
+              "params": [
+                  "{{owner_address}}",
+                  "0000000000000000000000000000000000000002",
+                  "Coin",
+                  "transfer_",
+                  ["0x2::SUI::SUI"],
+                  ["0x{{coin_object_id}}",10000, "0x{{recipient_address}}"],
+                  "{{gas_object_id}}",
+                  2000
+              ],
+              "id": 1 }' | json_pp
 ```
 
 #### 2, Sign the transaction
@@ -221,13 +223,13 @@ signature.  Gas usage is capped by the gas_budget. The `transfer`
 function is described in more detail in
 the [Sui Wallet](wallet.md#calling-move-code) documentation.
 
-Calling the `transfer` function in the `GAS` module serves the same
+Calling the `transfer_` function in the `Coin` module serves the same
 purpose as the native coin transfer ([`sui_transferCoin`](#sui_transfercoin)), and is mostly used for illustration
 purposes as native transfer is more efficient when it's applicable
 (i.e., we are transferring coins rather than non-coin
 objects). Consequently, you should fill out argument placeholders
 (`{{owner_address}}`, `{{coin_object_id}`, etc.) the same way you
-would for [`sui_transferCoin`](#sui_transfercoin) - please not additional
+would for [`sui_transferCoin`](#sui_transfercoin) - please note additional
 `0x` prepended to function arguments.
 
 To learn more about what `args` are accepted in a Move call, refer to the [SuiJSON](sui-json.md) documentation.

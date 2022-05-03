@@ -9,5 +9,4 @@ pub mod rpc_gateway;
 pub mod rpc_gateway_client;
 pub mod shell;
 pub mod sui_commands;
-pub mod sui_json;
 pub mod wallet_commands;

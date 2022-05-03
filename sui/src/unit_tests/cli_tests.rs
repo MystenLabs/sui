@@ -1,13 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::cli_tests::sui_network::start_test_network;
-use anyhow::anyhow;
-use move_core_types::identifier::Identifier;
-use serde_json::{json, Value};
 use std::{
     collections::BTreeSet, fmt::Write, fs::read_dir, ops::Add, path::PathBuf, str, time::Duration,
 };
+
+use anyhow::anyhow;
+use move_core_types::identifier::Identifier;
+use serde_json::{json, Value};
+use tracing_test::traced_test;
+
 use sui::{
     config::{
         AccountConfig, Config, GatewayConfig, GatewayType, GenesisConfig, NetworkConfig,
@@ -16,10 +18,10 @@ use sui::{
     },
     keystore::KeystoreType,
     sui_commands::{SuiCommand, SuiNetwork, SUI_AUTHORITY_KEYS},
-    sui_json::SuiJsonValue,
     wallet_commands::{WalletCommandResult, WalletCommands, WalletContext},
 };
 use sui_core::gateway_state::gateway_responses::SwitchResponse;
+use sui_core::sui_json::SuiJsonValue;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     crypto::{get_key_pair, random_key_pairs},
@@ -27,7 +29,8 @@ use sui_types::{
     messages::TransactionEffects,
     object::{Object, ObjectRead, GAS_VALUE_FOR_TESTING},
 };
-use tracing_test::traced_test;
+
+use crate::cli_tests::sui_network::start_test_network;
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
 const AIRDROP_SOURCE_CONTRACT_ADDRESS: &str = "bc4ca0eda7647a8ab7c2061c2e118a18a936f13d";

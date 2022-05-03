@@ -1,18 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    config::{Config, GatewayType, PersistedConfig, WalletConfig},
-    keystore::Keystore,
-    sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue},
-};
-use anyhow::anyhow;
-use clap::*;
-use colored::Colorize;
 use core::fmt;
-use move_core_types::{identifier::Identifier, language_storage::TypeTag, parser::parse_type_tag};
-use serde::Serialize;
-use serde_json::json;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::{Debug, Display, Formatter, Write},
@@ -20,20 +9,33 @@ use std::{
     sync::{Arc, RwLock},
     time::Instant,
 };
-use sui_adapter::adapter::resolve_and_type_check;
+
+use anyhow::anyhow;
+use clap::*;
+use colored::Colorize;
+use move_core_types::{identifier::Identifier, language_storage::TypeTag, parser::parse_type_tag};
+use serde::Serialize;
+use serde_json::json;
+use tracing::info;
+
 use sui_core::gateway_state::{
     gateway_responses::{MergeCoinResponse, PublishResponse, SplitCoinResponse, SwitchResponse},
     GatewayClient,
 };
+use sui_core::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_framework::build_move_package_to_bytes;
 use sui_types::{
     base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress},
     gas_coin::GasCoin,
-    messages::{CallArg, CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects},
+    messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects},
     object::{Object, ObjectRead, ObjectRead::Exists},
     SUI_FRAMEWORK_ADDRESS,
 };
-use tracing::info;
+
+use crate::{
+    config::{Config, GatewayType, PersistedConfig, WalletConfig},
+    keystore::Keystore,
+};
 
 const EXAMPLE_NFT_NAME: &str = "Example NFT";
 const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the wallet Command Line Tool";
@@ -108,10 +110,10 @@ pub enum WalletCommands {
         function: Identifier,
         /// Function name in module
         #[clap(
-            long,
-            parse(try_from_str = parse_type_tag),
-            multiple_occurrences = false,
-            multiple_values = true
+        long,
+        parse(try_from_str = parse_type_tag),
+        multiple_occurrences = false,
+        multiple_values = true
         )]
         type_args: Vec<TypeTag>,
         /// Simplified ordered args like in the function syntax
@@ -745,52 +747,25 @@ async fn call_move(
     context: &mut WalletContext,
 ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
     let package_obj_info = context.gateway.get_object_info(*package).await?;
-    let package_obj = package_obj_info.object().clone()?;
+    let package_obj = package_obj_info.object()?;
     let package_obj_ref = package_obj_info.reference().unwrap();
 
-    // These steps can potentially be condensed and moved into the client/manager level
-    // Extract the input args
+    // Resolving the args in client side to identify forbidden_gas_objects
     let json_args =
         resolve_move_function_args(package_obj, module.clone(), function.clone(), args.to_vec())?;
-
     // Fetch all the objects needed for this call
     let mut objects = BTreeMap::new();
-    let mut args = Vec::with_capacity(json_args.len());
     for json_arg in json_args {
-        args.push(match json_arg {
-            SuiJsonCallArg::Object(id) => {
-                let obj = context.gateway.get_object_info(id).await?.into_object()?;
-                let arg = if obj.is_shared() {
-                    CallArg::SharedObject(id)
-                } else {
-                    CallArg::ImmOrOwnedObject(obj.compute_object_reference())
-                };
-                objects.insert(id, obj);
-                arg
-            }
-            SuiJsonCallArg::Pure(bytes) => CallArg::Pure(bytes),
-        })
+        if let SuiJsonCallArg::Object(id) = json_arg {
+            let obj = context.gateway.get_object_info(id).await?.into_object()?;
+            objects.insert(id, obj);
+        }
     }
     let forbidden_gas_objects = objects.keys().copied().collect();
     let gas_object = context
         .choose_gas_for_wallet(*gas, *gas_budget, forbidden_gas_objects)
         .await?;
     let sender = gas_object.owner.get_owner_address()?;
-
-    // Pass in the objects for a deeper check
-    let compiled_module = package_obj
-        .data
-        .try_as_package()
-        .ok_or_else(|| anyhow!("Cannot get package from object"))?
-        .deserialize_module(module)?;
-    resolve_and_type_check(
-        &objects,
-        &compiled_module,
-        function,
-        type_args,
-        args.clone(),
-    )?;
-
     // Fetch the object info for the gas obj
     let gas_obj_ref = gas_object.compute_object_reference();
 
@@ -802,8 +777,8 @@ async fn call_move(
             module.to_owned(),
             function.to_owned(),
             type_args.to_owned(),
+            args.to_vec(),
             gas_obj_ref,
-            args,
             *gas_budget,
         )
         .await?;
