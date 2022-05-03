@@ -27,7 +27,7 @@ use sui_adapter::adapter;
 use sui_types::serialize::serialize_transaction_info;
 use sui_types::{
     base_types::*,
-    batch::UpdateItem,
+    batch::{TxSequenceNumber, UpdateItem},
     committee::Committee,
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
@@ -535,20 +535,37 @@ impl AuthorityState {
     pub async fn handle_batch_info_request(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<(VecDeque<UpdateItem>, bool), SuiError> {
+    ) -> Result<
+        (
+            VecDeque<UpdateItem>,
+            // Should subscribe, computer start, computed end
+            (bool, TxSequenceNumber, TxSequenceNumber),
+        ),
+        SuiError,
+    > {
         // Ensure the range contains some elements and end > start
-        if request.end <= request.start {
+        if request.length == 0 {
             return Err(SuiError::InvalidSequenceRangeError);
         };
 
         // Ensure we are not doing too much work per request
-        if request.end - request.start > MAX_ITEMS_LIMIT {
+        if request.length > MAX_ITEMS_LIMIT {
             return Err(SuiError::TooManyItemsError(MAX_ITEMS_LIMIT));
         }
 
-        let (batches, transactions) = self
-            ._database
-            .batches_and_transactions(request.start, request.end)?;
+        // If we do not have a start, pick the low watermark from the notifier.
+        let start = match request.start {
+            Some(start) => start,
+            None => {
+                self.last_batch()?
+                    .expect("Authority is always initialized with a batch")
+                    .batch
+                    .next_sequence_number
+            }
+        };
+        let end = start + request.length;
+
+        let (batches, transactions) = self._database.batches_and_transactions(start, end)?;
 
         let mut dq_batches = std::collections::VecDeque::from(batches);
         let mut dq_transactions = std::collections::VecDeque::from(transactions);
@@ -577,7 +594,7 @@ impl AuthorityState {
 
         // whether we have sent everything requested, or need to start
         // live notifications.
-        let should_subscribe = request.end > last_batch_next_seq;
+        let should_subscribe = end > last_batch_next_seq;
 
         // If any transactions are left they must be outside a batch
         while let Some(current_transaction) = dq_transactions.pop_front() {
@@ -585,7 +602,7 @@ impl AuthorityState {
             items.push_back(UpdateItem::Transaction(current_transaction));
         }
 
-        Ok((items, should_subscribe))
+        Ok((items, (should_subscribe, start, end)))
     }
 
     pub async fn new(

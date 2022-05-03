@@ -7,16 +7,14 @@ use crate::{
     consensus_adapter::{ConsensusAdapter, ConsensusListenerMessage},
 };
 use async_trait::async_trait;
-use futures::{stream::BoxStream, FutureExt, StreamExt, TryStreamExt};
+use futures::{stream::BoxStream, FutureExt, TryStreamExt};
 use std::{io, net::SocketAddr, sync::Arc, time::Duration};
 use sui_network::{
     api::{BincodeEncodedPayload, Validator, ValidatorServer},
     network::NetworkServer,
     tonic,
 };
-use sui_types::{
-    batch::UpdateItem, crypto::VerificationObligation, error::*, messages::*, serialize::*,
-};
+use sui_types::{crypto::VerificationObligation, error::*, messages::*, serialize::*};
 use tokio::{net::TcpListener, sync::mpsc::Sender};
 use tracing::{info, Instrument};
 
@@ -328,65 +326,18 @@ impl Validator for AuthorityServer {
             .deserialize()
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
 
-        // Register a subscriber to not miss any updates
-        let subscriber = self.state.subscribe_batch();
-        let message_end = request.end;
-
-        // Get the historical data requested
-        let (items, should_subscribe) = self
+        let xstream = self
             .state
-            .handle_batch_info_request(request)
+            .handle_batch_streaming(request)
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        let last_seq = items
-            .back()
-            .map(|item| {
-                if let UpdateItem::Transaction((seq, _)) = item {
-                    *seq
-                } else {
-                    0
-                }
-            })
-            .unwrap_or(0);
-
-        let items = futures::stream::iter(items).map(Ok);
-        let subscriber = tokio_stream::wrappers::BroadcastStream::new(subscriber)
-            .take_while(move |_| futures::future::ready(should_subscribe))
-            .take_while(|item| futures::future::ready(item.is_ok()))
-            // Do not re-send transactions already sent from the database
-            .skip_while(move |item| {
-                let skip = match item {
-                    Ok(item) => {
-                        let seq = match item {
-                            UpdateItem::Transaction((seq, _)) => *seq,
-                            UpdateItem::Batch(signed_batch) => {
-                                signed_batch.batch.next_sequence_number
-                            }
-                        };
-                        seq <= last_seq
-                    }
-                    Err(_) => false,
-                };
-                futures::future::ready(skip)
-            })
-            // We always stop sending at batch boundaries, so that we try to always
-            // start with a batch and end with a batch to allow signature verification.
-            .take_while(move |item| {
-                let take = match item {
-                    Ok(UpdateItem::Batch(signed_batch)) => {
-                        message_end >= signed_batch.batch.next_sequence_number
-                    }
-                    _ => true,
-                };
-                futures::future::ready(take)
-            });
-
-        let response = items
-            .chain(subscriber)
+        let response =
+            // items
+            // .chain(subscriber)
+            xstream
             .map_err(|e| tonic::Status::internal(e.to_string()))
             .map_ok(|item| {
-                let item = BatchInfoResponseItem(item);
                 BincodeEncodedPayload::try_from(&item).expect("serialization should not fail")
             });
 

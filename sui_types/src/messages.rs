@@ -620,8 +620,10 @@ pub struct AccountInfoRequest {
 /// is over the batch end marker.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct BatchInfoRequest {
-    pub start: TxSequenceNumber,
-    pub end: TxSequenceNumber,
+    // The sequence number at which to start the seuqence to return, or None for the latest.
+    pub start: Option<TxSequenceNumber>,
+    // The total number of items to receive. Could receive a bit more or a bit less.
+    pub length: u64,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
