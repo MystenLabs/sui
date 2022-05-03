@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::benchmark::validator_preparer::ValidatorPreparer;
-use bytes::Bytes;
-use move_core_types::account_address::AccountAddress;
-use move_core_types::ident_str;
+use move_core_types::{account_address::AccountAddress, ident_str};
 use rayon::prelude::*;
-use sui_types::crypto::{get_key_pair, AuthoritySignature, KeyPair, Signature};
-use sui_types::SUI_FRAMEWORK_ADDRESS;
-use sui_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
+use sui_types::{
+    base_types::*,
+    committee::*,
+    crypto::{get_key_pair, AuthoritySignature, KeyPair, Signature},
+    messages::*,
+    object::Object,
+    SUI_FRAMEWORK_ADDRESS,
+};
 
 const OBJECT_ID_OFFSET: &str = "0x10000";
 const GAS_PER_TX: u64 = u64::MAX;
@@ -55,10 +58,10 @@ fn create_gas_object(object_id: ObjectID, owner: SuiAddress) -> Object {
     )
 }
 
-/// This builds, signs a cert and serializes it
-fn make_serialized_cert(keys: &[KeyPair], committee: &Committee, tx: Transaction) -> Vec<u8> {
+/// This builds, signs a cert
+fn make_cert(keys: &[KeyPair], committee: &Committee, tx: &Transaction) -> CertifiedTransaction {
     // Make certificate
-    let mut certificate = CertifiedTransaction::new(tx);
+    let mut certificate = CertifiedTransaction::new(tx.clone());
     certificate.auth_sign_info.epoch = committee.epoch();
     for i in 0..committee.quorum_threshold() {
         let secx = keys.get(i).unwrap();
@@ -66,13 +69,10 @@ fn make_serialized_cert(keys: &[KeyPair], committee: &Committee, tx: Transaction
         let sig = AuthoritySignature::new(&certificate.data, secx);
         certificate.auth_sign_info.signatures.push((*pubx, sig));
     }
-
-    let serialized_certificate = serialize_cert(&certificate);
-    assert!(!serialized_certificate.is_empty());
-    serialized_certificate
+    certificate
 }
 
-fn make_serialized_transactions(
+fn make_transactions(
     address: SuiAddress,
     keypair: KeyPair,
     committee: &Committee,
@@ -80,7 +80,7 @@ fn make_serialized_transactions(
     authority_keys: &[KeyPair],
     batch_size: usize,
     use_move: bool,
-) -> Vec<Bytes> {
+) -> Vec<(Transaction, CertifiedTransaction)> {
     // Make one transaction per account
     // Depending on benchmark_type, this could be the Order and/or Confirmation.
     account_gas_objects
@@ -115,18 +115,10 @@ fn make_serialized_transactions(
 
             let signature = Signature::new(&data, &keypair);
             let transaction = Transaction::new(data, signature);
+            let cert = make_cert(authority_keys, committee, &transaction);
 
-            // Serialize transaction
-            let serialized_transaction = serialize_transaction(&transaction);
-
-            assert!(!serialized_transaction.is_empty());
-
-            vec![
-                serialized_transaction.into(),
-                make_serialized_cert(authority_keys, committee, transaction).into(),
-            ]
+            (transaction, cert)
         })
-        .flatten()
         .collect()
 }
 
@@ -158,13 +150,13 @@ impl TransactionCreator {
         num_chunks: usize,
         sender: Option<&KeyPair>,
         validator_preparer: &mut ValidatorPreparer,
-    ) -> Vec<Bytes> {
+    ) -> Vec<(Transaction, CertifiedTransaction)> {
         let (address, keypair) = if let Some(a) = sender {
             (SuiAddress::from(a.public_key_bytes()), a.copy())
         } else {
             get_key_pair()
         };
-        let (signed_txns, txn_objects) = self.make_transactions(
+        let (transactions, txn_objects) = self.make_transactions(
             address,
             keypair,
             chunk_size,
@@ -178,7 +170,7 @@ impl TransactionCreator {
 
         validator_preparer.update_objects_for_validator(txn_objects, address);
 
-        signed_txns
+        transactions
     }
 
     fn make_gas_objects(
@@ -229,7 +221,7 @@ impl TransactionCreator {
         object_id_offset: ObjectID,
         auth_keys: &[KeyPair],
         committee: &Committee,
-    ) -> (Vec<Bytes>, Vec<Object>) {
+    ) -> (Vec<(Transaction, CertifiedTransaction)>, Vec<Object>) {
         assert_eq!(chunk_size % conn, 0);
         let batch_size_per_conn = chunk_size / conn;
 
@@ -250,7 +242,7 @@ impl TransactionCreator {
             .flat_map(|(objects, gas)| objects.into_iter().chain(std::iter::once(gas)))
             .collect();
 
-        let serialized_txes = make_serialized_transactions(
+        let transactions = make_transactions(
             address,
             key_pair,
             committee,
@@ -259,6 +251,6 @@ impl TransactionCreator {
             batch_size_per_conn,
             use_move,
         );
-        (serialized_txes, all_objects)
+        (transactions, all_objects)
     }
 }
