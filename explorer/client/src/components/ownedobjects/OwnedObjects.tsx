@@ -128,7 +128,7 @@ function GroupView({ results }: { results: resultType }) {
 
     if (isGroup) {
         return (
-            <div id="groupCollection">
+            <div id="groupCollection" className={styles.groupcollection}>
                 {Array.from(new Set(results.map(({ Type }) => Type))).map(
                     (typeV) => {
                         const subObjList = results.filter(
@@ -161,7 +161,9 @@ function GroupView({ results }: { results: resultType }) {
     } else {
         return (
             <div>
-                <button onClick={goBack}>&#60; Back</button>
+                <button onClick={goBack} className={styles.totype}>
+                    &#60; Back
+                </button>
                 <OwnedObjectSection results={subObjs} />
             </div>
         );

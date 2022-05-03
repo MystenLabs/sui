@@ -8,6 +8,10 @@
     @apply w-[100%] lg:grid lg:justify-items-center lg:grid-cols-3;
 }
 
+.groupcollection > div {
+    @apply border-solid border-stone-300 rounded-lg my-2 p-2 cursor-pointer hover:shadow-md;
+}
+
 .objectbox {
     @apply border-solid border-stone-300 rounded-lg my-2 p-[0.25vw] lg:w-[23vw] lg:self-center hover:shadow-md cursor-pointer;
 }
@@ -52,4 +56,8 @@ button.btncontainer {
 
 .pagenumber {
     @apply select-none text-center break-normal text-sm;
+}
+
+button.totype {
+    @apply block mb-2 bg-sui hover:bg-suidark hover:text-white rounded-r-md border-none cursor-pointer p-2;
 }
