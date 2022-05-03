@@ -1193,6 +1193,7 @@ impl CertifiedTransaction {
 impl Display for CertifiedTransaction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
+        writeln!(writer, "Transaction Hash: {:?}", self.digest())?;
         writeln!(
             writer,
             "Signed Authorities : {:?}",
