@@ -1,9 +1,0 @@
-[package]
-name = "Experiments"
-version = "0.0.1"
-
-[dependencies]
-Sui = { local = "../../framework" }
-
-[addresses]
-Experiments = "0x0"
