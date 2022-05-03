@@ -1,25 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::VecDeque;
+
 use anyhow::{anyhow, bail};
+// Alias the type names for clarity
+use move_binary_format::{
+    access::ModuleAccess,
+    file_format::{SignatureToken, Visibility},
+};
 use move_core_types::{
     identifier::Identifier,
     value::{MoveTypeLayout, MoveValue},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
-use sui_types::{
-    base_types::{decode_bytes_hex, ObjectID, SuiAddress},
-    object::Object,
-};
-
-// Alias the type names for clarity
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{SignatureToken, Visibility},
-};
 use serde_json::Value as JsonValue;
+
+use sui_types::base_types::{decode_bytes_hex, ObjectID, SuiAddress};
+use sui_types::object::Object;
 
 const HEX_PREFIX: &str = "0x";
 
@@ -279,12 +278,12 @@ fn resolve_call_arg(
 
         SignatureToken::Struct(_)
         | SignatureToken::StructInstantiation(_, _)
+        | SignatureToken::TypeParameter(_)
         | SignatureToken::Reference(_)
         | SignatureToken::MutableReference(_) => {
             SuiJsonCallArg::Object(resolve_object_arg(idx, arg)?)
         }
 
-        SignatureToken::TypeParameter(_) => unreachable!("Not yet supported and already gated"),
         SignatureToken::Signer => unreachable!(),
     })
 }
@@ -335,13 +334,6 @@ pub fn resolve_move_function_args(
     if fdef.visibility != Visibility::Script {
         bail!(
             "{}::{} does not have public(script) visibility",
-            module.self_id(),
-            function,
-        )
-    }
-    if !function_signature.type_parameters.is_empty() {
-        bail!(
-            "{}::{} has type arguments, which are not yet supported in sui_json",
             module.self_id(),
             function,
         )

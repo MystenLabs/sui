@@ -3,7 +3,8 @@
 
 use anyhow::anyhow;
 use base64ct::{Base64, Encoding};
-
+use move_core_types::language_storage::TypeTag;
+use move_core_types::parser::parse_type_tag;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -108,5 +109,22 @@ impl MoveObjectType {
             Data::Move(_) => MoveObjectType::MoveObject,
             Data::Package(_) => MoveObjectType::MovePackage,
         }
+    }
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "TypeTagString")]
+pub struct SuiTypeTag(String);
+
+impl TryInto<TypeTag> for SuiTypeTag {
+    type Error = anyhow::Error;
+    fn try_into(self) -> Result<TypeTag, Self::Error> {
+        parse_type_tag(&self.0)
+    }
+}
+
+impl From<TypeTag> for SuiTypeTag {
+    fn from(tag: TypeTag) -> Self {
+        Self(format!("{}", tag))
     }
 }

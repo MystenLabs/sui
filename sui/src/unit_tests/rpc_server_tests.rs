@@ -16,18 +16,17 @@ use sui::{
     config::{PersistedConfig, WalletConfig, SUI_GATEWAY_CONFIG, SUI_WALLET_CONFIG},
     keystore::{Keystore, SuiKeystore},
     rpc_gateway::{
-        responses::ObjectResponse, RpcCallArg, RpcGatewayClient, RpcGatewayImpl, RpcGatewayServer,
+        responses::ObjectResponse, RpcGatewayClient, RpcGatewayImpl, RpcGatewayServer,
         SignedTransaction, TransactionBytes,
     },
     sui_commands::SuiNetwork,
-    sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue},
 };
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
+use sui_core::sui_json::SuiJsonValue;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     json_schema::Base64,
-    object::ObjectRead,
     SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -142,34 +141,24 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let gas = objects.first().unwrap();
 
     let package_id = ObjectID::new(SUI_FRAMEWORK_ADDRESS.into_bytes());
-    let package: ObjectRead = http_client.get_object_info(package_id).await?;
-    let package = package.into_object()?;
     let module = Identifier::new("ObjectBasics")?;
     let function = Identifier::new("create")?;
 
-    let json_args = resolve_move_function_args(
-        &package,
-        module.clone(),
-        function.clone(),
-        vec![
-            SuiJsonValue::from_str("10000")?,
-            SuiJsonValue::from_str(&format!("\"0x{}\"", address))?,
-        ],
-    )?;
-    let mut args = Vec::with_capacity(json_args.len());
-    for json_arg in json_args {
-        args.push(match json_arg {
-            SuiJsonCallArg::Pure(bytes) => RpcCallArg::Pure(Base64(bytes)),
-            SuiJsonCallArg::Object(id) => match http_client.get_object_info(id).await? {
-                ObjectRead::Exists(_, obj, _) if obj.is_shared() => RpcCallArg::SharedObject(id),
-                _ => RpcCallArg::ImmOrOwnedObject(id),
-            },
-        })
-    }
+    let json_args = vec![
+        SuiJsonValue::from_str("10000")?,
+        SuiJsonValue::from_str(&format!("\"0x{}\"", address))?,
+    ];
 
     let tx_data: TransactionBytes = http_client
         .move_call(
-            *address, package_id, module, function, None, args, gas.0, 1000,
+            *address,
+            package_id,
+            module,
+            function,
+            vec![],
+            json_args,
+            gas.0,
+            1000,
         )
         .await?;
 

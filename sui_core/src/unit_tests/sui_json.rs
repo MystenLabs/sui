@@ -7,12 +7,9 @@ use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, value::MoveTypeLayout,
 };
 use serde_json::{json, Value};
-use sui_adapter::{self, genesis::clone_genesis_packages};
-use sui_types::{
-    base_types::{ObjectID, SuiAddress, TransactionDigest},
-    object::Object,
-    SUI_FRAMEWORK_ADDRESS,
-};
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::object::Object;
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 use crate::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 
@@ -394,7 +391,7 @@ fn test_basic_args_linter_top_level() {
     assert!(resolve_move_function_args(&example_package, module, function, args).is_err());
 
     // Test with vecu8 as address
-    let genesis_objs = clone_genesis_packages();
+    let genesis_objs = sui_adapter::genesis::clone_genesis_packages();
     let framework_pkg = genesis_objs
         .iter()
         .find(|q| q.id() == ObjectID::from(SUI_FRAMEWORK_ADDRESS))
