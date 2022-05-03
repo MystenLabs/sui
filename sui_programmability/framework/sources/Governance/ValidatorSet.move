@@ -5,7 +5,7 @@ module Sui::ValidatorSet {
     use Std::Option::{Self, Option};
     use Std::Vector;
 
-    use Sui::Coin::Coin;
+    use Sui::Balance::Balance;
     use Sui::SUI::SUI;
     use Sui::TxContext::{Self, TxContext};
     use Sui::Validator::{Self, Validator};
@@ -90,7 +90,7 @@ module Sui::ValidatorSet {
     /// The total stake of the validator cannot exceed `max_validator_stake` with the `new_stake`.
     public(friend) fun request_add_stake(
         self: &mut ValidatorSet,
-        new_stake: Coin<SUI>,
+        new_stake: Balance<SUI>,
         max_validator_stake: u64,
         ctx: &TxContext,
     ) {
@@ -144,7 +144,7 @@ module Sui::ValidatorSet {
 
         adjust_stake(&mut self.active_validators, ctx);
 
-        process_pending_removals(&mut self.active_validators, &mut self.pending_removals);
+        process_pending_removals(&mut self.active_validators, &mut self.pending_removals, ctx);
 
         let (total_stake, quorum_stake_threshold) = calculate_total_stake_and_quorum_threshold(&self.active_validators);
         self.total_stake = total_stake;
@@ -188,17 +188,21 @@ module Sui::ValidatorSet {
 
     /// Process the pending withdraw requests. For each pending request, the validator
     /// is removed from `validators` and sent back to the address of the validator.
-    fun process_pending_removals(validators: &mut vector<Validator>, withdraw_list: &mut vector<u64>) {
+    fun process_pending_removals(
+        validators: &mut vector<Validator>, withdraw_list: &mut vector<u64>, ctx: &mut TxContext
+    ) {
         sort_removal_list(withdraw_list);
         while (!Vector::is_empty(withdraw_list)) {
             let index = Vector::pop_back(withdraw_list);
             let validator = Vector::remove(validators, index);
-            Validator::destroy(validator);
+            Validator::destroy(validator, ctx);
         }
     }
 
     /// Process the pending new validators. They are simply inserted into `validators`.
-    fun process_pending_validators(validators: &mut vector<Validator>, pending_validators: &mut vector<Validator>) {
+    fun process_pending_validators(
+        validators: &mut vector<Validator>, pending_validators: &mut vector<Validator>
+    ) {
         while (!Vector::is_empty(pending_validators)) {
             let v = Vector::pop_back(pending_validators);
             Vector::push_back(validators, v);
@@ -251,6 +255,7 @@ module Sui::ValidatorSet {
     #[test_only]
     public(script) fun destroy_for_testing(
         self: ValidatorSet,
+        ctx: &mut TxContext
     ) {
         let ValidatorSet {
             total_stake: _,
@@ -261,7 +266,7 @@ module Sui::ValidatorSet {
         } = self;
         while (!Vector::is_empty(&active_validators)) {
             let v = Vector::pop_back(&mut active_validators);
-            Validator::destroy(v);
+            Validator::destroy(v, ctx);
         };
         Vector::destroy_empty(active_validators);
         Vector::destroy_empty(pending_validators);

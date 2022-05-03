@@ -3,6 +3,7 @@
 
 module Sui::SuiSystem {
     use Sui::Coin::{Self, Coin, TreasuryCap};
+    use Sui::Balance::Balance;
     use Sui::ID::VersionedID;
     use Sui::SUI::SUI;
     use Sui::Transfer;
@@ -36,7 +37,7 @@ module Sui::SuiSystem {
         /// The SUI treasury capability needed to mint SUI.
         treasury_cap: TreasuryCap<SUI>,
         /// The storage fund.
-        storage_fund: Coin<SUI>,
+        storage_fund: Balance<SUI>,
         /// A list of system config parameters.
         parameters: SystemParameters,
     }
@@ -48,7 +49,7 @@ module Sui::SuiSystem {
     public(friend) fun create(
         validators: vector<Validator>,
         treasury_cap: TreasuryCap<SUI>,
-        storage_fund: Coin<SUI>,
+        storage_fund: Balance<SUI>,
         max_validator_candidate_count: u64,
         min_validator_stake: u64,
         max_validator_stake: u64,
@@ -94,7 +95,13 @@ module Sui::SuiSystem {
                 && stake_amount <= self.parameters.max_validator_stake,
             0
         );
-        let validator = Validator::new(TxContext::sender(ctx), name, net_address, stake);
+        let validator = Validator::new(
+            TxContext::sender(ctx),
+            name,
+            net_address,
+            Coin::into_balance(stake)
+        );
+
         ValidatorSet::request_add_validator(&mut self.validators, validator);
     }
 
@@ -121,7 +128,7 @@ module Sui::SuiSystem {
     ) {
         ValidatorSet::request_add_stake(
             &mut self.validators,
-            new_stake,
+            Coin::into_balance(new_stake),
             self.parameters.max_validator_stake,
             ctx,
         )
