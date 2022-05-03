@@ -33,7 +33,7 @@ div.txadd {
 }
 
 .txheader {
-    @apply bg-offblack text-offwhite rounded-none md:h-10 shadow-none !important;
+    @apply bg-offblack text-offwhite rounded-none md:h-10 shadow-none md:flex hidden !important;
 }
 
 .txtype {
@@ -65,5 +65,5 @@ div.txadd {
 }
 
 .success {
-    @apply text-sui;
+    @apply text-green-400;
 }

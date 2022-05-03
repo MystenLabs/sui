@@ -61,6 +61,10 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
             link: true,
         },
         {
+            label: 'Gas Fee',
+            value: tx.gasFee,
+        },
+        {
             label: 'Gas Budget',
             value: tx.data.gas_budget,
         },
@@ -192,18 +196,19 @@ function TransactionCard({ txdata }: Props) {
                                                 {itm.value.map(
                                                     (list: any, n: number) =>
                                                         itm.sublist ? (
-                                                            <ul
+                                                            <li
                                                                 className={
                                                                     styles.list
                                                                 }
                                                                 key={n}
                                                             >
+                                                                <div >
                                                                 {list.map(
                                                                     (
                                                                         sublist: string,
                                                                         l: number
                                                                     ) => (
-                                                                        <li
+                                                                        <div
                                                                             className={
                                                                                 styles.sublist
                                                                             }
@@ -222,7 +227,7 @@ function TransactionCard({ txdata }: Props) {
                                                                                             styles.sublistlabel
                                                                                         }
                                                                                     >
-                                                                                        {' '}
+                                                             
                                                                                         {
                                                                                             itm
                                                                                                 .subLabel[
@@ -245,10 +250,11 @@ function TransactionCard({ txdata }: Props) {
                                                                                     }
                                                                                 </div>
                                                                             </div>
-                                                                        </li>
+                                                                        </div>
                                                                     )
                                                                 )}
-                                                            </ul>
+                                                                </div>
+                                                            </li>
                                                         ) : (
                                                             <li
                                                                 className={

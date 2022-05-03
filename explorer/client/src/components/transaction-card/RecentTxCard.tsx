@@ -8,6 +8,7 @@ import {
     getSingleTransactionKind,
     getTransactionKind,
     getTransferTransaction,
+    getExecutionStatusType
 } from 'sui.js';
 
 import Longtext from '../../components/longtext/Longtext';
@@ -21,6 +22,7 @@ import type {
     GetTxnDigestsResponse,
     TransactionEffectsResponse,
     ExecutionStatus,
+    ExecutionStatusType,
 } from 'sui.js';
 
 import styles from './RecentTxCard.module.css';
@@ -31,14 +33,14 @@ const initState = {
 };
 
 const getGasFeesAndStatus = (txStatusData: ExecutionStatus) => {
-    const istxSucces = Object.keys(txStatusData)[0].toLowerCase();
+    const txStatus: ExecutionStatusType = getExecutionStatusType(txStatusData);
     const txGasObj = Object.values(txStatusData)[0];
     const txGas =
         txGasObj.gas_cost.computation_cost +
         txGasObj.gas_cost.storage_cost -
         txGasObj.gas_cost.storage_rebate;
     return {
-        istxSucces,
+        txStatus: txStatus.toLocaleLowerCase(),
         txGas,
     };
 };
@@ -80,7 +82,7 @@ const getRecentTransactions = async (txNum: number) => {
                         return {
                             block: tx[0],
                             txId: tx[1],
-                            success: txStatusData.istxSucces,
+                            success: txStatusData.txStatus,
                             txGas: txStatusData.txGas,
                             kind: txKind,
                             From: res.data.sender,

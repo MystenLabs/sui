@@ -4,7 +4,7 @@
 import cl from 'classnames';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { getSingleTransactionKind } from 'sui.js';
+import { getSingleTransactionKind, getExecutionStatusType } from 'sui.js';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import TransactionCard from '../../components/transaction-card/TransactionCard';
@@ -16,6 +16,7 @@ import type {
     CertifiedTransaction,
     TransactionEffectsResponse,
     ExecutionStatus,
+    ExecutionStatusType,
 } from 'sui.js';
 
 import styles from './TransactionResult.module.css';
@@ -55,17 +56,16 @@ const initState: TxnState = {
 };
 
 const getGasFeesAndStatus = (txStatusData: ExecutionStatus) => {
-    const istxSucces = Object.keys(txStatusData)[0].toLowerCase();
+    const txStatus: ExecutionStatusType = getExecutionStatusType(txStatusData);
     const txGasObj = Object.values(txStatusData)[0];
-    const txGas =
+    const txGasFees =
         txGasObj.gas_cost.computation_cost +
         txGasObj.gas_cost.storage_cost -
         txGasObj.gas_cost.storage_rebate;
 
     return {
-        istxSucces,
-        txGas,
-        //  txErr: txStatusData.Failure || '',
+        txStatus: txStatus.toLowerCase(),
+        txGas: txGasFees,
     };
 };
 
@@ -116,10 +116,10 @@ function TransactionResult() {
                 const txMeta = getGasFeesAndStatus(txObj.effects.status);
                 setTxState({
                     ...txObj.certificate,
-                    txSuccess: txMeta.istxSucces === 'success',
+                    txSuccess: txMeta.txStatus === 'success',
                     gasFee: txMeta.txGas,
                     txError:
-                        txMeta.istxSucces !== 'success'
+                        txMeta.txStatus !== 'success'
                             ? txObj.effects.status.Failure.error[
                                   Object.keys(
                                       txObj.effects.status.Failure.error
@@ -131,7 +131,7 @@ function TransactionResult() {
                 });
             })
             .catch((err) => {
-                //  remove this section in production
+                console.log(err)
                 setTxState({
                     ...initState,
                     loadState: 'fail',
