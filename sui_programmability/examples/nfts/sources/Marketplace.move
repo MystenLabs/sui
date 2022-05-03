@@ -133,8 +133,6 @@ module NFTs::MarketplaceTests {
     use Sui::TestScenario::{Self, Scenario};
     use NFTs::Marketplace::{Self, Marketplace, Listing};
 
-    use Std::Debug;
-
     // Simple Kitty-NFT data structure.
     struct Kitty has key, store {
         id: VersionedID,
@@ -235,15 +233,10 @@ module NFTs::MarketplaceTests {
     public(script) fun buy_kitty() {
         let scenario = &mut TestScenario::begin(&ADMIN);
 
-        Debug::print(&0);
         create_marketplace(scenario);
-        Debug::print(&1);
         mint_some_coin(scenario);
-        Debug::print(&2);
         mint_kitty(scenario);
-        Debug::print(&3);
         list_kitty(scenario);
-        Debug::print(&4);
 
         // BUYER takes 100 SUI from his wallet and purchases Kitty.
         TestScenario::next_tx(scenario, &BUYER);
@@ -253,7 +246,7 @@ module NFTs::MarketplaceTests {
             let mkp = TestScenario::borrow_mut(&mut mkp_wrapper);
             let bag = TestScenario::take_child_object<Marketplace, Bag>(scenario, mkp);
             let listing = TestScenario::take_child_object<Bag, Listing<Kitty, SUI>>(scenario, &bag);
-            let payment = Coin::withdraw(&mut coin, 100, TestScenario::ctx(scenario));
+            let payment = Coin::withdraw(Coin::balance_mut(&mut coin), 100, TestScenario::ctx(scenario));
 
             // Do the buy call and expect successful purchase.
             let nft = Marketplace::buy<Kitty, SUI>(&mut bag, listing, payment);
@@ -287,7 +280,7 @@ module NFTs::MarketplaceTests {
             let listing = TestScenario::take_child_object<Bag, Listing<Kitty, SUI>>(scenario, &bag);
 
             // AMOUNT here is 10 while expected is 100.
-            let payment = Coin::withdraw(&mut coin, 10, TestScenario::ctx(scenario));
+            let payment = Coin::withdraw(Coin::balance_mut(&mut coin), 10, TestScenario::ctx(scenario));
 
             // Attempt to buy and expect failure purchase.
             let nft = Marketplace::buy<Kitty, SUI>(&mut bag, listing, payment);

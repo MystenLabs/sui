@@ -4,6 +4,7 @@
 /// Example of objects that can be combined to create
 /// new objects
 module Basics::Sandwich {
+    use Sui::Balance::{Self, Balance};
     use Sui::Coin::{Self, Coin};
     use Sui::ID::{Self, VersionedID};
     use Sui::SUI::SUI;
@@ -30,7 +31,7 @@ module Basics::Sandwich {
     // Grocery is created on module init
     struct Grocery has key {
         id: VersionedID,
-        profits: Coin<SUI>
+        profits: Balance<SUI>
     }
 
     /// Price for ham
@@ -47,7 +48,7 @@ module Basics::Sandwich {
     fun init(ctx: &mut TxContext) {
         Transfer::share_object(Grocery {
             id: TxContext::new_id(ctx),
-            profits: Coin::zero<SUI>(ctx)
+            profits: Balance::zero<SUI>()
         });
 
         Transfer::transfer(GroceryOwnerCapability {
@@ -61,8 +62,9 @@ module Basics::Sandwich {
         c: Coin<SUI>,
         ctx: &mut TxContext
     ) {
-        assert!(Coin::value(&c) == HAM_PRICE, EInsufficientFunds);
-        Coin::join(&mut grocery.profits, c);
+        let b = Coin::into_balance(c);
+        assert!(Balance::value(&b) == HAM_PRICE, EInsufficientFunds);
+        Balance::join(&mut grocery.profits, b);
         Transfer::transfer(Ham { id: TxContext::new_id(ctx) }, TxContext::sender(ctx))
     }
 
@@ -72,8 +74,9 @@ module Basics::Sandwich {
         c: Coin<SUI>,
         ctx: &mut TxContext
     ) {
-        assert!(Coin::value(&c) == BREAD_PRICE, EInsufficientFunds);
-        Coin::join(&mut grocery.profits, c);
+        let b = Coin::into_balance(c);
+        assert!(Balance::value(&b) == BREAD_PRICE, EInsufficientFunds);
+        Balance::join(&mut grocery.profits, b);
         Transfer::transfer(Bread { id: TxContext::new_id(ctx) }, TxContext::sender(ctx))
     }
 
@@ -90,16 +93,18 @@ module Basics::Sandwich {
 
     /// See the profits of a grocery
     public fun profits(grocery: &Grocery): u64 {
-        Coin::value(&grocery.profits)
+        Balance::value(&grocery.profits)
     }
 
     /// Owner of the grocery can collect profits by passing his capability
     public(script) fun collect_profits(_cap: &GroceryOwnerCapability, grocery: &mut Grocery, ctx: &mut TxContext) {
-        let amount = Coin::value(&grocery.profits);
+        let amount = Balance::value(&grocery.profits);
 
         assert!(amount > 0, ENoProfits);
 
+        // Take a transferable `Coin` from a `Balance`
         let coin = Coin::withdraw(&mut grocery.profits, amount, ctx);
+
         Transfer::transfer(coin, TxContext::sender(ctx));
     }
 
