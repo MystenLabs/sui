@@ -130,50 +130,6 @@ fn make_serialized_transactions(
         .collect()
 }
 
-// fn make_transactions2(
-//     address: SuiAddress,
-//     key_pair: KeyPair,
-//     chunk_size: usize,
-//     num_chunks: usize,
-//     conn: usize,
-//     use_move: bool,
-//     object_id_offset: usize,
-//     auth_keys: &[KeyPair],
-//     committee: &Committee,
-// ) -> (Vec<Bytes>, Vec<Object>) {
-//     assert_eq!(chunk_size % conn, 0);
-//     let batch_size_per_conn = chunk_size / conn;
-
-//     // The batch-adjusted number of transactions
-//     let batch_tx_count = num_chunks * conn;
-//     // Only need one gas object per batch
-//     let account_gas_objects: Vec<_> = make_gas_objects(
-//         address,
-//         batch_tx_count,
-//         batch_size_per_conn,
-//         object_id_offset,
-//         use_move,
-//     );
-
-//     // Bulk load objects
-//     let all_objects: Vec<_> = account_gas_objects
-//         .clone()
-//         .into_iter()
-//         .flat_map(|(objects, gas)| objects.into_iter().chain(std::iter::once(gas)))
-//         .collect();
-
-//     let serialized_txes = make_serialized_transactions(
-//         address,
-//         key_pair,
-//         committee,
-//         &account_gas_objects,
-//         auth_keys,
-//         batch_size_per_conn,
-//         use_move,
-//     );
-//     (serialized_txes, all_objects)
-// }
-
 pub struct TransactionCreator {
     pub object_id_offset: ObjectID,
 }

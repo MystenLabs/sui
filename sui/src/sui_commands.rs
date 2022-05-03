@@ -578,34 +578,10 @@ async fn make_server_with_genesis_ctx(
     )
     .await;
 
-    // use tokio::sync::broadcast;
-
-    // let (obj_chann_tx, mut obj_chann_rx) = broadcast::channel(preload_objects.len());
-
-    // for _ in 0..50 {
-    //     let mut chann_rx = obj_chann_tx.subscribe();
-    //     tokio::spawn(async move {
-    //         loop {
-    //             match chann_rx.recv().await {
-    //                 Ok(o) => state.insert_genesis_object(o).await,
-    //                 Err(RecvError) => break,
-    //                 Err(e) => panic!(""),
-    //             }
-    //         }
-    //     });
-    // }
-
-    // for p in preload_objects {
-    //     obj_chann_tx.send(*p).unwrap();
-    // }
-
+    // Okay to do this since we're at genesis
     state
         .insert_genesis_objects_bulk_unsafe(&preload_objects.iter().collect::<Vec<_>>())
         .await;
-    // for object in preload_objects {
-
-    //     state.insert_genesis_object(object.clone()).await;
-    // }
 
     let (tx_sui_to_consensus, _rx_sui_to_consensus) = channel(1);
     Ok(AuthorityServer::new(
