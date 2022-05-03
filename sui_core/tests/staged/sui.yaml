@@ -4,20 +4,6 @@ AccountAddress:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 20
-AccountInfoRequest:
-  STRUCT:
-    - account:
-        TYPENAME: SuiAddress
-AccountInfoResponse:
-  STRUCT:
-    - object_ids:
-        SEQ:
-          TUPLE:
-            - TYPENAME: ObjectID
-            - TYPENAME: SequenceNumber
-            - TYPENAME: ObjectDigest
-    - owner:
-        TYPENAME: SuiAddress
 AuthorityBatch:
   STRUCT:
     - next_sequence_number: U64
@@ -32,34 +18,11 @@ AuthorityBatch:
         TUPLEARRAY:
           CONTENT: U8
           SIZE: 32
-AuthorityQuorumSignInfo:
-  STRUCT:
-    - epoch: U64
-    - signatures:
-        SEQ:
-          TUPLE:
-            - TYPENAME: PublicKeyBytes
-            - TYPENAME: AuthoritySignature
-AuthoritySignInfo:
-  STRUCT:
-    - epoch: U64
-    - authority:
-        TYPENAME: PublicKeyBytes
-    - signature:
-        TYPENAME: AuthoritySignature
 AuthoritySignature:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 64
-BatchInfoRequest:
-  STRUCT:
-    - start:
-        OPTION: U64
-    - length: U64
-BatchInfoResponseItem:
-  NEWTYPESTRUCT:
-    TYPENAME: UpdateItem
 CallArg:
   ENUM:
     0:
@@ -77,21 +40,6 @@ CallArg:
       SharedObject:
         NEWTYPE:
           TYPENAME: ObjectID
-ConsensusOutput:
-  STRUCT:
-    - message: BYTES
-    - sequence_number:
-        TYPENAME: SequenceNumber
-ConsensusSync:
-  STRUCT:
-    - sequence_number:
-        TYPENAME: SequenceNumber
-ConsensusTransaction:
-  ENUM:
-    0:
-      UserTransaction:
-        NEWTYPE:
-          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthorityQuorumSignInfo>"
 Data:
   ENUM:
     0:
@@ -102,13 +50,6 @@ Data:
       Package:
         NEWTYPE:
           TYPENAME: MovePackage
-EmptySignInfo:
-  STRUCT: []
-Event:
-  STRUCT:
-    - type_:
-        TYPENAME: StructTag
-    - contents: BYTES
 ExecutionStatus:
   ENUM:
     0:
@@ -212,15 +153,6 @@ MoveTypeLayout:
           TYPENAME: MoveStructLayout
     7:
       signer: UNIT
-Object:
-  STRUCT:
-    - data:
-        TYPENAME: Data
-    - owner:
-        TYPENAME: Owner
-    - previous_transaction:
-        TYPENAME: TransactionDigest
-    - storage_rebate: U64
 ObjectDigest:
   NEWTYPESTRUCT: BYTES
 ObjectFormatOptions:
@@ -229,12 +161,6 @@ ObjectFormatOptions:
 ObjectID:
   NEWTYPESTRUCT:
     TYPENAME: AccountAddress
-ObjectInfoRequest:
-  STRUCT:
-    - object_id:
-        TYPENAME: ObjectID
-    - request_kind:
-        TYPENAME: ObjectInfoRequestKind
 ObjectInfoRequestKind:
   ENUM:
     0:
@@ -246,30 +172,6 @@ ObjectInfoRequestKind:
       PastObjectInfo:
         NEWTYPE:
           TYPENAME: SequenceNumber
-ObjectInfoResponse:
-  STRUCT:
-    - parent_certificate:
-        OPTION:
-          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthorityQuorumSignInfo>"
-    - requested_object_reference:
-        OPTION:
-          TUPLE:
-            - TYPENAME: ObjectID
-            - TYPENAME: SequenceNumber
-            - TYPENAME: ObjectDigest
-    - object_and_lock:
-        OPTION:
-          TYPENAME: ObjectResponse
-ObjectResponse:
-  STRUCT:
-    - object:
-        TYPENAME: Object
-    - lock:
-        OPTION:
-          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthoritySignInfo>"
-    - layout:
-        OPTION:
-          TYPENAME: MoveStructLayout
 Owner:
   ENUM:
     0:
@@ -288,68 +190,6 @@ PublicKeyBytes:
   NEWTYPESTRUCT: BYTES
 SequenceNumber:
   NEWTYPESTRUCT: U64
-SerializedMessage:
-  ENUM:
-    0:
-      Transaction:
-        NEWTYPE:
-          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::EmptySignInfo>"
-    1:
-      Vote:
-        NEWTYPE:
-          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthoritySignInfo>"
-    2:
-      Cert:
-        NEWTYPE:
-          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthorityQuorumSignInfo>"
-    3:
-      Error:
-        NEWTYPE:
-          TYPENAME: SuiError
-    4:
-      AccountInfoReq:
-        NEWTYPE:
-          TYPENAME: AccountInfoRequest
-    5:
-      AccountInfoResp:
-        NEWTYPE:
-          TYPENAME: AccountInfoResponse
-    6:
-      ObjectInfoReq:
-        NEWTYPE:
-          TYPENAME: ObjectInfoRequest
-    7:
-      ObjectInfoResp:
-        NEWTYPE:
-          TYPENAME: ObjectInfoResponse
-    8:
-      TransactionResp:
-        NEWTYPE:
-          TYPENAME: TransactionInfoResponse
-    9:
-      TransactionInfoReq:
-        NEWTYPE:
-          TYPENAME: TransactionInfoRequest
-    10:
-      BatchInfoReq:
-        NEWTYPE:
-          TYPENAME: BatchInfoRequest
-    11:
-      BatchInfoResp:
-        NEWTYPE:
-          TYPENAME: BatchInfoResponseItem
-    12:
-      ConsensusOutput:
-        NEWTYPE:
-          TYPENAME: ConsensusOutput
-    13:
-      ConsensusSync:
-        NEWTYPE:
-          TYPENAME: ConsensusSync
-    14:
-      ConsensusTransaction:
-        NEWTYPE:
-          TYPENAME: ConsensusTransaction
 Signature:
   NEWTYPESTRUCT: BYTES
 SignedBatch:
@@ -743,102 +583,8 @@ SuiError:
     102:
       RpcError:
         NEWTYPE: STR
-TransactionData:
-  STRUCT:
-    - kind:
-        TYPENAME: TransactionKind
-    - sender:
-        TYPENAME: SuiAddress
-    - gas_payment:
-        TUPLE:
-          - TYPENAME: ObjectID
-          - TYPENAME: SequenceNumber
-          - TYPENAME: ObjectDigest
-    - gas_budget: U64
 TransactionDigest:
   NEWTYPESTRUCT: BYTES
-TransactionEffects:
-  STRUCT:
-    - status:
-        TYPENAME: ExecutionStatus
-    - shared_objects:
-        SEQ:
-          TUPLE:
-            - TYPENAME: ObjectID
-            - TYPENAME: SequenceNumber
-            - TYPENAME: ObjectDigest
-    - transaction_digest:
-        TYPENAME: TransactionDigest
-    - created:
-        SEQ:
-          TUPLE:
-            - TUPLE:
-                - TYPENAME: ObjectID
-                - TYPENAME: SequenceNumber
-                - TYPENAME: ObjectDigest
-            - TYPENAME: Owner
-    - mutated:
-        SEQ:
-          TUPLE:
-            - TUPLE:
-                - TYPENAME: ObjectID
-                - TYPENAME: SequenceNumber
-                - TYPENAME: ObjectDigest
-            - TYPENAME: Owner
-    - unwrapped:
-        SEQ:
-          TUPLE:
-            - TUPLE:
-                - TYPENAME: ObjectID
-                - TYPENAME: SequenceNumber
-                - TYPENAME: ObjectDigest
-            - TYPENAME: Owner
-    - deleted:
-        SEQ:
-          TUPLE:
-            - TYPENAME: ObjectID
-            - TYPENAME: SequenceNumber
-            - TYPENAME: ObjectDigest
-    - wrapped:
-        SEQ:
-          TUPLE:
-            - TYPENAME: ObjectID
-            - TYPENAME: SequenceNumber
-            - TYPENAME: ObjectDigest
-    - gas_object:
-        TUPLE:
-          - TUPLE:
-              - TYPENAME: ObjectID
-              - TYPENAME: SequenceNumber
-              - TYPENAME: ObjectDigest
-          - TYPENAME: Owner
-    - events:
-        SEQ:
-          TYPENAME: Event
-    - dependencies:
-        SEQ:
-          TYPENAME: TransactionDigest
-TransactionEffectsEnvelope:
-  STRUCT:
-    - effects:
-        TYPENAME: TransactionEffects
-    - auth_signature:
-        TYPENAME: AuthoritySignInfo
-TransactionInfoRequest:
-  STRUCT:
-    - transaction_digest:
-        TYPENAME: TransactionDigest
-TransactionInfoResponse:
-  STRUCT:
-    - signed_transaction:
-        OPTION:
-          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthoritySignInfo>"
-    - certified_transaction:
-        OPTION:
-          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthorityQuorumSignInfo>"
-    - signed_effects:
-        OPTION:
-          TYPENAME: TransactionEffectsEnvelope
 TransactionKind:
   ENUM:
     0:
@@ -906,28 +652,4 @@ UpdateItem:
       Batch:
         NEWTYPE:
           TYPENAME: SignedBatch
-"sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthorityQuorumSignInfo>":
-  STRUCT:
-    - data:
-        TYPENAME: TransactionData
-    - tx_signature:
-        TYPENAME: Signature
-    - auth_sign_info:
-        TYPENAME: AuthorityQuorumSignInfo
-"sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthoritySignInfo>":
-  STRUCT:
-    - data:
-        TYPENAME: TransactionData
-    - tx_signature:
-        TYPENAME: Signature
-    - auth_sign_info:
-        TYPENAME: AuthoritySignInfo
-"sui_types::messages::TransactionEnvelope<sui_types::crypto::EmptySignInfo>":
-  STRUCT:
-    - data:
-        TYPENAME: TransactionData
-    - tx_signature:
-        TYPENAME: Signature
-    - auth_sign_info:
-        TYPENAME: EmptySignInfo
 

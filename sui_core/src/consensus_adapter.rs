@@ -11,7 +11,7 @@ use std::{
 use sui_types::{
     committee::Committee,
     error::{SuiError, SuiResult},
-    messages::ConsensusTransaction,
+    messages::{ConsensusTransaction, TransactionInfoResponse},
 };
 use tokio::{
     net::TcpStream,
@@ -118,7 +118,7 @@ impl ConsensusAdapter {
     pub async fn submit(
         &self,
         certificate: &ConsensusTransaction,
-    ) -> SuiResult<SerializedTransactionInfoResponse> {
+    ) -> SuiResult<TransactionInfoResponse> {
         // Check the Sui certificate (submitted by the user).
         certificate.check(&self.committee)?;
 
@@ -151,7 +151,7 @@ impl ConsensusAdapter {
         // certificate will be sequenced. So the best we can do is to set a timer and notify the
         // client to retry if we timeout without hearing back from consensus (this module does not
         // handle retries). The best timeout value depends on the consensus protocol.
-        match timeout(self.max_delay, receiver).await {
+        let resp = match timeout(self.max_delay, receiver).await {
             Ok(reply) => reply.expect("Failed to read back from consensus listener"),
             Err(e) => {
                 let message = ConsensusListenerMessage::Cleanup(serialized);
@@ -161,7 +161,11 @@ impl ConsensusAdapter {
                     .expect("Cleanup channel with consensus listener dropped");
                 Err(SuiError::ConsensusConnectionBroken(e.to_string()))
             }
-        }
+        };
+
+        resp.and_then(|r| {
+            bincode::deserialize(&r).map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))
+        })
     }
 }
 
