@@ -202,57 +202,56 @@ function TransactionCard({ txdata }: Props) {
                                                                 }
                                                                 key={n}
                                                             >
-                                                                <div >
-                                                                {list.map(
-                                                                    (
-                                                                        sublist: string,
-                                                                        l: number
-                                                                    ) => (
-                                                                        <div
-                                                                            className={
-                                                                                styles.sublist
-                                                                            }
-                                                                            key={
-                                                                                l
-                                                                            }
-                                                                        >
+                                                                <div>
+                                                                    {list.map(
+                                                                        (
+                                                                            sublist: string,
+                                                                            l: number
+                                                                        ) => (
                                                                             <div
                                                                                 className={
                                                                                     styles.sublist
                                                                                 }
+                                                                                key={
+                                                                                    l
+                                                                                }
                                                                             >
-                                                                                {itm.subLabel ? (
-                                                                                    <div
-                                                                                        className={
-                                                                                            styles.sublistlabel
-                                                                                        }
-                                                                                    >
-                                                             
-                                                                                        {
-                                                                                            itm
-                                                                                                .subLabel[
-                                                                                                l
-                                                                                            ]
-                                                                                        }
-
-                                                                                        :
-                                                                                    </div>
-                                                                                ) : (
-                                                                                    ''
-                                                                                )}
                                                                                 <div
                                                                                     className={
-                                                                                        styles.sublistvalue
+                                                                                        styles.sublist
                                                                                     }
                                                                                 >
-                                                                                    {
-                                                                                        sublist
-                                                                                    }
+                                                                                    {itm.subLabel ? (
+                                                                                        <div
+                                                                                            className={
+                                                                                                styles.sublistlabel
+                                                                                            }
+                                                                                        >
+                                                                                            {
+                                                                                                itm
+                                                                                                    .subLabel[
+                                                                                                    l
+                                                                                                ]
+                                                                                            }
+
+                                                                                            :
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        ''
+                                                                                    )}
+                                                                                    <div
+                                                                                        className={
+                                                                                            styles.sublistvalue
+                                                                                        }
+                                                                                    >
+                                                                                        {
+                                                                                            sublist
+                                                                                        }
+                                                                                    </div>
                                                                                 </div>
                                                                             </div>
-                                                                        </div>
-                                                                    )
-                                                                )}
+                                                                        )
+                                                                    )}
                                                                 </div>
                                                             </li>
                                                         ) : (

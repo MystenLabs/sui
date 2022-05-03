@@ -17,7 +17,7 @@ div.txcardgrid:nth-child(2n + 1) {
 }
 
 div.txcardgrid:first-child {
-    @apply bg-offblack rounded-none items-center pt-5 pb-5 font-black shadow-md border-2 border-coolGray-400 ;
+    @apply bg-offblack rounded-none items-center pt-5 pb-5 font-black shadow-md border-2 border-coolGray-400;
 }
 
 div.txcardgrid > div:first-child {
@@ -72,6 +72,6 @@ ul.listitems {
     @apply mt-2 list-none p-0 md:flex grid gap-2 pr-0;
 }
 
-div.sublist .sublistlabel{
+div.sublist .sublistlabel {
     @apply w-28 flex-none;
 }

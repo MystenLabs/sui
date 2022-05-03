@@ -131,7 +131,7 @@ function TransactionResult() {
                 });
             })
             .catch((err) => {
-                console.log(err)
+                console.log(err);
                 setTxState({
                     ...initState,
                     loadState: 'fail',

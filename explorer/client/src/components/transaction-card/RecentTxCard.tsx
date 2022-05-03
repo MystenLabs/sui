@@ -8,7 +8,7 @@ import {
     getSingleTransactionKind,
     getTransactionKind,
     getTransferTransaction,
-    getExecutionStatusType
+    getExecutionStatusType,
 } from 'sui.js';
 
 import Longtext from '../../components/longtext/Longtext';
