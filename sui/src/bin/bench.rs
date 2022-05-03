@@ -1,30 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/*** How-to
- * subcommand: `microbench` to run micro benchmarks
- * args:
- *      running_mode:
- *          local-single-validator-thread:
- *              start a validator in a different thread.
- *          local-single-validator-process:
- *              start a validator in a new local process.
- *              --working-dir needs to be specified on this mode where a `validator` binary exists
- *
- * Examples:
- * ./bench microbench local-single-validator-process --port=9555 throughput --working-dir=$YOUR_WORKPLACE/sui/target/release
- * ./bench microbench local-single-validator-process latency --working-dir=$YOUR_WORKPLACE/sui/target/release
- * ./bench microbench local-single-validator-thread throughput
- * ./bench microbench local-single-validator-thread latency
- *
-*/
+// How-to
+// subcommand: `microbench` to run micro benchmarks
+// args:
+//      running_mode:
+//          local-single-validator-thread:
+//              start a validator in a different thread.
+//          local-single-validator-process:
+//              start a validator in a new local process.
+//              --working-dir needs to be specified on this mode where a `validator` binary exists
 
-#![deny(warnings)]
+// Examples:
+// ./bench microbench local-single-validator-process --port=9555 throughput --working-dir=$YOUR_WORKPLACE/sui/target/release
+// ./bench microbench local-single-validator-process latency --working-dir=$YOUR_WORKPLACE/sui/target/release
+// ./bench microbench local-single-validator-thread throughput
+// ./bench microbench local-single-validator-thread latency
 
 use clap::*;
-
-use sui::benchmark::validator_preparer::VALIDATOR_BINARY_NAME;
-use sui::benchmark::{bench_types, run_benchmark};
+use sui::benchmark::{bench_types, run_benchmark, validator_preparer::VALIDATOR_BINARY_NAME};
 use tracing::subscriber::set_global_default;
 use tracing_subscriber::EnvFilter;
 

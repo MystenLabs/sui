@@ -1,24 +1,26 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::fmt::Write;
-use std::fmt::{Display, Formatter};
-use std::path::PathBuf;
-use std::time::Duration;
-
-use serde::Deserialize;
-use serde::Serialize;
-
-use sui_core::authority_client::NetworkAuthorityClient;
-use sui_core::gateway_state::{GatewayClient, GatewayState};
+use crate::{
+    config::{AuthorityInfo, Config},
+    rpc_gateway_client::RpcGatewayClient,
+};
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::BTreeMap,
+    fmt::{Display, Formatter, Write},
+    path::PathBuf,
+    time::Duration,
+};
+use sui_core::{
+    authority_client::NetworkAuthorityClient,
+    gateway_state::{GatewayClient, GatewayState},
+};
 use sui_network::network::NetworkClient;
-use sui_network::transport;
-use sui_types::base_types::AuthorityName;
-use sui_types::committee::{Committee, EpochId};
-
-use crate::config::{AuthorityInfo, Config};
-use crate::rpc_gateway_client::RpcGatewayClient;
+use sui_types::{
+    base_types::AuthorityName,
+    committee::{Committee, EpochId},
+};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -117,7 +119,7 @@ impl Default for GatewayConfig {
             authorities: vec![],
             send_timeout: Duration::from_micros(4000000),
             recv_timeout: Duration::from_micros(4000000),
-            buffer_size: transport::DEFAULT_MAX_DATAGRAM_SIZE,
+            buffer_size: 650000,
             db_folder_path: Default::default(),
         }
     }

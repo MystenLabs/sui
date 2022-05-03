@@ -1,0 +1,4 @@
+processed 2 tasks
+
+task 1 'publish'. lines 5-26:
+Error: Failed to verify the Move module, reason: "_::M1, 'init' function cannot have return values".

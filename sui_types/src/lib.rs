@@ -6,7 +6,6 @@
     rust_2018_idioms,
     rust_2021_compatibility
 )]
-#![deny(warnings)]
 
 use move_core_types::account_address::AccountAddress;
 

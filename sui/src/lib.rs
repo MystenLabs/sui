@@ -4,6 +4,7 @@
 
 extern crate core;
 
+use std::fs::create_dir_all;
 use std::path::PathBuf;
 
 use anyhow::bail;
@@ -24,6 +25,7 @@ const SUI_CONFIG_DIR: &str = "sui_config";
 pub const SUI_NETWORK_CONFIG: &str = "network.conf";
 pub const SUI_WALLET_CONFIG: &str = "wallet.conf";
 pub const SUI_GATEWAY_CONFIG: &str = "gateway.conf";
+pub const SUI_DEV_NET_URL: &str = "http://gateway.devnet.sui.io:9000";
 
 pub fn sui_config_dir() -> Result<PathBuf, anyhow::Error> {
     match std::env::var_os("SUI_CONFIG_DIR") {
@@ -33,4 +35,10 @@ pub fn sui_config_dir() -> Result<PathBuf, anyhow::Error> {
             None => bail!("Cannot obtain home directory path"),
         },
     }
+    .and_then(|dir| {
+        if !dir.exists() {
+            create_dir_all(dir.clone())?;
+        }
+        Ok(dir)
+    })
 }

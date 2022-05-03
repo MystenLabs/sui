@@ -27,5 +27,5 @@ narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "72efe71
 
 sui-types = { path = "../sui_types" }
 sui_core = { path = "../sui_core" }
-sui-network = { path = "../network_utils" }
+sui-network = { path = "../crates/sui-network" }
 sui = { path = "../sui" }

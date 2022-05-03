@@ -1,0 +1,12 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.common;
+
+// A bincode encoded payload. This is intended to be used in the short-term
+// while we don't have good protobuf definitions for sui types
+message BincodeEncodedPayload {
+  bytes payload = 1;
+}
