@@ -13,7 +13,7 @@ use sui::{
     sui_commands::{genesis, make_server},
 };
 use sui_types::{
-    base_types::{decode_bytes_hex, encode_bytes_hex, SuiAddress},
+    base_types::{encode_bytes_hex, SuiAddress},
     committee::Committee,
 };
 use tracing::{error, info};
@@ -33,14 +33,6 @@ struct ValidatorOpt {
 
     #[clap(long)]
     pub network_config_path: Option<PathBuf>,
-
-    /// Public key/address of the validator to start
-    #[clap(long, parse(try_from_str = decode_bytes_hex))]
-    address: Option<SuiAddress>,
-
-    /// Index in validator array of validator to start
-    #[clap(long)]
-    validator_idx: Option<usize>,
 
     #[clap(long, help = "Specify host:port to listen on")]
     listen_address: Option<String>,
