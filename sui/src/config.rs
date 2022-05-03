@@ -2,30 +2,31 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::gateway_config::GatewayType;
-use crate::keystore::KeystoreType;
-use narwhal_config::Committee as ConsensusCommittee;
-use narwhal_config::{Authority, PrimaryAddresses, Stake, WorkerAddresses};
+use crate::{gateway_config::GatewayType, keystore::KeystoreType};
+use narwhal_config::{
+    Authority, Committee as ConsensusCommittee, PrimaryAddresses, Stake, WorkerAddresses,
+};
 use narwhal_crypto::ed25519::Ed25519PublicKey;
 use once_cell::sync::Lazy;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
-use serde_with::hex::Hex;
-use serde_with::serde_as;
-use std::fmt::Write;
-use std::fmt::{Display, Formatter};
-use std::fs::{self, File};
-use std::io::BufReader;
-use std::net::{SocketAddr, ToSocketAddrs};
-use std::ops::{Deref, DerefMut};
-use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use serde_with::{hex::Hex, serde_as};
+use std::{
+    fmt::{Display, Formatter, Write},
+    fs::{self, File},
+    io::BufReader,
+    net::{SocketAddr, ToSocketAddrs},
+    ops::{Deref, DerefMut},
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_network::network::PortAllocator;
-use sui_types::base_types::*;
-use sui_types::committee::{Committee, EpochId};
-use sui_types::crypto::{get_key_pair, KeyPair, PublicKeyBytes};
+use sui_types::{
+    base_types::*,
+    committee::{Committee, EpochId},
+    crypto::{get_key_pair, KeyPair, PublicKeyBytes},
+};
 use tracing::log::trace;
 
 const DEFAULT_WEIGHT: usize = 1;
@@ -45,7 +46,7 @@ pub struct AuthorityInfo {
     pub base_port: u16,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct AuthorityPrivateInfo {
     pub address: SuiAddress,
     pub public_key: PublicKeyBytes,
@@ -56,23 +57,20 @@ pub struct AuthorityPrivateInfo {
     pub consensus_address: SocketAddr,
 }
 
-<<<<<<< HEAD
 impl AuthorityPrivateInfo {
     pub fn copy(&self) -> Self {
         Self {
-            key_pair: self.key_pair.copy(),
             address: self.address,
             host: self.host.clone(),
             port: self.port,
             db_path: self.db_path.clone(),
             stake: self.stake,
             consensus_address: self.consensus_address,
+            public_key: self.public_key,
         }
     }
 }
-=======
 type AuthorityKeys = (Vec<PublicKeyBytes>, KeyPair);
->>>>>>> d3ac68acbfbc89af34f9584e52df3fb9adefe1b7
 
 // Warning: to_socket_addrs() is blocking and can fail.  Be careful where you use it.
 fn socket_addr_from_hostport(host: &str, port: u16) -> SocketAddr {
@@ -260,7 +258,7 @@ pub struct GenesisConfig {
 
 impl Config for GenesisConfig {}
 
-#[derive(Serialize, Deserialize, Default, Debug)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(default)]
 pub struct AccountConfig {
     #[serde(
@@ -273,7 +271,7 @@ pub struct AccountConfig {
     pub gas_object_ranges: Option<Vec<ObjectConfigRange>>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ObjectConfigRange {
     /// Starting object id
     pub offset: ObjectID,
@@ -283,7 +281,7 @@ pub struct ObjectConfigRange {
     pub gas_value: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ObjectConfig {
     #[serde(default = "ObjectID::random")]
     pub object_id: ObjectID,

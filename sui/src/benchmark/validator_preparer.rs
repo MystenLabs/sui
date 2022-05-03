@@ -4,32 +4,33 @@
 #![allow(clippy::large_enum_variant)]
 use crate::benchmark::bench_types::RunningMode;
 use crate::benchmark::load_generator::spawn_authority_server;
-<<<<<<< HEAD
-use crate::config::{AccountConfig, NetworkConfig, ObjectConfig};
-use crate::config::{Config, GenesisConfig};
-=======
+use crate::config::NetworkConfig;
 use crate::config::{AccountConfig, Config, GenesisConfig, ObjectConfig};
->>>>>>> d3ac68acbfbc89af34f9584e52df3fb9adefe1b7
+
 use rocksdb::Options;
-use std::env;
-use std::fs;
-use std::panic;
-use std::path::{Path, PathBuf};
-use std::process::Child;
-use std::process::Command;
-use std::sync::Arc;
-use std::thread;
-use std::{thread::sleep, time::Duration};
+use std::collections::BTreeMap;
+use std::{
+    env, fs, panic,
+    path::{Path, PathBuf},
+    process::{Child, Command},
+    sync::Arc,
+    thread,
+    thread::sleep,
+    time::Duration,
+};
 use sui_adapter::genesis;
 use sui_core::authority::*;
 use sui_network::network::NetworkServer;
-use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{random_key_pairs, KeyPair, PublicKeyBytes};
-use sui_types::gas_coin::GasCoin;
-use sui_types::object::Object;
-use sui_types::{base_types::*, committee::*};
+use sui_types::{
+    base_types::{SuiAddress, *},
+    committee::*,
+    crypto::{random_key_pairs, KeyPair, PublicKeyBytes},
+    gas_coin::GasCoin,
+    object::Object,
+};
 use tokio::runtime::{Builder, Runtime};
 use tracing::{error, info};
+
 const GENESIS_CONFIG_NAME: &str = "genesis_config.json";
 
 pub const VALIDATOR_BINARY_NAME: &str = "validator";
@@ -81,12 +82,11 @@ pub enum ValidatorConfig {
 }
 
 impl ValidatorPreparer {
-    pub fn new_for_remote(network_config: &NetworkConfig) -> Self {
-        let keys = network_config
-            .authorities
-            .iter()
-            .map(|q| (*q.key_pair.public_key_bytes(), q.key_pair.copy()))
-            .collect::<Vec<_>>();
+    pub fn new_for_remote(
+        network_config: &NetworkConfig,
+        keys: &BTreeMap<PublicKeyBytes, KeyPair>,
+    ) -> Self {
+        let keys = keys.iter().map(|q| q.1.copy()).collect::<Vec<_>>();
         let committee = Committee::from(network_config);
 
         Self {
