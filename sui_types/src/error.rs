@@ -302,12 +302,12 @@ pub enum SuiError {
     // Errors related to the authority-consensus interface.
     #[error("Authority state can be modified by a single consensus client at the time")]
     OnlyOneConsensusClientPermitted,
-
     #[error("Failed to connect with consensus node: {0}")]
     ConsensusConnectionBroken(String),
-
     #[error("Failed to lock shared objects: {0}")]
     SharedObjectLockingFailure(String),
+    #[error("Consensus listener is out of capacity")]
+    ListenerCapacityExceeded,
 
     // Cryptography errors.
     #[error("Signature seed invalid length, input byte size was: {0}")]

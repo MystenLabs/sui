@@ -729,12 +729,14 @@ SuiError:
       SharedObjectLockingFailure:
         NEWTYPE: STR
     98:
+      ListenerCapacityExceeded: UNIT
+    99:
       SignatureSeedInvalidLength:
         NEWTYPE: U64
-    99:
+    100:
       HkdfError:
         NEWTYPE: STR
-    100:
+    101:
       SignatureKeyGenError:
         NEWTYPE: STR
 TransactionData:
