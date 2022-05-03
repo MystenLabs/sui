@@ -55,7 +55,7 @@ pub async fn init_local_authorities(
             objects,
         )
         .await;
-        states.push(client.state().clone());
+        states.push(client.state.clone());
         clients.insert(authority_name, client);
     }
     (AuthorityAggregator::new(committee, clients), states)
@@ -286,7 +286,7 @@ async fn execute_transaction_with_fault_configs(
     let gas_object2 = Object::with_owner_for_testing(addr1);
     let genesis_objects =
         authority_genesis_objects(4, vec![gas_object1.clone(), gas_object2.clone()]);
-    let mut authorities = init_local_authorities(genesis_objects).await;
+    let mut authorities = init_local_authorities(genesis_objects).await.0;
 
     for (index, config) in configs_before_process_transaction {
         get_local_client(&mut authorities, *index).fault_config = *config;

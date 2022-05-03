@@ -4,14 +4,20 @@
 use super::*;
 use crate::{
     authority::authority_tests::init_state_with_object_id,
-    authority_client::{AuthorityAPI, NetworkAuthorityClient},
+    authority_client::{
+        AuthorityAPI, LocalAuthorityClient, LocalAuthorityClientFaultConfig, NetworkAuthorityClient,
+    },
 };
+use futures::StreamExt;
 use std::sync::Arc;
 use sui_network::network::NetworkClient;
 use sui_types::{
     base_types::{dbg_addr, dbg_object_id, TransactionDigest},
+    batch::UpdateItem,
     object::ObjectFormatOptions,
 };
+
+use crate::safe_client::SafeClient;
 use typed_store::Map;
 
 #[tokio::test]
@@ -115,6 +121,7 @@ async fn test_subscription() {
     let db = server.state.db().clone();
     let db2 = server.state.db().clone();
     let db3 = server.state.db().clone();
+    let state = server.state.clone();
 
     let server_handle = server.spawn().await.unwrap();
 
@@ -177,7 +184,7 @@ async fn test_subscription() {
     // Add data in real time
     let inner_server2 = state.clone();
     let _handle2 = tokio::spawn(async move {
-        for i in 105..150 {
+        for i in 105..120 {
             tokio::time::sleep(Duration::from_millis(20)).await;
             let ticket = inner_server2.batch_notifier.ticket().expect("all good");
             db2.executed_sequence
@@ -230,9 +237,6 @@ async fn test_subscription() {
         length: 10,
     };
 
-    // let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);
-    // tx.send(Ok(bytes)).await.expect("Problem sending");
-
     let mut resp = client.handle_batch_stream(req).await.unwrap();
 
     println!("TEST3: Send request.");
@@ -240,15 +244,11 @@ async fn test_subscription() {
     let mut num_batches = 0;
     let mut num_transactions = 0;
     let mut i = 120;
-    let inner_server2 = server.clone();
+    let inner_server2 = state.clone();
 
     loop {
         // Send a trasnaction
-        let ticket = inner_server2
-            .state
-            .batch_notifier
-            .ticket()
-            .expect("all good");
+        let ticket = inner_server2.batch_notifier.ticket().expect("all good");
         db3.executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
@@ -256,22 +256,17 @@ async fn test_subscription() {
         i += 1;
 
         // Then we wait to receive
-        if let Some(data) = rx.next().await {
-            match deserialize_message(&data[..]).expect("Bad response") {
-                SerializedMessage::BatchInfoResp(resp) => match *resp {
-                    BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
-                        num_batches += 1;
-                        if signed_batch.batch.next_sequence_number >= 129 {
-                            break;
-                        }
+        if let Some(data) = resp.next().await {
+            match data.expect("No error expected here") {
+                BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                    num_batches += 1;
+                    if signed_batch.batch.next_sequence_number >= 129 {
+                        break;
                     }
-                    BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
-                        println!("Received {seq}");
-                        num_transactions += 1;
-                    }
-                },
-                _ => {
-                    panic!("Bad response");
+                }
+                BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
+                    println!("Received {seq}");
+                    num_transactions += 1;
                 }
             }
         }
@@ -280,9 +275,7 @@ async fn test_subscription() {
     assert_eq!(2, num_batches);
     assert_eq!(10, num_transactions);
 
-    server.state.batch_notifier.close();
-    drop(tx);
-    handle1.await.expect("Problem closing task");
+    state.batch_notifier.close();
 }
 
 #[tokio::test]
@@ -311,7 +304,10 @@ async fn test_subscription_safe_client() {
     let db3 = server.state.db().clone();
 
     let _master_safe_client = SafeClient::new(
-        LocalAuthorityClient(state.clone()),
+        LocalAuthorityClient {
+            state: state.clone(),
+            fault_config: LocalAuthorityClientFaultConfig::default(),
+        },
         state.committee.clone(),
         state.name,
     );
@@ -462,18 +458,12 @@ async fn test_subscription_safe_client() {
         i += 1;
 
         // Then we wait to receive
-        if let Some(data) = resp.next().await {
-            match deserialize_message(&data[..]).expect("Bad response") {
-                SerializedMessage::BatchInfoResp(resp) => match *resp {
-                    BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
-                        num_batches += 1;
-                        if signed_batch.batch.next_sequence_number >= 129 {
-                            break;
-                        }
-                    }
-                    BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
-                        println!("Received {seq}");
-                        num_transactions += 1;
+        if let Some(data) = stream1.next().await {
+            match data.expect("Bad response") {
+                BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                    num_batches += 1;
+                    if signed_batch.batch.next_sequence_number >= 129 {
+                        break;
                     }
                 }
                 BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
