@@ -40,7 +40,7 @@
         "listItems": [
           {
             "title": "Discord",
-            "link": "https://discord.gg/sui-official",
+            "link": "https://discord.gg/sui",
             "external": true
           },
           {
@@ -98,7 +98,7 @@
       },
       {
         "title": "Discord",
-        "link": "https://discord.gg/sui-official",
+        "link": "https://discord.gg/sui",
         "external": true
       },
       {
@@ -206,7 +206,7 @@
           },
           {
             "name": "Discord",
-            "url": "https://discord.gg/sui-official",
+            "url": "https://discord.gg/sui",
             "external": true
           },
           {
