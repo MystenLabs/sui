@@ -323,7 +323,7 @@ module Games::Hero {
         )
     }
 
-    // --- Game intergiry / Links checks ---
+    // --- Game integrity / Links checks ---
 
     public fun check_id(game_info: &GameInfo, id: ID) {
         assert!(id(game_info) == id, 403); // TODO: error code
