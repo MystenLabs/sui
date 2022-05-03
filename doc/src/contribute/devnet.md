@@ -14,4 +14,31 @@ Many improvements to the Sui DevNet are underway, such as the ability to run Ful
 
 TODO: Create and link to Medium blog post.
 
-To begin building on the Sui TestNet, follow the instructions within [Building Sui](../build/index.md).
+## Purpose
+
+This procedure leverages the following components of the Sui blockchain:
+
+- The Wallet CLI
+    - creating and managing your private keys
+    - submitting transactions for creating example NFTs on SUI
+    - calling/publishing Move modules
+- The Gas Faucet service
+    - Transfer SUI tokens to you so that you can pay for the transactions
+- SuiExplorer
+    - View transactions and objects
+
+TODO: Edit, format, and link from the text above to relevant pages once we agree to include it. No faucet docs will exist for DevNet per Chris.
+
+## Prerequisites
+
+### Set up environment
+
+To use the Sui DevNet, you will need:
+
+* the [`git` command line interface](https://git-scm.com/download/)
+* coins requested through Discord (need channel link)
+* [Sui binaries in your PATH](https://docs.sui.io/build/install#binaries) environment variable
+
+:tip: To reliably test DevNet with the latest Sui binaies, re-install them at least weekly.
+
+In addition, to conduct advanced work such as publishing a Move module or making a Move call, also download the Sui source code.
