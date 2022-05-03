@@ -144,7 +144,7 @@ function LatestTxCard() {
     return (
         <div className={styles.txlatestesults}>
             <div className={styles.txcardgrid}>
-                <h3>Latest Transaction</h3>
+                <h3>Latest Transactions</h3>
             </div>
             <div className={styles.transactioncard}>
                 <div>
