@@ -498,7 +498,7 @@ Here is an example:
 {"contents":{"fields":{"id":{"fields":{"id":{"fields":{"id":{"fields":{"bytes":"eea4167be074537f4a2879c7781d8ef4ffd651cc"},"type":"0x2::ID::ID"}},"type":"0x2::ID::UniqueID"},"version":0},"type":"0x2::ID::VersionedID"},"value":100000},"type":"0x2::Coin::Coin<0x2::SUI::SUI>"},"owner":{"AddressOwner":[102,175,56,152,231,85,139,121,225,21,171,97,24,74,149,132,151,209,144,90]},"tx_digest":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
 ```
 
-## Transferring objects
+## Transferring coins
 
 If you inspect a newly created account, you would expect the account does not own any object. Let us inspect the fresh account we create in the [Generating a new account](#generating-a-new-account) section (`C72CF3ADCC4D11C03079CEF2C8992AEA5268677A`):
 
@@ -784,9 +784,12 @@ public(script) fun transfer(c: Coin::Coin<SUI>, recipient: address, _ctx: &mut T
 ```
 
 Please note that there is no real need to use a Move call to transfer
-objects as this can be accomplish with a built-in wallet
-[command](#transferring-objects) - we chose this example due to its
+objects as this can be accomplished with a built-in wallet
+[command](#transferring-coins) - we chose this example due to its
 simplicity.
+
+TODO: Clarify the statement above as experiments find only coins may be transferred. See:
+https://github.com/MystenLabs/sui/issues/1739
 
 Let us examine objects owned by address `AE6FB6036570FEC1DF71599740C132CDF5B45B9D`:
 
