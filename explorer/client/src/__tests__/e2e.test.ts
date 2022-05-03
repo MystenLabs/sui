@@ -274,6 +274,9 @@ describe('End-to-end Tests', () => {
         ) => {
             await page.goto(`${BASE_URL}/${parentIsA}/${parentValue}`);
 
+            const btn1 = await page.$('#groupCollection > div:nth-child(1)');
+            await btn1.click();
+
             //Click on child in Owned Objects List:
             const objectLink = await page.$(
                 `div#ownedObjects > div:nth-child(${parentToChildNo})`
@@ -325,6 +328,8 @@ describe('End-to-end Tests', () => {
         it('go from parent to broken image object and back', async () => {
             const parentValue = 'ObjectThatOwns';
             await page.goto(`${BASE_URL}/objects/${parentValue}`);
+            const btn1 = await page.$('#groupCollection > div:nth-child(1)');
+            await btn1.click();
 
             //Click on child in Owned Objects List:
             const objectLink = await page.$(
@@ -373,10 +378,12 @@ describe('End-to-end Tests', () => {
         it('to go to the next page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
+            const btn1 = await page.$('#groupCollection > div:nth-child(1)');
+            await btn1.click();
             const btn = await page.$('#nextBtn');
             await btn.click();
             const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(2)'
+                'div#ownedObjects > div:nth-child(1)'
             );
             await objectLink.click();
 
@@ -391,6 +398,9 @@ describe('End-to-end Tests', () => {
         it('to go to the last page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
+            const btn1 = await page.$('#groupCollection > div:nth-child(1)');
+            await btn1.click();
+
             const btn = await page.$('#lastBtn');
             await btn.click();
             const objectLink = await page.$(
@@ -404,11 +414,14 @@ describe('End-to-end Tests', () => {
                 (el: any) => el.textContent,
                 objectIDEl
             );
-            expect(objectValue.trim()).toBe('standaloneObject');
+            expect(objectValue.trim()).toBe('playerThree');
         });
         it('where last and next disappear in final page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
+            const btn1 = await page.$('#groupCollection > div:nth-child(1)');
+            await btn1.click();
+
             const btn = await page.$('#lastBtn');
             await btn.click();
 
@@ -423,12 +436,15 @@ describe('End-to-end Tests', () => {
         it('to go back a page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
+            const btn1 = await page.$('#groupCollection > div:nth-child(1)');
+            await btn1.click();
+
             await page.$('#lastBtn').then((btn: any) => btn.click());
 
             await page.$('#backBtn').then((btn: any) => btn.click());
 
             const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(2)'
+                'div#ownedObjects > div:nth-child(1)'
             );
             await objectLink.click();
 
@@ -444,6 +460,9 @@ describe('End-to-end Tests', () => {
         it('to go to first page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
+            const btn1 = await page.$('#groupCollection > div:nth-child(1)');
+            await btn1.click();
+
             await page.$('#lastBtn').then((btn: any) => btn.click());
 
             await page.$('#backBtn').then((btn: any) => btn.click());
@@ -451,7 +470,7 @@ describe('End-to-end Tests', () => {
             await page.$('#firstBtn').then((btn: any) => btn.click());
 
             const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(4)'
+                'div#ownedObjects > div:nth-child(1)'
             );
             await objectLink.click();
 
@@ -461,11 +480,13 @@ describe('End-to-end Tests', () => {
                 (el: any) => el.textContent,
                 objectIDEl
             );
-            expect(objectValue.trim()).toBe('ComponentObject');
+            expect(objectValue.trim()).toBe('playerOne');
         });
         it('where first and back disappear in first page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
+            const btn1 = await page.$('#groupCollection > div:nth-child(1)');
+            await btn1.click();
 
             //Next and Last buttons are not disabled:
             await checkIsNotDisabled(page, '#nextBtn');

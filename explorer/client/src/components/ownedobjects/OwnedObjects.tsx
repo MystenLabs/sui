@@ -152,17 +152,61 @@ function OwnedObjectView({ results }: { results: resultType }) {
 }
 
 function GetObjectsStatic({ id }: { id: string }) {
-    const objects = findOwnedObjectsfromID(id);
+    const allObjects = findOwnedObjectsfromID(id)!;
 
-    if (objects !== undefined) {
-        return (
-            <OwnedObjectSection
-                objects={objects.map(({ objectId }) => objectId)}
-            />
-        );
+    const [subObjs, setSubObjs] = useState([]);
+
+    const [isGroup, setIsGroup] = useState(true);
+
+    let typeIDList: any[][] = [[]];
+
+    if (allObjects?.length > 0) {
+        typeIDList = allObjects.map((obj) => [
+            obj.objectId,
+            findDataFromID(obj.objectId, undefined).objType,
+        ]);
     }
 
-    return <div />;
+    const shrinkObjList = useCallback(
+        (subObjList) => () => {
+            setIsGroup(false);
+            setSubObjs(subObjList);
+        },
+        []
+    );
+
+    const goBack = useCallback(() => setIsGroup(true), []);
+
+    if (isGroup) {
+        return (
+            <div id="groupCollection">
+                {Array.from(new Set(typeIDList.map(([_, x]) => x))).map(
+                    (typeV) => {
+                        const subObjList = typeIDList
+                            .filter(([_, x]) => x === typeV)
+                            .map(([x, _]) => x);
+                        console.log(subObjList);
+                        return (
+                            <div
+                                key={typeV}
+                                onClick={shrinkObjList(subObjList)}
+                            >
+                                <div>{typeV}</div>
+                                <div>Count {subObjList.length}</div>
+                            </div>
+                        );
+                    }
+                )}
+            </div>
+        );
+    } else {
+        return (
+            <div>
+                <button onClick={goBack}>&#60; Back</button>
+                <OwnedObjectSection objects={subObjs} />
+            </div>
+        );
+    }
 }
 
 function GetObjectsAPI({ id }: { id: string }) {

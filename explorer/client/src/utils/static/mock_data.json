@@ -182,6 +182,12 @@
                     "objectId": "standaloneObject"
                 },
                 {
+                    "objectId": "standaloneObject"
+                },
+                {
+                    "objectId": "standaloneObject"
+                },
+                {
                     "objectId": "CollectionObject"
                 },
                 {
@@ -245,6 +251,51 @@
                 }
             }
         },
+        {
+            "id": "anotherPlayer",
+            "owner": "SingleOwner(k#)",
+            "category": "object",
+            "version": "100",
+            "readonly": "false",
+            "objType": "0x2::Example::Player",
+            "data": {
+                "contents": {
+                    "earth_runes_count": 1,
+                    "fire_runes_count": 10,
+                    "water_runes_count": 3,
+                    "wind_runes_count": 2,
+                    "id": {},
+                    "player_name": {
+                        "bytes": [
+                            84, 101, 115, 116, 32, 80, 108, 97, 121, 101, 114
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "id": "playerThree",
+            "owner": "SingleOwner(k#)",
+            "category": "object",
+            "version": "100",
+            "readonly": "false",
+            "objType": "0x2::Example::Player",
+            "data": {
+                "contents": {
+                    "earth_runes_count": 1,
+                    "fire_runes_count": 10,
+                    "water_runes_count": 3,
+                    "wind_runes_count": 2,
+                    "id": {},
+                    "player_name": {
+                        "bytes": [
+                            84, 101, 115, 116, 32, 80, 108, 97, 121, 101, 114
+                        ]
+                    }
+                }
+            }
+        },
+
         {
             "id": "8cd943fd42810749de9e0434f01feg443hgg54v1",
             "owner": "SingleOwner(k#0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f)",
@@ -441,7 +492,7 @@
             "data": {
                 "contents": {
                     "id": {},
-                    "value": 9985319
+                    "balance": 100
                 }
             }
         },
