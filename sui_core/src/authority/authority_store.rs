@@ -501,7 +501,6 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             for lock in locks {
                 // The object / version must exist, and therefore lock initialized.
                 let lock = lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
-
                 if let Some(previous_tx_digest) = lock {
                     if previous_tx_digest != tx_digest {
                         warn!(prev_tx_digest =? previous_tx_digest,

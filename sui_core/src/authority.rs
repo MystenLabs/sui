@@ -230,6 +230,7 @@ impl AuthorityState {
     ) -> Result<TransactionInfoResponse, SuiError> {
         // Check the sender's signature.
         transaction.check_signature()?;
+
         let transaction_digest = *transaction.digest();
 
         let response = self.handle_transaction_impl(transaction).await;
@@ -678,6 +679,12 @@ impl AuthorityState {
     pub async fn insert_genesis_object(&self, object: Object) {
         self._database
             .insert_genesis_object(object)
+            .expect("TODO: propagate the error")
+    }
+
+    pub async fn insert_genesis_objects_bulk_unsafe(&self, objects: &[&Object]) {
+        self._database
+            .bulk_object_insert(objects)
             .expect("TODO: propagate the error")
     }
 

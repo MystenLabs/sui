@@ -85,7 +85,7 @@ pub async fn start_test_network(
         .collect();
     genesis_config.authorities = authorities;
 
-    let (network_config, accounts, mut keystore) = genesis(genesis_config).await?;
+    let (network_config, accounts, mut keystore) = genesis(genesis_config, None).await?;
     let key_pair_refs = key_pairs.iter().collect::<Vec<_>>();
     let network = SuiNetwork::start(&network_config, key_pair_refs).await?;
 
