@@ -16,12 +16,13 @@ import type {
     CertifiedTransaction,
     TransactionData,
     TransactionKindName,
+    ExecutionStatusType,
 } from 'sui.js';
 
 import styles from './TransactionCard.module.css';
 
 type TxDataProps = CertifiedTransaction & {
-    txSuccess: boolean;
+    status: ExecutionStatusType;
     gasFee: number;
     txError: string;
 };
@@ -41,8 +42,10 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
         {
             // May change later
             label: 'Status',
-            value: tx.txSuccess ? 'Success' : `Failed - ${tx.txError}`,
-            classAttr: tx.txSuccess ? 'status-success' : 'status-fail',
+            value:
+                tx.status === 'Success' ? 'Success' : `Failed - ${tx.txError}`,
+            classAttr:
+                tx.status === 'Success' ? 'status-success' : 'status-fail',
         },
         {
             label: 'Transaction Type',
@@ -137,7 +140,6 @@ function formatByTransactionKind(
                         .map((data: any) =>
                             Buffer.from(data['Pure']).toString('base64')
                         ),
-                    // list: true,
                 },
             ];
         case 'Publish':
@@ -147,7 +149,6 @@ function formatByTransactionKind(
                     label: 'Modules',
                     value: publish.modules,
                     list: true,
-                    //  sublist: true,
                 },
             ];
         default:
@@ -159,7 +160,7 @@ type Props = {
     txdata: CertifiedTransaction & {
         loadState: string;
         txId: string;
-        txSuccess: boolean;
+        status: ExecutionStatusType;
         gasFee: number;
         txError: string;
     };

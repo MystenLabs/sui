@@ -4,18 +4,21 @@
 import cl from 'classnames';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { getSingleTransactionKind, getExecutionStatusType } from 'sui.js';
+import {
+    getSingleTransactionKind,
+    getExecutionStatusType,
+    getTotalGasUsed,
+    getExecutionDetails,
+} from 'sui.js';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import TransactionCard from '../../components/transaction-card/TransactionCard';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
-import { findDataFromID } from '../../utils/static/searchUtil';
 
 import type {
     CertifiedTransaction,
     TransactionEffectsResponse,
-    ExecutionStatus,
     ExecutionStatusType,
 } from 'sui.js';
 
@@ -24,7 +27,7 @@ import styles from './TransactionResult.module.css';
 type TxnState = CertifiedTransaction & {
     loadState: string;
     txId: string;
-    txSuccess: boolean;
+    status: ExecutionStatusType;
     gasFee: number;
     txError: string;
 };
@@ -50,28 +53,16 @@ const initState: TxnState = {
         epoch: 0,
         signatures: [],
     },
-    txSuccess: false,
+    status: 'Success',
     gasFee: 0,
     txError: '',
 };
 
-const getGasFeesAndStatus = (txStatusData: ExecutionStatus) => {
-    const txStatus: ExecutionStatusType = getExecutionStatusType(txStatusData);
-    const txGasObj = Object.values(txStatusData)[0];
-    const txGasFees =
-        txGasObj.gas_cost.computation_cost +
-        txGasObj.gas_cost.storage_cost -
-        txGasObj.gas_cost.storage_rebate;
-
-    return {
-        txStatus: txStatus.toLowerCase(),
-        txGas: txGasFees,
-    };
-};
-
-const isStatic = process.env.REACT_APP_DATA !== 'static';
+const useRealData = process.env.REACT_APP_DATA !== 'static';
 // if dev fetch data from mock_data.json
-function fetchTransactionData(txId: string | undefined) {
+function fetchTransactionData(
+    txId: string | undefined
+): Promise<TransactionEffectsResponse> {
     try {
         if (!txId) {
             throw new Error('No Txid found');
@@ -79,23 +70,8 @@ function fetchTransactionData(txId: string | undefined) {
         // add delay to simulate barckend service
         // Remove this section in production
         // Use Mockdata in dev
-        if (!isStatic) {
-            // resolve after one second
-            return new Promise((resolve, reject) => {
-                setTimeout(() => {
-                    const staticObj: CertifiedTransaction = findDataFromID(
-                        txId,
-                        undefined
-                    );
-                    if (!staticObj) {
-                        reject('txid not found');
-                    }
-                    resolve({
-                        certificate: staticObj,
-                        effects: {},
-                    });
-                }, 1000);
-            });
+        if (!useRealData) {
+            throw new Error('Method not implemented for mock data.');
         }
 
         return rpc
@@ -111,27 +87,29 @@ function TransactionResult() {
     const [showTxState, setTxState] = useState(initState);
 
     useEffect(() => {
+        if (id == null) {
+            return;
+        }
         fetchTransactionData(id)
-            .then((txObj: any) => {
-                const txMeta = getGasFeesAndStatus(txObj.effects.status);
+            .then((txObj) => {
+                const executionStatus = txObj.effects.status;
+                const status = getExecutionStatusType(executionStatus);
+                const details = getExecutionDetails(executionStatus);
+
                 setTxState({
                     ...txObj.certificate,
-                    txSuccess: txMeta.txStatus === 'success',
-                    gasFee: txMeta.txGas,
+                    status,
+                    gasFee: getTotalGasUsed(executionStatus),
                     txError:
-                        txMeta.txStatus !== 'success'
-                            ? txObj.effects.status.Failure.error[
-                                  Object.keys(
-                                      txObj.effects.status.Failure.error
-                                  )[0]
-                              ].error
+                        'error' in details
+                            ? details.error[Object.keys(details.error)[0]].error
                             : '',
                     txId: id,
                     loadState: 'loaded',
                 });
             })
             .catch((err) => {
-                console.log(err);
+                console.log('Error fetching transaction data', err);
                 setTxState({
                     ...initState,
                     loadState: 'fail',
@@ -179,4 +157,3 @@ function TransactionResult() {
 }
 
 export default TransactionResult;
-// export { instanceOfDataType };
