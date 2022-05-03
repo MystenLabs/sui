@@ -1,8 +1,17 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use self::bench_types::{BenchmarkResult, MicroBenchmarkResult, MicroBenchmarkType};
+use crate::benchmark::{
+    bench_types::{Benchmark, BenchmarkType},
+    load_generator::{
+        calculate_throughput, check_transaction_response, send_tx_chunks, FixedRateLoadGenerator,
+    },
+    transaction_creator::TransactionCreator,
+    validator_preparer::ValidatorPreparer,
+};
 use futures::{join, StreamExt};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::{iter::ParallelIterator, prelude::*};
 use std::{panic, thread, thread::sleep, time::Duration};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_network::{
@@ -12,24 +21,14 @@ use sui_network::{
 use sui_types::{
     batch::UpdateItem,
     messages::{BatchInfoRequest, BatchInfoResponseItem},
-    serialize::*,
 };
 use tokio::runtime::{Builder, Runtime};
 use tracing::{error, info};
+
 pub mod bench_types;
 pub mod load_generator;
 pub mod transaction_creator;
 pub mod validator_preparer;
-use crate::benchmark::{
-    bench_types::{Benchmark, BenchmarkType},
-    load_generator::{
-        calculate_throughput, check_transaction_response, send_tx_chunks, FixedRateLoadGenerator,
-    },
-    transaction_creator::TransactionCreator,
-    validator_preparer::ValidatorPreparer,
-};
-
-use self::bench_types::{BenchmarkResult, MicroBenchmarkResult, MicroBenchmarkType};
 
 const FOLLOWER_BATCH_SIZE: u64 = 10_000;
 
@@ -142,8 +141,8 @@ fn run_throughout_microbench(
             .block_on(async move { send_tx_chunks(txes, network_client, connections).await });
 
         let _: Vec<_> = resp
-            .par_iter()
-            .map(|q| check_transaction_response(deserialize_message(&(q.as_ref().unwrap())[..])))
+            .into_par_iter()
+            .map(check_transaction_response)
             .collect();
 
         elapsed
