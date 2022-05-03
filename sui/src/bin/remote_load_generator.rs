@@ -4,11 +4,11 @@
 use clap::*;
 use futures::join;
 use sui::benchmark::bench_types::{MicroBenchmarkResult, RemoteLoadGenConfig};
+use sui::benchmark::load_generator::MultiFixedRateLoadGenerator;
 
 use std::panic;
 use std::path::PathBuf;
 use std::time::Duration;
-use sui::benchmark::multi_load_generator::MultiFixedRateLoadGenerator;
 use sui::benchmark::transaction_creator::TransactionCreator;
 use sui::benchmark::validator_preparer::ValidatorPreparer;
 use sui::config::{NetworkConfig, PersistedConfig};

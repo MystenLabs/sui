@@ -18,7 +18,6 @@ use tokio::runtime::{Builder, Runtime};
 use tracing::{error, info};
 pub mod bench_types;
 pub mod load_generator;
-pub mod multi_load_generator;
 pub mod transaction_creator;
 pub mod validator_preparer;
 use crate::benchmark::{
