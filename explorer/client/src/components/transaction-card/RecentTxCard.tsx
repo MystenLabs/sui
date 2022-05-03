@@ -13,7 +13,6 @@ import {
 } from 'sui.js';
 
 import Longtext from '../../components/longtext/Longtext';
-import Search from '../../components/search/Search';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import ErrorResult from '../error-result/ErrorResult';
@@ -169,9 +168,8 @@ function LatestTxCard() {
     return (
         <div className={styles.txlatestesults}>
             <div className={styles.txcardgrid}>
-                <h3>Latest Transaction</h3>
+                <h3>Latest Transactions</h3>
             </div>
-            <div className={styles.txsearch}>{isLoaded && <Search />}</div>
             <div className={styles.transactioncard}>
                 <div>
                     <div
