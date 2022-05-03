@@ -15,8 +15,6 @@ import {
 import { processDisplayValue, trimStdLibPrefix } from '../../utils/stringUtils';
 import DisplayBox from '../displaybox/DisplayBox';
 
-//import type { ObjectRef } from 'sui.js';
-
 import styles from './OwnedObjects.module.css';
 
 type resultType = {
@@ -69,6 +67,10 @@ function OwnedObjectAPI({ id }: { id: string }) {
     const [results, setResults] = useState(DATATYPE_DEFAULT);
     const [isLoaded, setIsLoaded] = useState(false);
 
+    // TODO - The below will fail for a large number of owned objects
+    // due to the number of calls to the API
+    // Backend changes will be required to enable a scalable solution
+    // getOwnedObjectRefs will need to return id, type and balance for each owned object
     useEffect(() => {
         rpc.getOwnedObjectRefs(id).then((objects) => {
             Promise.all(
