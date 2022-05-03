@@ -13,7 +13,7 @@ export type JsonBytes = { bytes: number[] };
 
 const useLocal = false;
 const LOCAL = 'http://127.0.0.1:5001';
-const DEVNET = 'http://34.105.36.61:9000';
+const DEVNET = 'http://gateway.devnet.sui.io:9000';
 
 const rpcUrl = tryGetRpcSetting() ?? useLocal ? LOCAL : DEVNET;
 

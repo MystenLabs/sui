@@ -1,8 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![deny(warnings)]
-
 use crate::benchmark::validator_preparer::ValidatorPreparer;
 use bytes::Bytes;
 use move_core_types::account_address::AccountAddress;

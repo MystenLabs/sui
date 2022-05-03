@@ -1,24 +1,21 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    env,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    path::PathBuf,
-};
-
 use clap::Parser;
 use jsonrpsee::{
     http_server::{AccessControlBuilder, HttpServerBuilder},
     RpcModule,
 };
-use tracing::info;
-
-use sui::rpc_gateway::RpcGatewayOpenRpc;
-use sui::{
-    rpc_gateway::{RpcGatewayImpl, RpcGatewayServer},
-    sui_config_dir,
+use std::{
+    env,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    path::PathBuf,
 };
+use sui::{
+    config::sui_config_dir,
+    rpc_gateway::{RpcGatewayImpl, RpcGatewayOpenRpc, RpcGatewayServer},
+};
+use tracing::info;
 
 const DEFAULT_RPC_SERVER_PORT: &str = "5001";
 const DEFAULT_RPC_SERVER_ADDR_IPV4: &str = "127.0.0.1";
