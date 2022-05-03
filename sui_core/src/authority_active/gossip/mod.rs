@@ -18,7 +18,7 @@ use crate::{
 };
 
 use futures::stream::FuturesOrdered;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 #[cfg(test)]
 mod tests;
@@ -47,6 +47,12 @@ where
         degree,
     );
 
+    // If we do not expect to connect to anyone
+    if target_num_tasks == 0 {
+        info!("Gossip: Turn off gossip mechanism");
+        return;
+    }
+
     // Keep track of names of active peers
     let mut peer_names = HashSet::new();
     let mut gossip_tasks = FuturesUnordered::new();
@@ -63,7 +69,7 @@ where
             gossip_tasks.push(async move {
                 let peer_gossip = PeerGossip::new(*name, active_authority);
                 // Add more duration if we make more than 1 to ensure overlap
-                info!("Gossip: Start gossip from peer {:?}", *name);
+                debug!("Gossip: Start gossip from peer {:?}", *name);
                 peer_gossip
                     .spawn(Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS + k * 15))
                     .await
@@ -80,7 +86,7 @@ where
                 finished_name, err
             );
         } else {
-            info!("Gossip: End gossip from peer {:?}", finished_name);
+            debug!("Gossip: End gossip from peer {:?}", finished_name);
         }
         peer_names.remove(&finished_name);
     }
@@ -102,6 +108,12 @@ where
 
     pub async fn spawn(mut self, duration: Duration) -> (AuthorityName, Result<(), SuiError>) {
         let peer_name = self.peer_name;
+
+        // Define the minimum time we spend per peer -- this is particularly relevant to when
+        // all peers are down, when we want to slow down how often we re-connect at the start
+        // of the network.
+        let minimum_time = tokio::time::sleep_until(tokio::time::Instant::now() + Duration::from_secs(10));
+
         let result = tokio::task::spawn(async move { self.gossip_timeout(duration).await })
             .await
             .map(|_| ())
@@ -109,6 +121,7 @@ where
                 error: "Gossip Join Error".to_string(),
             });
 
+        minimum_time.await;
         (peer_name, result)
     }
 
