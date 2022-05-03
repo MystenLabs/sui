@@ -10,8 +10,7 @@ use sui::{
     sui_commands::{genesis, make_server},
     sui_config_dir, SUI_NETWORK_CONFIG,
 };
-use sui_types::base_types::encode_bytes_hex;
-use sui_types::base_types::{decode_bytes_hex, SuiAddress};
+use sui_types::base_types::{encode_bytes_hex, SuiAddress};
 use sui_types::committee::Committee;
 use tracing::{error, info};
 
@@ -30,14 +29,6 @@ struct ValidatorOpt {
 
     #[clap(long)]
     pub network_config_path: Option<PathBuf>,
-
-    /// Public key/address of the validator to start
-    #[clap(long, parse(try_from_str = decode_bytes_hex))]
-    address: Option<SuiAddress>,
-
-    /// Index in validator array of validator to start
-    #[clap(long)]
-    validator_idx: Option<usize>,
 
     #[clap(long, help = "Specify host:port to listen on")]
     listen_address: Option<String>,
@@ -69,8 +60,9 @@ async fn main() -> Result<(), anyhow::Error> {
             network_config
         }
     };
-
-    let authority = if let Some(address) = cfg.address {
+    let public_key_bytes=  network_config.key_pair.public_key_bytes();
+    let address = SuiAddress::from(public_key_bytes);
+    let authority = 
         // Find the network config for this validator
         network_config
             .authorities
@@ -78,15 +70,10 @@ async fn main() -> Result<(), anyhow::Error> {
             .find(|x| SuiAddress::from(&x.public_key) == address)
             .ok_or_else(|| {
                 anyhow!(
-                    "Network configs must include config for address {}",
-                    address
+                    "Keypair (pub key: {:?}) in network config is not in the validator committee",
+                    public_key_bytes,
                 )
-            })?
-    } else if let Some(index) = cfg.validator_idx {
-        &network_config.authorities[index]
-    } else {
-        return Err(anyhow!("Must supply either --address of --validator-idx"));
-    };
+            })?;
 
     let listen_address = cfg
         .listen_address
