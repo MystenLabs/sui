@@ -114,7 +114,7 @@ function OwnedObjectAPI({ id }: { id: string }) {
 }
 
 function GroupView({ results }: { results: resultType }) {
-    const [subObjs, setSubObjs] = useState([]);
+    const [subObjs, setSubObjs] = useState(DATATYPE_DEFAULT);
 
     const [isGroup, setIsGroup] = useState(true);
 
@@ -163,9 +163,10 @@ function GroupView({ results }: { results: resultType }) {
     } else {
         return (
             <div>
-                <button onClick={goBack} className={styles.totype}>
-                    &#60; Back
-                </button>
+                <div className={styles.paginationheading}>
+                    <button onClick={goBack}>&#60; Back</button>
+                    <h2>{trimStdLibPrefix(subObjs[0].Type)}</h2>
+                </div>
                 <OwnedObjectSection results={subObjs} />
             </div>
         );
@@ -319,20 +320,8 @@ function OwnedObjectView({ results }: { results: resultType }) {
                             {(() => {
                                 switch (key) {
                                     case 'display':
-                                        break;
                                     case 'Type':
-                                        return (
-                                            <div>
-                                                <span>{key}</span>
-                                                <span>
-                                                    {typeof value === 'string'
-                                                        ? trimStdLibPrefix(
-                                                              value
-                                                          )
-                                                        : ''}
-                                                </span>
-                                            </div>
-                                        );
+                                        break;
                                     default:
                                         if (
                                             key === 'balance' &&
