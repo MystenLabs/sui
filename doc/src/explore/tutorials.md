@@ -324,7 +324,7 @@ This is a chance for Player X to win! X now mints the winning mark at (2, 0):
 $ wallet call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args \"0x$XCAP\" \"0x$ADMIN\" 2 0 --gas $X_GAS --gas-budget 1000
 ```
 
-And its ouput:
+And its output:
 ```shell
 ----- Certificate ----
 ...

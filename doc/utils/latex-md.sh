@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright (c) 2022, Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 # Prereqs: Pandoc installed and in PATH - https://pandoc.org/
 # Usage: convert a directory of files from LaTex to Markdown
 # Run `latex-md.sh` from the directory containing the files

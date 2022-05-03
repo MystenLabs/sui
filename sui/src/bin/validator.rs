@@ -6,13 +6,16 @@ use clap::*;
 use narwhal_config::Parameters as ConsensusParameters;
 use std::path::PathBuf;
 use sui::{
-    config::{GenesisConfig, NetworkConfig, PersistedConfig, CONSENSUS_DB_NAME},
+    config::{
+        sui_config_dir, GenesisConfig, NetworkConfig, PersistedConfig, CONSENSUS_DB_NAME,
+        SUI_NETWORK_CONFIG,
+    },
     sui_commands::{genesis, make_server},
-    sui_config_dir, SUI_NETWORK_CONFIG,
 };
-use sui_types::base_types::encode_bytes_hex;
-use sui_types::base_types::{decode_bytes_hex, SuiAddress};
-use sui_types::committee::Committee;
+use sui_types::{
+    base_types::{decode_bytes_hex, encode_bytes_hex, SuiAddress},
+    committee::Committee,
+};
 use tracing::{error, info};
 
 #[derive(Parser)]

@@ -16,6 +16,10 @@ describe('Test simplify common Move structs', () => {
     const coin = getContent('coin');
     const expected = {
       ...coin,
+      fields: {
+        ...coin.fields,
+        balance: 50000,
+      },
     };
     replaceField(expected, 'id', '07db46736b11cc9e46ea2bbcaf4b71bea706ea4e');
     expect(transformObjectContent(coin)).toEqual(expected);

@@ -1,31 +1,28 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_trait::async_trait;
+use clap::*;
+use colored::Colorize;
+use jsonrpsee::http_client::HttpClientBuilder;
 use std::{
     io,
     io::{stderr, stdout, Write},
     ops::Deref,
     path::PathBuf,
 };
-
-use async_trait::async_trait;
-use clap::*;
-use colored::Colorize;
-use jsonrpsee::http_client::HttpClientBuilder;
-use tracing::debug;
-
-use sui::config::{Config, WalletConfig};
-use sui::gateway_config::GatewayType;
-use sui::keystore::KeystoreType;
 use sui::{
+    config::{
+        sui_config_dir, Config, GatewayType, WalletConfig, SUI_DEV_NET_URL, SUI_WALLET_CONFIG,
+    },
+    keystore::KeystoreType,
     shell::{
         install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
     },
-    sui_config_dir,
     wallet_commands::*,
-    SUI_WALLET_CONFIG,
 };
 use sui_types::exit_main;
+use tracing::debug;
 
 const SUI: &str = "   _____       _    _       __      ____     __
   / ___/__  __(_)  | |     / /___ _/ / /__  / /_
@@ -84,11 +81,16 @@ async fn try_main() -> Result<(), anyhow::Error> {
             wallet_conf_path
         );
         if matches!(read_line(), Ok(line) if line.to_lowercase() == "y") {
-            print!("Sui Gateway Url : ");
+            print!("Sui Gateway Url (Default to Sui DevNet if not specified) : ");
             let url = read_line()?;
+            let url = if url.trim().is_empty() {
+                SUI_DEV_NET_URL
+            } else {
+                &url
+            };
 
             // Check url is valid
-            HttpClientBuilder::default().build(&url)?;
+            HttpClientBuilder::default().build(url)?;
             let keystore_path = wallet_conf_path
                 .parent()
                 .unwrap_or(&sui_config_dir()?)
@@ -98,7 +100,7 @@ async fn try_main() -> Result<(), anyhow::Error> {
             WalletConfig {
                 accounts: vec![new_address],
                 keystore,
-                gateway: GatewayType::RPC(url),
+                gateway: GatewayType::RPC(url.to_string()),
                 active_address: None,
             }
             .persisted(&wallet_conf_path)
