@@ -42,18 +42,23 @@ function OwnedObject({ id }: { id: string }) {
 }
 
 function OwnedObjectStatic({ id }: { id: string }) {
-    const objects = findOwnedObjectsfromID(id)!;
-    const results = objects.map(({ objectId }) => {
-        const entry = findDataFromID(objectId, undefined);
-        return {
-            id: entry?.id,
-            Type: entry?.objType,
-            Version: entry?.version,
-            display: entry?.data?.contents?.display,
-        };
-    });
+    const objects = findOwnedObjectsfromID(id);
 
-    return <GroupView results={results} />;
+    if (objects) {
+        const results = objects?.map(({ objectId }) => {
+            const entry = findDataFromID(objectId, undefined);
+            return {
+                id: entry?.id,
+                Type: entry?.objType,
+                Version: entry?.version,
+                display: entry?.data?.contents?.display,
+            };
+        });
+
+        return <GroupView results={results} />;
+    } else {
+        return <div />;
+    }
 }
 
 function OwnedObjectAPI({ id }: { id: string }) {
@@ -135,100 +140,27 @@ function GroupView({ results }: { results: resultType }) {
         return (
             <div>
                 <button onClick={goBack}>&#60; Back</button>
-                <OwnedObjectView results={subObjs} />
+                <OwnedObjectSection results={subObjs} />
             </div>
         );
     }
 }
-
-function OwnedObjectView({ results }: { results: resultType }) {
-    const handlePreviewClick = useCallback(
-        (id: string, navigate: Function) => (e: React.MouseEvent) =>
-            navigateWithUnknown(id, navigate),
-        []
-    );
-    const navigate = useNavigate();
-    return (
-        <div id="ownedObjects" className={styles.ownedobjects}>
-            {results.map((entryObj, index1) => (
-                <div
-                    className={styles.objectbox}
-                    key={`object-${index1}`}
-                    onClick={handlePreviewClick(entryObj.id, navigate)}
-                >
-                    {entryObj.display !== undefined && (
-                        <div className={styles.previewimage}>
-                            <DisplayBox
-                                display={entryObj.display}
-                                // TODO: clean this logic
-                                tag={
-                                    typeof entryObj.display === 'object' &&
-                                    'category' in entryObj.display &&
-                                    entryObj.display['category'] ===
-                                        'moveScript'
-                                        ? 'moveScript'
-                                        : 'imageURL'
-                                }
-                            />
-                        </div>
-                    )}
-                    {Object.entries(entryObj).map(([key, value], index2) => (
-                        <div key={`object-${index1}-${index2}`}>
-                            {(() => {
-                                switch (key) {
-                                    case 'display':
-                                        break;
-                                    case 'Type':
-                                        return (
-                                            <div>
-                                                <span>{key}</span>
-                                                <span>
-                                                    {typeof value === 'string'
-                                                        ? trimStdLibPrefix(
-                                                              value
-                                                          )
-                                                        : ''}
-                                                </span>
-                                            </div>
-                                        );
-                                    default:
-                                        return (
-                                            <div>
-                                                <span>{key}</span>
-                                                <span>{value}</span>
-                                            </div>
-                                        );
-                                }
-                            })()}
-                        </div>
-                    ))}
-                </div>
-            ))}
-        </div>
-    );
-}
-
-/*
-
-function OwnedObjectSection({ objects }: { objects: string[] }) {
+function OwnedObjectSection({ results }: { results: resultType }) {
     const [pageIndex, setPageIndex] = useState(0);
 
     const ITEMS_PER_PAGE = 12;
 
     const FINAL_PAGE_NO =
-        Math.floor(objects.length / ITEMS_PER_PAGE) +
-        (objects.length % ITEMS_PER_PAGE !== 0 ? 1 : 0);
+        Math.floor(results.length / ITEMS_PER_PAGE) +
+        (results.length % ITEMS_PER_PAGE !== 0 ? 1 : 0);
 
-    const objectSample = objects.slice(
+    const objectSample = results.slice(
         pageIndex * ITEMS_PER_PAGE,
         (pageIndex + 1) * ITEMS_PER_PAGE
     );
 
-    const OwnedObjectsRetrieved = (retrieved: string[]) => {
-        if (process.env.REACT_APP_DATA === 'static') {
-            return <OwnedObjectView results={objectSample} />;
-        }
-        return <OwnedObjectAPI objects={objectSample} />;
+    const OwnedObjectsRetrieved = (retrieved: resultType) => {
+        return <OwnedObjectView results={objectSample} />;
     };
 
     const handleFirstClick = useCallback(() => setPageIndex(0), []);
@@ -240,9 +172,9 @@ function OwnedObjectSection({ objects }: { objects: string[] }) {
 
     const handleNextClick = useCallback(
         () =>
-            (pageIndex + 1) * ITEMS_PER_PAGE < objects.length &&
+            (pageIndex + 1) * ITEMS_PER_PAGE < results.length &&
             setPageIndex(pageIndex + 1),
-        [pageIndex, objects.length]
+        [pageIndex, results.length]
     );
 
     const handleLastClick = useCallback(
@@ -324,5 +256,72 @@ function OwnedObjectSection({ objects }: { objects: string[] }) {
         </>
     );
 }
-*/
+function OwnedObjectView({ results }: { results: resultType }) {
+    const handlePreviewClick = useCallback(
+        (id: string, navigate: Function) => (e: React.MouseEvent) =>
+            navigateWithUnknown(id, navigate),
+        []
+    );
+    const navigate = useNavigate();
+
+    return (
+        <div id="ownedObjects" className={styles.ownedobjects}>
+            {results.map((entryObj, index1) => (
+                <div
+                    className={styles.objectbox}
+                    key={`object-${index1}`}
+                    onClick={handlePreviewClick(entryObj.id, navigate)}
+                >
+                    {entryObj.display !== undefined && (
+                        <div className={styles.previewimage}>
+                            <DisplayBox
+                                display={entryObj.display}
+                                // TODO: clean this logic
+                                tag={
+                                    typeof entryObj.display === 'object' &&
+                                    'category' in entryObj.display &&
+                                    entryObj.display['category'] ===
+                                        'moveScript'
+                                        ? 'moveScript'
+                                        : 'imageURL'
+                                }
+                            />
+                        </div>
+                    )}
+                    {Object.entries(entryObj).map(([key, value], index2) => (
+                        <div key={`object-${index1}-${index2}`}>
+                            {(() => {
+                                switch (key) {
+                                    case 'display':
+                                        break;
+                                    case 'Type':
+                                        return (
+                                            <div>
+                                                <span>{key}</span>
+                                                <span>
+                                                    {typeof value === 'string'
+                                                        ? trimStdLibPrefix(
+                                                              value
+                                                          )
+                                                        : ''}
+                                                </span>
+                                            </div>
+                                        );
+                                    default:
+                                        return (
+                                            <div>
+                                                <span>{key}</span>
+                                                <span>{value}</span>
+                                            </div>
+                                        );
+                                }
+                            })()}
+                        </div>
+                    ))}
+                </div>
+            ))}
+        </div>
+    );
+}
+
 export default OwnedObject;
