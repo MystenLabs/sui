@@ -1,31 +1,35 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
-
-use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
-use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
+use crate::rpc_server_tests::sui_network::start_test_network;
+use jsonrpsee::{
+    http_client::{HttpClient, HttpClientBuilder},
+    http_server::{HttpServerBuilder, HttpServerHandle},
+};
 use move_core_types::identifier::Identifier;
-
-use sui::config::{PersistedConfig, WalletConfig};
-use sui::keystore::{Keystore, SuiKeystore};
-use sui::rest_gateway::responses::ObjectResponse;
-use sui::rpc_gateway::TransactionBytes;
-use sui::rpc_gateway::{Base64EncodedBytes, RpcGatewayClient};
-use sui::rpc_gateway::{RpcCallArg, RpcGatewayServer};
-use sui::rpc_gateway::{RpcGatewayImpl, SignedTransaction};
-use sui::sui_commands::SuiNetwork;
-use sui::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
-use sui::{SUI_GATEWAY_CONFIG, SUI_WALLET_CONFIG};
+use std::{
+    net::SocketAddr,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+use sui::{
+    config::{PersistedConfig, WalletConfig, SUI_GATEWAY_CONFIG, SUI_WALLET_CONFIG},
+    keystore::{Keystore, SuiKeystore},
+    rpc_gateway::{
+        responses::ObjectResponse, RpcCallArg, RpcGatewayClient, RpcGatewayImpl, RpcGatewayServer,
+        SignedTransaction, TransactionBytes,
+    },
+    sui_commands::SuiNetwork,
+    sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue},
+};
 use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_framework::build_move_package_to_bytes;
-use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::object::ObjectRead;
-use sui_types::SUI_FRAMEWORK_ADDRESS;
-
-use crate::rpc_server_tests::sui_network::start_test_network;
+use sui_types::{
+    base_types::{ObjectID, SuiAddress},
+    json_schema::Base64,
+    object::ObjectRead,
+    SUI_FRAMEWORK_ADDRESS,
+};
 
 mod sui_network;
 
@@ -103,7 +107,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         false,
     )?
     .into_iter()
-    .map(Base64EncodedBytes)
+    .map(Base64)
     .collect::<Vec<_>>();
 
     let tx_data: TransactionBytes = http_client
@@ -155,7 +159,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let mut args = Vec::with_capacity(json_args.len());
     for json_arg in json_args {
         args.push(match json_arg {
-            SuiJsonCallArg::Pure(bytes) => RpcCallArg::Pure(Base64EncodedBytes(bytes)),
+            SuiJsonCallArg::Pure(bytes) => RpcCallArg::Pure(Base64(bytes)),
             SuiJsonCallArg::Object(id) => match http_client.get_object_info(id).await? {
                 ObjectRead::Exists(_, obj, _) if obj.is_shared() => RpcCallArg::SharedObject(id),
                 _ => RpcCallArg::ImmOrOwnedObject(id),
@@ -165,14 +169,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
 
     let tx_data: TransactionBytes = http_client
         .move_call(
-            *address,
-            package_id,
-            module,
-            function,
-            Vec::new(),
-            args,
-            gas.0,
-            1000,
+            *address, package_id, module, function, None, args, gas.0, 1000,
         )
         .await?;
 
@@ -190,7 +187,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
 
 async fn setup_test_network() -> Result<TestNetwork, anyhow::Error> {
     let working_dir = tempfile::tempdir()?.path().to_path_buf();
-    let _network = start_test_network(&working_dir, None).await?;
+    let _network = start_test_network(&working_dir, None, None).await?;
     let (server_addr, rpc_server_handle) =
         start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;
     let wallet_conf: WalletConfig = PersistedConfig::read(&working_dir.join(SUI_WALLET_CONFIG))?;

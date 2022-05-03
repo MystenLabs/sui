@@ -6,9 +6,13 @@ import { useLocation, useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import theme from '../../styles/theme.module.css';
-import { DefaultRpcClient as rpc } from '../../utils/api/SuiRpcClient';
+import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import ObjectLoaded from './ObjectLoaded';
-import { type DataType } from './ObjectResultType';
+import {
+    instanceOfDataType,
+    translate,
+    type DataType,
+} from './ObjectResultType';
 
 const DATATYPE_DEFAULT: DataType = {
     id: '',
@@ -23,10 +27,6 @@ const DATATYPE_DEFAULT: DataType = {
     },
     loadState: 'pending',
 };
-
-function instanceOfDataType(object: any): object is DataType {
-    return object && ['id', 'version', 'objType'].every((x) => x in object);
-}
 
 const Fail = ({ objID }: { objID: string | undefined }): JSX.Element => {
     return (
@@ -43,7 +43,7 @@ const ObjectResultAPI = ({ objID }: { objID: string }): JSX.Element => {
         rpc.getObjectInfo(objID as string)
             .then((objState) => {
                 setObjectState({
-                    ...(objState as DataType),
+                    ...(translate(objState) as DataType),
                     loadState: 'loaded',
                 });
             })
@@ -75,7 +75,12 @@ const ObjectResultStatic = ({ objID }: { objID: string }): JSX.Element => {
     if (instanceOfDataType(data)) {
         return <ObjectLoaded data={data} />;
     } else {
-        return <Fail objID={objID} />;
+        try {
+            return <ObjectLoaded data={translate(data)} />;
+        } catch (err) {
+            console.error("Couldn't parse data", err);
+            return <Fail objID={objID} />;
+        }
     }
 };
 

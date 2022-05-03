@@ -67,8 +67,8 @@
         "fileName": "build/wallet"
       },
       {
-        "label": "Use Sui REST Server",
-        "fileName": "build/rest-api"
+        "label": "Use Sui RPC Server",
+        "fileName": "build/json-rpc"
       },
       {
         "label": "Employ SuiJSON Format",

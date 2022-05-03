@@ -33,7 +33,8 @@
 ///   original owner and the item goes to the bidder that won the
 ///   auction
 module NFTs::Auction {
-    use Sui::Coin::Coin;
+    use Sui::Coin::{Self, Coin};
+    use Sui::Balance::Balance;
     use Sui::SUI::SUI;
     use Sui::ID::{Self, ID, VersionedID};
     use Sui::Transfer;
@@ -41,11 +42,10 @@ module NFTs::Auction {
 
     use NFTs::AuctionLib::{Self, Auction};
 
-
     // Error codes.
 
     /// A bid submitted for the wrong (e.g. non-existent) auction.
-    const EWRONG_AUCTION: u64 = 1;
+    const EWrongAuction: u64 = 1;
 
     /// Represents a bid sent by a bidder to the auctioneer.
     struct Bid has key {
@@ -55,7 +55,7 @@ module NFTs::Auction {
         /// ID of the Auction object this bid is intended for
         auction_id: ID,
         /// Coin used for bidding.
-        coin: Coin<SUI>
+        bid: Balance<SUI>
     }
 
     // Entry functions.
@@ -65,37 +65,47 @@ module NFTs::Auction {
     /// it can be shared with bidders but we cannot do this at the
     /// moment. This is executed by the owner of the asset to be
     /// auctioned.
-    public fun create_auction<T: key + store>(to_sell: T, id: VersionedID, auctioneer: address, ctx: &mut TxContext) {
+    public fun create_auction<T: key + store>(
+        to_sell: T, id: VersionedID, auctioneer: address, ctx: &mut TxContext
+    ) {
         let auction = AuctionLib::create_auction(id, to_sell, ctx);
         Transfer::transfer(auction, auctioneer);
     }
 
     /// Creates a bid a and send it to the auctioneer along with the
     /// ID of the auction. This is executed by a bidder.
-    public fun bid(coin: Coin<SUI>, auction_id: ID, auctioneer: address, ctx: &mut TxContext) {
+    public fun bid(
+        coin: Coin<SUI>, auction_id: ID, auctioneer: address, ctx: &mut TxContext
+    ) {
         let bid = Bid {
             id: TxContext::new_id(ctx),
             bidder: TxContext::sender(ctx),
             auction_id,
-            coin,
+            bid: Coin::into_balance(coin),
         };
+
         Transfer::transfer(bid, auctioneer);
     }
 
     /// Updates the auction based on the information in the bid
     /// (update auction if higher bid received and send coin back for
     /// bids that are too low). This is executed by the auctioneer.
-    public(script) fun update_auction<T: key + store>(auction: &mut Auction<T>, bid: Bid, _ctx: &mut TxContext) {
-        let Bid { id, bidder, auction_id, coin } = bid;
+    public(script) fun update_auction<T: key + store>(
+        auction: &mut Auction<T>, bid: Bid, ctx: &mut TxContext
+    ) {
+        let Bid { id, bidder, auction_id, bid: balance } = bid;
+        assert!(AuctionLib::auction_id(auction) == &auction_id, EWrongAuction);
+        AuctionLib::update_auction(auction, bidder, balance, ctx);
+
         ID::delete(id);
-        assert!(AuctionLib::auction_id(auction) == &auction_id, EWRONG_AUCTION);
-        AuctionLib::update_auction(auction, bidder, coin);
     }
 
     /// Ends the auction - transfers item to the currently highest
     /// bidder or to the original owner if no bids have been
     /// placed. This is executed by the auctioneer.
-    public(script) fun end_auction<T: key + store>(auction: Auction<T>, _ctx: &mut TxContext) {
-        AuctionLib::end_and_destroy_auction(auction);
+    public(script) fun end_auction<T: key + store>(
+        auction: Auction<T>, ctx: &mut TxContext
+    ) {
+        AuctionLib::end_and_destroy_auction(auction, ctx);
     }
 }

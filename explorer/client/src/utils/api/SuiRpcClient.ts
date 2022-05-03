@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// TODO: Remove this file after we finish the migration to use sui.js SDK
 import { tryGetRpcSetting } from './rpcSetting';
 
 export class SuiRpcClient {

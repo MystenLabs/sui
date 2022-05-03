@@ -1,25 +1,27 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![deny(warnings)]
-
 use anyhow::Error;
-use bytes::{Bytes, BytesMut};
-use futures::channel::mpsc::{channel as MpscChannel, Receiver, Sender as MpscSender};
-use futures::stream::StreamExt;
-use futures::SinkExt;
-
+use bytes::Bytes;
+use futures::{
+    channel::mpsc::{channel as MpscChannel, Receiver, Sender as MpscSender},
+    stream::StreamExt,
+    SinkExt,
+};
 use rayon::prelude::*;
-use std::io;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
-use sui_core::authority::*;
-use sui_core::authority_server::AuthorityServer;
+use std::{
+    io,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use sui_core::{
+    authority::*,
+    authority_client::{AuthorityAPI, NetworkAuthorityClient},
+    authority_server::{AuthorityServer, AuthorityServerHandle},
+};
 use sui_network::network::{NetworkClient, NetworkServer};
-use sui_network::transport;
 use sui_types::{messages::*, serialize::*};
-use tokio::sync::Notify;
-use tokio::time;
+use tokio::{sync::Notify, time};
 use tracing::{error, info};
 
 pub fn check_transaction_response(reply_message: Result<SerializedMessage, Error>) {
@@ -41,15 +43,31 @@ pub fn check_transaction_response(reply_message: Result<SerializedMessage, Error
 pub async fn send_tx_chunks(
     tx_chunks: Vec<Bytes>,
     net_client: NetworkClient,
-    conn: usize,
-) -> (u128, Vec<Result<BytesMut, io::Error>>) {
+    _conn: usize,
+) -> (u128, Vec<Result<Vec<u8>, io::Error>>) {
     let time_start = Instant::now();
 
-    let tx_resp = net_client
-        .batch_send(tx_chunks, conn, 0)
-        .map(|x| x.unwrap())
-        .concat()
-        .await;
+    // This probably isn't going to be as fast so we probably want to provide away to send a batch
+    // of txns to the authority at a time
+    let client = NetworkAuthorityClient::new(net_client);
+    let mut tx_resp = Vec::new();
+    for tx in tx_chunks {
+        let message = deserialize_message(&tx[..]).unwrap();
+        let resp = match message {
+            SerializedMessage::Transaction(transaction) => client
+                .handle_transaction(*transaction)
+                .await
+                .map(|resp| serialize_transaction_info(&resp))
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e)),
+            SerializedMessage::Cert(cert) => client
+                .handle_confirmation_transaction(ConfirmationTransaction { certificate: *cert })
+                .await
+                .map(|resp| serialize_transaction_info(&resp))
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e)),
+            _ => panic!("unexpected message type"),
+        };
+        tx_resp.push(resp);
+    }
 
     let elapsed = time_start.elapsed().as_micros();
 
@@ -167,7 +185,7 @@ impl FixedRateLoadGenerator {
 pub async fn spawn_authority_server(
     network_server: NetworkServer,
     state: AuthorityState,
-) -> transport::SpawnedServer<AuthorityServer> {
+) -> AuthorityServerHandle {
     // The following two fields are only needed for shared objects (not by this bench).
     let consensus_address = "127.0.0.1:0".parse().unwrap();
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);

@@ -18,8 +18,8 @@ Use these online resources:
 
 * Sui Website: [https://sui.io/](https://sui.io/)
 * Sui Developer Portal: [https://docs.sui.io/](https://docs.sui.io/)
-* Sui Smart Contract White Paper: [https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) 
-* SDK reference: [https://app.swaggerhub.com/apis/MystenLabs/sui-api/](https://app.swaggerhub.com/apis/MystenLabs/sui-api/)  
+* Sui Smart Contract White Paper: [https://sui.io/whitepaper](https://sui.io/whitepaper) 
+* SDK reference: [Sui JSON-RPC](https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/sui/open_rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false)  
 
 
 ### What does Sui offer over other blockchains?
@@ -129,7 +129,7 @@ Section four in the [Sui Smart Contract Platform](https://github.com/MystenLabs/
 
 ### Can I run a Sui validator node?
 
-We do not yet have a public devnet or testnet that will allow others to operate Sui nodes, but both are on our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap). Right now, you can run a local, non-networked Sui node for development. Check out our [Wallet](https://docs.sui.io/build/wallet) documentation to get started. You can interact with the local node via either the [Wallet CLI](../build/wallet#command-line-mode) or [REST API](../build/rest-api).
+We do not yet have a public devnet or testnet that will allow others to operate Sui nodes, but both are on our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap). Right now, you can run a local, non-networked Sui node for development. Check out our [Wallet](https://docs.sui.io/build/wallet) documentation to get started. You can interact with the local node via either the [Wallet CLI](../build/wallet#command-line-mode) or [RPC API](../build/json-rpc).
 
 ### What does a local node do and what are the hardware requirements to run it? How is it different from a testnet node?
 

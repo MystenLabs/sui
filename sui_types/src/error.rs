@@ -3,9 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::*;
+use crate::committee::EpochId;
 use move_binary_format::errors::{PartialVMError, VMError};
 use narwhal_executor::ExecutionStateError;
 use narwhal_executor::SubscriberError;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use thiserror::Error;
@@ -28,8 +30,21 @@ macro_rules! fp_ensure {
 }
 pub(crate) use fp_ensure;
 
+#[macro_export]
+macro_rules! exit_main {
+    ($result:expr) => {
+        match $result {
+            Ok(_) => (),
+            Err(err) => {
+                println!("{}", err.to_string().bold().red());
+                std::process::exit(1);
+            }
+        }
+    };
+}
+
 /// Custom error type for Sui.
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, JsonSchema)]
 #[allow(clippy::large_enum_variant)]
 pub enum SuiError {
     // Object misuse issues
@@ -64,6 +79,8 @@ pub enum SuiError {
     #[error("Value was not signed by a known authority")]
     UnknownSigner,
     // Certificate verification
+    #[error("Signature or certificate from wrong epoch, expected {expected_epoch}")]
+    WrongEpoch { expected_epoch: EpochId },
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
     #[error(
@@ -248,7 +265,11 @@ pub enum SuiError {
         error: Box<SuiError>,
     },
     #[error("Storage error")]
-    StorageError(#[from] TypedStoreError),
+    StorageError(
+        #[from]
+        #[schemars(with = "String")]
+        TypedStoreError,
+    ),
     #[error("Batch error: cannot send transaction to batch.")]
     BatchErrorSender,
     #[error("Authority Error: {error:?}")]

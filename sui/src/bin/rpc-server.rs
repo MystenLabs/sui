@@ -12,8 +12,8 @@ use std::{
     path::PathBuf,
 };
 use sui::{
-    rpc_gateway::{RpcGatewayImpl, RpcGatewayServer},
-    sui_config_dir,
+    config::sui_config_dir,
+    rpc_gateway::{RpcGatewayImpl, RpcGatewayOpenRpc, RpcGatewayServer},
 };
 use tracing::info;
 
@@ -66,12 +66,17 @@ async fn main() -> anyhow::Result<()> {
         ac_builder = ac_builder.set_allowed_origins(list)?;
     }
 
+    let acl = ac_builder.build();
+    info!("{:?}", acl);
+
     let server = server_builder
-        .set_access_control(ac_builder.build())
+        .set_access_control(acl)
         .build(SocketAddr::new(IpAddr::V4(options.host), options.port))
         .await?;
 
     let mut module = RpcModule::new(());
+    let open_rpc = RpcGatewayOpenRpc::open_rpc();
+    module.register_method("rpc.discover", move |_, _| Ok(open_rpc.clone()))?;
     module.merge(RpcGatewayImpl::new(&config_path)?.into_rpc())?;
 
     info!(

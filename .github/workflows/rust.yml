@@ -30,7 +30,7 @@ env:
 
 jobs:
   diff:
-    runs-on: ubuntu-latest
+    runs-on: [ubuntu-latest]
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
     steps:
@@ -41,35 +41,41 @@ jobs:
 
   license-check:
     name: license-check
-    runs-on: ubuntu-latest
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
       - run: scripts/license_check.sh
+      - run: cargo xlint
 
   test:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, self-hosted-ubuntu]
     strategy:
       fail-fast: false
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
+      # Disable caching on self-hosted jobs
       # Enable caching of the 'librocksdb-sys' crate by additionally caching the
       # 'librocksdb-sys' src directory which is managed by cargo
-      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-        with:
-          path: ~/.cargo/registry/src/**/librocksdb-sys-*
+      # - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
+      #   with:
+      #     path: ~/.cargo/registry/src/**/librocksdb-sys-*
       - name: cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features
+        run: |
+          cargo build --all-features --lib
+          cargo test --all-features --no-run # -j N # uncomment and set a low number if builds start OOMing again
+          cargo test --all-features
+      # Ensure there are no uncommitted changes in the repo after running tests
+      - run: scripts/changed-files.sh
 
   clippy:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -87,7 +93,7 @@ jobs:
   rustfmt:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -103,7 +109,7 @@ jobs:
     name: cargo-deny (advisories, licenses, bans, ...)
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v3
     - uses: EmbarkStudios/cargo-deny-action@v1
@@ -111,7 +117,7 @@ jobs:
   cargo-udeps:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1

@@ -6,13 +6,16 @@ use clap::*;
 use narwhal_config::Parameters as ConsensusParameters;
 use std::path::PathBuf;
 use sui::{
-    config::{GenesisConfig, NetworkConfig, PersistedConfig, CONSENSUS_DB_NAME},
+    config::{
+        sui_config_dir, GenesisConfig, NetworkConfig, PersistedConfig, CONSENSUS_DB_NAME,
+        SUI_NETWORK_CONFIG,
+    },
     sui_commands::{genesis, make_server},
-    sui_config_dir, SUI_NETWORK_CONFIG,
 };
-use sui_types::base_types::encode_bytes_hex;
-use sui_types::base_types::{decode_bytes_hex, SuiAddress};
-use sui_types::committee::Committee;
+use sui_types::{
+    base_types::{decode_bytes_hex, encode_bytes_hex, SuiAddress},
+    committee::Committee,
+};
 use tracing::{error, info};
 
 #[derive(Parser)]
@@ -51,6 +54,7 @@ async fn main() -> Result<(), anyhow::Error> {
         json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
         ..Default::default()
     };
+
     #[allow(unused)]
     let guard = telemetry_subscribers::init(config);
 
@@ -69,12 +73,12 @@ async fn main() -> Result<(), anyhow::Error> {
         }
     };
 
-    let net_cfg = if let Some(address) = cfg.address {
+    let authority = if let Some(address) = cfg.address {
         // Find the network config for this validator
         network_config
             .authorities
             .iter()
-            .find(|x| SuiAddress::from(x.key_pair.public_key_bytes()) == address)
+            .find(|x| SuiAddress::from(&x.public_key) == address)
             .ok_or_else(|| {
                 anyhow!(
                     "Network configs must include config for address {}",
@@ -89,32 +93,37 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let listen_address = cfg
         .listen_address
-        .unwrap_or(format!("{}:{}", net_cfg.host, net_cfg.port));
+        .unwrap_or(format!("{}:{}", authority.host, authority.port));
 
     info!(
         "authority {:?} listening on {} (public addr: {}:{})",
-        net_cfg.key_pair.public_key_bytes(),
-        listen_address,
-        net_cfg.host,
-        net_cfg.port
+        authority.public_key, listen_address, authority.host, authority.port
     );
 
     let consensus_committee = network_config.make_narwhal_committee();
-    let consensus_parameters = ConsensusParameters::default();
+
+    let consensus_parameters = ConsensusParameters {
+        max_header_delay: std::time::Duration::from_millis(5_000),
+        max_batch_delay: std::time::Duration::from_millis(5_000),
+        ..ConsensusParameters::default()
+    };
     let consensus_store_path = sui_config_dir()?
         .join(CONSENSUS_DB_NAME)
-        .join(encode_bytes_hex(net_cfg.key_pair.public_key_bytes()));
+        .join(encode_bytes_hex(&authority.public_key));
 
+    // Pass in the newtwork parameters of all authorities
+    let net = network_config.get_authority_infos();
     if let Err(e) = make_server(
-        net_cfg,
+        authority,
+        &network_config.key_pair,
         &Committee::from(&network_config),
         network_config.buffer_size,
         &consensus_committee,
         &consensus_store_path,
         &consensus_parameters,
+        Some(net),
     )
-    .await
-    .unwrap()
+    .await?
     .spawn_with_bind_address(&listen_address)
     .await
     .unwrap()

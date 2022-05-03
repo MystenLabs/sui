@@ -23,8 +23,8 @@ use std::sync::Arc;
 use std::{env, io};
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    ConfirmationTransaction, ObjectInfoRequest, ObjectInfoResponse, Transaction,
-    TransactionInfoRequest, TransactionInfoResponse,
+    ConfirmationTransaction, ConsensusTransaction, ObjectInfoRequest, ObjectInfoResponse,
+    Transaction, TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::object::Object;
 
@@ -38,7 +38,7 @@ where
         /* address */ *authority_key.public_key_bytes(),
         /* voting right */ 1,
     );
-    let committee = Committee::new(authorities);
+    let committee = Committee::new(0, authorities);
 
     (committee, authority_address, authority_key)
 }
@@ -443,6 +443,17 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         })
     }
 
+    async fn handle_consensus_transaction(
+        &self,
+        _transaction: ConsensusTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        Ok(TransactionInfoResponse {
+            signed_transaction: None,
+            certified_transaction: None,
+            signed_effects: None,
+        })
+    }
+
     async fn handle_account_info_request(
         &self,
         _request: AccountInfoRequest,
@@ -543,6 +554,17 @@ impl AuthorityAPI for ByzantineAuthorityClient {
     async fn handle_confirmation_transaction(
         &self,
         _transaction: ConfirmationTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        Ok(TransactionInfoResponse {
+            signed_transaction: None,
+            certified_transaction: None,
+            signed_effects: None,
+        })
+    }
+
+    async fn handle_consensus_transaction(
+        &self,
+        _transaction: ConsensusTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         Ok(TransactionInfoResponse {
             signed_transaction: None,
@@ -652,7 +674,7 @@ async fn test_safe_batch_stream() {
     println!("init public key {:?}", public_key_bytes);
 
     authorities.insert(public_key_bytes, 1);
-    let committee = Committee::new(authorities);
+    let committee = Committee::new(0, authorities);
     // Create an authority
     let mut opts = rocksdb::Options::default();
     opts.set_max_open_files(max_files_authority_tests());
