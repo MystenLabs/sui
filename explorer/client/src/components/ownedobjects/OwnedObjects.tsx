@@ -15,7 +15,7 @@ import {
 import { processDisplayValue, trimStdLibPrefix } from '../../utils/stringUtils';
 import DisplayBox from '../displaybox/DisplayBox';
 
-import type { ObjectRef } from 'sui.js';
+//import type { ObjectRef } from 'sui.js';
 
 import styles from './OwnedObjects.module.css';
 
@@ -33,8 +33,17 @@ const DATATYPE_DEFAULT: resultType = [
     },
 ];
 
-function OwnedObjectStatic({ objects }: { objects: string[] }) {
-    const results = objects.map((objectId) => {
+function OwnedObject({ id }: { id: string }) {
+    if (process.env.REACT_APP_DATA === 'static') {
+        return <OwnedObjectStatic id={id} />;
+    } else {
+        return <OwnedObjectAPI id={id} />;
+    }
+}
+
+function OwnedObjectStatic({ id }: { id: string }) {
+    const objects = findOwnedObjectsfromID(id)!;
+    const results = objects.map(({ objectId }) => {
         const entry = findDataFromID(objectId, undefined);
         return {
             id: entry?.id,
@@ -44,16 +53,18 @@ function OwnedObjectStatic({ objects }: { objects: string[] }) {
         };
     });
 
-    return <OwnedObjectView results={results} />;
+    return <GroupView results={results} />;
 }
 
-function OwnedObjectAPI({ objects }: { objects: string[] }) {
+function OwnedObjectAPI({ id }: { id: string }) {
     const [results, setResults] = useState(DATATYPE_DEFAULT);
     const [isLoaded, setIsLoaded] = useState(false);
 
     useEffect(() => {
-        Promise.all(objects.map((objID) => rpc.getObjectInfo(objID))).then(
-            (results) => {
+        rpc.getOwnedObjectRefs(id).then((objects) => {
+            Promise.all(
+                objects.map(({ objectId }) => rpc.getObjectInfo(objectId))
+            ).then((results) => {
                 setResults(
                     results
                         .filter(({ status }) => status === 'Exists')
@@ -73,14 +84,60 @@ function OwnedObjectAPI({ objects }: { objects: string[] }) {
                         )
                 );
                 setIsLoaded(true);
-            }
-        );
-    }, [objects]);
+            });
+        });
+    }, [id]);
 
     if (isLoaded) {
-        return <OwnedObjectView results={results} />;
+        return <GroupView results={results} />;
     } else {
         return <div />;
+    }
+}
+
+function GroupView({ results }: { results: resultType }) {
+    const [subObjs, setSubObjs] = useState([]);
+
+    const [isGroup, setIsGroup] = useState(true);
+
+    const shrinkObjList = useCallback(
+        (subObjList) => () => {
+            setIsGroup(false);
+            setSubObjs(subObjList);
+        },
+        []
+    );
+
+    const goBack = useCallback(() => setIsGroup(true), []);
+
+    if (isGroup) {
+        return (
+            <div id="groupCollection">
+                {Array.from(new Set(results.map(({ Type }) => Type))).map(
+                    (typeV) => {
+                        const subObjList = results.filter(
+                            ({ Type }) => Type === typeV
+                        );
+                        return (
+                            <div
+                                key={typeV}
+                                onClick={shrinkObjList(subObjList)}
+                            >
+                                <div>{typeV}</div>
+                                <div>Count {subObjList.length}</div>
+                            </div>
+                        );
+                    }
+                )}
+            </div>
+        );
+    } else {
+        return (
+            <div>
+                <button onClick={goBack}>&#60; Back</button>
+                <OwnedObjectView results={subObjs} />
+            </div>
+        );
     }
 }
 
@@ -151,80 +208,7 @@ function OwnedObjectView({ results }: { results: resultType }) {
     );
 }
 
-function GetObjectsStatic({ id }: { id: string }) {
-    const allObjects = findOwnedObjectsfromID(id)!;
-
-    const [subObjs, setSubObjs] = useState([]);
-
-    const [isGroup, setIsGroup] = useState(true);
-
-    let typeIDList: any[][] = [[]];
-
-    if (allObjects?.length > 0) {
-        typeIDList = allObjects.map((obj) => [
-            obj.objectId,
-            findDataFromID(obj.objectId, undefined).objType,
-        ]);
-    }
-
-    const shrinkObjList = useCallback(
-        (subObjList) => () => {
-            setIsGroup(false);
-            setSubObjs(subObjList);
-        },
-        []
-    );
-
-    const goBack = useCallback(() => setIsGroup(true), []);
-
-    if (isGroup) {
-        return (
-            <div id="groupCollection">
-                {Array.from(new Set(typeIDList.map(([_, x]) => x))).map(
-                    (typeV) => {
-                        const subObjList = typeIDList
-                            .filter(([_, x]) => x === typeV)
-                            .map(([x, _]) => x);
-                        console.log(subObjList);
-                        return (
-                            <div
-                                key={typeV}
-                                onClick={shrinkObjList(subObjList)}
-                            >
-                                <div>{typeV}</div>
-                                <div>Count {subObjList.length}</div>
-                            </div>
-                        );
-                    }
-                )}
-            </div>
-        );
-    } else {
-        return (
-            <div>
-                <button onClick={goBack}>&#60; Back</button>
-                <OwnedObjectSection objects={subObjs} />
-            </div>
-        );
-    }
-}
-
-function GetObjectsAPI({ id }: { id: string }) {
-    const [objects, setObjects] = useState<ObjectRef[]>([]);
-    useEffect(() => {
-        rpc.getOwnedObjectRefs(id).then((objects) => setObjects(objects));
-    }, [id]);
-    return (
-        <OwnedObjectSection objects={objects.map(({ objectId }) => objectId)} />
-    );
-}
-function OwnedObject({ id }: { id: string }) {
-    if (process.env.REACT_APP_DATA === 'static') {
-        return <GetObjectsStatic id={id} />;
-    } else {
-        return <GetObjectsAPI id={id} />;
-    }
-}
+/*
 
 function OwnedObjectSection({ objects }: { objects: string[] }) {
     const [pageIndex, setPageIndex] = useState(0);
@@ -242,7 +226,7 @@ function OwnedObjectSection({ objects }: { objects: string[] }) {
 
     const OwnedObjectsRetrieved = (retrieved: string[]) => {
         if (process.env.REACT_APP_DATA === 'static') {
-            return <OwnedObjectStatic objects={objectSample} />;
+            return <OwnedObjectView results={objectSample} />;
         }
         return <OwnedObjectAPI objects={objectSample} />;
     };
@@ -340,5 +324,5 @@ function OwnedObjectSection({ objects }: { objects: string[] }) {
         </>
     );
 }
-
+*/
 export default OwnedObject;
