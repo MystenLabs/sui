@@ -16,15 +16,23 @@ import type {
     CertifiedTransaction,
     TransactionData,
     TransactionKindName,
+    ExecutionStatusType,
 } from 'sui.js';
 
 import styles from './TransactionCard.module.css';
 
+type TxDataProps = CertifiedTransaction & {
+    status: ExecutionStatusType;
+    gasFee: number;
+    txError: string;
+};
+
 // Generate an Arr of Obj with Label and Value
 // TODO rewrite to use sue.js, verify tx types and dynamically generate list
-function formatTxResponse(tx: CertifiedTransaction, txId: string) {
+function formatTxResponse(tx: TxDataProps, txId: string) {
     // Todo add batch kind
     const txKindName = getTransactionKind(tx.data);
+
     return [
         {
             label: 'Transaction ID',
@@ -34,8 +42,10 @@ function formatTxResponse(tx: CertifiedTransaction, txId: string) {
         {
             // May change later
             label: 'Status',
-            value: 'Success',
-            classAttr: 'status-success',
+            value:
+                tx.status === 'Success' ? 'Success' : `Failed - ${tx.txError}`,
+            classAttr:
+                tx.status === 'Success' ? 'status-success' : 'status-fail',
         },
         {
             label: 'Transaction Type',
@@ -52,7 +62,10 @@ function formatTxResponse(tx: CertifiedTransaction, txId: string) {
             label: 'Gas Payment',
             value: tx.data.gas_payment[0],
             link: true,
-            className: 'grouped',
+        },
+        {
+            label: 'Gas Fee',
+            value: tx.gasFee,
         },
         {
             label: 'Gas Budget',
@@ -63,6 +76,8 @@ function formatTxResponse(tx: CertifiedTransaction, txId: string) {
             value: tx.auth_sign_info.signatures,
             list: true,
             sublist: true,
+            // Todo - assumes only two itmes in list ['A', 'B']
+            subLabel: ['Name', 'Signature'],
         },
     ];
 }
@@ -125,7 +140,6 @@ function formatByTransactionKind(
                         .map((data: any) =>
                             Buffer.from(data['Pure']).toString('base64')
                         ),
-                    // list: true,
                 },
             ];
         case 'Publish':
@@ -135,7 +149,6 @@ function formatByTransactionKind(
                     label: 'Modules',
                     value: publish.modules,
                     list: true,
-                    //  sublist: true,
                 },
             ];
         default:
@@ -144,7 +157,13 @@ function formatByTransactionKind(
 }
 
 type Props = {
-    txdata: CertifiedTransaction & { loadState: string; txId: string };
+    txdata: CertifiedTransaction & {
+        loadState: string;
+        txId: string;
+        status: ExecutionStatusType;
+        gasFee: number;
+        txError: string;
+    };
 };
 
 function TransactionCard({ txdata }: Props) {
@@ -178,32 +197,64 @@ function TransactionCard({ txdata }: Props) {
                                                 {itm.value.map(
                                                     (list: any, n: number) =>
                                                         itm.sublist ? (
-                                                            <ul
+                                                            <li
                                                                 className={
                                                                     styles.list
                                                                 }
                                                                 key={n}
                                                             >
-                                                                {list.map(
-                                                                    (
-                                                                        sublist: string,
-                                                                        l: number
-                                                                    ) => (
-                                                                        <li
-                                                                            className={
-                                                                                styles.sublist
-                                                                            }
-                                                                            key={
-                                                                                l
-                                                                            }
-                                                                        >
-                                                                            {
-                                                                                sublist
-                                                                            }
-                                                                        </li>
-                                                                    )
-                                                                )}
-                                                            </ul>
+                                                                <div>
+                                                                    {list.map(
+                                                                        (
+                                                                            sublist: string,
+                                                                            l: number
+                                                                        ) => (
+                                                                            <div
+                                                                                className={
+                                                                                    styles.sublist
+                                                                                }
+                                                                                key={
+                                                                                    l
+                                                                                }
+                                                                            >
+                                                                                <div
+                                                                                    className={
+                                                                                        styles.sublist
+                                                                                    }
+                                                                                >
+                                                                                    {itm.subLabel ? (
+                                                                                        <div
+                                                                                            className={
+                                                                                                styles.sublistlabel
+                                                                                            }
+                                                                                        >
+                                                                                            {
+                                                                                                itm
+                                                                                                    .subLabel[
+                                                                                                    l
+                                                                                                ]
+                                                                                            }
+
+                                                                                            :
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        ''
+                                                                                    )}
+                                                                                    <div
+                                                                                        className={
+                                                                                            styles.sublistvalue
+                                                                                        }
+                                                                                    >
+                                                                                        {
+                                                                                            sublist
+                                                                                        }
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        )
+                                                                    )}
+                                                                </div>
+                                                            </li>
                                                         ) : (
                                                             <li
                                                                 className={

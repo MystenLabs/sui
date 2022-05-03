@@ -4,19 +4,33 @@
 import cl from 'classnames';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { getSingleTransactionKind } from 'sui.js';
+import {
+    getSingleTransactionKind,
+    getExecutionStatusType,
+    getTotalGasUsed,
+    getExecutionDetails,
+} from 'sui.js';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import TransactionCard from '../../components/transaction-card/TransactionCard';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
-import { findDataFromID } from '../../utils/static/searchUtil';
 
-import type { CertifiedTransaction } from 'sui.js';
+import type {
+    CertifiedTransaction,
+    TransactionEffectsResponse,
+    ExecutionStatusType,
+} from 'sui.js';
 
 import styles from './TransactionResult.module.css';
 
-type TxnState = CertifiedTransaction & { loadState: string; txId: string };
+type TxnState = CertifiedTransaction & {
+    loadState: string;
+    txId: string;
+    status: ExecutionStatusType;
+    gasFee: number;
+    txError: string;
+};
 // Todo update state to include Call types
 const initState: TxnState = {
     loadState: 'pending',
@@ -39,11 +53,16 @@ const initState: TxnState = {
         epoch: 0,
         signatures: [],
     },
+    status: 'Success',
+    gasFee: 0,
+    txError: '',
 };
 
-const isStatic = process.env.REACT_APP_DATA !== 'static';
+const useRealData = process.env.REACT_APP_DATA !== 'static';
 // if dev fetch data from mock_data.json
-function fetchTransactionData(txId: string | undefined) {
+function fetchTransactionData(
+    txId: string | undefined
+): Promise<TransactionEffectsResponse> {
     try {
         if (!txId) {
             throw new Error('No Txid found');
@@ -51,20 +70,13 @@ function fetchTransactionData(txId: string | undefined) {
         // add delay to simulate barckend service
         // Remove this section in production
         // Use Mockdata in dev
-        if (!isStatic) {
-            // resolve after one second
-            return new Promise((resolve, reject) => {
-                setTimeout(() => {
-                    const staticObj = findDataFromID(txId, undefined);
-                    if (!staticObj) {
-                        reject('txid not found');
-                    }
-                    resolve(staticObj);
-                }, 1000);
-            });
+        if (!useRealData) {
+            throw new Error('Method not implemented for mock data.');
         }
 
-        return rpc.getTransaction(txId).then((objState) => objState);
+        return rpc
+            .getTransactionWithEffects(txId)
+            .then((txEff: TransactionEffectsResponse) => txEff);
     } catch (error) {
         throw error;
     }
@@ -75,16 +87,29 @@ function TransactionResult() {
     const [showTxState, setTxState] = useState(initState);
 
     useEffect(() => {
+        if (id == null) {
+            return;
+        }
         fetchTransactionData(id)
-            .then((resp: any) => {
+            .then((txObj) => {
+                const executionStatus = txObj.effects.status;
+                const status = getExecutionStatusType(executionStatus);
+                const details = getExecutionDetails(executionStatus);
+
                 setTxState({
-                    ...resp,
+                    ...txObj.certificate,
+                    status,
+                    gasFee: getTotalGasUsed(executionStatus),
+                    txError:
+                        'error' in details
+                            ? details.error[Object.keys(details.error)[0]].error
+                            : '',
                     txId: id,
                     loadState: 'loaded',
                 });
             })
             .catch((err) => {
-                //  remove this section in production
+                console.log('Error fetching transaction data', err);
                 setTxState({
                     ...initState,
                     loadState: 'fail',
@@ -132,4 +157,3 @@ function TransactionResult() {
 }
 
 export default TransactionResult;
-// export { instanceOfDataType };

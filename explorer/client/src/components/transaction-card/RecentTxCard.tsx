@@ -8,6 +8,8 @@ import {
     getSingleTransactionKind,
     getTransactionKind,
     getTransferTransaction,
+    getExecutionStatusType,
+    getTotalGasUsed,
 } from 'sui.js';
 
 import Longtext from '../../components/longtext/Longtext';
@@ -16,28 +18,47 @@ import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import ErrorResult from '../error-result/ErrorResult';
 
-import type { CertifiedTransaction, GetTxnDigestsResponse } from 'sui.js';
+import type {
+    CertifiedTransaction,
+    GetTxnDigestsResponse,
+    TransactionEffectsResponse,
+    ExecutionStatusType,
+    TransactionKindName,
+} from 'sui.js';
 
 import styles from './RecentTxCard.module.css';
 
-const initState = {
+const initState: { loadState: string; latestTx: TxnData[] } = {
     loadState: 'pending',
     latestTx: [],
 };
 
-const getRecentTransactions = async (txNum: number) => {
+type TxnData = {
+    To?: string;
+    seq: number;
+    txId: string;
+    status: ExecutionStatusType;
+    txGas: number;
+    kind: TransactionKindName | undefined;
+    From: string;
+};
+
+async function getRecentTransactions(txNum: number): Promise<TxnData[]> {
     try {
         // Get the latest transactions
-        // TODO add batch transaction kind
+        // TODO add batch transaction kind TransactionDigest
         // TODO sui.js to get the latest transactions meta data
         const transactions = await rpc
             .getRecentTransactions(txNum)
             .then((res: GetTxnDigestsResponse) => res);
+
         const txLatest = await Promise.all(
             transactions.map(async (tx) => {
+                const [seq, digest] = tx;
                 return await rpc
-                    .getTransaction(tx[1])
-                    .then((res: CertifiedTransaction) => {
+                    .getTransactionWithEffects(digest)
+                    .then((txEff: TransactionEffectsResponse) => {
+                        const res: CertifiedTransaction = txEff.certificate;
                         const singleTransaction = getSingleTransactionKind(
                             res.data
                         );
@@ -52,9 +73,12 @@ const getRecentTransactions = async (txNum: number) => {
                         )?.recipient;
 
                         return {
-                            block: tx[0],
-                            txId: tx[1],
-                            // success: txData ? true : false,
+                            seq,
+                            txId: digest,
+                            status: getExecutionStatusType(
+                                txEff.effects.status
+                            ),
+                            txGas: getTotalGasUsed(txEff.effects.status),
                             kind: txKind,
                             From: res.data.sender,
                             ...(recipient
@@ -67,21 +91,21 @@ const getRecentTransactions = async (txNum: number) => {
                     .catch((err) => {
                         console.error(
                             'Failed to get transaction details for txn digest',
-                            tx[1],
+                            digest,
                             err
                         );
-                        return false;
+                        return null;
                     });
             })
         );
-        // Remove failed transactions and sort by block number
+        // Remove failed transactions and sort by sequence number
         return txLatest
             .filter((itm) => itm)
-            .sort((a: any, b: any) => b.block - a.block);
+            .sort((a, b) => b!.seq - a!.seq) as TxnData[];
     } catch (error) {
         throw error;
     }
-};
+}
 
 function truncate(fullStr: string, strLen: number, separator: string) {
     if (fullStr.length <= strLen) return fullStr;
@@ -158,11 +182,12 @@ function LatestTxCard() {
                         )}
                     >
                         <div className={styles.txcardgridlarge}>TxId</div>
-                        <div className={styles.txtype}>Tx Type</div>
+                        <div className={styles.txtype}>TxType</div>
+                        <div className={styles.txgas}>Status</div>
                         <div className={styles.txgas}>Gas</div>
                         <div className={styles.txadd}>Sender & Receiver</div>
                     </div>
-                    {results.latestTx.map((tx: any, index: number) => (
+                    {results.latestTx.map((tx, index) => (
                         <div
                             key={index}
                             className={cl(styles.txcardgrid, styles.txcard)}
@@ -178,7 +203,15 @@ function LatestTxCard() {
                                 </div>
                             </div>
                             <div className={styles.txtype}> {tx.kind}</div>
-                            <div className={styles.txgas}> 10</div>
+                            <div
+                                className={cl(
+                                    styles[tx.status.toLowerCase()],
+                                    styles.txgas
+                                )}
+                            >
+                                {tx.status === 'Success' ? '✔' : '✖'}
+                            </div>
+                            <div className={styles.txgas}>{tx.txGas}</div>
                             <div className={styles.txadd}>
                                 <div>
                                     From:

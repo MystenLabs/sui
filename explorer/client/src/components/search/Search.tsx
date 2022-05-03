@@ -17,6 +17,8 @@ function Search() {
     const handleSubmit = useCallback(
         (e: React.FormEvent<HTMLFormElement>) => {
             e.preventDefault();
+            // Prevent empty search
+            if (!input.length) return;
             setPleaseWaitMode(true);
             navigateWithUnknown(input, navigate).then(() => {
                 setInput('');
