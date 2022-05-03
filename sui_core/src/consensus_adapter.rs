@@ -124,7 +124,6 @@ impl ConsensusAdapter {
 
         // Serialize the certificate in a way that is understandable to consensus (i.e., using
         // bincode) and it certificate to consensus.
-        //let serialized = serialize_consensus_transaction(certificate);
         let serialized = bincode::serialize(certificate).expect("Failed to serialize consensus tx");
         let bytes = Bytes::from(serialized.clone());
 
