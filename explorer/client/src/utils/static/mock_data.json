@@ -497,6 +497,21 @@
             }
         },
         {
+            "id": "standaloneObject200",
+            "category": "object",
+            "owner": "SingleOwner(k#playerTwo)",
+            "version": "87",
+            "readonly": "true",
+            "objType": "0x2::Coin::Coin<0x2::USD::USD>",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "balance": 200
+                }
+            }
+        },
+
+        {
             "id": "ProblemObject",
             "category": "object"
         },

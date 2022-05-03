@@ -496,4 +496,24 @@ describe('End-to-end Tests', () => {
             await checkIsDisabled(page, '#backBtn');
         });
     });
+    describe('Group View', () => {
+        it('counts players', async () => {
+            const address = 'ownsAllAddress';
+            await page.goto(`${BASE_URL}/addresses/${address}`);
+            const actual = await page.$eval(
+                '#groupCollection > div:nth-child(1) > div:nth-child(2)',
+                (el: any) => el.textContent
+            );
+            expect(actual).toBe('Count 25');
+        });
+        it('evaluates balance', async () => {
+            const address = 'ownsAllAddress';
+            await page.goto(`${BASE_URL}/addresses/${address}`);
+            const actual = await page.$eval(
+                '#groupCollection > div:nth-child(5) > div:nth-child(2)',
+                (el: any) => el.textContent
+            );
+            expect(actual).toBe('Balance 300');
+        });
+    });
 });

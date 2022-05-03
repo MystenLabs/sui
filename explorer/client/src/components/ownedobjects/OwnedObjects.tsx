@@ -24,6 +24,7 @@ type resultType = {
     Type: string;
     Version?: string;
     display?: string;
+    balance?: number;
 }[];
 
 const DATATYPE_DEFAULT: resultType = [
@@ -32,6 +33,8 @@ const DATATYPE_DEFAULT: resultType = [
         Type: '',
     },
 ];
+
+const IS_COIN_TYPE = (typeDesc: string): boolean => /::Coin::/.test(typeDesc);
 
 function OwnedObject({ id }: { id: string }) {
     if (process.env.REACT_APP_DATA === 'static') {
@@ -52,6 +55,7 @@ function OwnedObjectStatic({ id }: { id: string }) {
                 Type: entry?.objType,
                 Version: entry?.version,
                 display: entry?.data?.contents?.display,
+                balance: entry?.data?.contents?.balance,
             };
         });
 
@@ -77,12 +81,19 @@ function OwnedObjectAPI({ id }: { id: string }) {
                             (resp) => {
                                 const info = getObjectExistsResponse(resp)!;
                                 const url = parseImageURL(info.object);
+                                const balanceValue = (
+                                    typeof info.object.contents.fields
+                                        .balance === 'number'
+                                        ? info.object.contents.fields.balance
+                                        : undefined
+                                ) as number;
                                 return {
                                     id: info.objectRef.objectId,
                                     Type: info.object.contents.type,
                                     display: url
                                         ? processDisplayValue(url)
                                         : undefined,
+                                    balance: balanceValue,
                                 };
                             }
                             //TO DO - add back display and version
@@ -129,7 +140,18 @@ function GroupView({ results }: { results: resultType }) {
                                 onClick={shrinkObjList(subObjList)}
                             >
                                 <div>{typeV}</div>
-                                <div>Count {subObjList.length}</div>
+                                <div>
+                                    {IS_COIN_TYPE(typeV) &&
+                                    subObjList.every(
+                                        (el) => el.balance !== undefined
+                                    )
+                                        ? `Balance ${subObjList.reduce(
+                                              (prev, current) =>
+                                                  prev + current.balance!,
+                                              0
+                                          )}`
+                                        : `Count ${subObjList.length}`}
+                                </div>
                             </div>
                         );
                     }
