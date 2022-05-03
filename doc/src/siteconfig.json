@@ -6,7 +6,6 @@
   "favIcon": "/favicon2.png",
   "organizationName": "Mysten Labs",
   "projectName": "Dev Portal",
-
   "footerData": {
     "copyRight": "©2022 Copyright Sui. All rights reserved.",
     "privacyPolicy": {
@@ -17,9 +16,11 @@
       "label": "Terms of Service",
       "link": "https://sui.io/terms/"
     },
-    "menu": [{
+    "menu": [
+      {
         "title": "Docs",
-        "listItems": [{
+        "listItems": [
+          {
             "title": "Getting Started",
             "link": "/build/move"
           },
@@ -36,9 +37,10 @@
       },
       {
         "title": "Community",
-        "listItems": [{
+        "listItems": [
+          {
             "title": "Discord",
-            "link": "https://discord.gg/mysten",
+            "link": "https://discord.gg/sui",
             "external": true
           },
           {
@@ -55,7 +57,8 @@
       },
       {
         "title": "Team",
-        "listItems": [{
+        "listItems": [
+          {
             "title": "GitHub",
             "link": "https://github.com/MystenLabs",
             "external": true
@@ -76,7 +79,8 @@
     ]
   },
   "headerData": {
-    "menu": [{
+    "menu": [
+      {
         "title": "Learn",
         "link": "/learn"
       },
@@ -94,7 +98,7 @@
       },
       {
         "title": "Discord",
-        "link": "https://discord.gg/mysten",
+        "link": "https://discord.gg/sui",
         "external": true
       },
       {
@@ -116,9 +120,11 @@
         "external": false
       }
     },
-    "cta": [{
+    "cta": [
+      {
         "name": "Get Started",
-        "sublist": [{
+        "sublist": [
+          {
             "name": "Move Quick Start",
             "url": "/build/move"
           },
@@ -130,7 +136,8 @@
       },
       {
         "name": "Learn about Sui",
-        "sublist": [{
+        "sublist": [
+          {
             "name": "How Sui Works",
             "url": "/learn/how-sui-works"
           },
@@ -142,7 +149,8 @@
       },
       {
         "name": "See what's New",
-        "sublist": [{
+        "sublist": [
+          {
             "name": "Interact with local network",
             "url": "/build/json-rpc"
           },
@@ -158,7 +166,8 @@
       },
       {
         "name": "See Sui in Action",
-        "sublist": [{
+        "sublist": [
+          {
             "name": "Create and play Tic-Tac-Toe on Sui",
             "url": "/explore/tutorials"
           },
@@ -170,7 +179,8 @@
       },
       {
         "name": "Build with Examples",
-        "sublist": [{
+        "sublist": [
+          {
             "name": "Create an escrow",
             "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/Escrow.move",
             "external": true
@@ -188,14 +198,15 @@
       },
       {
         "name": "Join the Community",
-        "sublist": [{
+        "sublist": [
+          {
             "name": "GitHub",
             "url": "https://github.com/MystenLabs",
             "external": true
           },
           {
             "name": "Discord",
-            "url": "https://discord.gg/mysten",
+            "url": "https://discord.gg/sui",
             "external": true
           },
           {
@@ -207,7 +218,6 @@
             "name": "Medium",
             "url": "https://medium.com/mysten-labs/",
             "external": true
-
           }
         ]
       }
