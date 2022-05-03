@@ -332,6 +332,11 @@ function OwnedObjectView({ results }: { results: resultType }) {
                                             </div>
                                         );
                                     default:
+                                        if (
+                                            key === 'balance' &&
+                                            !IS_COIN_TYPE(entryObj.Type)
+                                        )
+                                            break;
                                         return (
                                             <div>
                                                 <span>{key}</span>
