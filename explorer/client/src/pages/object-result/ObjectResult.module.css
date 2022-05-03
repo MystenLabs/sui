@@ -9,7 +9,7 @@ h1.title {
 /* Display Box CSS */
 
 .display {
-    @apply ml-[5vw] mx-auto mt-[1vh] 
+    @apply ml-[5vw] mx-auto mt-[1vh]
     w-[88vw] lg:w-[35vw] min-h-[88vw] lg:min-h-[35vw];
 }
 
@@ -54,7 +54,9 @@ div.propertybox {
 }
 
 div.propertybox > div {
-    @apply w-[10rem] p-[0.5rem] mx-[1vw] my-[1vh] text-center border-solid rounded-xl bg-slate-200;
+    @apply p-[0.5rem] mx-[1vw] my-[1vh] text-center border-solid rounded-xl bg-slate-200;
+
+    overflow-wrap: anywhere;
 }
 
 div.propertybox > div > p {
