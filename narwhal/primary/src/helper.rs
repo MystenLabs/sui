@@ -1,26 +1,31 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::primary::PrimaryMessage;
-use config::Committee;
+use crate::{primary::PrimaryMessage, PayloadToken};
+use config::{Committee, WorkerId};
 use crypto::traits::VerifyingKey;
 use network::PrimaryNetwork;
 use store::Store;
 use tokio::sync::mpsc::Receiver;
 use tracing::{error, warn};
-use types::{Certificate, CertificateDigest};
+use types::{BatchDigest, Certificate, CertificateDigest};
 
 #[cfg(test)]
 #[path = "tests/helper_tests.rs"]
 mod helper_tests;
 
-/// A task dedicated to help other authorities by replying to their certificates requests.
+/// A task dedicated to help other authorities by replying to their certificate &
+/// payload availability requests.
 pub struct Helper<PublicKey: VerifyingKey> {
+    /// The node's name
+    name: PublicKey,
     /// The committee information.
     committee: Committee<PublicKey>,
-    /// The persistent storage.
-    store: Store<CertificateDigest, Certificate<PublicKey>>,
-    /// Input channel to receive certificates requests.
+    /// The certificate persistent storage.
+    certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+    /// The payloads (batches) persistent storage.
+    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+    /// Input channel to receive requests.
     rx_primaries: Receiver<PrimaryMessage<PublicKey>>,
     /// A network sender to reply to the sync requests.
     primary_network: PrimaryNetwork,
@@ -28,14 +33,18 @@ pub struct Helper<PublicKey: VerifyingKey> {
 
 impl<PublicKey: VerifyingKey> Helper<PublicKey> {
     pub fn spawn(
+        name: PublicKey,
         committee: Committee<PublicKey>,
-        store: Store<CertificateDigest, Certificate<PublicKey>>,
+        certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+        payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         rx_primaries: Receiver<PrimaryMessage<PublicKey>>,
     ) {
         tokio::spawn(async move {
             Self {
+                name,
                 committee,
-                store,
+                certificate_store,
+                payload_store,
                 rx_primaries,
                 primary_network: PrimaryNetwork::default(),
             }
@@ -63,11 +72,97 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                     self.process_certificates(certificate_ids, requestor, true)
                         .await;
                 }
+                // A request that another primary sends us to ask whether we
+                // can serve batch data for the provided certificate_ids.
+                PrimaryMessage::PayloadAvailabilityRequest {
+                    certificate_ids,
+                    requestor,
+                } => {
+                    self.process_payload_availability(certificate_ids, requestor)
+                        .await;
+                }
                 _ => {
                     panic!("Received unexpected message!");
                 }
             }
         }
+    }
+
+    /// Processes a payload availability request by checking we have the
+    /// certificate & batch data for each certificate digest in digests,
+    /// and reports on each fully available item in the request in a
+    /// PayloadAvailabilityResponse.
+    async fn process_payload_availability(
+        &mut self,
+        digests: Vec<CertificateDigest>,
+        origin: PublicKey,
+    ) {
+        // get the requestor's address.
+        let address = match self.committee.primary(&origin) {
+            Ok(x) => x.primary_to_primary,
+            Err(e) => {
+                warn!("Primary origin node not found in committee: {e}");
+                return;
+            }
+        };
+
+        let mut result: Vec<(CertificateDigest, bool)> = Vec::new();
+
+        let certificates = match self.certificate_store.read_all(digests.to_owned()).await {
+            Ok(certificates) => certificates,
+            Err(err) => {
+                error!("Error while retrieving certificates: {err}");
+
+                // just return at this point. Send back to the requestor
+                // that we don't have availability - ideally we would like
+                // to communicate an error (so they could potentially retry).
+                result = digests.into_iter().map(|d| (d, false)).collect();
+
+                let message = PrimaryMessage::<PublicKey>::PayloadAvailabilityResponse {
+                    payload_availability: result,
+                    from: self.name.clone(),
+                };
+                self.primary_network
+                    .unreliable_send(address, &message)
+                    .await;
+
+                return;
+            }
+        };
+
+        for (id, certificate_option) in digests.into_iter().zip(certificates) {
+            // Find the batches only for the certificates that exist
+            if let Some(certificate) = certificate_option {
+                let payload_available = match self
+                    .payload_store
+                    .read_all(certificate.header.payload)
+                    .await
+                {
+                    Ok(payload_result) => payload_result.into_iter().all(|x| x.is_some()),
+                    Err(err) => {
+                        // we'll assume that we don't have available the payloads,
+                        // otherwise and error response should be sent back.
+                        error!("Error while retrieving payloads: {err}");
+                        false
+                    }
+                };
+
+                result.push((id, payload_available));
+            } else {
+                // We don't have the certificate available in first place,
+                // so we can't even look up for the batches.
+                result.push((id, false));
+            }
+        }
+
+        // now send the result back to the requestor
+        let message = PrimaryMessage::<PublicKey>::PayloadAvailabilityResponse {
+            payload_availability: result,
+            from: self.name.clone(),
+        };
+        self.primary_network
+            .unreliable_send(address, &message)
+            .await;
     }
 
     async fn process_certificates(
@@ -76,22 +171,25 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
         origin: PublicKey,
         batch_mode: bool,
     ) {
-        // get the requestors address.
+        // get the requestor's address.
         let address = match self.committee.primary(&origin) {
             Ok(x) => x.primary_to_primary,
             Err(e) => {
-                warn!("Unexpected certificate request: {e}");
+                warn!("Primary origin node not found in committee: {e}");
                 return;
             }
         };
 
         // TODO [issue #195]: Do some accounting to prevent bad nodes from monopolizing our resources.
 
-        let certificates = match self.store.read_all(digests.to_owned()).await {
+        let certificates = match self.certificate_store.read_all(digests.to_owned()).await {
             Ok(certificates) => certificates,
             Err(err) => {
                 error!("Error while retrieving certificates: {err}");
-                vec![]
+
+                // just return at this point since we have no way
+                // to communicate to the requestor an error.
+                return;
             }
         };
 
@@ -114,14 +212,12 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                 .unreliable_send(address, &message)
                 .await;
         } else {
-            for certificate in certificates {
-                if certificate.is_some() {
-                    // TODO: Remove this deserialization-serialization in the critical path.
-                    let message = PrimaryMessage::Certificate(certificate.unwrap());
-                    self.primary_network
-                        .unreliable_send(address, &message)
-                        .await;
-                }
+            for certificate in certificates.into_iter().flatten() {
+                // TODO: Remove this deserialization-serialization in the critical path.
+                let message = PrimaryMessage::Certificate(certificate);
+                self.primary_network
+                    .unreliable_send(address, &message)
+                    .await;
             }
         }
     }

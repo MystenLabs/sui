@@ -32,7 +32,7 @@ use types::{BatchDigest, Certificate, CertificateDigest};
 #[path = "tests/block_synchronizer_tests.rs"]
 mod block_synchronizer_tests;
 mod peers;
-mod responses;
+pub mod responses;
 
 /// The minimum percentage
 /// (number of responses received from primary nodes / number of requests sent to primary nodes)

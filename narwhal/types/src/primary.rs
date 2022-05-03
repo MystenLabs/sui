@@ -469,6 +469,7 @@ pub enum PrimaryMessage<PublicKey: VerifyingKey> {
 
     PayloadAvailabilityResponse {
         payload_availability: Vec<(CertificateDigest, bool)>,
+        from: PublicKey,
     },
 }
 
