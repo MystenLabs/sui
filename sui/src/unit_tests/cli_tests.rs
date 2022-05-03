@@ -355,6 +355,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
             object_id,
             gas_value: 500,
         }],
+        gas_object_ranges: None,
     });
 
     let network = start_test_network(working_dir.path(), Some(config), Some(key_pairs)).await?;
