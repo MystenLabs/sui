@@ -133,13 +133,27 @@ fn execute_transaction<S: BackingPackageStore>(
         // Roll back the temporary store if execution failed.
         temporary_store.reset();
     }
+    // Make sure every mutable object's version number is incremented.
+    // This needs to happen before `charge_gas_for_storage_changes` so that it
+    // can charge gas for all mutated objects properly.
     temporary_store.ensure_active_inputs_mutated();
     if let Err(err) =
         temporary_store.charge_gas_for_storage_changes(&mut gas_status, &mut gas_object)
     {
-        result = Err(err);
-        // No need to roll back the temporary store here since `charge_gas_for_storage_changes`
-        // will not modify `temporary_store` if it failed.
+        // If `result` is already `Err`, we basically have two errors at the same time.
+        // Users should be generally more interested in the actual execution error, so we
+        // let that shadow the out of gas error. Also in this case, we don't need to reset
+        // the `temporary_store` because `charge_gas_for_storage_changes` won't mutate
+        // `temporary_store` if gas charge failed.
+        //
+        // If `result` is `Ok`, now we failed when charging gas, we have to reset
+        // the `temporary_store` to eliminate all effects caused by the execution,
+        // and re-ensure all mutable objects' versions are incremented.
+        if result.is_ok() {
+            temporary_store.reset();
+            temporary_store.ensure_active_inputs_mutated();
+            result = Err(err);
+        }
     }
 
     let cost_summary = gas_status.summary(result.is_ok());
