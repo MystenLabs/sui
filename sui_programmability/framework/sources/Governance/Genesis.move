@@ -34,13 +34,13 @@ module Sui::Genesis {
     /// all the information we need in the system.
     fun init(ctx: &mut TxContext) {
         let treasury_cap = SUI::new(ctx);
-        let storage_fund = Coin::mint(INIT_STORAGE_FUND, &mut treasury_cap, ctx);
+        let storage_fund = Coin::mint_balance(INIT_STORAGE_FUND, &mut treasury_cap);
         let validators = Vector::empty();
         Vector::push_back(&mut validators, Validator::new(
             VALIDATOR1_SUI_ADDRESS,
             VALIDATOR1_NAME,
             VALIDATOR1_IP_ADDRESS,
-            Coin::mint(VALIDATOR1_STAKE, &mut treasury_cap, ctx),
+            Coin::mint_balance(VALIDATOR1_STAKE, &mut treasury_cap),
         ));
         SuiSystem::create(
             validators,

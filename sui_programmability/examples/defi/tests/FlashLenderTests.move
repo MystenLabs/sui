@@ -32,7 +32,7 @@ module DeFi::FlashLenderTests {
             // simulate this by min ting the borrower 5 coins.
             let profit = Coin::mint_for_testing<SUI>(5, ctx);
             Coin::join(&mut profit, loan);
-            let to_keep = Coin::withdraw(&mut profit, 4, ctx);
+            let to_keep = Coin::withdraw(Coin::balance_mut(&mut profit), 4, ctx);
             Coin::keep(to_keep, ctx);
             FlashLender::repay(lender, profit, receipt);
 

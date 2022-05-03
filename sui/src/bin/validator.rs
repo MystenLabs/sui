@@ -68,7 +68,8 @@ async fn main() -> Result<(), anyhow::Error> {
         // If network.conf is missing, or if --force-genesis is true, we run genesis.
         _ => {
             let genesis_conf: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
-            let (network_config, _, _) = genesis(genesis_conf).await?;
+            let adddress = SuiAddress::from(genesis_conf.key_pair.public_key_bytes());
+            let (network_config, _, _) = genesis(genesis_conf, Some(adddress)).await?;
             network_config
         }
     };
@@ -90,11 +91,6 @@ async fn main() -> Result<(), anyhow::Error> {
         .listen_address
         .unwrap_or(format!("{}:{}", authority.host, authority.port));
 
-    info!(
-        "authority {:?} listening on {} (public addr: {}:{})",
-        authority.public_key, listen_address, authority.host, authority.port
-    );
-
     let consensus_committee = network_config.make_narwhal_committee();
 
     let consensus_parameters = ConsensusParameters {
@@ -105,6 +101,11 @@ async fn main() -> Result<(), anyhow::Error> {
     let consensus_store_path = sui_config_dir()?
         .join(CONSENSUS_DB_NAME)
         .join(encode_bytes_hex(&authority.public_key));
+
+    info!(
+        "Initializing authority {:?} listening on {} (public addr: {}:{})",
+        authority.public_key, listen_address, authority.host, authority.port
+    );
 
     // Pass in the newtwork parameters of all authorities
     let net = network_config.get_authority_infos();

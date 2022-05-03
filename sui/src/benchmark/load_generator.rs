@@ -20,9 +20,11 @@ use sui_core::{
     authority_server::{AuthorityServer, AuthorityServerHandle},
 };
 use sui_network::network::{NetworkClient, NetworkServer};
-use sui_types::{messages::*, serialize::*};
+use sui_types::{committee::Committee, messages::*, serialize::*};
 use tokio::{sync::Notify, time};
 use tracing::{error, info};
+
+use crate::config::NetworkConfig;
 
 pub fn check_transaction_response(reply_message: Result<SerializedMessage, Error>) {
     match reply_message {
@@ -111,8 +113,6 @@ pub struct FixedRateLoadGenerator {
     /// It is 2*chunk_size due to order and confirmation steps
     pub chunk_size_per_task: usize,
 }
-
-// new -> ready -> start
 
 impl FixedRateLoadGenerator {
     pub async fn new(
@@ -203,4 +203,269 @@ pub async fn spawn_authority_server(
 
 pub fn calculate_throughput(num_items: usize, elapsed_time_us: u128) -> f64 {
     1_000_000.0 * num_items as f64 / elapsed_time_us as f64
+}
+
+async fn send_tx_chunks_for_quorum_notif(
+    notif: Arc<Notify>,
+    tx_chunk: Vec<Bytes>,
+    result_chann_tx: &mut MpscSender<(u128, usize)>,
+    net_client: NetworkClient,
+    stake: usize,
+    conn: usize,
+) {
+    notif.notified().await;
+    let r = send_tx_chunks(tx_chunk, net_client.clone(), conn).await;
+
+    match result_chann_tx.send((r.0, stake)).await {
+        Ok(_) => (),
+        Err(e) => {
+            // Disconnect is okay since we may leave f running
+            if !e.is_disconnected() {
+                panic!("Send failed! {:?}", net_client)
+            }
+        }
+    }
+
+    let _: Vec<_> =
+        r.1.par_iter()
+            .map(|q| check_transaction_response(deserialize_message(&(q.as_ref().unwrap())[..])))
+            .collect();
+}
+
+async fn send_tx_for_quorum(
+    notif: Arc<Notify>,
+    order_chunk: Vec<Bytes>,
+    conf_chunk: Vec<Bytes>,
+
+    result_chann_tx: &mut MpscSender<u128>,
+    net_clients: Vec<(NetworkClient, usize)>,
+    conn: usize,
+    quorum_threshold: usize,
+) {
+    // For receiving info back from the subtasks
+    let (order_chann_tx, mut order_chann_rx) = MpscChannel(net_clients.len() * 2);
+
+    // Send intent orders to 3f+1
+    let order_start_notifier = Arc::new(Notify::new());
+    for (net_client, stake) in net_clients.clone() {
+        // This is for sending a start signal to the subtasks
+        let notif = order_start_notifier.clone();
+        // This is for getting the elapsed time
+        let mut ch_tx = order_chann_tx.clone();
+        // Chunk to send for order_
+        let chunk = order_chunk.clone();
+
+        tokio::spawn(async move {
+            send_tx_chunks_for_quorum_notif(
+                notif,
+                chunk,
+                &mut ch_tx,
+                net_client.clone(),
+                stake,
+                conn,
+            )
+            .await;
+        });
+    }
+    drop(order_chann_tx);
+
+    // Wait for timer tick
+    notif.notified().await;
+    // Notify all the subtasks
+    order_start_notifier.notify_waiters();
+    // Start timer
+    let time_start = Instant::now();
+
+    // Wait for 2f+1 by stake
+    let mut total = 0;
+
+    while let Some(v) = time::timeout(Duration::from_secs(10), order_chann_rx.next())
+        .await
+        .unwrap()
+    {
+        total += v.1;
+        if total >= quorum_threshold {
+            break;
+        }
+    }
+    if total < quorum_threshold {
+        panic!("Quorum threshold not reached for orders")
+    }
+
+    // Confirmation step
+    let (conf_chann_tx, mut conf_chann_rx) = MpscChannel(net_clients.len() * 2);
+
+    // Send the confs
+    let mut handles = vec![];
+    for (net_client, stake) in net_clients {
+        let chunk = conf_chunk.clone();
+        let mut chann_tx = conf_chann_tx.clone();
+        handles.push(tokio::spawn(async move {
+            let r = send_tx_chunks(chunk, net_client.clone(), conn).await;
+            match chann_tx.send((r.0, stake)).await {
+                Ok(_) => (),
+                Err(e) => {
+                    // Disconnect is okay since we may leave f running
+                    if !e.is_disconnected() {
+                        panic!("Send failed! {:?}", net_client)
+                    }
+                }
+            }
+
+            let _: Vec<_> =
+                r.1.par_iter()
+                    .map(|q| {
+                        check_transaction_response(deserialize_message(&(q.as_ref().unwrap())[..]))
+                    })
+                    .collect();
+        }));
+    }
+    drop(conf_chann_tx);
+
+    // Reset counter
+    total = 0;
+    while let Some(v) = time::timeout(Duration::from_secs(10), conf_chann_rx.next())
+        .await
+        .unwrap()
+    {
+        total += v.1;
+        if total >= quorum_threshold {
+            break;
+        }
+    }
+    if total < quorum_threshold {
+        panic!("Quorum threshold not reached for confirmation")
+    }
+
+    let elapsed = time_start.elapsed().as_micros();
+
+    // Send the total time over
+    result_chann_tx.send(elapsed).await.unwrap();
+}
+
+pub struct MultiFixedRateLoadGenerator {
+    /// The time between sending transactions chunks
+    /// Anything below 10ms causes degradation in resolution
+    pub period_us: u64,
+
+    //pub network_config: Vec<AuthorityPrivateInfo>,
+    pub tick_notifier: Arc<Notify>,
+
+    /// Number of TCP connections to open
+    pub connections: usize,
+
+    /// Transactions to be sent
+    pub transactions: Vec<Bytes>,
+
+    /// Results are sent over this channel
+    pub results_chann_rx: Receiver<u128>,
+
+    /// This is the chunk size actually assigned for each tick per task
+    /// It is 2*chunk_size due to order and confirmation steps
+    pub chunk_size_per_task: usize,
+}
+
+impl MultiFixedRateLoadGenerator {
+    pub async fn new(
+        transactions: Vec<Bytes>,
+        period_us: u64,
+        connections: usize,
+
+        network_cfg: &NetworkConfig,
+        recv_timeout: Duration,
+        send_timeout: Duration,
+    ) -> Self {
+        let network_clients_stake: Vec<(NetworkClient, usize)> = network_cfg
+            .authorities
+            .iter()
+            .map(|q| {
+                (
+                    NetworkClient::new(
+                        q.host.clone(),
+                        q.port,
+                        network_cfg.buffer_size,
+                        send_timeout,
+                        recv_timeout,
+                    ),
+                    q.stake,
+                )
+            })
+            .collect();
+        let committee_quorum_threshold = Committee::from(network_cfg).quorum_threshold();
+        let mut handles = vec![];
+        let tick_notifier = Arc::new(Notify::new());
+
+        let (result_chann_tx, results_chann_rx) = MpscChannel(transactions.len() * 2);
+
+        let conn = connections;
+        // Spin up a bunch of worker tasks
+        // Give each task
+        // Step by 2*conn due to order+confirmation, with `conn` tcp connections
+        // Take up to 2*conn for each task
+        let num_chunks_per_task = conn * 2;
+        for tx_chunk in transactions[..].chunks(num_chunks_per_task) {
+            let notif = tick_notifier.clone();
+            let mut result_chann_tx = result_chann_tx.clone();
+            let tx_chunk = tx_chunk.to_vec();
+            let clients = network_clients_stake.clone();
+
+            let mut order_chunk = vec![];
+            let mut conf_chunk = vec![];
+
+            for ch in tx_chunk[..].chunks(2) {
+                order_chunk.push(ch[0].clone());
+                conf_chunk.push(ch[1].clone());
+            }
+
+            handles.push(tokio::spawn(async move {
+                send_tx_for_quorum(
+                    notif,
+                    order_chunk,
+                    conf_chunk,
+                    &mut result_chann_tx,
+                    clients,
+                    conn,
+                    committee_quorum_threshold,
+                )
+                .await;
+            }));
+        }
+
+        drop(result_chann_tx);
+
+        Self {
+            period_us,
+            transactions,
+            connections,
+            results_chann_rx,
+            tick_notifier,
+            chunk_size_per_task: num_chunks_per_task,
+            //network_config: network_cfg.authorities,
+        }
+    }
+
+    pub async fn start(&mut self) -> Vec<u128> {
+        let mut interval = time::interval(Duration::from_micros(self.period_us));
+        let mut count = 0;
+        loop {
+            tokio::select! {
+                _  = interval.tick() => {
+                    self.tick_notifier.notify_one();
+                    count += self.chunk_size_per_task;
+                    if count >= self.transactions.len() {
+                        break;
+                    }
+                }
+            }
+        }
+        let mut times = Vec::new();
+        while let Some(v) = time::timeout(Duration::from_secs(10), self.results_chann_rx.next())
+            .await
+            .unwrap_or(None)
+        {
+            times.push(v);
+        }
+
+        times
+    }
 }

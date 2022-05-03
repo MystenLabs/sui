@@ -18,9 +18,9 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use futures::stream;
 use std::collections::BTreeMap;
+use std::env;
 use std::fs;
 use std::sync::Arc;
-use std::{env, io};
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
     ConfirmationTransaction, ConsensusTransaction, ObjectInfoRequest, ObjectInfoResponse,
@@ -491,7 +491,7 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
     async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, io::Error> {
+    ) -> Result<BatchInfoResponseItemStream, SuiError> {
         let secret = self.0.lock().await.secret.clone();
         let name = self.0.lock().await.name;
         let batch_size = 3;
@@ -503,7 +503,7 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
             BatchInfoResponseItem(UpdateItem::Batch(item))
         });
         let mut seq = 0;
-        while last_batch.next_sequence_number < request.end {
+        while last_batch.next_sequence_number < request.length {
             let mut transactions = Vec::new();
             for _i in 0..batch_size {
                 let rnd = TransactionDigest::random();
@@ -611,7 +611,7 @@ impl AuthorityAPI for ByzantineAuthorityClient {
     async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, io::Error> {
+    ) -> Result<BatchInfoResponseItemStream, SuiError> {
         let secret = self.0.lock().await.secret.clone();
         let name = self.0.lock().await.name;
         let batch_size = 3;
@@ -623,7 +623,7 @@ impl AuthorityAPI for ByzantineAuthorityClient {
             BatchInfoResponseItem(UpdateItem::Batch(item))
         });
         let mut seq = 0;
-        while last_batch.next_sequence_number < request.end {
+        while last_batch.next_sequence_number < request.length {
             let mut transactions = Vec::new();
             for _i in 0..batch_size {
                 let rnd = TransactionDigest::random();
@@ -693,7 +693,10 @@ async fn test_safe_batch_stream() {
     let auth_client = TrustworthyAuthorityClient::new(state);
     let safe_client = SafeClient::new(auth_client, committee.clone(), public_key_bytes);
 
-    let request = BatchInfoRequest { start: 0, end: 15 };
+    let request = BatchInfoRequest {
+        start: Some(0),
+        length: 15,
+    };
     let batch_stream = safe_client.handle_batch_stream(request.clone()).await;
 
     // No errors expected
@@ -752,7 +755,10 @@ async fn test_safe_batch_stream() {
     assert!(!items.is_empty());
     assert_eq!(items.len(), 15 + 6); // 15 items, and 6 batches (enclosing them)
 
-    let request_b = BatchInfoRequest { start: 0, end: 10 };
+    let request_b = BatchInfoRequest {
+        start: Some(0),
+        length: 10,
+    };
     batch_stream = safe_client_from_byzantine
         .handle_batch_stream(request_b.clone())
         .await;

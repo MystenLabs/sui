@@ -45,9 +45,12 @@ export type GasCostSummary = {
   storage_rebate: number;
 };
 
+export type ExecutionStatusType = 'Success' | 'Failure';
 export type ExecutionStatus =
-  | { Success: { gas_cost: GasCostSummary } }
-  | { Failure: { gas_cost: GasCostSummary; error: any } };
+  | { Success: ExecutionStatusDetail }
+  | { Failure: ExecutionStatusDetail };
+
+export type ExecutionStatusDetail = { gas_cost: GasCostSummary; error?: any };
 
 // TODO: change the tuple to struct from the server end
 export type OwnedObjectRef = [RawObjectRef, ObjectOwner];
@@ -152,4 +155,41 @@ export function getTransactionKind(
 ): TransactionKindName | undefined {
   const tx = getSingleTransactionKind(data);
   return tx && (Object.keys(tx)[0] as TransactionKindName);
+}
+
+export function getExecutionStatusType(
+  data: ExecutionStatus
+): ExecutionStatusType {
+  return Object.keys(data)[0] as ExecutionStatusType;
+}
+
+export function getGasSummary(
+  data: ExecutionStatus
+): GasCostSummary | undefined {
+  const details = getExecutionDetails(data);
+  return details.gas_cost;
+}
+
+export function getTotalGasUsed(data: ExecutionStatus): number {
+  const gasSummary = getGasSummary(data);
+  if (gasSummary) {
+    return (
+      gasSummary.computation_cost +
+      gasSummary.storage_cost -
+      gasSummary.storage_rebate
+    );
+  }
+  return 0;
+}
+
+export function getExecutionDetails(
+  data: ExecutionStatus
+): ExecutionStatusDetail {
+  if ('Success' in data) {
+    return data.Success;
+  } else if ('Failure' in data) {
+    return data.Failure;
+  }
+  console.error('Unrecognized ExecutionStatus:', data);
+  return data[Object.keys(data)[0]];
 }

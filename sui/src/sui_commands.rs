@@ -16,29 +16,32 @@ use move_binary_format::CompiledModule;
 use move_package::BuildConfig;
 use narwhal_config::{Committee as ConsensusCommittee, Parameters as ConsensusParameters};
 use narwhal_crypto::ed25519::Ed25519PublicKey;
-use std::{
-    collections::{BTreeMap, HashMap},
-    fs,
-    path::{Path, PathBuf},
-    sync::Arc,
-    time::Duration,
-};
-use sui_adapter::{adapter::generate_package_id, genesis};
-use sui_core::{
-    authority::{AuthorityState, AuthorityStore},
-    authority_active::ActiveAuthority,
-    authority_client::NetworkAuthorityClient,
-    authority_server::{AuthorityServer, AuthorityServerHandle},
-    consensus_adapter::ConsensusListener,
-};
+
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
+use sui_adapter::adapter::generate_package_id;
+use sui_adapter::genesis;
+use sui_core::authority::{AuthorityState, AuthorityStore};
+use sui_core::authority_active::ActiveAuthority;
+use sui_core::authority_client::NetworkAuthorityClient;
+use sui_core::authority_server::AuthorityServer;
+use sui_core::authority_server::AuthorityServerHandle;
+use sui_core::consensus_adapter::ConsensusListener;
 use sui_network::network::NetworkClient;
-use sui_types::{
-    base_types::{decode_bytes_hex, encode_bytes_hex, SequenceNumber, SuiAddress, TxContext},
-    committee::Committee,
-    crypto::{random_key_pairs, KeyPair},
-    error::SuiResult,
-    object::Object,
-};
+use sui_types::base_types::encode_bytes_hex;
+use sui_types::base_types::{decode_bytes_hex, ObjectID};
+use sui_types::base_types::{SequenceNumber, SuiAddress, TxContext};
+use sui_types::committee::Committee;
+use sui_types::crypto::{random_key_pairs, KeyPair};
+use sui_types::error::SuiResult;
+use sui_types::object::Object;
+
 use tokio::sync::mpsc::channel;
 use tracing::{error, info};
 
@@ -208,7 +211,7 @@ impl SuiCommand {
                     return Ok(());
                 }
 
-                let (network_config, accounts, mut keystore) = genesis(genesis_conf).await?;
+                let (network_config, accounts, mut keystore) = genesis(genesis_conf, None).await?;
                 info!("Network genesis completed.");
                 let network_config = network_config.persisted(&network_path);
                 network_config.save()?;
@@ -380,11 +383,15 @@ impl SuiNetwork {
 
 pub async fn genesis(
     genesis_conf: GenesisConfig,
+    single_address: Option<SuiAddress>,
 ) -> Result<(NetworkConfig, Vec<SuiAddress>, SuiKeystore), anyhow::Error> {
-    info!(
-        "Creating {} new authorities...",
+    let num_to_provision = if single_address.is_none() {
         genesis_conf.authorities.len()
-    );
+    } else {
+        1
+    };
+
+    info!("Creating {} new authorities...", num_to_provision);
 
     let mut network_config = NetworkConfig {
         epoch: 0,
@@ -402,6 +409,7 @@ pub async fn genesis(
     let mut addresses = Vec::new();
     let mut preload_modules: Vec<Vec<CompiledModule>> = Vec::new();
     let mut preload_objects = Vec::new();
+    let mut all_preload_objects_set = BTreeSet::new();
 
     info!("Creating accounts and gas objects...",);
 
@@ -414,13 +422,37 @@ pub async fn genesis(
         };
 
         addresses.push(address);
+        let mut preload_objects_map = BTreeMap::new();
 
-        for object_conf in account.gas_objects {
+        // Populate gas itemized objects
+        account.gas_objects.iter().for_each(|q| {
+            if !all_preload_objects_set.contains(&q.object_id) {
+                preload_objects_map.insert(q.object_id, q.gas_value);
+            }
+        });
+
+        // Populate ranged gas objects
+        if let Some(ranges) = account.gas_object_ranges {
+            for rg in ranges {
+                let ids = ObjectID::in_range(rg.offset, rg.count)?;
+
+                for obj_id in ids {
+                    if !preload_objects_map.contains_key(&obj_id)
+                        && !all_preload_objects_set.contains(&obj_id)
+                    {
+                        preload_objects_map.insert(obj_id, rg.gas_value);
+                        all_preload_objects_set.insert(obj_id);
+                    }
+                }
+            }
+        }
+
+        for (object_id, value) in preload_objects_map {
             let new_object = Object::with_id_owner_gas_coin_object_for_testing(
-                object_conf.object_id,
+                object_id,
                 SequenceNumber::new(),
                 address,
-                object_conf.gas_value,
+                value,
             );
             preload_objects.push(new_object);
         }
@@ -470,6 +502,12 @@ pub async fn genesis(
 
     let committee = Committee::new(network_config.epoch, voting_right);
     for authority in &network_config.authorities {
+        if let Some(addr) = single_address {
+            if addr != authority.address {
+                continue;
+            }
+        }
+
         make_server_with_genesis_ctx(
             authority,
             &network_config.key_pair,
@@ -540,9 +578,10 @@ async fn make_server_with_genesis_ctx(
     )
     .await;
 
-    for object in preload_objects {
-        state.insert_genesis_object(object.clone()).await;
-    }
+    // Okay to do this since we're at genesis
+    state
+        .insert_genesis_objects_bulk_unsafe(&preload_objects.iter().collect::<Vec<_>>())
+        .await;
 
     let (tx_sui_to_consensus, _rx_sui_to_consensus) = channel(1);
     Ok(AuthorityServer::new(
