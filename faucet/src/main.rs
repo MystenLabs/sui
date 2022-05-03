@@ -16,9 +16,8 @@ use std::{
     time::Duration,
 };
 use sui::{
-    sui_config_dir,
+    config::{sui_config_dir, SUI_WALLET_CONFIG},
     wallet_commands::{WalletCommands, WalletContext},
-    SUI_WALLET_CONFIG,
 };
 use sui_faucet::{Faucet, FaucetRequest, FaucetResponse, SimpleFaucet};
 use tower::ServiceBuilder;
