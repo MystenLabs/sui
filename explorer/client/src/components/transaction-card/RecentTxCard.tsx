@@ -141,6 +141,7 @@ function LatestTxCard() {
             .catch((err) => {
                 setResults({
                     ...initState,
+                    loadState: 'fail',
                 });
             });
 
@@ -148,7 +149,7 @@ function LatestTxCard() {
             isMounted = false;
         };
     }, []);
-    if (!isLoaded) {
+    if (results.loadState === 'pending') {
         return (
             <div className={theme.textresults}>
                 <div className={styles.content}>Loading...</div>
@@ -163,6 +164,10 @@ function LatestTxCard() {
                 errorMsg="There was an issue getting the latest transaction"
             />
         );
+    }
+
+    if (results.loadState === 'loaded' && !results.latestTx.length) {
+        return <ErrorResult id="latestTx" errorMsg="No Transactions Found" />;
     }
 
     return (

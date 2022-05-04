@@ -20,6 +20,8 @@ import type {
     CertifiedTransaction,
     TransactionEffectsResponse,
     ExecutionStatusType,
+    TransactionEffects,
+    RawObjectRef,
 } from 'sui.js';
 
 import styles from './TransactionResult.module.css';
@@ -30,6 +32,8 @@ type TxnState = CertifiedTransaction & {
     status: ExecutionStatusType;
     gasFee: number;
     txError: string;
+    mutated: RawObjectRef[];
+    created: RawObjectRef[];
 };
 // Todo update state to include Call types
 const initState: TxnState = {
@@ -56,6 +60,8 @@ const initState: TxnState = {
     status: 'Success',
     gasFee: 0,
     txError: '',
+    mutated: [],
+    created: [],
 };
 
 const useRealData = process.env.REACT_APP_DATA !== 'static';
@@ -67,9 +73,6 @@ function fetchTransactionData(
         if (!txId) {
             throw new Error('No Txid found');
         }
-        // add delay to simulate barckend service
-        // Remove this section in production
-        // Use Mockdata in dev
         if (!useRealData) {
             throw new Error('Method not implemented for mock data.');
         }
@@ -81,6 +84,16 @@ function fetchTransactionData(
         throw error;
     }
 }
+
+const getCreatedOrMutatedData = (
+    txEffects: TransactionEffects,
+    contentType: 'created' | 'mutated'
+) => {
+    // Get the first item in the 'created' | 'mutated' array
+    return contentType in txEffects
+        ? txEffects[contentType].map((itm) => itm[0])
+        : [];
+};
 
 function TransactionResult() {
     const { id } = useParams();
@@ -95,7 +108,6 @@ function TransactionResult() {
                 const executionStatus = txObj.effects.status;
                 const status = getExecutionStatusType(executionStatus);
                 const details = getExecutionDetails(executionStatus);
-
                 setTxState({
                     ...txObj.certificate,
                     status,
@@ -106,6 +118,8 @@ function TransactionResult() {
                             : '',
                     txId: id,
                     loadState: 'loaded',
+                    mutated: getCreatedOrMutatedData(txObj.effects, 'mutated'),
+                    created: getCreatedOrMutatedData(txObj.effects, 'created'),
                 });
             })
             .catch((err) => {
