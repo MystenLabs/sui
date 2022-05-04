@@ -906,6 +906,7 @@ fn test_simple_call() {
 
 #[test]
 fn test_child_of_shared_object() {
+    // TODO: Also add test cases where there are circular dependencies in the input.
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
     let genesis_objects = genesis::clone_genesis_packages();
