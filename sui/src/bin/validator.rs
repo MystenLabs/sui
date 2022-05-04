@@ -13,7 +13,7 @@ use sui::{
     sui_commands::{genesis, make_server},
 };
 use sui_types::{
-    base_types::{decode_bytes_hex, encode_bytes_hex, SuiAddress},
+    base_types::{encode_bytes_hex, SuiAddress},
     committee::Committee,
 };
 use tracing::{error, info};
@@ -33,14 +33,6 @@ struct ValidatorOpt {
 
     #[clap(long)]
     pub network_config_path: Option<PathBuf>,
-
-    /// Public key/address of the validator to start
-    #[clap(long, parse(try_from_str = decode_bytes_hex))]
-    address: Option<SuiAddress>,
-
-    /// Index in validator array of validator to start
-    #[clap(long)]
-    validator_idx: Option<usize>,
 
     #[clap(long, help = "Specify host:port to listen on")]
     listen_address: Option<String>,
@@ -62,38 +54,30 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let network_config_path = sui_config_dir()?.join(SUI_NETWORK_CONFIG);
 
-    let genesis_conf: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
-
-    let authority = if let Some(address) = cfg.address {
-        // Find the network config for this validator
-        genesis_conf
-            .authorities
-            .iter()
-            .find(|x| SuiAddress::from(&x.public_key) == address)
-            .ok_or_else(|| {
-                anyhow!(
-                    "Network configs must include config for address {}",
-                    address
-                )
-            })?
-    } else if let Some(index) = cfg.validator_idx {
-        &genesis_conf.authorities[index]
-    } else {
-        return Err(anyhow!("Must supply either --address of --validator-idx"));
-    };
-
-    let genesis_conf_copy: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
-
     let network_config = match (network_config_path.exists(), cfg.force_genesis) {
         (true, false) => PersistedConfig::<NetworkConfig>::read(&network_config_path)?,
 
         // If network.conf is missing, or if --force-genesis is true, we run genesis.
         _ => {
-            let (network_config, _, _) =
-                genesis(genesis_conf_copy, Some(authority.address)).await?;
+            let genesis_conf: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
+            let adddress = SuiAddress::from(genesis_conf.key_pair.public_key_bytes());
+            let (network_config, _, _) = genesis(genesis_conf, Some(adddress)).await?;
             network_config
         }
     };
+    let public_key_bytes = network_config.key_pair.public_key_bytes();
+    let address = SuiAddress::from(public_key_bytes);
+    // Find the network config for this validator
+    let authority = network_config
+        .authorities
+        .iter()
+        .find(|x| SuiAddress::from(&x.public_key) == address)
+        .ok_or_else(|| {
+            anyhow!(
+                "Keypair (pub key: {:?}) in network config is not in the validator committee",
+                public_key_bytes,
+            )
+        })?;
 
     let listen_address = cfg
         .listen_address
