@@ -3,7 +3,7 @@ title: Sui Frequently Asked Questions
 ---
 
 This page contains answers to frequently asked questions (FAQs) about Sui and Mysten Labs. 
-Ask more in [Discord](https://discord.gg/mysten), see where we are headed in our
+Ask more in [Discord](https://discord.gg/sui), see where we are headed in our
 [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap), and
 find full details in our
 [white paper](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf).
@@ -78,7 +78,7 @@ No. More information is forthcoming.
 
 ### How can I join the Sui network? How do I participate in the Sui project?
 
-Join our [Discord](https://discord.gg/mysten) and follow our [Twitter](https://twitter.com/Mysten_Labs) for the latest updates and announcements.
+Join our [Discord](https://discord.gg/sui) and follow our [Twitter](https://twitter.com/Mysten_Labs) for the latest updates and announcements.
 
 For developers:
 
@@ -97,7 +97,7 @@ We are seeking partners that can contribute to the ecosystem primarily in develo
 
 
 ### With whom can I talk about a partnership or strategic investment? How can I discuss Sui in person?
-Start in [Discord](https://discord.gg/mysten).
+Start in [Discord](https://discord.gg/sui).
 
 
 ### Where can I see the investors of the project?

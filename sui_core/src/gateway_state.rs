@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use futures::future;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
+use sui_adapter::adapter::resolve_and_type_check;
 use tracing::{error, Instrument};
 
 use sui_types::gas::{self, SuiGasStatus};
@@ -27,6 +28,7 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 
+use crate::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use crate::transaction_input_checker;
 use crate::{
     authority::GatewayStore, authority_aggregator::AuthorityAggregator,
@@ -48,6 +50,8 @@ pub type GatewayClient = Box<dyn GatewayAPI + Sync + Send>;
 pub type GatewayTxSeqNumber = u64;
 
 const MAX_TX_RANGE_SIZE: u64 = 4096;
+/// Number of times to retry failed TX
+const MAX_NUM_TX_RETRIES: usize = 5;
 
 pub struct GatewayState<A> {
     authorities: AuthorityAggregator<A>,
@@ -136,8 +140,8 @@ pub trait GatewayAPI {
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
+        arguments: Vec<SuiJsonValue>,
         gas_object_ref: ObjectRef,
-        arguments: Vec<CallArg>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -208,11 +212,14 @@ pub trait GatewayAPI {
         count: u64,
     ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error>;
 
-    // return transaction details by digest
+    /// Return transaction details by digest
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
     ) -> Result<TransactionEffectsResponse, anyhow::Error>;
+
+    /// Return locked objects and digests of TX they're locked on
+    fn get_locked_objects(&self) -> Result<BTreeMap<ObjectRef, TransactionDigest>, anyhow::Error>;
 }
 
 impl<A> GatewayState<A>
@@ -573,7 +580,20 @@ where
         tx: Transaction,
     ) -> Result<TransactionResponse, anyhow::Error> {
         let tx_kind = tx.data.kind.clone();
-        let (certificate, effects) = self.execute_transaction_impl(tx).await?;
+        let mut res = self.execute_transaction_impl(tx.clone()).await;
+
+        let mut remaining_retries = MAX_NUM_TX_RETRIES;
+        while res.is_err() {
+            if remaining_retries == 0 {
+                // Okay to do this since we checked that this is an error
+                return Err(res.unwrap_err());
+            }
+            remaining_retries -= 1;
+            res = self.execute_transaction_impl(tx.clone()).await;
+        }
+
+        // Okay to unwrap() since we checked that this is Ok
+        let (certificate, effects) = res.unwrap();
 
         // Create custom response base on the request type
         if let TransactionKind::Single(tx_kind) = tx_kind {
@@ -652,10 +672,48 @@ where
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
+        arguments: Vec<SuiJsonValue>,
         gas_object_ref: ObjectRef,
-        arguments: Vec<CallArg>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
+        let package_obj = self.get_object(&package_object_ref.0).await?;
+        let json_args =
+            resolve_move_function_args(&package_obj, module.clone(), function.clone(), arguments)?;
+
+        // Fetch all the objects needed for this call
+        let mut objects = BTreeMap::new();
+        let mut args = Vec::with_capacity(json_args.len());
+
+        for json_arg in json_args {
+            args.push(match json_arg {
+                SuiJsonCallArg::Object(id) => {
+                    let obj = self.get_object(&id).await?;
+                    let arg = if obj.is_shared() {
+                        CallArg::SharedObject(id)
+                    } else {
+                        CallArg::ImmOrOwnedObject(obj.compute_object_reference())
+                    };
+                    objects.insert(id, obj);
+                    arg
+                }
+                SuiJsonCallArg::Pure(bytes) => CallArg::Pure(bytes),
+            })
+        }
+
+        // Pass in the objects for a deeper check
+        let compiled_module = package_obj
+            .data
+            .try_as_package()
+            .ok_or_else(|| anyhow!("Cannot get package from object"))?
+            .deserialize_module(&module)?;
+        resolve_and_type_check(
+            &objects,
+            &compiled_module,
+            &function,
+            &type_arguments,
+            args.clone(),
+        )?;
+
         let data = TransactionData::new_move_call(
             signer,
             package_object_ref,
@@ -663,7 +721,7 @@ where
             function,
             type_arguments,
             gas_object_ref,
-            arguments,
+            args,
             gas_budget,
         );
         Ok(data)
@@ -821,5 +879,11 @@ where
             }),
             None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
         }
+    }
+
+    /// Return locked objects and digests of TX they're locked on
+    /// This function never fails, but is wrapped in Ok for compat with rpc
+    fn get_locked_objects(&self) -> Result<BTreeMap<ObjectRef, TransactionDigest>, anyhow::Error> {
+        Ok(self.store.get_locked_objects())
     }
 }

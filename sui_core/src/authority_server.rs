@@ -14,7 +14,7 @@ use sui_network::{
     network::NetworkServer,
     tonic,
 };
-use sui_types::{crypto::VerificationObligation, error::*, messages::*, serialize::*};
+use sui_types::{crypto::VerificationObligation, error::*, messages::*};
 use tokio::{net::TcpListener, sync::mpsc::Sender};
 use tracing::{info, Instrument};
 
@@ -241,10 +241,6 @@ impl Validator for AuthorityServer {
             .submit(&transaction)
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        // For some reason the output of consensus changed, we should change it back
-        let info = deserialize_message(&info[..]).unwrap();
-        let info = deserialize_transaction_info(info).unwrap();
 
         let payload = BincodeEncodedPayload::try_from(&info)
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
