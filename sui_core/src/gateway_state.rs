@@ -210,11 +210,14 @@ pub trait GatewayAPI {
         count: u64,
     ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error>;
 
-    // return transaction details by digest
+    /// Return transaction details by digest
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
     ) -> Result<TransactionEffectsResponse, anyhow::Error>;
+
+    /// Return locked objects and digests of TX they're locked on
+    fn get_locked_objects(&self) -> Result<BTreeMap<ObjectRef, TransactionDigest>, anyhow::Error>;
 }
 
 impl<A> GatewayState<A>
@@ -861,5 +864,11 @@ where
             }),
             None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
         }
+    }
+
+    /// Return locked objects and digests of TX they're locked on
+    /// This function never fails, but is wrapped in Ok for compat with rpc
+    fn get_locked_objects(&self) -> Result<BTreeMap<ObjectRef, TransactionDigest>, anyhow::Error> {
+        Ok(self.store.get_locked_objects())
     }
 }
