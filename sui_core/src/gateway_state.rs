@@ -242,7 +242,7 @@ where
             .ok_or(SuiError::ObjectNotFound {
                 object_id: *object_id,
             })?;
-        debug!(?object_id, ?object, "Fetched object");
+        debug!(?object_id, ?object, "Fetched object from local store");
         Ok(object)
     }
 
