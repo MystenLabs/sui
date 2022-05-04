@@ -33,16 +33,16 @@ TODO: Edit, format, and link from the text above to relevant pages once we agree
 
 To use the Sui DevNet, you will need:
 
-1. Sui test coins requested through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130)
+1. Sui test coins (tokens) requested through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130)
 1. A command line terminal, as virtually everything done here is done by command line interface (CLI)
 1. the [`git` command line interface](https://git-scm.com/download/)
 1. The [Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) toolchain, updated with `rustup update`
-1. [Sui binaries in your PATH](../build/install#binaries) environment variable, particularly `wallet`
+1. [Sui binaries](../build/install#binaries) in your PATH environment variable, particularly `wallet`
 
 Remember, you can confirm the existence of a command in your PATH by running `which` followed by the command, for example:
 
 ```shell
-which wallet
+$ which wallet
 ```
 You should see the path to the command. Otherwise, reinstall.
 
@@ -52,3 +52,41 @@ In addition, to conduct advanced work such as publishing a Move module or making
 
 * a [GitHub account](https://github.com/signup) if you don't have one already
 * the [Sui source code](../build/install#source-code)
+
+### Set up wallet, connect to gateway
+
+Now [set up your wallet and connect to DevNet](../build/wallet.md#connect-to-devnet) in a single step. Note you can [manually change the Gateway URL](../build/wallet.md#manually-changing-the-gateway-url) if you have already configured a Sui wallet.
+
+> **Tip:** If you run into issues, reset the Sui install be removing the configuration directory, by default located at `~/.sui/sui_config`. Then reinstall [Sui binaries](../build/install#binaries). Use 
+
+## Basic testing
+
+### Request gas tokens
+
+In your terminal, run the following to find your wallet's [active (default) address](../build/wallet.md#active-address):
+```shell
+$ wallet active-address
+```
+
+This will result in an address resembing:
+```shell
+F16A5AEDCDF9F2A9C2BD0F077279EC3D5FF0DFEE
+```
+
+For the remainder of this document, we will be using that address. We recommend adding that as an environment variable to ease reuse by *substituting your address into the following command*:
+```shell
+$ export ADDRESS=<YOUR ADDRESS>
+```
+
+Now use the following command to request Gas tokens from the faucet:
+```shell
+$ curl --location --request POST 'http://ac15d2445706543f3acf211fc44e01c3-1765225438.us-west-2.elb.amazonaws.com:9100/gas' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "FixedAmountRequest": {
+        "recipient": "$ADDRESS"
+    }
+}'| json_pp
+```
+
+> **Note:** If you don't have the `json_pp` command, simply strip it and the preceding pipe (|) from the command above and re-run it.
