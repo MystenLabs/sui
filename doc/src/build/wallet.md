@@ -213,7 +213,7 @@ The following commands are supported by the wallet:
     split-coin            Split a coin object into multiple coins
     switch                Switch active address
     sync                  Synchronize client state with authorities
-    transfer              Transfer an object
+    transfer-coin         Transfer coin object
 
 > **Note:** The `clear`, `echo`, `env` and `exit` commands exist only in the interactive shell.
 
@@ -509,14 +509,14 @@ Showing 0 results.
 ```
 
 To add objects to the account, you can [invoke a Move function](#calling-move-code),
-or you can transfer one of the existing objects from the genesis account to the new account using a dedicated wallet command.
-We will explore how to transfer objects using the wallet in this section.
+or you can transfer one of the existing coins from the genesis account to the new account using a dedicated wallet command.
+We will explore how to transfer coins using the wallet in this section.
 
-`transfer` command usage:
+`transfer-coin` command usage:
 
 ```shell
 USAGE:
-    transfer [FLAGS] [OPTIONS] --gas-budget <gas-budget> --object-id <object-id> --to <to>
+    transfer-coin [FLAGS] [OPTIONS] --gas-budget <gas-budget> --coin-object-id <coin-object-id> --to <to>
 
 FLAGS:
     -h, --help       Prints help information
@@ -524,24 +524,24 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-        --gas <gas>                  ID of the gas object for gas payment, in 20 bytes Hex string If not provided, a gas
-                                     object with at least gas_budget value will be selected
-        --gas-budget <gas-budget>    Gas budget for this transfer
-        --object-id <object-id>      Object to transfer, in 20 bytes Hex string
-        --to <to>                    Recipient address
+        --gas <gas>                             ID of the coin object for gas payment, in 20 bytes Hex string If not provided, a coin
+                                                object with at least gas_budget value will be selected
+        --gas-budget <gas-budget>               Gas budget for this transfer
+        --coin-object-id <coin-object-id>       Coin to transfer, in 20 bytes Hex string
+        --to <to>                               Recipient address
 ```
 
-To transfer an object to a recipient, you will need the recipient's address,
-the object ID of the object that you want to transfer,
-and optionally the gas object ID for the transaction fee payment. If a gas
-object is not specified, one that meets the budget is picked. Gas budget sets a
+To transfer a coin object to a recipient, you will need the recipient's address,
+the object ID of the coin that you want to transfer,
+and optionally the coin object ID for the transaction fee payment. If a gas 
+coin is not specified, one that meets the budget is picked. Gas budget sets a
 cap for how much gas you want to spend. We are still finalizing our gas metering
 mechanisms. For now, just set something large enough.
 
 Here is an example transfer of an object to account `F456EBEF195E4A231488DF56B762AC90695BE2DD`:
 
 ```shell
-$ wallet transfer --to C72CF3ADCC4D11C03079CEF2C8992AEA5268677A --object-id DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1 --gas-budget 100
+$ wallet transfer-coin --to C72CF3ADCC4D11C03079CEF2C8992AEA5268677A --coin-object-id DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1 --gas-budget 100
 ```
 
 With output like:
@@ -784,7 +784,7 @@ public(script) fun transfer(c: Coin::Coin<SUI>, recipient: address, _ctx: &mut T
 ```
 
 Please note that there is no real need to use a Move call to transfer
-objects as this can be accomplished with a built-in wallet
+coins as this can be accomplished with a built-in wallet
 [command](#transferring-coins) - we chose this example due to its
 simplicity.
 
