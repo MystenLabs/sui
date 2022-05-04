@@ -3218,7 +3218,7 @@ checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 [[package]]
 name = "name_variant"
 version = "1.0.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=97a056f85555fa2afe497d6abb7cf6bf8faa63cf#97a056f85555fa2afe497d6abb7cf6bf8faa63cf"
+source = "git+https://github.com/MystenLabs/mysten-infra?rev=d2976a45420147ad821baae96e6fe4b12215f743#d2976a45420147ad821baae96e6fe4b12215f743"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5278,7 +5278,7 @@ dependencies = [
 [[package]]
 name = "telemetry_subscribers"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=a45af6dc28aa12c8cc13521d118c24aadd4c6adf#a45af6dc28aa12c8cc13521d118c24aadd4c6adf"
+source = "git+https://github.com/MystenLabs/mysten-infra?rev=d2976a45420147ad821baae96e6fe4b12215f743#d2976a45420147ad821baae96e6fe4b12215f743"
 dependencies = [
  "opentelemetry",
  "opentelemetry-jaeger",
