@@ -188,7 +188,7 @@ function LatestTxCard() {
                         <div className={styles.txtype}>TxType</div>
                         <div className={styles.txgas}>Status</div>
                         <div className={styles.txgas}>Gas</div>
-                        <div className={styles.txadd}>Sender & Receiver</div>
+                        <div className={styles.txadd}>Addresses</div>
                     </div>
                     {results.latestTx.map((tx, index) => (
                         <div
