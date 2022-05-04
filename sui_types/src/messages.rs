@@ -928,6 +928,7 @@ impl BcsSignable for TransactionEffects {}
 impl Display for TransactionEffects {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
+        writeln!(writer, "Transaction Digest : {:?}", self.transaction_digest)?;
         writeln!(writer, "Status : {:?}", self.status)?;
         if !self.created.is_empty() {
             writeln!(writer, "Created Objects:")?;
