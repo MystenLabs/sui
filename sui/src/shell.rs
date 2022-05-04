@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::env;
@@ -132,17 +133,19 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
                         break;
                     };
                 }
-                Err(e) => writeln!(err, "{}", e.red())?,
+                Err(e) => writeln!(err, "{}", e.to_string().red())?,
             }
         }
         Ok(())
     }
 
-    fn split_and_unescape(line: &str) -> Result<Vec<String>, String> {
+    fn split_and_unescape(line: &str) -> Result<Vec<String>, anyhow::Error> {
         let mut commands = Vec::new();
-        for word in line.split_whitespace() {
-            let command =
-                unescape(word).ok_or_else(|| format!("Error: Unhandled escape sequence {word}"))?;
+        let split: Vec<String> = shell_words::split(line)?;
+
+        for word in split {
+            let command = unescape(&word)
+                .ok_or_else(|| anyhow!("Error: Unhandled escape sequence {word}"))?;
             commands.push(command);
         }
         Ok(commands)
