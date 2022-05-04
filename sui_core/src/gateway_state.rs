@@ -273,7 +273,7 @@ where
         &self,
         transaction: Transaction,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        transaction.check_signature()?;
+        transaction.verify_signature()?;
         self.check_gas(
             transaction.gas_payment_object_ref().0,
             transaction.data.gas_budget,
