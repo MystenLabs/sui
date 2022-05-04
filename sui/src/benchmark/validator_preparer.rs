@@ -190,8 +190,6 @@ impl ValidatorPreparer {
                     let child = Command::new(working_dir.clone().join(VALIDATOR_BINARY_NAME))
                         .arg("--genesis-config-path")
                         .arg(GENESIS_CONFIG_NAME)
-                        .arg("--address")
-                        .arg(&self.main_authority_address_hex)
                         .arg("--force-genesis")
                         .spawn()
                         .expect("failed to spawn a validator process");
