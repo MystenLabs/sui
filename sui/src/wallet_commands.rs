@@ -641,13 +641,17 @@ impl WalletContext {
         budget: u64,
         forbidden_gas_objects: BTreeSet<ObjectID>,
     ) -> Result<(u64, Object), anyhow::Error> {
+        // Make sure we don't use locked gas objects
+        let mut forbidden_gas_objects = forbidden_gas_objects.clone();
+        forbidden_gas_objects.extend(self.gateway.get_locked_objects()?.iter().map(|w| w.0 .0));
+
         for o in self.gas_objects(address).await.unwrap() {
             if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.id()) {
                 return Ok(o);
             }
         }
         return Err(anyhow!(
-            "No non-argument gas objects found with value >= budget {}",
+            "No available gas objects found with value >= budget {}",
             budget
         ));
     }
