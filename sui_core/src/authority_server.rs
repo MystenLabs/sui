@@ -159,8 +159,8 @@ impl Validator for AuthorityServer {
         obligation
             .verify_all()
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
-        //TODO This is really really bad, we should have different types for checked transactions
-        transaction.is_checked = true;
+        //TODO This is really really bad, we should have different types for signature-verified transactions
+        transaction.is_verified = true;
 
         let tx_digest = transaction.digest();
 
@@ -200,8 +200,8 @@ impl Validator for AuthorityServer {
         obligation
             .verify_all()
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
-        //TODO This is really really bad, we should have different types for checked transactions
-        transaction.is_checked = true;
+        //TODO This is really really bad, we should have different types for signature verified transactions
+        transaction.is_verified = true;
 
         let tx_digest = transaction.digest();
         let span = tracing::debug_span!(

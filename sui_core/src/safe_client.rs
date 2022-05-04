@@ -43,7 +43,7 @@ impl<C> SafeClient<C> {
     ) -> SuiResult {
         if let Some(signed_transaction) = &response.signed_transaction {
             // Check the transaction signature
-            signed_transaction.check(&self.committee)?;
+            signed_transaction.verify(&self.committee)?;
             // Check it has the right signer
             fp_ensure!(
                 signed_transaction.auth_sign_info.authority == self.address,
@@ -62,7 +62,7 @@ impl<C> SafeClient<C> {
 
         if let Some(certificate) = &response.certified_transaction {
             // Check signatures and quorum
-            certificate.check(&self.committee)?;
+            certificate.verify(&self.committee)?;
             // Check it's the right transaction
             fp_ensure!(
                 certificate.digest() == &digest,
@@ -77,7 +77,7 @@ impl<C> SafeClient<C> {
             signed_effects
                 .auth_signature
                 .signature
-                .check(&signed_effects.effects, self.address)?;
+                .verify(&signed_effects.effects, self.address)?;
             // Checks it concerns the right tx
             fp_ensure!(
                 signed_effects.effects.transaction_digest == digest,
@@ -104,7 +104,7 @@ impl<C> SafeClient<C> {
     ) -> SuiResult {
         // If we get a certificate make sure it is a valid certificate
         if let Some(certificate) = &response.parent_certificate {
-            certificate.check(&self.committee)?;
+            certificate.verify(&self.committee)?;
         }
 
         // Check the right object ID and version is returned
@@ -160,7 +160,7 @@ impl<C> SafeClient<C> {
             };
 
             if let Some(signed_transaction) = &object_and_lock.lock {
-                signed_transaction.check(&self.committee)?;
+                signed_transaction.verify(&self.committee)?;
                 // Check it has the right signer
                 fp_ensure!(
                     signed_transaction.auth_sign_info.authority == self.address,
@@ -186,7 +186,7 @@ impl<C> SafeClient<C> {
         // check the signature of the batch
         signed_batch
             .signature
-            .check(&signed_batch.batch, signed_batch.authority)?;
+            .verify(&signed_batch.batch, signed_batch.authority)?;
 
         // ensure transactions enclosed match requested range
 

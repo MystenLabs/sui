@@ -120,7 +120,7 @@ impl ConsensusAdapter {
         certificate: &ConsensusTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
         // Check the Sui certificate (submitted by the user).
-        certificate.check(&self.committee)?;
+        certificate.verify(&self.committee)?;
 
         // Serialize the certificate in a way that is understandable to consensus (i.e., using
         // bincode) and it certificate to consensus.
