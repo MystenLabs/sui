@@ -23,7 +23,7 @@ const DATATYPE_DEFAULT: DataType = {
     data: {
         contents: {},
         owner: { ObjectOwner: [] },
-        tx_digest: [],
+        tx_digest: '',
     },
     loadState: 'pending',
 };

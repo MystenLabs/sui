@@ -223,12 +223,23 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     />
                                 </div>
                             </div>
+                            {data.data?.tx_digest && (
+                                <div>
+                                    <div>Last Transaction ID</div>
+                                    <div id="transactionID">
+                                        <Longtext
+                                            text={data.data?.tx_digest}
+                                            category="transactions"
+                                            isLink={true}
+                                        />
+                                    </div>
+                                </div>
+                            )}
 
                             <div>
                                 <div>Version</div>
                                 <div>{data.version}</div>
                             </div>
-
                             {data.readonly && (
                                 <div>
                                     <div>Read Only?</div>
@@ -249,7 +260,6 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     )}
                                 </div>
                             )}
-
                             <div>
                                 <div>Type</div>
                                 <div>{prepObjTypeValue(data.objType)}</div>
@@ -280,7 +290,6 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     />
                                 </div>
                             )}
-
                             {data.ethAddress && (
                                 <div>
                                     <div>Ethereum Contract Address</div>
