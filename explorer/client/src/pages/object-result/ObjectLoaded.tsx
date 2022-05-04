@@ -47,13 +47,6 @@ function ObjectLoaded({ data }: { data: DataType }) {
 
     //TODO - a backend convention on how owned objects are labelled and how values are stored
     //This would facilitate refactoring the below and stopping bugs when a variant is missed:
-    const checkIsIDType = (key: string, value: any) =>
-        /owned/.test(key) ||
-        (/_id/.test(key) && value?.bytes) ||
-        value?.vec ||
-        key === 'objects';
-    const checkVecOfSingleID = (value: any) =>
-        Array.isArray(value) && value.length > 0 && value[0]?.bytes;
     const addrOwnerPattern = /^AddressOwner\(k#/;
     const endParensPattern = /\){1}$/;
 
@@ -184,26 +177,6 @@ function ObjectLoaded({ data }: { data: DataType }) {
     const nameKeyValue = Object.entries(viewedData.data?.contents)
         .filter(([key, _]) => /name/i.test(key))
         .map(([_, value]) => value);
-
-    const ownedObjects = Object.entries(viewedData.data?.contents)
-        .filter(([key, value]) => checkIsIDType(key, value))
-        .map(([key, value]) => {
-            if (value?.bytes !== undefined) return [key, [value.bytes]];
-
-            if (checkVecOfSingleID(value.vec))
-                return [
-                    key,
-                    value.vec.map((value2: { bytes: string }) => value2?.bytes),
-                ];
-
-            if (checkVecOfSingleID(value))
-                return [
-                    key,
-                    value.map((value2: { bytes: string }) => value2?.bytes),
-                ];
-
-            return [key, []];
-        });
 
     const properties = Object.entries(viewedData.data?.contents)
         //TO DO: remove when have distinct 'name' field in Description
@@ -348,30 +321,13 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             )}
                         </>
                     )}
-                    {ownedObjects.length > 0 && (
-                        <>
-                            <h2
-                                className={styles.clickableheader}
-                                onClick={clickSetShowConnectedEntities}
-                            >
-                                Owned Objects {showConnectedEntities ? '' : '+'}
-                            </h2>
-                            {showConnectedEntities && (
-                                <div className={theme.textresults}>
-                                    {ownedObjects.map(
-                                        ([key, value], index1) => (
-                                            <div
-                                                key={`ConnectedEntity-${index1}`}
-                                            >
-                                                <div>{prepLabel(key)}</div>
-                                                <OwnedObjects id={data.id} />
-                                            </div>
-                                        )
-                                    )}
-                                </div>
-                            )}
-                        </>
-                    )}
+                    <h2
+                        className={styles.clickableheader}
+                        onClick={clickSetShowConnectedEntities}
+                    >
+                        Owned Objects {showConnectedEntities ? '' : '+'}
+                    </h2>
+                    {showConnectedEntities && <OwnedObjects id={data.id} />}
                 </div>
             </div>
         </>

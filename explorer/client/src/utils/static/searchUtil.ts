@@ -6,13 +6,13 @@ import mockOwnedObjectData from './owned_object.json';
 
 const navigateWithUnknown = async (input: string, navigate: Function) => {
     const data = findDataFromID(input, false);
-    if (data === undefined || !('category' in data)) {
-        navigate(`../missing/${input}`);
-    } else if (data.category === 'transaction') {
+    const ownedObjects = findOwnedObjectsfromID(input);
+
+    if (data?.category === 'transaction') {
         navigate(`../transactions/${input}`, { state: data });
-    } else if (data.category === 'object') {
+    } else if (data?.category === 'object') {
         navigate(`../objects/${input}`, { state: data });
-    } else if (data.category === 'address') {
+    } else if (ownedObjects && ownedObjects.length > 0) {
         navigate(`../addresses/${input}`, { state: data });
     } else {
         navigate(`../missing/${input}`);
