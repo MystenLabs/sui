@@ -1,15 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Mod of the economics of the SeaHero game. In the game, a `Hero` can onAly
+/// Mod of the economics of the SeaHero game. In the game, a `Hero` can only
 /// slay a `SeaMonster` if they have sufficient strength. This mod allows a
 /// player with a weak `Hero` to ask a player with a stronger `Hero` to slay
 /// the monster for them in exchange for some of the reward.
 /// Anyone can create a mod like this--the permission of the `SeaHero` game
 /// is not required.
-module HeroGame::SeaHeroHelper {
-    use HeroGame::SeaHero::{Self, SeaMonster, RUM};
-    use HeroGame::Hero::Hero;
+module Games::SeaHeroHelper {
+    use Games::SeaHero::{Self, SeaMonster, RUM};
+    use Games::Hero::Hero;
     use Sui::Coin::{Self, Coin};
     use Sui::ID::{Self, VersionedID};
     use Sui::Transfer;
@@ -61,7 +61,7 @@ module HeroGame::SeaHeroHelper {
 
     /// Helper should call this if they are willing to help out and slay the
     /// monster.
-    public(script) fun slay(
+    public fun slay(
         hero: &Hero, wrapper: HelpMeSlayThisMonster, ctx: &mut TxContext,
     ): Coin<RUM> {
         let HelpMeSlayThisMonster {
@@ -73,7 +73,7 @@ module HeroGame::SeaHeroHelper {
         ID::delete(id);
         let owner_reward = SeaHero::slay(hero, monster);
         let helper_reward = Coin::withdraw(&mut owner_reward, helper_reward, ctx);
-        Transfer::transfer(owner_reward, monster_owner);
+        Transfer::transfer(Coin::from_balance(owner_reward, ctx), monster_owner);
         helper_reward
     }
 
