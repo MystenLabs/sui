@@ -29,8 +29,12 @@
 
 */
 
-use std::{collections::{BTreeMap, HashMap}, sync::Arc, time::Duration};
-use sui_types::{base_types::AuthorityName, error::{SuiResult, }};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+    time::Duration,
+};
+use sui_types::{base_types::AuthorityName, error::SuiResult};
 use tokio::sync::Mutex;
 
 use crate::{
@@ -58,17 +62,15 @@ impl Default for AuthorityHealth {
 
 impl AuthorityHealth {
     pub fn set_no_contact_for(&mut self, period: Duration) {
-        let future_instant = Instant::now()  + period;
+        let future_instant = Instant::now() + period;
         if self.no_contact_before < future_instant {
             self.no_contact_before = future_instant;
         }
     }
 
     pub fn can_contact_now(&self) -> bool {
-        return self.no_contact_before < Instant::now()
+        self.no_contact_before < Instant::now()
     }
-
-
 }
 
 pub struct ActiveAuthority<A> {
@@ -89,12 +91,14 @@ impl<A> ActiveAuthority<A> {
 
         Ok(ActiveAuthority {
             health: Arc::new(Mutex::new(
-                committee.voting_rights.iter()
-                .map(|(name, _)| (*name, AuthorityHealth::default())).collect()
+                committee
+                    .voting_rights
+                    .iter()
+                    .map(|(name, _)| (*name, AuthorityHealth::default()))
+                    .collect(),
             )),
             state: authority,
             net: Arc::new(AuthorityAggregator::new(committee, authority_clients)),
-            
         })
     }
 
@@ -103,27 +107,27 @@ impl<A> ActiveAuthority<A> {
         let (_, instant) = self.net.committee.robust_value(
             lock.iter().map(|(name, h)| (*name, h.no_contact_before)),
             // At least one honest node is at or above it.
-            self.net.committee.quorum_threshold()
+            self.net.committee.quorum_threshold(),
         );
         instant
     }
 
-    pub async fn set_failure_backoff(&self, name : AuthorityName) {
+    pub async fn set_failure_backoff(&self, name: AuthorityName) {
         let mut lock = self.health.lock().await;
         let mut entry = lock.entry(name).or_default();
         entry.retries = u32::min(entry.retries + 1, 10);
-        let delay : u64 = u64::min(u64::pow(2, entry.retries), 180);
+        let delay: u64 = u64::min(u64::pow(2, entry.retries), 180);
         entry.set_no_contact_for(Duration::from_secs(delay));
     }
 
-    pub async fn set_success_backoff(&self, name : AuthorityName) {
+    pub async fn set_success_backoff(&self, name: AuthorityName) {
         let mut lock = self.health.lock().await;
         let mut entry = lock.entry(name).or_default();
         entry.retries = 0;
         entry.set_no_contact_for(Duration::from_secs(0));
     }
 
-    pub async fn can_contact(&self, name : AuthorityName) -> bool {
+    pub async fn can_contact(&self, name: AuthorityName) -> bool {
         let mut lock = self.health.lock().await;
         let entry = lock.entry(name).or_default();
         entry.can_contact_now()
@@ -138,7 +142,6 @@ where
     pub async fn spawn_all_active_processes(self) -> Option<()> {
         // Spawn a task to take care of gossip
         let _gossip_join = tokio::task::spawn(async move {
-            
             gossip_process(&self, 4).await;
         });
 

@@ -9,7 +9,9 @@ use sui_types::{base_types::SequenceNumber, crypto::get_key_pair, object::Object
 use tracing_test::traced_test;
 
 use super::*;
-use crate::{authority_aggregator::authority_aggregator_tests::*, authority_client::NetworkAuthorityClient};
+use crate::{
+    authority_aggregator::authority_aggregator_tests::*, authority_client::NetworkAuthorityClient,
+};
 
 #[tokio::test]
 pub async fn test_gossip() {
@@ -80,24 +82,27 @@ pub async fn test_gossip_no_network() {
         authority_genesis_objects(4, vec![gas_object1.clone(), gas_object2.clone()]);
 
     let (_aggregator, states) = init_local_authorities(genesis_objects).await;
-    
+
     // Connect to non-existing peer
     let aggregator = AuthorityAggregator::new(
-        _aggregator.committee.clone(), 
-        _aggregator.authority_clients.iter().map(|(name, _)| {
-            let net = NetworkAuthorityClient::new(NetworkClient::new(
-                "127.0.0.1".to_string(),
-                // !!! This port does not exist                 
-                332,
-                65_000,
-                Duration::from_secs(1),
-                Duration::from_secs(1),
-            ));
-            (*name, net)
-
-        }).collect()
+        _aggregator.committee.clone(),
+        _aggregator
+            .authority_clients
+            .iter()
+            .map(|(name, _)| {
+                let net = NetworkAuthorityClient::new(NetworkClient::new(
+                    "127.0.0.1".to_string(),
+                    // !!! This port does not exist
+                    332,
+                    65_000,
+                    Duration::from_secs(1),
+                    Duration::from_secs(1),
+                ));
+                (*name, net)
+            })
+            .collect(),
     );
-    
+
     let clients = aggregator.authority_clients.clone();
 
     // Start batch processes, and active processes.

@@ -64,14 +64,22 @@ where
 
         // Find out what is the earliest time that we are allowed to reconnect
         // to at least 2f+1 nodes.
-        let next_connect = active_authority.minimum_wait_for_majority_honest_available().await;
-        debug!("Waiting for {:?}", next_connect - tokio::time::Instant::now() );
+        let next_connect = active_authority
+            .minimum_wait_for_majority_honest_available()
+            .await;
+        debug!(
+            "Waiting for {:?}",
+            next_connect - tokio::time::Instant::now()
+        );
         tokio::time::sleep_until(next_connect).await;
 
         let mut k = 0;
         while gossip_tasks.len() < target_num_tasks {
             let name = active_authority.state.committee.sample();
-            if peer_names.contains(name) || *name == active_authority.state.name || !active_authority.can_contact(*name).await {
+            if peer_names.contains(name)
+                || *name == active_authority.state.name
+                || !active_authority.can_contact(*name).await
+            {
                 continue;
             }
             peer_names.insert(*name);
@@ -93,18 +101,15 @@ where
         }
 
         // If we have no peers no need to wait for one
-        if  gossip_tasks.is_empty() {
-            continue
+        if gossip_tasks.is_empty() {
+            continue;
         }
 
         // Let the peer gossip task finish
         let (finished_name, _result) = gossip_tasks.select_next_some().await;
         if let Err(err) = _result {
             active_authority.set_failure_backoff(finished_name).await;
-            error!(
-                "Peer {:?} returned error: {}",
-                finished_name, err
-            );
+            error!("Peer {:?} returned error: {}", finished_name, err);
         } else {
             active_authority.set_success_backoff(finished_name).await;
             debug!("End gossip from peer {:?}", finished_name);
@@ -133,18 +138,21 @@ where
         // Define the minimum time we spend per peer -- this is particularly relevant to when
         // all peers are down, when we want to slow down how often we re-connect at the start
         // of the network.
-        let minimum_time = tokio::time::sleep_until(tokio::time::Instant::now() + Duration::from_secs(10));
+        let minimum_time =
+            tokio::time::sleep_until(tokio::time::Instant::now() + Duration::from_secs(10));
 
-        let result = tokio::task::spawn(async move { self.gossip_timeout(duration).await })
-            .await;
+        let result = tokio::task::spawn(async move { self.gossip_timeout(duration).await }).await;
 
         // Return a join error.
-        if let Err(_) = &result {
-                            return (peer_name, Err(SuiError::GenericAuthorityError {
-                                error: "Gossip Join Error".to_string(),
-                            }));
+        if result.is_err() {
+            return (
+                peer_name,
+                Err(SuiError::GenericAuthorityError {
+                    error: "Gossip Join Error".to_string(),
+                }),
+            );
         };
-        
+
         // Return the internal result
         let result = result.unwrap();
         minimum_time.await;
