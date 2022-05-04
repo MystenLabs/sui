@@ -226,7 +226,7 @@ async fn handle_command(
                     .collect::<Vec<_>>();
                 cache.insert(CacheKey::new("object", "--id"), objects.clone());
                 cache.insert(CacheKey::flag("--gas"), objects.clone());
-                cache.insert(CacheKey::flag("--object-id"), objects);
+                cache.insert(CacheKey::flag("--coin-object-id"), objects);
             }
             _ => {}
         }

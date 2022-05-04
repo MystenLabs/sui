@@ -523,7 +523,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     // Send an object
     WalletCommands::Transfer {
         to: recipient,
-        object_id: object_to_send,
+        coin_object_id: object_to_send,
         gas: Some(object_id),
         gas_budget: 50000,
     }
@@ -905,7 +905,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let resp = WalletCommands::Transfer {
         gas: Some(gas_obj_id),
         to: recipient,
-        object_id: obj_id,
+        coin_object_id: obj_id,
         gas_budget: 50000,
     }
     .execute(&mut context)
@@ -999,7 +999,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let resp = WalletCommands::Transfer {
         gas: None,
         to: recipient,
-        object_id: obj_id,
+        coin_object_id: obj_id,
         gas_budget: 50000,
     }
     .execute(&mut context)
