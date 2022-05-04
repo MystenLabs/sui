@@ -6,9 +6,7 @@ Welcome to the beginnings of the Sui DevNet. It exists now to gain operational e
 
 * A four-validator network with all nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: http://gateway.devnet.sui.io/
 * A public network [Sui Explorer](https://github.com/MystenLabs/sui/tree/explorer-rest/explorer) for browsing the TestNet transaction history: http://explorer.devnet.sui.io
-* A Discord channel **LINK** for requesting test coins that can be used to pay for gas on the test network. These coins have no financial value and will disappear each time we reset the network.
-
-TODO: Create and populate Discord link.
+* A [Discord channel](https://discordapp.com/channels/916379725201563759/971488439931392130) for requesting test coins that can be used to pay for gas on the test network. These coins have no financial value and will disappear each time we reset the network.
 
 Many improvements to the Sui DevNet are underway, such as the ability to run FullNodes and use a browser-based wallet. See the Sui DevNet blog post announcement for full details on upcoming features.
 
