@@ -51,7 +51,7 @@ You should see the path to the command. Otherwise, reinstall.
 In addition, to conduct advanced work such as publishing a Move module or making a Move call, also obtain:
 
 1. a [GitHub account](https://github.com/signup) if you don't have one already
-1. the [Sui source code](../build/install#source-code)
+1. the [Sui source code](../build/install#source-code) installed in: `~/sui`
 
 ### Set up wallet, connect to gateway
 
@@ -136,3 +136,87 @@ https://explorer.devnet.sui.io/objects/EC97467A40A1305FFDEF7019C3045FBC7AA31E29
 To get to the *Transaction Details* view in Sui Explorer after minting an NFT, going to the [home page](http://explorer.devnet.sui.io) and find the transaction hash under *latest transactions*.
 
 See the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) for instructions on its use.
+
+## Advanced testing
+
+### Publish a Move module
+
+Publish a sample Move package containing code developed in [Sui Move tutorial](../build/move#writing-a-package) as follows (assuming you installed the source code in `~sui` as advised in set up):
+```shell
+$ wallet publish --path ~sui/sui_programmability/tutorial --gas-budget 30000
+```
+
+You will see this output:
+```shell
+----- Certificate ----
+Signed Authorities : [k#2266186afd9da10a43dd3ed73d1039c6793d2d8514db6a2407fcf835132e863b, k#1d47ad34e2bc5589882c500345c953b5837e30d6649d315c61690ba7a1e28d23, k#e9599283c0da1ac2eedeb89a56fc49cd8f3c0d8d4ddba9b0a0a5054fe7df3ffd]
+Transaction Kind : Publish
+
+----- Publish Results ----
+The newly published package object ID: 0689E58788C875E9C354F359792CEC016DA0A1B0
+List of objects created by running module initializers:
+
+ID: 898922A9CABE93C6C38C55BBE047BFB0A8C864BF
+Version: 1
+Owner: Account Address ( F16A5AEDCDF9F2A9C2BD0F077279EC3D5FF0DFEE )
+Type: 0x689e58788c875e9c354f359792cec016da0a1b0::M1::Forge
+
+Updated Gas : Coin { id: 58C4DAA98694266F4DF47BA436CD99659B6A5342, value: 49552 }
+```
+
+Two important things happened as a result of publishing this package:
+
+* a package object (with ID `0689E58788C875E9C354F359792CEC016DA0A1B0`)  has been created
+* a `Forge` object (with ID `898922A9CABE93C6C38C55BBE047BFB0A8C864BF`) has been created as a result of running a [module initializer](../build/move.md#module-initializers) for one (and the only one) module of this package
+
+Specific object IDs displayed above may differ from one Sui installation to the other, so we will use the following placeholders for them (respectively): <PACKAGE_ID> and <FORGE_ID>. Whenever you see these used in the command line, for example when calling Move functions in the next section, *replace them with actual object IDs*.
+
+### Make a Move call
+
+In the previous section, we learned how to publish a Move package; and in this section, we will learn how to call into functions defined in this package. As a result of publishing a package, we obtained the new package object ID (<PACKAGE_ID>) and ID of the `Forge` object (<FORGE_ID>) that can be used to create swords and transfer them to other players.
+
+Let’s assume that the placeholder for the address of the player to receive a sword is <PLAYER_ADDRESS>. If you don’t know any address other than your own, you can create one using the following `wallet` command and use it whenever you see the <PLAYER_ADDRESS> placeholder:
+```shell
+$ wallet new-address
+```
+
+Which yields output resembling:
+```shell
+Created new keypair for address : 2D32ED71381BEF7F3D8C57B48DF82123593672AA
+```
+
+In order to create a sword and transfer it to another player, we use the following command to call the `sword_create` [function](https://github.com/MystenLabs/sui/blob/f4afb603801c90236772a1b2b56f2e216a9adf82/sui_programmability/tutorial/sources/M1.move#L44) in the `M1` [module](https://github.com/MystenLabs/sui/blob/f4afb603801c90236772a1b2b56f2e216a9adf82/sui_programmability/tutorial/sources/M1.move#L4) of the package we previously published.
+
+> **Important:** Note placeholders on the command line and formatting of function parameters as it is important to follow the same pattern.
+
+Now run:
+```shell
+$ wallet call --function sword_create --module M1 --package 0x<PACKAGE_ID> --args \"0x<FORGE_ID>\" 42 7 \"0x<PLAYER_ADDRESS>\" --gas-budget 30000
+```
+
+And receive output like:
+```shell
+----- Certificate ----
+Signed Authorities : [k#2266186afd9da10a43dd3ed73d1039c6793d2d8514db6a2407fcf835132e863b, k#1d47ad34e2bc5589882c500345c953b5837e30d6649d315c61690ba7a1e28d23, k#e9599283c0da1ac2eedeb89a56fc49cd8f3c0d8d4ddba9b0a0a5054fe7df3ffd]
+Transaction Kind : Call
+Package ID : 0x689e58788c875e9c354f359792cec016da0a1b0
+Module : M1
+Function : sword_create
+Arguments : [ImmOrOwnedObject((898922A9CABE93C6C38C55BBE047BFB0A8C864BF, SequenceNumber(1), o#9f12d4390e4fc8de3834c4960c6f265a78eca7c2b916ac1be66c1f00e1b47c68)), Pure([42, 0, 0, 0, 0, 0, 0, 0]), Pure([7, 0, 0, 0, 0, 0, 0, 0]), Pure([45, 50, 237, 113, 56, 27, 239, 127, 61, 140, 87, 180, 141, 248, 33, 35, 89, 54, 114, 170])]
+Type Arguments : []
+
+----- Transaction Effects ----
+Status : Success { gas_cost: GasCostSummary { computation_cost: 69, storage_cost: 40, storage_rebate: 27 } }
+Created Objects:
+  - ID: 2E34983D59E9FC5310CFBAA953D2188E6A84FD21 , Owner: Account Address ( 2D32ED71381BEF7F3D8C57B48DF82123593672AA )
+Mutated Objects:
+  - ID: 58C4DAA98694266F4DF47BA436CD99659B6A5342 , Owner: Account Address ( ADE6EAD34629411F730416D6AD48F6B382BBC6FD )
+  - ID: 898922A9CABE93C6C38C55BBE047BFB0A8C864BF , Owner: Account Address ( ADE6EAD34629411F730416D6AD48F6B382BBC6FD )
+```
+
+Go to the Sui Explorer to observe a newly created object (ID `2E34983D59E9FC5310CFBAA953D2188E6A84FD21`, in this example). You should see a sword object created with `Magic` property of `42` and `Strength` property of `7` and transferred to the new owner.
+
+As above, replace object ID in the Explorer link with the object ID of the created object you observed in your own command output:
+https://explorer.devnet.sui.io/objects/2E34983D59E9FC5310CFBAA953D2188E6A84FD21
+
+This concludes the Sui DevNet setup and testing instructions. Revisit this page and re-install the binaries regularly to witness and help Sui grow!
