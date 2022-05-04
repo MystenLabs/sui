@@ -190,6 +190,17 @@
                 }
             ]
         },
+        {
+            "id": "ObjectWBrokenChild",
+            "objects": [
+                {
+                    "objectId": "ChildObjectWImage"
+                },
+                {
+                    "objectId": "ChildObjectWBrokenImage"
+                }
+            ]
+        },
 
         {
             "id": "CollectionObject",
@@ -205,6 +216,10 @@
             "objects": [
                 {
                     "objectId": "standaloneObject",
+                    "version": 1
+                },
+                {
+                    "objectId": "Image1",
                     "version": 1
                 }
             ]

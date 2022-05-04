@@ -274,9 +274,6 @@ describe('End-to-end Tests', () => {
         ) => {
             await page.goto(`${BASE_URL}/${parentIsA}/${parentValue}`);
 
-            const btn1 = await page.$('#groupCollection > div:nth-child(1)');
-            await btn1.click();
-
             //Click on child in Owned Objects List:
             const objectLink = await page.$(
                 `div#ownedObjects > div:nth-child(${parentToChildNo})`
@@ -317,19 +314,11 @@ describe('End-to-end Tests', () => {
             );
         });
         it('go from object to child object and back', async () => {
-            await navigationTemplate(
-                page,
-                'playerTwo',
-                'objects',
-                'standaloneObject',
-                1
-            );
+            await navigationTemplate(page, 'playerTwo', 'objects', 'Image1', 1);
         });
         it('go from parent to broken image object and back', async () => {
-            const parentValue = 'ObjectThatOwns';
+            const parentValue = 'ObjectWBrokenChild';
             await page.goto(`${BASE_URL}/objects/${parentValue}`);
-            const btn1 = await page.$('#groupCollection > div:nth-child(1)');
-            await btn1.click();
 
             //Click on child in Owned Objects List:
             const objectLink = await page.$(
