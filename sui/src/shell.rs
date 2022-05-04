@@ -87,7 +87,7 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
             let line = substitute_env_variables(line);
 
             // Runs the line
-            match Self::split_and_unescape(line.trim()) {
+            match split_and_unescape(line.trim()) {
                 Ok(line) => {
                     if let Some(s) = line.first() {
                         // These are shell only commands.
@@ -138,18 +138,18 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
         }
         Ok(())
     }
+}
 
-    fn split_and_unescape(line: &str) -> Result<Vec<String>, anyhow::Error> {
-        let mut commands = Vec::new();
-        let split: Vec<String> = shell_words::split(line)?;
+fn split_and_unescape(line: &str) -> Result<Vec<String>, anyhow::Error> {
+    let mut commands = Vec::new();
+    let split: Vec<String> = shell_words::split(line)?;
 
-        for word in split {
-            let command = unescape(&word)
-                .ok_or_else(|| anyhow!("Error: Unhandled escape sequence {word}"))?;
-            commands.push(command);
-        }
-        Ok(commands)
+    for word in split {
+        let command =
+            unescape(&word).ok_or_else(|| anyhow!("Error: Unhandled escape sequence {word}"))?;
+        commands.push(command);
     }
+    Ok(commands)
 }
 
 fn substitute_env_variables(s: String) -> String {
