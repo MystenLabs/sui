@@ -14,7 +14,7 @@ use futures::future;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use sui_adapter::adapter::resolve_and_type_check;
-use tracing::{error, Instrument};
+use tracing::{debug, error, Instrument};
 
 use sui_types::{
     base_types::*,
@@ -242,6 +242,7 @@ where
             .ok_or(SuiError::ObjectNotFound {
                 object_id: *object_id,
             })?;
+        debug!(?object_id, ?object, "Fetched object from local store");
         Ok(object)
     }
 
@@ -250,6 +251,11 @@ where
         mutable_input_objects: &[ObjectRef],
         transaction: Transaction,
     ) -> Result<(), SuiError> {
+        debug!(
+            ?mutable_input_objects,
+            ?transaction,
+            "Setting transaction lock"
+        );
         self.store
             .set_transaction_lock(mutable_input_objects, transaction)
     }
@@ -272,6 +278,7 @@ where
                 }
             }
         }
+        debug!(?transaction, "Synced input objects with authorities");
         Ok(())
     }
 
@@ -318,6 +325,12 @@ where
         }
         let (new_certificate, effects) = exec_result?;
 
+        debug!(
+            ?new_certificate,
+            ?effects,
+            "Transaction completed successfully"
+        );
+
         // Download the latest content of every mutated object from the authorities.
         let mutated_object_refs: BTreeSet<_> = effects
             .mutated_and_created()
@@ -348,6 +361,8 @@ where
                 self.store.insert_object_direct(*obj_ref, object)?;
             }
         }
+        debug!(?result, "Downloaded object from authorities");
+
         Ok(result)
     }
 
@@ -374,6 +389,7 @@ where
                 error: "Failed to download some objects after transaction succeeded".to_owned(),
             }
         );
+        debug!(?object_refs, "Downloaded objects from authorities");
         Ok(objects)
     }
 
@@ -441,6 +457,15 @@ where
         let updated_gas = updated_gas.ok_or(SuiError::InconsistentGatewayResult {
             error: "No gas updated".to_owned(),
         })?;
+
+        debug!(
+            ?package,
+            ?created_objects,
+            ?updated_gas,
+            ?certificate,
+            "Created Publish response"
+        );
+
         Ok(TransactionResponse::PublishResponse(PublishResponse {
             certificate,
             package,
@@ -487,6 +512,15 @@ where
             new_coins.push(self.get_object(id).await?);
         }
         let updated_gas = self.get_object(&gas_payment).await?;
+
+        debug!(
+            ?updated_coin,
+            ?new_coins,
+            ?updated_gas,
+            ?certificate,
+            "Created Split Coin response"
+        );
+
         Ok(TransactionResponse::SplitCoinResponse(SplitCoinResponse {
             certificate,
             updated_coin,
@@ -524,6 +558,14 @@ where
         );
         let updated_coin = self.get_object_info(*primary_coin).await?.into_object()?;
         let updated_gas = self.get_object_info(gas_payment).await?.into_object()?;
+
+        debug!(
+            ?updated_coin,
+            ?updated_gas,
+            ?certificate,
+            "Created Merge Coin response"
+        );
+
         Ok(TransactionResponse::MergeCoinResponse(MergeCoinResponse {
             certificate,
             updated_coin,
@@ -571,21 +613,52 @@ where
         tx: Transaction,
     ) -> Result<TransactionResponse, anyhow::Error> {
         let tx_kind = tx.data.kind.clone();
-        let mut res = self.execute_transaction_impl(tx.clone()).await;
+        let tx_digest = tx.digest();
+
+        debug!(?tx_digest, ?tx, "Received execute_transaction request");
+
+        let span = tracing::debug_span!(
+            "gateway_execute_transaction",
+            ?tx_digest,
+            tx_kind = tx.data.kind_as_str()
+        );
+
+        let mut res = self
+            .execute_transaction_impl(tx.clone())
+            .instrument(span.clone())
+            .await;
 
         let mut remaining_retries = MAX_NUM_TX_RETRIES;
         while res.is_err() {
             if remaining_retries == 0 {
-                // Okay to do this since we checked that this is an error
+                error!(
+                    num_retries = MAX_NUM_TX_RETRIES,
+                    ?tx_digest,
+                    ?tx,
+                    "All transaction retries failed"
+                );
+                // Okay to unwrap since we checked that this is an error
                 return Err(res.unwrap_err());
             }
             remaining_retries -= 1;
-            res = self.execute_transaction_impl(tx.clone()).await;
+
+            debug!(
+                remaining_retries,
+                ?tx_digest,
+                ?tx,
+                "Retrying failed transaction"
+            );
+
+            res = self
+                .execute_transaction_impl(tx.clone())
+                .instrument(span.clone())
+                .await;
         }
 
         // Okay to unwrap() since we checked that this is Ok
         let (certificate, effects) = res.unwrap();
 
+        debug!(?tx, ?certificate, ?effects, "Transaction suceeded");
         // Create custom response base on the request type
         if let TransactionKind::Single(tx_kind) = tx_kind {
             match tx_kind {
@@ -647,6 +720,13 @@ where
             .authorities
             .sync_all_owned_objects(account_addr, Duration::from_secs(60))
             .await?;
+
+        debug!(
+            ?active_object_certs,
+            deletec = ?_deleted_refs_certs,
+            ?account_addr,
+            "Syncing account states"
+        );
 
         for (object, _option_layout, _option_cert) in active_object_certs {
             self.store
@@ -715,6 +795,8 @@ where
             args,
             gas_budget,
         );
+
+        debug!(?data, "Created Move Call transaction data");
         Ok(data)
     }
 
@@ -757,6 +839,7 @@ where
             ],
             gas_budget,
         );
+        debug!(?data, "Created Split Coin transaction data");
         Ok(data)
     }
 
@@ -791,6 +874,7 @@ where
             ],
             gas_budget,
         );
+        debug!(?data, "Created Merge Coin transaction data");
         Ok(data)
     }
 
@@ -836,7 +920,9 @@ where
             }
             .into()
         );
-        Ok(self.store.transactions_in_seq_range(start, end)?)
+        let res = self.store.transactions_in_seq_range(start, end)?;
+        debug!(?start, ?end, ?res, "Fetched transactions");
+        Ok(res)
     }
 
     fn get_recent_transactions(
