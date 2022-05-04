@@ -41,6 +41,9 @@ pub async fn gossip_process<A>(active_authority: &ActiveAuthority<A>, degree: us
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
+    // A copy of the committee
+    let committee = &active_authority.net.committee;
+
     // Number of tasks at most "degree" and no more than committee - 1
     let target_num_tasks: usize = usize::min(
         active_authority.state.committee.voting_rights.len() - 1,
@@ -80,6 +83,9 @@ where
                 || *name == active_authority.state.name
                 || !active_authority.can_contact(*name).await
             {
+                // Are we likely to never terminate because of this condition?
+                // - We check we have nodes left by stake
+                // - We check that we have at least 2/3 of nodes that can be contacted.
                 continue;
             }
             peer_names.insert(*name);
@@ -93,9 +99,14 @@ where
             });
             k += 1;
 
-            // Only try to connect 20 times, after that re-assess whether
-            // there are enough people to connect to.
-            if k > 20 {
+            // If we have already used all the good stake, then stop here and
+            // wait for some node to become available.
+            let total_stake_used: usize = peer_names
+                .iter()
+                .map(|name| committee.weight(name))
+                .sum::<usize>()
+                + committee.weight(&active_authority.state.name);
+            if committee.quorum_threshold() <= total_stake_used {
                 break;
             }
         }
@@ -134,13 +145,6 @@ where
 
     pub async fn spawn(mut self, duration: Duration) -> (AuthorityName, Result<(), SuiError>) {
         let peer_name = self.peer_name;
-
-        // Define the minimum time we spend per peer -- this is particularly relevant to when
-        // all peers are down, when we want to slow down how often we re-connect at the start
-        // of the network.
-        let minimum_time =
-            tokio::time::sleep_until(tokio::time::Instant::now() + Duration::from_secs(10));
-
         let result = tokio::task::spawn(async move { self.gossip_timeout(duration).await }).await;
 
         // Return a join error.
@@ -155,7 +159,7 @@ where
 
         // Return the internal result
         let result = result.unwrap();
-        minimum_time.await;
+        // minimum_time.await;
         (peer_name, result)
     }
 

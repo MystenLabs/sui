@@ -118,8 +118,8 @@ pub async fn test_gossip_no_network() {
 
     // Let the helper tasks start
     tokio::task::yield_now().await;
-    tokio::time::sleep(Duration::from_secs(20)).await;
+    tokio::time::sleep(Duration::from_secs(10)).await;
 
     // There have been timeouts and as a result the logs contain backoff messages
-    logs_contain("Waiting for 1.99");
+    assert!(logs_contain("Waiting for 3.99"));
 }
