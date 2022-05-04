@@ -1,9 +1,0 @@
-[package]
-name = "HeroGame"
-version = "0.0.1"
-
-[dependencies]
-Sui = { local = "../../../framework" }
-
-[addresses]
-HeroGame = "0x0"
