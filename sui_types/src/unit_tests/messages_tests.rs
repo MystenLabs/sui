@@ -49,7 +49,7 @@ fn test_signed_values() {
         *sec1.public_key_bytes(),
         &sec1,
     );
-    assert!(v.check(&committee).is_ok());
+    assert!(v.verify(&committee).is_ok());
 
     let v = SignedTransaction::new(
         committee.epoch(),
@@ -57,7 +57,7 @@ fn test_signed_values() {
         *sec2.public_key_bytes(),
         &sec2,
     );
-    assert!(v.check(&committee).is_err());
+    assert!(v.verify(&committee).is_err());
 
     let v = SignedTransaction::new(
         committee.epoch(),
@@ -65,7 +65,7 @@ fn test_signed_values() {
         *sec3.public_key_bytes(),
         &sec3,
     );
-    assert!(v.check(&committee).is_err());
+    assert!(v.verify(&committee).is_err());
 
     let v = SignedTransaction::new(
         committee.epoch(),
@@ -73,7 +73,7 @@ fn test_signed_values() {
         *sec1.public_key_bytes(),
         &sec1,
     );
-    assert!(v.check(&committee).is_err());
+    assert!(v.verify(&committee).is_err());
 }
 
 #[test]
@@ -130,9 +130,9 @@ fn test_certificates() {
         .append(v2.auth_sign_info.authority, v2.auth_sign_info.signature)
         .unwrap()
         .unwrap();
-    assert!(c.check(&committee).is_ok());
+    assert!(c.verify(&committee).is_ok());
     c.auth_sign_info.signatures.pop();
-    assert!(c.check(&committee).is_err());
+    assert!(c.verify(&committee).is_err());
 
     let mut builder = SignatureAggregator::try_new(transaction, &committee).unwrap();
     assert!(builder

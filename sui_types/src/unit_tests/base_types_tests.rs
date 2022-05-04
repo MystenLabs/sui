@@ -36,10 +36,10 @@ fn test_signatures() {
     let bar = Bar("hello".into());
 
     let s = Signature::new(&foo, &sec1);
-    assert!(s.check(&foo, addr1).is_ok());
-    assert!(s.check(&foo, addr2).is_err());
-    assert!(s.check(&foox, addr1).is_err());
-    assert!(s.check(&bar, addr1).is_err());
+    assert!(s.verify(&foo, addr1).is_ok());
+    assert!(s.verify(&foo, addr2).is_err());
+    assert!(s.verify(&foox, addr1).is_err());
+    assert!(s.verify(&bar, addr1).is_err());
 }
 
 #[test]
