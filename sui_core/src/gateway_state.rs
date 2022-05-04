@@ -48,6 +48,8 @@ pub type GatewayClient = Box<dyn GatewayAPI + Sync + Send>;
 pub type GatewayTxSeqNumber = u64;
 
 const MAX_TX_RANGE_SIZE: u64 = 4096;
+/// Number of times to retry failed TX
+const MAX_NUM_TX_RETRIES: usize = 5;
 
 pub struct GatewayState<A> {
     authorities: AuthorityAggregator<A>,
@@ -573,7 +575,19 @@ where
         tx: Transaction,
     ) -> Result<TransactionResponse, anyhow::Error> {
         let tx_kind = tx.data.kind.clone();
-        let (certificate, effects) = self.execute_transaction_impl(tx).await?;
+        let mut res = self.execute_transaction_impl(tx.clone()).await;
+
+        let mut remaining_retries = MAX_NUM_TX_RETRIES - 1;
+        while res.is_err() {
+            if remaining_retries == 0 {
+                res?;
+            }
+            remaining_retries -= 1;
+            res = self.execute_transaction_impl(tx.clone()).await;
+        }
+
+        // Okay to unwrap() since we checked that this is Ok
+        let (certificate, effects) = res.unwrap();
 
         // Create custom response base on the request type
         if let TransactionKind::Single(tx_kind) = tx_kind {
