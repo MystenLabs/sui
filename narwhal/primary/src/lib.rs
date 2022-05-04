@@ -31,7 +31,7 @@ mod common;
 
 pub use crate::{
     block_remover::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage},
-    block_synchronizer::responses::PayloadAvailabilityResponse,
+    block_synchronizer::responses::{CertificatesResponse, PayloadAvailabilityResponse},
     block_waiter::{BatchMessage, BlockCommand, BlockWaiter},
     primary::{
         PayloadToken, Primary, PrimaryWorkerMessage, WorkerPrimaryError, WorkerPrimaryMessage,

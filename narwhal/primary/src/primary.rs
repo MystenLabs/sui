@@ -13,7 +13,7 @@ use crate::{
     payload_receiver::PayloadReceiver,
     proposer::Proposer,
     synchronizer::Synchronizer,
-    BlockRemover, DeleteBatchMessage, PayloadAvailabilityResponse,
+    BlockRemover, CertificatesResponse, DeleteBatchMessage, PayloadAvailabilityResponse,
 };
 use async_trait::async_trait;
 use config::{Committee, Parameters, WorkerId};
@@ -106,7 +106,7 @@ impl Primary {
         let (tx_batch_removal, rx_batch_removal) = channel(CHANNEL_CAPACITY);
         let (_tx_block_synchronizer_commands, rx_block_synchronizer_commands) =
             channel(CHANNEL_CAPACITY);
-        let (_tx_certificate_responses, rx_certificate_responses) = channel(CHANNEL_CAPACITY);
+        let (tx_certificate_responses, rx_certificate_responses) = channel(CHANNEL_CAPACITY);
         let (tx_payload_availability_responses, rx_payload_availability_responses) =
             channel(CHANNEL_CAPACITY);
 
@@ -127,6 +127,7 @@ impl Primary {
             tx_primary_messages,
             tx_helper_requests,
             tx_payload_availability_responses,
+            tx_certificate_responses,
         }
         .spawn(address, parameters.max_concurrent_requests);
         info!(
@@ -297,6 +298,7 @@ struct PrimaryReceiverHandler<PublicKey: VerifyingKey> {
     tx_primary_messages: Sender<PrimaryMessage<PublicKey>>,
     tx_helper_requests: Sender<PrimaryMessage<PublicKey>>,
     tx_payload_availability_responses: Sender<PayloadAvailabilityResponse<PublicKey>>,
+    tx_certificate_responses: Sender<CertificatesResponse<PublicKey>>,
 }
 
 impl<PublicKey: VerifyingKey> PrimaryReceiverHandler<PublicKey> {
@@ -329,6 +331,14 @@ impl<PublicKey: VerifyingKey> PrimaryToPrimary for PrimaryReceiverHandler<Public
             PrimaryMessage::CertificatesBatchRequest { .. } => self
                 .tx_helper_requests
                 .send(message)
+                .await
+                .expect("Failed to send primary message"),
+            PrimaryMessage::CertificatesBatchResponse { certificates, from } => self
+                .tx_certificate_responses
+                .send(CertificatesResponse {
+                    certificates: certificates.to_vec(),
+                    from: from.clone(),
+                })
                 .await
                 .expect("Failed to send primary message"),
             PrimaryMessage::PayloadAvailabilityRequest { .. } => self

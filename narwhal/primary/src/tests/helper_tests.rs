@@ -151,7 +151,7 @@ async fn test_process_certificates_batch_mode() {
         .unwrap();
     let message: PrimaryMessage<Ed25519PublicKey> = received.deserialize().unwrap();
     let result_certificates = match message {
-        PrimaryMessage::CertificatesBatchResponse { certificates } => certificates,
+        PrimaryMessage::CertificatesBatchResponse { certificates, .. } => certificates,
         msg => {
             panic!("Didn't expect message {:?}", msg);
         }
