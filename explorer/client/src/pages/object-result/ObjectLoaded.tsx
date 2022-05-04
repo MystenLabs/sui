@@ -183,6 +183,14 @@ function ObjectLoaded({ data }: { data: DataType }) {
         .filter(([key, _]) => !/name/i.test(key))
         .filter(([_, value]) => checkIsPropertyType(value));
 
+    const descriptionTitle =
+        data.objType === 'Move Package' ? 'Package Description' : 'Description';
+
+    const detailsTitle =
+        data.objType === 'Move Package'
+            ? 'Disassembled Bytecode'
+            : 'Properties';
+
     return (
         <>
             <div className={styles.resultbox}>
@@ -206,7 +214,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                         className={styles.clickableheader}
                         onClick={clickSetShowDescription}
                     >
-                        Description {showDescription ? '' : '+'}
+                        {descriptionTitle} {showDescription ? '' : '+'}
                     </h2>
                     {showDescription && (
                         <div
@@ -322,7 +330,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                 className={styles.clickableheader}
                                 onClick={clickSetShowProperties}
                             >
-                                Properties {showProperties ? '' : '+'}
+                                {detailsTitle} {showProperties ? '' : '+'}
                             </h2>
                             {showProperties && (
                                 <div className={styles.propertybox}>
@@ -336,12 +344,17 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             )}
                         </>
                     )}
-                    <h2
-                        className={styles.clickableheader}
-                        onClick={clickSetShowConnectedEntities}
-                    >
-                        Owned Objects {showConnectedEntities ? '' : '+'}
-                    </h2>
+                    {}
+                    {data.objType !== 'Move Package' ? (
+                        <h2
+                            className={styles.clickableheader}
+                            onClick={clickSetShowConnectedEntities}
+                        >
+                            Child Objects {showConnectedEntities ? '' : '+'}
+                        </h2>
+                    ) : (
+                        <></>
+                    )}
                     {showConnectedEntities && <OwnedObjects id={data.id} />}
                 </div>
             </div>
