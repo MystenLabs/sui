@@ -16,16 +16,14 @@ TODO: Create and link to Medium blog post.
 
 This procedure leverages the following components of the Sui blockchain:
 
-- The Wallet CLI
-    - creating and managing your private keys
-    - submitting transactions for creating example NFTs on SUI
-    - calling/publishing Move modules
+* The [Sui Wallet command line interface (CLI)](../build/wallet.md)
+    * create and manage your private keys
+    * submit transactions for creating example NFTs
+    * call and publish Move modules
 - The Gas Faucet service
-    - Transfer SUI tokens to you so that you can pay for the transactions
-- SuiExplorer
+    - transfer SUI tokens to you so you may pay for the transactions
+- [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme)
     - View transactions and objects
-
-TODO: Edit, format, and link from the text above to relevant pages once we agree to include it. No faucet docs will exist for DevNet per Chris.
 
 ## Prerequisites
 
@@ -34,7 +32,7 @@ TODO: Edit, format, and link from the text above to relevant pages once we agree
 To use the Sui DevNet, you will need:
 
 1. Sui test coins (tokens) requested through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130)
-1. A command line terminal, as virtually everything done here is done by command line interface (CLI)
+1. A command line terminal, as virtually everything done here is done by CLI
 1. the [`git` command line interface](https://git-scm.com/download/)
 1. The [Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) toolchain, updated with `rustup update`
 1. [Sui binaries](../build/install#binaries) in your PATH environment variable, particularly `wallet`
