@@ -8,10 +8,12 @@
 /// earns RUM tokens for hero's owner.
 /// Note that this mod does not require special permissions from `Hero` module;
 /// anyone is free to create a mod like this.
-module HeroGame::SeaHero {
-    use HeroGame::Hero::{Self, Hero};
+module Games::SeaHero {
+    use Games::Hero::{Self, Hero};
+
+    use Sui::Balance::{Self, Balance};
     use Sui::ID::{Self, VersionedID};
-    use Sui::Coin::{Self, Coin, TreasuryCap };
+    use Sui::Coin::{Self, TreasuryCap};
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
 
@@ -33,7 +35,7 @@ module HeroGame::SeaHero {
     struct SeaMonster has key, store {
         id: VersionedID,
         /// Tokens that the user will earn for slaying this monster
-        reward: Coin<RUM>
+        reward: Balance<RUM>
     }
 
     /// Type of the sea game token
@@ -51,20 +53,18 @@ module HeroGame::SeaHero {
 
     // --- Initialization ---
 
+
+
     /// Get a treasury cap for the coin and give it to the admin
     // TODO: this leverages Move module initializers
-    fun init(token_supply_max: u64, monster_max: u64, ctx: &mut TxContext) {
-        // a game with no tokens and/or no monsters is no fun
-        assert!(token_supply_max > 0, EINVALID_TOKEN_SUPPLY);
-        assert!(monster_max > 0, EINVALID_MONSTER_SUPPLY);
-
+    fun init(ctx: &mut TxContext) {
         Transfer::transfer(
             SeaHeroAdmin {
                 id: TxContext::new_id(ctx),
                 treasury_cap: Coin::create_currency<RUM>(RUM{}, ctx),
                 monsters_created: 0,
-                token_supply_max,
-                monster_max,
+                token_supply_max: 1000000,
+                monster_max: 10,
             },
             TxContext::sender(ctx)
         )
@@ -75,13 +75,13 @@ module HeroGame::SeaHero {
     /// Slay the `monster` with the `hero`'s sword, earn RUM tokens in
     /// exchange.
     /// Aborts if the hero is not strong enough to slay the monster
-    public fun slay(hero: &Hero, monster: SeaMonster): Coin<RUM> {
+    public fun slay(hero: &Hero, monster: SeaMonster): Balance<RUM> {
         let SeaMonster { id, reward } = monster;
         ID::delete(id);
         // Hero needs strength greater than the reward value to defeat the
         // monster
         assert!(
-            Hero::hero_strength(hero) >= Coin::value(&reward),
+            Hero::hero_strength(hero) >= Balance::value(&reward),
             EHERO_NOT_STRONG_ENOUGH
         );
 
@@ -109,7 +109,7 @@ module HeroGame::SeaHero {
 
         let monster = SeaMonster {
             id: TxContext::new_id(ctx),
-            reward: Coin::mint(reward_amount, &mut admin.treasury_cap, ctx)
+            reward: Coin::mint_balance(reward_amount, &mut admin.treasury_cap)
         };
         admin.monsters_created = admin.monsters_created + 1;
         Transfer::transfer(monster, recipient);
@@ -124,6 +124,6 @@ module HeroGame::SeaHero {
 
     /// Reward a hero will reap from slaying this monster
     public fun monster_reward(monster: &SeaMonster): u64 {
-        Coin::value(&monster.reward)
+        Balance::value(&monster.reward)
     }
 }
