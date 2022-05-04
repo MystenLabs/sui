@@ -214,7 +214,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             id="descriptionResults"
                         >
                             <div>
-                                <div>Object ID:</div>
+                                <div>Object ID</div>
                                 <div id="objectID">
                                     <Longtext
                                         text={data.id}
@@ -225,8 +225,8 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             </div>
                             {data.data?.tx_digest && (
                                 <div>
-                                    <div>Transaction ID:</div>
-                                    <div>
+                                    <div>Transaction ID</div>
+                                    <div id="transactionID">
                                         {typeof data.data?.tx_digest ===
                                         'object' ? (
                                             data.data.tx_digest.map((txId) => (
