@@ -77,7 +77,6 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
                       value: tx.created.map((obj) => obj[0]),
                       list: true,
                       link: true,
-                      // //ublist: true,
                   },
               ]
             : []),
