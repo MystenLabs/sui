@@ -378,7 +378,7 @@ pub struct TransactionEnvelope<S> {
     transaction_digest: OnceCell<TransactionDigest>,
     // Deserialization sets this to "false"
     #[serde(skip)]
-    pub is_checked: bool,
+    pub is_verified: bool,
 
     pub data: TransactionData,
     /// tx_signature is signed by the transaction sender, applied on `data`.
@@ -391,12 +391,12 @@ pub struct TransactionEnvelope<S> {
 }
 
 impl<S> TransactionEnvelope<S> {
-    pub fn check_signature(&self) -> Result<(), SuiError> {
+    pub fn verify_signature(&self) -> Result<(), SuiError> {
         // We use this flag to see if someone has checked this before
         // and therefore we can skip the check. Note that the flag has
         // to be set to true manually, and is not set by calling this
         // "check" function.
-        if self.is_checked {
+        if self.is_verified {
             return Ok(());
         }
 
@@ -520,7 +520,7 @@ impl Transaction {
     pub fn new(data: TransactionData, signature: Signature) -> Self {
         Self {
             transaction_digest: OnceCell::new(),
-            is_checked: false,
+            is_verified: false,
             data,
             tx_signature: signature,
             auth_sign_info: EmptySignInfo {},
@@ -555,7 +555,7 @@ impl SignedTransaction {
         let signature = AuthoritySignature::new(&transaction.data, secret);
         Self {
             transaction_digest: OnceCell::new(),
-            is_checked: transaction.is_checked,
+            is_verified: transaction.is_verified,
             data: transaction.data,
             tx_signature: transaction.tx_signature,
             auth_sign_info: AuthoritySignInfo {
@@ -567,13 +567,13 @@ impl SignedTransaction {
     }
 
     /// Verify the signature and return the non-zero voting right of the authority.
-    pub fn check(&self, committee: &Committee) -> Result<usize, SuiError> {
-        self.check_signature()?;
+    pub fn verify(&self, committee: &Committee) -> Result<usize, SuiError> {
+        self.verify_signature()?;
         let weight = committee.weight(&self.auth_sign_info.authority);
         fp_ensure!(weight > 0, SuiError::UnknownSigner);
         self.auth_sign_info
             .signature
-            .check(&self.data, self.auth_sign_info.authority)?;
+            .verify(&self.data, self.auth_sign_info.authority)?;
         Ok(weight)
     }
 
@@ -1029,7 +1029,7 @@ pub struct SignatureAggregator<'a> {
 impl<'a> SignatureAggregator<'a> {
     /// Start aggregating signatures for the given value into a certificate.
     pub fn try_new(transaction: Transaction, committee: &'a Committee) -> Result<Self, SuiError> {
-        transaction.check_signature()?;
+        transaction.verify_signature()?;
         Ok(Self::new_unsafe(transaction, committee))
     }
 
@@ -1051,7 +1051,7 @@ impl<'a> SignatureAggregator<'a> {
         authority: AuthorityName,
         signature: AuthoritySignature,
     ) -> Result<Option<CertifiedTransaction>, SuiError> {
-        signature.check(&self.partial.data, authority)?;
+        signature.verify(&self.partial.data, authority)?;
         // Check that each authority only appears once.
         fp_ensure!(
             !self.used_authorities.contains(&authority),
@@ -1080,7 +1080,7 @@ impl CertifiedTransaction {
     pub fn new(transaction: Transaction) -> CertifiedTransaction {
         CertifiedTransaction {
             transaction_digest: transaction.transaction_digest,
-            is_checked: false,
+            is_verified: false,
             data: transaction.data,
             tx_signature: transaction.tx_signature,
             auth_sign_info: AuthorityQuorumSignInfo {
@@ -1097,7 +1097,7 @@ impl CertifiedTransaction {
     ) -> CertifiedTransaction {
         CertifiedTransaction {
             transaction_digest: transaction.transaction_digest,
-            is_checked: false,
+            is_verified: false,
             data: transaction.data,
             tx_signature: transaction.tx_signature,
             auth_sign_info: AuthorityQuorumSignInfo { epoch, signatures },
@@ -1109,12 +1109,12 @@ impl CertifiedTransaction {
     }
 
     /// Verify the certificate.
-    pub fn check(&self, committee: &Committee) -> Result<(), SuiError> {
+    pub fn verify(&self, committee: &Committee) -> Result<(), SuiError> {
         // We use this flag to see if someone has checked this before
         // and therefore we can skip the check. Note that the flag has
         // to be set to true manually, and is not set by calling this
         // "check" function.
-        if self.is_checked {
+        if self.is_verified {
             return Ok(());
         }
 
@@ -1235,9 +1235,9 @@ pub enum ConsensusTransaction {
 }
 
 impl ConsensusTransaction {
-    pub fn check(&self, committee: &Committee) -> SuiResult<()> {
+    pub fn verify(&self, committee: &Committee) -> SuiResult<()> {
         match self {
-            Self::UserTransaction(certificate) => certificate.check(committee),
+            Self::UserTransaction(certificate) => certificate.verify(committee),
         }
     }
 }

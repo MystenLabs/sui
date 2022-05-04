@@ -98,18 +98,18 @@ fn test_deterministic_signing() {
     assert!(sig_1.is_ok());
 
     // Verify signatures.
-    let ver_0 = sig_0_ok.clone().check(&msg0, sui_address_0);
+    let ver_0 = sig_0_ok.clone().verify(&msg0, sui_address_0);
     assert!(ver_0.is_ok());
 
-    let ver_1 = sig_1.unwrap().check(&msg0, sui_address_1);
+    let ver_1 = sig_1.unwrap().verify(&msg0, sui_address_1);
     assert!(ver_1.is_ok());
 
     // Ensure that signatures cannot be verified against another address.
-    let ver_0_with_address_1 = sig_0_ok.clone().check(&msg0, sui_address_1);
+    let ver_0_with_address_1 = sig_0_ok.clone().verify(&msg0, sui_address_1);
     assert!(ver_0_with_address_1.is_err());
 
     // Ensure that signatures cannot be verified against another message.
-    let ver_0_with_msg1 = sig_0_ok.clone().check(&msg1, sui_address_0);
+    let ver_0_with_msg1 = sig_0_ok.clone().verify(&msg1, sui_address_0);
     assert!(ver_0_with_msg1.is_err());
 
     // As we use ed25519, ensure that signatures on the same message are deterministic.

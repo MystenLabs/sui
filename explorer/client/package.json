@@ -42,6 +42,7 @@
     "scripts": {
         "start": "react-scripts start",
         "start:static": "REACT_APP_DATA=static PORT=8080 react-scripts start",
+        "start:local": "REACT_APP_DATA=local PORT=8080 react-scripts start",
         "test": "npx start-server-and-test 'yarn start:static' 8080 'react-scripts test --detectOpenHandles --watchAll=false'",
         "build": "react-scripts build",
         "eslint:check": "eslint --max-warnings=0 .eslintrc.js \"./src/**/*.{js,jsx,ts,tsx}\"",

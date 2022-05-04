@@ -14,6 +14,7 @@ function Footer() {
                 <Link to="/" id="homeBtn">
                     Home
                 </Link>
+                <ExternalLink href="https://sui.io/" label="Sui" />
                 <ExternalLink
                     href="https://mystenlabs.com/"
                     label="Mysten Labs"
