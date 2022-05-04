@@ -50,8 +50,8 @@ You should see the path to the command. Otherwise, reinstall.
 
 In addition, to conduct advanced work such as publishing a Move module or making a Move call, also obtain:
 
-* a [GitHub account](https://github.com/signup) if you don't have one already
-* the [Sui source code](../build/install#source-code)
+1. a [GitHub account](https://github.com/signup) if you don't have one already
+1. the [Sui source code](../build/install#source-code)
 
 ### Set up wallet, connect to gateway
 
@@ -90,3 +90,49 @@ $ curl --location --request POST 'http://ac15d2445706543f3acf211fc44e01c3-176522
 ```
 
 > **Note:** If you don't have the `json_pp` command, simply strip it and the preceding pipe (|) from the command above and re-run it.
+
+## Mint an example NFT
+
+To create a Non-Fungible Token (NFT), run:
+```shell
+$ wallet create-example-nft
+```
+
+You will see output resembling:
+```shell
+Successfully created an ExampleNFT:
+
+ID: ED883F6812AF447B9B0CE220DA5EA9E0F58012FE
+Version: 1
+Owner: Account Address ( 9E9A9D406961E478AA80F4A6B2B167673F3DF8BA )
+Type: 0x2::DevNetNFT::DevNetNFT
+```
+
+The above command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58012FE`. Note you may use `wallet` to [view objects owned by the account](https://docs.sui.io/build/wallet#view-objects-owned-by-the-account).
+
+Now you can view the created object in the [Sui Explorer](http://explorer.devnet.sui.io) at:
+https://explorer.devnet.sui.io/objects/ED883F6812AF447B9B0CE220DA5EA9E0F58012FE
+
+Replace the object ID in the link above with the object ID of the ExampleNFT you observed in your own command output to see it in Sui Explorer.
+
+Note you may easily customize the name, description, or image of the NFT upon creation, like so:
+```shell
+$ wallet create-example-nft --url=https://user-images.githubusercontent.com/76067158/166136286-c60fe70e-b982-4813-932a-0414d0f55cfb.png --description="The greatest chef in the world" --name="Greatest Chef"
+```
+
+Which results in a new object ID:
+```shell
+Successfully created an ExampleNFT:
+
+ID: EC97467A40A1305FFDEF7019C3045FBC7AA31E29
+Version: 1
+Owner: Account Address ( 9E9A9D406961E478AA80F4A6B2B167673F3DF8BA )
+Type: 0x2::DevNetNFT::DevNetNFT
+```
+
+Which you can similarly view at:
+https://explorer.devnet.sui.io/objects/EC97467A40A1305FFDEF7019C3045FBC7AA31E29
+
+To get to the *Transaction Details* view in Sui Explorer after minting an NFT, going to the [home page](http://explorer.devnet.sui.io) and find the transaction hash under *latest transactions*.
+
+See the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) for instructions on its use.
