@@ -61,33 +61,7 @@ Now [set up your wallet and connect to DevNet](../build/wallet.md#connect-to-dev
 
 ### Request gas tokens
 
-In your terminal, run the following to find your wallet's [active (default) address](../build/wallet.md#active-address):
-```shell
-$ wallet active-address
-```
-
-This will result in an address resembing:
-```shell
-F16A5AEDCDF9F2A9C2BD0F077279EC3D5FF0DFEE
-```
-
-For the remainder of this document, we will be using that address. We recommend adding that as an environment variable to ease reuse by *substituting your address into the following command*:
-```shell
-$ export ADDRESS=<YOUR ADDRESS>
-```
-
-Now use the following command to request Gas tokens from the faucet:
-```shell
-$ curl --location --request POST 'http://ac15d2445706543f3acf211fc44e01c3-1765225438.us-west-2.elb.amazonaws.com:9100/gas' \
---header 'Content-Type: application/json' \
---data-raw '{
-    "FixedAmountRequest": {
-        "recipient": "$ADDRESS"
-    }
-}'| json_pp
-```
-
-> **Note:** If you don't have the `json_pp` command, simply strip it and the preceding pipe (|) from the command above and re-run it.
+Request gas tokens in the [#request-devnet-test-coins](https://discordapp.com/channels/916379725201563759/971488439931392130) Discord channel.
 
 ## Mint an example NFT
 
