@@ -12,7 +12,7 @@ version 1.60.0 or higher in order to build and install Sui on your machine.
 To develop in Sui, you will need the Sui binaries. After installing `cargo`, run:
 
 ```shell
-$ cargo install --git https://github.com/MystenLabs/sui.git sui
+$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "devnet" sui
 ```
 
 This will put these binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):

@@ -130,16 +130,16 @@ pub enum WalletCommands {
         gas_budget: u64,
     },
 
-    /// Transfer an object
-    #[clap(name = "transfer")]
+    /// Transfer coin object
+    #[clap(name = "transfer-coin")]
     Transfer {
         /// Recipient address
         #[clap(long, parse(try_from_str = decode_bytes_hex))]
         to: SuiAddress,
 
-        /// Object to transfer, in 20 bytes Hex string
+        /// Coin to transfer, in 20 bytes Hex string
         #[clap(long)]
-        object_id: ObjectID,
+        coin_object_id: ObjectID,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
@@ -304,7 +304,7 @@ impl WalletCommands {
 
             WalletCommands::Transfer {
                 to,
-                object_id,
+                coin_object_id: object_id,
                 gas,
                 gas_budget,
             } => {
