@@ -343,12 +343,25 @@ function OwnedObjectView({ results }: { results: resultType }) {
                                 switch (key) {
                                     case 'display':
                                         break;
+                                    case 'Type':
+                                        if (IS_COIN_TYPE(entryObj.Type)) {
+                                            break;
+                                        } else {
+                                            return (
+                                                <div>
+                                                    <span>{key}</span>
+                                                    <span>
+                                                        {trimStdLibPrefix(
+                                                            value as string
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            );
+                                        }
                                     default:
                                         if (
-                                            (key === 'balance' &&
-                                                !IS_COIN_TYPE(entryObj.Type)) ||
-                                            (key === 'Type' &&
-                                                IS_COIN_TYPE(key))
+                                            key === 'balance' &&
+                                            !IS_COIN_TYPE(entryObj.Type)
                                         )
                                             break;
                                         return (

@@ -9,7 +9,7 @@
 }
 
 .ownedobjects > div {
-    @apply mx-auto break-all lg:w-[15vw];
+    @apply mx-auto break-all lg:w-[20vw];
 }
 
 .groupcollection > div {
