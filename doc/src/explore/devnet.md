@@ -100,10 +100,10 @@ Owner: Account Address ( 9E9A9D406961E478AA80F4A6B2B167673F3DF8BA )
 Type: 0x2::DevNetNFT::DevNetNFT
 ```
 
-Which you can similarly view at:
+That you can similarly view at:
 https://explorer.devnet.sui.io/objects/EC97467A40A1305FFDEF7019C3045FBC7AA31E29
 
-To get to the *Transaction Details* view in Sui Explorer after minting an NFT, going to the [home page](http://explorer.devnet.sui.io) and find the transaction hash under *latest transactions*.
+To get to the *Transaction Details* view in Sui Explorer after minting an NFT, go to the [home page](http://explorer.devnet.sui.io) and find the transaction hash under *Latest Transactions*.
 
 See the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) for instructions on its use.
 
@@ -111,7 +111,7 @@ See the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/explor
 
 ### Publish a Move module
 
-Publish a sample Move package containing code developed in [Sui Move tutorial](../build/move#writing-a-package) as follows (assuming you installed the source code in `~sui` as advised in set up):
+Publish a sample Move package containing code developed in [Sui Move tutorial](../build/move.md#writing-a-package) as follows (assuming you installed the source code in `~sui` as advised in set up):
 ```shell
 $ wallet publish --path ~sui/sui_programmability/tutorial --gas-budget 30000
 ```
@@ -187,6 +187,6 @@ Mutated Objects:
 Go to the Sui Explorer to observe a newly created object (ID `2E34983D59E9FC5310CFBAA953D2188E6A84FD21`, in this example). You should see a sword object created with `Magic` property of `42` and `Strength` property of `7` and transferred to the new owner.
 
 As above, replace object ID in the Explorer link with the object ID of the created object you observed in your own command output:
-https://explorer.devnet.sui.io/objects/2E34983D59E9FC5310CFBAA953D2188E6A84FD21
+https://explorer.devnet.sui.io/objects/OBJECT-ID
 
 This concludes the Sui DevNet setup and testing instructions. Revisit this page and re-install the binaries regularly to witness and help Sui grow!
