@@ -3,7 +3,7 @@
 
 import { JsonRpcProvider } from 'sui.js';
 
-import { tryGetRpcSetting } from './rpcSetting';
+import { getEndpoint } from './rpcSetting';
 
 const useLocal = false;
 const LOCAL = 'http://127.0.0.1:5001';
@@ -11,6 +11,6 @@ const DEVNET = 'https://gateway.devnet.sui.io:9000';
 
 let rpcUrl;
 if (useLocal) rpcUrl = LOCAL;
-else rpcUrl = tryGetRpcSetting() ?? DEVNET;
+else rpcUrl = getEndpoint() ?? DEVNET;
 
 export const DefaultRpcClient = new JsonRpcProvider(rpcUrl);
