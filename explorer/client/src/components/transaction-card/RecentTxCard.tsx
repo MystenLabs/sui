@@ -167,7 +167,7 @@ function LatestTxCard() {
     }
 
     if (results.loadState === 'loaded' && !results.latestTx.length) {
-        return <ErrorResult id="latestTx" errorMsg="No Transactions Found" />;
+        return <ErrorResult id="" errorMsg="No Transactions Found" />;
     }
 
     return (
