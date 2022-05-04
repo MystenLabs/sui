@@ -3,10 +3,10 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getObjectExistsResponse } from 'sui.js';
+import { getObjectContent, getObjectExistsResponse } from 'sui.js';
 
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
-import { parseImageURL } from '../../utils/objectUtils';
+import { parseImageURL, parseObjectType } from '../../utils/objectUtils';
 import { navigateWithUnknown } from '../../utils/searchUtil';
 import {
     findDataFromID,
@@ -82,16 +82,16 @@ function OwnedObjectAPI({ id }: { id: string }) {
                         .map(
                             (resp) => {
                                 const info = getObjectExistsResponse(resp)!;
+                                const contents = getObjectContent(resp);
                                 const url = parseImageURL(info.object);
                                 const balanceValue = (
-                                    typeof info.object.contents.fields
-                                        .balance === 'number'
-                                        ? info.object.contents.fields.balance
+                                    typeof contents?.fields.balance === 'number'
+                                        ? contents.fields.balance
                                         : undefined
                                 ) as number;
                                 return {
                                     id: info.objectRef.objectId,
-                                    Type: info.object.contents.type,
+                                    Type: parseObjectType(info),
                                     display: url
                                         ? processDisplayValue(url)
                                         : undefined,
