@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { getMovePackageContent, getObjectContent, getObjectType } from 'sui.js';
+
 import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
 
 import type {
@@ -47,16 +49,18 @@ export function translate(o: GetObjectInfoResponse): DataType {
         case 'Exists': {
             const {
                 objectRef: { objectId, version },
-                object: { contents, owner, tx_digest },
+                object: { owner, tx_digest },
             } = details as ObjectExistsInfo;
 
             return {
                 id: objectId,
                 version: version.toString(),
-                objType: contents['type'],
+                objType: getObjectType(o)!,
                 owner: parseOwner(owner),
                 data: {
-                    contents: contents.fields,
+                    contents:
+                        getObjectContent(o)?.fields ??
+                        getMovePackageContent(o)!,
                     tx_digest,
                 },
             };
