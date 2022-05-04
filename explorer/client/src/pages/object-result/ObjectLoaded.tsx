@@ -214,7 +214,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             id="descriptionResults"
                         >
                             <div>
-                                <div>Object ID</div>
+                                <div>Object ID:</div>
                                 <div id="objectID">
                                     <Longtext
                                         text={data.id}
@@ -223,12 +223,36 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     />
                                 </div>
                             </div>
+                            {data.data?.tx_digest && (
+                                <div>
+                                    <div>Transaction ID:</div>
+                                    <div>
+                                        {typeof data.data?.tx_digest ===
+                                        'object' ? (
+                                            data.data.tx_digest.map((txId) => (
+                                                <>
+                                                    <Longtext
+                                                        text={txId.toString()}
+                                                        category="transactions"
+                                                        isLink={true}
+                                                    />
+                                                </>
+                                            ))
+                                        ) : (
+                                            <Longtext
+                                                text={data.data?.tx_digest.toString()}
+                                                category="transactions"
+                                                isLink={true}
+                                            />
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                             <div>
                                 <div>Version</div>
                                 <div>{data.version}</div>
                             </div>
-
                             {data.readonly && (
                                 <div>
                                     <div>Read Only?</div>
@@ -249,7 +273,6 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     )}
                                 </div>
                             )}
-
                             <div>
                                 <div>Type</div>
                                 <div>{prepObjTypeValue(data.objType)}</div>
@@ -280,7 +303,6 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     />
                                 </div>
                             )}
-
                             {data.ethAddress && (
                                 <div>
                                     <div>Ethereum Contract Address</div>
