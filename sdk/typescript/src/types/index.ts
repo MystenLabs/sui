@@ -4,6 +4,3 @@
 export * from './common';
 export * from './objects';
 export * from './transactions';
-export * from './framework/coin';
-export * from './framework/move-object';
-export * from './framework/id';
