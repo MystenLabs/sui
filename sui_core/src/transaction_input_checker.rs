@@ -45,7 +45,7 @@ where
 
 /// Checking gas budget by fetching the gas object only from the store,
 /// and check whether the balance and budget satisfies the miminum requirement.
-/// Returns the gas object (to be able to rese it latter) and a gas status
+/// Returns the gas object (to be able to reuse it latter) and a gas status
 /// that will be used in the entire lifecycle of the transaction execution.
 #[instrument(level = "trace", skip_all)]
 async fn check_gas<const A: bool, S>(
