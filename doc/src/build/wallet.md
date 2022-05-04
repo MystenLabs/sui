@@ -500,6 +500,8 @@ Here is an example:
 
 ## Transferring coins
 
+Coins *are* objects yet have a specific use case that allow for native commands like transfer-coin/merge-coin/split-coin to be used. This is different from non-coin objects that can only be mutated via Move calls.
+
 If you inspect a newly created account, you would expect the account does not own any object. Let us inspect the fresh account we create in the [Generating a new account](#generating-a-new-account) section (`C72CF3ADCC4D11C03079CEF2C8992AEA5268677A`):
 
 ```shell
@@ -787,9 +789,6 @@ Please note that there is no real need to use a Move call to transfer
 coins as this can be accomplished with a built-in wallet
 [command](#transferring-coins) - we chose this example due to its
 simplicity.
-
-TODO: Clarify the statement above as experiments find only coins may be transferred. See:
-https://github.com/MystenLabs/sui/issues/1739
 
 Let us examine objects owned by address `AE6FB6036570FEC1DF71599740C132CDF5B45B9D`:
 
