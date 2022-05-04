@@ -577,10 +577,11 @@ where
         let tx_kind = tx.data.kind.clone();
         let mut res = self.execute_transaction_impl(tx.clone()).await;
 
-        let mut remaining_retries = MAX_NUM_TX_RETRIES - 1;
+        let mut remaining_retries = MAX_NUM_TX_RETRIES;
         while res.is_err() {
             if remaining_retries == 0 {
-                res?;
+                // Okay to do this since we checked that this is an error
+                return Err(res.unwrap_err());
             }
             remaining_retries -= 1;
             res = self.execute_transaction_impl(tx.clone()).await;
