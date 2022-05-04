@@ -57,7 +57,7 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
         // txKind Transfer or Call
         ...(formatByTransactionKind(txKindName, tx.data) ?? []),
         {
-            label: 'Transactions Signature',
+            label: 'Transaction Signature',
             value: tx.tx_signature,
         },
         ...(tx.mutated.length
@@ -143,8 +143,8 @@ function formatByTransactionKind(
                 },
                 {
                     label: 'Package',
-                    value: moveCall.package,
-                    list: true,
+                    value: moveCall.package[0],
+                    link: true,
                 },
                 {
                     label: 'Module',
