@@ -163,18 +163,24 @@ function GroupView({ results }: { results: resultType }) {
                                 key={typeV}
                                 onClick={shrinkObjList(subObjList)}
                             >
-                                <div>{trimStdLibPrefix(typeV)}</div>
                                 <div>
-                                    {IS_COIN_TYPE(typeV) &&
-                                    subObjList.every(
-                                        (el) => el.balance !== undefined
-                                    )
-                                        ? `Balance ${subObjList.reduce(
-                                              (prev, current) =>
-                                                  prev + current.balance!,
-                                              0
-                                          )}`
-                                        : `Count ${subObjList.length}`}
+                                    <span>Type</span>
+                                    <span>{trimStdLibPrefix(typeV)}</span>
+                                </div>
+                                <div>
+                                    <span>Balance</span>
+                                    <span>
+                                        {IS_COIN_TYPE(typeV) &&
+                                        subObjList.every(
+                                            (el) => el.balance !== undefined
+                                        )
+                                            ? `${subObjList.reduce(
+                                                  (prev, current) =>
+                                                      prev + current.balance!,
+                                                  0
+                                              )}`
+                                            : ''}
+                                    </span>
                                 </div>
                             </div>
                         );

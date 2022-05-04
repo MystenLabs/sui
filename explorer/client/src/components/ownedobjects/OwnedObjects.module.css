@@ -20,16 +20,16 @@
     @apply border-solid border-stone-300 rounded-lg my-2 p-[0.25vw] lg:w-[23vw] lg:self-center hover:shadow-md cursor-pointer;
 }
 
-.objectbox > div > div {
-    @apply border-0 border-b border-solid border-gray-300
-                        mb-2;
+.objectbox > div {
+    @apply pt-2 pl-2;
 }
 
 .objectbox > div:first-child > div {
     @apply border-none;
 }
 
-.objectbox > div > div > span:first-child {
+.objectbox > div > div > span:first-child,
+.groupcollection > div > div > span:first-child {
     @apply mr-[1rem] uppercase font-sans font-semibold block xl:inline;
 }
 

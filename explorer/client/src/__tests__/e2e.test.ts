@@ -485,28 +485,28 @@ describe('End-to-end Tests', () => {
                     '#groupCollection > div:nth-child(1) > div:nth-child(1)',
                     (el: any) => el.textContent
                 )
-            ).toBe('Coin::Coin<0x2::USD::USD>');
+            ).toBe('TypeCoin::Coin<0x2::USD::USD>');
 
             expect(
                 await page.$eval(
                     '#groupCollection > div:nth-child(1) > div:nth-child(2)',
                     (el: any) => el.textContent
                 )
-            ).toBe('Balance 300');
+            ).toBe('Balance300');
 
             expect(
                 await page.$eval(
                     '#groupCollection > div:nth-child(2) > div:nth-child(1)',
                     (el: any) => el.textContent
                 )
-            ).toBe('Coin::Coin<0x2::SUI::SUI>');
+            ).toBe('TypeCoin::Coin<0x2::SUI::SUI>');
 
             expect(
                 await page.$eval(
                     '#groupCollection > div:nth-child(2) > div:nth-child(2)',
                     (el: any) => el.textContent
                 )
-            ).toBe('Balance 200');
+            ).toBe('Balance200');
         });
     });
 });
