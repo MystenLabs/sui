@@ -35,7 +35,7 @@ schemars ="0.8.8"
 tonic = "0.7"
 
 name_variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "97a056f85555fa2afe497d6abb7cf6bf8faa63cf" }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d2976a45420147ad821baae96e6fe4b12215f743" }
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "c37d291668838108137a2028ab34a593ee9e6800" }
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
