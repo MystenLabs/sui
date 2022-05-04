@@ -101,7 +101,7 @@ async fn try_main() -> Result<(), anyhow::Error> {
                 accounts: vec![new_address],
                 keystore,
                 gateway: GatewayType::RPC(url.to_string()),
-                active_address: None,
+                active_address: Some(new_address),
             }
             .persisted(&wallet_conf_path)
             .save()?;
@@ -111,12 +111,21 @@ async fn try_main() -> Result<(), anyhow::Error> {
     let mut context = WalletContext::new(&wallet_conf_path)?;
 
     // Sync all accounts on start up.
-    for address in context.config.accounts.clone() {
-        WalletCommands::SyncClientState {
-            address: Some(address),
+    // Do not sync if command is a gateway switch, as the current gateway might be unreachable and causes sync to panic.
+    if !matches!(
+        options.cmd,
+        Some(WalletCommands::Switch {
+            gateway: Some(_),
+            ..
+        })
+    ) {
+        for address in context.config.accounts.clone() {
+            WalletCommands::SyncClientState {
+                address: Some(address),
+            }
+            .execute(&mut context)
+            .await?;
         }
-        .execute(&mut context)
-        .await?;
     }
 
     let mut out = stdout();
