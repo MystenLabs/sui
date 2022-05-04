@@ -238,14 +238,6 @@ function OwnedObjectSection({ results }: { results: resultType }) {
                     <span className={pageIndex === 0 ? styles.gone : ''}>
                         <button
                             className={styles.btncontainer}
-                            id="firstBtn"
-                            onClick={handleFirstClick}
-                            disabled={pageIndex === 0}
-                        >
-                            First
-                        </button>
-                        <button
-                            className={styles.btncontainer}
                             id="backBtn"
                             onClick={handleBackClick}
                             disabled={pageIndex === 0}
@@ -261,6 +253,15 @@ function OwnedObjectSection({ results }: { results: resultType }) {
                                 />
                             </svg>
                         </button>
+
+                        <button
+                            className={styles.btncontainer}
+                            id="firstBtn"
+                            onClick={handleFirstClick}
+                            disabled={pageIndex === 0}
+                        >
+                            First
+                        </button>
                     </span>
 
                     <span className={styles.pagenumber}>
@@ -272,6 +273,14 @@ function OwnedObjectSection({ results }: { results: resultType }) {
                             pageIndex === FINAL_PAGE_NO - 1 ? styles.gone : ''
                         }
                     >
+                        <button
+                            id="lastBtn"
+                            disabled={pageIndex === FINAL_PAGE_NO - 1}
+                            onClick={handleLastClick}
+                            className={styles.btncontainer}
+                        >
+                            Last
+                        </button>
                         <button
                             id="nextBtn"
                             className={styles.btncontainer}
@@ -288,14 +297,6 @@ function OwnedObjectSection({ results }: { results: resultType }) {
                                     fill="transparent"
                                 />
                             </svg>
-                        </button>
-                        <button
-                            id="lastBtn"
-                            disabled={pageIndex === FINAL_PAGE_NO - 1}
-                            onClick={handleLastClick}
-                            className={styles.btncontainer}
-                        >
-                            Last
                         </button>
                     </span>
                 </>
