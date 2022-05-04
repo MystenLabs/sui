@@ -215,6 +215,18 @@ pub enum SuiError {
     InvalidMoveEvent { error: String },
     #[error("Circular object ownership detected")]
     CircularObjectOwnership,
+    #[error("When an (either direct or indirect) child object of a shared object is passed as a Move argument,\
+        either the child object's type or the shared object's type must be defined in the same module \
+        as the called function. This is violated by object {child} (defined in module '{child_module}'), \
+        whose ancestor {ancestor} is a shared object (defined in module '{ancestor_module}'), \
+        and neither are defined in this module '{current_module}'")]
+    InvalidSharedChildUse {
+        child: ObjectID,
+        child_module: String,
+        ancestor: ObjectID,
+        ancestor_module: String,
+        current_module: String,
+    },
 
     // Gas related errors
     #[error("Gas budget set higher than max: {error:?}.")]
