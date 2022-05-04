@@ -5,6 +5,8 @@ import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
 
 import type {
     GetObjectInfoResponse,
+    MovePackageContent,
+    ObjectContent,
     ObjectExistsInfo,
     ObjectNotExistsInfo,
     ObjectOwner,
@@ -47,16 +49,31 @@ export function translate(o: GetObjectInfoResponse): DataType {
         case 'Exists': {
             const {
                 objectRef: { objectId, version },
+                objectType,
                 object: { contents, owner, tx_digest },
             } = details as ObjectExistsInfo;
 
+            if (objectType === 'movePackage') {
+                return {
+                    id: objectId,
+                    version: version.toString(),
+                    objType: 'Move Package',
+                    owner: parseOwner(owner),
+                    data: {
+                        contents: contents as MovePackageContent,
+                        tx_digest,
+                    },
+                };
+            }
+
+            const objectContent = contents as ObjectContent;
             return {
                 id: objectId,
                 version: version.toString(),
-                objType: contents['type'],
+                objType: objectContent['type'],
                 owner: parseOwner(owner),
                 data: {
-                    contents: contents.fields,
+                    contents: objectContent.fields,
                     tx_digest,
                 },
             };

@@ -24,8 +24,10 @@ export type ObjectContent = {
   type: string;
 };
 
+export type MovePackageContent = Record<string, string>;
+
 export type SuiObject = {
-  contents: ObjectContent;
+  contents: ObjectContent | MovePackageContent;
   owner: ObjectOwner;
   tx_digest: TransactionDigest;
 };
@@ -69,8 +71,34 @@ export function getObjectExistsResponse(
     : (resp.details as ObjectExistsInfo);
 }
 
+export function getObjectType(
+  resp: GetObjectInfoResponse
+): 'moveObject' | 'movePackage' | undefined {
+  return getObjectExistsResponse(resp)?.objectType;
+}
+
 export function getObjectContent(
   resp: GetObjectInfoResponse
 ): ObjectContent | undefined {
-  return getObjectExistsResponse(resp)?.object.contents;
+  const existsInfo = getObjectExistsResponse(resp);
+  if (existsInfo == null) {
+    return undefined;
+  }
+  const { object, objectType } = existsInfo;
+  return objectType === 'moveObject'
+    ? (object.contents as ObjectContent)
+    : undefined;
+}
+
+export function getMovePackageContent(
+  resp: GetObjectInfoResponse
+): MovePackageContent | undefined {
+  const existsInfo = getObjectExistsResponse(resp);
+  if (existsInfo == null) {
+    return undefined;
+  }
+  const { object, objectType } = existsInfo;
+  return objectType === 'movePackage'
+    ? (object.contents as MovePackageContent)
+    : undefined;
 }
