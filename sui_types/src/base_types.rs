@@ -222,7 +222,7 @@ impl TxContext {
     /// Updates state of the context instance. It's intended to use
     /// when mutable context is passed over some boundary via
     /// serialize/deserialize and this is the reason why this method
-    /// consumes the other contex..
+    /// consumes the other context..
     pub fn update_state(&mut self, other: TxContext) -> Result<(), SuiError> {
         if self.sender != other.sender
             || self.digest != other.digest
@@ -656,6 +656,13 @@ impl From<hex::FromHexError> for ObjectIDParseError {
 impl From<[u8; ObjectID::LENGTH]> for ObjectID {
     fn from(bytes: [u8; ObjectID::LENGTH]) -> Self {
         Self::new(bytes)
+    }
+}
+
+impl From<SuiAddress> for ObjectID {
+    fn from(address: SuiAddress) -> ObjectID {
+        let tmp: AccountAddress = address.into();
+        tmp.into()
     }
 }
 
