@@ -855,7 +855,7 @@ fn test_simple_call() {
     let genesis_objects = genesis::clone_genesis_packages();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
-    // crate gas object for payment
+    // create gas object for payment
     let gas_object =
         Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
 
@@ -911,7 +911,7 @@ fn test_child_of_shared_object() {
     let genesis_objects = genesis::clone_genesis_packages();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
-    // crate gas object for payment
+    // create gas object for payment
     let gas_object =
         Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
 
@@ -984,7 +984,7 @@ fn test_child_of_shared_object() {
         vec![o2_shared, o3],
         vec![],
     );
-    // Using O2 and O3 in O1 is illegable when O2 is a shared object and O3 is its child.
+    // Using O2 and O3 in O1 is illegal when O2 is a shared object and O3 is its child.
     assert!(matches!(
         result,
         Err(SuiError::InvalidSharedChildUse { .. })
@@ -1017,7 +1017,7 @@ fn test_publish_init() {
     let genesis_objects = genesis::clone_genesis_packages();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
-    // crate gas object for payment
+    // create gas object for payment
     let gas_object =
         Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
 
@@ -1032,7 +1032,7 @@ fn test_publish_init() {
     .unwrap();
 
     // a package object and a fresh object in the constructor should
-    // have been crated
+    // have been created
     assert_eq!(storage.created().len(), 2);
     let to_check = mem::take(&mut storage.temporary.created);
     let mut move_obj_exists = false;

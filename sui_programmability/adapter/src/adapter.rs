@@ -816,7 +816,7 @@ fn check_child_object_of_shared_object(
     current_module: ModuleId,
 ) -> SuiResult {
     // ancestor_map is a cache that remembers the top ancestor of each object.
-    // Top ancestor is the object at the top in the object ownership chain whose
+    // Top ancestor is the root object at the top in the object ownership chain whose
     // parent is no longer an object.
     let mut ancestor_map: BTreeMap<ObjectID, ObjectID> = BTreeMap::new();
     for (object_id, obj) in objects {
@@ -840,8 +840,12 @@ fn check_child_object_of_shared_object(
             match owner {
                 Owner::ObjectOwner(parent_id) => {
                     cur_id = parent_id.into();
+                    fp_ensure!(
+                        cur_id != ancestor_stack[0],
+                        SuiError::CircularObjectOwnership
+                    );
                 }
-                _ => {
+                Owner::AddressOwner(_) | Owner::Immutable | Owner::Shared => {
                     break cur_id;
                 }
             }
