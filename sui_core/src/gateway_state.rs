@@ -16,7 +16,6 @@ use move_core_types::language_storage::TypeTag;
 use sui_adapter::adapter::resolve_and_type_check;
 use tracing::{error, Instrument};
 
-use sui_types::gas::{self, SuiGasStatus};
 use sui_types::{
     base_types::*,
     coin,
@@ -255,16 +254,25 @@ where
             .set_transaction_lock(mutable_input_objects, transaction)
     }
 
-    async fn check_gas(
+    /// Make sure all objects in the input exist in the gateway store.
+    /// If any object does not exist in the store, give it a chance
+    /// to download from authorities.
+    async fn sync_input_objects_with_authorities(
         &self,
-        gas_payment_id: ObjectID,
-        gas_budget: u64,
-    ) -> SuiResult<(Object, SuiGasStatus<'_>)> {
-        let gas_object = self.get_object(&gas_payment_id).await?;
-        gas::check_gas_balance(&gas_object, gas_budget)?;
-        // TODO: Pass in real computation gas unit price and storage gas unit price.
-        let gas_status = gas::start_gas_metering(gas_budget, 1, 1)?;
-        Ok((gas_object, gas_status))
+        transaction: &Transaction,
+    ) -> Result<(), anyhow::Error> {
+        let input_objects = transaction.data.input_objects()?;
+        let mut objects = self.read_objects_from_store(&input_objects).await?;
+        for (object_opt, kind) in objects.iter_mut().zip(&input_objects) {
+            if object_opt.is_none() {
+                if let ObjectRead::Exists(_, object, _) =
+                    self.get_object_info(kind.object_id()).await?
+                {
+                    *object_opt = Some(object);
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Execute (or retry) a transaction and execute the Confirmation Transaction.
@@ -274,31 +282,14 @@ where
         transaction: Transaction,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         transaction.verify_signature()?;
-        self.check_gas(
-            transaction.gas_payment_object_ref().0,
-            transaction.data.gas_budget,
-        )
-        .await?;
 
-        let input_objects = transaction.data.input_objects()?;
-        let mut objects = self.read_objects_from_store(&input_objects).await?;
-        for (object_opt, kind) in objects.iter_mut().zip(&input_objects) {
-            // If any object does not exist in the store, give it a chance
-            // to download from authorities.
-            if object_opt.is_none() {
-                if let ObjectRead::Exists(_, object, _) =
-                    self.get_object_info(kind.object_id()).await?
-                {
-                    *object_opt = Some(object);
-                }
-            }
-        }
+        self.sync_input_objects_with_authorities(&transaction)
+            .await?;
 
-        let objects_by_kind =
-            transaction_input_checker::check_locks(&transaction.data, input_objects, objects)
-                .instrument(tracing::trace_span!("tx_check_locks"))
-                .await?;
-        let owned_objects = transaction_input_checker::filter_owned_objects(&objects_by_kind);
+        let (_gas_status, all_objects) =
+            transaction_input_checker::check_transaction_input(&self.store, &transaction).await?;
+
+        let owned_objects = transaction_input_checker::filter_owned_objects(&all_objects);
         self.set_transaction_lock(&owned_objects, transaction.clone())
             .instrument(tracing::trace_span!("db_set_transaction_lock"))
             .await?;
@@ -336,7 +327,7 @@ where
             .download_objects_from_authorities(mutated_object_refs)
             .await?;
         self.store.update_gateway_state(
-            objects_by_kind,
+            all_objects,
             mutated_objects,
             new_certificate.clone(),
             effects.clone().to_unsigned_effects(),

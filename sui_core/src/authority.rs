@@ -32,7 +32,7 @@ use sui_types::{
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
     fp_bail, fp_ensure,
-    gas::{self, SuiGasStatus},
+    gas::SuiGasStatus,
     messages::*,
     object::{Data, Object},
     storage::{BackingPackageStore, DeleteKind, Storage},
@@ -60,7 +60,7 @@ mod temporary_store;
 pub use temporary_store::AuthorityTemporaryStore;
 
 mod authority_store;
-pub use authority_store::{AuthorityStore, GatewayStore};
+pub use authority_store::{AuthorityStore, GatewayStore, SuiDataStore};
 
 pub mod authority_notifier;
 
@@ -117,69 +117,6 @@ impl AuthorityState {
         self.batch_channels.subscribe()
     }
 
-    /// Checking gas budget by fetching the gas object only from the store,
-    /// and check whether the balance and budget satisfies the miminum requirement.
-    /// Returns the gas object (to be able to rese it latter) and a gas status
-    /// that will be used in the entire lifecycle of the transaction execution.
-    #[instrument(level = "trace", skip_all)]
-    async fn check_gas(
-        &self,
-        gas_payment_id: ObjectID,
-        gas_budget: u64,
-    ) -> SuiResult<(Object, SuiGasStatus<'_>)> {
-        let gas_object = self.get_object(&gas_payment_id).await?;
-        let gas_object = gas_object.ok_or(SuiError::ObjectNotFound {
-            object_id: gas_payment_id,
-        })?;
-        gas::check_gas_balance(&gas_object, gas_budget)?;
-        // TODO: Pass in real computation gas unit price and storage gas unit price.
-        let gas_status = gas::start_gas_metering(gas_budget, 1, 1)?;
-        Ok((gas_object, gas_status))
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    async fn check_locks(
-        &self,
-        transaction: &TransactionData,
-        gas_object: Object,
-        gas_status: &mut SuiGasStatus<'_>,
-    ) -> Result<Vec<(InputObjectKind, Object)>, SuiError> {
-        let input_objects = transaction.input_objects()?;
-        // These IDs act as authenticators that can own other objects.
-        let objects = self.fetch_objects(&input_objects, Some(gas_object)).await?;
-        let all_objects =
-            transaction_input_checker::check_locks(transaction, input_objects, objects).await?;
-        // Charge gas for reading all objects from the DB.
-        // TODO: Some of the objects may be duplicate (for batch tx). We could save gas by
-        // fetching only unique objects.
-        let total_size = all_objects
-            .iter()
-            .map(|(_, obj)| obj.object_size_for_gas_metering())
-            .sum();
-        gas_status.charge_storage_read(total_size)?;
-
-        Ok(all_objects)
-    }
-
-    #[instrument(level = "trace", skip_all, fields(num_objects = input_objects.len()))]
-    async fn fetch_objects(
-        &self,
-        input_objects: &[InputObjectKind],
-        gas_object_opt: Option<Object>,
-    ) -> Result<Vec<Option<Object>>, SuiError> {
-        let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
-        if let Some(gas_object) = gas_object_opt {
-            // If we already have the gas object, avoid fetching it again.
-            // Skip the last one since it's the gas object.
-            debug_assert_eq!(gas_object.id(), ids[ids.len() - 1]);
-            let mut result = self.get_objects(&ids[..ids.len() - 1]).await?;
-            result.push(Some(gas_object));
-            Ok(result)
-        } else {
-            self.get_objects(&ids[..]).await
-        }
-    }
-
     async fn handle_transaction_impl(
         &self,
         transaction: Transaction,
@@ -191,21 +128,10 @@ impl AuthorityState {
             return Ok(transaction_info);
         }
 
-        let (gas_object, mut gas_status) = self
-            .check_gas(
-                transaction.gas_payment_object_ref().0,
-                transaction.data.gas_budget,
-            )
-            .await?;
+        let (_gas_status, all_objects) =
+            transaction_input_checker::check_transaction_input(&self._database, &transaction)
+                .await?;
 
-        let all_objects: Vec<_> = self
-            .check_locks(&transaction.data, gas_object, &mut gas_status)
-            .await?;
-        if transaction.contains_shared_object() {
-            // It's important that we do this here to make sure there is enough
-            // gas to cover shared objects, before we lock all objects.
-            gas_status.charge_consensus()?;
-        }
         let owned_objects = transaction_input_checker::filter_owned_objects(&all_objects);
 
         let signed_transaction =
@@ -332,16 +258,9 @@ impl AuthorityState {
         let certificate = confirmation_transaction.certificate;
         let transaction_digest = *certificate.digest();
 
-        let (gas_object, mut gas_status) = self
-            .check_gas(
-                certificate.gas_payment_object_ref().0,
-                certificate.data.gas_budget,
-            )
-            .await?;
-
-        let objects_by_kind = self
-            .check_locks(&certificate.data, gas_object, &mut gas_status)
-            .await?;
+        let (gas_status, objects_by_kind) =
+            transaction_input_checker::check_transaction_input(&self._database, &certificate)
+                .await?;
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
@@ -356,7 +275,6 @@ impl AuthorityState {
             // for processing by the consensus protocol.
             self.check_shared_locks(&transaction_digest, &shared_object_refs)
                 .await?;
-            gas_status.charge_consensus()?;
         }
 
         debug!(
@@ -693,7 +611,8 @@ impl AuthorityState {
         modules: Vec<CompiledModule>,
     ) -> SuiResult {
         let inputs = Transaction::input_objects_in_compiled_modules(&modules);
-        let input_objects = self.fetch_objects(&inputs, None).await?;
+        let ids: Vec<_> = inputs.iter().map(|kind| kind.object_id()).collect();
+        let input_objects = self.get_objects(&ids[..]).await?;
         // When publishing genesis packages, since the std framework packages all have
         // non-zero addresses, [`Transaction::input_objects_in_compiled_modules`] will consider
         // them as dependencies even though they are not. Hence input_objects contain objects

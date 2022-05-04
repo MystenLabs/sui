@@ -3,22 +3,107 @@
 
 use std::collections::HashSet;
 
+use serde::{Deserialize, Serialize};
 use sui_types::{
-    base_types::{ObjectRef, SequenceNumber, SuiAddress},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     error::{SuiError, SuiResult},
     fp_ensure,
-    messages::{InputObjectKind, SingleTransactionKind, TransactionData},
+    gas::{self, SuiGasStatus},
+    messages::{InputObjectKind, SingleTransactionKind, TransactionData, TransactionEnvelope},
     object::{Object, Owner},
 };
-use tracing::debug;
+use tracing::{debug, instrument};
+
+use crate::authority::SuiDataStore;
+
+#[instrument(level = "trace", skip_all)]
+pub async fn check_transaction_input<const A: bool, S, T>(
+    store: &SuiDataStore<A, S>,
+    transaction: &TransactionEnvelope<T>,
+) -> Result<(SuiGasStatus<'static>, Vec<(InputObjectKind, Object)>), SuiError>
+where
+    S: Eq + Serialize + for<'de> Deserialize<'de>,
+{
+    let (gas_object, mut gas_status) = check_gas(
+        store,
+        transaction.gas_payment_object_ref().0,
+        transaction.data.gas_budget,
+    )
+    .await?;
+
+    let objects_by_kind =
+        check_locks(store, &transaction.data, gas_object, &mut gas_status).await?;
+
+    if transaction.contains_shared_object() {
+        // It's important that we do this here to make sure there is enough
+        // gas to cover shared objects, before we lock all objects.
+        gas_status.charge_consensus()?;
+    }
+
+    Ok((gas_status, objects_by_kind))
+}
+
+/// Checking gas budget by fetching the gas object only from the store,
+/// and check whether the balance and budget satisfies the miminum requirement.
+/// Returns the gas object (to be able to reuse it latter) and a gas status
+/// that will be used in the entire lifecycle of the transaction execution.
+#[instrument(level = "trace", skip_all)]
+async fn check_gas<const A: bool, S>(
+    store: &SuiDataStore<A, S>,
+    gas_payment_id: ObjectID,
+    gas_budget: u64,
+) -> SuiResult<(Object, SuiGasStatus<'static>)>
+where
+    S: Eq + Serialize + for<'de> Deserialize<'de>,
+{
+    let gas_object = store.get_object(&gas_payment_id)?;
+    let gas_object = gas_object.ok_or(SuiError::ObjectNotFound {
+        object_id: gas_payment_id,
+    })?;
+    gas::check_gas_balance(&gas_object, gas_budget)?;
+    // TODO: Pass in real computation gas unit price and storage gas unit price.
+    let gas_status = gas::start_gas_metering(gas_budget, 1, 1)?;
+    Ok((gas_object, gas_status))
+}
+
+#[instrument(level = "trace", skip_all, fields(num_objects = input_objects.len()))]
+async fn fetch_objects<const A: bool, S>(
+    store: &SuiDataStore<A, S>,
+    input_objects: &[InputObjectKind],
+    gas_object_opt: Option<Object>,
+) -> Result<Vec<Option<Object>>, SuiError>
+where
+    S: Eq + Serialize + for<'de> Deserialize<'de>,
+{
+    let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
+    if let Some(gas_object) = gas_object_opt {
+        // If we already have the gas object, avoid fetching it again.
+        // Skip the last one since it's the gas object.
+        debug_assert_eq!(gas_object.id(), ids[ids.len() - 1]);
+        let mut result = store.get_objects(&ids[..ids.len() - 1])?;
+        result.push(Some(gas_object));
+        Ok(result)
+    } else {
+        store.get_objects(&ids[..])
+    }
+}
 
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
-pub async fn check_locks(
+#[instrument(level = "trace", skip_all)]
+async fn check_locks<const A: bool, S>(
+    store: &SuiDataStore<A, S>,
     transaction: &TransactionData,
-    input_objects: Vec<InputObjectKind>,
-    objects: Vec<Option<Object>>,
-) -> Result<Vec<(InputObjectKind, Object)>, SuiError> {
+    gas_object: Object,
+    gas_status: &mut SuiGasStatus<'_>,
+) -> Result<Vec<(InputObjectKind, Object)>, SuiError>
+where
+    S: Eq + Serialize + for<'de> Deserialize<'de>,
+{
+    let input_objects = transaction.input_objects()?;
+    // These IDs act as authenticators that can own other objects.
+    let objects = fetch_objects(store, &input_objects, Some(gas_object)).await?;
+
     // Constructing the list of objects that could be used to authenticate other
     // objects. Any mutable object (either shared or owned) can be used to
     // authenticate other objects. Hence essentially we are building the list
@@ -89,6 +174,16 @@ pub async fn check_locks(
         return Err(SuiError::LockErrors { errors });
     }
     fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
+
+    // Charge gas for reading all objects from the DB.
+    // TODO: Some of the objects may be duplicate (for batch tx). We could save gas by
+    // fetching only unique objects.
+    let total_size = all_objects
+        .iter()
+        .map(|(_, obj)| obj.object_size_for_gas_metering())
+        .sum();
+    gas_status.charge_storage_read(total_size)?;
+
     Ok(all_objects)
 }
 
