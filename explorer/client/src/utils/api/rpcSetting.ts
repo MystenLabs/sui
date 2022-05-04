@@ -37,3 +37,19 @@ export const tryGetRpcSetting = (): string | null => {
     // query param takes precedence over local store
     return queryParam ? queryParam : localStore;
 };
+
+const ENDPOINTS = {
+    local: 'http://127.0.0.1:5001',
+    devnet: 'http://gateway.devnet.sui.io:9000',
+};
+
+export function getEndpoint(): string {
+    const override = tryGetRpcSetting();
+    if (override) return override;
+    const network = process.env.REACT_APP_DATA;
+    if (network === 'local') {
+        return ENDPOINTS[network];
+    }
+    // Use DevNet as the fallback option
+    return ENDPOINTS.devnet;
+}

@@ -7,7 +7,7 @@ import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
-import { type AddressOwner } from '../../utils/api/SuiRpcClient';
+import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
 import { parseImageURL } from '../../utils/objectUtils';
 import {
     asciiFromNumberBytes,
