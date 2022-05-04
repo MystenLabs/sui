@@ -8,7 +8,7 @@ use itertools::Itertools;
 use rand::distributions::{Distribution, Uniform};
 use rand::rngs::OsRng;
 use std::borrow::Borrow;
-use std::collections::{BTreeMap, HashMap, };
+use std::collections::{BTreeMap, HashMap};
 
 pub type EpochId = u64;
 
@@ -73,21 +73,29 @@ impl Committee {
 
     /// Given a sequence of (AuthorityName, value) for values that are ordered, provide the
     /// value at the particular threshold by stake. This orders all provided values and pick
-    /// the appropriate value that has under it threshold stake. You may use the function 
-    /// `quorum_threshold` or `validity_threshold` to pick the f+1 or 2f+1 thresholds 
+    /// the appropriate value that has under it threshold stake. You may use the function
+    /// `quorum_threshold` or `validity_threshold` to pick the f+1 or 2f+1 thresholds
     /// respectivelly.
-    pub fn robust_value<A, V>(&self, items: impl Iterator<Item=(A, V)>, threshold: usize) -> (AuthorityName, V) 
-        where A : Borrow<AuthorityName> + Ord,
-              V : Ord,
+    pub fn robust_value<A, V>(
+        &self,
+        items: impl Iterator<Item = (A, V)>,
+        threshold: usize,
+    ) -> (AuthorityName, V)
+    where
+        A: Borrow<AuthorityName> + Ord,
+        V: Ord,
     {
         debug_assert!(threshold < self.total_votes);
 
-        let vec : Vec<_> = items.map(|(a, v)| (v, self.voting_rights[a.borrow()], *a.borrow())).sorted().collect();
+        let vec: Vec<_> = items
+            .map(|(a, v)| (v, self.voting_rights[a.borrow()], *a.borrow()))
+            .sorted()
+            .collect();
         let mut total = 0;
         for (v, s, a) in vec {
             total += s;
             if threshold < total {
-                return (a, v)
+                return (a, v);
             }
         }
         unreachable!();

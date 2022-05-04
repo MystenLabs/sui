@@ -106,17 +106,14 @@ pub async fn test_gossip_no_network() {
     let clients = aggregator.authority_clients.clone();
 
     // Start batch processes, and active processes.
-    for state in states {
-        let inner_state = state.clone();
+    if let Some(state) = states.into_iter().next() {
+        let inner_state = state;
         let inner_clients = clients.clone();
 
         let _active_handle = tokio::task::spawn(async move {
             let active_state = ActiveAuthority::new(inner_state, inner_clients).unwrap();
             active_state.spawn_all_active_processes().await
         });
-
-        // Just do one
-        break;
     }
 
     // Let the helper tasks start
