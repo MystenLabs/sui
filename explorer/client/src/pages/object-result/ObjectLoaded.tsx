@@ -260,7 +260,13 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     <Longtext
                                         text={extractOwnerData(data.owner)}
                                         category="unknown"
-                                        isLink={true}
+                                        // TODO: make this more elegant
+                                        isLink={
+                                            extractOwnerData(data.owner) !==
+                                                'Immutable' &&
+                                            extractOwnerData(data.owner) !==
+                                                'Shared'
+                                        }
                                     />
                                 </div>
                             </div>
