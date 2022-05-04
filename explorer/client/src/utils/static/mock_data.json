@@ -1,201 +1,6 @@
 {
     "data": [
         {
-            "id": "txCreateSuccess",
-            "category": "transaction",
-            "sender": "senderAddress",
-            "status": "success",
-            "created": [
-                "playerOne",
-                "playerTwo",
-                "CollectionObject",
-                "ComponentObject",
-                "DeletedObject"
-            ],
-            "recipients": []
-        },
-        {
-            "id": "txFails",
-            "category": "transaction",
-            "sender": "senderAddress",
-            "status": "fail",
-            "recipients": []
-        },
-        {
-            "id": "txSendPending",
-            "category": "transaction",
-            "sender": "senderAddress",
-            "status": "pending",
-            "mutated": ["playerOne", "playerTwo"],
-            "recipients": ["receiverAddress"]
-        },
-        {
-            "id": "txSendSuccess",
-            "category": "transaction",
-            "sender": "senderAddress",
-            "status": "success",
-            "mutated": ["playerOne", "playerTwo"],
-            "recipients": ["receiverAddress"]
-        },
-
-        {
-            "id": "txDeleteSuccess",
-            "category": "transaction",
-            "sender": "senderAddress",
-            "status": "success",
-            "deleted": ["DeletedObject"],
-            "recipients": []
-        },
-        {
-            "id": "txMissingData",
-            "category": "transaction"
-        },
-        {
-            "id": "senderAddress",
-            "category": "address",
-            "objects": []
-        },
-        {
-            "id": "receiverAddress",
-            "category": "address",
-            "objects": [
-                {
-                    "objectId": "playerOne"
-                },
-                {
-                    "objectId": "playerTwo"
-                }
-            ]
-        },
-        {
-            "id": "0xa5e6dbcf33730ace6ec8b400ff4788c1f150ff7e",
-            "category": "address",
-            "objects": [
-                {
-                    "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
-                }
-            ]
-        },
-        {
-            "id": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f",
-            "category": "address",
-            "objects": [
-                {
-                    "objectId": "8cd943fd42810749de9e0434f01feg443hgg54v1"
-                },
-                {
-                    "objectId": "8cd943fd42810749de9e0434f01feg443hgg54v2"
-                },
-                {
-                    "objectId": "9de054ge53921850ef0f1545g12gfh554ihh65v1"
-                },
-                {
-                    "objectId": "9de054ge53921850ef0f1545g12gfh554ihh65v2"
-                },
-                {
-                    "objectId": "0ef165hf64032961fg1g2656h23hgi665jii7690"
-                }
-            ]
-        },
-
-        {
-            "id": "problemAddress",
-            "category": "address"
-        },
-        {
-            "id": "ownsAllAddress",
-            "category": "address",
-            "objects": [
-                {
-                    "objectId": "playerOne"
-                },
-                {
-                    "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
-                },
-                {
-                    "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
-                },
-                {
-                    "objectId": "ComponentObject"
-                },
-                {
-                    "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
-                },
-                {
-                    "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
-                },
-                {
-                    "objectId": "ComponentObject"
-                },
-                {
-                    "objectId": "ComponentObject"
-                },
-                {
-                    "objectId": "ComponentObject"
-                },
-                {
-                    "objectId": "ComponentObject"
-                },
-                {
-                    "objectId": "ComponentObject"
-                },
-                {
-                    "objectId": "ComponentObject"
-                },
-                {
-                    "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
-                },
-                {
-                    "objectId": "playerTwo"
-                },
-                {
-                    "objectId": "CollectionObject"
-                },
-                {
-                    "objectId": "CollectionObject"
-                },
-                {
-                    "objectId": "CollectionObject"
-                },
-                {
-                    "objectId": "CollectionObject"
-                },
-                {
-                    "objectId": "CollectionObject"
-                },
-                {
-                    "objectId": "CollectionObject"
-                },
-                {
-                    "objectId": "CollectionObject"
-                },
-                {
-                    "objectId": "CollectionObject"
-                },
-                {
-                    "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
-                },
-                {
-                    "objectId": "CollectionObject"
-                },
-                {
-                    "objectId": "standaloneObject"
-                },
-                {
-                    "objectId": "standaloneObject"
-                },
-                {
-                    "objectId": "standaloneObject"
-                },
-                {
-                    "objectId": "CollectionObject"
-                },
-                {
-                    "objectId": "CollectionObject"
-                }
-            ]
-        },
-        {
             "id": "playerOne",
             "owner": "SingleOwner(k#receiverAddress)",
             "category": "object",
@@ -618,191 +423,6 @@
                 }
             }
         },
-        {
-            "id": "8cd943fd42810749de9e0434f01feg443hgg54v1",
-            "owner": "SingleOwner(k#0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f)",
-            "category": "object",
-            "version": "5",
-            "readonly": "false",
-            "objType": "0x2::Geniteam::Monster",
-            "name": "Brown Dog",
-            "data": {
-                "contents": {
-                    "id": {},
-                    "breed": 89,
-                    "monster_affinity": 2,
-                    "monster_description": "surprisingly cute",
-                    "monster_level": 5,
-                    "monster_xp": 9900,
-                    "hunger_level": 5,
-                    "affection_level": 3,
-                    "buddy_level": 7,
-                    "display": "https://geniteam-video-images.s3.amazonaws.com/131074_0_Brown_Dog.png"
-                }
-            }
-        },
-        {
-            "id": "8cd943fd42810749de9e0434f01feg443hgg54v2",
-            "owner": "SingleOwner(k#0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f)",
-            "category": "object",
-            "version": "6",
-            "readonly": "false",
-            "objType": "0x2::Geniteam::Monster",
-            "name": "Brown Water Dog",
-            "data": {
-                "contents": {
-                    "water_runes_count": 1,
-                    "applied_monster_cosmetic_0_id": {
-                        "vec": [
-                            {
-                                "bytes": "3a4e674ce2810749de9e0434f01feg443hgg54v2"
-                            }
-                        ]
-                    },
-                    "id": {},
-                    "breed": 89,
-                    "monster_affinity": 2,
-                    "monster_description": "surprisingly cute",
-                    "monster_level": 5,
-                    "monster_xp": 9900,
-                    "hunger_level": 5,
-                    "affection_level": 3,
-                    "buddy_level": 9,
-                    "display": "https://geniteam-video-images.s3.amazonaws.com/131842_0_Evolved_Water_Dog_Brown.png"
-                }
-            }
-        },
-        {
-            "id": "3a4e674ce2810749de9e0434f01feg443hgg54v2",
-            "owner": "SingleOwner(k#8cd943fd42810749de9e0434f01feg443hgg54v2)",
-            "category": "object",
-            "version": "1",
-            "readonly": "true",
-            "objType": "0x2::Geniteam::MonsterCosmetic",
-            "name": "Water Rune",
-            "data": {
-                "contents": {
-                    "id": {},
-                    "display": "https://geniteam-video-images.s3.amazonaws.com/1125899906842624_Rune_Water.png"
-                }
-            }
-        },
-
-        {
-            "id": "9de054ge53921850ef0f1545g12gfh554ihh65v1",
-            "owner": "SingleOwner(k#0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f)",
-            "category": "object",
-            "version": "4",
-            "readonly": "false",
-            "objType": "0x2::Geniteam::Monster",
-            "name": "White Cat",
-            "data": {
-                "contents": {
-                    "id": {},
-                    "breed": 52,
-                    "monster_affinity": 3,
-                    "monster_description": "little angle feline",
-                    "monster_level": 8,
-                    "monster_xp": 16000,
-                    "hunger_level": 2,
-                    "affection_level": 8,
-                    "buddy_level": 5,
-                    "display": "https://geniteam-video-images.s3.amazonaws.com/65537_0_White_Cat.png"
-                }
-            }
-        },
-        {
-            "id": "9de054ge53921850ef0f1545g12gfh554ihh65v2",
-            "owner": "SingleOwner(k#0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f)",
-            "category": "object",
-            "version": "5",
-            "readonly": "false",
-            "objType": "0x2::Geniteam::Monster",
-            "name": "White Cat with Glasses",
-            "data": {
-                "contents": {
-                    "id": {},
-                    "breed": 52,
-                    "monster_affinity": 3,
-                    "monster_description": "a smart cat",
-                    "monster_level": 9,
-                    "monster_xp": 24000,
-                    "hunger_level": 2,
-                    "affection_level": 8,
-                    "buddy_level": 5,
-                    "applied_monster_cosmetic_0_id": {
-                        "vec": [
-                            {
-                                "bytes": "f4a5535e53921850ef0f1545g12gfh554ihh65v2"
-                            }
-                        ]
-                    },
-                    "display": "https://geniteam-video-images.s3.amazonaws.com/4295032833_2_White_Cat_Goggles1.png"
-                }
-            }
-        },
-        {
-            "id": "f4a5535e53921850ef0f1545g12gfh554ihh65v2",
-            "owner": "SingleOwner(k#9de054ge53921850ef0f1545g12gfh554ihh65v2)",
-            "category": "object",
-            "version": "1",
-            "readonly": "true",
-            "objType": "0x2::Geniteam::MonsterCosmetic",
-            "name": "Glasses",
-            "data": {
-                "contents": {
-                    "id": {},
-                    "display": "https://geniteam-video-images.s3.amazonaws.com/4294967296_Goggles1.png"
-                }
-            }
-        },
-
-        {
-            "id": "0ef165hf64032961fg1g2656h23hgi665jii7690",
-            "owner": "SingleOwner(k#0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f)",
-            "category": "object",
-            "version": "7",
-            "readonly": "false",
-            "objType": "0x2::Geniteam::Monster",
-            "name": "White Fire Cat",
-            "data": {
-                "contents": {
-                    "id": {},
-                    "applied_monster_cosmetic_0_id": {
-                        "vec": [
-                            {
-                                "bytes": "f14e489364032961fg1g2656h23hgi665jii7690"
-                            }
-                        ]
-                    },
-                    "breed": 55,
-                    "monster_affinity": 8,
-                    "monster_description": "this cat burns",
-                    "monster_level": 10,
-                    "monster_xp": 24000,
-                    "hunger_level": 1,
-                    "affection_level": 6,
-                    "buddy_level": 9,
-                    "fire_runes_count": 1,
-                    "display": "https://geniteam-video-images.s3.amazonaws.com/66049_0_Evolved_Fire_Cat_White.png"
-                }
-            }
-        },
-        {
-            "id": "f14e489364032961fg1g2656h23hgi665jii7690",
-            "owner": "SingleOwner(k#0ef165hf64032961fg1g2656h23hgi665jii7690)",
-            "category": "object",
-            "version": "1",
-            "readonly": "true",
-            "objType": "0x2::Geniteam::MonsterCosmetic",
-            "name": "Fire Rune",
-            "data": {
-                "contents": {
-                    "id": {},
-                    "display": "https://geniteam-video-images.s3.amazonaws.com/562949953421312_Rune_Fire.png"
-                }
-            }
-        },
 
         {
             "id": "standaloneObject",
@@ -1045,6 +665,191 @@
                         "AddressOwner": "3997c1099d2961e09c2a302d8e3644d6ce1237ce"
                     },
                     "tx_digest": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                }
+            }
+        },
+        {
+            "id": "8cd943fd42810749de9e0434f01feg443hgg54v1",
+            "owner": "SingleOwner(k#0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f)",
+            "category": "object",
+            "version": "5",
+            "readonly": "false",
+            "objType": "0x2::Geniteam::Monster",
+            "name": "Brown Dog",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "breed": 89,
+                    "monster_affinity": 2,
+                    "monster_description": "surprisingly cute",
+                    "monster_level": 5,
+                    "monster_xp": 9900,
+                    "hunger_level": 5,
+                    "affection_level": 3,
+                    "buddy_level": 7,
+                    "display": "https://geniteam-video-images.s3.amazonaws.com/131074_0_Brown_Dog.png"
+                }
+            }
+        },
+        {
+            "id": "8cd943fd42810749de9e0434f01feg443hgg54v2",
+            "owner": "SingleOwner(k#0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f)",
+            "category": "object",
+            "version": "6",
+            "readonly": "false",
+            "objType": "0x2::Geniteam::Monster",
+            "name": "Brown Water Dog",
+            "data": {
+                "contents": {
+                    "water_runes_count": 1,
+                    "applied_monster_cosmetic_0_id": {
+                        "vec": [
+                            {
+                                "bytes": "3a4e674ce2810749de9e0434f01feg443hgg54v2"
+                            }
+                        ]
+                    },
+                    "id": {},
+                    "breed": 89,
+                    "monster_affinity": 2,
+                    "monster_description": "surprisingly cute",
+                    "monster_level": 5,
+                    "monster_xp": 9900,
+                    "hunger_level": 5,
+                    "affection_level": 3,
+                    "buddy_level": 9,
+                    "display": "https://geniteam-video-images.s3.amazonaws.com/131842_0_Evolved_Water_Dog_Brown.png"
+                }
+            }
+        },
+        {
+            "id": "3a4e674ce2810749de9e0434f01feg443hgg54v2",
+            "owner": "SingleOwner(k#8cd943fd42810749de9e0434f01feg443hgg54v2)",
+            "category": "object",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Geniteam::MonsterCosmetic",
+            "name": "Water Rune",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "display": "https://geniteam-video-images.s3.amazonaws.com/1125899906842624_Rune_Water.png"
+                }
+            }
+        },
+
+        {
+            "id": "9de054ge53921850ef0f1545g12gfh554ihh65v1",
+            "owner": "SingleOwner(k#0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f)",
+            "category": "object",
+            "version": "4",
+            "readonly": "false",
+            "objType": "0x2::Geniteam::Monster",
+            "name": "White Cat",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "breed": 52,
+                    "monster_affinity": 3,
+                    "monster_description": "little angle feline",
+                    "monster_level": 8,
+                    "monster_xp": 16000,
+                    "hunger_level": 2,
+                    "affection_level": 8,
+                    "buddy_level": 5,
+                    "display": "https://geniteam-video-images.s3.amazonaws.com/65537_0_White_Cat.png"
+                }
+            }
+        },
+        {
+            "id": "9de054ge53921850ef0f1545g12gfh554ihh65v2",
+            "owner": "SingleOwner(k#0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f)",
+            "category": "object",
+            "version": "5",
+            "readonly": "false",
+            "objType": "0x2::Geniteam::Monster",
+            "name": "White Cat with Glasses",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "breed": 52,
+                    "monster_affinity": 3,
+                    "monster_description": "a smart cat",
+                    "monster_level": 9,
+                    "monster_xp": 24000,
+                    "hunger_level": 2,
+                    "affection_level": 8,
+                    "buddy_level": 5,
+                    "applied_monster_cosmetic_0_id": {
+                        "vec": [
+                            {
+                                "bytes": "f4a5535e53921850ef0f1545g12gfh554ihh65v2"
+                            }
+                        ]
+                    },
+                    "display": "https://geniteam-video-images.s3.amazonaws.com/4295032833_2_White_Cat_Goggles1.png"
+                }
+            }
+        },
+        {
+            "id": "f4a5535e53921850ef0f1545g12gfh554ihh65v2",
+            "owner": "SingleOwner(k#9de054ge53921850ef0f1545g12gfh554ihh65v2)",
+            "category": "object",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Geniteam::MonsterCosmetic",
+            "name": "Glasses",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "display": "https://geniteam-video-images.s3.amazonaws.com/4294967296_Goggles1.png"
+                }
+            }
+        },
+
+        {
+            "id": "0ef165hf64032961fg1g2656h23hgi665jii7690",
+            "owner": "SingleOwner(k#0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f)",
+            "category": "object",
+            "version": "7",
+            "readonly": "false",
+            "objType": "0x2::Geniteam::Monster",
+            "name": "White Fire Cat",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "applied_monster_cosmetic_0_id": {
+                        "vec": [
+                            {
+                                "bytes": "f14e489364032961fg1g2656h23hgi665jii7690"
+                            }
+                        ]
+                    },
+                    "breed": 55,
+                    "monster_affinity": 8,
+                    "monster_description": "this cat burns",
+                    "monster_level": 10,
+                    "monster_xp": 24000,
+                    "hunger_level": 1,
+                    "affection_level": 6,
+                    "buddy_level": 9,
+                    "fire_runes_count": 1,
+                    "display": "https://geniteam-video-images.s3.amazonaws.com/66049_0_Evolved_Fire_Cat_White.png"
+                }
+            }
+        },
+        {
+            "id": "f14e489364032961fg1g2656h23hgi665jii7690",
+            "owner": "SingleOwner(k#0ef165hf64032961fg1g2656h23hgi665jii7690)",
+            "category": "object",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Geniteam::MonsterCosmetic",
+            "name": "Fire Rune",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "display": "https://geniteam-video-images.s3.amazonaws.com/562949953421312_Rune_Fire.png"
                 }
             }
         }

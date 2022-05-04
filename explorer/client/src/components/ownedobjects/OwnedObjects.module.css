@@ -5,7 +5,11 @@
 }
 
 .ownedobjects {
-    @apply w-[100%] lg:grid lg:justify-items-center lg:grid-cols-3;
+    @apply w-[100%] lg:flex lg:justify-items-center lg:flex-wrap;
+}
+
+.ownedobjects > div {
+    @apply mx-auto break-all lg:w-[15vw];
 }
 
 .groupcollection > div {
