@@ -15,7 +15,6 @@ use move_core_types::identifier::Identifier;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{base64, serde_as};
-use sui_types::base_types::ObjectRef;
 use std::collections::BTreeMap;
 use std::path::Path;
 use sui_core::gateway_state::{
@@ -24,6 +23,7 @@ use sui_core::gateway_state::{
 };
 use sui_core::sui_json::SuiJsonValue;
 use sui_open_rpc_macros::open_rpc;
+use sui_types::base_types::ObjectRef;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     crypto,
