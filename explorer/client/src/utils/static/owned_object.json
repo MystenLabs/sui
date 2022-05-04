@@ -10,71 +10,7 @@
                     "objectId": "anotherPlayer"
                 },
                 {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-
-                {
                     "objectId": "playerTwo"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
-                },
-                {
-                    "objectId": "anotherPlayer"
                 },
                 {
                     "objectId": "playerThree"
@@ -84,67 +20,66 @@
                     "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
                 },
                 {
-                    "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
+                    "objectId": "playerFour"
                 },
+
                 {
                     "objectId": "ComponentObject"
                 },
                 {
-                    "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
+                    "objectId": "playerFive"
                 },
-                {
-                    "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
-                },
-                {
-                    "objectId": "ComponentObject"
-                },
-                {
-                    "objectId": "ComponentObject"
-                },
-                {
-                    "objectId": "ComponentObject"
-                },
-                {
-                    "objectId": "ComponentObject"
-                },
-                {
-                    "objectId": "ComponentObject"
-                },
-                {
-                    "objectId": "ComponentObject"
-                },
-                {
-                    "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
-                },
+
                 {
                     "objectId": "CollectionObject"
                 },
                 {
-                    "objectId": "CollectionObject"
+                    "objectId": "playerSix"
                 },
                 {
-                    "objectId": "CollectionObject"
+                    "objectId": "playerSeven"
                 },
                 {
-                    "objectId": "CollectionObject"
+                    "objectId": "playerEight"
                 },
                 {
-                    "objectId": "CollectionObject"
+                    "objectId": "playerNine"
                 },
                 {
-                    "objectId": "CollectionObject"
+                    "objectId": "ObjectThatOwns"
                 },
                 {
-                    "objectId": "CollectionObject"
+                    "objectId": "ChildObjectWImage"
                 },
                 {
-                    "objectId": "CollectionObject"
+                    "objectId": "ChildObjectWBrokenImage"
                 },
                 {
-                    "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
+                    "objectId": "Image1"
                 },
                 {
-                    "objectId": "CollectionObject"
+                    "objectId": "Image2"
+                },
+                {
+                    "objectId": "Image3"
+                },
+                {
+                    "objectId": "Image4"
+                },
+                {
+                    "objectId": "Image5"
+                },
+                {
+                    "objectId": "Image6"
+                },
+                {
+                    "objectId": "Image7"
+                },
+                {
+                    "objectId": "Image8"
+                },
+                {
+                    "objectId": "playerTen"
                 },
                 {
                     "objectId": "standaloneObject"
@@ -153,10 +88,10 @@
                     "objectId": "standaloneObject200"
                 },
                 {
-                    "objectId": "CollectionObject"
+                    "objectId": "standaloneObjectSUI50"
                 },
                 {
-                    "objectId": "CollectionObject"
+                    "objectId": "standaloneObjectSUI150"
                 }
             ]
         },

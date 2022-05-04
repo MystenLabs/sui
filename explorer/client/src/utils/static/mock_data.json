@@ -295,7 +295,329 @@
                 }
             }
         },
+        {
+            "id": "playerFour",
+            "owner": "SingleOwner(k#)",
+            "category": "object",
+            "version": "100",
+            "readonly": "false",
+            "objType": "0x2::Example::Player",
+            "data": {
+                "contents": {
+                    "earth_runes_count": 1,
+                    "fire_runes_count": 10,
+                    "water_runes_count": 3,
+                    "wind_runes_count": 2,
+                    "id": {},
+                    "player_name": {
+                        "bytes": [
+                            84, 101, 115, 116, 32, 80, 108, 97, 121, 101, 114
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "id": "playerFive",
+            "owner": "SingleOwner(k#)",
+            "category": "object",
+            "version": "100",
+            "readonly": "false",
+            "objType": "0x2::Example::Player",
+            "data": {
+                "contents": {
+                    "earth_runes_count": 1,
+                    "fire_runes_count": 10,
+                    "water_runes_count": 3,
+                    "wind_runes_count": 2,
+                    "id": {},
+                    "player_name": {
+                        "bytes": [
+                            84, 101, 115, 116, 32, 80, 108, 97, 121, 101, 114
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "id": "playerSix",
+            "owner": "SingleOwner(k#)",
+            "category": "object",
+            "version": "100",
+            "readonly": "false",
+            "objType": "0x2::Example::Player",
+            "data": {
+                "contents": {
+                    "earth_runes_count": 1,
+                    "fire_runes_count": 10,
+                    "water_runes_count": 3,
+                    "wind_runes_count": 2,
+                    "id": {},
+                    "player_name": {
+                        "bytes": [
+                            84, 101, 115, 116, 32, 80, 108, 97, 121, 101, 114
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "id": "playerSeven",
+            "owner": "SingleOwner(k#)",
+            "category": "object",
+            "version": "100",
+            "readonly": "false",
+            "objType": "0x2::Example::Player",
+            "data": {
+                "contents": {
+                    "earth_runes_count": 1,
+                    "fire_runes_count": 10,
+                    "water_runes_count": 3,
+                    "wind_runes_count": 2,
+                    "id": {},
+                    "player_name": {
+                        "bytes": [
+                            84, 101, 115, 116, 32, 80, 108, 97, 121, 101, 114
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "id": "playerEight",
+            "owner": "SingleOwner(k#)",
+            "category": "object",
+            "version": "100",
+            "readonly": "false",
+            "objType": "0x2::Example::Player",
+            "data": {
+                "contents": {
+                    "earth_runes_count": 1,
+                    "fire_runes_count": 10,
+                    "water_runes_count": 3,
+                    "wind_runes_count": 2,
+                    "id": {},
+                    "player_name": {
+                        "bytes": [
+                            84, 101, 115, 116, 32, 80, 108, 97, 121, 101, 114
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "id": "playerNine",
+            "owner": "SingleOwner(k#)",
+            "category": "object",
+            "version": "100",
+            "readonly": "false",
+            "objType": "0x2::Example::Player",
+            "data": {
+                "contents": {
+                    "earth_runes_count": 1,
+                    "fire_runes_count": 10,
+                    "water_runes_count": 3,
+                    "wind_runes_count": 2,
+                    "id": {},
+                    "player_name": {
+                        "bytes": [
+                            84, 101, 115, 116, 32, 80, 108, 97, 121, 101, 114
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "id": "playerTen",
+            "owner": "SingleOwner(k#)",
+            "category": "object",
+            "version": "100",
+            "readonly": "false",
+            "objType": "0x2::Example::Player",
+            "data": {
+                "contents": {
+                    "earth_runes_count": 1,
+                    "fire_runes_count": 10,
+                    "water_runes_count": 3,
+                    "wind_runes_count": 2,
+                    "id": {},
+                    "player_name": {
+                        "bytes": [
+                            84, 101, 115, 116, 32, 80, 108, 97, 121, 101, 114
+                        ]
+                    }
+                }
+            }
+        },
 
+        {
+            "id": "Image1",
+            "category": "object",
+            "owner": "SingleOwner(k#CollectionObject)",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "contract_id": { "bytes": "smartContract" },
+            "data": {
+                "contents": {
+                    "display": "https://sui-explorer-test-image.s3.amazonaws.com/testImage.png",
+                    "cosmetic_type": 1,
+                    "lore": "This is a species of orchid only found in Brazil",
+                    "Humidity": "High",
+                    "Temperature": "Hot",
+                    "Light": "Medium",
+                    "Flowering Period": "Spring to early Summer"
+                }
+            }
+        },
+        {
+            "id": "Image2",
+            "category": "object",
+            "owner": "SingleOwner(k#CollectionObject)",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "contract_id": { "bytes": "smartContract" },
+            "data": {
+                "contents": {
+                    "display": "https://sui-explorer-test-image.s3.amazonaws.com/testImage.png",
+                    "cosmetic_type": 1,
+                    "lore": "This is a species of orchid only found in Brazil",
+                    "Humidity": "High",
+                    "Temperature": "Hot",
+                    "Light": "Medium",
+                    "Flowering Period": "Spring to early Summer"
+                }
+            }
+        },
+        {
+            "id": "Image3",
+            "category": "object",
+            "owner": "SingleOwner(k#CollectionObject)",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "contract_id": { "bytes": "smartContract" },
+            "data": {
+                "contents": {
+                    "display": "https://sui-explorer-test-image.s3.amazonaws.com/testImage.png",
+                    "cosmetic_type": 1,
+                    "lore": "This is a species of orchid only found in Brazil",
+                    "Humidity": "High",
+                    "Temperature": "Hot",
+                    "Light": "Medium",
+                    "Flowering Period": "Spring to early Summer"
+                }
+            }
+        },
+        {
+            "id": "Image4",
+            "category": "object",
+            "owner": "SingleOwner(k#CollectionObject)",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "contract_id": { "bytes": "smartContract" },
+            "data": {
+                "contents": {
+                    "display": "https://sui-explorer-test-image.s3.amazonaws.com/testImage.png",
+                    "cosmetic_type": 1,
+                    "lore": "This is a species of orchid only found in Brazil",
+                    "Humidity": "High",
+                    "Temperature": "Hot",
+                    "Light": "Medium",
+                    "Flowering Period": "Spring to early Summer"
+                }
+            }
+        },
+        {
+            "id": "Image5",
+            "category": "object",
+            "owner": "SingleOwner(k#CollectionObject)",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "contract_id": { "bytes": "smartContract" },
+            "data": {
+                "contents": {
+                    "display": "https://sui-explorer-test-image.s3.amazonaws.com/testImage.png",
+                    "cosmetic_type": 1,
+                    "lore": "This is a species of orchid only found in Brazil",
+                    "Humidity": "High",
+                    "Temperature": "Hot",
+                    "Light": "Medium",
+                    "Flowering Period": "Spring to early Summer"
+                }
+            }
+        },
+        {
+            "id": "Image6",
+            "category": "object",
+            "owner": "SingleOwner(k#CollectionObject)",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "contract_id": { "bytes": "smartContract" },
+            "data": {
+                "contents": {
+                    "display": "https://sui-explorer-test-image.s3.amazonaws.com/testImage.png",
+                    "cosmetic_type": 1,
+                    "lore": "This is a species of orchid only found in Brazil",
+                    "Humidity": "High",
+                    "Temperature": "Hot",
+                    "Light": "Medium",
+                    "Flowering Period": "Spring to early Summer"
+                }
+            }
+        },
+        {
+            "id": "Image7",
+            "category": "object",
+            "owner": "SingleOwner(k#CollectionObject)",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "contract_id": { "bytes": "smartContract" },
+            "data": {
+                "contents": {
+                    "display": "https://sui-explorer-test-image.s3.amazonaws.com/testImage.png",
+                    "cosmetic_type": 1,
+                    "lore": "This is a species of orchid only found in Brazil",
+                    "Humidity": "High",
+                    "Temperature": "Hot",
+                    "Light": "Medium",
+                    "Flowering Period": "Spring to early Summer"
+                }
+            }
+        },
+        {
+            "id": "Image8",
+            "category": "object",
+            "owner": "SingleOwner(k#CollectionObject)",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "contract_id": { "bytes": "smartContract" },
+            "data": {
+                "contents": {
+                    "display": "https://sui-explorer-test-image.s3.amazonaws.com/testImage.png",
+                    "cosmetic_type": 1,
+                    "lore": "This is a species of orchid only found in Brazil",
+                    "Humidity": "High",
+                    "Temperature": "Hot",
+                    "Light": "Medium",
+                    "Flowering Period": "Spring to early Summer"
+                }
+            }
+        },
         {
             "id": "8cd943fd42810749de9e0434f01feg443hgg54v1",
             "owner": "SingleOwner(k#0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f)",
@@ -507,6 +829,34 @@
                 "contents": {
                     "id": {},
                     "balance": 200
+                }
+            }
+        },
+        {
+            "id": "standaloneObjectSUI50",
+            "category": "object",
+            "owner": "SingleOwner(k#playerTwo)",
+            "version": "87",
+            "readonly": "true",
+            "objType": "0x2::Coin::Coin<0x2::SUI::SUI>",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "balance": 50
+                }
+            }
+        },
+        {
+            "id": "standaloneObjectSUI150",
+            "category": "object",
+            "owner": "SingleOwner(k#playerTwo)",
+            "version": "87",
+            "readonly": "true",
+            "objType": "0x2::Coin::Coin<0x2::SUI::SUI>",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "balance": 150
                 }
             }
         },

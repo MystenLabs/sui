@@ -378,8 +378,6 @@ describe('End-to-end Tests', () => {
         it('to go to the next page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            const btn1 = await page.$('#groupCollection > div:nth-child(1)');
-            await btn1.click();
             const btn = await page.$('#nextBtn');
             await btn.click();
             const objectLink = await page.$(
@@ -393,13 +391,11 @@ describe('End-to-end Tests', () => {
                 (el: any) => el.textContent,
                 objectIDEl
             );
-            expect(objectValue.trim()).toBe('playerTwo');
+            expect(objectValue.trim()).toBe('playerNine');
         });
         it('to go to the last page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            const btn1 = await page.$('#groupCollection > div:nth-child(1)');
-            await btn1.click();
 
             const btn = await page.$('#lastBtn');
             await btn.click();
@@ -414,13 +410,11 @@ describe('End-to-end Tests', () => {
                 (el: any) => el.textContent,
                 objectIDEl
             );
-            expect(objectValue.trim()).toBe('playerThree');
+            expect(objectValue.trim()).toBe('playerTen');
         });
         it('where last and next disappear in final page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            const btn1 = await page.$('#groupCollection > div:nth-child(1)');
-            await btn1.click();
 
             const btn = await page.$('#lastBtn');
             await btn.click();
@@ -436,8 +430,6 @@ describe('End-to-end Tests', () => {
         it('to go back a page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            const btn1 = await page.$('#groupCollection > div:nth-child(1)');
-            await btn1.click();
 
             await page.$('#lastBtn').then((btn: any) => btn.click());
 
@@ -454,14 +446,12 @@ describe('End-to-end Tests', () => {
                 (el: any) => el.textContent,
                 objectIDEl
             );
-            expect(objectValue.trim()).toBe('playerTwo');
+            expect(objectValue.trim()).toBe('playerNine');
         });
 
         it('to go to first page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            const btn1 = await page.$('#groupCollection > div:nth-child(1)');
-            await btn1.click();
 
             await page.$('#lastBtn').then((btn: any) => btn.click());
 
@@ -497,23 +487,37 @@ describe('End-to-end Tests', () => {
         });
     });
     describe('Group View', () => {
-        it('counts players', async () => {
-            const address = 'ownsAllAddress';
-            await page.goto(`${BASE_URL}/addresses/${address}`);
-            const actual = await page.$eval(
-                '#groupCollection > div:nth-child(1) > div:nth-child(2)',
-                (el: any) => el.textContent
-            );
-            expect(actual).toBe('Count 25');
-        });
         it('evaluates balance', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            const actual = await page.$eval(
-                '#groupCollection > div:nth-child(5) > div:nth-child(2)',
-                (el: any) => el.textContent
-            );
-            expect(actual).toBe('Balance 300');
+
+            expect(
+                await page.$eval(
+                    '#groupCollection > div:nth-child(1) > div:nth-child(1)',
+                    (el: any) => el.textContent
+                )
+            ).toBe('Coin::Coin<0x2::USD::USD>');
+
+            expect(
+                await page.$eval(
+                    '#groupCollection > div:nth-child(1) > div:nth-child(2)',
+                    (el: any) => el.textContent
+                )
+            ).toBe('Balance 300');
+
+            expect(
+                await page.$eval(
+                    '#groupCollection > div:nth-child(2) > div:nth-child(1)',
+                    (el: any) => el.textContent
+                )
+            ).toBe('Coin::Coin<0x2::SUI::SUI>');
+
+            expect(
+                await page.$eval(
+                    '#groupCollection > div:nth-child(2) > div:nth-child(2)',
+                    (el: any) => el.textContent
+                )
+            ).toBe('Balance 200');
         });
     });
 });

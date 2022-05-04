@@ -57,7 +57,7 @@ function OwnedObjectStatic({ id }: { id: string }) {
             };
         });
 
-        return <GroupView results={results} />;
+        return <OwnedObjectLayout results={results} />;
     } else {
         return <div />;
     }
@@ -107,10 +107,32 @@ function OwnedObjectAPI({ id }: { id: string }) {
     }, [id]);
 
     if (isLoaded) {
-        return <GroupView results={results} />;
+        return <OwnedObjectLayout results={results} />;
     } else {
         return <div />;
     }
+}
+
+function OwnedObjectLayout({ results }: { results: resultType }) {
+    const coin_results = results.filter(({ Type }) => IS_COIN_TYPE(Type));
+    const other_results = results.filter(({ Type }) => !IS_COIN_TYPE(Type));
+
+    return (
+        <div>
+            {coin_results.length > 0 && (
+                <div>
+                    <h2>Coins</h2>
+                    <GroupView results={coin_results} />
+                </div>
+            )}
+            {other_results.length > 0 && (
+                <div id="NFTSection">
+                    <h2>NFTs</h2>
+                    <OwnedObjectSection results={other_results} />
+                </div>
+            )}
+        </div>
+    );
 }
 
 function GroupView({ results }: { results: resultType }) {
@@ -320,12 +342,13 @@ function OwnedObjectView({ results }: { results: resultType }) {
                             {(() => {
                                 switch (key) {
                                     case 'display':
-                                    case 'Type':
                                         break;
                                     default:
                                         if (
-                                            key === 'balance' &&
-                                            !IS_COIN_TYPE(entryObj.Type)
+                                            (key === 'balance' &&
+                                                !IS_COIN_TYPE(entryObj.Type)) ||
+                                            (key === 'Type' &&
+                                                IS_COIN_TYPE(key))
                                         )
                                             break;
                                         return (
