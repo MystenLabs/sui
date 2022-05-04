@@ -62,7 +62,7 @@ narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "72efe71
 
 once_cell = "1.10.0"
 
-jsonrpsee = { version = "0.11.0", features = ["full"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee.git", rev = "661870a0ab4159b2bb104ace25a2cb817a097e03", features = ["full"] }
 jsonrpsee-proc-macros = "0.11.0"
 schemars = "0.8.8"
 
