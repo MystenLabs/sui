@@ -225,26 +225,13 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             </div>
                             {data.data?.tx_digest && (
                                 <div>
-                                    <div>Transaction ID</div>
+                                    <div>Last Transaction ID</div>
                                     <div id="transactionID">
-                                        {typeof data.data.tx_digest ===
-                                        'object' ? (
-                                            data.data.tx_digest.map((txId) => (
-                                                <>
-                                                    <Longtext
-                                                        text={txId.toString()}
-                                                        category="transactions"
-                                                        isLink={true}
-                                                    />
-                                                </>
-                                            ))
-                                        ) : (
-                                            <Longtext
-                                                text={data.data?.tx_digest.toString()}
-                                                category="transactions"
-                                                isLink={true}
-                                            />
-                                        )}
+                                        <Longtext
+                                            text={data.data?.tx_digest}
+                                            category="transactions"
+                                            isLink={true}
+                                        />
                                     </div>
                                 </div>
                             )}
