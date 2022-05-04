@@ -213,7 +213,7 @@ async fn handle_command(
             WalletCommandResult::Objects(ref objects) => {
                 let objects = objects
                     .iter()
-                    .map(|((object_id, _, _), _)| format!("{object_id}"))
+                    .map(|(object_id, _, _)| format!("{object_id}"))
                     .collect::<Vec<_>>();
                 cache.insert(CacheKey::new("object", "--id"), objects.clone());
                 cache.insert(CacheKey::flag("--gas"), objects.clone());

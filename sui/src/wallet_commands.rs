@@ -369,16 +369,7 @@ impl WalletCommands {
                     Some(a) => *a,
                     None => context.active_address()?,
                 };
-                let locked_objects = context.gateway.get_locked_objects()?;
-                let objects: Vec<_> = context
-                    .gateway
-                    .get_owned_objects(address)
-                    .await?
-                    .iter()
-                    .map(|q| (*q, locked_objects.contains_key(q)))
-                    .collect();
-
-                WalletCommandResult::Objects(objects)
+                WalletCommandResult::Objects(context.gateway.get_owned_objects(address).await?)
             }
 
             WalletCommands::SyncClientState { address } => {
@@ -692,8 +683,8 @@ impl Display for WalletCommandResult {
             }
             WalletCommandResult::Objects(object_refs) => {
                 writeln!(writer, "Showing {} results.", object_refs.len())?;
-                for (object_ref, lock_status) in object_refs {
-                    writeln!(writer, "{:?}, locked: {}", object_ref, lock_status)?;
+                for object_ref in object_refs {
+                    writeln!(writer, "{:?}", object_ref)?;
                 }
             }
             WalletCommandResult::SyncClientState => {
@@ -881,7 +872,7 @@ pub enum WalletCommandResult {
         TransactionEffects,
     ),
     Addresses(Vec<SuiAddress>),
-    Objects(Vec<(ObjectRef, bool)>),
+    Objects(Vec<ObjectRef>),
     SyncClientState,
     NewAddress(SuiAddress),
     Gas(Vec<GasCoin>),
