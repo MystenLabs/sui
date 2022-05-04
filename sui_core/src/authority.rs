@@ -228,8 +228,7 @@ impl AuthorityState {
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         // Check the sender's signature.
-        transaction.check_signature()?;
-
+        transaction.verify_signature()?;
         let transaction_digest = *transaction.digest();
 
         let response = self.handle_transaction_impl(transaction).await;
@@ -263,7 +262,7 @@ impl AuthorityState {
 
         // Check the certificate and retrieve the transfer data.
         tracing::trace_span!("cert_check_signature")
-            .in_scope(|| confirmation_transaction.certificate.check(&self.committee))?;
+            .in_scope(|| confirmation_transaction.certificate.verify(&self.committee))?;
 
         self.process_certificate(confirmation_transaction).await
     }
@@ -426,7 +425,7 @@ impl AuthorityState {
         }
 
         // Check the certificate.
-        certificate.check(&self.committee)?;
+        certificate.verify(&self.committee)?;
 
         // Persist the certificate since we are about to lock one or more shared object.
         // We thus need to make sure someone (if not the client) can continue the protocol.
