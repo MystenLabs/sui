@@ -5,16 +5,14 @@ import { JsonRpcProvider } from 'sui.js';
 
 import { tryGetRpcSetting } from './rpcSetting';
 
-export type AddressBytes = number[];
-export type AddressOwner = { AddressOwner: AddressBytes };
-
-export type AnyVec = { vec: any[] };
-export type JsonBytes = { bytes: number[] };
-
 const useLocal = false;
 const LOCAL = 'http://127.0.0.1:5001';
-const DEVNET = 'http://gateway.devnet.sui.io:9000';
+const DEVNET = 'https://gateway.devnet.sui.io:9000';
 
-const rpcUrl = tryGetRpcSetting() ?? useLocal ? LOCAL : DEVNET;
+let rpcUrl;
+if(useLocal)
+    rpcUrl = LOCAL;
+else
+    rpcUrl = tryGetRpcSetting() ?? DEVNET;
 
 export const DefaultRpcClient = new JsonRpcProvider(rpcUrl);
