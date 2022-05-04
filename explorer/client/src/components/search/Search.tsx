@@ -20,7 +20,8 @@ function Search() {
             // Prevent empty search
             if (!input.length) return;
             setPleaseWaitMode(true);
-            navigateWithUnknown(input, navigate).then(() => {
+            // remove empty char from input
+            navigateWithUnknown(input.trim(), navigate).then(() => {
                 setInput('');
                 setPleaseWaitMode(false);
             });

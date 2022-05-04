@@ -17,6 +17,7 @@ import type {
     TransactionData,
     TransactionKindName,
     ExecutionStatusType,
+    RawObjectRef,
 } from 'sui.js';
 
 import styles from './TransactionCard.module.css';
@@ -25,6 +26,8 @@ type TxDataProps = CertifiedTransaction & {
     status: ExecutionStatusType;
     gasFee: number;
     txError: string;
+    mutated: RawObjectRef[];
+    created: RawObjectRef[];
 };
 
 // Generate an Arr of Obj with Label and Value
@@ -57,7 +60,26 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
             label: 'Transactions Signature',
             value: tx.tx_signature,
         },
-
+        ...(tx.mutated.length
+            ? [
+                  {
+                      label: 'Mutated',
+                      value: tx.mutated.map((obj) => obj[0]),
+                      list: true,
+                      link: true,
+                  },
+              ]
+            : []),
+        ...(tx.created.length
+            ? [
+                  {
+                      label: 'Created',
+                      value: tx.created.map((obj) => obj[0]),
+                      list: true,
+                      link: true,
+                  },
+              ]
+            : []),
         {
             label: 'Gas Payment',
             value: tx.data.gas_payment[0],
@@ -163,6 +185,8 @@ type Props = {
         status: ExecutionStatusType;
         gasFee: number;
         txError: string;
+        mutated: RawObjectRef[];
+        created: RawObjectRef[];
     };
 };
 
@@ -245,9 +269,23 @@ function TransactionCard({ txdata }: Props) {
                                                                                             styles.sublistvalue
                                                                                         }
                                                                                     >
-                                                                                        {
+                                                                                        {itm.link ? (
+                                                                                            <Longtext
+                                                                                                text={
+                                                                                                    sublist
+                                                                                                }
+                                                                                                category={
+                                                                                                    itm.category
+                                                                                                        ? itm.category
+                                                                                                        : 'unknown'
+                                                                                                }
+                                                                                                isLink={
+                                                                                                    true
+                                                                                                }
+                                                                                            />
+                                                                                        ) : (
                                                                                             sublist
-                                                                                        }
+                                                                                        )}
                                                                                     </div>
                                                                                 </div>
                                                                             </div>
@@ -262,7 +300,23 @@ function TransactionCard({ txdata }: Props) {
                                                                 }
                                                                 key={n}
                                                             >
-                                                                {list}
+                                                                {itm.link ? (
+                                                                    <Longtext
+                                                                        text={
+                                                                            list
+                                                                        }
+                                                                        category={
+                                                                            itm.category
+                                                                                ? itm.category
+                                                                                : 'unknown'
+                                                                        }
+                                                                        isLink={
+                                                                            true
+                                                                        }
+                                                                    />
+                                                                ) : (
+                                                                    list
+                                                                )}
                                                             </li>
                                                         )
                                                 )}
