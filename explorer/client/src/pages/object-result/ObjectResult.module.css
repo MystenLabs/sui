@@ -1,5 +1,5 @@
 .resultbox {
-    @apply flex flex-wrap w-[100vw];
+    @apply flex flex-wrap w-[95vw];
 }
 
 h1.title {
@@ -28,7 +28,7 @@ div.textbox {
 }
 
 div.textbox.accommodate {
-    @apply lg:w-[50vw];
+    @apply lg:w-[45vw];
 }
 
 div.textbox.noaccommodate {
