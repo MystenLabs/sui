@@ -214,6 +214,47 @@ async fn test_coin_split() {
 }
 
 #[tokio::test]
+async fn test_coin_split_insufficient_gas() {
+    let (addr1, key1) = get_key_pair();
+
+    let coin_object = Object::with_owner_for_testing(addr1);
+    let gas_object = Object::with_owner_for_testing(addr1);
+
+    let genesis_objects =
+        authority_genesis_objects(4, vec![coin_object.clone(), gas_object.clone()]);
+    let gateway = create_gateway_state(genesis_objects).await;
+
+    let split_amounts = vec![100, 200, 300, 400, 500];
+
+    let data = gateway
+        .split_coin(
+            addr1,
+            coin_object.id(),
+            split_amounts.clone(),
+            gas_object.id(),
+            20, /* Insufficient gas */
+        )
+        .await
+        .unwrap();
+
+    let signature = key1.sign(&data.to_bytes());
+    let response = gateway
+        .execute_transaction(Transaction::new(data, signature))
+        .await;
+    // Tx should fail due to out of gas, and no transactions should remain pending.
+    // Objects are not locked either.
+    assert!(response.is_err());
+    assert_eq!(gateway.store().pending_transactions().iter().count(), 0);
+    assert_eq!(
+        gateway
+            .store()
+            .get_transaction_lock(&gas_object.compute_object_reference())
+            .unwrap(),
+        None
+    );
+}
+
+#[tokio::test]
 async fn test_coin_merge() {
     let (addr1, key1) = get_key_pair();
 
