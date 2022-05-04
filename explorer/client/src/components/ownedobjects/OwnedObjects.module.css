@@ -5,23 +5,31 @@
 }
 
 .ownedobjects {
-    @apply w-[100%] lg:grid lg:justify-items-center lg:grid-cols-3;
+    @apply w-[100%] lg:flex lg:justify-items-center lg:flex-wrap;
+}
+
+.ownedobjects > div {
+    @apply mx-auto break-all lg:w-[20vw];
+}
+
+.groupcollection > div {
+    @apply border-solid border-stone-300 rounded-lg my-2 p-2 cursor-pointer hover:shadow-md;
 }
 
 .objectbox {
     @apply border-solid border-stone-300 rounded-lg my-2 p-[0.25vw] lg:w-[23vw] lg:self-center hover:shadow-md cursor-pointer;
 }
 
-.objectbox > div > div {
-    @apply border-0 border-b border-solid border-gray-300
-                        mb-2;
+.objectbox > div {
+    @apply pt-2 pl-2;
 }
 
 .objectbox > div:first-child > div {
     @apply border-none;
 }
 
-.objectbox > div > div > span:first-child {
+.objectbox > div > div > span:first-child,
+.groupcollection > div > div > span:first-child {
     @apply mr-[1rem] uppercase font-sans font-semibold block xl:inline;
 }
 
@@ -43,7 +51,7 @@
 }
 
 button.btncontainer {
-    @apply inline-block px-0 cursor-pointer border-none bg-offwhite hover:bg-sui 
+    @apply inline-block px-0 cursor-pointer border-none bg-inherit hover:bg-sui 
   py-2
   text-offblack stroke-offblack
   hover:text-white hover:stroke-white
@@ -52,4 +60,16 @@ button.btncontainer {
 
 .pagenumber {
     @apply select-none text-center break-normal text-sm;
+}
+
+.paginationheading {
+    @apply block;
+}
+
+.paginationheading > button {
+    @apply block lg:inline mb-2 bg-sui hover:bg-suidark hover:text-white rounded-r-md border-none cursor-pointer p-2;
+}
+
+.paginationheading > h2 {
+    @apply inline lg:ml-5;
 }
