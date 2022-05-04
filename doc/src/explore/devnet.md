@@ -33,7 +33,7 @@ To use the Sui DevNet, you will need:
 1. A command line terminal, as virtually everything done here is done by CLI
 1. the [`git` command line interface](https://git-scm.com/download/)
 1. The [Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) toolchain, updated with `rustup update`
-1. [Sui binaries](../build/install#binaries) in your PATH environment variable, particularly `wallet`
+1. [Sui binaries](../build/install.md#binaries) in your PATH environment variable, particularly `wallet`
 
 Remember, you can confirm the existence of a command in your PATH by running `which` followed by the command, for example:
 
@@ -47,19 +47,19 @@ You should see the path to the command. Otherwise, reinstall.
 In addition, to conduct advanced work such as publishing a Move module or making a Move call, also obtain:
 
 1. a [GitHub account](https://github.com/signup) if you don't have one already
-1. the [Sui source code](../build/install#source-code) installed in: `~/sui`
+1. the [Sui source code](../build/install.md#source-code) installed in: `~/sui`
 
 ### Set up wallet, connect to gateway
 
 Now [set up your wallet and connect to DevNet](../build/wallet.md#connect-to-devnet) in a single step. Note you can [manually change the Gateway URL](../build/wallet.md#manually-changing-the-gateway-url) if you have already configured a Sui wallet.
 
-> **Tip:** If you run into issues, reset the Sui install be removing the configuration directory, by default located at `~/.sui/sui_config`. Then reinstall [Sui binaries](../build/install#binaries). Use 
+> **Tip:** If you run into issues, reset the Sui install be removing the configuration directory, by default located at `~/.sui/sui_config`. Then reinstall [Sui binaries](../build/install.md#binaries).
 
 ## Basic testing
 
 ### Request gas tokens
 
-Request gas tokens in the [#request-devnet-test-coins](https://discordapp.com/channels/916379725201563759/971488439931392130) Discord channel.
+Request gas tokens in the [#request-devnet-test-coins](https://discordapp.com/channels/916379725201563759/971488439931392130) Discord channel if you haven't already and wait for them to be issued.
 
 ## Mint an example NFT
 
