@@ -32,7 +32,7 @@ To use the Sui DevNet, you will need:
 1. Sui test coins (tokens) requested through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130)
 1. A command line terminal, as virtually everything done here is done by CLI
 1. the [`git` command line interface](https://git-scm.com/download/)
-1. The [Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) toolchain, updated with `rustup update`
+1. The [Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) toolchain, updated with `rustup update stable`
 1. [Sui binaries](../build/install.md#binaries) in your PATH environment variable, particularly `wallet`
 
 Remember, you can confirm the existence of a command in your PATH by running `which` followed by the command, for example:
