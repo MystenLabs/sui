@@ -37,7 +37,7 @@ const SUI_CONFIG_DIR: &str = "sui_config";
 pub const SUI_NETWORK_CONFIG: &str = "network.conf";
 pub const SUI_WALLET_CONFIG: &str = "wallet.conf";
 pub const SUI_GATEWAY_CONFIG: &str = "gateway.conf";
-pub const SUI_DEV_NET_URL: &str = "http://gateway.devnet.sui.io:9000";
+pub const SUI_DEV_NET_URL: &str = "https://gateway.devnet.sui.io:9000";
 
 pub fn sui_config_dir() -> Result<PathBuf, anyhow::Error> {
     match std::env::var_os("SUI_CONFIG_DIR") {
