@@ -17,6 +17,7 @@ mod block_waiter;
 mod certificate_waiter;
 mod core;
 mod garbage_collector;
+mod grpc_server;
 mod header_waiter;
 mod helper;
 mod payload_receiver;
@@ -32,8 +33,9 @@ mod common;
 pub use crate::{
     block_remover::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage},
     block_synchronizer::responses::{CertificatesResponse, PayloadAvailabilityResponse},
-    block_waiter::{BatchMessage, BlockCommand, BlockWaiter},
+    block_waiter::{BlockCommand, BlockWaiter},
     primary::{
         PayloadToken, Primary, PrimaryWorkerMessage, WorkerPrimaryError, WorkerPrimaryMessage,
+        CHANNEL_CAPACITY,
     },
 };

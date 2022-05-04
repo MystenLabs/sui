@@ -21,7 +21,10 @@ use tokio::{
     time::timeout,
 };
 use tracing::{error, log::debug};
-use types::{Batch, BatchDigest, Certificate, CertificateDigest, Header};
+use types::{
+    BatchDigest, BatchMessage, BlockError, BlockErrorType, BlockResult, Certificate,
+    CertificateDigest, Header,
+};
 use Result::*;
 
 const BATCH_RETRIEVE_TIMEOUT: Duration = Duration::from_secs(1);
@@ -54,7 +57,7 @@ pub enum BlockCommand {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GetBlockResponse {
-    id: CertificateDigest,
+    pub id: CertificateDigest,
     #[allow(dead_code)]
     pub batches: Vec<BatchMessage>,
 }
@@ -66,50 +69,11 @@ pub struct GetBlocksResponse {
 
 pub type BatchResult = Result<BatchMessage, BatchMessageError>;
 
-#[derive(Clone, Default, Debug, PartialEq)]
-pub struct BatchMessage {
-    pub id: BatchDigest,
-    pub transactions: Batch,
-}
-
 #[derive(Clone, Default, Debug)]
 // If worker couldn't send us a batch, this error message
 // should be passed to BlockWaiter.
 pub struct BatchMessageError {
     pub id: BatchDigest,
-}
-
-pub type BlockResult<T> = Result<T, BlockError>;
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct BlockError {
-    id: CertificateDigest,
-    error: BlockErrorType,
-}
-
-impl<T> From<BlockError> for BlockResult<T> {
-    fn from(error: BlockError) -> Self {
-        BlockResult::Err(error)
-    }
-}
-
-impl fmt::Display for BlockError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "block id: {}, error type: {}", self.id, self.error)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum BlockErrorType {
-    BlockNotFound,
-    BatchTimeout,
-    BatchError,
-}
-
-impl fmt::Display for BlockErrorType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
 }
 
 type BlocksResult = Result<GetBlocksResponse, BlocksError>;
@@ -158,8 +122,8 @@ type RequestKey = Vec<u8>;
 /// # use std::collections::BTreeMap;
 /// # use types::Certificate;
 /// # use tempfile::tempdir;
-/// # use primary::{BatchMessage, BlockWaiter, BlockCommand};
-/// # use types::{BatchDigest, CertificateDigest, Batch};
+/// # use primary::{BlockWaiter, BlockCommand};
+/// # use types::{BatchMessage, BatchDigest, CertificateDigest, Batch};
 ///
 /// #[tokio::main(flavor = "current_thread")]
 /// # async fn main() {

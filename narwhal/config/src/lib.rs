@@ -20,8 +20,10 @@ use std::{
 };
 use thiserror::Error;
 use tracing::info;
+use utils::get_available_port;
 
 mod duration_format;
+mod utils;
 
 #[derive(Error, Debug)]
 pub enum ConfigError {
@@ -105,8 +107,28 @@ pub struct Parameters {
     pub max_batch_delay: Duration,
     /// The parameters for the block synchronizer
     pub block_synchronizer: BlockSynchronizerParameters,
+    /// The parameters for the Consensus API gRPC server
+    pub consensus_api_grpc: ConsensusAPIGrpcParameters,
     /// The maximum number of concurrent requests for messages accepted from an un-trusted entity
     pub max_concurrent_requests: usize,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct ConsensusAPIGrpcParameters {
+    /// Socket address the server should be listening to.
+    pub socket_addr: String,
+    /// The timeout configuration when requesting batches from workers.
+    #[serde(with = "duration_format")]
+    pub get_collections_timeout: Duration,
+}
+
+impl Default for ConsensusAPIGrpcParameters {
+    fn default() -> Self {
+        Self {
+            socket_addr: format!("127.0.0.1:{}", get_available_port()),
+            get_collections_timeout: Duration::from_millis(5_000),
+        }
+    }
 }
 
 #[derive(Deserialize, Clone)]
@@ -145,6 +167,7 @@ impl Default for Parameters {
             batch_size: 500_000,
             max_batch_delay: Duration::from_millis(100),
             block_synchronizer: BlockSynchronizerParameters::default(),
+            consensus_api_grpc: ConsensusAPIGrpcParameters::default(),
             max_concurrent_requests: 500_000,
         }
     }
@@ -185,6 +208,14 @@ impl Parameters {
             self.block_synchronizer
                 .payload_synchronize_timeout
                 .as_millis()
+        );
+        info!(
+            "Consensus API gRPC Server listening on {}",
+            self.consensus_api_grpc.socket_addr
+        );
+        info!(
+            "Get collections timeout set to {} ms",
+            self.consensus_api_grpc.get_collections_timeout.as_millis()
         );
         info!(
             "Max concurrent requests set to {}",
@@ -358,6 +389,10 @@ mod tests {
                  "payload_synchronize_timeout": "3_000ms",
                  "payload_availability_timeout": "4_000ms"
              },
+             "consensus_api_grpc": {
+                 "socket_addr": "127.0.0.1:0",
+                 "get_collections_timeout": "5_000ms"
+             },
              "max_concurrent_requests": 500000
           }"#;
 
@@ -396,6 +431,14 @@ mod tests {
                 .as_millis(),
             4_000
         );
+        assert!(params.consensus_api_grpc.socket_addr.contains("127.0.0.1:"));
+        assert_eq!(
+            params
+                .consensus_api_grpc
+                .get_collections_timeout
+                .as_millis(),
+            5_000
+        );
     }
 
     #[test]
@@ -424,6 +467,10 @@ mod tests {
         assert!(logs_contain(
             "Synchronize payload (batches) timeout set to 2000 ms"
         ));
+        assert!(logs_contain(
+            "Consensus API gRPC Server listening on 127.0.0.1"
+        ));
+        assert!(logs_contain("Get collections timeout set to 5000 ms"));
         assert!(logs_contain("Max concurrent requests set to 500000"))
     }
 }

@@ -33,6 +33,10 @@ def local(ctx, debug=True):
             'payload_synchronize_timeout': '2_000ms',
             'payload_availability_timeout': '2_000ms'
         },
+        "consensus_api_grpc": {
+            "socket_addr": "127.0.0.1:0",
+            "get_collections_timeout": "5_000ms"
+        },
         'max_concurrent_requests': 2
     }
     try:
@@ -120,6 +124,10 @@ def remote(ctx, debug=False):
             'certificates_synchronize_timeout': '2_000ms',
             'payload_synchronize_timeout': '2_000ms',
             'payload_availability_timeout': '2_000ms'
+        },
+        "consensus_api_grpc": {
+            "socket_addr": "127.0.0.1:0",
+            "get_collections_timeout": "5_000ms"
         },
         'max_concurrent_requests': 500_000
     }

@@ -6,6 +6,7 @@
 .idea/*
 rust/.idea/*
 .db-*
+benchmark/db-*
 
 target/
 !/**/src/**/target/

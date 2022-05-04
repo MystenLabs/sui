@@ -2,7 +2,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::error::{DagError, DagResult};
+use crate::{BatchDigestProto, CertificateDigestProto};
 use blake2::{digest::Update, VarBlake2b};
+use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::{
     traits::{EncodeDecodeBase64, VerifyingKey},
@@ -10,6 +12,7 @@ use crypto::{
 };
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
+use std::fmt::Formatter;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     fmt,
@@ -40,6 +43,14 @@ impl fmt::Display for BatchDigest {
 impl From<BatchDigest> for Digest {
     fn from(digest: BatchDigest) -> Self {
         Digest::new(digest.0)
+    }
+}
+
+impl From<BatchDigest> for BatchDigestProto {
+    fn from(digest: BatchDigest) -> Self {
+        BatchDigestProto {
+            digest: Bytes::from(digest.0.to_vec()),
+        }
     }
 }
 
@@ -392,9 +403,22 @@ impl<PublicKey: VerifyingKey> Certificate<PublicKey> {
 #[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct CertificateDigest([u8; DIGEST_LEN]);
 
+impl CertificateDigest {
+    pub fn new(digest: [u8; DIGEST_LEN]) -> CertificateDigest {
+        CertificateDigest(digest)
+    }
+}
+
 impl From<CertificateDigest> for Digest {
     fn from(hd: CertificateDigest) -> Self {
         Digest::new(hd.0)
+    }
+}
+impl From<CertificateDigest> for CertificateDigestProto {
+    fn from(hd: CertificateDigest) -> Self {
+        CertificateDigestProto {
+            digest: Bytes::from(hd.0.to_vec()),
+        }
     }
 }
 
@@ -485,4 +509,44 @@ pub enum PrimaryWorkerMessage<PublicKey> {
     RequestBatch(BatchDigest),
     /// Delete the batches, dictated from the provided vector of digest, from the worker node
     DeleteBatches(Vec<BatchDigest>),
+}
+
+#[derive(Clone, Default, Debug, PartialEq)]
+pub struct BatchMessage {
+    // TODO: revisit including the id here [see #188]
+    pub id: BatchDigest,
+    pub transactions: Batch,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BlockErrorType {
+    BlockNotFound,
+    BatchTimeout,
+    BatchError,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BlockError {
+    pub id: CertificateDigest,
+    pub error: BlockErrorType,
+}
+
+pub type BlockResult<T> = Result<T, BlockError>;
+
+impl<T> From<BlockError> for BlockResult<T> {
+    fn from(error: BlockError) -> Self {
+        BlockResult::Err(error)
+    }
+}
+
+impl fmt::Display for BlockError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "block id: {}, error type: {}", self.id, self.error)
+    }
+}
+
+impl fmt::Display for BlockErrorType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }

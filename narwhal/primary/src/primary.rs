@@ -4,10 +4,11 @@
 use crate::{
     block_remover::DeleteBatchResult,
     block_synchronizer::BlockSynchronizer,
-    block_waiter::{BatchMessage, BatchMessageError, BatchResult, BlockWaiter},
+    block_waiter::{BatchMessageError, BatchResult, BlockWaiter},
     certificate_waiter::CertificateWaiter,
     core::Core,
     garbage_collector::GarbageCollector,
+    grpc_server::ConsensusAPIGrpc,
     header_waiter::HeaderWaiter,
     helper::Helper,
     payload_receiver::PayloadReceiver,
@@ -33,8 +34,9 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tonic::{Request, Response, Status};
 use tracing::info;
 use types::{
-    Batch, BatchDigest, BincodeEncodedPayload, Certificate, CertificateDigest, Empty, Header,
-    HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer, WorkerToPrimary, WorkerToPrimaryServer,
+    Batch, BatchDigest, BatchMessage, BincodeEncodedPayload, Certificate, CertificateDigest, Empty,
+    Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer, WorkerToPrimary,
+    WorkerToPrimaryServer,
 };
 
 /// The default channel capacity for each channel of the primary.
@@ -85,6 +87,7 @@ impl Primary {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         tx_consensus: Sender<Certificate<PublicKey>>,
         rx_consensus: Receiver<Certificate<PublicKey>>,
+        external_consensus: bool,
     ) {
         let (tx_others_digests, rx_others_digests) = channel(CHANNEL_CAPACITY);
         let (tx_our_digests, rx_our_digests) = channel(CHANNEL_CAPACITY);
@@ -98,7 +101,7 @@ impl Primary {
         let (tx_helper_requests, rx_helper_requests) = channel(CHANNEL_CAPACITY);
         // _tx_get_block_commands should be used by the handler that will issue the requests
         // to fetch the collections from Narwhal (e.x the get_collections endpoint).
-        let (_tx_get_block_commands, rx_get_block_commands) = channel(CHANNEL_CAPACITY);
+        let (tx_get_block_commands, rx_get_block_commands) = channel(CHANNEL_CAPACITY);
         let (tx_batches, rx_batches) = channel(CHANNEL_CAPACITY);
         // _tx_block_removal_commands should be used by the handler that will issue the requests
         // to remove collections from Narwhal (e.x the remove_collections endpoint).
@@ -278,6 +281,15 @@ impl Primary {
             payload_store,
             rx_helper_requests,
         );
+
+        if external_consensus {
+            // Spawn a grpc server to accept requests from external consensus layer.
+            ConsensusAPIGrpc::spawn(
+                parameters.consensus_api_grpc.socket_addr,
+                tx_get_block_commands,
+                parameters.consensus_api_grpc.get_collections_timeout,
+            );
+        }
 
         // NOTE: This log entry is used to compute performance.
         info!(

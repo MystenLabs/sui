@@ -5,6 +5,124 @@ syntax = "proto3";
 
 package narwhal;
 
+// TODO: Make this proto the source of truth for all relevant narwhal types.
+
+/* 
+ * Proto wrapper for Narwhal type 
+ *
+ * pub struct CertificateDigest([u8; DIGEST_LEN])
+ *
+ */
+message CertificateDigest {
+    bytes digest = 1;
+}
+
+/* 
+ * Proto wrapper for Narwhal type 
+ *
+ * pub struct BatchDigest(pub [u8; crypto::DIGEST_LEN]);
+ *
+ */
+message BatchDigest {
+    bytes digest = 1;
+}
+
+/* 
+ * Proto wrapper for Narwhal type 
+ *
+ * pub struct Batch(pub Vec<Transaction>);
+ *
+ */
+message Batch {
+    repeated Transaction transaction = 1;
+}
+
+/* 
+ * Proto wrapper for Narwhal type 
+ *
+ * pub type Transaction = Vec<u8>;
+ *
+ */
+message Transaction {
+    bytes transaction = 1;
+}
+
+/*
+ * Proto wrapper for Narwhal type 
+ *
+ * pub enum BlockErrorType {
+ *   BlockNotFound,
+ *   BatchTimeout,
+ *   BatchError,
+ * }
+ */
+ enum CollectionErrorType {
+    COLLECTION_NOT_FOUND = 0;
+    COLLECTION_TIMEOUT = 1;
+    COLLECTION_ERROR = 2;
+}
+
+/*
+ * Proto wrapper for Narwhal type 
+ *
+ * pub struct BlockError {
+ *     id: CertificateDigest,
+ *     error: BlockErrorType,
+ * }
+ */
+message CollectionError {
+    CertificateDigest id = 1;
+    CollectionErrorType error = 2;
+}
+
+/*
+ * Proto wrapper for Narwhal type
+ *
+ * pub struct BatchMessage {
+ *   pub id: BatchDigest,
+ *   pub transactions: Batch,
+ * }
+ *
+ */
+ message BatchMessage {
+    BatchDigest id = 1;
+    Batch transactions = 2;
+}
+
+message CollectionRetrievalResult {
+    oneof retrieval_result {
+        BatchMessage batch = 1;
+        CollectionError error = 2;
+    }
+}
+
+message GetCollectionsRequest {
+    // List of collections to be retreived.
+    repeated CertificateDigest collection_ids = 1;
+}
+
+message GetCollectionsResponse {
+    // TODO: Revisit this for spec compliance.  
+    // List of retrieval results of collections.
+    repeated CollectionRetrievalResult result = 1;
+}
+
+// A bincode encoded payload. This is intended to be used in the short-term
+// while we don't have good protobuf definitions for Narwhal types
+message BincodeEncodedPayload {
+    bytes payload = 1;
+  }
+  
+// Empty message for when we don't have anything to return
+message Empty {
+}
+
+// The consensus to mempool interface for validator actions.
+service Validator {
+    // Returns the collection contents for each requested collection
+    rpc GetCollections (GetCollectionsRequest) returns (GetCollectionsResponse);
+}
+
 // The primary-to-primary interface
 service PrimaryToPrimary {
   // Sends a message
@@ -37,18 +155,4 @@ service Transactions {
 
     // Submit a Transactions
     rpc SubmitTransactionStream (stream Transaction) returns (Empty) {}
-}
-
-// A bincode encoded payload. This is intended to be used in the short-term
-// while we don't have good protobuf definitions for Narwhal types
-message BincodeEncodedPayload {
-  bytes payload = 1;
-}
-
-// Empty message for when we don't have anything to return
-message Empty {
-}
-
-message Transaction {
-    bytes transaction = 1;
 }
