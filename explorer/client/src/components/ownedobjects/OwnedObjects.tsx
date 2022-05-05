@@ -388,6 +388,9 @@ function OwnedObjectView({ results }: { results: resultType }) {
                     ))}
                 </div>
             ))}
+            {results.length % 3 === 2 && (
+                <div className={`${styles.objectbox} ${styles.fillerbox}`} />
+            )}
         </div>
     );
 }
