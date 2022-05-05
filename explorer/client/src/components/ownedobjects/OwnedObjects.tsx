@@ -119,7 +119,13 @@ function OwnedObjectAPI({ id }: { id: string }) {
 
 function OwnedObjectLayout({ results }: { results: resultType }) {
     const coin_results = results.filter(({ Type }) => IS_COIN_TYPE(Type));
-    const other_results = results.filter(({ Type }) => !IS_COIN_TYPE(Type));
+    const other_results = results
+        .filter(({ Type }) => !IS_COIN_TYPE(Type))
+        .sort((a, b) => {
+            if (a.Type > b.Type) return 1;
+            if (a.Type < b.Type) return -1;
+            return 0;
+        });
 
     return (
         <div>
