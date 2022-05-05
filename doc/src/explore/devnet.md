@@ -10,9 +10,9 @@ Welcome to the beginnings of the Sui DevNet. It exists now to gain operational e
 
 Many improvements to the Sui DevNet are underway, such as the ability to run full nodes and use a browser-based wallet. See the [Sui DevNet blog post](https://medium.com/mysten-labs) announcement for full details on upcoming features.
 
-## Components
+## Tools
 
-DevNet deployment features the following components of the Sui blockchain:
+We provide the following tools for users to interact with the Sui Devnet:
 
 * The [Sui Wallet command line interface (CLI)](../build/wallet.md)
     * create and manage your private keys
