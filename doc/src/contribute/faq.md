@@ -95,7 +95,7 @@ We have a number of examples and demos available for viewing at: [https://docs.s
 
 ### Are you looking for partners?
 
-We are seeking partners that can contribute to the ecosystem primarily in development by building apps with the SDK now so they can be ready to launch when the network goes live. If interested, please apply [here]( https://bit.ly/suiform)
+We are seeking partners that can contribute to the ecosystem primarily in development by building apps with the SDK now so they can be ready to launch when the network goes live. If interested, please apply using the [Sui Partnerships Form](https://bit.ly/suiform).
 
 
 ### With whom can I talk about a partnership or strategic investment? How can I discuss Sui in person?
