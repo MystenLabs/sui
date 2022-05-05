@@ -828,9 +828,9 @@ impl Debug for WalletCommandResult {
             WalletCommandResult::Object(object_read) => {
                 let object = object_read.object()?;
                 let layout = object_read.layout()?;
-                Ok(object.to_json(layout)?.to_string())
+                Ok(serde_json::to_string_pretty(&object.to_json(layout)?)?)
             }
-            _ => Ok(serde_json::to_string(self)?),
+            _ => Ok(serde_json::to_string_pretty(self)?),
         });
         write!(f, "{}", s)
     }
