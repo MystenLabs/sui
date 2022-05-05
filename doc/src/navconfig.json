@@ -2,8 +2,8 @@
   "sideMenu": {
     "title": "QUICK LINKS",
     "items": [{
-        "label": "Tutorial",
-        "link": "explore/tutorials"
+        "label": "DevNet",
+        "link": "explore/devnet"
       },
       {
         "label": "Examples",
@@ -88,6 +88,10 @@
       }
     ],
     "explore": [{
+        "label": "DevNet",
+        "fileName": "explore/devnet"
+      },
+      {
         "label": "Tutorial",
         "fileName": "explore/tutorials"
       },
