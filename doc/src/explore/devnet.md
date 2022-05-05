@@ -109,11 +109,11 @@ https://explorer.devnet.sui.io/objects/EC97467A40A1305FFDEF7019C3045FBC7AA31E29
 
 ![Custom NFT](../../static/custom-nft.png "Custom NFT")
 
-To get to the *Transaction Details* view in Sui Explorer after minting an NFT, go to the [home page](http://explorer.devnet.sui.io) and find the transaction hash under *Latest Transactions*:
+See all transactions on the [home page](http://explorer.devnet.sui.io) and find the transaction hash under *Latest Transactions*:
 
 ![Explorer home](../../static/explorer-home.png "Explorer home")
 
-Click on any transaction to see its details:
+To get to the *Transaction Details* view in Sui Explorer after minting an NFT, click on the *Last Transaction ID* field in the *Object View*.
 
 ![Transaction details](../../static/transaction-details.png "Transaction details")
 
