@@ -239,5 +239,90 @@
         "tx_digest": "Zy76499PkX9Rm4DEWEj5o1NSnLWqu/700Xfx+bd4qSc="
       }
     }
+  },
+
+  "hero": {
+    "status": "Exists",
+    "details": {
+      "objectRef": {
+        "objectId": "3cc2a1f0d3f7c3df8cf74249490eeb995cd5b268",
+        "version": 1,
+        "digest": "AreMRNmuTBKRmeeQfu2wcIA5aR/EkO5vUdHH7y7yoT0="
+      },
+      "objectType": "moveObject",
+      "object": {
+        "contents": {
+          "fields": {
+            "experience": 0,
+            "game_id": {
+              "fields": {
+                "bytes": "1a2c7db7cbb34abfe2374e8d9879f8ec0f295111"
+              },
+              "type": "0x2::ID::ID"
+            },
+            "hp": 100,
+            "id": {
+              "fields": {
+                "id": {
+                  "fields": {
+                    "id": {
+                      "fields": {
+                        "bytes": "3cc2a1f0d3f7c3df8cf74249490eeb995cd5b268"
+                      },
+                      "type": "0x2::ID::ID"
+                    }
+                  },
+                  "type": "0x2::ID::UniqueID"
+                },
+                "version": 1
+              },
+              "type": "0x2::ID::VersionedID"
+            },
+            "sword": {
+              "fields": {
+                "vec": [
+                  {
+                    "fields": {
+                      "game_id": {
+                        "fields": {
+                          "bytes": "1a2c7db7cbb34abfe2374e8d9879f8ec0f295111"
+                        },
+                        "type": "0x2::ID::ID"
+                      },
+                      "id": {
+                        "fields": {
+                          "id": {
+                            "fields": {
+                              "id": {
+                                "fields": {
+                                  "bytes": "a3b20b97b43aefe1539c6dbeff1547eb7b171ca1"
+                                },
+                                "type": "0x2::ID::ID"
+                              }
+                            },
+                            "type": "0x2::ID::UniqueID"
+                          },
+                          "version": 0
+                        },
+                        "type": "0x2::ID::VersionedID"
+                      },
+                      "magic": 10,
+                      "strength": 1
+                    },
+                    "type": "0xba510c18a7c08c306f524b82d05f918bf91fb5c0::Hero::Sword"
+                  }
+                ]
+              },
+              "type": "0x1::Option::Option<0xba510c18a7c08c306f524b82d05f918bf91fb5c0::Hero::Sword>"
+            }
+          },
+          "type": "0xba510c18a7c08c306f524b82d05f918bf91fb5c0::Hero::Hero"
+        },
+        "owner": {
+          "AddressOwner": "a8ac9659d254c9ad366971c7c1b751a86ea2e84f"
+        },
+        "tx_digest": "LLz5oCSAxbL5bnwcn2mKq8zcIE70GgS3flWAeSq6EJI="
+      }
+    }
   }
 }

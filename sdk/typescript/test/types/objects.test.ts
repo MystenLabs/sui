@@ -11,11 +11,12 @@ describe('Test Objects Definition', () => {
     validate('coin');
     validate('example_nft');
     validate('move_package');
+    validate('hero');
   });
 });
 
 function validate(
-  key: 'coin' | 'example_nft' | 'move_package'
+  key: 'coin' | 'example_nft' | 'move_package' | 'hero'
 ): GetObjectInfoResponse {
   const data = mockObjectData[key];
   expect(isGetObjectInfoResponse(data)).toBeTruthy();
