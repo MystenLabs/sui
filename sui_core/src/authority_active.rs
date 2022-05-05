@@ -6,7 +6,7 @@
     components to perform a number of functions such as:
 
     (1) Share transactions received with other authorities, to complete their execution
-        in case clients fail before sharing a trasnaction with sufficient authorities.
+        in case clients fail before sharing a transaction with sufficient authorities.
     (2) Share certificates with other authorities in case clients fail before a
         certificate has its executon finalized.
     (3) Gossip executed certificates digests with other authorities through following
@@ -15,7 +15,7 @@
         protocol.
 
     This component manages the root of all these active processes. It spawns services
-    and tasks that activelly initiate network operations to progess all these
+    and tasks that actively initiate network operations to progress all these
     processes.
 
     Some ground rules:

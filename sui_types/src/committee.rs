@@ -73,9 +73,9 @@ impl Committee {
 
     /// Given a sequence of (AuthorityName, value) for values, provide the
     /// value at the particular threshold by stake. This orders all provided values
-    /// in asceding order and pick the appropriate value that has under it threshold
+    /// in ascending order and pick the appropriate value that has under it threshold
     /// stake. You may use the function `validity_threshold` or `quorum_threshold` to
-    /// pick the f+1 (1/3 stake) or 2f+1 (2/3 stake) thresholds respectivelly.
+    /// pick the f+1 (1/3 stake) or 2f+1 (2/3 stake) thresholds respectively.
     ///
     /// This function may be used in a number of settings:
     /// - When we pass in a set of values produced by authorities with at least 2/3 stake
