@@ -4,8 +4,10 @@
 
 use super::base_types::*;
 use ed25519_dalek::PublicKey;
+use itertools::Itertools;
 use rand::distributions::{Distribution, Uniform};
 use rand::rngs::OsRng;
+use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashMap};
 
 pub type EpochId = u64;
@@ -67,5 +69,42 @@ impl Committee {
         // If N = 3f + 1 + k (0 <= k < 3)
         // then (N + 2) / 3 = f + 1 + k/3 = f + 1
         (self.total_votes + 2) / 3
+    }
+
+    /// Given a sequence of (AuthorityName, value) for values, provide the
+    /// value at the particular threshold by stake. This orders all provided values
+    /// in asceding order and pick the appropriate value that has under it threshold
+    /// stake. You may use the function `validity_threshold` or `quorum_threshold` to
+    /// pick the f+1 (1/3 stake) or 2f+1 (2/3 stake) thresholds respectivelly.
+    ///
+    /// This function may be used in a number of settings:
+    /// - When we pass in a set of values produced by authorities with at least 2/3 stake
+    ///   and pick a validity_threshold it ensures that the resulting value is either itself
+    ///   or is in between values provided by an honest node.
+    /// - When we pass in values associated with the totality of stake and set a threshold
+    ///   of quorum_threshold, we ensure that at least a majority of honest nodes (ie >1/3
+    ///   out of the 2/3 threshold) have a value smaller than the value returned.
+    pub fn robust_value<A, V>(
+        &self,
+        items: impl Iterator<Item = (A, V)>,
+        threshold: usize,
+    ) -> (AuthorityName, V)
+    where
+        A: Borrow<AuthorityName> + Ord,
+        V: Ord,
+    {
+        debug_assert!(threshold < self.total_votes);
+
+        let items = items
+            .map(|(a, v)| (v, self.voting_rights[a.borrow()], *a.borrow()))
+            .sorted();
+        let mut total = 0;
+        for (v, s, a) in items {
+            total += s;
+            if threshold < total {
+                return (a, v);
+            }
+        }
+        unreachable!();
     }
 }
