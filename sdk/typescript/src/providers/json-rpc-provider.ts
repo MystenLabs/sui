@@ -64,6 +64,24 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
+  async getObjectInfoBatch(
+    objectIds: string[]
+  ): Promise<GetObjectInfoResponse[]> {
+    const requests = objectIds.map(id => ({
+      method: 'sui_getObjectTypedInfo',
+      args: [id],
+    }));
+    try {
+      const responses = await this.client.batchRequestWithType(
+        requests,
+        isGetObjectInfoResponse
+      );
+      return responses.map(r => transformGetObjectInfoResponse(r));
+    } catch (err) {
+      throw new Error(`Error fetching object info: ${err} for id ${objectIds}`);
+    }
+  }
+
   // Transactions
   async getTransactionWithEffects(
     digest: TransactionDigest
