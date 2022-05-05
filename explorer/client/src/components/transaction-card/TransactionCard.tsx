@@ -64,6 +64,7 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
             ? [
                   {
                       label: 'Mutated',
+                      category: 'objects',
                       value: tx.mutated.map((obj) => obj[0]),
                       list: true,
                       link: true,
@@ -75,6 +76,7 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
                   {
                       label: 'Created',
                       value: tx.created.map((obj) => obj[0]),
+                      category: 'objects',
                       list: true,
                       link: true,
                   },

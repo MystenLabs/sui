@@ -138,7 +138,11 @@ export function isObjectContentField(obj: any, _argumentName?: string): obj is O
             obj.every((e: any) =>
                 isSequenceNumber(e) as boolean
             ) ||
-            isObjectContent(obj) as boolean)
+            isObjectContent(obj) as boolean ||
+            Array.isArray(obj) &&
+            obj.every((e: any) =>
+                isObjectContent(e) as boolean
+            ))
     )
 }
 
