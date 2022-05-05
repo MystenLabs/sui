@@ -151,16 +151,16 @@
         "name": "See what's New",
         "sublist": [
           {
+            "name": "Explore Sui DevNet!",
+            "url": "/explore/devnet"
+          },
+          {
             "name": "Interact with local network",
             "url": "/build/json-rpc"
           },
           {
             "name": "Learn Sui consensus",
             "url": "/learn/architecture/consensus"
-          },
-          {
-            "name": "Use gas objects for transactions",
-            "url": "/build/wallet#paying-for-transactions-with-gas-objects"
           }
         ]
       },
