@@ -22,9 +22,6 @@ function ObjectLoaded({ data }: { data: DataType }) {
     const [showProperties, setShowProperties] = useState(false);
     const [showConnectedEntities, setShowConnectedEntities] = useState(false);
 
-    console.log(data);
-    const IS_LIBRARY = data.objType === 'Move Package';
-
     useEffect(() => {
         setShowDescription(true);
         setShowProperties(true);
@@ -273,12 +270,12 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             <div>
                                 <div>Type</div>
                                 <div>
-                                    {IS_LIBRARY
+                                    {data.objType === 'Move Package'
                                         ? 'Library'
                                         : prepObjTypeValue(data.objType)}
                                 </div>
                             </div>
-                            {!IS_LIBRARY && (
+                            {data.objType !== 'Move Package' && (
                                 <div>
                                     <div>Owner</div>
                                     <div id="owner">
@@ -332,7 +329,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             )}
                         </div>
                     )}
-                    {properties.length > 0 && !IS_LIBRARY && (
+                    {properties.length > 0 && data.objType !== 'Move Package' && (
                         <>
                             <h2
                                 className={styles.clickableheader}
