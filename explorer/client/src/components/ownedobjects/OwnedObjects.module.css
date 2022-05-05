@@ -51,7 +51,7 @@
 }
 
 button.btncontainer {
-    @apply inline-block px-0 cursor-pointer border-none bg-inherit hover:bg-sui 
+    @apply inline-block px-0 cursor-pointer border-none bg-inherit hover:bg-sui
   py-2
   text-offblack stroke-offblack
   hover:text-white hover:stroke-white
@@ -72,4 +72,8 @@ button.btncontainer {
 
 .paginationheading > h2 {
     @apply inline lg:ml-5;
+}
+
+.gray {
+    color: gray;
 }
