@@ -44,6 +44,7 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 use tracing::{debug, instrument, log};
+use typed_store::Map;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -721,6 +722,37 @@ impl AuthorityState {
                     .store_package_and_init_modules_for_genesis(genesis_ctx, genesis_modules)
                     .await
                     .expect("We expect publishing the Genesis packages to not fail");
+            }
+        }
+
+        // If a checkpoint store is present, ensure it is up-to-date with the latest
+        // batches.
+        if let Some(checkpoint) = &state._checkpoints {
+            let next_expected_tx = checkpoint.next_transaction_sequence_expected();
+
+            // Get all unprocessed checkpoints
+            for (_seq, batch) in state
+                ._database
+                .batches
+                .iter()
+                .skip_to(&next_expected_tx)
+                .expect("Seeking batches should never fail at this point")
+            {
+                let transactions: Vec<(TxSequenceNumber, TransactionDigest)> = state
+                    ._database
+                    .executed_sequence
+                    .iter()
+                    .skip_to(&batch.batch.initial_sequence_number)
+                    .expect("Should never fail to get an iterator")
+                    .take_while(|(seq, _tx)| *seq < batch.batch.next_sequence_number)
+                    .collect();
+
+                if batch.batch.next_sequence_number > next_expected_tx {
+                    // Update the checkpointing mechanism
+                    checkpoint
+                        .handle_internal_batch(batch.batch.next_sequence_number, &transactions)
+                        .expect("Should see no errors updating the checkpointing mechanism.");
+                }
             }
         }
 
