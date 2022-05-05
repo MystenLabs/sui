@@ -5236,6 +5236,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util 0.7.1",
  "tracing",
+ "tracing-test",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=d2976a45420147ad821baae96e6fe4b12215f743)",
 ]
 
