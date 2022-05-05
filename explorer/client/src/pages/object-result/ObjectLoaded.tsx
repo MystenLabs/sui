@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
@@ -270,24 +270,30 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             )}
                             <div>
                                 <div>Type</div>
-                                <div>{prepObjTypeValue(data.objType)}</div>
-                            </div>
-                            <div>
-                                <div>Owner</div>
-                                <div id="owner">
-                                    <Longtext
-                                        text={extractOwnerData(data.owner)}
-                                        category="unknown"
-                                        // TODO: make this more elegant
-                                        isLink={
-                                            extractOwnerData(data.owner) !==
-                                                'Immutable' &&
-                                            extractOwnerData(data.owner) !==
-                                                'Shared'
-                                        }
-                                    />
+                                <div>
+                                    {data.objType === 'Move Package'
+                                        ? 'Library'
+                                        : prepObjTypeValue(data.objType)}
                                 </div>
                             </div>
+                            {data.objType !== 'Move Package' && (
+                                <div>
+                                    <div>Owner</div>
+                                    <div id="owner">
+                                        <Longtext
+                                            text={extractOwnerData(data.owner)}
+                                            category="unknown"
+                                            // TODO: make this more elegant
+                                            isLink={
+                                                extractOwnerData(data.owner) !==
+                                                    'Immutable' &&
+                                                extractOwnerData(data.owner) !==
+                                                    'Shared'
+                                            }
+                                        />
+                                    </div>
+                                </div>
+                            )}
                             {data.contract_id && (
                                 <div>
                                     <div>Contract ID</div>
@@ -324,7 +330,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             )}
                         </div>
                     )}
-                    {properties.length > 0 && (
+                    {properties.length > 0 && data.objType !== 'Move Package' && (
                         <>
                             <h2
                                 className={styles.clickableheader}
@@ -353,7 +359,24 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             Child Objects {showConnectedEntities ? '' : '+'}
                         </h2>
                     ) : (
-                        <></>
+                        <div>
+                            <h2
+                                className={styles.clickableheader}
+                                onClick={clickSetShowProperties}
+                            >
+                                Modules {showProperties ? '' : '+'}
+                            </h2>
+                            {showProperties && (
+                                <div className={styles.bytecodebox}>
+                                    {properties.map(([key, value], index) => (
+                                        <div key={`property-${index}`}>
+                                            <div>{prepLabel(key)}</div>
+                                            <div>{value}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     )}
                     {showConnectedEntities && <OwnedObjects id={data.id} />}
                 </div>
