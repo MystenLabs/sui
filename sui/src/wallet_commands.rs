@@ -25,7 +25,7 @@ use sui_core::gateway_state::{
 use sui_core::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_framework::build_move_package_to_bytes;
 use sui_types::{
-    base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress},
+    base_types::{ObjectID, ObjectRef, SuiAddress},
     error::SuiError,
     fp_ensure,
     gas_coin::GasCoin,
@@ -61,7 +61,7 @@ pub enum WalletCommands {
     Switch {
         /// An Sui address to be used as the active address for subsequent
         /// commands.
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         address: Option<SuiAddress>,
         /// The gateway URL (e.g., local rpc server, devnet rpc server, etc) to be
         /// used for subsequent commands.
@@ -136,7 +136,7 @@ pub enum WalletCommands {
     #[clap(name = "transfer-coin")]
     Transfer {
         /// Recipient address
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         to: SuiAddress,
 
         /// Coin to transfer, in 20 bytes Hex string
@@ -155,7 +155,7 @@ pub enum WalletCommands {
     /// Synchronize client state with authorities.
     #[clap(name = "sync")]
     SyncClientState {
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         address: Option<SuiAddress>,
     },
 
@@ -171,7 +171,7 @@ pub enum WalletCommands {
     #[clap(name = "objects")]
     Objects {
         /// Address owning the objects
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         address: Option<SuiAddress>,
     },
 
@@ -179,7 +179,7 @@ pub enum WalletCommands {
     #[clap(name = "gas")]
     Gas {
         /// Address owning the objects
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         address: Option<SuiAddress>,
     },
 

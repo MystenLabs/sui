@@ -1,10 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::account_address::AccountAddress;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use move_core_types::account_address::AccountAddress;
 use serde;
 use serde::de::{Deserialize, Deserializer, Error};
 use serde::ser::Serializer;
@@ -137,6 +137,8 @@ where
 
 pub mod encoding {
     use anyhow::anyhow;
+
+    use crate::base_types::{decode_bytes_hex, encode_bytes_hex};
     use base64ct::Encoding as _;
 
     pub trait Encoding {
@@ -148,11 +150,11 @@ pub mod encoding {
 
     impl Encoding for Hex {
         fn decode(s: String) -> Result<Vec<u8>, anyhow::Error> {
-            Ok(hex::decode(s)?)
+            decode_bytes_hex(&s)
         }
 
         fn encode<T: AsRef<[u8]>>(data: T) -> String {
-            hex::encode(data)
+            encode_bytes_hex(&data)
         }
     }
     impl Encoding for Base64 {

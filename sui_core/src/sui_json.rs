@@ -128,7 +128,7 @@ impl SuiJsonValue {
                 if !s.starts_with(HEX_PREFIX) {
                     return Err(anyhow!("Address hex string must start with 0x.",));
                 }
-                let r: SuiAddress = decode_bytes_hex(s.trim_start_matches(HEX_PREFIX))?;
+                let r: SuiAddress = decode_bytes_hex(&s)?;
                 MoveValue::Address(r.into())
             }
             _ => return Err(anyhow!("Unexpected arg {val} for expected type {ty}")),

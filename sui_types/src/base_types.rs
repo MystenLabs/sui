@@ -6,6 +6,7 @@ use base64ct::Encoding;
 use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
+use std::str::FromStr;
 
 use crate::crypto::PublicKeyBytes;
 use crate::error::SuiError;
@@ -348,45 +349,38 @@ where
 }
 
 pub fn encode_bytes_hex<B: AsRef<[u8]>>(bytes: &B) -> String {
-    hex::encode(bytes.as_ref())
+    format!("0x{}", hex::encode(bytes.as_ref()).to_uppercase())
 }
 
 pub fn decode_bytes_hex<T: for<'a> TryFrom<&'a [u8]>>(s: &str) -> Result<T, anyhow::Error> {
+    let s = if let Some(s) = s.strip_prefix("0x") {
+        s
+    } else {
+        s
+    };
     let value = hex::decode(s)?;
     T::try_from(&value[..]).map_err(|_| anyhow::anyhow!("byte deserialization failed"))
 }
 
-impl std::fmt::LowerHex for SuiAddress {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-
-        for byte in &self.0 {
-            write!(f, "{:02x}", byte)?;
-        }
-
-        Ok(())
-    }
-}
-
-impl std::fmt::UpperHex for SuiAddress {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-
-        for byte in &self.0 {
-            write!(f, "{:02X}", byte)?;
-        }
-
-        Ok(())
-    }
-}
-
 impl fmt::Display for SuiAddress {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:X}", self)
+    }
+}
+
+impl fmt::Debug for SuiAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:X}", self)
+    }
+}
+impl fmt::LowerHex for SuiAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", encode_bytes_hex(self).to_lowercase())
+    }
+}
+impl fmt::UpperHex for SuiAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", encode_bytes_hex(self))
     }
 }
 
@@ -397,14 +391,6 @@ pub fn dbg_addr(name: u8) -> SuiAddress {
 
 pub fn dbg_object_id(name: u8) -> ObjectID {
     ObjectID::from_bytes([name; ObjectID::LENGTH]).unwrap()
-}
-
-impl std::fmt::Debug for SuiAddress {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = hex::encode(&self.0);
-        write!(f, "k#{}", s)?;
-        Ok(())
-    }
 }
 
 impl std::fmt::Debug for ObjectDigest {
@@ -694,22 +680,29 @@ impl From<SuiAddress> for AccountAddress {
 
 impl fmt::Display for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
+        write!(f, "{:X}", self)
     }
 }
+
 impl fmt::Debug for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        write!(f, "{:X}", self)
     }
 }
 impl fmt::LowerHex for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        write!(f, "{}", encode_bytes_hex(self).to_lowercase())
     }
 }
 impl fmt::UpperHex for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        write!(f, "{}", encode_bytes_hex(self))
+    }
+}
+
+impl AsRef<[u8]> for ObjectID {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_slice()
     }
 }
 
@@ -736,6 +729,13 @@ impl TryFrom<String> for ObjectID {
 
     fn try_from(s: String) -> Result<ObjectID, ObjectIDParseError> {
         Self::from_hex(s.clone()).or_else(|_| Self::from_hex_literal(&s))
+    }
+}
+
+impl FromStr for SuiAddress {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, anyhow::Error> {
+        decode_bytes_hex(s)
     }
 }
 
