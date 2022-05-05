@@ -321,14 +321,6 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         }
     }
 
-    /// Read all locks.
-    pub fn get_locked_objects(&self) -> BTreeMap<ObjectRef, TransactionDigest> {
-        self.transaction_lock
-            .iter()
-            .filter_map(|lck| lck.1.map(|t| (lck.0, t)))
-            .collect()
-    }
-
     /// Read a certificate and return an option with None if it does not exist.
     pub fn read_certificate(
         &self,

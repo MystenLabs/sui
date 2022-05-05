@@ -15,7 +15,6 @@ use move_core_types::identifier::Identifier;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{base64, serde_as};
-use std::collections::BTreeMap;
 use std::path::Path;
 use sui_core::gateway_state::{
     gateway_responses::{TransactionEffectsResponse, TransactionResponse},
@@ -23,7 +22,6 @@ use sui_core::gateway_state::{
 };
 use sui_core::sui_json::SuiJsonValue;
 use sui_open_rpc_macros::open_rpc;
-use sui_types::base_types::ObjectRef;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     crypto,
@@ -156,9 +154,6 @@ pub trait RpcGateway {
     /// `get_object_typed_info` instead.
     #[method(name = "getObjectInfoRaw")]
     async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<ObjectRead>;
-
-    #[method(name = "getLockedObjects")]
-    fn get_locked_objects(&self) -> RpcResult<BTreeMap<ObjectRef, TransactionDigest>>;
 }
 
 pub struct RpcGatewayImpl {
@@ -388,10 +383,6 @@ impl RpcGatewayServer for RpcGatewayImpl {
         digest: TransactionDigest,
     ) -> RpcResult<TransactionEffectsResponse> {
         Ok(self.gateway.get_transaction(digest).await?)
-    }
-
-    fn get_locked_objects(&self) -> RpcResult<BTreeMap<ObjectRef, TransactionDigest>> {
-        Ok(self.gateway.get_locked_objects()?)
     }
 }
 
