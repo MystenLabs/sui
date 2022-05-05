@@ -26,7 +26,7 @@ We provide the following tools for users to interact with the Sui Devnet:
 
 To use the Sui DevNet, you will need:
 
-1. Sui test coins (tokens) requested through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130)
+1. Sui [test coins (tokens)](#request-gas-tokens) requested through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130)
 1. A command line terminal, as virtually everything done here is done by CLI
 1. the [`git` command line interface](https://git-scm.com/download/)
 1. The [Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) toolchain, updated with `rustup update stable`
@@ -56,7 +56,12 @@ Now [set up your wallet and connect to DevNet](../build/wallet.md#connect-to-dev
 
 ### Request gas tokens
 
-Request gas tokens in the [#request-devnet-test-coins](https://discordapp.com/channels/916379725201563759/971488439931392130) Discord channel if you haven't already and wait for them to be issued.
+Request gas tokens by posting your wallet address in the [#request-devnet-test-coins](https://discordapp.com/channels/916379725201563759/971488439931392130) Discord channel if you haven't already and wait for them to be issued.
+
+You can find your wallet address by running:
+```shell
+$ wallet active-address
+```
 
 ## Mint an example NFT
 
