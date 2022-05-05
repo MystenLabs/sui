@@ -4,8 +4,8 @@ title: Experiment with Sui DevNet
 
 Welcome to the beginnings of the Sui DevNet. It exists now to gain operational experience with the Sui software in a public setting. The Sui DevNet currently consists of:
 
-* A four-validator network with all nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: https://gateway.devnet.sui.io:9000/
-* A public network [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) for browsing the TestNet transaction history: http://explorer.devnet.sui.io
+* A four-validator network with all nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: https://gateway.devnet.sui.io:9000/ using [JSON-RPC](../build/json-rpc.md)
+* A public network [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) for browsing the TestNet transaction history: https://explorer.devnet.sui.io
 * A [Discord channel](https://discordapp.com/channels/916379725201563759/971488439931392130) for requesting test coins that can be used to pay for gas on the test network. These coins have no financial value and will disappear each time we reset the network.
 
 Many improvements to the Sui DevNet are underway, such as the ability to run full nodes and use a browser-based wallet. See the [Sui DevNet blog post](https://medium.com/mysten-labs) announcement for full details on upcoming features. All DevNet usage is subject to our [terms of service](https://sui.io/terms/).
@@ -82,7 +82,7 @@ Type: 0x2::DevNetNFT::DevNetNFT
 
 The above command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58012FE`. Note you may use `wallet` to [view objects owned by the account](https://docs.sui.io/build/wallet#view-objects-owned-by-the-account).
 
-Now you can view the created object in the [Sui Explorer](http://explorer.devnet.sui.io) at:
+Now you can view the created object in the [Sui Explorer](https://explorer.devnet.sui.io) at:
 https://explorer.devnet.sui.io/objects/ED883F6812AF447B9B0CE220DA5EA9E0F58012FE
 
 Replace the object ID in the link above with the object ID of the Example NFT you observed in your own command output to see it in Sui Explorer:
@@ -109,7 +109,7 @@ https://explorer.devnet.sui.io/objects/EC97467A40A1305FFDEF7019C3045FBC7AA31E29
 
 ![Custom NFT](../../static/custom-nft.png "Custom NFT")
 
-See all transactions on the [home page](http://explorer.devnet.sui.io) and find the transaction hash under *Latest Transactions*:
+See all transactions on the [home page](https://explorer.devnet.sui.io) and find the transaction hash under *Latest Transactions*:
 
 ![Explorer home](../../static/explorer-home.png "Explorer home")
 
