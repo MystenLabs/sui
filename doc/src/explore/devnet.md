@@ -8,7 +8,7 @@ Welcome to the beginnings of the Sui DevNet. It exists now to gain operational e
 * A public network [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) for browsing the TestNet transaction history: https://explorer.devnet.sui.io
 * A [Discord channel](https://discordapp.com/channels/916379725201563759/971488439931392130) for requesting test coins that can be used to pay for gas on the test network. These coins have no financial value and will disappear each time we reset the network.
 
-Many improvements to the Sui DevNet are underway, such as the ability to run full nodes and use a browser-based wallet. See the [Sui DevNet blog post](https://medium.com/mysten-labs) announcement for full details on upcoming features. All DevNet usage is subject to our [terms of service](https://sui.io/terms/).
+Many improvements to the Sui DevNet are underway, such as the ability to run full nodes and use a browser-based wallet. See the [Sui DevNet blog post](https://medium.com/mysten-labs/sui-devnet-public-release-a2be304ff36b) announcement for full details on upcoming features. All DevNet usage is subject to our [terms of service](https://sui.io/terms/).
 
 ## Tools
 
