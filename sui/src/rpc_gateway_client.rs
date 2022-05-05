@@ -1,8 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
 use anyhow::Error;
 use async_trait::async_trait;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
@@ -196,14 +194,5 @@ impl GatewayAPI for RpcGatewayClient {
         digest: TransactionDigest,
     ) -> Result<TransactionEffectsResponse, Error> {
         Ok(self.client.get_transaction(digest).await?)
-    }
-
-    /// Return locked objects and digests of TX they're locked on
-    fn get_locked_objects(&self) -> Result<BTreeMap<ObjectRef, TransactionDigest>, Error> {
-        let handle = Handle::current();
-        let _ = handle.enter();
-        Ok(futures::executor::block_on(
-            self.client.get_locked_objects(),
-        )?)
     }
 }
