@@ -58,7 +58,7 @@ pub enum SuiError {
     MovePackageAsObject { object_id: ObjectID },
     #[error("Expecting a singler owner, shared ownership found")]
     UnexpectedOwnerType,
-    #[error("Shared mutable object not yet supported")]
+    #[error("Shared object not yet supported")]
     UnsupportedSharedObjectError,
     #[error("Object used as shared is not shared.")]
     NotSharedObjectError,
