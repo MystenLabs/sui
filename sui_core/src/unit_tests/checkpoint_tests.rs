@@ -2,10 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::authority::authority_tests::max_files_authority_tests;
-use std::{collections::HashSet, env, fs, path::PathBuf, sync::Arc};
+use crate::{
+    authority::{authority_tests::max_files_authority_tests, AuthorityState, AuthorityStore},
+    authority_batch::batch_tests::init_state_parameters_from_rng,
+};
+use rand::prelude::StdRng;
+use rand::SeedableRng;
+use std::{collections::HashSet, env, fs, path::PathBuf, sync::Arc, time::Duration};
+use sui_adapter::genesis;
 use sui_types::{
     base_types::{AuthorityName, ObjectID},
+    batch::UpdateItem,
     utils::make_committee_key,
     waypoint::GlobalCheckpoint,
 };
@@ -689,5 +696,233 @@ fn checkpoint_integration() {
         assert!(cps.set_proposal().is_err());
         // Loop invariant to ensure termination or error
         assert_eq!(cps.get_locals().next_checkpoint, old_checkpoint + 1);
+    }
+}
+
+// Now check the connection between state / bacth and checkpoint mechanism
+
+#[tokio::test]
+async fn test_batch_to_checkpointing() {
+    // Create a random directory to store the DB
+    let dir = env::temp_dir();
+    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    fs::create_dir(&path).unwrap();
+
+    // Create an authority
+    let mut opts = rocksdb::Options::default();
+    opts.set_max_open_files(max_files_authority_tests());
+
+    // Make a test key pair
+    let seed = [1u8; 32];
+    let (committee, _, authority_key) =
+        init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
+
+    let mut store_path = path.clone();
+    store_path.push("store");
+    let store = Arc::new(AuthorityStore::open(&store_path, Some(opts)));
+
+    let mut checkpoints_path = path.clone();
+    checkpoints_path.push("checkpoints");
+
+    let secret = Arc::pin(authority_key);
+    let checkpoints = Arc::new(
+        CheckpointStore::open(
+            &checkpoints_path,
+            None,
+            *secret.public_key_bytes(),
+            committee.clone(),
+            secret.clone(),
+        )
+        .unwrap(),
+    );
+
+    let state = AuthorityState::new(
+        committee,
+        *secret.public_key_bytes(),
+        secret,
+        store.clone(),
+        Some(checkpoints.clone()),
+        genesis::clone_genesis_compiled_modules(),
+        &mut genesis::get_genesis_context(),
+    )
+    .await;
+    let authority_state = Arc::new(state);
+
+    let inner_state = authority_state.clone();
+    let _join = tokio::task::spawn(async move {
+        inner_state
+            .run_batch_service(1000, Duration::from_millis(500))
+            .await
+    });
+    // Send transactions out of order
+    let mut rx = authority_state.subscribe_batch();
+
+    {
+        let t0 = &authority_state.batch_notifier.ticket().expect("ok");
+        let t1 = &authority_state.batch_notifier.ticket().expect("ok");
+        let t2 = &authority_state.batch_notifier.ticket().expect("ok");
+        let t3 = &authority_state.batch_notifier.ticket().expect("ok");
+
+        store.side_sequence(t1.seq(), &TransactionDigest::random());
+        store.side_sequence(t3.seq(), &TransactionDigest::random());
+        store.side_sequence(t2.seq(), &TransactionDigest::random());
+        store.side_sequence(t0.seq(), &TransactionDigest::random());
+    }
+
+    // Get transactions in order then batch.
+    assert!(matches!(
+        rx.recv().await.unwrap(),
+        UpdateItem::Transaction((0, _))
+    ));
+
+    assert!(matches!(
+        rx.recv().await.unwrap(),
+        UpdateItem::Transaction((1, _))
+    ));
+    assert!(matches!(
+        rx.recv().await.unwrap(),
+        UpdateItem::Transaction((2, _))
+    ));
+    assert!(matches!(
+        rx.recv().await.unwrap(),
+        UpdateItem::Transaction((3, _))
+    ));
+
+    // Then we (eventually) get a batch
+    assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
+
+    // Now once we have a batch we should also have stuff in the checkpoint
+    assert_eq!(checkpoints.next_transaction_sequence_expected(), 4);
+
+    // When we close the sending channel we also also end the service task
+    authority_state.batch_notifier.close();
+
+    _join.await.expect("No errors in task").expect("ok");
+}
+
+#[tokio::test]
+async fn test_batch_to_checkpointing_init_crash() {
+    // Create a random directory to store the DB
+    let dir = env::temp_dir();
+    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    fs::create_dir(&path).unwrap();
+
+    // Create an authority
+    let mut opts = rocksdb::Options::default();
+    opts.set_max_open_files(max_files_authority_tests());
+
+    // Make a test key pair
+    let seed = [1u8; 32];
+    let (committee, _, authority_key) =
+        init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
+
+    let mut store_path = path.clone();
+    store_path.push("store");
+
+    let mut checkpoints_path = path.clone();
+    checkpoints_path.push("checkpoints");
+
+    let secret = Arc::pin(authority_key);
+
+    // Scope to ensure all variables are dropped
+    {
+        let store = Arc::new(AuthorityStore::open(&store_path, Some(opts.clone())));
+
+        let state = AuthorityState::new(
+            committee.clone(),
+            *secret.public_key_bytes(),
+            secret.clone(),
+            store.clone(),
+            None,
+            genesis::clone_genesis_compiled_modules(),
+            &mut genesis::get_genesis_context(),
+        )
+        .await;
+        let authority_state = Arc::new(state);
+
+        let inner_state = authority_state.clone();
+        let _join = tokio::task::spawn(async move {
+            inner_state
+                .run_batch_service(1000, Duration::from_millis(500))
+                .await
+        });
+        // Send transactions out of order
+        let mut rx = authority_state.subscribe_batch();
+
+        {
+            let t0 = &authority_state.batch_notifier.ticket().expect("ok");
+            let t1 = &authority_state.batch_notifier.ticket().expect("ok");
+            let t2 = &authority_state.batch_notifier.ticket().expect("ok");
+            let t3 = &authority_state.batch_notifier.ticket().expect("ok");
+
+            store.side_sequence(t1.seq(), &TransactionDigest::random());
+            store.side_sequence(t3.seq(), &TransactionDigest::random());
+            store.side_sequence(t2.seq(), &TransactionDigest::random());
+            store.side_sequence(t0.seq(), &TransactionDigest::random());
+        }
+
+        // Get transactions in order then batch.
+        assert!(matches!(
+            rx.recv().await.unwrap(),
+            UpdateItem::Transaction((0, _))
+        ));
+
+        assert!(matches!(
+            rx.recv().await.unwrap(),
+            UpdateItem::Transaction((1, _))
+        ));
+        assert!(matches!(
+            rx.recv().await.unwrap(),
+            UpdateItem::Transaction((2, _))
+        ));
+        assert!(matches!(
+            rx.recv().await.unwrap(),
+            UpdateItem::Transaction((3, _))
+        ));
+
+        // Then we (eventually) get a batch
+        assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
+
+        // When we close the sending channel we also also end the service task
+        authority_state.batch_notifier.close();
+
+        _join.await.expect("No errors in task").expect("ok");
+    }
+
+    // Scope to ensure all variables are dropped
+    {
+        let store = Arc::new(AuthorityStore::open(&store_path, Some(opts)));
+
+        let checkpoints = Arc::new(
+            CheckpointStore::open(
+                &checkpoints_path,
+                None,
+                *secret.public_key_bytes(),
+                committee.clone(),
+                secret.clone(),
+            )
+            .unwrap(),
+        );
+
+        // Start with no transactions
+        assert_eq!(checkpoints.next_transaction_sequence_expected(), 0);
+
+        let state = AuthorityState::new(
+            committee,
+            *secret.public_key_bytes(),
+            secret,
+            store.clone(),
+            Some(checkpoints.clone()),
+            genesis::clone_genesis_compiled_modules(),
+            &mut genesis::get_genesis_context(),
+        )
+        .await;
+        let authority_state = Arc::new(state);
+
+        // But init feeds the transactions in
+        assert_eq!(checkpoints.next_transaction_sequence_expected(), 4);
+
+        // When we close the sending channel we also also end the service task
+        authority_state.batch_notifier.close();
     }
 }
