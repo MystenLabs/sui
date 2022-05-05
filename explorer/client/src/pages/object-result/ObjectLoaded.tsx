@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from 'react';
 
 import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
+import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
 import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
 import { parseImageURL } from '../../utils/objectUtils';
@@ -15,7 +16,6 @@ import {
 import { type DataType } from './ObjectResultType';
 
 import styles from './ObjectResult.module.css';
-import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 
 function ObjectLoaded({ data }: { data: DataType }) {
     // TODO - restore or remove this functionality
