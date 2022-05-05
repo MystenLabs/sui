@@ -1,32 +1,34 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![deny(warnings)]
-
+use self::bench_types::{BenchmarkResult, MicroBenchmarkResult, MicroBenchmarkType};
+use crate::benchmark::{
+    bench_types::{Benchmark, BenchmarkType},
+    load_generator::{
+        calculate_throughput, check_transaction_response, send_tx_chunks, FixedRateLoadGenerator,
+    },
+    transaction_creator::TransactionCreator,
+    validator_preparer::ValidatorPreparer,
+};
 use futures::{join, StreamExt};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use std::panic;
-use std::thread;
-use std::{thread::sleep, time::Duration};
+use rayon::{iter::ParallelIterator, prelude::*};
+use std::{panic, thread, thread::sleep, time::Duration};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
-use sui_network::network::{NetworkClient, NetworkServer};
-use sui_types::batch::UpdateItem;
-use sui_types::messages::{BatchInfoRequest, BatchInfoResponseItem};
-use sui_types::serialize::*;
+use sui_network::{
+    network::{NetworkClient, NetworkServer},
+    tonic,
+};
+use sui_types::{
+    batch::UpdateItem,
+    messages::{BatchInfoRequest, BatchInfoResponseItem},
+};
 use tokio::runtime::{Builder, Runtime};
 use tracing::{error, info};
+
 pub mod bench_types;
 pub mod load_generator;
 pub mod transaction_creator;
 pub mod validator_preparer;
-use crate::benchmark::bench_types::{Benchmark, BenchmarkType};
-use crate::benchmark::load_generator::{
-    calculate_throughput, check_transaction_response, send_tx_chunks, FixedRateLoadGenerator,
-};
-use crate::benchmark::transaction_creator::TransactionCreator;
-use crate::benchmark::validator_preparer::ValidatorPreparer;
-
-use self::bench_types::{BenchmarkResult, MicroBenchmarkResult, MicroBenchmarkType};
 
 const FOLLOWER_BATCH_SIZE: u64 = 10_000;
 
@@ -54,7 +56,7 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
     } else {
         num_cpus::get()
     };
-    let validator_preparer = ValidatorPreparer::new(
+    let validator_preparer = ValidatorPreparer::new_for_local(
         benchmark.running_mode,
         benchmark.working_dir,
         benchmark.committee_size,
@@ -68,7 +70,7 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
             network_server,
             connections,
             benchmark.batch_size,
-            benchmark.use_move,
+            !benchmark.use_native,
             num_transactions,
             validator_preparer,
         ),
@@ -80,7 +82,7 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
             network_client,
             network_server,
             connections,
-            benchmark.use_move,
+            !benchmark.use_native,
             num_chunks,
             chunk_size,
             period_us,
@@ -118,6 +120,7 @@ fn run_throughout_microbench(
         use_move,
         batch_size * connections,
         num_transactions / chunk_size,
+        None,
         &mut validator_preparer,
     );
 
@@ -138,8 +141,8 @@ fn run_throughout_microbench(
             .block_on(async move { send_tx_chunks(txes, network_client, connections).await });
 
         let _: Vec<_> = resp
-            .par_iter()
-            .map(|q| check_transaction_response(deserialize_message(&(q.as_ref().unwrap())[..])))
+            .into_par_iter()
+            .map(check_transaction_response)
             .collect();
 
         elapsed
@@ -182,12 +185,13 @@ fn run_latency_microbench(
         use_move,
         chunk_size,
         num_chunks,
+        None,
         &mut validator_preparer,
     );
 
     // These are tracer TXes used for measuring latency
     let tracer_txes =
-        tx_cr.generate_transactions(1, use_move, 1, num_chunks, &mut validator_preparer);
+        tx_cr.generate_transactions(1, use_move, 1, num_chunks, None, &mut validator_preparer);
 
     validator_preparer.deploy_validator(_network_server);
 
@@ -215,7 +219,7 @@ fn run_latency_microbench(
     validator_preparer.clean_up();
 
     match result {
-        Ok((load_latencies, tracer_latencies)) => MicroBenchmarkResult::Latency {
+        Ok((load_latencies, tracer_latencies)) => MicroBenchmarkResult::CombinedLatency {
             load_chunk_size: chunk_size,
             load_latencies,
             tick_period_us: period_us as usize,
@@ -230,15 +234,28 @@ fn run_latency_microbench(
 async fn run_follower(network_client: NetworkClient) {
     // We spawn a second client that listens to the batch interface
     let _batch_client_handle = tokio::task::spawn(async move {
-        let authority_client = NetworkAuthorityClient::new(network_client);
+        let uri = format!(
+            "http://{}:{}",
+            network_client.base_address(),
+            network_client.base_port()
+        )
+        .parse()
+        .unwrap();
+        let channel = tonic::transport::Channel::builder(uri)
+            .connect_timeout(network_client.send_timeout())
+            .timeout(network_client.recv_timeout())
+            .connect()
+            .await
+            .unwrap();
+        let authority_client = NetworkAuthorityClient::with_channel(channel, network_client);
 
         let mut start = 0;
 
         loop {
             let receiver = authority_client
                 .handle_batch_stream(BatchInfoRequest {
-                    start,
-                    end: start + FOLLOWER_BATCH_SIZE,
+                    start: Some(start),
+                    length: FOLLOWER_BATCH_SIZE,
                 })
                 .await;
 

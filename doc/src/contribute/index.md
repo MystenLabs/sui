@@ -13,7 +13,7 @@ overall status of Sui, including timelines for launching devnet, testnet, and ma
 
 ## Join the community
 
-To connect with the Sui community, join our [Discord](https://discord.gg/mysten).
+To connect with the Sui community, join our [Discord](https://discord.gg/sui).
 
 ## File issues
 

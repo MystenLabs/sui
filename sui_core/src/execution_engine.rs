@@ -12,7 +12,7 @@ use sui_types::{
     error::SuiResult,
     gas::{self, SuiGasStatus},
     messages::{
-        ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind, Transaction,
+        ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind, TransactionData,
         TransactionEffects, Transfer,
     },
     object::Object,
@@ -24,19 +24,19 @@ use tracing::{debug, instrument};
 pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     shared_object_refs: Vec<ObjectRef>,
     temporary_store: &mut AuthorityTemporaryStore<S>,
-    transaction: Transaction,
+    transaction_data: TransactionData,
     transaction_digest: TransactionDigest,
     mut transaction_dependencies: BTreeSet<TransactionDigest>,
     move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     gas_status: SuiGasStatus,
 ) -> SuiResult<TransactionEffects> {
-    let mut tx_ctx = TxContext::new(&transaction.sender_address(), &transaction_digest);
+    let mut tx_ctx = TxContext::new(&transaction_data.signer(), &transaction_digest);
 
-    let gas_object_id = transaction.gas_payment_object_ref().0;
+    let gas_object_id = transaction_data.gas_payment_object_ref().0;
     let status = execute_transaction(
         temporary_store,
-        transaction,
+        transaction_data,
         gas_object_id,
         &mut tx_ctx,
         move_vm,
@@ -68,7 +68,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
 #[instrument(name = "tx_execute", level = "debug", skip_all)]
 fn execute_transaction<S: BackingPackageStore>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
-    transaction: Transaction,
+    transaction_data: TransactionData,
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
@@ -84,7 +84,7 @@ fn execute_transaction<S: BackingPackageStore>(
     let mut result = Ok(());
     // TODO: Since we require all mutable objects to not show up more than
     // once across single tx, we should be able to run them in parallel.
-    for single_tx in transaction.into_single_transactions() {
+    for single_tx in transaction_data.kind.into_single_transactions() {
         result = match single_tx {
             SingleTransactionKind::Transfer(Transfer {
                 recipient,
@@ -133,13 +133,27 @@ fn execute_transaction<S: BackingPackageStore>(
         // Roll back the temporary store if execution failed.
         temporary_store.reset();
     }
+    // Make sure every mutable object's version number is incremented.
+    // This needs to happen before `charge_gas_for_storage_changes` so that it
+    // can charge gas for all mutated objects properly.
     temporary_store.ensure_active_inputs_mutated();
     if let Err(err) =
         temporary_store.charge_gas_for_storage_changes(&mut gas_status, &mut gas_object)
     {
-        result = Err(err);
-        // No need to roll back the temporary store here since `charge_gas_for_storage_changes`
-        // will not modify `temporary_store` if it failed.
+        // If `result` is already `Err`, we basically have two errors at the same time.
+        // Users should be generally more interested in the actual execution error, so we
+        // let that shadow the out of gas error. Also in this case, we don't need to reset
+        // the `temporary_store` because `charge_gas_for_storage_changes` won't mutate
+        // `temporary_store` if gas charge failed.
+        //
+        // If `result` is `Ok`, now we failed when charging gas, we have to reset
+        // the `temporary_store` to eliminate all effects caused by the execution,
+        // and re-ensure all mutable objects' versions are incremented.
+        if result.is_ok() {
+            temporary_store.reset();
+            temporary_store.ensure_active_inputs_mutated();
+            result = Err(err);
+        }
     }
 
     let cost_summary = gas_status.summary(result.is_ok());

@@ -1,12 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::config::{Config, NetworkConfig};
+
 use super::load_generator::calculate_throughput;
 use clap::*;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use std::collections::BTreeMap;
 use std::default::Default;
 use std::path::PathBuf;
 use strum_macros::EnumString;
-use sui_network::transport;
+use sui_types::base_types::ObjectID;
+use sui_types::crypto::{KeyPair, PublicKeyBytes};
 
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -18,13 +24,13 @@ pub struct Benchmark {
     #[clap(long, default_value = "1", global = true)]
     pub committee_size: usize,
     /// Timeout for sending queries (us)
-    #[clap(long, default_value = "40000000", global = true)]
+    #[clap(long, default_value = "400000000", global = true)]
     pub send_timeout_us: u64,
     /// Timeout for receiving responses (us)
-    #[clap(long, default_value = "40000000", global = true)]
+    #[clap(long, default_value = "400000000", global = true)]
     pub recv_timeout_us: u64,
     /// Maximum size of datagrams received and sent (bytes)
-    #[clap(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE_STR, global = true)]
+    #[clap(long, default_value = "65000", global = true)]
     pub buffer_size: usize,
     /// Number of connections to the server
     #[clap(long, default_value = "0", global = true)]
@@ -34,13 +40,13 @@ pub struct Benchmark {
     pub db_cpus: usize,
     /// Use Move orders
     #[clap(long, global = true)]
-    pub use_move: bool,
+    pub use_native: bool,
     #[clap(long, default_value = "2000", global = true)]
     pub batch_size: usize,
 
     #[clap(
         arg_enum,
-        default_value = "local-single-validator-thread",
+        default_value = "single-validator-thread",
         global = true,
         ignore_case = true
     )]
@@ -74,8 +80,9 @@ pub enum BenchmarkType {
 #[derive(Debug, Parser, Clone, Copy, ArgEnum, EnumString)]
 #[clap(rename_all = "kebab-case")]
 pub enum RunningMode {
-    LocalSingleValidatorThread,
-    LocalSingleValidatorProcess,
+    SingleValidatorThread,
+    SingleValidatorProcess,
+    RemoteValidator,
 }
 
 #[derive(Debug, Clone, Parser, Eq, PartialEq, EnumString)]
@@ -136,11 +143,16 @@ pub enum MicroBenchmarkResult {
     Throughput {
         chunk_throughput: f64,
     },
-    Latency {
+    CombinedLatency {
         load_chunk_size: usize,
         tick_period_us: usize,
         load_latencies: Vec<u128>,
         chunk_latencies: Vec<u128>,
+    },
+    Latency {
+        load_chunk_size: usize,
+        tick_period_us: usize,
+        latencies: Vec<u128>,
     },
 }
 
@@ -150,7 +162,7 @@ impl std::fmt::Display for MicroBenchmarkResult {
             MicroBenchmarkResult::Throughput { chunk_throughput } => {
                 write!(f, "Throughout: {} tps", chunk_throughput)
             }
-            MicroBenchmarkResult::Latency {
+            MicroBenchmarkResult::CombinedLatency {
                 chunk_latencies,
                 load_chunk_size,
                 tick_period_us: tick_period,
@@ -169,6 +181,37 @@ impl std::fmt::Display for MicroBenchmarkResult {
                     chunk_latencies.len()
                 )
             }
+            MicroBenchmarkResult::Latency {
+                load_chunk_size,
+                tick_period_us,
+                latencies,
+            } => {
+                let tracer_avg = latencies.iter().sum::<u128>() as f64 / latencies.len() as f64;
+
+                write!(
+                    f,
+                    "Average Latency {} us @ {} tps ({} samples)",
+                    tracer_avg,
+                    calculate_throughput(*load_chunk_size, *tick_period_us as u128),
+                    latencies.len()
+                )
+            }
         }
     }
 }
+
+#[serde_as]
+#[derive(Serialize, Deserialize)]
+pub struct RemoteLoadGenConfig {
+    /// Keypairs of all the validators
+    /// Ideally we wouldnt need this, but sometime we pre-sign certs
+    pub validator_keypairs: BTreeMap<PublicKeyBytes, KeyPair>,
+    /// Account keypair to use for transactions
+    pub account_keypair: KeyPair,
+    /// ObjectID offset for transaction objects
+    pub object_id_offset: ObjectID,
+    /// Network config for accessing validators
+    pub network_config: NetworkConfig,
+}
+
+impl Config for RemoteLoadGenConfig {}

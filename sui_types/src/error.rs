@@ -2,11 +2,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::*;
-use crate::committee::EpochId;
+use crate::{base_types::*, committee::EpochId};
 use move_binary_format::errors::{PartialVMError, VMError};
-use narwhal_executor::ExecutionStateError;
-use narwhal_executor::SubscriberError;
+use narwhal_executor::{ExecutionStateError, SubscriberError};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -30,6 +28,19 @@ macro_rules! fp_ensure {
 }
 pub(crate) use fp_ensure;
 
+#[macro_export]
+macro_rules! exit_main {
+    ($result:expr) => {
+        match $result {
+            Ok(_) => (),
+            Err(err) => {
+                println!("{}", err.to_string().bold().red());
+                std::process::exit(1);
+            }
+        }
+    };
+}
+
 /// Custom error type for Sui.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, JsonSchema)]
 #[allow(clippy::large_enum_variant)]
@@ -39,7 +50,7 @@ pub enum SuiError {
     LockErrors { errors: Vec<SuiError> },
     #[error("Attempt to transfer an object that's not owned.")]
     TransferUnownedError,
-    #[error("Attempt to transfer an object that's not a coin.")]
+    #[error("Attempt to transfer an object that's not a coin. Object transfer must be done using a distinct Move function call.")]
     TransferNonCoinError,
     #[error("A move package is expected, instead a move object is passed: {object_id}")]
     MoveObjectAsPackage { object_id: ObjectID },
@@ -51,7 +62,7 @@ pub enum SuiError {
     UnsupportedSharedObjectError,
     #[error("Object used as shared is not shared.")]
     NotSharedObjectError,
-    #[error("An object that's owned by another object cannot be deleted or wrapped. It must be transerred to an account address first before deletion")]
+    #[error("An object that's owned by another object cannot be deleted or wrapped. It must be transferred to an account address first before deletion")]
     DeleteObjectOwnedObject,
     #[error("The shared locks for this transaction have not yet been set.")]
     SharedObjectLockNotSetObject,
@@ -204,6 +215,18 @@ pub enum SuiError {
     InvalidMoveEvent { error: String },
     #[error("Circular object ownership detected")]
     CircularObjectOwnership,
+    #[error("When an (either direct or indirect) child object of a shared object is passed as a Move argument,\
+        either the child object's type or the shared object's type must be defined in the same module \
+        as the called function. This is violated by object {child} (defined in module '{child_module}'), \
+        whose ancestor {ancestor} is a shared object (defined in module '{ancestor_module}'), \
+        and neither are defined in this module '{current_module}'")]
+    InvalidSharedChildUse {
+        child: ObjectID,
+        child_module: String,
+        ancestor: ObjectID,
+        ancestor_module: String,
+        current_module: String,
+    },
 
     // Gas related errors
     #[error("Gas budget set higher than max: {error:?}.")]
@@ -289,12 +312,12 @@ pub enum SuiError {
     // Errors related to the authority-consensus interface.
     #[error("Authority state can be modified by a single consensus client at the time")]
     OnlyOneConsensusClientPermitted,
-
     #[error("Failed to connect with consensus node: {0}")]
     ConsensusConnectionBroken(String),
-
     #[error("Failed to lock shared objects: {0}")]
     SharedObjectLockingFailure(String),
+    #[error("Consensus listener is out of capacity")]
+    ListenerCapacityExceeded,
 
     // Cryptography errors.
     #[error("Signature seed invalid length, input byte size was: {0}")]
@@ -303,6 +326,11 @@ pub enum SuiError {
     HkdfError(String),
     #[error("Signature key generation error: {0}")]
     SignatureKeyGenError(String),
+
+    // These are errors that occur when an RPC fails and is simply the utf8 message sent in a
+    // Tonic::Status
+    #[error("{0}")]
+    RpcError(String),
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
@@ -327,6 +355,12 @@ impl std::convert::From<VMError> for SuiError {
 impl std::convert::From<SubscriberError> for SuiError {
     fn from(error: SubscriberError) -> Self {
         SuiError::SharedObjectLockingFailure(error.to_string())
+    }
+}
+
+impl From<tonic::Status> for SuiError {
+    fn from(status: tonic::Status) -> Self {
+        Self::RpcError(status.message().to_owned())
     }
 }
 

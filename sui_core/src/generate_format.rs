@@ -19,7 +19,6 @@ use sui_types::{
         CallArg, ExecutionStatus, ObjectInfoRequestKind, SingleTransactionKind, TransactionKind,
     },
     object::{Data, Owner},
-    serialize,
 };
 use typed_store::rocks::TypedStoreError;
 
@@ -71,8 +70,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<base_types::SuiAddress>(&samples)?;
     tracer.trace_type::<UpdateItem>(&samples)?;
 
-    // The final and main entry point that we must document
-    tracer.trace_type::<serialize::SerializedMessage>(&samples)?;
     tracer.registry()
 }
 

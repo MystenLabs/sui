@@ -12,7 +12,7 @@ version 1.60.0 or higher in order to build and install Sui on your machine.
 To develop in Sui, you will need the Sui binaries. After installing `cargo`, run:
 
 ```shell
-$ cargo install --git https://github.com/MystenLabs/sui.git sui
+$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "devnet" sui
 ```
 
 This will put these binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
@@ -54,7 +54,7 @@ You can start exploring Sui's source code by looking into the following primary 
 * [sui_core](https://github.com/MystenLabs/sui/tree/main/sui_core) - authority server and Sui Gateway
 * [sui_types](https://github.com/MystenLabs/sui/tree/main/sui_types) - coins, gas, and other object types
 * [explorer](https://github.com/MystenLabs/sui/tree/main/explorer) - object explorer for the Sui network
-* [network_utils](https://github.com/MystenLabs/sui/tree/main/network_utils) - networking utilities and related unit tests
+* [sui-network](https://github.com/MystenLabs/sui/tree/main/crates/sui-network) - networking interfaces
 
 To contribute updates to Sui code, [send pull requests](../contribute/index.md#send-pull-requests) our way.
 

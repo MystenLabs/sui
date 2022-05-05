@@ -34,11 +34,12 @@ pub mod authority_aggregator_tests;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
+#[derive(Clone)]
 pub struct AuthorityAggregator<A> {
     /// Our Sui committee.
     pub committee: Committee,
     /// How to talk to this committee.
-    authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
+    pub authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
 }
 
 impl<A> AuthorityAggregator<A> {
@@ -69,7 +70,7 @@ where
     /// Note: Both source and destination may be byzantine, therefore one should always
     /// time limit the call to this function to avoid byzantine authorities consuming
     /// an unbounded amount of resources.
-    async fn sync_authority_source_to_destination(
+    pub async fn sync_authority_source_to_destination(
         &self,
         cert: ConfirmationTransaction,
         source_authority: AuthorityName,
@@ -83,7 +84,7 @@ where
         // represent certificates that earlier insertions depend on. Thus updating an
         // authority in the order we pop() the certificates from this stack should ensure
         // certificates are uploaded in causal order.
-        let digest = cert.certificate.transaction.digest();
+        let digest = *cert.certificate.digest();
         let mut missing_certificates: Vec<_> = vec![cert.clone()];
 
         // We keep a list of certificates already processed to avoid duplicates
@@ -108,11 +109,11 @@ where
             // The first time we cannot find the cert from the destination authority
             // we try to get its dependencies. But the second time we have already tried
             // to update its dependencies, so we should just admit failure.
-            let cert_digest = target_cert.certificate.transaction.digest();
-            if attempted_certificates.contains(&cert_digest) {
+            let cert_digest = target_cert.certificate.digest();
+            if attempted_certificates.contains(cert_digest) {
                 return Err(SuiError::AuthorityInformationUnavailable);
             }
-            attempted_certificates.insert(cert_digest);
+            attempted_certificates.insert(*cert_digest);
 
             // TODO: Eventually the client will store more information, and we could
             // first try to read certificates and parents from a local cache before
@@ -140,7 +141,7 @@ where
 
                 source_client
                     .handle_transaction_info_request(TransactionInfoRequest {
-                        transaction_digest: cert_digest,
+                        transaction_digest: *cert_digest,
                     })
                     .await?
             };
@@ -196,6 +197,7 @@ where
         // and its full history. We should be able to use these are source authorities.
         let mut candidate_source_authorties: HashSet<AuthorityName> = cert
             .certificate
+            .auth_sign_info
             .signatures
             .iter()
             .map(|(name, _)| *name)
@@ -239,7 +241,7 @@ where
                     let inner_err = SuiError::PairwiseSyncFailed {
                         xsource: source_authority,
                         destination: destination_authority,
-                        tx_digest: cert.certificate.transaction.digest(),
+                        tx_digest: *cert.certificate.digest(),
                         error: Box::new(err.clone()),
                     };
 
@@ -476,7 +478,7 @@ where
                 };
 
                 let (transaction_digest, cert_option) = if let Some(cert) = parent_certificate {
-                    (cert.transaction.digest(), Some(cert))
+                    (*cert.digest(), Some(cert))
                 } else {
                     (TransactionDigest::genesis(), None)
                 };
@@ -504,7 +506,7 @@ where
                 entry.2.push((name, signed_transaction_option));
 
                 if let Some(cert) = cert_option {
-                    certificates.insert(cert.transaction.digest(), cert);
+                    certificates.insert(*cert.digest(), cert);
                 }
             } else {
                 error_list.push((name, result));
@@ -681,7 +683,7 @@ where
 
                 // Add authorities that need to be updated
                 let entry = certs_to_sync
-                    .entry(cert.transaction.digest())
+                    .entry(*cert.digest())
                     .or_insert((cert.clone(), HashSet::new()));
                 entry.1.extend(authorities);
 
@@ -764,6 +766,7 @@ where
         // Find out which objects are required by this transaction and
         // ensure they are synced on authorities.
         let required_ids: Vec<ObjectID> = transaction
+            .data
             .input_objects()?
             .iter()
             .map(|o| o.object_id())
@@ -950,6 +953,7 @@ where
             ?timeout_after_quorum,
             "Broadcasting certificate to authorities"
         );
+        let contains_shared_object = certificate.contains_shared_object();
 
         let state = self
             .quorum_map_then_reduce_with_timeout(
@@ -961,10 +965,15 @@ where
                         // - we try to update the authority with the cert, and on error return Err.
                         // - we try to re-process the certificate and return the result.
 
-                        let res = client
+                        let handle = if contains_shared_object {
+                            client.handle_consensus_transaction(ConsensusTransaction::UserTransaction(cert_ref.clone()))
+                        } else {
+                            client
                             .handle_confirmation_transaction(ConfirmationTransaction::new(
                                 cert_ref.clone(),
                             ))
+                        };
+                        let res = handle
                             .instrument(tracing::trace_span!("handle_cert", authority =? _name))
                             .await;
 

@@ -1,30 +1,37 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use std::{
+    net::SocketAddr,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
-use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
-use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
+use jsonrpsee::{
+    http_client::{HttpClient, HttpClientBuilder},
+    http_server::{HttpServerBuilder, HttpServerHandle},
+};
 use move_core_types::identifier::Identifier;
 
-use sui::config::{PersistedConfig, WalletConfig};
-use sui::keystore::{Keystore, SuiKeystore};
-use sui::rpc_gateway::responses::ObjectResponse;
-use sui::rpc_gateway::RpcGatewayClient;
-use sui::rpc_gateway::TransactionBytes;
-use sui::rpc_gateway::{RpcCallArg, RpcGatewayServer};
-use sui::rpc_gateway::{RpcGatewayImpl, SignedTransaction};
-use sui::sui_commands::SuiNetwork;
-use sui::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
-use sui::{SUI_GATEWAY_CONFIG, SUI_WALLET_CONFIG};
-use sui_core::gateway_state::gateway_responses::TransactionResponse;
+use sui::{
+    config::{PersistedConfig, WalletConfig, SUI_GATEWAY_CONFIG, SUI_WALLET_CONFIG},
+    keystore::{Keystore, SuiKeystore},
+    rpc_gateway::{
+        responses::ObjectResponse, RpcGatewayClient, RpcGatewayImpl, RpcGatewayServer,
+        SignedTransaction, TransactionBytes,
+    },
+    sui_commands::SuiNetwork,
+};
+use sui_core::gateway_state::gateway_responses::{TransactionEffectsResponse, TransactionResponse};
+use sui_core::gateway_state::GatewayTxSeqNumber;
+use sui_core::sui_json::SuiJsonValue;
 use sui_framework::build_move_package_to_bytes;
-use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::json_schema::Base64;
-use sui_types::object::ObjectRead;
-use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::{
+    base_types::{ObjectID, SuiAddress, TransactionDigest},
+    json_schema::Base64,
+    object::ObjectRead,
+    SUI_FRAMEWORK_ADDRESS,
+};
 
 use crate::rpc_server_tests::sui_network::start_test_network;
 
@@ -139,34 +146,24 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let gas = objects.first().unwrap();
 
     let package_id = ObjectID::new(SUI_FRAMEWORK_ADDRESS.into_bytes());
-    let package: ObjectRead = http_client.get_object_info(package_id).await?;
-    let package = package.into_object()?;
     let module = Identifier::new("ObjectBasics")?;
     let function = Identifier::new("create")?;
 
-    let json_args = resolve_move_function_args(
-        &package,
-        module.clone(),
-        function.clone(),
-        vec![
-            SuiJsonValue::from_str("10000")?,
-            SuiJsonValue::from_str(&format!("\"0x{}\"", address))?,
-        ],
-    )?;
-    let mut args = Vec::with_capacity(json_args.len());
-    for json_arg in json_args {
-        args.push(match json_arg {
-            SuiJsonCallArg::Pure(bytes) => RpcCallArg::Pure(Base64(bytes)),
-            SuiJsonCallArg::Object(id) => match http_client.get_object_info(id).await? {
-                ObjectRead::Exists(_, obj, _) if obj.is_shared() => RpcCallArg::SharedObject(id),
-                _ => RpcCallArg::ImmOrOwnedObject(id),
-            },
-        })
-    }
+    let json_args = vec![
+        SuiJsonValue::from_str("10000")?,
+        SuiJsonValue::from_str(&format!("\"0x{}\"", address))?,
+    ];
 
     let tx_data: TransactionBytes = http_client
         .move_call(
-            *address, package_id, module, function, None, args, gas.0, 1000,
+            *address,
+            package_id,
+            module,
+            function,
+            vec![],
+            json_args,
+            gas.0,
+            1000,
         )
         .await?;
 
@@ -182,9 +179,97 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[tokio::test]
+async fn test_get_object_info() -> Result<(), anyhow::Error> {
+    let test_network = setup_test_network().await?;
+    let http_client = test_network.http_client;
+    let address = test_network.accounts.first().unwrap();
+    http_client.sync_account_state(*address).await?;
+    let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
+    let result = result
+        .objects
+        .into_iter()
+        .map(|o| o.to_object_ref())
+        .collect::<Result<Vec<_>, _>>()?;
+
+    for (id, _, _) in result {
+        let result: ObjectRead = http_client.get_object_info(id).await?;
+        assert!(
+            matches!(result, ObjectRead::Exists((obj_id,_,_), object, _) if id == obj_id && &object.owner.get_owner_address()? == address)
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_transaction() -> Result<(), anyhow::Error> {
+    let test_network = setup_test_network().await?;
+    let http_client = test_network.http_client;
+    let address = test_network.accounts.first().unwrap();
+
+    http_client.sync_account_state(*address).await?;
+
+    let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
+    let objects = result
+        .objects
+        .into_iter()
+        .map(|o| o.to_object_ref())
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let (gas_id, _, _) = objects.last().unwrap();
+
+    // Make some transactions
+    let mut tx_responses = Vec::new();
+    for (id, _, _) in &objects[..objects.len() - 1] {
+        let tx_data: TransactionBytes = http_client
+            .transfer_coin(*address, *id, *gas_id, 1000, *address)
+            .await?;
+
+        let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;
+        let signature = keystore.sign(address, &tx_data.tx_bytes)?;
+
+        let response: TransactionResponse = http_client
+            .execute_transaction(SignedTransaction::new(tx_data.tx_bytes, signature))
+            .await?;
+
+        if let TransactionResponse::EffectResponse(effects) = response {
+            tx_responses.push(effects);
+        }
+    }
+    // test get_transactions_in_range
+    let tx: Vec<(GatewayTxSeqNumber, TransactionDigest)> =
+        http_client.get_transactions_in_range(0, 10).await?;
+    assert_eq!(4, tx.len());
+
+    // test get_transactions_in_range with smaller range
+    let tx: Vec<(GatewayTxSeqNumber, TransactionDigest)> =
+        http_client.get_transactions_in_range(1, 3).await?;
+    assert_eq!(2, tx.len());
+
+    // test get_recent_transactions with smaller range
+    let tx: Vec<(GatewayTxSeqNumber, TransactionDigest)> =
+        http_client.get_recent_transactions(3).await?;
+    assert_eq!(3, tx.len());
+
+    // test get_recent_transactions
+    let tx: Vec<(GatewayTxSeqNumber, TransactionDigest)> =
+        http_client.get_recent_transactions(10).await?;
+    assert_eq!(4, tx.len());
+
+    // test get_transaction
+    for (_, tx_digest) in tx {
+        let response: TransactionEffectsResponse = http_client.get_transaction(tx_digest).await?;
+        assert!(tx_responses.iter().any(
+            |effects| effects.effects.transaction_digest == response.effects.transaction_digest
+        ))
+    }
+
+    Ok(())
+}
+
 async fn setup_test_network() -> Result<TestNetwork, anyhow::Error> {
     let working_dir = tempfile::tempdir()?.path().to_path_buf();
-    let _network = start_test_network(&working_dir, None).await?;
+    let _network = start_test_network(&working_dir, None, None).await?;
     let (server_addr, rpc_server_handle) =
         start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;
     let wallet_conf: WalletConfig = PersistedConfig::read(&working_dir.join(SUI_WALLET_CONFIG))?;

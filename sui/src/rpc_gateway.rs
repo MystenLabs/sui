@@ -1,37 +1,37 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
-
+use crate::rpc_gateway::responses::SuiTypeTag;
+use crate::{
+    config::{GatewayConfig, PersistedConfig},
+    rpc_gateway::responses::{GetObjectInfoResponse, NamedObjectRef, ObjectResponse},
+};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use ed25519_dalek::ed25519::signature::Signature;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::TypeTag;
 use schemars::JsonSchema;
-use serde::Deserialize;
-use serde::Serialize;
-use serde_with::base64;
-use serde_with::serde_as;
-use sui_core::gateway_state::gateway_responses::TransactionResponse;
-use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
+use serde::{Deserialize, Serialize};
+use serde_with::{base64, serde_as};
+use std::path::Path;
+use sui_core::gateway_state::{
+    gateway_responses::{TransactionEffectsResponse, TransactionResponse},
+    GatewayClient, GatewayState, GatewayTxSeqNumber,
+};
+use sui_core::sui_json::SuiJsonValue;
 use sui_open_rpc_macros::open_rpc;
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
-use sui_types::crypto;
-use sui_types::crypto::SignableBytes;
-use sui_types::messages::CallArg;
-use sui_types::messages::{CertifiedTransaction, Transaction, TransactionData};
-use sui_types::object::ObjectRead;
+use sui_types::{
+    base_types::{ObjectID, SuiAddress, TransactionDigest},
+    crypto,
+    crypto::SignableBytes,
+    json_schema,
+    json_schema::Base64,
+    messages::{Transaction, TransactionData},
+    object::ObjectRead,
+};
 use tracing::debug;
-
-use sui_types::json_schema;
-use sui_types::json_schema::Base64;
-
-use crate::config::PersistedConfig;
-use crate::gateway_config::GatewayConfig;
-use crate::rpc_gateway::responses::{GetObjectInfoResponse, NamedObjectRef, ObjectResponse};
 
 pub mod responses;
 
@@ -77,10 +77,8 @@ pub trait RpcGateway {
         package_object_id: ObjectID,
         #[schemars(with = "json_schema::Identifier")] module: Identifier,
         #[schemars(with = "json_schema::Identifier")] function: Identifier,
-        #[schemars(with = "Option<Vec<json_schema::TypeTag>>")] type_arguments: Option<
-            Vec<TypeTag>,
-        >,
-        arguments: Vec<RpcCallArg>,
+        type_arguments: Vec<SuiTypeTag>,
+        arguments: Vec<SuiJsonValue>,
         gas_object_id: ObjectID,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
@@ -147,7 +145,10 @@ pub trait RpcGateway {
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
 
     #[method(name = "getTransaction")]
-    async fn get_transaction(&self, digest: TransactionDigest) -> RpcResult<CertifiedTransaction>;
+    async fn get_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> RpcResult<TransactionEffectsResponse>;
 
     /// Low level API to get object info. Client Applications should prefer to use
     /// `get_object_typed_info` instead.
@@ -312,8 +313,8 @@ impl RpcGatewayServer for RpcGatewayImpl {
         package_object_id: ObjectID,
         module: Identifier,
         function: Identifier,
-        type_arguments: Option<Vec<TypeTag>>,
-        rpc_arguments: Vec<RpcCallArg>,
+        type_arguments: Vec<SuiTypeTag>,
+        rpc_arguments: Vec<SuiJsonValue>,
         gas_object_id: ObjectID,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
@@ -330,28 +331,18 @@ impl RpcGatewayServer for RpcGatewayImpl {
                 .await?
                 .reference()?;
 
-            // Fetch the objects for the object args
-            let mut arguments = Vec::with_capacity(rpc_arguments.len());
-            for rpc_arg in rpc_arguments {
-                arguments.push(match rpc_arg {
-                    RpcCallArg::Pure(arg) => CallArg::Pure(arg.to_vec()),
-                    RpcCallArg::SharedObject(id) => CallArg::SharedObject(id),
-                    RpcCallArg::ImmOrOwnedObject(id) => {
-                        let object_ref = self.gateway.get_object_info(id).await?.reference()?;
-                        CallArg::ImmOrOwnedObject(object_ref)
-                    }
-                })
-            }
-
             self.gateway
                 .move_call(
                     signer,
                     package_object_ref,
                     module,
                     function,
-                    type_arguments.unwrap_or_default(),
+                    type_arguments
+                        .into_iter()
+                        .map(|tag| tag.try_into())
+                        .collect::<Result<Vec<_>, _>>()?,
+                    rpc_arguments,
                     gas_obj_ref,
-                    arguments,
                     gas_budget,
                 )
                 .await
@@ -387,7 +378,10 @@ impl RpcGatewayServer for RpcGatewayImpl {
         Ok(self.gateway.get_recent_transactions(count)?)
     }
 
-    async fn get_transaction(&self, digest: TransactionDigest) -> RpcResult<CertifiedTransaction> {
+    async fn get_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> RpcResult<TransactionEffectsResponse> {
         Ok(self.gateway.get_transaction(digest).await?)
     }
 }

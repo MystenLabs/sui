@@ -1,23 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::authority::authority_tests::get_genesis_package_by_module;
-use crate::authority::authority_tests::init_state_with_objects;
-use crate::authority::AuthorityState;
-use move_core_types::account_address::AccountAddress;
-use move_core_types::ident_str;
+use crate::authority::{
+    authority_tests::{get_genesis_package_by_module, init_state_with_objects},
+    AuthorityState,
+};
+use move_core_types::{account_address::AccountAddress, ident_str};
 use narwhal_executor::ExecutionIndices;
 use sui_adapter::genesis;
-use sui_types::base_types::{ObjectID, TransactionDigest};
-use sui_types::crypto::Signature;
-use sui_types::gas_coin::GasCoin;
-use sui_types::messages::{
-    CallArg, CertifiedTransaction, SignatureAggregator, Transaction, TransactionData,
+use sui_types::{
+    base_types::{ObjectID, TransactionDigest},
+    crypto::Signature,
+    gas_coin::GasCoin,
+    messages::{
+        CallArg, CertifiedTransaction, ConfirmationTransaction, SignatureAggregator, Transaction,
+        TransactionData,
+    },
+    object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
 };
-use sui_types::object::OBJECT_START_VERSION;
-use sui_types::object::{MoveObject, Object, Owner};
-use test_utils::network::test_listener;
-use test_utils::test_keys;
+use test_utils::{network::test_listener, test_keys};
 use tokio::sync::mpsc::channel;
 
 /// Default network buffer size.
@@ -114,22 +115,19 @@ async fn listen_to_sequenced_transaction() {
 
     // Spawn a consensus listener.
     ConsensusListener::spawn(
-        Arc::new(state),
         /* rx_consensus_input */ rx_sui_to_consensus,
         /* rx_consensus_output */ rx_consensus_to_sui,
+        /* max_pending_transactions */ 100,
     );
 
     // Submit a sample consensus transaction.
     let (sender, receiver) = oneshot::channel();
-    let input = ConsensusInput {
-        serialized: serialized.clone(),
-        replier: sender,
-    };
-    tx_sui_to_consensus.send(input).await.unwrap();
+    let message = ConsensusListenerMessage::New(serialized.clone(), sender);
+    tx_sui_to_consensus.send(message).await.unwrap();
 
     // Notify the consensus listener that the transaction has been sequenced.
     tokio::task::yield_now().await;
-    let output = (Ok(()), serialized);
+    let output = (Ok(Vec::default()), serialized);
     tx_consensus_to_sui.send(output).await.unwrap();
 
     // Ensure the caller get notified from the consensus listener.
@@ -148,7 +146,7 @@ async fn submit_transaction_to_consensus() {
     objects.push(test_shared_object());
     let state = init_state_with_objects(objects).await;
     let certificate = test_certificates(&state).await.pop().unwrap();
-    let expected_transaction = certificate.transaction.clone();
+    let expected_transaction = certificate.clone().to_transaction();
 
     // Make a new consensus submitter instance.
     let submitter = ConsensusAdapter::new(
@@ -164,10 +162,11 @@ async fn submit_transaction_to_consensus() {
 
     // Notify the submitter when a consensus transaction has been sequenced and executed.
     tokio::spawn(async move {
-        let ConsensusInput {
-            replier,
-            serialized,
-        } = rx_consensus_listener.recv().await.unwrap();
+        let (serialized, replier) = match rx_consensus_listener.recv().await.unwrap() {
+            ConsensusListenerMessage::New(serialized, replier) => (serialized, replier),
+            message => panic!("Unexpected message {message:?}"),
+        };
+
         let message =
             bincode::deserialize(&serialized).expect("Failed to deserialize consensus tx");
         let ConsensusTransaction::UserTransaction(certificate) = message;
@@ -181,7 +180,8 @@ async fn submit_transaction_to_consensus() {
         let confirmation_transaction = ConfirmationTransaction { certificate };
         let result = state
             .handle_confirmation_transaction(confirmation_transaction)
-            .await;
+            .await
+            .map(|info| bincode::serialize(&info).unwrap());
 
         // Reply to the submitter.
         replier.send(result).unwrap();
@@ -197,7 +197,7 @@ async fn submit_transaction_to_consensus() {
     let bytes = handle.await.unwrap();
     match bincode::deserialize(&bytes).unwrap() {
         ConsensusTransaction::UserTransaction(x) => {
-            assert_eq!(x.transaction, expected_transaction)
+            assert_eq!(x.to_transaction(), expected_transaction)
         }
     }
 }

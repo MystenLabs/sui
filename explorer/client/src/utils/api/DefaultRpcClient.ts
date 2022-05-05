@@ -3,16 +3,13 @@
 
 import { JsonRpcProvider } from 'sui.js';
 
-import { tryGetRpcSetting } from './rpcSetting';
+import { getEndpoint } from './rpcSetting';
 
+// TODO: Remove these types with SDK types
 export type AddressBytes = number[];
 export type AddressOwner = { AddressOwner: AddressBytes };
 
 export type AnyVec = { vec: any[] };
 export type JsonBytes = { bytes: number[] };
 
-const rpcUrl = tryGetRpcSetting() ?? 'http://127.0.0.1:5001';
-
-export const DefaultRpcClient = new JsonRpcProvider(rpcUrl);
-
-console.log(DefaultRpcClient);
+export const DefaultRpcClient = new JsonRpcProvider(getEndpoint());

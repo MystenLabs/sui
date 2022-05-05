@@ -1,7 +1,8 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
+use anyhow::anyhow;
+use base64ct::Encoding;
 use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
@@ -12,7 +13,6 @@ use crate::json_schema;
 use crate::readable_serde::encoding::Base64;
 use crate::readable_serde::encoding::Hex;
 use crate::readable_serde::Readable;
-use base64ct::Encoding;
 use digest::Digest;
 use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
@@ -108,6 +108,10 @@ impl SuiAddress {
         let s = String::deserialize(deserializer)?;
         let value = decode_bytes_hex(&s).map_err(serde::de::Error::custom)?;
         Ok(Some(value))
+    }
+
+    pub fn to_inner(self) -> [u8; SUI_ADDRESS_LENGTH] {
+        self.0
     }
 }
 
@@ -218,7 +222,7 @@ impl TxContext {
     /// Updates state of the context instance. It's intended to use
     /// when mutable context is passed over some boundary via
     /// serialize/deserialize and this is the reason why this method
-    /// consumes the other contex..
+    /// consumes the other context..
     pub fn update_state(&mut self, other: TxContext) -> Result<(), SuiError> {
         if self.sender != other.sender
             || self.digest != other.digest
@@ -549,6 +553,66 @@ impl ObjectID {
             .map_err(|_| ObjectIDParseError::TryFromSliceError)
             .map(ObjectID::from)
     }
+
+    /// Incremenent the ObjectID by usize IDs, assuming the ObjectID hex is a number represented as an array of bytes
+    pub fn advance(&self, step: usize) -> Result<ObjectID, anyhow::Error> {
+        let mut curr_vec = self.as_slice().to_vec();
+        let mut step_copy = step;
+
+        let mut carry = 0;
+        for idx in (0..Self::LENGTH).rev() {
+            if step_copy == 0 {
+                // Nothing else to do
+                break;
+            }
+            // Extract the relevant part
+            let g = (step_copy % 0x100) as u16;
+            // Shift to next group
+            step_copy >>= 8;
+            let mut val = curr_vec[idx] as u16;
+            (carry, val) = ((val + carry + g) / 0x100, (val + carry + g) % 0x100);
+            curr_vec[idx] = val as u8;
+        }
+
+        if carry > 0 {
+            return Err(anyhow!("Increment will cause overflow"));
+        }
+        ObjectID::from_bytes(curr_vec).map_err(|w| w.into())
+    }
+
+    /// Incremenent the ObjectID by one, assuming the ObjectID hex is a number represented as an array of bytes
+    pub fn next_increment(&self) -> Result<ObjectID, anyhow::Error> {
+        let mut prev_val = self.as_slice().to_vec();
+        let mx = [0xFF; Self::LENGTH];
+
+        if prev_val == mx {
+            return Err(anyhow!("Increment will cause overflow"));
+        }
+
+        // This logic increments the integer representation of an ObjectID u8 array
+        for idx in (0..Self::LENGTH).rev() {
+            if prev_val[idx] == 0xFF {
+                prev_val[idx] = 0;
+            } else {
+                prev_val[idx] += 1;
+                break;
+            };
+        }
+        ObjectID::from_bytes(prev_val.clone()).map_err(|w| w.into())
+    }
+
+    /// Create `count` object IDs starting with one at `offset`
+    pub fn in_range(offset: ObjectID, count: u64) -> Result<Vec<ObjectID>, anyhow::Error> {
+        let mut ret = Vec::new();
+        let mut prev = offset;
+        for o in 0..count {
+            if o != 0 {
+                prev = prev.next_increment()?;
+            }
+            ret.push(prev);
+        }
+        Ok(ret)
+    }
 }
 
 #[derive(PartialEq, Clone, Debug, thiserror::Error)]
@@ -592,6 +656,13 @@ impl From<hex::FromHexError> for ObjectIDParseError {
 impl From<[u8; ObjectID::LENGTH]> for ObjectID {
     fn from(bytes: [u8; ObjectID::LENGTH]) -> Self {
         Self::new(bytes)
+    }
+}
+
+impl From<SuiAddress> for ObjectID {
+    fn from(address: SuiAddress) -> ObjectID {
+        let tmp: AccountAddress = address.into();
+        tmp.into()
     }
 }
 

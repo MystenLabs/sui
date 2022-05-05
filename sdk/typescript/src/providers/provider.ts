@@ -1,9 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { GetObjectInfoResponse, ObjectRef } from "../types/objects";
-import { GatewayTxSeqNumber, GetTxnDigestsResponse } from "../types/transactions";
-
+import {
+  GetObjectInfoResponse,
+  ObjectRef,
+  GatewayTxSeqNumber,
+  GetTxnDigestsResponse,
+} from '../types';
 
 export interface SignedTransaction {
   txBytes: string;

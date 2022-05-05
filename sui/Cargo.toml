@@ -11,11 +11,11 @@ rayon = "1.5.2"
 anyhow = { version = "1.0.57", features = ["backtrace"] }
 bytes = "1.1.0"
 futures = "0.3.21"
-serde = { version = "1.0.136", features = ["derive"] }
-serde_json = "1.0.79"
+serde = { version = "1.0.137", features = ["derive"] }
+serde_json = "1.0.80"
 tempfile = "3.3.0"
 tokio = { version = "1.17.0", features = ["full"] }
-rand = "0.8.4"
+rand = "0.7.3"
 toml = "0.5.9"
 strum = "0.24.0"
 strum_macros = "0.24.0"
@@ -31,14 +31,14 @@ tracing-subscriber = { version = "0.3.11", features = ["time", "registry", "env-
 serde-value = "0.7.0"
 serde-name = "0.2.0"
 dirs = "4.0.0"
-clap = { version = "3.1.8", features = ["derive"] }
-telemetry_subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a45af6dc28aa12c8cc13521d118c24aadd4c6adf" }
+clap = { version = "3.1.14", features = ["derive"] }
+telemetry_subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d2976a45420147ad821baae96e6fe4b12215f743" }
 
 bcs = "0.1.3"
 sui_core = { path = "../sui_core" }
 sui-adapter = { path = "../sui_programmability/adapter" }
 sui-framework = { path = "../sui_programmability/framework" }
-sui-network = { path = "../network_utils" }
+sui-network = { path = "../crates/sui-network" }
 sui-types = { path = "../sui_types" }
 sui-verifier = { path = "../sui_programmability/verifier" }
 sui-open-rpc = { path = "open_rpc" }
@@ -56,15 +56,16 @@ move-binary-format = { git = "https://github.com/move-language/move", rev = "4e0
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
 move-unit-test = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
 
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "976355d2ff75aefc6b7ec7fd32742d3d7188c4e0", package = "node" }
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "976355d2ff75aefc6b7ec7fd32742d3d7188c4e0", package = "config" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "976355d2ff75aefc6b7ec7fd32742d3d7188c4e0", package = "crypto" }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "72efe71f0615f91f861cc658e031b763ba30fd5b", package = "node" }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "72efe71f0615f91f861cc658e031b763ba30fd5b", package = "config" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "72efe71f0615f91f861cc658e031b763ba30fd5b", package = "crypto" }
 
 once_cell = "1.10.0"
 
-jsonrpsee = { version = "0.11.0", features = ["full"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee.git", rev = "661870a0ab4159b2bb104ace25a2cb817a097e03", features = ["full"] }
 jsonrpsee-proc-macros = "0.11.0"
 schemars = "0.8.8"
+shell-words = "1.1.0"
 
 [dev-dependencies]
 tracing-test = "0.2.1"
@@ -72,7 +73,6 @@ pretty_assertions = "1.2.0"
 tokio-util = { version = "0.7.1", features = ["codec"] }
 
 test_utils = { path = "../test_utils" }
-sui-network = { path = "../network_utils" }
 
 [features]
 benchmark = ["narwhal-node/benchmark"]

@@ -60,9 +60,8 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     owner_index: DBMap<(SuiAddress, ObjectID), ObjectRef>,
 
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
-    /// NOTE: after a lock is deleted the corresponding entry here could be deleted, but right
-    /// now this is not done. If a certificate is processed (see `certificates`) the
-    /// transaction can also be deleted from this structure.
+    /// NOTE: after a lock is deleted (after a certificate is processed) the corresponding entry here
+    /// could be deleted, but right now this is only done on gateways, not done on authorities.
     transactions: DBMap<TransactionDigest, TransactionEnvelope<S>>,
 
     /// This is a map between the transaction digest and the corresponding certificate for all
@@ -209,14 +208,27 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         }
     }
 
-    /// Returns true if we have a signed_effects structure for this transaction digest
+    /// Returns the TransactionEffects if we have an effects structure for this transaction digest
+    pub fn get_effects(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<TransactionEffects> {
+        self.effects
+            .get(transaction_digest)?
+            .map(|data| data.effects)
+            .ok_or(SuiError::TransactionNotFound {
+                digest: *transaction_digest,
+            })
+    }
+
+    /// Returns true if we have an effects structure for this transaction digest
     pub fn effects_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
         self.effects
             .contains_key(transaction_digest)
             .map_err(|e| e.into())
     }
 
-    /// Returns true if we have a signed_effects structure for this transaction digest
+    /// Returns true if we have a transaction structure for this transaction digest
     pub fn transaction_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
         self.transactions
             .contains_key(transaction_digest)
@@ -459,9 +471,9 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     pub fn set_transaction_lock(
         &self,
         owned_input_objects: &[ObjectRef],
-        tx_digest: TransactionDigest,
         transaction: TransactionEnvelope<S>,
     ) -> Result<(), SuiError> {
+        let tx_digest = *transaction.digest();
         let lock_batch = self
             .transaction_lock
             .batch()
@@ -489,7 +501,6 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             for lock in locks {
                 // The object / version must exist, and therefore lock initialized.
                 let lock = lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
-
                 if let Some(previous_tx_digest) = lock {
                     if previous_tx_digest != tx_digest {
                         warn!(prev_tx_digest =? previous_tx_digest,
@@ -544,11 +555,8 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         )?;
 
         // Cleanup the lock of the shared objects.
-        let write_batch = self.remove_shared_objects_locks(
-            write_batch,
-            transaction_digest,
-            &certificate.transaction,
-        )?;
+        let write_batch =
+            self.remove_shared_objects_locks(write_batch, transaction_digest, certificate)?;
 
         // Safe to unwrap since the "true" flag ensures we get a sequence value back.
         self.batch_update_objects(
@@ -578,7 +586,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         active_inputs: Vec<(InputObjectKind, Object)>,
         mutated_objects: HashMap<ObjectRef, Object>,
         certificate: CertifiedTransaction,
-        effects: TransactionEffects,
+        effects: TransactionEffectsEnvelope<S>,
         sequence_number: GatewayTxSeqNumber,
     ) -> SuiResult {
         let transaction_digest = certificate.digest();
@@ -587,10 +595,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         for (_, object) in mutated_objects {
             temporary_store.write_object(object);
         }
-        for obj_ref in &effects.deleted {
+        for obj_ref in &effects.effects.deleted {
             temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Normal);
         }
-        for obj_ref in &effects.wrapped {
+        for obj_ref in &effects.effects.wrapped {
             temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Wrap);
         }
 
@@ -600,6 +608,12 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         write_batch = write_batch.insert_batch(
             &self.certificates,
             std::iter::once((transaction_digest, &certificate)),
+        )?;
+
+        // Store the unsigned effects of the transaction
+        write_batch = write_batch.insert_batch(
+            &self.effects,
+            std::iter::once((transaction_digest, effects)),
         )?;
 
         // Once a transaction is done processing and effects committed, we no longer
@@ -800,7 +814,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         &self,
         mut write_batch: DBBatch,
         transaction_digest: &TransactionDigest,
-        transaction: &Transaction,
+        transaction: &CertifiedTransaction,
     ) -> SuiResult<DBBatch> {
         let mut sequenced_to_delete = Vec::new();
         let mut schedule_to_delete = Vec::new();
@@ -827,10 +841,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         let certificate_to_write = std::iter::once((transaction_digest, &certificate));
 
         // Make an iterator to update the locks of the transaction's shared objects.
-        let ids = certificate.transaction.shared_input_objects();
+        let ids = certificate.shared_input_objects();
         let versions = self.schedule.multi_get(ids)?;
 
-        let ids = certificate.transaction.shared_input_objects();
+        let ids = certificate.shared_input_objects();
         let (sequenced_to_write, schedule_to_write): (Vec<_>, Vec<_>) = ids
             .zip(versions.iter())
             .map(|(id, v)| {
@@ -838,9 +852,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                 // sequence number (`OBJECT_START_VERSION`). Otherwise use the `scheduled` map to
                 // to assign the next sequence number.
                 let version = v.unwrap_or_else(|| OBJECT_START_VERSION);
-                let next_version = v
-                    .map(|v| v.increment())
-                    .unwrap_or_else(|| SequenceNumber::from(2));
+                let next_version = version.increment();
 
                 let sequenced = ((transaction_digest, *id), version);
                 let scheduled = (id, next_version);

@@ -1,29 +1,33 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![deny(warnings)]
-
+#![allow(clippy::large_enum_variant)]
 use crate::benchmark::bench_types::RunningMode;
 use crate::benchmark::load_generator::spawn_authority_server;
-use crate::config::{AccountConfig, ObjectConfig};
-use crate::config::{Config, GenesisConfig};
+use crate::config::NetworkConfig;
+use crate::config::{AccountConfig, Config, GenesisConfig, ObjectConfig};
+
 use rocksdb::Options;
-use std::env;
-use std::fs;
-use std::panic;
-use std::path::{Path, PathBuf};
-use std::process::Child;
-use std::process::Command;
-use std::sync::Arc;
-use std::thread;
-use std::{thread::sleep, time::Duration};
+use std::collections::BTreeMap;
+use std::{
+    env, fs, panic,
+    path::{Path, PathBuf},
+    process::{Child, Command},
+    sync::Arc,
+    thread,
+    thread::sleep,
+    time::Duration,
+};
 use sui_adapter::genesis;
 use sui_core::authority::*;
 use sui_network::network::NetworkServer;
-use sui_types::crypto::{KeyPair, PublicKeyBytes};
-use sui_types::gas_coin::GasCoin;
-use sui_types::object::Object;
-use sui_types::{base_types::*, committee::*};
+use sui_types::{
+    base_types::{SuiAddress, *},
+    committee::*,
+    crypto::{random_key_pairs, KeyPair, PublicKeyBytes},
+    gas_coin::GasCoin,
+    object::Object,
+};
 use tokio::runtime::{Builder, Runtime};
 use tracing::{error, info};
 
@@ -35,7 +39,7 @@ pub const VALIDATOR_BINARY_NAME: &str = "validator";
 #[allow(unused)]
 pub struct ValidatorPreparer {
     running_mode: RunningMode,
-    pub keys: Vec<(PublicKeyBytes, KeyPair)>,
+    pub keys: Vec<KeyPair>,
     main_authority_address_hex: String,
     pub committee: Committee,
     validator_config: ValidatorConfig,
@@ -45,13 +49,23 @@ fn set_up_authorities_and_committee(
     committee_size: usize,
 ) -> Result<(Vec<KeyPair>, GenesisConfig), anyhow::Error> {
     let temp_dir = tempfile::tempdir()?;
-    let config = GenesisConfig::custom_genesis(temp_dir.path(), committee_size, 0, 0)?;
-    let keypairs: Vec<_> = config
-        .authorities
-        .iter()
-        .map(|authority| authority.key_pair.copy())
-        .collect();
-    Ok((keypairs, config))
+    let key_pairs = random_key_pairs(committee_size);
+    let key_pair = key_pairs[0].copy();
+    let config = GenesisConfig::custom_genesis(
+        temp_dir.path(),
+        committee_size,
+        0,
+        0,
+        Some((
+            key_pairs
+                .iter()
+                .map(|kp| *kp.public_key_bytes())
+                .collect::<Vec<_>>(),
+            key_pair,
+        )),
+    )?;
+
+    Ok((key_pairs, config))
 }
 
 pub enum ValidatorConfig {
@@ -64,10 +78,26 @@ pub enum ValidatorConfig {
         working_dir: PathBuf,
         validator_process: Option<Child>,
     },
+    RemoteValidatorConfig,
 }
 
 impl ValidatorPreparer {
-    pub fn new(
+    pub fn new_for_remote(
+        network_config: &NetworkConfig,
+        keys: &BTreeMap<PublicKeyBytes, KeyPair>,
+    ) -> Self {
+        let keys = keys.iter().map(|q| q.1.copy()).collect::<Vec<_>>();
+        let committee = Committee::from(network_config);
+
+        Self {
+            running_mode: RunningMode::RemoteValidator,
+            keys,
+            main_authority_address_hex: "".to_string(),
+            committee,
+            validator_config: ValidatorConfig::RemoteValidatorConfig,
+        }
+    }
+    pub fn new_for_local(
         running_mode: RunningMode,
         working_dir: Option<PathBuf>,
         committee_size: usize,
@@ -75,23 +105,26 @@ impl ValidatorPreparer {
         validator_port: u16,
         db_cpus: usize,
     ) -> Self {
-        let (key_pairs, mut genesis_config) = set_up_authorities_and_committee(committee_size)
+        let (keys, mut genesis_config) = set_up_authorities_and_committee(committee_size)
             .expect("Got error in setting up committee");
 
-        // pick the first keypair as main validator
-        let main_authority_address_hex =
-            format!("{}", SuiAddress::from(key_pairs[0].public_key_bytes()));
+        let main_authority_address_hex = format!(
+            "{}",
+            SuiAddress::from(genesis_config.key_pair.public_key_bytes())
+        );
         info!("authority address hex: {}", main_authority_address_hex);
 
-        let mut keys = Vec::new();
-        for key_pair in key_pairs {
-            let name = *key_pair.public_key_bytes();
-            keys.push((name, key_pair));
-        }
-        let committee = Committee::new(0, keys.iter().map(|(k, _)| (*k, 1)).collect());
+        let committee = Committee::new(
+            0,
+            genesis_config
+                .authorities
+                .iter()
+                .map(|api| (api.public_key, 1))
+                .collect(),
+        );
 
         match running_mode {
-            RunningMode::LocalSingleValidatorProcess => {
+            RunningMode::SingleValidatorProcess => {
                 // Honor benchmark's host:port setting
                 genesis_config.authorities[0].port = validator_port;
                 genesis_config.authorities[0].host = validator_host.into();
@@ -108,10 +141,10 @@ impl ValidatorPreparer {
                 }
             }
 
-            RunningMode::LocalSingleValidatorThread => {
+            RunningMode::SingleValidatorThread => {
                 // Pick the first validator and create state.
-                let public_auth0 = keys[0].0;
-                let secret_auth0 = keys[0].1.copy();
+                let public_auth0 = keys[0].public_key_bytes();
+                let secret_auth0 = keys[0].copy();
 
                 // Create a random directory to store the DB
                 let path = env::temp_dir().join(format!("DB_{:?}", ObjectID::random()));
@@ -119,8 +152,8 @@ impl ValidatorPreparer {
                     &path,
                     db_cpus as i32,
                     &committee,
-                    &public_auth0,
-                    secret_auth0.copy(),
+                    public_auth0,
+                    secret_auth0,
                 );
 
                 Self {
@@ -134,12 +167,13 @@ impl ValidatorPreparer {
                     },
                 }
             }
+            RunningMode::RemoteValidator => panic!("Use new_for_remote"),
         }
     }
 
     pub fn deploy_validator(&mut self, _network_server: NetworkServer) {
         match self.running_mode {
-            RunningMode::LocalSingleValidatorProcess => {
+            RunningMode::SingleValidatorProcess => {
                 if let ValidatorConfig::LocalSingleValidatorProcessConfig {
                     working_dir,
                     genesis_config,
@@ -156,8 +190,6 @@ impl ValidatorPreparer {
                     let child = Command::new(working_dir.clone().join(VALIDATOR_BINARY_NAME))
                         .arg("--genesis-config-path")
                         .arg(GENESIS_CONFIG_NAME)
-                        .arg("--address")
-                        .arg(&self.main_authority_address_hex)
                         .arg("--force-genesis")
                         .spawn()
                         .expect("failed to spawn a validator process");
@@ -166,7 +198,7 @@ impl ValidatorPreparer {
                     panic!("Invalid validator config in local-single-validator-process mode");
                 }
             }
-            RunningMode::LocalSingleValidatorThread => {
+            RunningMode::SingleValidatorThread => {
                 if let ValidatorConfig::LocalSingleValidatorThreadConfig {
                     authority_state,
                     authority_store: _,
@@ -187,6 +219,7 @@ impl ValidatorPreparer {
                     panic!("Invalid validator config in local-single-validator-thread mode");
                 }
             }
+            RunningMode::RemoteValidator => (),
         }
         // Wait for server start
         sleep(Duration::from_secs(3));
@@ -194,7 +227,7 @@ impl ValidatorPreparer {
 
     pub fn update_objects_for_validator(&mut self, objects: Vec<Object>, address: SuiAddress) {
         match self.running_mode {
-            RunningMode::LocalSingleValidatorProcess => {
+            RunningMode::SingleValidatorProcess => {
                 let all_objects: Vec<ObjectConfig> = objects
                     .iter()
                     .map(|object| ObjectConfig {
@@ -215,12 +248,13 @@ impl ValidatorPreparer {
                         .push(AccountConfig {
                             address: Some(address),
                             gas_objects: all_objects,
+                            gas_object_ranges: None,
                         })
                 } else {
                     panic!("invalid validator config in local-single-validator-process mode");
                 }
             }
-            RunningMode::LocalSingleValidatorThread => {
+            RunningMode::SingleValidatorThread => {
                 if let ValidatorConfig::LocalSingleValidatorThreadConfig {
                     authority_state: _,
                     authority_store,
@@ -233,29 +267,29 @@ impl ValidatorPreparer {
                     panic!("invalid validator config in local-single-validator-thread mode");
                 }
             }
+
+            // Nothing to do here. Remote machine must be provisioned separately
+            RunningMode::RemoteValidator => (),
         }
     }
 
     pub fn clean_up(&mut self) {
-        match self.running_mode {
-            RunningMode::LocalSingleValidatorProcess => {
-                info!("Cleaning up local validator process...");
-                if let ValidatorConfig::LocalSingleValidatorProcessConfig {
-                    working_dir: _,
-                    genesis_config: _,
-                    validator_process,
-                } = &mut self.validator_config
-                {
-                    validator_process
-                        .take()
-                        .unwrap()
-                        .kill()
-                        .expect("Failed to kill validator process");
-                } else {
-                    panic!("invalid validator config in local-single-validator-process mode");
-                }
+        if let RunningMode::SingleValidatorProcess = self.running_mode {
+            info!("Cleaning up local validator process...");
+            if let ValidatorConfig::LocalSingleValidatorProcessConfig {
+                working_dir: _,
+                genesis_config: _,
+                validator_process,
+            } = &mut self.validator_config
+            {
+                validator_process
+                    .take()
+                    .unwrap()
+                    .kill()
+                    .expect("Failed to kill validator process");
+            } else {
+                panic!("invalid validator config in local-single-validator-process mode");
             }
-            RunningMode::LocalSingleValidatorThread => {}
         }
     }
 }

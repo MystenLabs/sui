@@ -5,7 +5,6 @@
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use async_trait::async_trait;
 use futures::StreamExt;
-use std::io;
 use sui_types::crypto::PublicKeyBytes;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 
@@ -31,6 +30,11 @@ impl<C> SafeClient<C> {
         }
     }
 
+    #[cfg(test)]
+    pub fn authority_client(&mut self) -> &mut C {
+        &mut self.authority_client
+    }
+
     // Here we centralize all checks for transaction info responses
     fn check_transaction_response(
         &self,
@@ -39,7 +43,7 @@ impl<C> SafeClient<C> {
     ) -> SuiResult {
         if let Some(signed_transaction) = &response.signed_transaction {
             // Check the transaction signature
-            signed_transaction.check(&self.committee)?;
+            signed_transaction.verify(&self.committee)?;
             // Check it has the right signer
             fp_ensure!(
                 signed_transaction.auth_sign_info.authority == self.address,
@@ -49,7 +53,7 @@ impl<C> SafeClient<C> {
             );
             // Check it's the right transaction
             fp_ensure!(
-                signed_transaction.digest() == digest,
+                signed_transaction.digest() == &digest,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
@@ -58,10 +62,10 @@ impl<C> SafeClient<C> {
 
         if let Some(certificate) = &response.certified_transaction {
             // Check signatures and quorum
-            certificate.check(&self.committee)?;
+            certificate.verify(&self.committee)?;
             // Check it's the right transaction
             fp_ensure!(
-                certificate.transaction.digest() == digest,
+                certificate.digest() == &digest,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
@@ -73,7 +77,7 @@ impl<C> SafeClient<C> {
             signed_effects
                 .auth_signature
                 .signature
-                .check(&signed_effects.effects, self.address)?;
+                .verify(&signed_effects.effects, self.address)?;
             // Checks it concerns the right tx
             fp_ensure!(
                 signed_effects.effects.transaction_digest == digest,
@@ -100,7 +104,7 @@ impl<C> SafeClient<C> {
     ) -> SuiResult {
         // If we get a certificate make sure it is a valid certificate
         if let Some(certificate) = &response.parent_certificate {
-            certificate.check(&self.committee)?;
+            certificate.verify(&self.committee)?;
         }
 
         // Check the right object ID and version is returned
@@ -156,7 +160,7 @@ impl<C> SafeClient<C> {
             };
 
             if let Some(signed_transaction) = &object_and_lock.lock {
-                signed_transaction.check(&self.committee)?;
+                signed_transaction.verify(&self.committee)?;
                 // Check it has the right signer
                 fp_ensure!(
                     signed_transaction.auth_sign_info.authority == self.address,
@@ -172,7 +176,7 @@ impl<C> SafeClient<C> {
 
     fn check_update_item_batch_response(
         &self,
-        request: BatchInfoRequest,
+        _request: BatchInfoRequest,
         signed_batch: &SignedBatch,
         transactions_and_last_batch: &Option<(
             Vec<(TxSequenceNumber, TransactionDigest)>,
@@ -182,22 +186,34 @@ impl<C> SafeClient<C> {
         // check the signature of the batch
         signed_batch
             .signature
-            .check(&signed_batch.batch, signed_batch.authority)?;
+            .verify(&signed_batch.batch, signed_batch.authority)?;
 
         // ensure transactions enclosed match requested range
-        fp_ensure!(
-            signed_batch.batch.initial_sequence_number >= request.start
-                && signed_batch.batch.next_sequence_number
-                    <= (request.end + signed_batch.batch.size),
-            SuiError::ByzantineAuthoritySuspicion {
-                authority: self.address
-            }
-        );
+
+        // TODO: check that the batch is within bounds given that the
+        //      bounds may now not be known by the requester.
+        //
+        // if let Some(start) = &request.start {
+        //    fp_ensure!(
+        //        signed_batch.batch.initial_sequence_number >= *start
+        //            && signed_batch.batch.next_sequence_number
+        //                <= (*start + request.length + signed_batch.batch.size),
+        //        SuiError::ByzantineAuthoritySuspicion {
+        //            authority: self.address
+        //        }
+        //    );
+        // }
 
         // If we have seen a previous batch, use it to make sure the next batch
         // is constructed correctly:
 
         if let Some((transactions, prev_batch)) = transactions_and_last_batch {
+            fp_ensure!(
+                !transactions.is_empty(),
+                SuiError::GenericAuthorityError {
+                    error: "Safe Client: Batches must have some contents.".to_string()
+                }
+            );
             let reconstructed_batch = AuthorityBatch::make_next(prev_batch, transactions)?;
 
             fp_ensure!(
@@ -272,7 +288,7 @@ where
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let digest = transaction.digest();
+        let digest = *transaction.digest();
         let transaction_info = self
             .authority_client
             .handle_transaction(transaction)
@@ -289,7 +305,7 @@ where
         &self,
         transaction: ConfirmationTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let digest = transaction.certificate.transaction.digest();
+        let digest = *transaction.certificate.digest();
         let transaction_info = self
             .authority_client
             .handle_confirmation_transaction(transaction)
@@ -300,6 +316,16 @@ where
             return Err(err);
         }
         Ok(transaction_info)
+    }
+
+    async fn handle_consensus_transaction(
+        &self,
+        transaction: ConsensusTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        // TODO: Add safety checks on the response.
+        self.authority_client
+            .handle_consensus_transaction(transaction)
+            .await
     }
 
     async fn handle_account_info_request(
@@ -348,7 +374,7 @@ where
     async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<BatchInfoResponseItemStream, io::Error> {
+    ) -> Result<BatchInfoResponseItemStream, SuiError> {
         let batch_info_items = self
             .authority_client
             .handle_batch_stream(request.clone())
@@ -356,19 +382,21 @@ where
 
         let client = self.clone();
         let address = self.address;
+        let count: u64 = 0;
         let stream = Box::pin(batch_info_items.scan(
-            (0u64, None),
-            move |(seq, txs_and_last_batch), batch_info_item| {
+            (0u64, None, count),
+            move |(seq, txs_and_last_batch, count), batch_info_item| {
                 let req_clone = request.clone();
                 let client = client.clone();
 
                 // We check if we have exceeded the batch boundary for this request.
-                if *seq >= request.end {
+                // This is to protect against server DoS
+                if *count > 10 * request.length {
                     // If we exceed it return None to end stream
                     return futures::future::ready(None);
                 }
 
-                let x = match &batch_info_item {
+                let result = match &batch_info_item {
                     Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
                         if let Err(err) = client.check_update_item_batch_response(
                             req_clone,
@@ -398,13 +426,14 @@ where
                             client.report_client_error(err.clone());
                             Some(Err(err))
                         } else {
+                            *count += 1;
                             Some(batch_info_item)
                         }
                     }
                     Err(e) => Some(Err(e.clone())),
                 };
 
-                futures::future::ready(x)
+                futures::future::ready(result)
             },
         ));
         Ok(Box::pin(stream))
