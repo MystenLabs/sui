@@ -18,10 +18,8 @@ DevNet deployment features the following components of the Sui blockchain:
     * create and manage your private keys
     * submit transactions for creating example NFTs
     * call and publish Move modules
-- The Gas Faucet service
-    - transfer SUI tokens to you so you may pay for the transactions
-- [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme)
-    - View transactions and objects
+* [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme)
+    * View transactions and objects
 
 ## Prerequisites
 
