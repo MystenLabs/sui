@@ -65,6 +65,7 @@ once_cell = "1.10.0"
 jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee.git", rev = "661870a0ab4159b2bb104ace25a2cb817a097e03", features = ["full"] }
 jsonrpsee-proc-macros = "0.11.0"
 schemars = "0.8.8"
+shell-words = "1.1.0"
 
 [dev-dependencies]
 tracing-test = "0.2.1"

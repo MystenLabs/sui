@@ -11,6 +11,7 @@ use rustyline::Context;
 
 use sui_types::base_types::ObjectID;
 
+use crate::shell::split_and_unescape;
 use crate::shell::{
     substitute_env_variables, CacheKey, CommandStructure, CompletionCache, ShellHelper,
 };
@@ -215,4 +216,20 @@ fn test_completer_with_cache() {
         .map(|pair| pair.display.clone())
         .collect::<Vec<_>>();
     assert_eq!(vec!["--gas"], candidates);
+}
+
+#[test]
+fn test_split_line() {
+    let test = "create-example-nft --name \"test 1\" --description \"t e s t 2\"";
+    let result = split_and_unescape(test).unwrap();
+    assert_eq!(
+        vec![
+            "create-example-nft",
+            "--name",
+            "test 1",
+            "--description",
+            "t e s t 2"
+        ],
+        result
+    );
 }
