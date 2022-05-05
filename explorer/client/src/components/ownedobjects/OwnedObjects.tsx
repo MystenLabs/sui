@@ -109,7 +109,11 @@ function OwnedObjectAPI({ id }: { id: string }) {
     if (isLoaded) {
         return <OwnedObjectLayout results={results} />;
     } else {
-        return <div />;
+        return results.length > 0 ? (
+            <div className={styles.gray}>loading...</div>
+        ) : (
+            <div />
+        );
     }
 }
 
