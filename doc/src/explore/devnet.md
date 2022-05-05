@@ -63,7 +63,7 @@ You can find your wallet address by running:
 $ wallet active-address
 ```
 
-## Mint an example NFT
+### Mint an example NFT
 
 To create a Non-Fungible Token (NFT), run:
 ```shell
@@ -85,7 +85,9 @@ The above command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58
 Now you can view the created object in the [Sui Explorer](http://explorer.devnet.sui.io) at:
 https://explorer.devnet.sui.io/objects/ED883F6812AF447B9B0CE220DA5EA9E0F58012FE
 
-Replace the object ID in the link above with the object ID of the ExampleNFT you observed in your own command output to see it in Sui Explorer.
+Replace the object ID in the link above with the object ID of the Example NFT you observed in your own command output to see it in Sui Explorer:
+
+![Example NFT](../../static/example-nft.png "Example NFT")
 
 Note you may easily customize the name, description, or image of the NFT upon creation, like so:
 ```shell
@@ -105,9 +107,21 @@ Type: 0x2::DevNetNFT::DevNetNFT
 That you can similarly view at:
 https://explorer.devnet.sui.io/objects/EC97467A40A1305FFDEF7019C3045FBC7AA31E29
 
+![Custom NFT](../../static/custom-nft.png "Custom NFT")
+
+See all transactions on the [home page](http://explorer.devnet.sui.io) and find the transaction hash under *Latest Transactions*:
+
+![Explorer home](../../static/explorer-home.png "Explorer home")
+
 To get to the *Transaction Details* view in Sui Explorer after minting an NFT, click on the *Last Transaction ID* field in the *Object View*.
 
-See the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) for instructions on its use.
+![Transaction details](../../static/transaction-details.png "Transaction details")
+
+Click on any address to see the objects it owns:
+
+![Owned objects](../../static/owned-objects.png "Owned objects")
+
+See the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) for more details.
 
 ## Advanced testing
 
@@ -190,5 +204,7 @@ Go to the Sui Explorer to observe a newly created object (ID `2E34983D59E9FC5310
 
 As above, replace object ID in the Explorer link with the object ID of the created object you observed in your own command output:
 https://explorer.devnet.sui.io/objects/OBJECT-ID
+
+![Magic sword](../../static/magic-sword.png "Magic sword")
 
 This concludes the Sui DevNet setup and testing instructions. Revisit this page and re-install the binaries regularly to witness and help Sui grow!
