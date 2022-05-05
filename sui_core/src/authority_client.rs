@@ -7,8 +7,11 @@ use async_trait::async_trait;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
 use std::sync::Arc;
-use sui_network::{api::ValidatorClient, tonic};
+
+use sui_network::{api::ValidatorClient, network::NetworkClient, tonic};
 use sui_types::{error::SuiError, messages::*};
+
+use sui_types::{messages_checkpoint::{CheckpointRequest, CheckpointResponse}};
 
 #[cfg(test)]
 use sui_types::{
@@ -60,6 +63,12 @@ pub trait AuthorityAPI {
         &self,
         request: BatchInfoRequest,
     ) -> Result<BatchInfoResponseItemStream, SuiError>;
+
+    async fn handle_checkpoint(
+        &self,
+        request: CheckpointRequest,
+    ) -> Result<CheckpointResponse, SuiError>;
+
 }
 
 pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoResponseItem, SuiError>>;
@@ -176,6 +185,19 @@ impl AuthorityAPI for NetworkAuthorityClient {
 
         Ok(Box::pin(stream))
     }
+
+    /// Handle Object information requests for this account.
+    async fn handle_checkpoint(
+        &self,
+        request: CheckpointRequest,
+    ) -> Result<CheckpointResponse, SuiError> {
+        self.client()
+            .checkpoint(request)
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(Into::into)
+    }
+
 }
 
 #[derive(Clone, Copy, Default)]
@@ -284,6 +306,15 @@ impl AuthorityAPI for LocalAuthorityClient {
         let update_items = state.handle_batch_streaming(request).await?;
         Ok(Box::pin(update_items))
     }
+
+    async fn handle_checkpoint(
+        &self,
+        _request: CheckpointRequest,
+    ) -> Result<CheckpointResponse, SuiError>{
+        unimplemented!();
+    }
+
+
 }
 
 impl LocalAuthorityClient {

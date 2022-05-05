@@ -7,6 +7,8 @@ use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::get_key_pair_from_rng;
 use sui_types::crypto::KeyPair;
+use sui_types::messages_checkpoint::CheckpointRequest;
+use sui_types::messages_checkpoint::CheckpointResponse;
 
 use super::*;
 use crate::authority::authority_tests::*;
@@ -565,6 +567,13 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         })
     }
 
+    async fn handle_checkpoint(
+        &self,
+        _request: CheckpointRequest,
+    ) -> Result<CheckpointResponse, SuiError>{
+        unimplemented!();
+    }
+
     /// Handle Batch information requests for this authority.
     async fn handle_batch_stream(
         &self,
@@ -682,6 +691,13 @@ impl AuthorityAPI for ByzantineAuthorityClient {
             certified_transaction: None,
             signed_effects: None,
         })
+    }
+
+    async fn handle_checkpoint(
+        &self,
+        _request: CheckpointRequest,
+    ) -> Result<CheckpointResponse, SuiError>{
+        unimplemented!();
     }
 
     /// Handle Batch information requests for this authority.
