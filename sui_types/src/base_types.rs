@@ -1,11 +1,12 @@
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str::FromStr;
 
-// Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
 use anyhow::anyhow;
 use base64ct::Encoding;
 use digest::Digest;
@@ -66,6 +67,7 @@ pub struct ObjectID(
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
 pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;
+
 #[serde_as]
 #[derive(
     Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema,
@@ -173,6 +175,7 @@ pub struct TransactionDigest(
     #[serde_as(as = "Readable<Base64, Bytes>")]
     [u8; TRANSACTION_DIGEST_LENGTH],
 );
+
 // Each object has a unique digest
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
@@ -379,6 +382,7 @@ impl fmt::LowerHex for SuiAddress {
         write!(f, "{}", encode_bytes_hex(self))
     }
 }
+
 impl fmt::UpperHex for SuiAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if f.alternate() {
@@ -624,6 +628,7 @@ pub enum ObjectIDParseError {
     // #[error("Internal hex parser error: {err}")]
     // HexParserError { err: hex::FromHexError },
 }
+
 /// Wraps the underlying parsing errors
 impl From<hex::FromHexError> for ObjectIDParseError {
     fn from(err: hex::FromHexError) -> Self {
@@ -702,6 +707,7 @@ impl fmt::LowerHex for ObjectID {
         write!(f, "{}", encode_bytes_hex(self))
     }
 }
+
 impl fmt::UpperHex for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if f.alternate() {
