@@ -14,8 +14,12 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
+
 use sui_types::{crypto::VerificationObligation, error::*, messages::*};
 use tokio::sync::mpsc::Sender;
+
+use sui_types::{messages_checkpoint::CheckpointRequest,};
+
 use tracing::{info, Instrument};
 
 #[cfg(test)]
@@ -295,5 +299,28 @@ impl Validator for AuthorityServer {
         let response = xstream.map_err(|e| tonic::Status::internal(e.to_string()));
 
         Ok(tonic::Response::new(Box::pin(response)))
+    }
+
+    async fn checkpoint(
+        &self,
+        request: tonic::Request<BincodeEncodedPayload>,
+    ) -> Result<tonic::Response<BincodeEncodedPayload>, tonic::Status> {
+        if let Some(checkpoint) = &self.state.checkpoints() {
+            let request: CheckpointRequest = request
+                .into_inner()
+                .deserialize()
+                .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
+
+            let response = checkpoint
+                .handle_checkpoint_request(&request)
+                .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
+            let payload = BincodeEncodedPayload::try_from(&response)
+                .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
+            return Ok(tonic::Response::new(payload));
+        }
+
+        Err(tonic::Status::internal("Unsupported".to_string()))
     }
 }

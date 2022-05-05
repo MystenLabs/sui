@@ -837,6 +837,10 @@ impl AuthorityState {
         state
     }
 
+    pub(crate) fn checkpoints(&self) -> Option<Arc<CheckpointStore>> {
+        self._checkpoints.clone()
+    }
+
     pub(crate) fn db(&self) -> Arc<AuthorityStore> {
         self._database.clone()
     }

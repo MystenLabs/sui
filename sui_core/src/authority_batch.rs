@@ -198,12 +198,11 @@ impl crate::authority::AuthorityState {
                 // to insert the transactions into future checkpoint candidates
                 if let Some(checkpoint) = &self._checkpoints {
                     if let Err(err) = checkpoint
-                    .handle_internal_batch(new_batch.batch.next_sequence_number, &current_batch)
+                        .handle_internal_batch(new_batch.batch.next_sequence_number, &current_batch)
                     {
                         error!("Checkpointing service error: {}", err);
                     }
                 }
-
 
                 // Send the update
                 let _ = self
