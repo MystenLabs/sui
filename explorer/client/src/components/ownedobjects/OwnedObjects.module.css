@@ -21,7 +21,7 @@
 }
 
 .objectbox > div {
-    @apply pt-2 pl-2;
+    @apply pt-2 pl-2 pr-1;
 }
 
 .objectbox > div:first-child > div {
