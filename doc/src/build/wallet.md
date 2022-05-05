@@ -337,7 +337,7 @@ In order to see what the current active address is, use the command `active-addr
 $ wallet active-address
 ```
 
-Which will reveal and address resembing:
+Which will reveal an address resembing:
 
 ```shell
 562F07CF6369E8D22DBF226A5BFEDC6300014837
@@ -349,7 +349,7 @@ Changing the default address is as easy as calling the `switch` command:
 $ wallet switch --address 913CF36F370613ED131868AC6F9DA2420166062E
 ```
 
-You will see out like:
+You will see output like:
 
 ```shell
 Active address switched to 913CF36F370613ED131868AC6F9DA2420166062E
