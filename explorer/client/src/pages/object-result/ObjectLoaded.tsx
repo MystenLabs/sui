@@ -15,6 +15,7 @@ import {
 import { type DataType } from './ObjectResultType';
 
 import styles from './ObjectResult.module.css';
+import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 
 function ObjectLoaded({ data }: { data: DataType }) {
     // TODO - restore or remove this functionality
@@ -377,6 +378,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             )}
                         </div>
                     )}
+                    {showConnectedEntities && <OwnedObjects id={data.id} />}
                 </div>
             </div>
         </>
