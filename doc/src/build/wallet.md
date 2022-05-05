@@ -38,7 +38,7 @@ If you have used the wallet before with a local network, follow the next section
 If you have used the wallet before, you will have an existing `wallet.conf` configuration
 file. Change the configured Gateway URL to DevNet by using:
 ```shell
-$ wallet switch --gateway http://gateway.devnet.sui.io:9000
+$ wallet switch --gateway https://gateway.devnet.sui.io:9000
 ```
 
 ## Genesis
