@@ -309,12 +309,12 @@ describe('End-to-end Tests', () => {
                 page,
                 'receiverAddress',
                 'addresses',
-                'playerOne',
+                'player1',
                 1
             );
         });
         it('go from object to child object and back', async () => {
-            await navigationTemplate(page, 'playerTwo', 'objects', 'Image1', 1);
+            await navigationTemplate(page, 'player2', 'objects', 'Image1', 1);
         });
         it('go from parent to broken image object and back', async () => {
             const parentValue = 'ObjectWBrokenChild';
@@ -322,7 +322,7 @@ describe('End-to-end Tests', () => {
 
             //Click on child in Owned Objects List:
             const objectLink = await page.$(
-                `div#ownedObjects > div:nth-child(2)`
+                `div#ownedObjects > div:nth-child(1)`
             );
             await objectLink.click();
 
@@ -380,7 +380,7 @@ describe('End-to-end Tests', () => {
                 (el: any) => el.textContent,
                 objectIDEl
             );
-            expect(objectValue.trim()).toBe('playerNine');
+            expect(objectValue.trim()).toBe('player0');
         });
         it('to go to the last page', async () => {
             const address = 'ownsAllAddress';
@@ -399,7 +399,9 @@ describe('End-to-end Tests', () => {
                 (el: any) => el.textContent,
                 objectIDEl
             );
-            expect(objectValue.trim()).toBe('playerTen');
+            expect(objectValue.trim()).toBe(
+                '7bc832ec31709638cd8d9323e90edf332gff4389'
+            );
         });
         it('where last and next disappear in final page', async () => {
             const address = 'ownsAllAddress';
@@ -435,7 +437,7 @@ describe('End-to-end Tests', () => {
                 (el: any) => el.textContent,
                 objectIDEl
             );
-            expect(objectValue.trim()).toBe('playerNine');
+            expect(objectValue.trim()).toBe('player0');
         });
 
         it('to go to first page', async () => {
@@ -459,7 +461,7 @@ describe('End-to-end Tests', () => {
                 (el: any) => el.textContent,
                 objectIDEl
             );
-            expect(objectValue.trim()).toBe('playerOne');
+            expect(objectValue.trim()).toBe('ChildObjectWBrokenImage');
         });
         it('where first and back disappear in first page', async () => {
             const address = 'ownsAllAddress';
