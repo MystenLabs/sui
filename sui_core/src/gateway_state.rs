@@ -655,7 +655,7 @@ where
         // Okay to unwrap() since we checked that this is Ok
         let (certificate, effects) = res.unwrap();
 
-        debug!(?tx, ?certificate, ?effects, "Transaction suceeded");
+        debug!(?tx, ?certificate, ?effects, "Transaction succeeded");
         // Create custom response base on the request type
         if let TransactionKind::Single(tx_kind) = tx_kind {
             match tx_kind {
