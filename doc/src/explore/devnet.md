@@ -115,7 +115,7 @@ See the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/explor
 
 Publish a sample Move package containing code developed in the [Sui Move tutorial](../build/move.md#writing-a-package) as follows (assuming you installed the source code in `~sui` as advised in set up):
 ```shell
-$ wallet publish --path ~sui/sui_programmability/tutorial --gas-budget 30000
+$ wallet publish --path <your-sui-repo>/sui_programmability/tutorial --gas-budget 30000
 ```
 
 You will see this output:
