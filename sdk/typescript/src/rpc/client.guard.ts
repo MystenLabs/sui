@@ -5,7 +5,7 @@
  * Generated type guards for "client.ts".
  * WARNING: Do not manually change this file.
  */
-import { HttpHeaders, ValidResponse, ErrorResponse } from "./client";
+import { HttpHeaders, RpcParams, ValidResponse, ErrorResponse } from "./client";
 import { isTransactionResponse } from "../index.guard";
 
 export function isHttpHeaders(obj: any, _argumentName?: string): obj is HttpHeaders {
@@ -13,6 +13,16 @@ export function isHttpHeaders(obj: any, _argumentName?: string): obj is HttpHead
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function")
+    )
+}
+
+export function isRpcParams(obj: any, _argumentName?: string): obj is RpcParams {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionResponse(obj.method) as boolean &&
+        Array.isArray(obj.args)
     )
 }
 
