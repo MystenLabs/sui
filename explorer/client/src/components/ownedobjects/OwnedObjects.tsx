@@ -83,7 +83,6 @@ function OwnedObjectAPI({ id }: { id: string }) {
                             (resp) => {
                                 const info = getObjectExistsResponse(resp)!;
                                 const contents = getObjectContent(resp);
-                                console.log(info.object);
                                 const url = parseImageURL(info.object);
                                 const balanceValue = (
                                     typeof contents?.fields.balance === 'number'
