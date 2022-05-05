@@ -124,6 +124,9 @@ function OwnedObjectLayout({ results }: { results: resultType }) {
         .sort((a, b) => {
             if (a.Type > b.Type) return 1;
             if (a.Type < b.Type) return -1;
+            if (a.Type === b.Type) {
+                return a.id <= b.id ? -1 : 1;
+            }
             return 0;
         });
 

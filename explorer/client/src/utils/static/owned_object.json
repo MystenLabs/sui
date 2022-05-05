@@ -4,46 +4,46 @@
             "id": "ownsAllAddress",
             "objects": [
                 {
-                    "objectId": "playerOne"
+                    "objectId": "player1"
                 },
                 {
-                    "objectId": "anotherPlayer"
+                    "objectId": "player0"
                 },
                 {
-                    "objectId": "playerTwo"
+                    "objectId": "player2"
                 },
                 {
-                    "objectId": "playerThree"
+                    "objectId": "player3"
                 },
 
                 {
                     "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
                 },
                 {
-                    "objectId": "playerFour"
+                    "objectId": "player4"
                 },
 
                 {
                     "objectId": "ComponentObject"
                 },
                 {
-                    "objectId": "playerFive"
+                    "objectId": "player5"
                 },
 
                 {
                     "objectId": "CollectionObject"
                 },
                 {
-                    "objectId": "playerSix"
+                    "objectId": "player6"
                 },
                 {
-                    "objectId": "playerSeven"
+                    "objectId": "player7"
                 },
                 {
-                    "objectId": "playerEight"
+                    "objectId": "player8"
                 },
                 {
-                    "objectId": "playerNine"
+                    "objectId": "player9"
                 },
                 {
                     "objectId": "ObjectThatOwns"
@@ -79,7 +79,7 @@
                     "objectId": "Image8"
                 },
                 {
-                    "objectId": "playerTen"
+                    "objectId": "playerA1"
                 },
                 {
                     "objectId": "standaloneObject"
@@ -99,46 +99,46 @@
             "id": "ObjectThatOwns",
             "objects": [
                 {
-                    "objectId": "playerOne"
+                    "objectId": "player1"
                 },
                 {
-                    "objectId": "anotherPlayer"
+                    "objectId": "player0"
                 },
                 {
-                    "objectId": "playerTwo"
+                    "objectId": "player2"
                 },
                 {
-                    "objectId": "playerThree"
+                    "objectId": "player3"
                 },
 
                 {
                     "objectId": "7bc832ec31709638cd8d9323e90edf332gff4389"
                 },
                 {
-                    "objectId": "playerFour"
+                    "objectId": "player4"
                 },
 
                 {
                     "objectId": "ComponentObject"
                 },
                 {
-                    "objectId": "playerFive"
+                    "objectId": "player5"
                 },
 
                 {
                     "objectId": "CollectionObject"
                 },
                 {
-                    "objectId": "playerSix"
+                    "objectId": "player6"
                 },
                 {
-                    "objectId": "playerSeven"
+                    "objectId": "player7"
                 },
                 {
-                    "objectId": "playerEight"
+                    "objectId": "player8"
                 },
                 {
-                    "objectId": "playerNine"
+                    "objectId": "player9"
                 },
                 {
                     "objectId": "ObjectThatOwns"
@@ -174,7 +174,7 @@
                     "objectId": "Image8"
                 },
                 {
-                    "objectId": "playerTen"
+                    "objectId": "playerA1"
                 },
                 {
                     "objectId": "standaloneObject"
@@ -212,7 +212,7 @@
             ]
         },
         {
-            "id": "playerTwo",
+            "id": "player2",
             "objects": [
                 {
                     "objectId": "standaloneObject",
@@ -228,11 +228,11 @@
             "id": "receiverAddress",
             "objects": [
                 {
-                    "objectId": "playerOne",
+                    "objectId": "player1",
                     "version": 6
                 },
                 {
-                    "objectId": "playerTwo",
+                    "objectId": "player2",
                     "version": 5
                 }
             ]
