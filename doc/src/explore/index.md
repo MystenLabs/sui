@@ -41,5 +41,5 @@ View projects built by third parties demonstrating the power of Sui.
 
 ## Sui Explorer
 
-Navigate the [Sui Explorer](https://explorer.devnet.sui.io/) to see the latest transactions and objects. [Here](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) are the instructions on how to run the explorer locally.
+Navigate the [Sui Explorer](https://explorer.devnet.sui.io/) to see the latest transactions and objects. Read the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) for instructions on how to run the Explorer locally.
 https://explorer.devnet.sui.io/
