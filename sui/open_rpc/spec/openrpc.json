@@ -609,23 +609,6 @@
           "$ref": "#/components/schemas/ObjectRead"
         }
       }
-    },
-    {
-      "name": "sui_getLockedObjects",
-      "description": "",
-      "params": [],
-      "result": {
-        "name": "BTreeMap < ObjectRef, TransactionDigest >",
-        "summary": "",
-        "description": "",
-        "required": true,
-        "schema": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/components/schemas/TransactionDigest"
-          }
-        }
-      }
     }
   ],
   "components": {
