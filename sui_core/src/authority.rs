@@ -67,6 +67,8 @@ pub use temporary_store::AuthorityTemporaryStore;
 mod authority_store;
 pub use authority_store::{AuthorityStore, GatewayStore, ReplicaStore, SuiDataStore};
 
+use self::authority_checkpoints::CheckpointStore;
+
 pub mod authority_checkpoints;
 pub mod authority_notifier;
 
@@ -184,6 +186,9 @@ pub struct AuthorityState {
 
     /// The database
     pub(crate) _database: Arc<AuthorityStore>, // TODO: remove pub
+
+    /// The checkpoint store
+    pub(crate) _checkpoints: Option<Arc<CheckpointStore>>,
 
     // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
@@ -693,11 +698,18 @@ impl AuthorityState {
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
+        checkpoints: Option<Arc<CheckpointStore>>,
         genesis_packages: Vec<Vec<CompiledModule>>,
         genesis_ctx: &mut TxContext,
     ) -> Self {
-        let state =
-            AuthorityState::new_without_genesis(committee, name, secret, store.clone()).await;
+        let state = AuthorityState::new_without_genesis(
+            committee,
+            name,
+            secret,
+            store.clone(),
+            checkpoints,
+        )
+        .await;
 
         // Only initialize an empty database.
         if store
@@ -721,9 +733,16 @@ impl AuthorityState {
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
         genesis: &Genesis,
+        checkpoints: Option<Arc<CheckpointStore>>,
     ) -> Self {
-        let state =
-            AuthorityState::new_without_genesis(committee, name, secret, store.clone()).await;
+        let state = AuthorityState::new_without_genesis(
+            committee,
+            name,
+            secret,
+            store.clone(),
+            checkpoints,
+        )
+        .await;
 
         // Only initialize an empty database.
         if store
@@ -753,6 +772,7 @@ impl AuthorityState {
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
+        checkpoints: Option<Arc<CheckpointStore>>,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -768,6 +788,7 @@ impl AuthorityState {
                     .expect("We defined natives to not fail here"),
             ),
             _database: store.clone(),
+            _checkpoints: checkpoints,
             batch_channels: tx,
             batch_notifier: Arc::new(
                 authority_notifier::TransactionNotifier::new(store)

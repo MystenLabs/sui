@@ -36,7 +36,6 @@ use serde_with::Bytes;
 
 use sha3::Sha3_256;
 
-
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
 mod base_types_tests;
@@ -201,10 +200,10 @@ pub struct ObjectDigest(
 
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
-pub struct TransactionEffectsDigest(    
+pub struct TransactionEffectsDigest(
     #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")] 
-    pub [u8; TRANSACTION_DIGEST_LENGTH]
+    #[serde_as(as = "Readable<Base64, Bytes>")]
+    pub [u8; TRANSACTION_DIGEST_LENGTH],
 );
 
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");

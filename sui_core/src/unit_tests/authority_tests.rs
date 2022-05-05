@@ -1259,6 +1259,7 @@ pub async fn init_state() -> AuthorityState {
         *authority_key.public_key_bytes(),
         Arc::pin(authority_key),
         store,
+        None,
         genesis::clone_genesis_compiled_modules(),
         &mut genesis::get_genesis_context(),
     )

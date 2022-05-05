@@ -289,7 +289,7 @@ impl AuthorityAPI for LocalAuthorityClient {
 impl LocalAuthorityClient {
     #[cfg(test)]
     pub async fn new(committee: Committee, address: PublicKeyBytes, secret: KeyPair) -> Self {
-        use crate::authority::AuthorityStore;
+        use crate::authority::{authority_checkpoints::CheckpointStore, AuthorityStore};
         use std::{env, fs};
         use sui_adapter::genesis;
 
@@ -298,12 +298,28 @@ impl LocalAuthorityClient {
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
-        let store = Arc::new(AuthorityStore::open(path, None));
+        let secret = Arc::pin(secret);
+
+        let mut store_path = path.clone();
+        store_path.push("store");
+        let store = Arc::new(AuthorityStore::open(&store_path, None));
+        let mut checkpoints_path = path.clone();
+        checkpoints_path.push("checkpoints");
+        let checkpoints = CheckpointStore::open(
+            &checkpoints_path,
+            None,
+            address,
+            committee.clone(),
+            secret.clone(),
+        )
+        .expect("Should not fail to open local checkpoint DB");
+
         let state = AuthorityState::new(
             committee.clone(),
             address,
-            Arc::pin(secret),
+            secret.clone(),
             store,
+            Some(Arc::new(checkpoints)),
             genesis::clone_genesis_compiled_modules(),
             &mut genesis::get_genesis_context(),
         )

@@ -53,6 +53,7 @@ pub(crate) async fn init_state(
         *authority_key.public_key_bytes(),
         Arc::pin(authority_key),
         store,
+        None,
         genesis::clone_genesis_compiled_modules(),
         &mut genesis::get_genesis_context(),
     )
@@ -761,6 +762,7 @@ async fn test_safe_batch_stream() {
         public_key_bytes,
         Arc::pin(authority_key),
         store.clone(),
+        None,
         genesis::clone_genesis_compiled_modules(),
         &mut genesis::get_genesis_context(),
     )
@@ -805,6 +807,7 @@ async fn test_safe_batch_stream() {
         public_key_bytes_b,
         Arc::pin(authority_key),
         store,
+        None,
         genesis::clone_genesis_compiled_modules(),
         &mut genesis::get_genesis_context(),
     )
