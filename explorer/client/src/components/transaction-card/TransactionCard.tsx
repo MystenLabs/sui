@@ -172,6 +172,16 @@ function formatByTransactionKind(
                     value: publish.modules,
                     list: true,
                 },
+                ...(data.sender
+                    ? [
+                          {
+                              label: 'Sender ',
+                              value: data.sender,
+                              link: true,
+                              category: 'addresses',
+                          },
+                      ]
+                    : []),
             ];
         default:
             return [];
