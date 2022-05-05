@@ -254,7 +254,7 @@ async fn shared_object_flood() {
     let (configs, key_pairs) = test_authority_configs();
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs, &key_pairs).await;
 
-    // Publish the move package to all authorities and get the new pacakge ref.
+    // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;
     let package_ref = publish_counter_package(gas_objects.pop().unwrap(), &configs).await;
 
@@ -353,7 +353,7 @@ async fn shared_object_sync() {
     let (configs, key_pairs) = test_authority_configs();
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs, &key_pairs).await;
 
-    // Publish the move package to all authorities and get the new pacakge ref.
+    // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;
     let package_ref = publish_counter_package(gas_objects.pop().unwrap(), &configs).await;
 

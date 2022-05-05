@@ -119,7 +119,7 @@ impl TransactionNotifier {
                                 (transaction_notifier, temp_buffer, next_seq, uniquess_guard),
                             ));
                         } else {
-                            // If the notifer is closed, then exit
+                            // If the notifier is closed, then exit
                             if transaction_notifier
                                 .is_closed
                                 .load(std::sync::atomic::Ordering::SeqCst)

@@ -36,7 +36,7 @@ The architecture is as follows:
 - The authority store notifies that a new certificate / effect has
   been sequenced.
 - If the batch service is running it reaches into the notifier and
-  finds the highest safe index in the trasaction sequence. An index
+  finds the highest safe index in the transaction sequence. An index
   is safe if no task is handling a lower index (they have either
   written to the DB or are dead.)
 - The batch service then reads from the database the new items in
@@ -129,7 +129,7 @@ impl crate::authority::AuthorityState {
             .next()
             .unwrap();
 
-        // Let's ensure we can get (exclusive) access to the trasnaction stream.
+        // Let's ensure we can get (exclusive) access to the transaction stream.
         let mut transaction_stream = self.batch_notifier.iter_from(next_sequence_number)?;
 
         // Then we operate in a loop, where for each new update we consider
@@ -255,7 +255,7 @@ impl crate::authority::AuthorityState {
                 return None;
             }
 
-            // If there are histroical items send them.
+            // If there are historical items send them.
             if let Some(item) = local_state.items.pop_front() {
                 // Update the last processed items to ensure we do not repeat them
                 match &item {
