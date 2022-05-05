@@ -26,6 +26,8 @@ use sui_core::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValu
 use sui_framework::build_move_package_to_bytes;
 use sui_types::{
     base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress},
+    error::SuiError,
+    fp_ensure,
     gas_coin::GasCoin,
     messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects},
     object::{Object, ObjectRead, ObjectRead::Exists},
@@ -787,9 +789,19 @@ async fn call_move(
         .read()
         .unwrap()
         .sign(&sender, &data.to_bytes())?;
+    let transaction = Transaction::new(data, signature);
+    // Shared objects are not yet supported end-to-end.
+    // Disabling it by default at the moment. However we could still use it
+    // if we pass environment variable SHARED to the wallet.
+    if std::env::var("SHARED").is_err() {
+        fp_ensure!(
+            !transaction.contains_shared_object(),
+            SuiError::UnsupportedSharedObjectError.into()
+        );
+    }
     let (cert, effects) = context
         .gateway
-        .execute_transaction(Transaction::new(data, signature))
+        .execute_transaction(transaction)
         .await?
         .to_effect_response()?;
 
