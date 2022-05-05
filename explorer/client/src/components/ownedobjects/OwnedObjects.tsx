@@ -3,7 +3,12 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getObjectContent, getObjectExistsResponse } from 'sui.js';
+//TODO - remove import of type GetObjectInfoResponse
+import {
+    getObjectContent,
+    getObjectExistsResponse,
+    type GetObjectInfoResponse,
+} from 'sui.js';
 
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { parseImageURL, parseObjectType } from '../../utils/objectUtils';
@@ -14,6 +19,8 @@ import {
 } from '../../utils/static/searchUtil';
 import { processDisplayValue, trimStdLibPrefix } from '../../utils/stringUtils';
 import DisplayBox from '../displaybox/DisplayBox';
+//TODO - Remove TEMPORARY_MOCK_FN
+import { mockGetObjectInfo } from './TEMPORARY_MOCK_FN';
 
 import styles from './OwnedObjects.module.css';
 
@@ -72,17 +79,24 @@ function OwnedObjectAPI({ id }: { id: string }) {
     // Backend changes will be required to enable a scalable solution
     // getOwnedObjectRefs will need to return id, type and balance for each owned object
     useEffect(() => {
-        rpc.getOwnedObjectRefs(id).then((objects) => {
-            Promise.all(
-                objects.map(({ objectId }) => rpc.getObjectInfo(objectId))
-            ).then((results) => {
+        rpc.getOwnedObjectRefs(id)
+            .then((objects) =>
+                //TODO - replace with acutal batching function:
+                mockGetObjectInfo(objects.map(({ objectId }) => objectId))
+            )
+            .then((results) => {
                 setResults(
                     results
                         .filter(({ status }) => status === 'Exists')
                         .map(
                             (resp) => {
-                                const info = getObjectExistsResponse(resp)!;
-                                const contents = getObjectContent(resp);
+                                // TODO - remove as GetObjectInfoResponse casting
+                                const info = getObjectExistsResponse(
+                                    resp as GetObjectInfoResponse
+                                )!;
+                                const contents = getObjectContent(
+                                    resp as GetObjectInfoResponse
+                                );
                                 const url = parseImageURL(info.object);
                                 const balanceValue = (
                                     typeof contents?.fields.balance === 'number'
@@ -103,7 +117,6 @@ function OwnedObjectAPI({ id }: { id: string }) {
                 );
                 setIsLoaded(true);
             });
-        });
     }, [id]);
 
     if (isLoaded) {
