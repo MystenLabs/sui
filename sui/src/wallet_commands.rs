@@ -680,10 +680,22 @@ impl Display for WalletCommandResult {
                 }
             }
             WalletCommandResult::Objects(object_refs) => {
-                writeln!(writer, "Showing {} results.", object_refs.len())?;
-                for object_ref in object_refs {
-                    writeln!(writer, "{:?}", object_ref)?;
+                writeln!(
+                    writer,
+                    " {0: ^42} | {1: ^10} | {2: ^68}",
+                    "Object ID", "Version", "Digest"
+                )?;
+                writeln!(writer, "{}", ["-"; 126].join(""))?;
+                for (id, version, digest) in object_refs {
+                    writeln!(
+                        writer,
+                        " {0: ^42} | {1: ^10} | {2: ^34?}",
+                        id,
+                        version.value(),
+                        digest
+                    )?;
                 }
+                writeln!(writer, "Showing {} results.", object_refs.len())?;
             }
             WalletCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
@@ -695,7 +707,7 @@ impl Display for WalletCommandResult {
                 // TODO: generalize formatting of CLI
                 writeln!(
                     writer,
-                    " {0: ^40} | {1: ^10} | {2: ^11}",
+                    " {0: ^42} | {1: ^10} | {2: ^11}",
                     "Object ID", "Version", "Gas Value"
                 )?;
                 writeln!(
@@ -705,7 +717,7 @@ impl Display for WalletCommandResult {
                 for gas in gases {
                     writeln!(
                         writer,
-                        " {0: ^40} | {1: ^10} | {2: ^11}",
+                        " {0: ^42} | {1: ^10} | {2: ^11}",
                         gas.id(),
                         u64::from(gas.version()),
                         gas.value()

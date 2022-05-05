@@ -1,19 +1,13 @@
-// Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-use anyhow::anyhow;
-use base64ct::Encoding;
 use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str::FromStr;
 
-use crate::crypto::PublicKeyBytes;
-use crate::error::SuiError;
-use crate::json_schema;
-use crate::readable_serde::encoding::Base64;
-use crate::readable_serde::encoding::Hex;
-use crate::readable_serde::Readable;
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+use anyhow::anyhow;
+use base64ct::Encoding;
 use digest::Digest;
 use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
@@ -26,6 +20,13 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 use sha3::Sha3_256;
+
+use crate::crypto::PublicKeyBytes;
+use crate::error::SuiError;
+use crate::json_schema;
+use crate::readable_serde::encoding::Base64;
+use crate::readable_serde::encoding::Hex;
+use crate::readable_serde::Readable;
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -349,38 +350,41 @@ where
 }
 
 pub fn encode_bytes_hex<B: AsRef<[u8]>>(bytes: &B) -> String {
-    format!("0x{}", hex::encode(bytes.as_ref()).to_uppercase())
+    hex::encode(bytes.as_ref())
 }
 
 pub fn decode_bytes_hex<T: for<'a> TryFrom<&'a [u8]>>(s: &str) -> Result<T, anyhow::Error> {
-    let s = if let Some(s) = s.strip_prefix("0x") {
-        s
-    } else {
-        s
-    };
+    let s = s.strip_prefix("0x").unwrap_or(s);
     let value = hex::decode(s)?;
     T::try_from(&value[..]).map_err(|_| anyhow::anyhow!("byte deserialization failed"))
 }
 
 impl fmt::Display for SuiAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:X}", self)
+        write!(f, "{:#x}", self)
     }
 }
 
 impl fmt::Debug for SuiAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:X}", self)
+        write!(f, "{:#x}", self)
     }
 }
+
 impl fmt::LowerHex for SuiAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", encode_bytes_hex(self).to_lowercase())
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", encode_bytes_hex(self))
     }
 }
 impl fmt::UpperHex for SuiAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", encode_bytes_hex(self))
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", encode_bytes_hex(self).to_uppercase())
     }
 }
 
@@ -680,23 +684,30 @@ impl From<SuiAddress> for AccountAddress {
 
 impl fmt::Display for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:X}", self)
+        write!(f, "{:#x}", self)
     }
 }
 
 impl fmt::Debug for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:X}", self)
+        write!(f, "{:#x}", self)
     }
 }
+
 impl fmt::LowerHex for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", encode_bytes_hex(self).to_lowercase())
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", encode_bytes_hex(self))
     }
 }
 impl fmt::UpperHex for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", encode_bytes_hex(self))
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", encode_bytes_hex(self).to_uppercase())
     }
 }
 

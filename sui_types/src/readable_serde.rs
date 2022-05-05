@@ -127,8 +127,12 @@ where
     {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            let value = E::decode(s).map_err(to_custom_error::<'de, D, _>)?;
-            AccountAddress::from_bytes(&value).map_err(to_custom_error::<'de, D, _>)
+            if s.starts_with("0x") {
+                AccountAddress::from_hex_literal(&s)
+            } else {
+                AccountAddress::from_hex(&s)
+            }
+            .map_err(to_custom_error::<'de, D, _>)
         } else {
             R::deserialize_as(deserializer)
         }
@@ -137,9 +141,9 @@ where
 
 pub mod encoding {
     use anyhow::anyhow;
+    use base64ct::Encoding as _;
 
     use crate::base_types::{decode_bytes_hex, encode_bytes_hex};
-    use base64ct::Encoding as _;
 
     pub trait Encoding {
         fn decode(s: String) -> Result<Vec<u8>, anyhow::Error>;
@@ -154,7 +158,7 @@ pub mod encoding {
         }
 
         fn encode<T: AsRef<[u8]>>(data: T) -> String {
-            encode_bytes_hex(&data)
+            format!("0x{}", encode_bytes_hex(&data).to_lowercase())
         }
     }
     impl Encoding for Base64 {

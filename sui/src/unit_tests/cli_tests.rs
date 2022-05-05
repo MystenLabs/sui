@@ -582,7 +582,7 @@ fn extract_gas_info(s: &str) -> Option<(ObjectID, SequenceNumber, u64)> {
         .unwrap()
         .to_owned();
     Some((
-        ObjectID::from_hex(id_str).unwrap(),
+        ObjectID::from_hex_literal(id_str).unwrap(),
         SequenceNumber::from_u64(tokens[1].parse::<u64>().unwrap()),
         tokens[2].parse::<u64>().unwrap(),
     ))
@@ -929,11 +929,11 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         };
 
     retry_assert!(
-        logs_contain(&format!("{:02X}", mut_obj1.0)),
+        logs_contain(&format!("{}", mut_obj1.0)),
         Duration::from_millis(5000)
     );
     retry_assert!(
-        logs_contain(&format!("{:02X}", mut_obj2.0)),
+        logs_contain(&format!("{}", mut_obj2.0)),
         Duration::from_millis(5000)
     );
 
@@ -1023,11 +1023,11 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         };
 
     retry_assert!(
-        logs_contain(&format!("{:02X}", mut_obj1.0)),
+        logs_contain(&format!("{}", mut_obj1.0)),
         Duration::from_millis(5000)
     );
     retry_assert!(
-        logs_contain(&format!("{:02X}", mut_obj2.0)),
+        logs_contain(&format!("{}", mut_obj2.0)),
         Duration::from_millis(5000)
     );
 

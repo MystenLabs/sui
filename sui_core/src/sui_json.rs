@@ -139,7 +139,13 @@ impl SuiJsonValue {
 impl std::str::FromStr for SuiJsonValue {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self, anyhow::Error> {
-        SuiJsonValue::new(serde_json::from_str(s)?)
+        // Add quotes for hex value start with 0x if it's missing
+        let s = if s.starts_with(HEX_PREFIX) {
+            serde_json::from_str(&format!("\"{}\"", s))
+        } else {
+            serde_json::from_str(s)
+        }?;
+        SuiJsonValue::new(s)
     }
 }
 
