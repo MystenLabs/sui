@@ -1,11 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
-import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
 import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
 import { parseImageURL } from '../../utils/objectUtils';
@@ -283,17 +282,17 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                 <div>
                                     <div>Owner</div>
                                     <div id="owner">
-                                    <Longtext
-                                        text={extractOwnerData(data.owner)}
-                                        category="unknown"
-                                        // TODO: make this more elegant
-                                        isLink={
-                                            extractOwnerData(data.owner) !==
-                                                'Immutable' &&
-                                            extractOwnerData(data.owner) !==
-                                                'Shared'
-                                        }
-                                    />
+                                        <Longtext
+                                            text={extractOwnerData(data.owner)}
+                                            category="unknown"
+                                            // TODO: make this more elegant
+                                            isLink={
+                                                extractOwnerData(data.owner) !==
+                                                    'Immutable' &&
+                                                extractOwnerData(data.owner) !==
+                                                    'Shared'
+                                            }
+                                        />
                                     </div>
                                 </div>
                             )}
