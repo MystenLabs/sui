@@ -29,7 +29,7 @@ function AddressResult() {
         return (
             <div className={theme.textresults} id="textResults">
                 <div>
-                    <div>Address ID</div>
+                    <div>Address</div>
                     <div id="addressID">
                         <Longtext
                             text={addressID}

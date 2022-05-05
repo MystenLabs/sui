@@ -90,7 +90,7 @@ describe('End-to-end Tests', () => {
     });
 
     // TODO - rewrite this test to use the new transaction data and state object
-    /* 
+    /*
     describe('Transaction Results', () => {
         //Specific to transaction tests:
         const successTransactionID = 'txCreateSuccess';
@@ -249,7 +249,7 @@ describe('End-to-end Tests', () => {
         it('has correct structure', async () => {
             await page.goto(`${BASE_URL}/addresses/${successAddressID}`);
 
-            const labels = ['Address ID', 'Owned Objects'];
+            const labels = ['Address', 'Owned Objects'];
 
             for (let i = 1; i <= labels.length; i++) {
                 const value = await page.$eval(
@@ -292,7 +292,7 @@ describe('End-to-end Tests', () => {
             const ownerLink = await page.$('div#owner > span:first-child');
             await ownerLink.click();
 
-            //Looking for object or address ID?
+            //Looking for object or address?
             const lookingFor =
                 parentIsA === 'addresses' ? '#addressID' : '#objectID';
 
