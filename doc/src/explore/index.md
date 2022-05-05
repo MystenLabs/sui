@@ -41,4 +41,5 @@ View projects built by third parties demonstrating the power of Sui.
 
 ## Sui Explorer
 
-Navigate the [Sui Explorer](https://github.com/MystenLabs/sui/tree/explorer-rest/explorer) and [Sui Explorer Client](https://github.com/MystenLabs/sui/blob/explorer-rest/explorer/client) to see the latest blocks, transactions, and cluster statistics.
+Navigate the [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) to see the latest blocks, transactions, and cluster statistics:
+https://explorer.devnet.sui.io/
