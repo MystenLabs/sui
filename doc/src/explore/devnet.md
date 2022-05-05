@@ -85,7 +85,7 @@ The above command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58
 Now you can view the created object in the [Sui Explorer](http://explorer.devnet.sui.io) at:
 https://explorer.devnet.sui.io/objects/ED883F6812AF447B9B0CE220DA5EA9E0F58012FE
 
-Replace the object ID in the link above with the object ID of the ExampleN FT you observed in your own command output to see it in Sui Explorer:
+Replace the object ID in the link above with the object ID of the Example NFT you observed in your own command output to see it in Sui Explorer:
 
 ![Example NFT](../../static/example-nft.png "Example NFT")
 
