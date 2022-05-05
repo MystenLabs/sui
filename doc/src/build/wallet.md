@@ -13,9 +13,9 @@ interface, *Wallet CLI*.
 Follow the instructions to [install Sui binaries](install.md#binaries).
 
 ## Connect to DevNet
-We are hosting a public DevNet for the community to experiment with our 
-tech and help to shape the future of the Sui network. To connect the wallet 
-client to the DevNet, run the following command:
+We are hosting a public [DevNet](../explore/devnet.md) for the community to
+experiment with our  tech and help to shape the future of the Sui network. To
+connect the wallet  client to the DevNet, run the following command:
 ```shell
 $ wallet
 ```
