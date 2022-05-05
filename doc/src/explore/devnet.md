@@ -4,7 +4,7 @@ title: Experiment with Sui DevNet
 
 Welcome to the beginnings of the Sui DevNet. It exists now to gain operational experience with the Sui software in a public setting. The Sui DevNet currently consists of:
 
-* A four-validator network with all nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: http://gateway.devnet.sui.io/
+* A four-validator network with all nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: https://gateway.devnet.sui.io:9000/
 * A public network [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) for browsing the TestNet transaction history: http://explorer.devnet.sui.io
 * A [Discord channel](https://discordapp.com/channels/916379725201563759/971488439931392130) for requesting test coins that can be used to pay for gas on the test network. These coins have no financial value and will disappear each time we reset the network.
 
