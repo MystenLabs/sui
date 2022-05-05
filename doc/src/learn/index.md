@@ -14,7 +14,7 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](../.
 
 Find the latest updates to these contents in this section:
 
-* [Sui DevNet](../explore/devnet.md) - Experiment with Sui DevNet: request gas tokens, mint/customize an example NFT, and publish a Move module, and make a Move call.
+* [Sui DevNet](../explore/devnet.md) - Experiment with Sui DevNet: request gas tokens, mint/customize example NFTs, publish a Move module, and make a Move call.
 * [JSON-RPC API](../build/json-rpc.md) - Set up your own local Sui RPC Server and use the Sui JSON-RPC API to interact with a local Sui network.
 * [Narwhal and Tusk for consensus](../learn/architecture/consensus.md) - Learn about Narwhal and Tusk, Sui's high-throughput mempool and consensus engine.
 * [RPC API publishing](../build/json-rpc.md#sui_publish) - Follow instructions for publishing Move modules via the Publish endpoint.
