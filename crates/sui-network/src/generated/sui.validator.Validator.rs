@@ -4,7 +4,7 @@
 pub mod validator_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
-    /// The Validator interface
+    ///The Validator interface
     #[derive(Debug, Clone)]
     pub struct ValidatorClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -67,9 +67,9 @@ pub mod validator_client {
         }
         pub async fn transaction(
             &mut self,
-            request: impl tonic::IntoRequest<super::super::common::BincodeEncodedPayload>,
+            request: impl tonic::IntoRequest<sui_types::messages::Transaction>,
         ) -> Result<
-                tonic::Response<super::super::common::BincodeEncodedPayload>,
+                tonic::Response<sui_types::messages::TransactionInfoResponse>,
                 tonic::Status,
             > {
             self.inner
@@ -81,7 +81,7 @@ pub mod validator_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = crate::codec::BincodeCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.validator.Validator/Transaction",
             );
@@ -89,9 +89,9 @@ pub mod validator_client {
         }
         pub async fn confirmation_transaction(
             &mut self,
-            request: impl tonic::IntoRequest<super::super::common::BincodeEncodedPayload>,
+            request: impl tonic::IntoRequest<sui_types::messages::CertifiedTransaction>,
         ) -> Result<
-                tonic::Response<super::super::common::BincodeEncodedPayload>,
+                tonic::Response<sui_types::messages::TransactionInfoResponse>,
                 tonic::Status,
             > {
             self.inner
@@ -103,7 +103,7 @@ pub mod validator_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = crate::codec::BincodeCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.validator.Validator/ConfirmationTransaction",
             );
@@ -111,9 +111,9 @@ pub mod validator_client {
         }
         pub async fn consensus_transaction(
             &mut self,
-            request: impl tonic::IntoRequest<super::super::common::BincodeEncodedPayload>,
+            request: impl tonic::IntoRequest<sui_types::messages::ConsensusTransaction>,
         ) -> Result<
-                tonic::Response<super::super::common::BincodeEncodedPayload>,
+                tonic::Response<sui_types::messages::TransactionInfoResponse>,
                 tonic::Status,
             > {
             self.inner
@@ -125,7 +125,7 @@ pub mod validator_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = crate::codec::BincodeCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.validator.Validator/ConsensusTransaction",
             );
@@ -133,9 +133,9 @@ pub mod validator_client {
         }
         pub async fn account_info(
             &mut self,
-            request: impl tonic::IntoRequest<super::super::common::BincodeEncodedPayload>,
+            request: impl tonic::IntoRequest<sui_types::messages::AccountInfoRequest>,
         ) -> Result<
-                tonic::Response<super::super::common::BincodeEncodedPayload>,
+                tonic::Response<sui_types::messages::AccountInfoResponse>,
                 tonic::Status,
             > {
             self.inner
@@ -147,7 +147,7 @@ pub mod validator_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = crate::codec::BincodeCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.validator.Validator/AccountInfo",
             );
@@ -155,9 +155,9 @@ pub mod validator_client {
         }
         pub async fn object_info(
             &mut self,
-            request: impl tonic::IntoRequest<super::super::common::BincodeEncodedPayload>,
+            request: impl tonic::IntoRequest<sui_types::messages::ObjectInfoRequest>,
         ) -> Result<
-                tonic::Response<super::super::common::BincodeEncodedPayload>,
+                tonic::Response<sui_types::messages::ObjectInfoResponse>,
                 tonic::Status,
             > {
             self.inner
@@ -169,7 +169,7 @@ pub mod validator_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = crate::codec::BincodeCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.validator.Validator/ObjectInfo",
             );
@@ -177,9 +177,9 @@ pub mod validator_client {
         }
         pub async fn transaction_info(
             &mut self,
-            request: impl tonic::IntoRequest<super::super::common::BincodeEncodedPayload>,
+            request: impl tonic::IntoRequest<sui_types::messages::TransactionInfoRequest>,
         ) -> Result<
-                tonic::Response<super::super::common::BincodeEncodedPayload>,
+                tonic::Response<sui_types::messages::TransactionInfoResponse>,
                 tonic::Status,
             > {
             self.inner
@@ -191,7 +191,7 @@ pub mod validator_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = crate::codec::BincodeCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.validator.Validator/TransactionInfo",
             );
@@ -199,10 +199,10 @@ pub mod validator_client {
         }
         pub async fn batch_info(
             &mut self,
-            request: impl tonic::IntoRequest<super::super::common::BincodeEncodedPayload>,
+            request: impl tonic::IntoRequest<sui_types::messages::BatchInfoRequest>,
         ) -> Result<
                 tonic::Response<
-                    tonic::codec::Streaming<super::super::common::BincodeEncodedPayload>,
+                    tonic::codec::Streaming<sui_types::messages::BatchInfoResponseItem>,
                 >,
                 tonic::Status,
             > {
@@ -215,7 +215,7 @@ pub mod validator_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = crate::codec::BincodeCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.validator.Validator/BatchInfo",
             );
@@ -232,58 +232,58 @@ pub mod validator_server {
     pub trait Validator: Send + Sync + 'static {
         async fn transaction(
             &self,
-            request: tonic::Request<super::super::common::BincodeEncodedPayload>,
+            request: tonic::Request<sui_types::messages::Transaction>,
         ) -> Result<
-                tonic::Response<super::super::common::BincodeEncodedPayload>,
+                tonic::Response<sui_types::messages::TransactionInfoResponse>,
                 tonic::Status,
             >;
         async fn confirmation_transaction(
             &self,
-            request: tonic::Request<super::super::common::BincodeEncodedPayload>,
+            request: tonic::Request<sui_types::messages::CertifiedTransaction>,
         ) -> Result<
-                tonic::Response<super::super::common::BincodeEncodedPayload>,
+                tonic::Response<sui_types::messages::TransactionInfoResponse>,
                 tonic::Status,
             >;
         async fn consensus_transaction(
             &self,
-            request: tonic::Request<super::super::common::BincodeEncodedPayload>,
+            request: tonic::Request<sui_types::messages::ConsensusTransaction>,
         ) -> Result<
-                tonic::Response<super::super::common::BincodeEncodedPayload>,
+                tonic::Response<sui_types::messages::TransactionInfoResponse>,
                 tonic::Status,
             >;
         async fn account_info(
             &self,
-            request: tonic::Request<super::super::common::BincodeEncodedPayload>,
+            request: tonic::Request<sui_types::messages::AccountInfoRequest>,
         ) -> Result<
-                tonic::Response<super::super::common::BincodeEncodedPayload>,
+                tonic::Response<sui_types::messages::AccountInfoResponse>,
                 tonic::Status,
             >;
         async fn object_info(
             &self,
-            request: tonic::Request<super::super::common::BincodeEncodedPayload>,
+            request: tonic::Request<sui_types::messages::ObjectInfoRequest>,
         ) -> Result<
-                tonic::Response<super::super::common::BincodeEncodedPayload>,
+                tonic::Response<sui_types::messages::ObjectInfoResponse>,
                 tonic::Status,
             >;
         async fn transaction_info(
             &self,
-            request: tonic::Request<super::super::common::BincodeEncodedPayload>,
+            request: tonic::Request<sui_types::messages::TransactionInfoRequest>,
         ) -> Result<
-                tonic::Response<super::super::common::BincodeEncodedPayload>,
+                tonic::Response<sui_types::messages::TransactionInfoResponse>,
                 tonic::Status,
             >;
         ///Server streaming response type for the BatchInfo method.
         type BatchInfoStream: futures_core::Stream<
-                Item = Result<super::super::common::BincodeEncodedPayload, tonic::Status>,
+                Item = Result<sui_types::messages::BatchInfoResponseItem, tonic::Status>,
             >
             + Send
             + 'static;
         async fn batch_info(
             &self,
-            request: tonic::Request<super::super::common::BincodeEncodedPayload>,
+            request: tonic::Request<sui_types::messages::BatchInfoRequest>,
         ) -> Result<tonic::Response<Self::BatchInfoStream>, tonic::Status>;
     }
-    /// The Validator interface
+    ///The Validator interface
     #[derive(Debug)]
     pub struct ValidatorServer<T: Validator> {
         inner: _Inner<T>,
@@ -336,19 +336,16 @@ pub mod validator_server {
                     struct TransactionSvc<T: Validator>(pub Arc<T>);
                     impl<
                         T: Validator,
-                    > tonic::server::UnaryService<
-                        super::super::common::BincodeEncodedPayload,
-                    > for TransactionSvc<T> {
-                        type Response = super::super::common::BincodeEncodedPayload;
+                    > tonic::server::UnaryService<sui_types::messages::Transaction>
+                    for TransactionSvc<T> {
+                        type Response = sui_types::messages::TransactionInfoResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<
-                                super::super::common::BincodeEncodedPayload,
-                            >,
+                            request: tonic::Request<sui_types::messages::Transaction>,
                         ) -> Self::Future {
                             let inner = self.0.clone();
                             let fut = async move { (*inner).transaction(request).await };
@@ -361,7 +358,7 @@ pub mod validator_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = TransactionSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = crate::codec::BincodeCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -378,9 +375,9 @@ pub mod validator_server {
                     impl<
                         T: Validator,
                     > tonic::server::UnaryService<
-                        super::super::common::BincodeEncodedPayload,
+                        sui_types::messages::CertifiedTransaction,
                     > for ConfirmationTransactionSvc<T> {
-                        type Response = super::super::common::BincodeEncodedPayload;
+                        type Response = sui_types::messages::TransactionInfoResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -388,7 +385,7 @@ pub mod validator_server {
                         fn call(
                             &mut self,
                             request: tonic::Request<
-                                super::super::common::BincodeEncodedPayload,
+                                sui_types::messages::CertifiedTransaction,
                             >,
                         ) -> Self::Future {
                             let inner = self.0.clone();
@@ -404,7 +401,7 @@ pub mod validator_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ConfirmationTransactionSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = crate::codec::BincodeCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -421,9 +418,9 @@ pub mod validator_server {
                     impl<
                         T: Validator,
                     > tonic::server::UnaryService<
-                        super::super::common::BincodeEncodedPayload,
+                        sui_types::messages::ConsensusTransaction,
                     > for ConsensusTransactionSvc<T> {
-                        type Response = super::super::common::BincodeEncodedPayload;
+                        type Response = sui_types::messages::TransactionInfoResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -431,7 +428,7 @@ pub mod validator_server {
                         fn call(
                             &mut self,
                             request: tonic::Request<
-                                super::super::common::BincodeEncodedPayload,
+                                sui_types::messages::ConsensusTransaction,
                             >,
                         ) -> Self::Future {
                             let inner = self.0.clone();
@@ -447,7 +444,7 @@ pub mod validator_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ConsensusTransactionSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = crate::codec::BincodeCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -464,9 +461,9 @@ pub mod validator_server {
                     impl<
                         T: Validator,
                     > tonic::server::UnaryService<
-                        super::super::common::BincodeEncodedPayload,
+                        sui_types::messages::AccountInfoRequest,
                     > for AccountInfoSvc<T> {
-                        type Response = super::super::common::BincodeEncodedPayload;
+                        type Response = sui_types::messages::AccountInfoResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -474,7 +471,7 @@ pub mod validator_server {
                         fn call(
                             &mut self,
                             request: tonic::Request<
-                                super::super::common::BincodeEncodedPayload,
+                                sui_types::messages::AccountInfoRequest,
                             >,
                         ) -> Self::Future {
                             let inner = self.0.clone();
@@ -490,7 +487,7 @@ pub mod validator_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = AccountInfoSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = crate::codec::BincodeCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -506,10 +503,9 @@ pub mod validator_server {
                     struct ObjectInfoSvc<T: Validator>(pub Arc<T>);
                     impl<
                         T: Validator,
-                    > tonic::server::UnaryService<
-                        super::super::common::BincodeEncodedPayload,
-                    > for ObjectInfoSvc<T> {
-                        type Response = super::super::common::BincodeEncodedPayload;
+                    > tonic::server::UnaryService<sui_types::messages::ObjectInfoRequest>
+                    for ObjectInfoSvc<T> {
+                        type Response = sui_types::messages::ObjectInfoResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -517,7 +513,7 @@ pub mod validator_server {
                         fn call(
                             &mut self,
                             request: tonic::Request<
-                                super::super::common::BincodeEncodedPayload,
+                                sui_types::messages::ObjectInfoRequest,
                             >,
                         ) -> Self::Future {
                             let inner = self.0.clone();
@@ -531,7 +527,7 @@ pub mod validator_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ObjectInfoSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = crate::codec::BincodeCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -548,9 +544,9 @@ pub mod validator_server {
                     impl<
                         T: Validator,
                     > tonic::server::UnaryService<
-                        super::super::common::BincodeEncodedPayload,
+                        sui_types::messages::TransactionInfoRequest,
                     > for TransactionInfoSvc<T> {
-                        type Response = super::super::common::BincodeEncodedPayload;
+                        type Response = sui_types::messages::TransactionInfoResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
@@ -558,7 +554,7 @@ pub mod validator_server {
                         fn call(
                             &mut self,
                             request: tonic::Request<
-                                super::super::common::BincodeEncodedPayload,
+                                sui_types::messages::TransactionInfoRequest,
                             >,
                         ) -> Self::Future {
                             let inner = self.0.clone();
@@ -574,7 +570,7 @@ pub mod validator_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = TransactionInfoSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = crate::codec::BincodeCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -591,9 +587,9 @@ pub mod validator_server {
                     impl<
                         T: Validator,
                     > tonic::server::ServerStreamingService<
-                        super::super::common::BincodeEncodedPayload,
+                        sui_types::messages::BatchInfoRequest,
                     > for BatchInfoSvc<T> {
-                        type Response = super::super::common::BincodeEncodedPayload;
+                        type Response = sui_types::messages::BatchInfoResponseItem;
                         type ResponseStream = T::BatchInfoStream;
                         type Future = BoxFuture<
                             tonic::Response<Self::ResponseStream>,
@@ -602,7 +598,7 @@ pub mod validator_server {
                         fn call(
                             &mut self,
                             request: tonic::Request<
-                                super::super::common::BincodeEncodedPayload,
+                                sui_types::messages::BatchInfoRequest,
                             >,
                         ) -> Self::Future {
                             let inner = self.0.clone();
@@ -616,7 +612,7 @@ pub mod validator_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = BatchInfoSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = crate::codec::BincodeCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
