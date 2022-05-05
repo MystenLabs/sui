@@ -1,7 +1,7 @@
 {
     "data": [
         {
-            "id": "playerOne",
+            "id": "player1",
             "owner": "SingleOwner(k#receiverAddress)",
             "category": "object",
             "version": "6",
@@ -25,7 +25,7 @@
             }
         },
         {
-            "id": "playerTwo",
+            "id": "player2",
             "owner": "SingleOwner(k#receiverAddress)",
             "category": "object",
             "version": "5",
@@ -57,7 +57,7 @@
             }
         },
         {
-            "id": "anotherPlayer",
+            "id": "player0",
             "owner": "SingleOwner(k#)",
             "category": "object",
             "version": "100",
@@ -79,7 +79,7 @@
             }
         },
         {
-            "id": "playerThree",
+            "id": "player3",
             "owner": "SingleOwner(k#)",
             "category": "object",
             "version": "100",
@@ -101,7 +101,7 @@
             }
         },
         {
-            "id": "playerFour",
+            "id": "player4",
             "owner": "SingleOwner(k#)",
             "category": "object",
             "version": "100",
@@ -123,7 +123,7 @@
             }
         },
         {
-            "id": "playerFive",
+            "id": "player5",
             "owner": "SingleOwner(k#)",
             "category": "object",
             "version": "100",
@@ -145,7 +145,7 @@
             }
         },
         {
-            "id": "playerSix",
+            "id": "player6",
             "owner": "SingleOwner(k#)",
             "category": "object",
             "version": "100",
@@ -167,7 +167,7 @@
             }
         },
         {
-            "id": "playerSeven",
+            "id": "player7",
             "owner": "SingleOwner(k#)",
             "category": "object",
             "version": "100",
@@ -189,7 +189,7 @@
             }
         },
         {
-            "id": "playerEight",
+            "id": "player8",
             "owner": "SingleOwner(k#)",
             "category": "object",
             "version": "100",
@@ -211,7 +211,7 @@
             }
         },
         {
-            "id": "playerNine",
+            "id": "player9",
             "owner": "SingleOwner(k#)",
             "category": "object",
             "version": "100",
@@ -233,7 +233,7 @@
             }
         },
         {
-            "id": "playerTen",
+            "id": "playerA1",
             "owner": "SingleOwner(k#)",
             "category": "object",
             "version": "100",
@@ -258,7 +258,7 @@
         {
             "id": "Image1",
             "category": "object",
-            "owner": "SingleOwner(k#playerTwo)",
+            "owner": "SingleOwner(k#player2)",
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -427,7 +427,7 @@
         {
             "id": "standaloneObject",
             "category": "object",
-            "owner": "SingleOwner(k#playerTwo)",
+            "owner": "SingleOwner(k#player2)",
             "version": "87",
             "readonly": "true",
             "objType": "0x2::Coin::Coin<0x2::USD::USD>",
@@ -441,7 +441,7 @@
         {
             "id": "standaloneObject200",
             "category": "object",
-            "owner": "SingleOwner(k#playerTwo)",
+            "owner": "SingleOwner(k#player2)",
             "version": "87",
             "readonly": "true",
             "objType": "0x2::Coin::Coin<0x2::USD::USD>",
@@ -455,7 +455,7 @@
         {
             "id": "standaloneObjectSUI50",
             "category": "object",
-            "owner": "SingleOwner(k#playerTwo)",
+            "owner": "SingleOwner(k#player2)",
             "version": "87",
             "readonly": "true",
             "objType": "0x2::Coin::Coin<0x2::SUI::SUI>",
@@ -469,7 +469,7 @@
         {
             "id": "standaloneObjectSUI150",
             "category": "object",
-            "owner": "SingleOwner(k#playerTwo)",
+            "owner": "SingleOwner(k#player2)",
             "version": "87",
             "readonly": "true",
             "objType": "0x2::Coin::Coin<0x2::SUI::SUI>",
@@ -488,7 +488,7 @@
         {
             "id": "CollectionObject",
             "category": "object",
-            "owner": "SingleOwner(k#playerTwo)",
+            "owner": "SingleOwner(k#player2)",
             "version": "2",
             "readonly": "false",
             "objType": "0x2::MystenUniverse::Collection",
