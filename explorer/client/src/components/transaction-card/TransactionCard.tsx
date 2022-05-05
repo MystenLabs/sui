@@ -143,6 +143,7 @@ function formatByTransactionKind(
                 },
                 {
                     label: 'Package',
+                    category: 'objects',
                     value: moveCall.package[0],
                     link: true,
                 },
