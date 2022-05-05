@@ -63,7 +63,7 @@ You can find your wallet address by running:
 $ wallet active-address
 ```
 
-## Mint an example NFT
+### Mint an example NFT
 
 To create a Non-Fungible Token (NFT), run:
 ```shell
