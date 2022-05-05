@@ -11,7 +11,7 @@ use std::sync::Arc;
 use sui_network::{api::ValidatorClient, network::NetworkClient, tonic};
 use sui_types::{error::SuiError, messages::*};
 
-use sui_types::{messages_checkpoint::{CheckpointRequest, CheckpointResponse}};
+use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 
 #[cfg(test)]
 use sui_types::{
@@ -68,7 +68,6 @@ pub trait AuthorityAPI {
         &self,
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError>;
-
 }
 
 pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoResponseItem, SuiError>>;
@@ -197,7 +196,6 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map(tonic::Response::into_inner)
             .map_err(Into::into)
     }
-
 }
 
 #[derive(Clone, Copy, Default)]
@@ -310,11 +308,9 @@ impl AuthorityAPI for LocalAuthorityClient {
     async fn handle_checkpoint(
         &self,
         _request: CheckpointRequest,
-    ) -> Result<CheckpointResponse, SuiError>{
+    ) -> Result<CheckpointResponse, SuiError> {
         unimplemented!();
     }
-
-
 }
 
 impl LocalAuthorityClient {

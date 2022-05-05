@@ -23,7 +23,10 @@ use sui_types::{messages_checkpoint::CheckpointRequest,};
 
 
 use sui_types::{
-    crypto::VerificationObligation, error::*, messages::*, messages_checkpoint::{CheckpointRequest, CheckpointResponse},
+    crypto::VerificationObligation,
+    error::*,
+    messages::*,
+    messages_checkpoint::{CheckpointRequest, CheckpointResponse},
 };
 use tokio::{net::TcpListener, sync::mpsc::Sender};
 
@@ -318,8 +321,8 @@ impl Validator for AuthorityServer {
             let response = checkpoint
                 .handle_checkpoint_request(&request)
                 .map_err(|e| tonic::Status::internal(e.to_string()))?;
-    
-            return Ok(tonic::Response::new(response))
+
+            return Ok(tonic::Response::new(response));
         }
 
         Err(tonic::Status::internal("Unsupported".to_string()))

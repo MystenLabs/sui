@@ -570,7 +570,7 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
     async fn handle_checkpoint(
         &self,
         _request: CheckpointRequest,
-    ) -> Result<CheckpointResponse, SuiError>{
+    ) -> Result<CheckpointResponse, SuiError> {
         unimplemented!();
     }
 
@@ -696,7 +696,7 @@ impl AuthorityAPI for ByzantineAuthorityClient {
     async fn handle_checkpoint(
         &self,
         _request: CheckpointRequest,
-    ) -> Result<CheckpointResponse, SuiError>{
+    ) -> Result<CheckpointResponse, SuiError> {
         unimplemented!();
     }
 

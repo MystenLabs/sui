@@ -74,7 +74,7 @@ fn bootstrap() {
                 .output_type("sui_types::messages::TransactionInfoResponse")
                 .codec_path(codec_path)
                 .build(),
-        )        
+        )
         .method(
             Method::builder()
                 .name("checkpoint")

@@ -372,7 +372,7 @@ where
     async fn handle_checkpoint(
         &self,
         _request: CheckpointRequest,
-    ) -> Result<CheckpointResponse, SuiError>{
+    ) -> Result<CheckpointResponse, SuiError> {
         unimplemented!();
     }
 
