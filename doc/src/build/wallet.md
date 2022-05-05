@@ -14,27 +14,29 @@ Follow the instructions to [install Sui binaries](install.md#binaries).
 
 ## Connect to DevNet
 We are hosting a public DevNet for the community to experiment with our 
-tech and help to shape the future of Sui network. To connect the wallet 
+tech and help to shape the future of the Sui network. To connect the wallet 
 client to the DevNet, run the following command:
 ```shell
 $ wallet
 ```
 The wallet will print the following line if the wallet is starting up the 
-first time. (if you have used the wallet before with a local network, 
-follow [here](#manually-changing-the-gateway-url) to change the config for DevNet.)
+first time.
 ```shell
-Config file ["/Users/dir/.sui/sui_config/wallet.conf"] doesn't exist, do you want to connect to a Sui Gateway [yn]?
+Config file ["/Users/dir/.sui/sui_config/wallet.conf"] doesn't exist, do you want to connect to a Sui Gateway [y/n]?
 ```
-Type 'y' and then press 'Enter'. You should see the following output.
+Type 'y' and then press 'Enter'. You should see the following output:
 ```shell
 Sui Gateway Url (Default to Sui DevNet if not specified) : 
 ```
 The wallet will prompt for the Gateway URL, press 'Enter' and it will default to the DevNet, 
 or enter the URL if you want to connect to a Gateway hosted elsewhere.
 
-### Manually changing the Gateway URL
-If you have use the wallet before, you will have an existing `wallet.conf`.
-You can change the configured Gateway URL to DevNet by using:
+If you have used the wallet before with a local network, follow the next section to
+[manually change the Gateway URL](#manually-change-the-gateway-url) to DevNet.
+
+### Manually change the Gateway URL
+If you have used the wallet before, you will have an existing `wallet.conf` configuration
+file. Change the configured Gateway URL to DevNet by using:
 ```shell
 $ wallet switch --gateway http://gateway.devnet.sui.io:9000
 ```
@@ -335,7 +337,7 @@ In order to see what the current active address is, use the command `active-addr
 $ wallet active-address
 ```
 
-Which will reveal and address resembing:
+Which will reveal an address resembing:
 
 ```shell
 562F07CF6369E8D22DBF226A5BFEDC6300014837
@@ -347,7 +349,7 @@ Changing the default address is as easy as calling the `switch` command:
 $ wallet switch --address 913CF36F370613ED131868AC6F9DA2420166062E
 ```
 
-You will see out like:
+You will see output like:
 
 ```shell
 Active address switched to 913CF36F370613ED131868AC6F9DA2420166062E
