@@ -10,7 +10,7 @@ Welcome to the beginnings of the Sui DevNet. It exists now to gain operational e
 
 Many improvements to the Sui DevNet are underway, such as the ability to run full nodes and use a browser-based wallet. See the [Sui DevNet blog post](https://medium.com/mysten-labs) announcement for full details on upcoming features.
 
-## Purpose
+## Components
 
 DevNet deployment features the following components of the Sui blockchain:
 
@@ -111,7 +111,7 @@ See the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/explor
 
 ### Publish a Move module
 
-Publish a sample Move package containing code developed in [Sui Move tutorial](../build/move.md#writing-a-package) as follows (assuming you installed the source code in `~sui` as advised in set up):
+Publish a sample Move package containing code developed in the [Sui Move tutorial](../build/move.md#writing-a-package) as follows (assuming you installed the source code in `~sui` as advised in set up):
 ```shell
 $ wallet publish --path ~sui/sui_programmability/tutorial --gas-budget 30000
 ```
