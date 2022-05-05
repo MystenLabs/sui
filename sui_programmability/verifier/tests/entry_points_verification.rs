@@ -361,7 +361,7 @@ fn single_template_vector_param_key() {
     }
 
     it's a valid entry function and verification should FAIL due to
-    missing Key abilty on the vector's generic type
+    missing Key ability on the vector's generic type
     */
     let (mut builder, _) = ModuleBuilder::default();
 

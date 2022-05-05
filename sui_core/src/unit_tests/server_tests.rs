@@ -52,7 +52,7 @@ async fn test_start_stop_batch_subsystem() {
 
     // This should return immediately.
     join.await
-        .expect("Error stoping subsystem")
+        .expect("Error stopping subsystem")
         .expect("Subsystem crashed?");
 }
 
@@ -247,7 +247,7 @@ async fn test_subscription() {
     let inner_server2 = state.clone();
 
     loop {
-        // Send a trasnaction
+        // Send a transaction
         let ticket = inner_server2.batch_notifier.ticket().expect("all good");
         db3.executed_sequence
             .insert(&ticket.seq(), &tx_zero)
