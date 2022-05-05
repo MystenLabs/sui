@@ -5,23 +5,23 @@
 }
 
 .ownedobjects {
-    @apply w-[100%] lg:flex lg:justify-items-center lg:flex-wrap;
-}
-
-.ownedobjects > div {
-    @apply mx-auto break-all lg:w-[20vw];
+    @apply w-[100%] lg:flex lg:flex-wrap lg:justify-between;
 }
 
 .groupcollection > div {
     @apply border-solid border-stone-300 rounded-lg my-2 p-2 cursor-pointer hover:shadow-md;
 }
 
+.fillerbox {
+    @apply invisible;
+}
+
 .objectbox {
-    @apply border-solid border-stone-300 rounded-lg my-2 p-[0.25vw] lg:w-[23vw] lg:self-center hover:shadow-md cursor-pointer;
+    @apply border-solid border-stone-300 rounded-lg my-2 lg:self-center hover:shadow-md cursor-pointer break-all lg:w-[20vw];
 }
 
 .objectbox > div {
-    @apply pt-2 pl-2;
+    @apply pt-2 pl-2 pr-1;
 }
 
 .objectbox > div:first-child > div {
