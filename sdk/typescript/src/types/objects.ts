@@ -15,7 +15,8 @@ export type ObjectContentField =
   | string
   | boolean
   | number
-  | number[];
+  | number[]
+  | ObjectContent[];
 
 export type ObjectContentFields = Record<string, ObjectContentField>;
 

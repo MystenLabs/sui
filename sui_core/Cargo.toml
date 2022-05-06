@@ -54,6 +54,7 @@ serde_yaml = "0.8.23"
 pretty_assertions = "1.2.1"
 temp_testdir = "0.2.3"
 hex = "0.4.3"
+tracing-test = "0.2.1"
 
 test_utils = { path = "../test_utils" }
 

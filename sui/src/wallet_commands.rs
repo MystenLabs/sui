@@ -26,6 +26,8 @@ use sui_core::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValu
 use sui_framework::build_move_package_to_bytes;
 use sui_types::{
     base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress},
+    error::SuiError,
+    fp_ensure,
     gas_coin::GasCoin,
     messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects},
     object::{Object, ObjectRead, ObjectRead::Exists},
@@ -641,17 +643,13 @@ impl WalletContext {
         budget: u64,
         forbidden_gas_objects: BTreeSet<ObjectID>,
     ) -> Result<(u64, Object), anyhow::Error> {
-        // Make sure we don't use locked gas objects
-        let mut forbidden_gas_objects = forbidden_gas_objects.clone();
-        forbidden_gas_objects.extend(self.gateway.get_locked_objects()?.iter().map(|w| w.0 .0));
-
         for o in self.gas_objects(address).await.unwrap() {
             if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.id()) {
                 return Ok(o);
             }
         }
         return Err(anyhow!(
-            "No available gas objects found with value >= budget {}",
+            "No non-argument gas objects found with value >= budget {}",
             budget
         ));
     }
@@ -791,9 +789,19 @@ async fn call_move(
         .read()
         .unwrap()
         .sign(&sender, &data.to_bytes())?;
+    let transaction = Transaction::new(data, signature);
+    // Shared objects are not yet supported end-to-end.
+    // Disabling it by default at the moment. However we could still use it
+    // if we pass environment variable SHARED to the wallet.
+    if std::env::var("SHARED").is_err() {
+        fp_ensure!(
+            !transaction.contains_shared_object(),
+            SuiError::UnsupportedSharedObjectError.into()
+        );
+    }
     let (cert, effects) = context
         .gateway
-        .execute_transaction(Transaction::new(data, signature))
+        .execute_transaction(transaction)
         .await?
         .to_effect_response()?;
 
@@ -828,9 +836,9 @@ impl Debug for WalletCommandResult {
             WalletCommandResult::Object(object_read) => {
                 let object = object_read.object()?;
                 let layout = object_read.layout()?;
-                Ok(object.to_json(layout)?.to_string())
+                Ok(serde_json::to_string_pretty(&object.to_json(layout)?)?)
             }
-            _ => Ok(serde_json::to_string(self)?),
+            _ => Ok(serde_json::to_string_pretty(self)?),
         });
         write!(f, "{}", s)
     }

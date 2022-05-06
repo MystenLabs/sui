@@ -55,6 +55,15 @@ function Longtext({
         navigateWithUnknown(text, navigate).then(() => setPleaseWait(false));
     }, [text, navigate]);
 
+    // temporary hack to make display of the genesis transaction clearer
+    if (
+        category === 'transactions' &&
+        text === 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+    ) {
+        text = 'Genesis';
+        isLink = false;
+    }
+
     let textComponent;
     if (isLink) {
         if (category === 'unknown') {

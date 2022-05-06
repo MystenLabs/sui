@@ -4,14 +4,15 @@
 import type { ObjectExistsInfo } from 'sui.js';
 
 export function parseImageURL(data: any): string {
-    if (data?.contents?.url?.fields) {
-        return data.contents.url.fields['url'];
-    }
-    // TODO: Remove Legacy format
-    if (data?.contents?.display) {
-        return data.contents.display;
-    }
-    return '';
+    return (
+        //Render Image for Preview Cards
+        data?.contents?.fields?.url?.fields?.url ||
+        //Render Image for Object Results
+        data?.contents?.url?.fields?.url ||
+        // TODO: Remove Legacy format
+        data?.contents?.display ||
+        ''
+    );
 }
 
 export function parseObjectType(data: ObjectExistsInfo): string {

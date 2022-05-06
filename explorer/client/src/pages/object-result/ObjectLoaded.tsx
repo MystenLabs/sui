@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
@@ -183,6 +183,14 @@ function ObjectLoaded({ data }: { data: DataType }) {
         .filter(([key, _]) => !/name/i.test(key))
         .filter(([_, value]) => checkIsPropertyType(value));
 
+    const descriptionTitle =
+        data.objType === 'Move Package' ? 'Package Description' : 'Description';
+
+    const detailsTitle =
+        data.objType === 'Move Package'
+            ? 'Disassembled Bytecode'
+            : 'Properties';
+
     return (
         <>
             <div className={styles.resultbox}>
@@ -206,7 +214,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                         className={styles.clickableheader}
                         onClick={clickSetShowDescription}
                     >
-                        Description {showDescription ? '' : '+'}
+                        {descriptionTitle} {showDescription ? '' : '+'}
                     </h2>
                     {showDescription && (
                         <div
@@ -223,12 +231,23 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     />
                                 </div>
                             </div>
+                            {data.data?.tx_digest && (
+                                <div>
+                                    <div>Last Transaction ID</div>
+                                    <div id="transactionID">
+                                        <Longtext
+                                            text={data.data?.tx_digest}
+                                            category="transactions"
+                                            isLink={true}
+                                        />
+                                    </div>
+                                </div>
+                            )}
 
                             <div>
                                 <div>Version</div>
                                 <div>{data.version}</div>
                             </div>
-
                             {data.readonly && (
                                 <div>
                                     <div>Read Only?</div>
@@ -249,27 +268,32 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     )}
                                 </div>
                             )}
-
                             <div>
                                 <div>Type</div>
-                                <div>{prepObjTypeValue(data.objType)}</div>
-                            </div>
-                            <div>
-                                <div>Owner</div>
-                                <div id="owner">
-                                    <Longtext
-                                        text={extractOwnerData(data.owner)}
-                                        category="unknown"
-                                        // TODO: make this more elegant
-                                        isLink={
-                                            extractOwnerData(data.owner) !==
-                                                'Immutable' &&
-                                            extractOwnerData(data.owner) !==
-                                                'Shared'
-                                        }
-                                    />
+                                <div>
+                                    {data.objType === 'Move Package'
+                                        ? 'Library'
+                                        : prepObjTypeValue(data.objType)}
                                 </div>
                             </div>
+                            {data.objType !== 'Move Package' && (
+                                <div>
+                                    <div>Owner</div>
+                                    <div id="owner">
+                                        <Longtext
+                                            text={extractOwnerData(data.owner)}
+                                            category="unknown"
+                                            // TODO: make this more elegant
+                                            isLink={
+                                                extractOwnerData(data.owner) !==
+                                                    'Immutable' &&
+                                                extractOwnerData(data.owner) !==
+                                                    'Shared'
+                                            }
+                                        />
+                                    </div>
+                                </div>
+                            )}
                             {data.contract_id && (
                                 <div>
                                     <div>Contract ID</div>
@@ -280,7 +304,6 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     />
                                 </div>
                             )}
-
                             {data.ethAddress && (
                                 <div>
                                     <div>Ethereum Contract Address</div>
@@ -307,13 +330,13 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             )}
                         </div>
                     )}
-                    {properties.length > 0 && (
+                    {properties.length > 0 && data.objType !== 'Move Package' && (
                         <>
                             <h2
                                 className={styles.clickableheader}
                                 onClick={clickSetShowProperties}
                             >
-                                Properties {showProperties ? '' : '+'}
+                                {detailsTitle} {showProperties ? '' : '+'}
                             </h2>
                             {showProperties && (
                                 <div className={styles.propertybox}>
@@ -327,13 +350,38 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             )}
                         </>
                     )}
-                    <h2
-                        className={styles.clickableheader}
-                        onClick={clickSetShowConnectedEntities}
-                    >
-                        Owned Objects {showConnectedEntities ? '' : '+'}
-                    </h2>
-                    {showConnectedEntities && <OwnedObjects id={data.id} />}
+                    {}
+                    {data.objType !== 'Move Package' ? (
+                        <h2
+                            className={styles.clickableheader}
+                            onClick={clickSetShowConnectedEntities}
+                        >
+                            Child Objects {showConnectedEntities ? '' : '+'}
+                        </h2>
+                    ) : (
+                        <div>
+                            <h2
+                                className={styles.clickableheader}
+                                onClick={clickSetShowProperties}
+                            >
+                                Modules {showProperties ? '' : '+'}
+                            </h2>
+                            {showProperties && (
+                                <div className={styles.bytecodebox}>
+                                    {properties.map(([key, value], index) => (
+                                        <div key={`property-${index}`}>
+                                            <div>{prepLabel(key)}</div>
+                                            <div>{value}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    {showConnectedEntities &&
+                        data.objType !== 'Move Package' && (
+                            <OwnedObjects id={data.id} />
+                        )}
                 </div>
             </div>
         </>

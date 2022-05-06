@@ -6,26 +6,90 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
+use tonic_build::manual::{Builder, Method, Service};
 
 type Result<T> = ::std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 #[test]
 fn bootstrap() {
-    let proto_files = &["proto/validator.proto", "proto/common.proto"];
-    let dirs = &["proto"];
-
     let out_dir = PathBuf::from(std::env!("CARGO_MANIFEST_DIR"))
         .join("src")
         .join("generated");
+    let codec_path = "crate::codec::BincodeCodec";
 
-    // Use `Bytes` instead of `Vec<u8>` for bytes fields
-    let mut config = prost_build::Config::new();
-    config.bytes(&["."]);
+    let validator_service = Service::builder()
+        .name("Validator")
+        .package("sui.validator")
+        .comment("The Validator interface")
+        .method(
+            Method::builder()
+                .name("transaction")
+                .route_name("Transaction")
+                .input_type("sui_types::messages::Transaction")
+                .output_type("sui_types::messages::TransactionInfoResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            Method::builder()
+                .name("confirmation_transaction")
+                .route_name("ConfirmationTransaction")
+                .input_type("sui_types::messages::CertifiedTransaction")
+                .output_type("sui_types::messages::TransactionInfoResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            Method::builder()
+                .name("consensus_transaction")
+                .route_name("ConsensusTransaction")
+                .input_type("sui_types::messages::ConsensusTransaction")
+                .output_type("sui_types::messages::TransactionInfoResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            Method::builder()
+                .name("account_info")
+                .route_name("AccountInfo")
+                .input_type("sui_types::messages::AccountInfoRequest")
+                .output_type("sui_types::messages::AccountInfoResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            Method::builder()
+                .name("object_info")
+                .route_name("ObjectInfo")
+                .input_type("sui_types::messages::ObjectInfoRequest")
+                .output_type("sui_types::messages::ObjectInfoResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            Method::builder()
+                .name("transaction_info")
+                .route_name("TransactionInfo")
+                .input_type("sui_types::messages::TransactionInfoRequest")
+                .output_type("sui_types::messages::TransactionInfoResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            Method::builder()
+                .name("batch_info")
+                .route_name("BatchInfo")
+                .input_type("sui_types::messages::BatchInfoRequest")
+                .output_type("sui_types::messages::BatchInfoResponseItem")
+                .server_streaming()
+                .codec_path(codec_path)
+                .build(),
+        )
+        .build();
 
-    tonic_build::configure()
-        .out_dir(format!("{}", out_dir.display()))
-        .compile_with_config(config, proto_files, dirs)
-        .unwrap();
+    Builder::new()
+        .out_dir(&out_dir)
+        .compile(&[validator_service]);
 
     prepend_license(&out_dir).unwrap();
 

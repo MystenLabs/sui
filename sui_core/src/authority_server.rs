@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use futures::{stream::BoxStream, FutureExt, TryStreamExt};
 use std::{io, net::SocketAddr, sync::Arc, time::Duration};
 use sui_network::{
-    api::{BincodeEncodedPayload, Validator, ValidatorServer},
+    api::{Validator, ValidatorServer},
     network::NetworkServer,
     tonic,
 };
@@ -145,12 +145,9 @@ impl AuthorityServer {
 impl Validator for AuthorityServer {
     async fn transaction(
         &self,
-        request: tonic::Request<BincodeEncodedPayload>,
-    ) -> Result<tonic::Response<BincodeEncodedPayload>, tonic::Status> {
-        let mut transaction: Transaction = request
-            .into_inner()
-            .deserialize()
-            .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
+        request: tonic::Request<Transaction>,
+    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+        let mut transaction = request.into_inner();
 
         let mut obligation = VerificationObligation::default();
         transaction
@@ -178,20 +175,14 @@ impl Validator for AuthorityServer {
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        let payload = BincodeEncodedPayload::try_from(&info)
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        Ok(tonic::Response::new(payload))
+        Ok(tonic::Response::new(info))
     }
 
     async fn confirmation_transaction(
         &self,
-        request: tonic::Request<BincodeEncodedPayload>,
-    ) -> Result<tonic::Response<BincodeEncodedPayload>, tonic::Status> {
-        let mut transaction: CertifiedTransaction = request
-            .into_inner()
-            .deserialize()
-            .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
+        request: tonic::Request<CertifiedTransaction>,
+    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+        let mut transaction = request.into_inner();
 
         let mut obligation = VerificationObligation::default();
         transaction
@@ -221,20 +212,14 @@ impl Validator for AuthorityServer {
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        let payload = BincodeEncodedPayload::try_from(&info)
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        Ok(tonic::Response::new(payload))
+        Ok(tonic::Response::new(info))
     }
 
     async fn consensus_transaction(
         &self,
-        request: tonic::Request<BincodeEncodedPayload>,
-    ) -> Result<tonic::Response<BincodeEncodedPayload>, tonic::Status> {
-        let transaction: ConsensusTransaction = request
-            .into_inner()
-            .deserialize()
-            .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
+        request: tonic::Request<ConsensusTransaction>,
+    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+        let transaction = request.into_inner();
 
         let info = self
             .consensus_adapter
@@ -242,20 +227,14 @@ impl Validator for AuthorityServer {
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        let payload = BincodeEncodedPayload::try_from(&info)
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        Ok(tonic::Response::new(payload))
+        Ok(tonic::Response::new(info))
     }
 
     async fn account_info(
         &self,
-        request: tonic::Request<BincodeEncodedPayload>,
-    ) -> Result<tonic::Response<BincodeEncodedPayload>, tonic::Status> {
-        let request: AccountInfoRequest = request
-            .into_inner()
-            .deserialize()
-            .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
+        request: tonic::Request<AccountInfoRequest>,
+    ) -> Result<tonic::Response<AccountInfoResponse>, tonic::Status> {
+        let request = request.into_inner();
 
         let response = self
             .state
@@ -263,20 +242,14 @@ impl Validator for AuthorityServer {
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        let payload = BincodeEncodedPayload::try_from(&response)
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        Ok(tonic::Response::new(payload))
+        Ok(tonic::Response::new(response))
     }
 
     async fn object_info(
         &self,
-        request: tonic::Request<BincodeEncodedPayload>,
-    ) -> Result<tonic::Response<BincodeEncodedPayload>, tonic::Status> {
-        let request: ObjectInfoRequest = request
-            .into_inner()
-            .deserialize()
-            .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
+        request: tonic::Request<ObjectInfoRequest>,
+    ) -> Result<tonic::Response<ObjectInfoResponse>, tonic::Status> {
+        let request = request.into_inner();
 
         let response = self
             .state
@@ -284,20 +257,14 @@ impl Validator for AuthorityServer {
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        let payload = BincodeEncodedPayload::try_from(&response)
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        Ok(tonic::Response::new(payload))
+        Ok(tonic::Response::new(response))
     }
 
     async fn transaction_info(
         &self,
-        request: tonic::Request<BincodeEncodedPayload>,
-    ) -> Result<tonic::Response<BincodeEncodedPayload>, tonic::Status> {
-        let request: TransactionInfoRequest = request
-            .into_inner()
-            .deserialize()
-            .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
+        request: tonic::Request<TransactionInfoRequest>,
+    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+        let request = request.into_inner();
 
         let response = self
             .state
@@ -305,22 +272,16 @@ impl Validator for AuthorityServer {
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        let payload = BincodeEncodedPayload::try_from(&response)
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        Ok(tonic::Response::new(payload))
+        Ok(tonic::Response::new(response))
     }
 
-    type BatchInfoStream = BoxStream<'static, Result<BincodeEncodedPayload, tonic::Status>>;
+    type BatchInfoStream = BoxStream<'static, Result<BatchInfoResponseItem, tonic::Status>>;
 
     async fn batch_info(
         &self,
-        request: tonic::Request<BincodeEncodedPayload>,
+        request: tonic::Request<BatchInfoRequest>,
     ) -> Result<tonic::Response<Self::BatchInfoStream>, tonic::Status> {
-        let request: BatchInfoRequest = request
-            .into_inner()
-            .deserialize()
-            .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
+        let request = request.into_inner();
 
         let xstream = self
             .state
@@ -328,14 +289,7 @@ impl Validator for AuthorityServer {
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        let response =
-            // items
-            // .chain(subscriber)
-            xstream
-            .map_err(|e| tonic::Status::internal(e.to_string()))
-            .map_ok(|item| {
-                BincodeEncodedPayload::try_from(&item).expect("serialization should not fail")
-            });
+        let response = xstream.map_err(|e| tonic::Status::internal(e.to_string()));
 
         Ok(tonic::Response::new(Box::pin(response)))
     }
