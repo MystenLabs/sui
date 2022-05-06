@@ -12,7 +12,11 @@ import {
     findDataFromID,
     findOwnedObjectsfromID,
 } from '../../utils/static/searchUtil';
-import { processDisplayValue, trimStdLibPrefix } from '../../utils/stringUtils';
+import {
+    handleCoinType,
+    processDisplayValue,
+    trimStdLibPrefix,
+} from '../../utils/stringUtils';
 import DisplayBox from '../displaybox/DisplayBox';
 
 import styles from './OwnedObjects.module.css';
@@ -180,7 +184,7 @@ function GroupView({ results }: { results: resultType }) {
                             <div>
                                 <div>
                                     <span>Type</span>
-                                    <span>{trimStdLibPrefix(typeV)}</span>
+                                    <span>{handleCoinType(typeV)}</span>
                                 </div>
                                 <div>
                                     <span>Balance</span>
@@ -213,7 +217,7 @@ function GroupView({ results }: { results: resultType }) {
             <div>
                 <div className={styles.paginationheading}>
                     <button onClick={goBack}>&#60; Back</button>
-                    <h2>{trimStdLibPrefix(subObjs[0].Type)}</h2>
+                    <h2>{handleCoinType(subObjs[0].Type)}</h2>
                 </div>
                 <OwnedObjectSection results={subObjs} />
             </div>

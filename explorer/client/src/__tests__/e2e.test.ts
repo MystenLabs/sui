@@ -487,7 +487,7 @@ describe('End-to-end Tests', () => {
                     '#groupCollection > div:nth-child(1) > div > div:nth-child(1)',
                     (el: any) => el.textContent
                 )
-            ).toBe('TypeCoin::Coin<0x2::USD::USD>');
+            ).toBe('Type0x2::USD::USD');
 
             expect(
                 await page.$eval(
@@ -501,7 +501,7 @@ describe('End-to-end Tests', () => {
                     '#groupCollection > div:nth-child(2) > div > div:nth-child(1)',
                     (el: any) => el.textContent
                 )
-            ).toBe('TypeCoin::Coin<0x2::SUI::SUI>');
+            ).toBe('TypeSUI');
 
             expect(
                 await page.$eval(
