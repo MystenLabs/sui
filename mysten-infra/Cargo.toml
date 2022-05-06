@@ -1,11 +1,11 @@
 [workspace]
 members = [
-    "component",
+    "crates/component",
+    "crates/name-variant",
+    "crates/rccheck",
+    "crates/telemetry-subscribers",
+    "crates/typed-store",
     "crates/x",
-    "name-variant",
-    "rccheck",
-    "telemetry-subscribers",
-    "typed-store",
 ]
 
 [profile.release]
