@@ -6,7 +6,7 @@ Generates methods to print an enum variant's  name as a string.
 
 ```rust
  use name_variant::NamedVariant;
- 
+
  #[derive(NamedVariant)]
  enum TestEnum {
      A,
@@ -15,17 +15,17 @@ Generates methods to print an enum variant's  name as a string.
      D { _name: String, _age: i32 },
      VariantTest,
  }
- 
+
  fn main() {
      let x = TestEnum::C(1, 2);
      assert_eq!(x.variant_name(), "C");
- 
+
      let x = TestEnum::A;
      assert_eq!(x.variant_name(), "A");
- 
+
      let x = TestEnum::B();
      assert_eq!(x.variant_name(), "B");
- 
+
      let x = TestEnum::D {_name: "Jane Doe".into(), _age: 30 };
      assert_eq!(x.variant_name(), "D");
 
