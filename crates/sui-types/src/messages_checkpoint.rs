@@ -1,10 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use crate::crypto::Signable;
-use crate::waypoint::Waypoint;
+use crate::messages::CertifiedTransaction;
+use crate::waypoint::{Waypoint, WaypointDiff};
 use crate::{
     base_types::{AuthorityName, TransactionDigest},
     committee::Committee,
@@ -399,6 +400,15 @@ impl CheckpointContents {
     pub fn digest(&self) -> [u8; 32] {
         sha3_hash(self)
     }
+}
+
+// The construction of checkpoints is based on the aggregation of fragments.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckpointFragment {
+    pub proposer: SignedCheckpointProposal,
+    pub other: SignedCheckpointProposal,
+    pub diff: WaypointDiff<AuthorityName, TransactionDigest>,
+    pub certs: Option<BTreeMap<TransactionDigest, CertifiedTransaction>>,
 }
 
 #[cfg(test)]

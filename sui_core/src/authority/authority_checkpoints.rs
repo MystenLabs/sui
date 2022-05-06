@@ -12,8 +12,8 @@ use sui_types::{
     error::SuiError,
     messages_checkpoint::{
         AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpoint, CheckpointContents,
-        CheckpointRequest, CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
-        CheckpointSummary, SignedCheckpoint, SignedCheckpointProposal,
+        CheckpointFragment, CheckpointRequest, CheckpointRequestType, CheckpointResponse,
+        CheckpointSequenceNumber, CheckpointSummary, SignedCheckpoint, SignedCheckpointProposal,
     },
     waypoint::WaypointDiff,
 };
@@ -80,10 +80,7 @@ impl CheckpointProposal {
     /// TODO: down the line we can include other methods to get diffs
     /// line MerkleTrees or IBLT filters that do not require O(n) download
     /// of both proposals.
-    pub fn diff_with(
-        &self,
-        other_proposal: &CheckpointProposal,
-    ) -> WaypointDiff<AuthorityName, TransactionDigest> {
+    pub fn diff_with(&self, other_proposal: &CheckpointProposal) -> CheckpointFragment {
         let all_elements = self
             .transactions()
             .chain(other_proposal.transactions.transactions.iter())
@@ -94,14 +91,21 @@ impl CheckpointProposal {
         let other_transactions = other_proposal.transactions().collect();
         let iter_missing_ot = all_elements.difference(&other_transactions).map(|x| **x);
 
-        WaypointDiff::new(
+        let diff = WaypointDiff::new(
             *self.name(),
             *self.checkpoint().waypoint.clone(),
             iter_missing_me,
             *other_proposal.name(),
             *other_proposal.checkpoint().waypoint.clone(),
             iter_missing_ot,
-        )
+        );
+
+        CheckpointFragment {
+            proposer: self.proposal.clone(),
+            other: other_proposal.proposal.clone(),
+            diff,
+            certs: None,
+        }
     }
 }
 
@@ -156,6 +160,12 @@ pub struct CheckpointStore {
 
     /// The list of checkpoint, along with their authentication information
     pub checkpoints: DBMap<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
+
+    /// Store the fragments received in order, the counter is purely internal,
+    /// to allow us to provide a list in order they were received. We only store
+    /// the fragments that are relevant to the next checkpoints. Past checkpoints
+    /// already contain all relevant information from previous checkpoints.
+    pub fragments: DBMap<usize, CheckpointFragment>,
 
     /// The local sequence at which the proposal for the next checkpoint is created
     /// This is a sequence number containing all unprocessed trasnactions lower than
@@ -263,6 +273,7 @@ impl CheckpointStore {
                 ("unprocessed_transactions", &point_lookup),
                 ("extra_transactions", &point_lookup),
                 ("checkpoints", &point_lookup),
+                ("fragments", &options),
                 ("locals", &point_lookup),
             ],
         )
@@ -274,6 +285,7 @@ impl CheckpointStore {
             unprocessed_transactions,
             extra_transactions,
             checkpoints,
+            fragments,
             locals,
         ) = reopen! (
             &db,
@@ -282,6 +294,7 @@ impl CheckpointStore {
             "unprocessed_transactions";<TransactionDigest,CheckpointSequenceNumber>,
             "extra_transactions";<TransactionDigest,TxSequenceNumber>,
             "checkpoints";<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
+            "fragments";<usize, CheckpointFragment>,
             "locals";<DBLabel, CheckpointLocals>
         );
 
@@ -294,6 +307,7 @@ impl CheckpointStore {
             unprocessed_transactions,
             extra_transactions,
             checkpoints,
+            fragments,
             memory_locals: ArcSwapOption::from(None),
             locals,
         };

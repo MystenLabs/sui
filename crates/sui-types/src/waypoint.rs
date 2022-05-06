@@ -98,11 +98,11 @@ impl Waypoint {
     of checkpoints.
 */
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WaypointWithItems<K, I>
 where
     K: Clone,
-    I:,
+    I: Ord,
 {
     pub key: K,
     pub waypoint: Waypoint,
@@ -143,7 +143,7 @@ where
     Represents the difference between two waypoints
     and elements that make up this difference.
 */
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WaypointDiff<K, I>
 where
     K: Clone,
@@ -386,7 +386,7 @@ where
     /// to catch up with the checkpoint (and maybe surpass it).
     pub fn checkpoint_items(
         &self,
-        diff: WaypointDiff<K, I>,
+        diff: &WaypointDiff<K, I>,
         mut own_proposal: BTreeSet<I>,
     ) -> Result<BTreeSet<I>, WaypointError> {
         // If the authority is one of the participants in the checkpoint
@@ -405,7 +405,7 @@ where
         }
 
         // Union of items, to catch up with second
-        own_proposal.extend(diff.first.items);
+        own_proposal.extend(diff.first.items.clone());
         // Remove items not in second
         let mut second_items: BTreeSet<I> = own_proposal
             .difference(&diff.second.items)

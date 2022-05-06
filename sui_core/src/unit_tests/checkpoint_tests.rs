@@ -265,18 +265,18 @@ fn make_diffs() {
     let diff23 = p2.diff_with(&p3);
 
     let mut global = GlobalCheckpoint::<AuthorityName, TransactionDigest>::new(0);
-    global.insert(diff12.clone()).unwrap();
-    global.insert(diff23).unwrap();
+    global.insert(diff12.diff.clone()).unwrap();
+    global.insert(diff23.diff).unwrap();
 
     // P4 proposal not selected
     let diff41 = p4.diff_with(&p1);
     let all_items4 = global
-        .checkpoint_items(diff41, p4.transactions().cloned().collect())
+        .checkpoint_items(&diff41.diff, p4.transactions().cloned().collect())
         .unwrap();
 
     // P1 proposal selected
     let all_items1 = global
-        .checkpoint_items(diff12, p1.transactions().cloned().collect())
+        .checkpoint_items(&diff12.diff, p1.transactions().cloned().collect())
         .unwrap();
 
     // All get the same set for the proposal
@@ -800,7 +800,7 @@ async fn test_batch_to_checkpointing() {
     _join.await.expect("No errors in task").expect("ok");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_batch_to_checkpointing_init_crash() {
     // Create a random directory to store the DB
     let dir = env::temp_dir();
@@ -846,6 +846,10 @@ async fn test_batch_to_checkpointing_init_crash() {
                 .run_batch_service(1000, Duration::from_millis(500))
                 .await
         });
+
+        tokio::time::advance(Duration::from_millis(10)).await;
+        tokio::task::yield_now().await;
+
         // Send transactions out of order
         let mut rx = authority_state.subscribe_batch();
 
@@ -875,10 +879,8 @@ async fn test_batch_to_checkpointing_init_crash() {
             rx.recv().await.unwrap(),
             UpdateItem::Transaction((2, _))
         ));
-        assert!(matches!(
-            rx.recv().await.unwrap(),
-            UpdateItem::Transaction((3, _))
-        ));
+        let v = rx.recv().await;
+        assert!(matches!(v.unwrap(), UpdateItem::Transaction((3, _))));
 
         // Then we (eventually) get a batch
         assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));

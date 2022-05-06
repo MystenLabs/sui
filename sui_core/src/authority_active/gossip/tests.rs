@@ -11,8 +11,8 @@ use crate::{
     authority_aggregator::authority_aggregator_tests::*, authority_client::NetworkAuthorityClient,
 };
 
-#[tokio::test]
-pub async fn test_gossip() {
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+pub async fn test_gossip_plain() {
     let (addr1, key1) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
@@ -42,10 +42,12 @@ pub async fn test_gossip() {
         });
     }
 
+    println!("All authorities started");
     // Let the helper tasks start
-    tokio::task::yield_now().await;
     tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::task::yield_now().await;
 
+    println!("Do transactions");
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(authority_clients[0], gas_object1.id()).await;
     let create1 =
@@ -58,13 +60,16 @@ pub async fn test_gossip() {
     // Get a cert
     let cert1 = extract_cert(&authority_clients, &aggregator.committee, create1.digest()).await;
 
+    println!("Submit cert");
     // Submit the cert to 1 authority.
     let _new_ref_1 = do_cert(authority_clients[0], &cert1).await.created[0].0;
 
+    println!("Wait for cert");
     tokio::time::sleep(Duration::from_secs(10)).await;
     let gas_ref_1 = get_latest_ref(authority_clients[3], gas_object1.id()).await;
     println!("Ref: {:?}", gas_ref_1);
 
+    println!("Check object");
     assert_eq!(gas_ref_1.1, SequenceNumber::from(1));
 }
 
