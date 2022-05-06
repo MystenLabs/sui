@@ -7,6 +7,6 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.52"
-nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "61421e7f5fe3a2ff5eb780aca7f5ef28c6bd9652" }
-nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "61421e7f5fe3a2ff5eb780aca7f5ef28c6bd9652" }
+nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "faf2796b3c9a750d0daf9d60e80c4d7bc5bbd8c6" }
+nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "faf2796b3c9a750d0daf9d60e80c4d7bc5bbd8c6" }
 clap = { version = "3.1.14", features = ["derive"] }

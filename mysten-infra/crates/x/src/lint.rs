@@ -24,18 +24,19 @@ pub fn run(args: Args) -> crate::Result<()> {
     let project_linters: &[&dyn ProjectLinter] = &[&DirectDepDups::new(&direct_dups_config)];
 
     let package_linters: &[&dyn PackageLinter] = &[
-        // &CrateNamesPaths,
+        &CrateNamesPaths,
         &IrrelevantBuildDeps,
         // This one seems to be broken
         //&UnpublishedPackagesOnlyUsePathDependencies::new(),
         &PublishedPackagesDontDependOnUnpublishedPackages,
         &OnlyPublishToCratesIo,
         &CratesInCratesDirectory,
+        // &CratesOnlyInCratesDirectory,
     ];
 
     let file_path_linters: &[&dyn FilePathLinter] = &[
         // &AllowedPaths::new(DEFAULT_ALLOWED_PATHS_REGEX)?
-        ];
+    ];
 
     // allow whitespace exceptions for markdown files
     // let whitespace_exceptions = build_exceptions(&["*.md".to_owned()])?;
