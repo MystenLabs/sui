@@ -1,5 +1,12 @@
 [workspace]
-members = ["typed-store", "rccheck", "name_variant", "component", "telemetry_subscribers"]
+members = [
+    "component",
+    "crates/x",
+    "name_variant",
+    "rccheck",
+    "telemetry_subscribers",
+    "typed-store",
+]
 
 [profile.release]
 codegen-units = 1
