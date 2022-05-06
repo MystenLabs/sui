@@ -484,28 +484,28 @@ describe('End-to-end Tests', () => {
 
             expect(
                 await page.$eval(
-                    '#groupCollection > div:nth-child(1) > div:nth-child(1)',
+                    '#groupCollection > div:nth-child(1) > div > div:nth-child(1)',
                     (el: any) => el.textContent
                 )
             ).toBe('TypeCoin::Coin<0x2::USD::USD>');
 
             expect(
                 await page.$eval(
-                    '#groupCollection > div:nth-child(1) > div:nth-child(2)',
+                    '#groupCollection > div:nth-child(1) > div > div:nth-child(2)',
                     (el: any) => el.textContent
                 )
             ).toBe('Balance300');
 
             expect(
                 await page.$eval(
-                    '#groupCollection > div:nth-child(2) > div:nth-child(1)',
+                    '#groupCollection > div:nth-child(2) > div > div:nth-child(1)',
                     (el: any) => el.textContent
                 )
             ).toBe('TypeCoin::Coin<0x2::SUI::SUI>');
 
             expect(
                 await page.$eval(
-                    '#groupCollection > div:nth-child(2) > div:nth-child(2)',
+                    '#groupCollection > div:nth-child(2) > div > div:nth-child(2)',
                     (el: any) => el.textContent
                 )
             ).toBe('Balance200');
