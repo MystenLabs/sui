@@ -1,0 +1,18 @@
+[package]
+name = "name-variant"
+version = "1.0.0"
+authors = ["Francois Garillot <francois@mystenlabs.com>"]
+edition = "2021"
+description = "Generates a method to name enum variants."
+license = "Apache-2.0"
+repository = "https://github.com/mysten_infra/name_variant"
+publish = false
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "1.0.86"
+quote = "1.0.15"
+proc-macro2 = "1.0.36"
+

@@ -31,7 +31,7 @@ pub fn run(args: Args) -> crate::Result<()> {
         &PublishedPackagesDontDependOnUnpublishedPackages,
         &OnlyPublishToCratesIo,
         &CratesInCratesDirectory,
-        // &CratesOnlyInCratesDirectory,
+        &CratesOnlyInCratesDirectory,
     ];
 
     let file_path_linters: &[&dyn FilePathLinter] = &[
