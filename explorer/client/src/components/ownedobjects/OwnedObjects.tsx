@@ -162,19 +162,22 @@ function GroupView({ results }: { results: resultType }) {
 
     const goBack = useCallback(() => setIsGroup(true), []);
 
+    const uniqueTypes = Array.from(new Set(results.map(({ Type }) => Type)));
+
     if (isGroup) {
         return (
-            <div id="groupCollection" className={styles.groupcollection}>
-                {Array.from(new Set(results.map(({ Type }) => Type))).map(
-                    (typeV) => {
-                        const subObjList = results.filter(
-                            ({ Type }) => Type === typeV
-                        );
-                        return (
-                            <div
-                                key={typeV}
-                                onClick={shrinkObjList(subObjList)}
-                            >
+            <div id="groupCollection" className={styles.ownedobjects}>
+                {uniqueTypes.map((typeV) => {
+                    const subObjList = results.filter(
+                        ({ Type }) => Type === typeV
+                    );
+                    return (
+                        <div
+                            key={typeV}
+                            onClick={shrinkObjList(subObjList)}
+                            className={styles.objectbox}
+                        >
+                            <div>
                                 <div>
                                     <span>Type</span>
                                     <span>{trimStdLibPrefix(typeV)}</span>
@@ -195,8 +198,13 @@ function GroupView({ results }: { results: resultType }) {
                                     </span>
                                 </div>
                             </div>
-                        );
-                    }
+                        </div>
+                    );
+                })}
+                {uniqueTypes.length % 3 === 2 && (
+                    <div
+                        className={`${styles.objectbox} ${styles.fillerbox}`}
+                    />
                 )}
             </div>
         );
