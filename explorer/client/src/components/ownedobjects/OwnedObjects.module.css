@@ -13,7 +13,7 @@
 }
 
 .objectbox {
-    @apply border-solid border-stone-300 rounded-lg my-2 lg:self-center hover:shadow-md cursor-pointer break-all lg:w-[20vw];
+    @apply border-solid border-stone-300 rounded-lg my-2 lg:self-center hover:shadow-md cursor-pointer break-all lg:w-[25vw];
 }
 
 .objectbox > div {
