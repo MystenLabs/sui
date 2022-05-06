@@ -2,9 +2,9 @@
 members = [
     "component",
     "crates/x",
-    "name_variant",
+    "name-variant",
     "rccheck",
-    "telemetry_subscribers",
+    "telemetry-subscribers",
     "typed-store",
 ]
 
