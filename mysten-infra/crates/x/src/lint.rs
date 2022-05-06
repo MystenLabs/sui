@@ -5,6 +5,7 @@ use clap::Parser;
 use nexlint::{prelude::*, NexLintContext};
 use nexlint_lints::{
     content::*,
+    file_path::{AllowedPaths, DEFAULT_ALLOWED_PATHS_REGEX},
     handle_lint_results,
     package::*,
     project::{DirectDepDups, DirectDepDupsConfig},
@@ -34,17 +35,15 @@ pub fn run(args: Args) -> crate::Result<()> {
         &CratesOnlyInCratesDirectory,
     ];
 
-    let file_path_linters: &[&dyn FilePathLinter] = &[
-        // &AllowedPaths::new(DEFAULT_ALLOWED_PATHS_REGEX)?
-    ];
+    let file_path_linters: &[&dyn FilePathLinter] =
+        &[&AllowedPaths::new(DEFAULT_ALLOWED_PATHS_REGEX)?];
 
-    // allow whitespace exceptions for markdown files
-    // let whitespace_exceptions = build_exceptions(&["*.md".to_owned()])?;
+    let whitespace_exceptions = build_exceptions(&[])?;
     let content_linters: &[&dyn ContentLinter] = &[
         &LicenseHeader::new(LICENSE_HEADER),
         &RootToml,
-        // &EofNewline::new(&whitespace_exceptions),
-        // &TrailingWhitespace::new(&whitespace_exceptions),
+        &EofNewline::new(&whitespace_exceptions),
+        &TrailingWhitespace::new(&whitespace_exceptions),
     ];
 
     let nexlint_context = NexLintContext::from_current_dir()?;
