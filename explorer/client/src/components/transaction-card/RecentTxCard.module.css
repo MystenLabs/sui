@@ -19,7 +19,7 @@ div.txcardgrid > div {
 }
 
 div.txcardgrid > div:first-child {
-    @apply w-full md:w-1/3;
+    @apply w-full md:w-1/4 lg:w-1/3;
 }
 
 .txlatestesults {
