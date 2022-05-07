@@ -4,6 +4,7 @@
 
 use crate::keystore::KeystoreType;
 use anyhow::bail;
+use std::time::Duration;
 use narwhal_config::{
     Authority, Committee as ConsensusCommittee, PrimaryAddresses, Stake, WorkerAddresses,
 };
@@ -14,7 +15,7 @@ use serde_with::{hex::Hex, serde_as};
 use std::{
     fmt::{Display, Formatter, Write},
     fs::{self, create_dir_all, File},
-    io::BufReader,
+    io::{self, BufReader},
     net::{SocketAddr, ToSocketAddrs},
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
@@ -26,6 +27,7 @@ use sui_types::{
     crypto::{get_key_pair, KeyPair, PublicKeyBytes},
 };
 use tracing::{info, log::trace};
+use backoff::{retry, ExponentialBackoffBuilder, Error};
 
 pub mod gateway;
 pub mod utils;
@@ -103,6 +105,24 @@ fn socket_addr_from_hostport(host: &str, port: u16) -> SocketAddr {
     addresses
         .next()
         .unwrap_or_else(|| panic!("Hostname/IP resolution failed for {host}"))
+}
+
+fn socket_addr_from_hostport_retry(host: &str, port: u16) -> SocketAddr {
+    let back_off = ExponentialBackoffBuilder::new()
+        .with_initial_interval(Duration::from_millis(100)) 
+        .with_multiplier(2.0)
+        .with_max_elapsed_time(Some(Duration::from_secs(30)))
+        .build();
+    let addr = retry(
+        back_off,
+        || {
+        info!("Trying to resolve {host}:{port}");
+        let mut addresses = format!("{host}:{port}")
+        .to_socket_addrs()
+        .map_err(Error::transient)?;
+    addresses.next().ok_or(Error::transient(io::Error::new(io::ErrorKind::Other, "Can't find addr".to_string())))
+    });
+    addr.unwrap()
 }
 
 // Custom deserializer with optional default fields
@@ -224,14 +244,14 @@ impl NetworkConfig {
                         .expect("Can't get narwhal public key");
                     info!("Resolving {}: {}:{}", name, &x.host, &x.port);
                     let primary = PrimaryAddresses {
-                        primary_to_primary: socket_addr_from_hostport(&x.host, x.port + 100),
-                        worker_to_primary: socket_addr_from_hostport(&x.host, x.port + 200),
+                        primary_to_primary: socket_addr_from_hostport_retry(&x.host, x.port + 100),
+                        worker_to_primary: socket_addr_from_hostport_retry(&x.host, x.port + 200),
                     };
                     info!("p2p: {}", primary.primary_to_primary);
                     info!("w2p: {}", primary.worker_to_primary);
                     
-                    let p2w = socket_addr_from_hostport(&x.host, x.port + 300);
-                    let w2w = socket_addr_from_hostport(&x.host, x.port + 400);
+                    let p2w = socket_addr_from_hostport_retry(&x.host, x.port + 300);
+                    let w2w = socket_addr_from_hostport_retry(&x.host, x.port + 400);
 
                     info!("p2w: {}", &p2w);
                     info!("txn: {}", &x.consensus_address);
