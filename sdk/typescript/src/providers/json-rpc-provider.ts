@@ -64,6 +64,24 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
+  async getObjectInfoBatch(
+    objectIds: string[]
+  ): Promise<GetObjectInfoResponse[]> {
+    const requests = objectIds.map(id => ({
+      method: 'sui_getObjectTypedInfo',
+      args: [id],
+    }));
+    try {
+      const responses = await this.client.batchRequestWithType(
+        requests,
+        isGetObjectInfoResponse
+      );
+      return responses.map(r => transformGetObjectInfoResponse(r));
+    } catch (err) {
+      throw new Error(`Error fetching object info: ${err} for id ${objectIds}`);
+    }
+  }
+
   // Transactions
   async getTransactionWithEffects(
     digest: TransactionDigest
@@ -79,6 +97,24 @@ export class JsonRpcProvider extends Provider {
       throw new Error(
         `Error getting transaction with effects: ${err} for digest ${digest}`
       );
+    }
+  }
+
+  async getTransactionWithEffectsBatch(
+    digests: TransactionDigest[]
+  ): Promise<TransactionEffectsResponse[]> {
+    const requests = digests.map(d => ({
+      method: 'sui_getTransaction',
+      args: [d],
+    }));
+    try {
+      return await this.client.batchRequestWithType(
+        requests,
+        isTransactionEffectsResponse
+      );
+    } catch (err) {
+      const list = digests.join(', ').substring(0, -2);
+      throw new Error(`Error getting transaction effects: ${err} for digests [${list}]`);
     }
   }
 

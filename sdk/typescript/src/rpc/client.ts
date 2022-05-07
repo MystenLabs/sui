@@ -10,6 +10,14 @@ import { isErrorResponse, isValidResponse } from './client.guard';
  */
 export type HttpHeaders = { [header: string]: string };
 
+/**
+ * @internal
+ */
+export type RpcParams = {
+  method: string;
+  args: Array<any>;
+};
+
 export class JsonRpcClient {
   private rpcClient: RpcClient;
 
@@ -75,6 +83,38 @@ export class JsonRpcClient {
   async request(method: string, args: Array<any>): Promise<any> {
     return new Promise((resolve, reject) => {
       this.rpcClient.request(method, args, (err: any, response: any) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(response);
+      });
+    });
+  }
+
+  async batchRequestWithType<T>(
+    requests: RpcParams[],
+    isT: (val: any) => val is T
+  ): Promise<T[]> {
+    const responses = await this.batchRequest(requests);
+    // TODO: supports other error modes such as throw or return
+    const validResponses = responses.filter(
+      (response: any) => isValidResponse(response) && isT(response.result)
+    );
+
+    return validResponses.map((response: ValidResponse) => response.result);
+  }
+
+  async batchRequest(requests: RpcParams[]): Promise<any> {
+    return new Promise((resolve, reject) => {
+      // Do nothing if requests is empty
+      if (requests.length === 0) resolve([]);
+
+      const batch = requests.map(params => {
+        return this.rpcClient.request(params.method, params.args);
+      });
+
+      this.rpcClient.request(batch, (err: any, response: any) => {
         if (err) {
           reject(err);
           return;

@@ -91,7 +91,7 @@ fn parse_argument_rec(s: &str) -> anyhow::Result<(SuiTransactionArg, &str)> {
         check_not_empty("object(", s)?;
         let (id, s) = split_alpha_numeric(s);
         let (id, _) = parse_address(id)
-            .ok_or_else(|| anyhow!("Exepected address after 'object(', got \"{}\"", s))?;
+            .ok_or_else(|| anyhow!("Expected address after 'object(', got \"{}\"", s))?;
         let s = eat(s, ')')?;
         (A::Object(id), s)
     } else if let Some(_s) = s.strip_prefix("x\"") {

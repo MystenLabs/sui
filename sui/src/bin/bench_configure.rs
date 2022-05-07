@@ -110,7 +110,7 @@ fn main() {
         accounts.push(account);
     }
 
-    // For each validator, fill in the account info inot genesis
+    // For each validator, fill in the account info into genesis
     for (i, (_, (_, kp))) in authorities.iter().zip(authority_keys.iter()).enumerate() {
         // Create and save the genesis configs for the validators
         let genesis_config = GenesisConfig {

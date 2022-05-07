@@ -73,9 +73,8 @@ function OwnedObjectAPI({ id }: { id: string }) {
     // getOwnedObjectRefs will need to return id, type and balance for each owned object
     useEffect(() => {
         rpc.getOwnedObjectRefs(id).then((objects) => {
-            Promise.all(
-                objects.map(({ objectId }) => rpc.getObjectInfo(objectId))
-            ).then((results) => {
+            const ids = objects.map(({ objectId }) => objectId);
+            rpc.getObjectInfoBatch(ids).then((results) => {
                 setResults(
                     results
                         .filter(({ status }) => status === 'Exists')
@@ -98,7 +97,7 @@ function OwnedObjectAPI({ id }: { id: string }) {
                                     balance: balanceValue,
                                 };
                             }
-                            //TO DO - add back display and version
+                            //TO DO - add back version
                         )
                 );
                 setIsLoaded(true);
@@ -119,7 +118,16 @@ function OwnedObjectAPI({ id }: { id: string }) {
 
 function OwnedObjectLayout({ results }: { results: resultType }) {
     const coin_results = results.filter(({ Type }) => IS_COIN_TYPE(Type));
-    const other_results = results.filter(({ Type }) => !IS_COIN_TYPE(Type));
+    const other_results = results
+        .filter(({ Type }) => !IS_COIN_TYPE(Type))
+        .sort((a, b) => {
+            if (a.Type > b.Type) return 1;
+            if (a.Type < b.Type) return -1;
+            if (a.Type === b.Type) {
+                return a.id <= b.id ? -1 : 1;
+            }
+            return 0;
+        });
 
     return (
         <div>

@@ -15,7 +15,7 @@ tonic = "0.7"
 prost = "0.10"
 bincode = "1.3.3"
 serde = "1.0.136"
+sui-types = { path = "../../sui_types" }
 
 [dev-dependencies]
-tonic-build = { version = "0.7", features = [ "prost", "transport" ] }
-prost-build = "0.10.1"
+tonic-build = { git = "https://github.com/hyperium/tonic.git", rev = "de2e4ac077c076736dc451f3415ea7da1a61a560", default-features = false, features = [ "transport" ] }

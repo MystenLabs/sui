@@ -188,10 +188,10 @@ where
                     match items {
                         // Upon receiving a batch
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Batch(_signed_batch)) )) => {
-                            // Update the longer term seqeunce_number only after a batch that is signed
+                            // Update the longer term sequence_number only after a batch that is signed
                             self.max_seq = Some(_signed_batch.batch.next_sequence_number);
                         },
-                        // Upon receiving a trasnaction digest we store it, if it is not processed already.
+                        // Upon receiving a transaction digest we store it, if it is not processed already.
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((_seq, _digest))))) => {
                             if !self.state._database.effects_exists(&_digest)? {
                                 queue.push(async move {

@@ -13,9 +13,9 @@ interface, *Wallet CLI*.
 Follow the instructions to [install Sui binaries](install.md#binaries).
 
 ## Connect to DevNet
-We are hosting a public DevNet for the community to experiment with our 
-tech and help to shape the future of the Sui network. To connect the wallet 
-client to the DevNet, run the following command:
+We are hosting a public [DevNet](../explore/devnet.md) for the community to
+experiment with our  tech and help to shape the future of the Sui network. To
+connect the wallet  client to the DevNet, run the following command:
 ```shell
 $ wallet
 ```
@@ -38,7 +38,7 @@ If you have used the wallet before with a local network, follow the next section
 If you have used the wallet before, you will have an existing `wallet.conf` configuration
 file. Change the configured Gateway URL to DevNet by using:
 ```shell
-$ wallet switch --gateway http://gateway.devnet.sui.io:9000
+$ wallet switch --gateway https://gateway.devnet.sui.io:9000
 ```
 
 ## Genesis
