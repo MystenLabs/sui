@@ -73,9 +73,11 @@ ul.listitems {
 }
 
 .listitems .sublist {
-    @apply mt-2 list-none p-0 md:flex grid gap-2 pr-0;
+    @apply mt-2 list-none p-0 md:flex grid gap-2 pr-0  max-w-[84vw];
 }
-
+.listitems .sublist > div{
+    @apply max-w-[84vw] overflow-auto;
+}
 div.sublist .sublistlabel {
     @apply w-28 flex-none;
 }
