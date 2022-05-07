@@ -115,12 +115,6 @@ pub enum CheckpointRequestType {
     PastCheckpoint(CheckpointSequenceNumber),
     // Set a checkpoint certificate
     SetCertificate(CertifiedCheckpoint, Option<CheckpointContents>),
-
-    // DEVNET: until we have a consensus core to collectivelly decide
-    // the checkpoint we allow a trusted client to just force a
-    // checkpoint. This is for early testing and removal at Testnet
-    // time.
-    DEBUGSetCheckpoint(Box<(SignedCheckpointProposal, CheckpointContents)>),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

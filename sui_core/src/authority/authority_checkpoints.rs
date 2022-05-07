@@ -332,9 +332,6 @@ impl CheckpointStore {
             CheckpointRequestType::SetCertificate(cert, opt_contents) => {
                 self.handle_checkpoint_certificate(cert, opt_contents)
             }
-            CheckpointRequestType::DEBUGSetCheckpoint(_box_checkpoint) => {
-                self.debug_handle_set_checkpoint(&**_box_checkpoint)
-            }
         }
     }
 
@@ -527,37 +524,6 @@ impl CheckpointStore {
             }
         };
 
-        Ok(CheckpointResponse {
-            info: AuthorityCheckpointInfo::Success,
-            detail: None,
-        })
-    }
-
-    /// NOTE: this is a hack to accept the checkpoint proposed by the first node
-    /// in the committee as the checkpoint that all will accept. This is a stop gap
-    /// until we have a proper consensus integrated in a short while. After that we
-    /// will use this consensus to get a checkpoint to be the union of 2f+1 proposals.
-    pub fn debug_handle_set_checkpoint(
-        &self,
-        _contents: &(SignedCheckpointProposal, CheckpointContents),
-    ) -> Result<CheckpointResponse, SuiError> {
-        let checkpoint = &_contents.0;
-        let trasnactions = &_contents.1;
-
-        // Check it is correct
-        checkpoint.0.check_transactions(trasnactions)?;
-        // Check it is from the special 'first' authority
-        let max_authority_name = self.committee.voting_rights.keys().max().unwrap();
-        if *max_authority_name != checkpoint.0.authority {
-            return Err(SuiError::GenericAuthorityError {
-                error: "DEBUG FUNCTIONALITY: Incorrect master authority.".to_string(),
-            });
-        }
-
-        // Call the otherwise internal code to update the checkpoint.
-        self.handle_internal_set_checkpoint(checkpoint.0.checkpoint.clone(), trasnactions)?;
-
-        // If no error so far repond with success.
         Ok(CheckpointResponse {
             info: AuthorityCheckpointInfo::Success,
             detail: None,
