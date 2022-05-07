@@ -300,6 +300,12 @@ async fn test_batch_manager_out_of_order_bug() {
     drop(t3);
     store.side_sequence(t2.seq(), &TransactionDigest::random());
     drop(t2);
+
+    // Give a change to send signals
+    tokio::task::yield_now().await;
+    // Still nothing has arrived out of order
+    assert_eq!(rx.len(), 0);
+
     store.side_sequence(t0.seq(), &TransactionDigest::random());
     drop(t0);
 
