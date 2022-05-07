@@ -2,19 +2,29 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
-use std::sync::atomic::{AtomicBool, AtomicU64};
+use std::{
+    collections::BTreeSet,
+    sync::atomic::{AtomicBool, AtomicU64},
+};
 use sui_types::batch::TxSequenceNumber;
 
 use tokio::sync::Notify;
 use typed_store::traits::Map;
 
+use parking_lot::Mutex;
+
 pub struct TransactionNotifier {
     state: Arc<AuthorityStore>,
     low_watermark: AtomicU64,
-    high_watermark: AtomicU64,
     notify: Notify,
     has_stream: AtomicBool,
     is_closed: AtomicBool,
+    inner: Mutex<LockedNotifier>,
+}
+
+struct LockedNotifier {
+    high_watermark: u64,
+    live_tickets: BTreeSet<TxSequenceNumber>,
 }
 
 impl TransactionNotifier {
@@ -24,10 +34,16 @@ impl TransactionNotifier {
         Ok(TransactionNotifier {
             state,
             low_watermark: AtomicU64::new(seq),
-            high_watermark: AtomicU64::new(seq),
             notify: Notify::new(),
             has_stream: AtomicBool::new(false),
             is_closed: AtomicBool::new(false),
+
+            // Keep a set of the tickets that are still being processed
+            // This is the size of the number of concurrent processes.
+            inner: Mutex::new(LockedNotifier {
+                high_watermark: seq,
+                live_tickets: BTreeSet::new(),
+            }),
         })
     }
 
@@ -41,9 +57,11 @@ impl TransactionNotifier {
             return Err(SuiError::ClosedNotifierError);
         }
 
-        let seq = self
-            .high_watermark
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let mut inner = self.inner.lock();
+        // Insert the ticket into the set of live tickets.
+        let seq = inner.high_watermark;
+        inner.high_watermark += 1;
+        inner.live_tickets.insert(seq);
         Ok(TransactionNotifierTicket {
             transaction_notifier: self.clone(),
             seq,
@@ -101,7 +119,7 @@ impl TransactionNotifier {
                         .iter()
                         .skip_to(&next_seq)
                     {
-                        // ... contued here with take_while. And expand the buffer with the new items.
+                        // ... continued here with take_while. And expand the buffer with the new items.
                         temp_buffer.extend(
                             iter.take_while(|(tx_seq, _tx_digest)| *tx_seq < last_safe)
                                 .map(|(tx_seq, _tx_digest)| (tx_seq, _tx_digest)),
@@ -172,9 +190,20 @@ impl TransactionNotifierTicket {
 /// associated with this sequence number,
 impl Drop for TransactionNotifierTicket {
     fn drop(&mut self) {
+        let mut inner = self.transaction_notifier.inner.lock();
+        inner.live_tickets.remove(&self.seq);
+
+        // The new low watermark is either the lowest outstanding ticket
+        // or the high watermark.
+        let new_low_watermark = *inner
+            .live_tickets
+            .iter()
+            .next()
+            .unwrap_or(&inner.high_watermark);
+
         self.transaction_notifier
             .low_watermark
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            .store(new_low_watermark, std::sync::atomic::Ordering::SeqCst);
         self.transaction_notifier.notify.notify_one();
     }
 }
