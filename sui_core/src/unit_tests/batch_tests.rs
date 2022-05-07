@@ -263,6 +263,65 @@ async fn test_batch_manager_out_of_order() {
 }
 
 #[tokio::test]
+async fn test_batch_manager_out_of_order_bug() {
+    // Create a random directory to store the DB
+    let dir = env::temp_dir();
+    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    fs::create_dir(&path).unwrap();
+
+    // Create an authority
+    let mut opts = rocksdb::Options::default();
+    opts.set_max_open_files(max_files_authority_tests());
+    let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
+
+    // Make a test key pair
+    let seed = [1u8; 32];
+    let (committee, _, authority_key) =
+        init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
+    let authority_state = Arc::new(init_state(committee, authority_key, store.clone()).await);
+
+    let inner_state = authority_state.clone();
+    let _join = tokio::task::spawn(async move {
+        inner_state
+            .run_batch_service(1000, Duration::from_millis(500))
+            .await
+    });
+    // Send transactions out of order
+    let mut rx = authority_state.subscribe_batch();
+
+    let t0 = authority_state.batch_notifier.ticket().expect("ok");
+    let t1 = authority_state.batch_notifier.ticket().expect("ok");
+    let t2 = authority_state.batch_notifier.ticket().expect("ok");
+    let t3 = authority_state.batch_notifier.ticket().expect("ok");
+
+    store.side_sequence(t1.seq(), &TransactionDigest::random());
+    drop(t1);
+    store.side_sequence(t3.seq(), &TransactionDigest::random());
+    drop(t3);
+    store.side_sequence(t2.seq(), &TransactionDigest::random());
+    drop(t2);
+
+    let mut items = vec![];
+    items.push(rx.recv().await.unwrap());
+    items.push(rx.recv().await.unwrap());
+    items.push(rx.recv().await.unwrap());
+
+    store.side_sequence(t0.seq(), &TransactionDigest::random());
+    drop(t0);
+
+    items.push(rx.recv().await.unwrap());
+    items.push(rx.recv().await.unwrap());
+    assert!(items
+        .iter()
+        .any(|item| matches!(item, UpdateItem::Transaction((0, _)))));
+
+    // When we close the sending channel we also also end the service task
+    authority_state.batch_notifier.close();
+
+    _join.await.expect("No errors in task").expect("ok");
+}
+
+#[tokio::test]
 async fn test_handle_move_order_with_batch() {
     let (sender, sender_key) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
