@@ -170,7 +170,6 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getRecentTransactions(count: number): Promise<GetTxnDigestsResponse> {
-
     try {
       return await this.client.requestWithType(
         'sui_getRecentTransactions',
