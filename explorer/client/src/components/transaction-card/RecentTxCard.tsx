@@ -45,7 +45,6 @@ type TxnData = {
 async function getRecentTransactions(txNum: number): Promise<TxnData[]> {
     try {
         // Get the latest transactions
-        // TODO sui.js to get the latest transactions meta data
         const transactions = await rpc
             .getRecentTransactions(txNum)
             .then((res: GetTxnDigestsResponse) => res);
@@ -132,6 +131,7 @@ function LatestTxCard() {
                     ...initState,
                     loadState: 'fail',
                 });
+                setIsLoaded(false);
             });
 
         return () => {
