@@ -109,7 +109,7 @@ fn socket_addr_from_hostport(host: &str, port: u16) -> SocketAddr {
 
 fn socket_addr_from_hostport_retry(host: &str, port: u16) -> SocketAddr {
     let back_off = ExponentialBackoffBuilder::new()
-        .with_initial_interval(Duration::from_millis(100)) 
+        .with_initial_interval(Duration::from_millis(500)) 
         .with_multiplier(2.0)
         .with_max_elapsed_time(Some(Duration::from_secs(30)))
         .build();
