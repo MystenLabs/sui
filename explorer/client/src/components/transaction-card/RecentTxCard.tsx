@@ -45,58 +45,47 @@ type TxnData = {
 async function getRecentTransactions(txNum: number): Promise<TxnData[]> {
     try {
         // Get the latest transactions
-        // TODO add batch transaction kind TransactionDigest
         // TODO sui.js to get the latest transactions meta data
-        const transactions = await rpc
+        const transactions: GetTxnDigestsResponse = await rpc
             .getRecentTransactions(txNum)
             .then((res: GetTxnDigestsResponse) => res);
 
-        const txLatest = await Promise.all(
-            transactions.map(async (tx) => {
-                const [seq, digest] = tx;
-                return await rpc
-                    .getTransactionWithEffects(digest)
-                    .then((txEff: TransactionEffectsResponse) => {
-                        const res: CertifiedTransaction = txEff.certificate;
-                        const singleTransaction = getSingleTransactionKind(
-                            res.data
+        const digests = transactions.map((tx: any[]) => tx[1]);
+        const txLatest = await rpc
+            .getTransactionWithEffectsBatch(digests)
+            .then((txEffs: TransactionEffectsResponse[]) => {
+                return txEffs.map((txEff, i) => {
+                    const [seq, digest] = transactions[i];
+                    const res: CertifiedTransaction = txEff.certificate;
+                    const singleTransaction = getSingleTransactionKind(
+                        res.data
+                    );
+                    if (!singleTransaction) {
+                        throw new Error(
+                            `Transaction kind not supported yet ${res.data.kind}`
                         );
-                        if (!singleTransaction) {
-                            throw new Error(
-                                `Transaction kind not supported yet ${res.data.kind}`
-                            );
-                        }
-                        const txKind = getTransactionKind(res.data);
-                        const recipient = getTransferTransaction(
-                            res.data
-                        )?.recipient;
+                    }
+                    const txKind = getTransactionKind(res.data);
+                    const recipient = getTransferTransaction(
+                        res.data
+                    )?.recipient;
 
-                        return {
-                            seq,
-                            txId: digest,
-                            status: getExecutionStatusType(
-                                txEff.effects.status
-                            ),
-                            txGas: getTotalGasUsed(txEff.effects.status),
-                            kind: txKind,
-                            From: res.data.sender,
-                            ...(recipient
-                                ? {
-                                      To: recipient,
-                                  }
-                                : {}),
-                        };
-                    })
-                    .catch((err) => {
-                        console.error(
-                            'Failed to get transaction details for txn digest',
-                            digest,
-                            err
-                        );
-                        return null;
-                    });
-            })
-        );
+                    return {
+                        seq,
+                        txId: digest,
+                        status: getExecutionStatusType(txEff.effects.status),
+                        txGas: getTotalGasUsed(txEff.effects.status),
+                        kind: txKind,
+                        From: res.data.sender,
+                        ...(recipient
+                            ? {
+                                  To: recipient,
+                              }
+                            : {}),
+                    };
+                });
+            });
+
         // Remove failed transactions and sort by sequence number
         return txLatest
             .filter((itm) => itm)
