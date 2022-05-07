@@ -300,17 +300,16 @@ async fn test_batch_manager_out_of_order_bug() {
     drop(t3);
     store.side_sequence(t2.seq(), &TransactionDigest::random());
     drop(t2);
-
-    let mut items = vec![];
-    items.push(rx.recv().await.unwrap());
-    items.push(rx.recv().await.unwrap());
-    items.push(rx.recv().await.unwrap());
-
     store.side_sequence(t0.seq(), &TransactionDigest::random());
     drop(t0);
 
-    items.push(rx.recv().await.unwrap());
-    items.push(rx.recv().await.unwrap());
+    let mut items = vec![];
+
+    for _ in 0..5 {
+        let v = rx.recv().await.unwrap();
+        println!("GOT: {:?}", v);
+        items.push(v);
+    }
     assert!(items
         .iter()
         .any(|item| matches!(item, UpdateItem::Transaction((0, _)))));
