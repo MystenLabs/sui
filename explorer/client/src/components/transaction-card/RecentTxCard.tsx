@@ -149,8 +149,8 @@ function LatestTxCard() {
     if (!isLoaded && results.loadState === 'fail') {
         return (
             <ErrorResult
-                id="latestTx"
-                errorMsg="There was an issue getting the latest transaction"
+                id=""
+                errorMsg="There was an issue getting the latest transactions"
             />
         );
     }
