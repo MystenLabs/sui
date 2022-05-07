@@ -49,7 +49,7 @@ async function getRecentTransactions(txNum: number): Promise<TxnData[]> {
             .getRecentTransactions(txNum)
             .then((res: GetTxnDigestsResponse) => res);
 
-        const digests = transactions.map((tx: any[]) => tx[1]);
+        const digests = transactions.map((tx) => tx[1]);
         const txLatest = await rpc
             .getTransactionWithEffectsBatch(digests)
             .then((txEffs: TransactionEffectsResponse[]) => {
