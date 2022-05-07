@@ -100,6 +100,24 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
+  async getTransactionWithEffectsBatch(
+    digests: TransactionDigest[]
+  ): Promise<TransactionEffectsResponse[]> {
+    const requests = digests.map(d => ({
+      method: 'sui_getTransaction',
+      args: [d],
+    }));
+    try {
+      return await this.client.batchRequestWithType(
+        requests,
+        isTransactionEffectsResponse
+      );
+    } catch (err) {
+      const list = digests.join(', ').substring(0, -2);
+      throw new Error(`Error getting transaction effects: ${err} for digests [${list}]`);
+    }
+  }
+
   async getTransaction(
     digest: TransactionDigest
   ): Promise<CertifiedTransaction> {
@@ -152,6 +170,7 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getRecentTransactions(count: number): Promise<GetTxnDigestsResponse> {
+
     try {
       return await this.client.requestWithType(
         'sui_getRecentTransactions',
