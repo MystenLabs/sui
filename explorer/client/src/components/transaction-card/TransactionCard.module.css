@@ -16,12 +16,16 @@ div.txcardgrid:nth-child(2n + 1) {
     @apply bg-[#f6f6f6];
 }
 
+.listitems .sublist > div {
+    @apply break-all break-words max-w-[84vw] overflow-auto;
+}
+
 div.txcardgrid:first-child {
     @apply bg-offblack rounded-none items-center pt-5 pb-5 font-black shadow-md border-2 border-coolGray-400;
 }
 
 div.txcardgrid > div:first-child {
-    @apply col-span-1 font-normal;
+    @apply col-span-1 font-normal w-[90vw];
 }
 
 div.txcardgrid > div:last-child {
@@ -29,7 +33,7 @@ div.txcardgrid > div:last-child {
 }
 
 div.txcardgridlarge {
-    @apply font-mono break-all tracking-tight font-normal block col-span-2;
+    @apply font-mono break-all tracking-tight font-normal md:block col-span-2  max-w-[84vw];
 }
 
 div.status-success {
@@ -61,7 +65,7 @@ ul.listitems {
 }
 
 .listitems .list {
-    @apply mt-5 list-none p-0;
+    @apply mt-5 list-none p-0  max-w-[84vw];
 }
 
 .listitems .list:first-child {
@@ -69,7 +73,7 @@ ul.listitems {
 }
 
 .listitems .sublist {
-    @apply mt-2 list-none p-0 md:flex grid gap-2 pr-0;
+    @apply mt-2 list-none p-0 md:flex grid gap-2 pr-0  max-w-[84vw];
 }
 
 div.sublist .sublistlabel {
