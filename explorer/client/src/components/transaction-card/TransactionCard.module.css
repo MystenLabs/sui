@@ -28,7 +28,6 @@ div.txcardgrid > div:first-child {
     @apply col-span-1 font-normal w-[90vw];
 }
 
-
 div.txcardgrid > div:last-child {
     @apply border-none;
 }
