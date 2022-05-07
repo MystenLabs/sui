@@ -263,7 +263,7 @@ async fn test_batch_manager_out_of_order() {
 }
 
 #[tokio::test]
-async fn test_batch_manager_out_of_order_bug() {
+async fn test_batch_manager_drop_out_of_order() {
     // Create a random directory to store the DB
     let dir = env::temp_dir();
     let path = dir.join(format!("DB_{:?}", ObjectID::random()));
@@ -283,7 +283,9 @@ async fn test_batch_manager_out_of_order_bug() {
     let inner_state = authority_state.clone();
     let _join = tokio::task::spawn(async move {
         inner_state
-            .run_batch_service(1000, Duration::from_millis(500))
+            // Make sure that a batch will not be formed due to time, but will be formed
+            // when there are 4 transactions.
+            .run_batch_service(4, Duration::from_millis(10000))
             .await
     });
     // Send transactions out of order
@@ -301,7 +303,7 @@ async fn test_batch_manager_out_of_order_bug() {
     store.side_sequence(t2.seq(), &TransactionDigest::random());
     drop(t2);
 
-    // Give a change to send signals
+    // Give a chance to send signals
     tokio::task::yield_now().await;
     // Still nothing has arrived out of order
     assert_eq!(rx.len(), 0);
@@ -309,16 +311,27 @@ async fn test_batch_manager_out_of_order_bug() {
     store.side_sequence(t0.seq(), &TransactionDigest::random());
     drop(t0);
 
-    let mut items = vec![];
+    // Get transactions in order then batch.
+    assert!(matches!(
+        rx.recv().await.unwrap(),
+        UpdateItem::Transaction((0, _))
+    ));
 
-    for _ in 0..5 {
-        let v = rx.recv().await.unwrap();
-        println!("GOT: {:?}", v);
-        items.push(v);
-    }
-    assert!(items
-        .iter()
-        .any(|item| matches!(item, UpdateItem::Transaction((0, _)))));
+    assert!(matches!(
+        rx.recv().await.unwrap(),
+        UpdateItem::Transaction((1, _))
+    ));
+    assert!(matches!(
+        rx.recv().await.unwrap(),
+        UpdateItem::Transaction((2, _))
+    ));
+    assert!(matches!(
+        rx.recv().await.unwrap(),
+        UpdateItem::Transaction((3, _))
+    ));
+
+    // Then we (eventually) get a batch
+    assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
 
     // When we close the sending channel we also also end the service task
     authority_state.batch_notifier.close();
