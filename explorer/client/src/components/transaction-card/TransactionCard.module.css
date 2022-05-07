@@ -25,8 +25,9 @@ div.txcardgrid:first-child {
 }
 
 div.txcardgrid > div:first-child {
-    @apply col-span-1 font-normal;
+    @apply col-span-1 font-normal w-[90vw];
 }
+
 
 div.txcardgrid > div:last-child {
     @apply border-none;
@@ -65,7 +66,7 @@ ul.listitems {
 }
 
 .listitems .list {
-    @apply mt-5 list-none p-0;
+    @apply mt-5 list-none p-0  max-w-[84vw];
 }
 
 .listitems .list:first-child {
