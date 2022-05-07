@@ -222,6 +222,7 @@ impl NetworkConfig {
                         .public_key
                         .make_narwhal_public_key()
                         .expect("Can't get narwhal public key");
+                    info!("Resolving {}: {}:{}", name, &x.host, &x.port);
                     let primary = PrimaryAddresses {
                         primary_to_primary: socket_addr_from_hostport(&x.host, x.port + 100),
                         worker_to_primary: socket_addr_from_hostport(&x.host, x.port + 200),
