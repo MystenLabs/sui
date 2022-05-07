@@ -175,7 +175,7 @@ function LatestTxCard() {
                     >
                         <div className={styles.txcardgridlarge}>TxId</div>
                         <div className={styles.txtype}>TxType</div>
-                        <div className={styles.txgas}>Status</div>
+                        <div className={styles.txstatus}>Status</div>
                         <div className={styles.txgas}>Gas</div>
                         <div className={styles.txadd}>Addresses</div>
                     </div>
@@ -198,7 +198,7 @@ function LatestTxCard() {
                             <div
                                 className={cl(
                                     styles[tx.status.toLowerCase()],
-                                    styles.txgas
+                                    styles.txstatus
                                 )}
                             >
                                 {tx.status === 'Success' ? '✔' : '✖'}
