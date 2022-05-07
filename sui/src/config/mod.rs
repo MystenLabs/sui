@@ -25,7 +25,7 @@ use sui_types::{
     committee::{Committee, EpochId},
     crypto::{get_key_pair, KeyPair, PublicKeyBytes},
 };
-use tracing::log::trace;
+use tracing::{info, log::trace};
 
 pub mod gateway;
 pub mod utils;
@@ -226,12 +226,23 @@ impl NetworkConfig {
                         primary_to_primary: socket_addr_from_hostport(&x.host, x.port + 100),
                         worker_to_primary: socket_addr_from_hostport(&x.host, x.port + 200),
                     };
+                    info!("p2p: {}", primary.primary_to_primary);
+                    info!("w2p: {}", primary.worker_to_primary);
+                    
+                    let p2w = socket_addr_from_hostport(&x.host, x.port + 300);
+                    let w2w = socket_addr_from_hostport(&x.host, x.port + 400);
+
+                    info!("p2w: {}", &p2w);
+                    info!("txn: {}", &x.consensus_address);
+                    info!("w2w: {}", &w2w);
                     let workers = [(
                         /* worker_id */ 0,
                         WorkerAddresses {
-                            primary_to_worker: socket_addr_from_hostport(&x.host, x.port + 300),
+                            // primary_to_worker: socket_addr_from_hostport(&x.host, x.port + 300),
+                            primary_to_worker: p2w,
                             transactions: x.consensus_address,
-                            worker_to_worker: socket_addr_from_hostport(&x.host, x.port + 400),
+                            // worker_to_worker: socket_addr_from_hostport(&x.host, x.port + 400),
+                            worker_to_worker: w2w,
                         },
                     )]
                     .iter()
