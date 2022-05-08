@@ -7,7 +7,7 @@ div.txcardgrid h3 {
 }
 
 div.txcard {
-    @apply font-mono md:flex grid items-center bg-center shadow-sm pt-5 pb-5 h-auto border-solid border border-gray-100 pl-5 pr-5 bg-white mt-5 mb-5 text-left;
+    @apply font-mono md:flex grid items-center bg-center shadow-sm pt-5 pb-5 h-auto border-solid border border-gray-100 pl-5 pr-5 bg-white mt-5 mb-5 text-left md:justify-around;
 }
 
 div.txcardgridlarge {
@@ -19,7 +19,7 @@ div.txcardgrid > div {
 }
 
 div.txcardgrid > div:first-child {
-    @apply w-full md:w-1/3;
+    @apply w-full md:w-1/4 lg:w-1/3;
 }
 
 .txlatestesults {
@@ -29,7 +29,7 @@ div.txcardgrid > div:first-child {
 }
 
 div.txadd {
-    @apply flex md:flex-col flex-row;
+    @apply flex md:flex-col flex-row md:w-1/4 lg:w-1/3 w-auto;
 }
 
 .txheader {
@@ -41,6 +41,10 @@ div.txadd {
 }
 
 .txgas {
+    @apply md:w-1/12 max-w-sm;
+}
+
+.txstatus {
     @apply md:w-1/12 max-w-sm;
 }
 
