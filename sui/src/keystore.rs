@@ -26,6 +26,7 @@ pub enum KeystoreType {
 pub trait Keystore: Send + Sync {
     fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error>;
     fn add_random_key(&mut self) -> Result<SuiAddress, anyhow::Error>;
+    fn has_key(&self, address: &SuiAddress) -> bool;
 }
 
 impl KeystoreType {
@@ -71,6 +72,10 @@ impl Keystore for SuiKeystore {
         self.keys.insert(address, keypair);
         self.save()?;
         Ok(address)
+    }
+
+    fn has_key(&self, address: &SuiAddress) -> bool {
+        self.keys.contains_key(address)
     }
 }
 

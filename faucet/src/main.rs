@@ -20,8 +20,9 @@ use sui::{
     wallet_commands::{WalletCommands, WalletContext},
 };
 use sui_faucet::{Faucet, FaucetRequest, FaucetResponse, SimpleFaucet};
+use sui_types::base_types::SuiAddress;
 use tower::ServiceBuilder;
-use tracing::info;
+use tracing::{info, warn};
 
 // TODO: Increase this once we use multiple gas objects
 const CONCURRENCY_LIMIT: usize = 1;
@@ -112,22 +113,28 @@ async fn request_gas(
     Extension(state): Extension<Arc<AppState>>,
 ) -> impl IntoResponse {
     let result = match payload {
-        FaucetRequest::FixedAmountRequest(requests) => {
+        FaucetRequest::FixedAmountRequest(request) => {
+            info!("Got a request: {:?}", request);
             state
                 .faucet
                 .send(
-                    requests.recipient,
+                    request.recipient,
                     &vec![state.config.amount; state.config.num_coins],
                 )
                 .await
         }
     };
     match result {
-        Ok(v) => (StatusCode::CREATED, Json(FaucetResponse::from(v))),
-        Err(v) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(FaucetResponse::from(v)),
-        ),
+        Ok(v) => {
+            let response = FaucetResponse::from(v);
+            info!("Request succeeded, sending back response: {:?}", &response);
+            (StatusCode::CREATED, Json(response))
+        }
+        Err(v) => {
+            let response = FaucetResponse::from(v);
+            warn!("Request failed, sending back response: {:?}", &response);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
+        }
     }
 }
 
@@ -143,6 +150,9 @@ async fn create_wallet_context() -> Result<WalletContext, anyhow::Error> {
         .cloned()
         .ok_or_else(|| anyhow::anyhow!("Empty wallet context!"))?;
 
+    // Check the faucet setup to make it fail-fast.
+    check_wallet_config_integrity(&context, &address);
+
     // Sync client to retrieve objects from the network.
     WalletCommands::SyncClientState {
         address: Some(address),
@@ -151,6 +161,11 @@ async fn create_wallet_context() -> Result<WalletContext, anyhow::Error> {
     .await
     .map_err(|err| anyhow::anyhow!("Fail to sync client state: {}", err))?;
     Ok(context)
+}
+
+fn check_wallet_config_integrity(context: &WalletContext, address: &SuiAddress) {
+    let has_key = context.keystore.read().unwrap().has_key(address);
+    assert!(has_key, "Keystore does not have key pair for {}", address);
 }
 
 async fn handle_error(error: BoxError) -> impl IntoResponse {
