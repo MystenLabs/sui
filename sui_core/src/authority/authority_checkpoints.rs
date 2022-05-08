@@ -332,6 +332,7 @@ impl CheckpointStore {
             CheckpointRequestType::SetCertificate(cert, opt_contents) => {
                 self.handle_checkpoint_certificate(cert, opt_contents)
             }
+            CheckpointRequestType::SetFragment(fragment) => self.handle_receive_fragment(fragment),
         }
     }
 
@@ -416,6 +417,18 @@ impl CheckpointStore {
         })
     }
 
+    // TODO: this function should submit the received fragment to the
+    //       consensus algorithm for sequencing. It should also do some
+    //       basic checks to not submit redundant information to the
+    //       consensus, as well as to check it is the right node to
+    //       submit to consensus.
+    pub fn handle_receive_fragment(
+        &self,
+        _fragment: &CheckpointFragment,
+    ) -> Result<CheckpointResponse, SuiError> {
+        unimplemented!();
+    }
+
     /// Call this function internally to update the latest checkpoint.
     /// Internally it is called with an unsigned checkpoint, and results
     /// in the signed checkpoint being signed, stored and the contents
@@ -471,6 +484,13 @@ impl CheckpointStore {
         self.set_locals(locals, new_locals)?;
 
         Ok(())
+    }
+
+    /// This function should be called by the conseusus output, it is idempotent,
+    /// and if called again with the same sequence number will do nothing. However,
+    /// fragments should be provided in seq increasing order.
+    pub fn handle_internal_fragment(&self, _seq: u64, _fragment: CheckpointFragment) {
+        unimplemented!()
     }
 
     /// Handles the submission of a full checkpoint externally, and stores

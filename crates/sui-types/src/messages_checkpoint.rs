@@ -115,6 +115,8 @@ pub enum CheckpointRequestType {
     PastCheckpoint(CheckpointSequenceNumber),
     // Set a checkpoint certificate
     SetCertificate(CertifiedCheckpoint, Option<CheckpointContents>),
+    // Submit a consensus fragment to a node
+    SetFragment(Box<CheckpointFragment>),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
