@@ -4,7 +4,7 @@ use crate::{test_committee, test_keys};
 use narwhal_config::Parameters as ConsensusParameters;
 use std::{path::PathBuf, sync::Arc};
 use sui::{
-    config::{make_locat_narwhal_committee, utils::get_available_port, AuthorityPrivateInfo},
+    config::{make_local_narwhal_committee, utils::get_available_port, AuthorityPrivateInfo},
     sui_commands::make_authority,
 };
 use sui_adapter::genesis;
@@ -87,7 +87,7 @@ where
     I: IntoIterator<Item = Object> + Clone,
 {
     let states = test_authority_states(objects).await;
-    let consensus_committee = make_locat_narwhal_committee(authorities).unwrap();
+    let consensus_committee = make_local_narwhal_committee(authorities).unwrap();
     let consensus_parameters = ConsensusParameters {
         max_header_delay: std::time::Duration::from_millis(200),
         header_size: 1,

@@ -271,10 +271,8 @@ impl NetworkConfig {
                     let workers = [(
                         /* worker_id */ 0,
                         WorkerAddresses {
-                            // primary_to_worker: socket_addr_from_hostport(&x.host, x.port + 300),
                             primary_to_worker: p2w,
                             transactions: x.consensus_address,
-                            // worker_to_worker: socket_addr_from_hostport(&x.host, x.port + 400),
                             worker_to_worker: w2w,
                         },
                     )]
@@ -512,7 +510,7 @@ impl<C> DerefMut for PersistedConfig<C> {
 
 /// Make a default Narwhal-compatible committee running locally
 /// Ports are overridden by next available port id.
-pub fn make_locat_narwhal_committee(
+pub fn make_local_narwhal_committee(
     authorities: &[AuthorityPrivateInfo],
 ) -> Result<ConsensusCommittee<Ed25519PublicKey>, anyhow::Error> {
     let mut ports = Vec::new();

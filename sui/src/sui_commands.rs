@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     config::{
-        make_locat_narwhal_committee, sui_config_dir, AuthorityInfo, AuthorityPrivateInfo, Config,
+        make_local_narwhal_committee, sui_config_dir, AuthorityInfo, AuthorityPrivateInfo, Config,
         GatewayConfig, GatewayType, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
         CONSENSUS_DB_NAME, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
     },
@@ -320,7 +320,7 @@ impl SuiNetwork {
                 .collect(),
         );
 
-        let consensus_committee = make_locat_narwhal_committee(&config.authorities)?;
+        let consensus_committee = make_local_narwhal_committee(&config.authorities)?;
         let consensus_parameters = ConsensusParameters::default();
 
         // Pass in the newtwork parameters of all authorities
