@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, path::Path, sync::Arc};
+use std::{collections::{HashSet, BTreeMap}, path::Path, sync::Arc};
 
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -104,7 +104,7 @@ impl CheckpointProposal {
             proposer: self.proposal.clone(),
             other: other_proposal.proposal.clone(),
             diff,
-            certs: None,
+            certs: BTreeMap::new(),
         }
     }
 }
@@ -165,7 +165,7 @@ pub struct CheckpointStore {
     /// to allow us to provide a list in order they were received. We only store
     /// the fragments that are relevant to the next checkpoints. Past checkpoints
     /// already contain all relevant information from previous checkpoints.
-    pub fragments: DBMap<usize, CheckpointFragment>,
+    pub fragments: DBMap<u64, CheckpointFragment>,
 
     /// The local sequence at which the proposal for the next checkpoint is created
     /// This is a sequence number containing all unprocessed trasnactions lower than
@@ -294,7 +294,7 @@ impl CheckpointStore {
             "unprocessed_transactions";<TransactionDigest,CheckpointSequenceNumber>,
             "extra_transactions";<TransactionDigest,TxSequenceNumber>,
             "checkpoints";<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
-            "fragments";<usize, CheckpointFragment>,
+            "fragments";<u64, CheckpointFragment>,
             "locals";<DBLabel, CheckpointLocals>
         );
 
@@ -426,6 +426,26 @@ impl CheckpointStore {
         &self,
         _fragment: &CheckpointFragment,
     ) -> Result<CheckpointResponse, SuiError> {
+        // Check structure is correct and signatures verify
+        _fragment.verify(&self.committee)?;
+
+        // Only a fragment that involves ourselves to be sequenced through
+        // this node.
+        if _fragment.proposer.0.authority != self.name && _fragment.other.0.authority != self.name {
+            return Err(SuiError::GenericAuthorityError {
+                error: "Fragment does not involve this node".to_string(),
+            });
+        }
+
+        // TODO: Checks here that the fragment makes progress over the existing
+        //       construction.
+
+        // TODO: Send to consensus for sequencing.
+
+        // NOTE: we should charge the node that sends this into consensus
+        //       according to the byte length of the fragment, to create 
+        //       incentives for nodes to submit smaller fragments.
+
         unimplemented!();
     }
 
@@ -489,7 +509,28 @@ impl CheckpointStore {
     /// This function should be called by the conseusus output, it is idempotent,
     /// and if called again with the same sequence number will do nothing. However,
     /// fragments should be provided in seq increasing order.
-    pub fn handle_internal_fragment(&self, _seq: u64, _fragment: CheckpointFragment) {
+    pub fn handle_internal_fragment(
+        &self,
+        _seq: u64,
+        _fragment: CheckpointFragment,
+    ) -> Result<(), SuiError> {
+        // Ensure we have not already processed this fragment.
+        if let Some((last_seq, _)) = self.fragments.iter().skip_to_last().next() {
+            if _seq <= last_seq {
+                // We have already processed this fragment, just exit.
+                return Ok(());
+            }
+        }
+
+        // Check structure is correct and signatures verify
+        _fragment.verify(&self.committee)?;
+
+        // Save the new fragment in the DB
+        self.fragments.insert(&_seq, &_fragment)?;
+
+        // Run the reconstruction logic to build a checkpoint.
+
+
         unimplemented!()
     }
 

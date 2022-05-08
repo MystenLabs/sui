@@ -323,7 +323,11 @@ impl CertifiedCheckpoint {
             weight += voting_rights;
         }
         fp_ensure!(
-            weight >= committee.quorum_threshold(),
+            // NOTE: here we only require f+1 weight to accept it, since
+            //       we only need to ensure one honest node signs it, and
+            //       do not require quorum intersection properties between
+            //       any two sets of signers.
+            weight >= committee.validity_threshold(),
             SuiError::CertificateRequiresQuorum
         );
 
@@ -404,7 +408,18 @@ pub struct CheckpointFragment {
     pub proposer: SignedCheckpointProposal,
     pub other: SignedCheckpointProposal,
     pub diff: WaypointDiff<AuthorityName, TransactionDigest>,
-    pub certs: Option<BTreeMap<TransactionDigest, CertifiedTransaction>>,
+    pub certs: BTreeMap<TransactionDigest, CertifiedTransaction>,
+}
+
+impl CheckpointFragment {
+    pub fn verify(&self, _committee : &Committee) -> Result<(), SuiError> {
+        // TODO:
+        // - check the signatures on the proposed checkpoints.
+        // - check that the waypoint is between the checkpoints.
+        // - check the waypoint is valid.
+        // - check that the certs includes all missing certs.
+        Ok(())
+    }
 }
 
 #[cfg(test)]
