@@ -471,7 +471,7 @@ OPTIONS:
 To view the objects owned by the accounts created in genesis, run the following command (substitute the address with one of the genesis addresses in your wallet):
 
 ```shell
-$ wallet objects --address 66af3898e7558b79e115ab61184a958497d1905a
+$ wallet objects --address 0x66af3898e7558b79e115ab61184a958497d1905a
 ```
 
 The result should resemble the following, which shows the object in the format of (`object_id`, `sequence_number`, `object_hash`).
