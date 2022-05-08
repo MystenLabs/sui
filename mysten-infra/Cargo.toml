@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/component",
+    "crates/mysten-network",
     "crates/name-variant",
     "crates/rccheck",
     "crates/telemetry-subscribers",
