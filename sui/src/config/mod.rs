@@ -4,7 +4,7 @@
 
 use crate::keystore::KeystoreType;
 use anyhow::bail;
-use std::time::Duration;
+use backoff::{retry, Error, ExponentialBackoffBuilder};
 use narwhal_config::{
     Authority, Committee as ConsensusCommittee, PrimaryAddresses, Stake, WorkerAddresses,
 };
@@ -12,6 +12,7 @@ use narwhal_crypto::ed25519::Ed25519PublicKey;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::{hex::Hex, serde_as};
+use std::time::Duration;
 use std::{
     fmt::{Display, Formatter, Write},
     fs::{self, create_dir_all, File},
@@ -26,8 +27,7 @@ use sui_types::{
     committee::{Committee, EpochId},
     crypto::{get_key_pair, KeyPair, PublicKeyBytes},
 };
-use tracing::{info, log::trace};
-use backoff::{retry, ExponentialBackoffBuilder, Error};
+use tracing::{debug, info, log::trace};
 
 pub mod gateway;
 pub mod utils;
@@ -107,20 +107,27 @@ fn socket_addr_from_hostport(host: &str, port: u16) -> SocketAddr {
         .unwrap_or_else(|| panic!("Hostname/IP resolution failed for {host}"))
 }
 
+// When validators start they need to find peers in the committee
+// Here we give them some time to retry connecting with exponentially back-off
+// TODO: for testnet, we may need to tune the parameters to allow
+// more asynchronous starting.
 fn socket_addr_from_hostport_retry(host: &str, port: u16) -> SocketAddr {
     let back_off = ExponentialBackoffBuilder::new()
-        .with_initial_interval(Duration::from_millis(500)) 
+        .with_initial_interval(Duration::from_secs(2))
         .with_multiplier(2.0)
         .with_max_elapsed_time(Some(Duration::from_secs(30)))
         .build();
-    let addr = retry(
-        back_off,
-        || {
+    let addr = retry(back_off, || {
         info!("Trying to resolve {host}:{port}");
         let mut addresses = format!("{host}:{port}")
-        .to_socket_addrs()
-        .map_err(Error::transient)?;
-    addresses.next().ok_or(Error::transient(io::Error::new(io::ErrorKind::Other, "Can't find addr".to_string())))
+            .to_socket_addrs()
+            .map_err(Error::transient)?;
+        addresses.next().ok_or_else(|| {
+            Error::transient(io::Error::new(
+                io::ErrorKind::Other,
+                format!("Can't resolve addr {host}:{port}"),
+            ))
+        })
     });
     addr.unwrap()
 }
@@ -242,20 +249,25 @@ impl NetworkConfig {
                         .public_key
                         .make_narwhal_public_key()
                         .expect("Can't get narwhal public key");
-                    info!("Resolving {}: {}:{}", name, &x.host, &x.port);
+
+                    debug!("Resolving {}:{} for {}", &x.host, &x.port, name);
+
                     let primary = PrimaryAddresses {
                         primary_to_primary: socket_addr_from_hostport_retry(&x.host, x.port + 100),
                         worker_to_primary: socket_addr_from_hostport_retry(&x.host, x.port + 200),
                     };
-                    info!("p2p: {}", primary.primary_to_primary);
-                    info!("w2p: {}", primary.worker_to_primary);
-                    
                     let p2w = socket_addr_from_hostport_retry(&x.host, x.port + 300);
                     let w2w = socket_addr_from_hostport_retry(&x.host, x.port + 400);
 
-                    info!("p2w: {}", &p2w);
-                    info!("txn: {}", &x.consensus_address);
-                    info!("w2w: {}", &w2w);
+                    debug!(
+                        "p2p: {}, w2p: {}, p2w: {}, consensus: {}, w2w: {}",
+                        primary.primary_to_primary,
+                        primary.worker_to_primary,
+                        &p2w,
+                        &x.consensus_address,
+                        &w2w,
+                    );
+
                     let workers = [(
                         /* worker_id */ 0,
                         WorkerAddresses {
@@ -498,8 +510,9 @@ impl<C> DerefMut for PersistedConfig<C> {
     }
 }
 
-/// Make a default Narwhal-compatible committee.
-pub fn make_default_narwhal_committee(
+/// Make a default Narwhal-compatible committee running locally
+/// Ports are overridden by next available port id.
+pub fn make_locat_narwhal_committee(
     authorities: &[AuthorityPrivateInfo],
 ) -> Result<ConsensusCommittee<Ed25519PublicKey>, anyhow::Error> {
     let mut ports = Vec::new();
