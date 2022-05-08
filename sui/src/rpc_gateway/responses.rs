@@ -12,7 +12,7 @@ use serde_with::serde_as;
 
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber, TransactionDigest};
 use sui_types::error::SuiError;
-use sui_types::object::{ObjectRead, Owner, ParsedMoveData};
+use sui_types::object::{ObjectRead, Owner, SuiMoveData};
 
 #[serde_as]
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -57,7 +57,7 @@ pub struct ObjectExistsResponse {
     object_ref: NamedObjectRef,
     owner: Owner,
     previous_transaction: TransactionDigest,
-    data: ParsedMoveData,
+    data: SuiMoveData,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]
