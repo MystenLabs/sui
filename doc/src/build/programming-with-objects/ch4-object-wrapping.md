@@ -1,5 +1,5 @@
 ## Chapter 4: Object Wrapping
-In most languages, we organize data structures in layer by nesting complex data structures in another data structure. In Move, you could do the same by putting a field of struct type in another, like the following:
+In many programming languages, we organize data structures in layers by nesting complex data structures in another data structure. In Move, you may do the same by putting a field of `struct` type in another, like the following:
 ```rust
 struct Foo has key {
     id: VersionedID,
@@ -9,28 +9,30 @@ struct Bar has store {
     value: u64,
 }
 ```
-> :book: For a struct type to be capable of being embedded in a Sui object struct (which will have `key` ability), the embedded struct type must have `store` ability.
+> :book: For a struct type to be capable of being embedded in a Sui object struct (which will have `key` ability), the embedded struct type must have the `store` ability.
 
-In the above example, `Bar` is a normal Move struct, but it is not a Sui object, since it doesn't have `key` ability. This is very common usage when we just need to organize data with good encapsulation.
-In some cases, however, we want to put a Sui object struct type as a field in another Sui object struct type. In the above example, if we change `Bar` into:
+In the above example, `Bar` is a normal Move struct, but it is not a Sui object, since it doesn't have the `key` ability. This is common usage when we just need to organize data with good encapsulation.
+In some cases, however, we want to put a Sui object struct type as a field in another Sui object struct type. In the above example, we may change `Bar` into:
 ```rust
 struct Bar has key, store {
     id: VersionedID,
     value: u64,
 }
 ```
-Now `Bar` is also a Sui object type. When we put a Sui object of type `Bar` into a Sui object of type `Foo`, the Sui object of type `Bar` is said to be **wrapped** by `Foo` (which we call "the **wrapper** object).
-> :bulb: In Move code, it is also possible to put a Sui object as a field of a non-Sui object struct type. For example, in the above code sample, we can define `Foo` to not have `key` but `Bar` to have `key, store`. However, this case can only happen temporarily in the middle of a Move execution and cannot be persisted on-chain. This is because a non-Sui object cannot flow across Move/Sui boundary, and one must unpack the non-Sui object at some point and deal with the Sui object fields in it.
+Now `Bar` is also a Sui object type. When we put a Sui object of type `Bar` into a Sui object of type `Foo`, the Sui object of type `Bar` is said to be **wrapped** by `Foo` (which we call the **wrapper** object).
 
-There are some interesting consequences of wrapping an Sui object into another. When an object is wrapped, this object no longer exists independently on-chain. We will no longer be able to look up this object by its ID. This object becomes part of the data of the object that wraps it. Most importantly, we can no longer pass the wrapped object as an argument in any way in Move calls. The only access point is through the wrapping object.
->:bulb: The fact that you can no longer use a wrapped Sui object means that it's impossible to create circular wrapping behavior, where A wraps B, B wraps C and C also wraps A.
+> :bulb: In Move code, it is also possible to put a Sui object as a field of a non-Sui object struct type. For example, in the above code sample, we can define `Foo` to not have `key` but `Bar` to have `key, store`. However, this case can happen only temporarily in the middle of a Move execution and cannot be persisted on-chain. This is because a non-Sui object cannot flow across the Move-Sui boundary, and one must unpack the non-Sui object at some point and deal with the Sui object fields in it.
 
-There are a few common ways to wrap a Sui object into another Sui object, and there use cases are likely different. In the following, we will walk through three different ways to wrap a Sui object and their typical use cases.
+There are some interesting consequences of wrapping an Sui object into another. When an object is wrapped, this object no longer exists independently on-chain. We will no longer be able to look up this object by its ID. This object becomes part of the data of the object that wraps it. Most importantly, *we can no longer pass the wrapped object as an argument in any way in Move calls*. The only access point is through the wrapping object.
 
-### Direct Wrapping
-When we put a Sui object type directly as a field in another Sui object type (just like how we put `Bar` as field `bar` in `Foo`), it is called direct wrapping. The most important property achieved through direct wrapping is the following: The wrapped object cannot be unwrapped unless we destroy the wrapping object. In the examle above, in order to make `bar` a standalone object again, one has to delete (and hence [unpack](https://move-book.com/advanced-topics/struct.html#destructing-structures)) the `Foo` object. Because of this property, Direct Wrapping is the best way to implement **Object Locking**: lock an object with constrained access, and one can only unlock it through specific contract calls.
+>:bulb: The fact that you can no longer use a wrapped Sui object means that it's impossible to create circular wrapping behavior, where A wraps B, B wraps C, and C also wraps A.
 
-Let's walk through an example implementation of a trusted swap to demonstrate how to use direct wrapping. Let's say there is an NFT-style `Object` type that has `scarcity` and `style`. `scarcity` determines how scarce the object is (presumably the more scarce the higher its market value); `style` determines the object content/type or how it's rendered. You own some of these objects, and want to trade your objects with others. But to make sure it's a fair trade, you are only willing to trade an object with another one that has identical `scarcity` but different `style` (so that you can collect more styles).
+There are a few common ways to wrap a Sui object into another Sui object, and their use cases are typically different. In the following, we will walk through three different ways to wrap a Sui object and their typical use cases.
+
+### Direct wrapping
+When we put a Sui object type directly as a field in another Sui object type (just like how we put `Bar` as field `bar` in `Foo`), it is called *direct wrapping*. The most important property achieved through direct wrapping is the following: *The wrapped object cannot be unwrapped unless we destroy the wrapping object.* In the example above, in order to make `bar` a standalone object again, one has to delete (and hence [unpack](https://move-book.com/advanced-topics/struct.html#destructing-structures)) the `Foo` object. Because of this property, direct wrapping is the best way to implement *object locking*: lock an object with constrained access, and one can unlock it only through specific contract calls.
+
+Let's walk through an example implementation of a trusted swap to demonstrate how to use direct wrapping. Let's say there is an NFT-style `Object` type that has `scarcity` and `style`. `scarcity` determines how rare the object is (presumably the more scarce the higher its market value); `style` determines the object content/type or how it's rendered. Let's say you own some of these objects and want to trade your objects with others. But to make sure it's a fair trade, you are willing to trade an object only with another one that has identical `scarcity` but different `style` (so that you can collect more styles).
 
 First of all, let's define such an object type:
 ```rust
@@ -60,7 +62,7 @@ public(script) fun transfer_object(object: Object, ctx: &mut TxContext) {
 
 Now let's look at how we could enable a swap/trade between your object and others' objects. A straightforward idea is this: define a function that takes two objects from two accounts, and swap their ownership. But this doesn't work in Sui! Recall from Chapter 2 that only object owners can send a transaction to mutate the object. So one person cannot send a transaction that would swap their own object with someone else's object.
 
-In the future, we will likely introduce multi-agent transactions where two signers can sign the same transaction that uses objects from both of them. However you may not always be able to find someone to swap with right away. A multi-agent transaction won't work in this scenario. Even if you can, you may not want to carry the burden of finding a swap target.
+In the future, we will likely introduce multi-sig transactions so that two people can sign the same transaction for this type of usecase. However you may not always be able to find someone to swap with right away. A multi-sig transaction won't work in this scenario. Even if you can, you may not want to carry the burden of finding a swap target.
 
 Another common solution is to "send" your object to a pool (e.g. a marketplace in the case of NFT, or a liquidity pool in the case of tokens), and perform the swap in the pool (either right away, or later when there is demand). In future chapters, we will explore the concept of shared objects that can be mutated by anyone, and show that how it enables anyone to operate in a shared object pool. In this chapter, we will focus on how to achieve the same effect using owned objects. Transactions only using owned objects is faster and cheaper (in terms of gas) than using shared objects, since it does not require consensus in Sui.
 
@@ -195,8 +197,5 @@ You can also find a more complex example in [Hero.move](../../../../sui_programm
 
 ### Wrapping through `vector`
 The concept of wrapping objects in a vector field of another Sui object is very similar to wrapping through `Option`: an object may contain 0, 1 or many of the wrapped objects of the same type.
->:book: Move's `Option` type is in fact implemented using `vector`.
 
 To be finished.
-
-<!-- TODO: Explain when to use object wrapping: One can always achieve object locking through data wrapping instead of object wrapping, and is likely cheaper to do. The only advantage of object wrapping hence lies in the ability to keep a stable object ID before and after object wrap and unwrap. We will need to come up with a real use case for this. -->
