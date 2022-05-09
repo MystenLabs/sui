@@ -9,7 +9,7 @@ import {
     getExecutionStatusType,
     getTotalGasUsed,
     getExecutionDetails,
-} from 'sui.js';
+} from '@mysten/sui.js';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import TransactionCard from '../../components/transaction-card/TransactionCard';
@@ -22,7 +22,7 @@ import type {
     ExecutionStatusType,
     TransactionEffects,
     RawObjectRef,
-} from 'sui.js';
+} from '@mysten/sui.js';
 
 import styles from './TransactionResult.module.css';
 

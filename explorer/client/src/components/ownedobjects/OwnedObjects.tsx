@@ -3,7 +3,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getObjectContent, getObjectExistsResponse } from 'sui.js';
+import { getObjectContent, getObjectExistsResponse } from '@mysten/sui.js';
 
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { parseImageURL, parseObjectType } from '../../utils/objectUtils';

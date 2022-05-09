@@ -8,7 +8,7 @@ import {
     getPublishTransaction,
     getTransactionKind,
     getTransferTransaction,
-} from 'sui.js';
+} from '@mysten/sui.js';
 
 import Longtext from '../../components/longtext/Longtext';
 
@@ -18,7 +18,7 @@ import type {
     TransactionKindName,
     ExecutionStatusType,
     RawObjectRef,
-} from 'sui.js';
+} from '@mysten/sui.js';
 
 import styles from './TransactionCard.module.css';
 

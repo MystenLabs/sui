@@ -10,7 +10,7 @@ import {
     getTransferTransaction,
     getExecutionStatusType,
     getTotalGasUsed,
-} from 'sui.js';
+} from '@mysten/sui.js';
 
 import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
@@ -23,7 +23,7 @@ import type {
     TransactionEffectsResponse,
     ExecutionStatusType,
     TransactionKindName,
-} from 'sui.js';
+} from '@mysten/sui.js';
 
 import styles from './RecentTxCard.module.css';
 
