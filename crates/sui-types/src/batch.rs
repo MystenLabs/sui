@@ -74,6 +74,12 @@ impl AuthorityBatch {
                 error: "Transaction number must be positive.".to_string(),
             });
         };
+        // TODO: ensure batches are always contiguous with previous
+        // if transaction_vec[0].0 != previous_batch.next_sequence_number {
+        //     return Err(SuiError::GenericAuthorityError {
+        //         error: "Transactions sequence not contiguous with last batch.".to_string(),
+        //     });
+        // }
 
         let initial_sequence_number = transaction_vec[0].0 as u64;
         let next_sequence_number = (transaction_vec[transaction_vec.len() - 1].0 + 1) as u64;
