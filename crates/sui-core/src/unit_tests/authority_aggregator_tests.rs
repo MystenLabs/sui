@@ -257,7 +257,8 @@ pub async fn extract_cert<A: AuthorityAPI>(
     }
 
     let stake: usize = votes.iter().map(|(name, _)| committee.weight(name)).sum();
-    assert!(stake >= committee.quorum_threshold());
+    let quorum_threshold = committee.quorum_threshold();
+    assert!(stake >= quorum_threshold);
 
     CertifiedTransaction::new_with_signatures(
         committee.epoch(),
@@ -277,6 +278,15 @@ pub async fn do_cert<A: AuthorityAPI>(
         .signed_effects
         .unwrap()
         .effects
+}
+
+pub async fn do_cert_configurable<A: AuthorityAPI>(authority: &A, cert: &CertifiedTransaction) {
+    let result = authority
+        .handle_confirmation_transaction(ConfirmationTransaction::new(cert.clone()))
+        .await;
+    if result.is_err() {
+        println!("Error in do cert {:?}", result.err());
+    }
 }
 
 pub async fn get_latest_ref<A: AuthorityAPI>(authority: &A, object_id: ObjectID) -> ObjectRef {

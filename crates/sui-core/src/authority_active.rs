@@ -8,7 +8,7 @@
     (1) Share transactions received with other authorities, to complete their execution
         in case clients fail before sharing a transaction with sufficient authorities.
     (2) Share certificates with other authorities in case clients fail before a
-        certificate has its executon finalized.
+        certificate has its execution finalized.
     (3) Gossip executed certificates digests with other authorities through following
         each other and using push / pull to execute certificates.
     (4) Perform the active operations necessary to progress the periodic checkpointing
@@ -36,6 +36,7 @@ use std::{
 };
 use sui_types::{base_types::AuthorityName, error::SuiResult};
 use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 
 use crate::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
@@ -84,8 +85,9 @@ impl AuthorityHealth {
         self.no_contact_before = Instant::now();
     }
 
-    pub fn can_contact_now(&self) -> bool {
-        self.no_contact_before < Instant::now()
+    pub fn can_initiate_contact_now(&self) -> bool {
+        let now = Instant::now();
+        self.no_contact_before <= now
     }
 }
 
@@ -147,7 +149,7 @@ impl<A> ActiveAuthority<A> {
         entry.set_no_contact_for(Duration::from_millis(delay));
     }
 
-    // Resets retries to zero and sets no contact to zero delay.
+    /// Resets retries to zero and sets no contact to zero delay.
     pub async fn set_success_backoff(&self, name: AuthorityName) {
         let mut lock = self.health.lock().await;
         let mut entry = lock.entry(name).or_default();
@@ -155,12 +157,12 @@ impl<A> ActiveAuthority<A> {
         entry.reset_no_contact();
     }
 
-    // Checks given the current time if we should contact this authority, ie
-    // if we are past any `no contact` delay.
+    /// Checks given the current time if we should contact this authority, ie
+    /// if we are past any `no contact` delay.
     pub async fn can_contact(&self, name: AuthorityName) -> bool {
         let mut lock = self.health.lock().await;
         let entry = lock.entry(name).or_default();
-        entry.can_contact_now()
+        entry.can_initiate_contact_now()
     }
 }
 
@@ -168,13 +170,11 @@ impl<A> ActiveAuthority<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    // TODO: Active tasks go here + logic to spawn them all
-    pub async fn spawn_all_active_processes(self) -> Option<()> {
+    /// Spawn all active tasks.
+    pub async fn spawn_all_active_processes(self) -> JoinHandle<()> {
         // Spawn a task to take care of gossip
-        let _gossip_join = tokio::task::spawn(async move {
+        tokio::task::spawn(async move {
             gossip_process(&self, 4).await;
-        });
-
-        Some(())
+        })
     }
 }
