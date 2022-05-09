@@ -93,7 +93,7 @@ module ABC::ABC {
     use RC::RegulatedCoin::{Self as RC, RegulatedCoin as RC};
     use Sui::TxContext::{Self, TxContext};
     use Sui::Balance::{Self, Balance};
-    use Sui::Coin::{Self, TreasuryCap};
+    use Sui::Coin::{Self, Coin, TreasuryCap};
     use Sui::ID::{Self, VersionedID};
     use Sui::Transfer;
     use Std::Vector;
@@ -105,13 +105,14 @@ module ABC::ABC {
     struct Transfer has key {
         id: VersionedID,
         balance: Balance<ABC>,
-        to: address
+        to: address,
     }
 
     /// A registry of addresses banned from using the coin.
     struct Registry has key {
         id: VersionedID,
-        banned: vector<address>
+        banned: vector<address>,
+        swapped_amount: u64,
     }
 
     /// For when an attempting to interact with another account's RegulatedCoin<ABC>.
@@ -134,7 +135,20 @@ module ABC::ABC {
         Transfer::share_object(Registry {
             id: TxContext::new_id(ctx),
             banned: Vector::empty(),
+            swapped_amount: 0,
         });
+    }
+
+    // === Getters section: Registry ===
+
+    /// Get total amount of `Coin` from the `Registry`.
+    public fun swapped_amount(r: &Registry): u64 {
+        r.swapped_amount
+    }
+
+    /// Get vector of banned addresses from `Registry`.
+    public fun banned(r: &Registry): &vector<address> {
+        &r.banned
     }
 
     // === Admin actions: creating balances, minting coins and banning addresses ===
@@ -156,7 +170,7 @@ module ABC::ABC {
         Vector::push_back(&mut registry.banned, to_ban)
     }
 
-    // === Publicly available methods ===
+    // === Public: Regulated transfers ===
 
     /// Transfer entrypoint - create a restricted `Transfer` instance and transfer it to the
     /// `to` account for being accepted later.
@@ -177,8 +191,10 @@ module ABC::ABC {
     }
 
     /// Accept an incoming transfer by joining an incoming balance with an owned one.
-    /// Fails if the `RegulatedCoin<ABC>.owner` does not match `Transfer.to`; or if the address
-    /// of the owner/recipient is banned.
+    ///
+    /// Fails if:
+    /// 1. the `RegulatedCoin<ABC>.owner` does not match `Transfer.to`;
+    /// 2. the address of the owner/recipient is banned;
     public(script) fun accept_transfer(r: &Registry, coin: &mut RC<ABC>, transfer: Transfer, _: &mut TxContext) {
         let Transfer { id, balance, to } = transfer;
 
@@ -187,6 +203,44 @@ module ABC::ABC {
 
         Balance::join(borrow_mut(coin), balance);
         ID::delete(id)
+    }
+
+    // === Public: Swap RegulatedCoin <-> Coin ===
+
+    /// Take `value` amount of `RegulatedCoin` and make it freely transferable by wrapping it into
+    /// a `Coin`. Update `Registry` to keep track of the swapped amount.
+    ///
+    /// Fails if:
+    /// 1. `RegulatedCoin<ABC>.owner` was banned;
+    /// 2. `RegulatedCoin<ABC>` is not owned by the tx sender;
+    public(script) fun take(r: &mut Registry, coin: &mut RC<ABC>, value: u64, ctx: &mut TxContext) {
+        let sender = TxContext::sender(ctx);
+
+        assert!(RC::owner(coin) == sender, ENotOwner);
+        assert!(Vector::contains(&r.banned, &sender) == false, EAddressBanned);
+
+        // Update swapped amount for Registry to keep track of non-regulated amounts.
+        r.swapped_amount = r.swapped_amount + value;
+
+        Transfer::transfer(Coin::withdraw(borrow_mut(coin), value, ctx), TxContext::sender(ctx));
+    }
+
+    /// Take `Coin` and put to the `RegulatedCoin`'s balance.
+    ///
+    /// Fails if:
+    /// 1. `RegulatedCoin<ABC>.owner` was banned;
+    /// 2. `RegulatedCoin<ABC>` is not owned by the tx sender;
+    public(script) fun put_back(r: &mut Registry, rc_coin: &mut RC<ABC>, coin: Coin<ABC>, ctx: &mut TxContext) {
+        let balance = Coin::into_balance(coin);
+        let sender = TxContext::sender(ctx);
+
+        assert!(RC::owner(rc_coin) == sender, ENotOwner);
+        assert!(Vector::contains(&r.banned, &sender) == false, EAddressBanned);
+
+        // Update swapped amount as in `swap_regulated`.
+        r.swapped_amount = r.swapped_amount - Balance::value(&balance);
+
+        Balance::join(borrow_mut(rc_coin), balance);
     }
 
     // === Private implementations accessors and type morphing ===
@@ -213,6 +267,8 @@ module ABC::ABC {
 /// * - test_minting
 /// |   +-- test_creation
 /// |       +-- test_transfer
+/// |           +-- test_take
+/// |               +-- test_put_back
 /// |           +-- test_ban
 /// |               +-- test_address_banned_fail
 /// |               +-- test_different_account_fail
@@ -222,7 +278,7 @@ module ABC::Tests {
     use ABC::ABC::{Self, ABC, Registry};
     use RC::RegulatedCoin::{Self as RC, RegulatedCoin as RC};
 
-    use Sui::Coin::TreasuryCap;
+    use Sui::Coin::{Coin, TreasuryCap};
     use Sui::TestScenario::{Self, Scenario, next_tx, ctx};
 
     // === Test handlers; this trick helps reusing scenarios ==
@@ -230,6 +286,8 @@ module ABC::Tests {
     #[test] public(script) fun test_minting() { test_minting_(&mut scenario()) }
     #[test] public(script) fun test_creation() { test_creation_(&mut scenario()) }
     #[test] public(script) fun test_transfer() { test_transfer_(&mut scenario()) }
+    #[test] public(script) fun test_take() { test_take_(&mut scenario()) }
+    #[test] public(script) fun test_put_back() { test_put_back_(&mut scenario()) }
     #[test] public(script) fun test_ban() { test_ban_(&mut scenario()) }
 
     #[test]
@@ -333,6 +391,58 @@ module ABC::Tests {
         };
     }
 
+    // User1 cashes 100,000 of his `RegulatedCoin` into a `Coin`;
+    // User1 sends Coin<ABC> it to `user2`.
+    public(script) fun test_take_(test: &mut Scenario) {
+        let (_, user1, user2) = people();
+
+        test_transfer_(test);
+
+        next_tx(test, &user1); {
+            let coin = TestScenario::take_owned<RC<ABC>>(test);
+            let reg = TestScenario::take_shared<Registry>(test);
+            let reg_ref = TestScenario::borrow_mut(&mut reg);
+
+            ABC::take(reg_ref, &mut coin, 100000, ctx(test));
+
+            assert!(ABC::swapped_amount(reg_ref) == 100000, 4);
+            assert!(RC::value(&coin) == 400000, 5);
+
+            TestScenario::return_shared(test, reg);
+            TestScenario::return_owned(test, coin);
+        };
+
+        next_tx(test, &user1); {
+            let coin = TestScenario::take_owned<Coin<ABC>>(test);
+            Sui::Transfer::transfer(coin, user2);
+        };
+    }
+
+    // User2 sends his `Coin<ABC>` to `admin`.
+    // Admin puts this coin to his RegulatedCoin balance.
+    public(script) fun test_put_back_(test: &mut Scenario) {
+        let (admin, _, user2) = people();
+
+        test_take_(test);
+
+        next_tx(test, &user2); {
+            let coin = TestScenario::take_owned<Coin<ABC>>(test);
+            Sui::Transfer::transfer(coin, admin);
+        };
+
+        next_tx(test, &admin); {
+            let coin = TestScenario::take_owned<Coin<ABC>>(test);
+            let reg_coin = TestScenario::take_owned<RC<ABC>>(test);
+            let reg = TestScenario::take_shared<Registry>(test);
+            let reg_ref = TestScenario::borrow_mut(&mut reg);
+
+            ABC::put_back(reg_ref, &mut reg_coin, coin, ctx(test));
+
+            TestScenario::return_owned(test, reg_coin);
+            TestScenario::return_shared(test, reg);
+        }
+    }
+
     // Admin bans user1 by adding his address to the registry.
     public(script) fun test_ban_(test: &mut Scenario) {
         let (admin, user1, _) = people();
@@ -409,167 +519,5 @@ module ABC::Tests {
             TestScenario::return_shared(test, reg);
             TestScenario::return_owned(test, coin);
         }
-    }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-module RC::FREE {
-    use Sui::Balance::Balance;
-    use Sui::TxContext::{Self, TxContext};
-    use RC::RegulatedCoin::{Self as C, RegulatedCoin};
-
-    struct FREE has drop {}
-
-    // === implement the interface for the RegulatedCoin ===
-
-    public fun borrow(coin: &RegulatedCoin<FREE>): &Balance<FREE> { C::borrow(FREE {}, coin) }
-    public fun borrow_mut(coin: &mut RegulatedCoin<FREE>): &mut Balance<FREE> { C::borrow_mut(FREE {}, coin) }
-    public fun from_balance(balance: Balance<FREE>, ctx: &mut TxContext): RegulatedCoin<FREE> { C::from_balance(FREE {}, balance, TxContext::sender(ctx), ctx) }
-    public fun into_balance(coin: RegulatedCoin<FREE>): Balance<FREE> { C::into_balance(FREE {}, coin) }
-
-    // === and that's it (+ minting and currency creation) ===
-}
-
-// A very RESTricted coin.
-module RC::REST {
-    use RC::RegulatedCoin::{Self as C, RegulatedCoin};
-
-    use Sui::Balance::{Self, Balance};
-    use Sui::Coin::{Self, TreasuryCap};
-    use Sui::TxContext::{Self, TxContext};
-    use Sui::Transfer;
-
-    const ENotAllowed: u64 = 1;
-    const ENotOwner: u64 = 2;
-
-    struct REST has drop {}
-
-    /// A restricted transfer of the Balance
-    struct CoinTransfer has key {
-        id: Sui::ID::VersionedID,
-        balance: Balance<REST>,
-        to: address
-    }
-
-    /// Currently let's just use Coin::TreasuryCap functionality
-    fun init(ctx: &mut TxContext) {
-        Transfer::transfer(
-            Coin::create_currency(REST {}, ctx),
-            TxContext::sender(ctx)
-        )
-    }
-
-    /// Only owner of the treasury cap can create new Balances; for example, after a KYC process;
-    public fun create_empty_for(_cap: &TreasuryCap<REST>, for: address, ctx: &mut TxContext) {
-        Transfer::transfer(C::zero(REST {}, for, ctx), for)
-    }
-
-    /// Allow borrowing as is, by default
-    public fun borrow(coin: &RegulatedCoin<REST>): &Balance<REST> { C::borrow(REST {}, coin) }
-    public fun borrow_mut(coin: &mut RegulatedCoin<REST>, ctx: &mut TxContext): &mut Balance<REST> {
-        assert!(TxContext::sender(ctx) == C::owner(coin), ENotOwner); // only owner can access the balance
-        C::borrow_mut(REST {}, coin)
-    }
-
-    // === Coin Transfers ===
-
-    public(script) fun transfer(
-        coin: &mut RegulatedCoin<REST>, value: u64, to: address, ctx: &mut TxContext
-    ) {
-        Transfer::transfer(CoinTransfer {
-            id: TxContext::new_id(ctx),
-            balance: Balance::split(borrow_mut(coin, ctx), value),
-            to
-        }, to)
-    }
-
-    public(script) fun accept_transfer(
-        coin: &mut RegulatedCoin<REST>, transfer: CoinTransfer, ctx: &mut TxContext
-    ) {
-        let CoinTransfer { id, balance, to } = transfer;
-        assert!(C::owner(coin) == to, ENotOwner);
-        Balance::join(borrow_mut(coin, ctx), balance);
-        Sui::ID::delete(id);
-    }
-}
-
-module RC::RestrictedStake {
-    use RC::REST::{Self, REST};
-    use RC::RegulatedCoin::RegulatedCoin;
-
-    use Sui::Coin::{Self, Coin, TreasuryCap};
-    use Sui::Balance::{Self, Balance};
-    use Sui::TxContext::{Self, TxContext};
-    use Sui::Transfer;
-
-    // stake token - get your money back once
-    struct STAKE has drop {}
-
-    struct StableStake has key {
-        id: Sui::ID::VersionedID,
-        balance: Balance<REST>,
-        treasury_cap: TreasuryCap<STAKE>,
-    }
-
-    fun init(ctx: &mut TxContext) {
-        Transfer::share_object(StableStake {
-            id: TxContext::new_id(ctx),
-            balance: Balance::zero<REST>(),
-            treasury_cap: Coin::create_currency<STAKE>(STAKE{}, ctx)
-        });
-    }
-
-    public(script) fun fill(
-        stake: &mut StableStake,
-        coin: &mut RegulatedCoin<REST>,
-        value: u64,
-        ctx: &mut TxContext
-    ) {
-        let to_fill = Balance::split(REST::borrow_mut(coin, ctx), value);
-        let coin = Coin::mint<STAKE>(value, &mut stake.treasury_cap, ctx);
-
-        Balance::join(&mut stake.balance, to_fill);
-        Transfer::transfer(coin, TxContext::sender(ctx))
-    }
-
-    public(script) fun withdraw(
-        stake: &mut StableStake,
-        stable: &mut RegulatedCoin<REST>,
-        coin: Coin<STAKE>,
-        ctx: &mut TxContext
-    ) {
-        let balance = Balance::split(&mut stake.balance, Coin::value(&coin));
-
-        Coin::burn(coin, &mut stake.treasury_cap);
-        Balance::join(REST::borrow_mut(stable, ctx), balance);
     }
 }
