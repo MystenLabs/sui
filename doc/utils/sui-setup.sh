@@ -1,13 +1,13 @@
 #!/bin/bash
-# Prereqs: Git CLI and GitHub account
+# Prereqs: Rust Cargo, Git CLI, and GitHub account
 # Usage: set up environment for Sui development
 # Run `sui-setup.sh` in the directory to download source
 shopt -s nullglob
 set -e
 set -o pipefail
 
-## Get Cargo with Rust toolchain
-curl https://sh.rustup.rs -sSf | sh
+## Confirm or get Cargo with Rust toolchain
+command -v cargo >/dev/null 2>&1 || { echo "Cargo (https://doc.rust-lang.org/cargo/getting-started/installation.html) is not installed or missing from PATH, exiting."; return 1; }
 
 ## Build and install Sui binaries
 cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "devnet" sui
