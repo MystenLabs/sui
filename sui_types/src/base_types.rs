@@ -1,18 +1,14 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use anyhow::anyhow;
-use base64ct::Encoding;
+
 use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
+use std::str::FromStr;
 
-use crate::crypto::PublicKeyBytes;
-use crate::error::SuiError;
-use crate::json_schema;
-use crate::readable_serde::encoding::Base64;
-use crate::readable_serde::encoding::Hex;
-use crate::readable_serde::Readable;
+use anyhow::anyhow;
+use base64ct::Encoding;
 use digest::Digest;
 use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
@@ -25,6 +21,13 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 use sha3::Sha3_256;
+
+use crate::crypto::PublicKeyBytes;
+use crate::error::SuiError;
+use crate::json_schema;
+use crate::readable_serde::encoding::Base64;
+use crate::readable_serde::encoding::Hex;
+use crate::readable_serde::Readable;
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -64,6 +67,7 @@ pub struct ObjectID(
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
 pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;
+
 #[serde_as]
 #[derive(
     Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema,
@@ -171,6 +175,7 @@ pub struct TransactionDigest(
     #[serde_as(as = "Readable<Base64, Bytes>")]
     [u8; TRANSACTION_DIGEST_LENGTH],
 );
+
 // Each object has a unique digest
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
@@ -352,41 +357,38 @@ pub fn encode_bytes_hex<B: AsRef<[u8]>>(bytes: &B) -> String {
 }
 
 pub fn decode_bytes_hex<T: for<'a> TryFrom<&'a [u8]>>(s: &str) -> Result<T, anyhow::Error> {
+    let s = s.strip_prefix("0x").unwrap_or(s);
     let value = hex::decode(s)?;
     T::try_from(&value[..]).map_err(|_| anyhow::anyhow!("byte deserialization failed"))
 }
 
-impl std::fmt::LowerHex for SuiAddress {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-
-        for byte in &self.0 {
-            write!(f, "{:02x}", byte)?;
-        }
-
-        Ok(())
-    }
-}
-
-impl std::fmt::UpperHex for SuiAddress {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-
-        for byte in &self.0 {
-            write!(f, "{:02X}", byte)?;
-        }
-
-        Ok(())
-    }
-}
-
 impl fmt::Display for SuiAddress {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:X}", self)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:#x}", self)
+    }
+}
+
+impl fmt::Debug for SuiAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:#x}", self)
+    }
+}
+
+impl fmt::LowerHex for SuiAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", encode_bytes_hex(self))
+    }
+}
+
+impl fmt::UpperHex for SuiAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", encode_bytes_hex(self).to_uppercase())
     }
 }
 
@@ -397,14 +399,6 @@ pub fn dbg_addr(name: u8) -> SuiAddress {
 
 pub fn dbg_object_id(name: u8) -> ObjectID {
     ObjectID::from_bytes([name; ObjectID::LENGTH]).unwrap()
-}
-
-impl std::fmt::Debug for SuiAddress {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = hex::encode(&self.0);
-        write!(f, "k#{}", s)?;
-        Ok(())
-    }
 }
 
 impl std::fmt::Debug for ObjectDigest {
@@ -634,6 +628,7 @@ pub enum ObjectIDParseError {
     // #[error("Internal hex parser error: {err}")]
     // HexParserError { err: hex::FromHexError },
 }
+
 /// Wraps the underlying parsing errors
 impl From<hex::FromHexError> for ObjectIDParseError {
     fn from(err: hex::FromHexError) -> Self {
@@ -694,22 +689,37 @@ impl From<SuiAddress> for AccountAddress {
 
 impl fmt::Display for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
+        write!(f, "{:#x}", self)
     }
 }
+
 impl fmt::Debug for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        write!(f, "{:#x}", self)
     }
 }
+
 impl fmt::LowerHex for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", encode_bytes_hex(self))
     }
 }
+
 impl fmt::UpperHex for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", encode_bytes_hex(self).to_uppercase())
+    }
+}
+
+impl AsRef<[u8]> for ObjectID {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_slice()
     }
 }
 
@@ -736,6 +746,13 @@ impl TryFrom<String> for ObjectID {
 
     fn try_from(s: String) -> Result<ObjectID, ObjectIDParseError> {
         Self::from_hex(s.clone()).or_else(|_| Self::from_hex_literal(&s))
+    }
+}
+
+impl FromStr for SuiAddress {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, anyhow::Error> {
+        decode_bytes_hex(s)
     }
 }
 

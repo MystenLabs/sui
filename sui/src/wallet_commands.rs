@@ -25,7 +25,7 @@ use sui_core::gateway_state::{
 use sui_core::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_framework::build_move_package_to_bytes;
 use sui_types::{
-    base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress},
+    base_types::{ObjectID, ObjectRef, SuiAddress},
     error::SuiError,
     fp_ensure,
     gas_coin::GasCoin,
@@ -61,7 +61,7 @@ pub enum WalletCommands {
     Switch {
         /// An Sui address to be used as the active address for subsequent
         /// commands.
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         address: Option<SuiAddress>,
         /// The gateway URL (e.g., local rpc server, devnet rpc server, etc) to be
         /// used for subsequent commands.
@@ -136,7 +136,7 @@ pub enum WalletCommands {
     #[clap(name = "transfer-coin")]
     Transfer {
         /// Recipient address
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         to: SuiAddress,
 
         /// Coin to transfer, in 20 bytes Hex string
@@ -155,7 +155,7 @@ pub enum WalletCommands {
     /// Synchronize client state with authorities.
     #[clap(name = "sync")]
     SyncClientState {
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         address: Option<SuiAddress>,
     },
 
@@ -171,7 +171,7 @@ pub enum WalletCommands {
     #[clap(name = "objects")]
     Objects {
         /// Address owning the objects
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         address: Option<SuiAddress>,
     },
 
@@ -179,7 +179,7 @@ pub enum WalletCommands {
     #[clap(name = "gas")]
     Gas {
         /// Address owning the objects
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         address: Option<SuiAddress>,
     },
 
@@ -680,10 +680,22 @@ impl Display for WalletCommandResult {
                 }
             }
             WalletCommandResult::Objects(object_refs) => {
-                writeln!(writer, "Showing {} results.", object_refs.len())?;
-                for object_ref in object_refs {
-                    writeln!(writer, "{:?}", object_ref)?;
+                writeln!(
+                    writer,
+                    " {0: ^42} | {1: ^10} | {2: ^68}",
+                    "Object ID", "Version", "Digest"
+                )?;
+                writeln!(writer, "{}", ["-"; 126].join(""))?;
+                for (id, version, digest) in object_refs {
+                    writeln!(
+                        writer,
+                        " {0: ^42} | {1: ^10} | {2: ^34?}",
+                        id,
+                        version.value(),
+                        digest
+                    )?;
                 }
+                writeln!(writer, "Showing {} results.", object_refs.len())?;
             }
             WalletCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
@@ -695,7 +707,7 @@ impl Display for WalletCommandResult {
                 // TODO: generalize formatting of CLI
                 writeln!(
                     writer,
-                    " {0: ^40} | {1: ^10} | {2: ^11}",
+                    " {0: ^42} | {1: ^10} | {2: ^11}",
                     "Object ID", "Version", "Gas Value"
                 )?;
                 writeln!(
@@ -705,7 +717,7 @@ impl Display for WalletCommandResult {
                 for gas in gases {
                     writeln!(
                         writer,
-                        " {0: ^40} | {1: ^10} | {2: ^11}",
+                        " {0: ^42} | {1: ^10} | {2: ^11}",
                         gas.id(),
                         u64::from(gas.version()),
                         gas.value()
