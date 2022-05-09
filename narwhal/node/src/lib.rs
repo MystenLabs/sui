@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{Committee, Parameters, WorkerId};
-use consensus::{dag::Dag, Consensus, ConsensusStore, SequenceNumber, SubscriberHandler};
+use consensus::{dag::InnerDag, Consensus, ConsensusStore, SequenceNumber, SubscriberHandler};
 use crypto::traits::{KeyPair, Signer, VerifyingKey};
 use executor::{ExecutionState, Executor, SerializedTransaction, SubscriberResult};
 use primary::{PayloadToken, Primary};
@@ -145,7 +145,7 @@ impl Node {
             }
             false => {
                 debug!("Consensus is disabled: the primary will run on its own");
-                Dag::spawn(rx_new_certificates);
+                InnerDag::spawn(rx_new_certificates);
             }
         }
         Ok(())
