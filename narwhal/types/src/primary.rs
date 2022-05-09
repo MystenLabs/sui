@@ -1,8 +1,10 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::error::{DagError, DagResult};
-use crate::{BatchDigestProto, CertificateDigestProto};
+use crate::{
+    error::{DagError, DagResult},
+    BatchDigestProto, CertificateDigestProto,
+};
 use blake2::{digest::Update, VarBlake2b};
 use bytes::Bytes;
 use config::{Committee, WorkerId};
@@ -12,10 +14,10 @@ use crypto::{
 };
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
-use std::fmt::Formatter;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     fmt,
+    fmt::Formatter,
 };
 
 /// The round number.

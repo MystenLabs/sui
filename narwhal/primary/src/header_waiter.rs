@@ -47,7 +47,7 @@ pub struct HeaderWaiter<PublicKey: VerifyingKey> {
     /// The committee information.
     committee: Committee<PublicKey>,
     /// The persistent storage for parent Certificates.
-    header_store: Store<CertificateDigest, Certificate<PublicKey>>,
+    certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
     /// The persistent storage for payload markers from workers.
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     /// The current consensus round (used for cleanup).
@@ -82,7 +82,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
     pub fn spawn(
         name: PublicKey,
         committee: Committee<PublicKey>,
-        header_store: Store<CertificateDigest, Certificate<PublicKey>>,
+        certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         consensus_round: Arc<AtomicU64>,
         gc_depth: Round,
@@ -95,7 +95,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
             Self {
                 name,
                 committee,
-                header_store,
+                certificate_store,
                 payload_store,
                 consensus_round,
                 gc_depth,
@@ -202,7 +202,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                             let wait_for = missing.clone();
                             let (tx_cancel, rx_cancel) = channel(1);
                             self.pending.insert(header_id, (round, tx_cancel));
-                            let fut = Self::waiter(wait_for, self.header_store.clone(), header, rx_cancel);
+                            let fut = Self::waiter(wait_for, self.certificate_store.clone(), header, rx_cancel);
                             // pointer-size allocation, bounded by the # of blocks (may eventually go away, see rust RFC #1909)
                             waiting.push(Box::pin(fut));
 

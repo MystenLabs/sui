@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::time::Duration;
 
-use crate::block_waiter::GetBlockResponse;
-use crate::BlockCommand;
-use tokio::sync::oneshot;
-use tokio::{sync::mpsc::Sender, time::timeout};
+use crate::{block_waiter::GetBlockResponse, BlockCommand};
+use tokio::{
+    sync::{mpsc::Sender, oneshot},
+    time::timeout,
+};
 use tonic::{Request, Response, Status};
 use types::{
     BatchMessageProto, BlockError, CollectionRetrievalResult, GetCollectionsRequest,

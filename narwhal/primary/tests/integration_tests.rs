@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use config::Parameters;
-use crypto::traits::Signer;
-use crypto::Hash;
-use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
+use crypto::{
+    ed25519::Ed25519PublicKey,
+    traits::{KeyPair, Signer},
+    Hash,
+};
 use node::NodeStorage;
-use primary::Primary;
-use primary::CHANNEL_CAPACITY;
+use primary::{Primary, CHANNEL_CAPACITY};
 use std::time::Duration;
 use test_utils::{
     certificate, committee_with_base_port, fixture_batch_with_transactions, fixture_header_builder,
