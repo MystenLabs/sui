@@ -183,7 +183,7 @@ public(script) fun equip_sword(warrior: &mut SimpleWarrior, sword: Sword, ctx: &
 ```
 In the above function, we are passing a `warrior` as mutable reference of `SimpleWarrior`, and a `sword` passed by value because we need to wrap it into the `warrior`.
 
-It is important to note that because `Sword` is a Sui object type without `drop` ability, if the warrior already has a sword equipped, that sword cannot just be dropped. If we make a call to `Option::fill` without first checking and taking out the existig sword, a runtime error may happen. Hence in `equip_sword`, we first check if there is already a sword equipped, and if so, we take it out and send it back to the sender. This matches what you would typically expect when you equip a new sword: if a sword is already equipped, you get it back.
+It is important to note that because `Sword` is a Sui object type without `drop` ability, if the warrior already has a sword equipped, that sword cannot just be dropped. If we make a call to `Option::fill` without first checking and taking out the existig sword, a runtime error may happen. Hence in `equip_sword`, we first check if there is already a sword equipped, and if so, we take it out and send it back to the sender. This matches what you would expect when you equip a new sword--you get the old sword back, if there is one.
 
 Full code can be found in [SimpleWarrior.move](../../../../sui_programmability/examples/objects_tutorial/sources/SimpleWarrior.move).
 
