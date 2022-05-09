@@ -38,6 +38,9 @@ const DATATYPE_DEFAULT: resultType = [
 
 const IS_COIN_TYPE = (typeDesc: string): boolean => /::Coin::/.test(typeDesc);
 
+const lastRowHas2Elements = (itemList: any[]): boolean =>
+    itemList.length % 3 === 2;
+
 function OwnedObject({ id }: { id: string }) {
     if (process.env.REACT_APP_DATA === 'static') {
         return <OwnedObjectStatic id={id} />;
@@ -205,7 +208,7 @@ function GroupView({ results }: { results: resultType }) {
                         </div>
                     );
                 })}
-                {uniqueTypes.length % 3 === 2 && (
+                {lastRowHas2Elements(uniqueTypes) && (
                     <div
                         className={`${styles.objectbox} ${styles.fillerbox}`}
                     />
@@ -407,7 +410,7 @@ function OwnedObjectView({ results }: { results: resultType }) {
                     ))}
                 </div>
             ))}
-            {results.length % 3 === 2 && (
+            {lastRowHas2Elements(results) && (
                 <div className={`${styles.objectbox} ${styles.fillerbox}`} />
             )}
         </div>
