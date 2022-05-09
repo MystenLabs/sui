@@ -19,6 +19,11 @@ export function hexToAscii(hex: string) {
 export const trimStdLibPrefix = (str: string): string =>
     str.replace(/^0x2::/, '');
 
+export const handleCoinType = (str: string): string =>
+    str === '0x2::Coin::Coin<0x2::SUI::SUI>'
+        ? 'SUI'
+        : str.match(/(?<=<)[a-zA-Z0-9:]+(?=>)/)?.[0] || str;
+
 export const processDisplayValue = (display: { bytes: number[] } | string) => {
     const url =
         typeof display === 'object' && 'bytes' in display

@@ -12,7 +12,11 @@ import {
     findDataFromID,
     findOwnedObjectsfromID,
 } from '../../utils/static/searchUtil';
-import { processDisplayValue, trimStdLibPrefix } from '../../utils/stringUtils';
+import {
+    handleCoinType,
+    processDisplayValue,
+    trimStdLibPrefix,
+} from '../../utils/stringUtils';
 import DisplayBox from '../displaybox/DisplayBox';
 
 import styles from './OwnedObjects.module.css';
@@ -33,6 +37,9 @@ const DATATYPE_DEFAULT: resultType = [
 ];
 
 const IS_COIN_TYPE = (typeDesc: string): boolean => /::Coin::/.test(typeDesc);
+
+const lastRowHas2Elements = (itemList: any[]): boolean =>
+    itemList.length % 3 === 2;
 
 function OwnedObject({ id }: { id: string }) {
     if (process.env.REACT_APP_DATA === 'static') {
@@ -162,22 +169,25 @@ function GroupView({ results }: { results: resultType }) {
 
     const goBack = useCallback(() => setIsGroup(true), []);
 
+    const uniqueTypes = Array.from(new Set(results.map(({ Type }) => Type)));
+
     if (isGroup) {
         return (
-            <div id="groupCollection" className={styles.groupcollection}>
-                {Array.from(new Set(results.map(({ Type }) => Type))).map(
-                    (typeV) => {
-                        const subObjList = results.filter(
-                            ({ Type }) => Type === typeV
-                        );
-                        return (
-                            <div
-                                key={typeV}
-                                onClick={shrinkObjList(subObjList)}
-                            >
+            <div id="groupCollection" className={styles.ownedobjects}>
+                {uniqueTypes.map((typeV) => {
+                    const subObjList = results.filter(
+                        ({ Type }) => Type === typeV
+                    );
+                    return (
+                        <div
+                            key={typeV}
+                            onClick={shrinkObjList(subObjList)}
+                            className={styles.objectbox}
+                        >
+                            <div>
                                 <div>
                                     <span>Type</span>
-                                    <span>{trimStdLibPrefix(typeV)}</span>
+                                    <span>{handleCoinType(typeV)}</span>
                                 </div>
                                 <div>
                                     <span>Balance</span>
@@ -195,8 +205,13 @@ function GroupView({ results }: { results: resultType }) {
                                     </span>
                                 </div>
                             </div>
-                        );
-                    }
+                        </div>
+                    );
+                })}
+                {lastRowHas2Elements(uniqueTypes) && (
+                    <div
+                        className={`${styles.objectbox} ${styles.fillerbox}`}
+                    />
                 )}
             </div>
         );
@@ -205,7 +220,7 @@ function GroupView({ results }: { results: resultType }) {
             <div>
                 <div className={styles.paginationheading}>
                     <button onClick={goBack}>&#60; Back</button>
-                    <h2>{trimStdLibPrefix(subObjs[0].Type)}</h2>
+                    <h2>{handleCoinType(subObjs[0].Type)}</h2>
                 </div>
                 <OwnedObjectSection results={subObjs} />
             </div>
@@ -395,7 +410,7 @@ function OwnedObjectView({ results }: { results: resultType }) {
                     ))}
                 </div>
             ))}
-            {results.length % 3 === 2 && (
+            {lastRowHas2Elements(results) && (
                 <div className={`${styles.objectbox} ${styles.fillerbox}`} />
             )}
         </div>

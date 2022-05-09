@@ -53,6 +53,19 @@ const searchText = async (page: any, text: string) => {
     await page.click('#searchBtn');
 };
 
+//Standardized CSS Selectors
+
+const coinGroup = (num: number) => {
+    const trunk = `#groupCollection > div:nth-child(${num})`;
+    return {
+        base: () => trunk,
+        field: (numField: number) =>
+            `${trunk} > div > div:nth-child(${numField})`,
+    };
+};
+
+const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num})`;
+
 describe('End-to-end Tests', () => {
     beforeAll(async () => {
         browser = await puppeteer.launch();
@@ -275,9 +288,7 @@ describe('End-to-end Tests', () => {
             await page.goto(`${BASE_URL}/${parentIsA}/${parentValue}`);
 
             //Click on child in Owned Objects List:
-            const objectLink = await page.$(
-                `div#ownedObjects > div:nth-child(${parentToChildNo})`
-            );
+            const objectLink = await page.$(nftObject(parentToChildNo));
             await objectLink.click();
 
             //Check ID of child object:
@@ -321,9 +332,7 @@ describe('End-to-end Tests', () => {
             await page.goto(`${BASE_URL}/objects/${parentValue}`);
 
             //Click on child in Owned Objects List:
-            const objectLink = await page.$(
-                `div#ownedObjects > div:nth-child(1)`
-            );
+            const objectLink = await page.$(nftObject(1));
             await objectLink.click();
 
             // First see Please Wait Message:
@@ -369,9 +378,7 @@ describe('End-to-end Tests', () => {
             await page.goto(`${BASE_URL}/addresses/${address}`);
             const btn = await page.$('#nextBtn');
             await btn.click();
-            const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(1)'
-            );
+            const objectLink = await page.$(nftObject(1));
             await objectLink.click();
 
             const objectIDEl = await page.$('#objectID');
@@ -388,9 +395,7 @@ describe('End-to-end Tests', () => {
 
             const btn = await page.$('#lastBtn');
             await btn.click();
-            const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(1)'
-            );
+            const objectLink = await page.$(nftObject(1));
             await objectLink.click();
 
             const objectIDEl = await page.$('#objectID');
@@ -426,9 +431,7 @@ describe('End-to-end Tests', () => {
 
             await page.$('#backBtn').then((btn: any) => btn.click());
 
-            const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(1)'
-            );
+            const objectLink = await page.$(nftObject(1));
             await objectLink.click();
 
             const objectIDEl = await page.$('#objectID');
@@ -450,9 +453,7 @@ describe('End-to-end Tests', () => {
 
             await page.$('#firstBtn').then((btn: any) => btn.click());
 
-            const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(1)'
-            );
+            const objectLink = await page.$(nftObject(1));
             await objectLink.click();
 
             const objectIDEl = await page.$('#objectID');
@@ -466,7 +467,7 @@ describe('End-to-end Tests', () => {
         it('where first and back disappear in first page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            const btn1 = await page.$('#groupCollection > div:nth-child(1)');
+            const btn1 = await page.$(coinGroup(1).base());
             await btn1.click();
 
             //Next and Last buttons are not disabled:
@@ -484,28 +485,28 @@ describe('End-to-end Tests', () => {
 
             expect(
                 await page.$eval(
-                    '#groupCollection > div:nth-child(1) > div:nth-child(1)',
+                    coinGroup(1).field(1),
                     (el: any) => el.textContent
                 )
-            ).toBe('TypeCoin::Coin<0x2::USD::USD>');
+            ).toBe('Type0x2::USD::USD');
 
             expect(
                 await page.$eval(
-                    '#groupCollection > div:nth-child(1) > div:nth-child(2)',
+                    coinGroup(1).field(2),
                     (el: any) => el.textContent
                 )
             ).toBe('Balance300');
 
             expect(
                 await page.$eval(
-                    '#groupCollection > div:nth-child(2) > div:nth-child(1)',
+                    coinGroup(2).field(1),
                     (el: any) => el.textContent
                 )
-            ).toBe('TypeCoin::Coin<0x2::SUI::SUI>');
+            ).toBe('TypeSUI');
 
             expect(
                 await page.$eval(
-                    '#groupCollection > div:nth-child(2) > div:nth-child(2)',
+                    coinGroup(2).field(2),
                     (el: any) => el.textContent
                 )
             ).toBe('Balance200');
