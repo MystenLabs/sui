@@ -64,6 +64,8 @@ const coinGroup = (num: number) => {
     };
 };
 
+const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num})`;
+
 describe('End-to-end Tests', () => {
     beforeAll(async () => {
         browser = await puppeteer.launch();
@@ -286,9 +288,7 @@ describe('End-to-end Tests', () => {
             await page.goto(`${BASE_URL}/${parentIsA}/${parentValue}`);
 
             //Click on child in Owned Objects List:
-            const objectLink = await page.$(
-                `div#ownedObjects > div:nth-child(${parentToChildNo})`
-            );
+            const objectLink = await page.$(nftObject(parentToChildNo));
             await objectLink.click();
 
             //Check ID of child object:
@@ -332,9 +332,7 @@ describe('End-to-end Tests', () => {
             await page.goto(`${BASE_URL}/objects/${parentValue}`);
 
             //Click on child in Owned Objects List:
-            const objectLink = await page.$(
-                `div#ownedObjects > div:nth-child(1)`
-            );
+            const objectLink = await page.$(nftObject(1));
             await objectLink.click();
 
             // First see Please Wait Message:
@@ -380,9 +378,7 @@ describe('End-to-end Tests', () => {
             await page.goto(`${BASE_URL}/addresses/${address}`);
             const btn = await page.$('#nextBtn');
             await btn.click();
-            const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(1)'
-            );
+            const objectLink = await page.$(nftObject(1));
             await objectLink.click();
 
             const objectIDEl = await page.$('#objectID');
@@ -399,9 +395,7 @@ describe('End-to-end Tests', () => {
 
             const btn = await page.$('#lastBtn');
             await btn.click();
-            const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(1)'
-            );
+            const objectLink = await page.$(nftObject(1));
             await objectLink.click();
 
             const objectIDEl = await page.$('#objectID');
@@ -437,9 +431,7 @@ describe('End-to-end Tests', () => {
 
             await page.$('#backBtn').then((btn: any) => btn.click());
 
-            const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(1)'
-            );
+            const objectLink = await page.$(nftObject(1));
             await objectLink.click();
 
             const objectIDEl = await page.$('#objectID');
@@ -461,9 +453,7 @@ describe('End-to-end Tests', () => {
 
             await page.$('#firstBtn').then((btn: any) => btn.click());
 
-            const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(1)'
-            );
+            const objectLink = await page.$(nftObject(1));
             await objectLink.click();
 
             const objectIDEl = await page.$('#objectID');
