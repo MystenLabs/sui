@@ -8,29 +8,24 @@
     @apply w-[100%] lg:flex lg:flex-wrap lg:justify-between;
 }
 
-.groupcollection > div {
-    @apply border-solid border-stone-300 rounded-lg my-2 p-2 cursor-pointer hover:shadow-md;
-}
-
 .fillerbox {
     @apply invisible;
 }
 
 .objectbox {
-    @apply border-solid border-stone-300 rounded-lg my-2 lg:self-center hover:shadow-md cursor-pointer break-all lg:w-[20vw];
+    @apply border-solid border-stone-300 rounded-lg my-2 lg:self-center hover:shadow-md cursor-pointer break-all lg:w-[21.8vw];
 }
 
 .objectbox > div {
-    @apply pt-2 pl-2 pr-1;
+    @apply py-1 px-1;
 }
 
 .objectbox > div:first-child > div {
     @apply border-none;
 }
 
-.objectbox > div > div > span:first-child,
-.groupcollection > div > div > span:first-child {
-    @apply mr-[1rem] uppercase font-sans font-semibold block xl:inline;
+.objectbox > div > div > span:first-child {
+    @apply mr-[0.25vw] uppercase font-sans font-bold block xl:inline;
 }
 
 .previewimage > div > img {
