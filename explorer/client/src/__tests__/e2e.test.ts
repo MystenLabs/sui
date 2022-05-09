@@ -53,6 +53,17 @@ const searchText = async (page: any, text: string) => {
     await page.click('#searchBtn');
 };
 
+//Standardized CSS Selectors
+
+const coinGroup = (num: number) => {
+    const trunk = `#groupCollection > div:nth-child(${num})`;
+    return {
+        base: () => trunk,
+        field: (numField: number) =>
+            `${trunk} > div > div:nth-child(${numField})`,
+    };
+};
+
 describe('End-to-end Tests', () => {
     beforeAll(async () => {
         browser = await puppeteer.launch();
@@ -466,7 +477,7 @@ describe('End-to-end Tests', () => {
         it('where first and back disappear in first page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            const btn1 = await page.$('#groupCollection > div:nth-child(1)');
+            const btn1 = await page.$(coinGroup(1).base());
             await btn1.click();
 
             //Next and Last buttons are not disabled:
@@ -484,28 +495,28 @@ describe('End-to-end Tests', () => {
 
             expect(
                 await page.$eval(
-                    '#groupCollection > div:nth-child(1) > div > div:nth-child(1)',
+                    coinGroup(1).field(1),
                     (el: any) => el.textContent
                 )
             ).toBe('Type0x2::USD::USD');
 
             expect(
                 await page.$eval(
-                    '#groupCollection > div:nth-child(1) > div > div:nth-child(2)',
+                    coinGroup(1).field(2),
                     (el: any) => el.textContent
                 )
             ).toBe('Balance300');
 
             expect(
                 await page.$eval(
-                    '#groupCollection > div:nth-child(2) > div > div:nth-child(1)',
+                    coinGroup(2).field(1),
                     (el: any) => el.textContent
                 )
             ).toBe('TypeSUI');
 
             expect(
                 await page.$eval(
-                    '#groupCollection > div:nth-child(2) > div > div:nth-child(2)',
+                    coinGroup(2).field(2),
                     (el: any) => el.textContent
                 )
             ).toBe('Balance200');
