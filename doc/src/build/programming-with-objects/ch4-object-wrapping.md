@@ -83,7 +83,7 @@ public(script) fun request_swap(object: Object, fee: Coin<SUI>, service_address:
 }
 ```
 In the above entry function, to request for swapping an `object`, one must pass the object by value so that it's fully consumed and wrapped into `ObjectWrapper`. A fee (in the type of `Coin<SUI>`) is also provided. It also checks that the fee is sufficient. Note that we turn `Coin` into `Balance` when putting it into the `wrapper` object. This is because `Coin` is a Sui object type and only used to pass around as Sui objects (e.g. as entry function arguments or objects sent to addresses). For coin balances that need to be embedded in another Sui object struct, we use `Balance` instead because it's not a Sui object type and hence is much cheaper to use.
-The wrapper object is then sent to the service operator, whose address is also specified in the call as `serviec_address`.
+The wrapper object is then sent to the service operator, whose address is also specified in the call as `service_address`.
 
 Although the service operator (`service_address`) now owns the `ObjectWrapper`, which contains the object to be swapped, there is nothing they can do about the object. They cannot transfer it even though we have defined a `transfer_object` entry function for `Object`. This is because they cannot pass the wrapped `Object` as an argument to the function.
 
