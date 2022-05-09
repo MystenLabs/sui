@@ -8,8 +8,10 @@ import {
   GatewayTxSeqNumber,
   ObjectRef,
   GetObjectInfoResponse,
+  SignedTransaction,
+  TransactionResponse,
 } from '../types';
-import { Provider, SignedTransaction, TransactionResponse } from './provider';
+import { Provider } from './provider';
 
 export class VoidProvider extends Provider {
   // Objects
