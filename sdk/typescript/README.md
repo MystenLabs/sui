@@ -6,17 +6,8 @@ Note that the SDK is still in development mode and some API functions are subjec
 
 ## Installation
 
-We haven't published the npm package yet, so right now you may use [npm link](https://docs.npmjs.com/cli/v8/commands/npm-link) to install it locally.
-
 ```bash
-cd sui/sdk/typescript
-yarn && yarn build && npm link
-```
-
-Then:
-```bash
-cd your/project
-npm link sui.js
+$ yarn add @mysten/sui.js
 ```
 
 ## Local Development Environment Setup
@@ -30,7 +21,7 @@ The `JsonRpcProvider` class provides a connection to the JSON-RPC Server and sho
 Fetch objects owned by the address `C5206DD02C86A510C4848516229B02ADDFACBE55`
 
 ```typescript
-import { JsonRpcProvider } from 'sui.js';
+import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider('http://127.0.0.1:5001/');
 const objects = await provider.getOwnedObjectRefs(
   'C5206DD02C86A510C4848516229B02ADDFACBE55'
@@ -40,7 +31,7 @@ const objects = await provider.getOwnedObjectRefs(
 Fetch transaction details from a transaction digest:
 
 ```typescript
-import { JsonRpcProvider } from 'sui.js';
+import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider('http://127.0.0.1:5001/');
 const txn = await provider.getTransaction(
   '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME='
