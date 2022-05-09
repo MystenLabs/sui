@@ -8,10 +8,14 @@ use crate::{
 use std::collections::BTreeMap;
 
 pub fn make_committee_key() -> (Vec<KeyPair>, Committee) {
+    make_committee_key_num(4)
+}
+
+pub fn make_committee_key_num(num: usize) -> (Vec<KeyPair>, Committee) {
     let mut authorities = BTreeMap::new();
     let mut keys = Vec::new();
 
-    for _ in 0..4 {
+    for _ in 0..num {
         let (_, inner_authority_key) = get_key_pair();
         authorities.insert(
             /* address */ *inner_authority_key.public_key_bytes(),

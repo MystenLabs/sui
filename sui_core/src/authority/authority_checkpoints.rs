@@ -1,7 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::{HashSet, BTreeMap}, path::Path, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    path::Path,
+    sync::Arc,
+};
 
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -15,7 +19,7 @@ use sui_types::{
         CheckpointFragment, CheckpointRequest, CheckpointRequestType, CheckpointResponse,
         CheckpointSequenceNumber, CheckpointSummary, SignedCheckpoint, SignedCheckpointProposal,
     },
-    waypoint::WaypointDiff,
+    waypoint::{GlobalCheckpoint, WaypointDiff},
 };
 use typed_store::{
     reopen,
@@ -443,10 +447,13 @@ impl CheckpointStore {
         // TODO: Send to consensus for sequencing.
 
         // NOTE: we should charge the node that sends this into consensus
-        //       according to the byte length of the fragment, to create 
+        //       according to the byte length of the fragment, to create
         //       incentives for nodes to submit smaller fragments.
 
-        unimplemented!();
+        Ok(CheckpointResponse {
+            info: AuthorityCheckpointInfo::Success,
+            detail: None,
+        })
     }
 
     /// Call this function internally to update the latest checkpoint.
@@ -528,8 +535,14 @@ impl CheckpointStore {
         // Save the new fragment in the DB
         self.fragments.insert(&_seq, &_fragment)?;
 
-        // Run the reconstruction logic to build a checkpoint.
+        let fragments: Vec<_> = self.fragments.values().collect();
 
+        // Run the reconstruction logic to build a checkpoint.
+        let _potential_checkpoint = FragmentReconstruction::construct(
+            self.next_checkpoint(),
+            self.committee.clone(),
+            &fragments,
+        );
 
         unimplemented!()
     }
@@ -882,5 +895,115 @@ impl CheckpointStore {
         batch.write()?;
 
         Ok(self.lowest_unprocessed_checkpoint())
+    }
+}
+
+pub struct FragmentReconstruction {
+    pub committee: Committee,
+    pub global: GlobalCheckpoint<AuthorityName, TransactionDigest>,
+}
+
+impl FragmentReconstruction {
+    pub fn construct(
+        seq: u64,
+        committee: Committee,
+        fragments: &[CheckpointFragment],
+    ) -> Result<FragmentReconstruction, SuiError> {
+        // First extract the greatest connected component
+        let mut links: HashMap<AuthorityName, HashSet<AuthorityName>> = HashMap::new();
+        let mut link_fragment: HashMap<(AuthorityName, AuthorityName), _> = HashMap::new();
+
+        // TODO Here: Check that any subsequence proposal from the same authority
+        // is the same as any previous proposal seen to avoid equivocation. If a
+        // contradiction is found exclude the authority from the checkpoint -- it
+        // is faulty for sure.
+        //
+        // let _entities: HashMap<AuthorityName, SignedCheckpointProposal> = HashMap::new();
+
+        // Insert each link both ways, to construct the graph.
+        for fragment in fragments {
+            let proposer = fragment.proposer.0.authority;
+            let other = fragment.other.0.authority;
+            links
+                .entry(proposer)
+                .or_insert_with(HashSet::new)
+                .insert(other);
+            links
+                .entry(other)
+                .or_insert_with(HashSet::new)
+                .insert(proposer);
+
+            // Make an index of the fragments
+            link_fragment.entry((proposer, other)).or_insert(fragment);
+            link_fragment.entry((other, proposer)).or_insert(fragment);
+        }
+
+        let mut candidates: HashSet<_> = links.keys().collect();
+
+        // Loop back here!
+        loop {
+            let mut current_component = Vec::new();
+            let mut add_set = HashSet::new();
+
+            // This list is getting smaller with each pop, and when empty we
+            // exit, therefore this loop will terminate with an error in case
+            // we do not find a checkpoint-size component.
+            if let Some(add_item) = candidates.iter().next() {
+                // Take the next available node to create the next connected
+                // component.
+                add_set.insert(*add_item);
+            } else {
+                // If we run out of candidates with no checkpoint, there is no
+                // checkpoint yet.
+                return Err(SuiError::GenericAuthorityError {
+                    error: "No global checkpoint yet".to_string(),
+                });
+            }
+
+            // Extract the connected component starting at "add_item".
+            while !add_set.is_empty() {
+                let start_entity = *add_set.iter().next().unwrap();
+                add_set.remove(start_entity);
+                candidates.remove(start_entity);
+                // Note this lists nodes in causal order of connection.
+                current_component.push(start_entity);
+                add_set.extend(
+                    links[start_entity]
+                        .iter()
+                        .filter(|item| candidates.contains(*item)),
+                );
+            }
+
+            // Measure the amount of stake in this component
+            let total_weight: usize = current_component
+                .iter()
+                .map(|item| committee.weight(item))
+                .sum();
+
+            // The weight is too small for this component to be a checkpoint so we
+            // skip and try to go make another component. (Or exit.)
+            if total_weight < committee.quorum_threshold() {
+                continue;
+            }
+
+            // Here we are dealing with a global checkpoint!
+            // NOTE: Since a global checkpoint has 2f+1 stake there can only be one of them.
+            let mut global = GlobalCheckpoint::new(seq);
+            for first_item in current_component {
+                for second_item in &links[first_item] {
+                    // Rearrange so that the first item connects with the existing graph.
+                    let mut fragment_diff =
+                        link_fragment[&(*first_item, *second_item)].diff.clone();
+                    if fragment_diff.first.key != *first_item {
+                        fragment_diff = fragment_diff.swap();
+                    }
+                    // Insert into the graph.
+                    let _ = global.insert(fragment_diff);
+                }
+            }
+
+            // We have found a large enough component, so we now return it!
+            return Ok(FragmentReconstruction { global, committee });
+        }
     }
 }

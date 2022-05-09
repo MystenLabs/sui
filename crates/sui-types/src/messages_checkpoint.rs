@@ -412,7 +412,7 @@ pub struct CheckpointFragment {
 }
 
 impl CheckpointFragment {
-    pub fn verify(&self, _committee : &Committee) -> Result<(), SuiError> {
+    pub fn verify(&self, _committee: &Committee) -> Result<(), SuiError> {
         // TODO:
         // - check the signatures on the proposed checkpoints.
         // - check that the waypoint is between the checkpoints.

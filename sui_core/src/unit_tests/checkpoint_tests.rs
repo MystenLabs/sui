@@ -13,13 +13,16 @@ use sui_adapter::genesis;
 use sui_types::{
     base_types::{AuthorityName, ObjectID},
     batch::UpdateItem,
-    utils::make_committee_key,
+    utils::{make_committee_key, make_committee_key_num},
     waypoint::GlobalCheckpoint,
 };
 
 fn random_ckpoint_store() -> Vec<(PathBuf, CheckpointStore)> {
-    let (keys, committee) = make_committee_key();
+    random_ckpoint_store_num(4)
+}
 
+fn random_ckpoint_store_num(num: usize) -> Vec<(PathBuf, CheckpointStore)> {
+    let (keys, committee) = make_committee_key_num(num);
     keys.iter()
         .map(|k| {
             let dir = env::temp_dir();
@@ -927,4 +930,151 @@ async fn test_batch_to_checkpointing_init_crash() {
         // When we close the sending channel we also also end the service task
         authority_state.batch_notifier.close();
     }
+}
+
+#[test]
+fn set_fragment_external() {
+    let mut test_objects = random_ckpoint_store();
+    let (_, cps1) = test_objects.pop().unwrap();
+    let (_, cps2) = test_objects.pop().unwrap();
+    let (_, cps3) = test_objects.pop().unwrap();
+    let (_, cps4) = test_objects.pop().unwrap();
+
+    let t1 = TransactionDigest::random();
+    let t2 = TransactionDigest::random();
+    let t3 = TransactionDigest::random();
+    let t4 = TransactionDigest::random();
+    let t5 = TransactionDigest::random();
+    // let t6 = TransactionDigest::random();
+
+    cps1.update_processed_transactions(&[(1, t2), (2, t3)])
+        .unwrap();
+
+    cps2.update_processed_transactions(&[(1, t1), (2, t2)])
+        .unwrap();
+
+    cps3.update_processed_transactions(&[(1, t3), (2, t4)])
+        .unwrap();
+
+    cps4.update_processed_transactions(&[(1, t4), (2, t5)])
+        .unwrap();
+
+    let p1 = cps1.set_proposal().unwrap();
+    let p2 = cps2.set_proposal().unwrap();
+    let _p3 = cps3.set_proposal().unwrap();
+
+    let fragment12 = p1.diff_with(&p2);
+    // let fragment13 = p1.diff_with(&p3);
+
+    // When the fragment concern the authority it processes it
+    assert!(cps1.handle_receive_fragment(&fragment12).is_ok());
+    assert!(cps2.handle_receive_fragment(&fragment12).is_ok());
+
+    // When the fragment does not concern the authority it does not process it.
+    assert!(cps3.handle_receive_fragment(&fragment12).is_err());
+}
+
+#[test]
+fn set_fragment_reconstruct() {
+    let mut test_objects = random_ckpoint_store();
+    let (_, cps1) = test_objects.pop().unwrap();
+    let (_, cps2) = test_objects.pop().unwrap();
+    let (_, cps3) = test_objects.pop().unwrap();
+    let (_, cps4) = test_objects.pop().unwrap();
+
+    let t1 = TransactionDigest::random();
+    let t2 = TransactionDigest::random();
+    let t3 = TransactionDigest::random();
+    let t4 = TransactionDigest::random();
+    let t5 = TransactionDigest::random();
+    // let t6 = TransactionDigest::random();
+
+    cps1.update_processed_transactions(&[(1, t2), (2, t3)])
+        .unwrap();
+
+    cps2.update_processed_transactions(&[(1, t1), (2, t2)])
+        .unwrap();
+
+    cps3.update_processed_transactions(&[(1, t3), (2, t4)])
+        .unwrap();
+
+    cps4.update_processed_transactions(&[(1, t4), (2, t5)])
+        .unwrap();
+
+    let p1 = cps1.set_proposal().unwrap();
+    let p2 = cps2.set_proposal().unwrap();
+    let p3 = cps3.set_proposal().unwrap();
+    let p4 = cps4.set_proposal().unwrap();
+
+    let fragment12 = p1.diff_with(&p2);
+    let fragment34 = p3.diff_with(&p4);
+
+    let attempt1 = FragmentReconstruction::construct(
+        0,
+        cps1.committee.clone(),
+        &[fragment12.clone(), fragment34.clone()],
+    );
+    assert!(attempt1.is_err());
+
+    let fragment41 = p4.diff_with(&p1);
+    let attempt2 =
+        FragmentReconstruction::construct(0, cps1.committee, &[fragment12, fragment34, fragment41]);
+    assert!(attempt2.is_ok());
+
+    let reconstruction = attempt2.unwrap();
+    assert_eq!(reconstruction.global.authority_waypoints.len(), 4);
+}
+
+#[test]
+fn set_fragment_reconstruct_two_components() {
+    let mut test_objects = random_ckpoint_store_num(2 * 3 + 1);
+
+    let t2 = TransactionDigest::random();
+    let t3 = TransactionDigest::random();
+    // let t6 = TransactionDigest::random();
+
+    for (_, cps) in &mut test_objects {
+        cps.update_processed_transactions(&[(1, t2), (2, t3)])
+            .unwrap();
+    }
+
+    let mut proposals: Vec<_> = test_objects
+        .iter_mut()
+        .map(|(_, cps)| cps.set_proposal().unwrap())
+        .collect();
+
+    let committee = test_objects[0].1.committee.clone();
+
+    // Get out the last two
+    let p_x = proposals.pop().unwrap();
+    let p_y = proposals.pop().unwrap();
+
+    let fragment_xy = p_x.diff_with(&p_y);
+
+    let attempt1 = FragmentReconstruction::construct(0, committee.clone(), &[fragment_xy.clone()]);
+    assert!(attempt1.is_err());
+
+    // Make a daisy chain of the other proposals
+    let mut fragments = vec![fragment_xy];
+
+    while let Some(proposal) = proposals.pop() {
+        if !proposals.is_empty() {
+            let fragment_xy = proposal.diff_with(&proposals[0]);
+            fragments.push(fragment_xy);
+        }
+
+        if proposals.len() == 1 {
+            break;
+        }
+
+        let attempt2 = FragmentReconstruction::construct(0, committee.clone(), &fragments);
+        // Error until we have the full 5 others
+        assert!(attempt2.is_err());
+    }
+
+    let attempt2 = FragmentReconstruction::construct(0, committee, &fragments);
+    assert!(attempt2.is_ok());
+
+    let reconstruction = attempt2.unwrap();
+    assert_eq!(reconstruction.global.authority_waypoints.len(), 5);
 }

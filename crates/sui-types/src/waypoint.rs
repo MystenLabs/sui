@@ -22,6 +22,8 @@ mod waypoint_tests;
 pub enum WaypointError {
     #[error("Waypoint error: {:?}", msg)]
     Generic { msg: String },
+    #[error("Nothing to do, all parts are already in the checkpoint.")]
+    NothingToDo,
 }
 
 impl WaypointError {
@@ -292,9 +294,7 @@ where
             }
 
             if self.authority_waypoints.contains_key(&diff.second.key) {
-                return Err(WaypointError::generic(
-                    "Both parts of diff in checkpoint".to_string(),
-                ));
+                return Err(WaypointError::NothingToDo);
             }
 
             let WaypointDiff { first, mut second } = diff;
