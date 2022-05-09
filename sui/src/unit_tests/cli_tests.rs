@@ -33,7 +33,7 @@ use sui_types::{
 use test_utils::network::start_test_network;
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
-const AIRDROP_SOURCE_CONTRACT_ADDRESS: &str = "bc4ca0eda7647a8ab7c2061c2e118a18a936f13d";
+const AIRDROP_SOURCE_CONTRACT_ADDRESS: &str = "0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d";
 const AIRDROP_SOURCE_TOKEN_ID: u64 = 101u64;
 const AIRDROP_TOKEN_NAME: &str = "BoredApeYachtClub";
 const AIRDROP_TOKEN_URI: &str = "ipfs://QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/101";
@@ -179,12 +179,12 @@ async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
 
     // Assemble the move call to claim the airdrop
     let oracle_obj_str = format!(
-        "0x{:02x}",
+        "{}",
         airdrop_get_oracle_object(oracle_address, &mut context).await?
     );
     let args_json = json!([
         oracle_obj_str,
-        format!("0x{:02x}", recipient_address),
+        format!("{}", recipient_address),
         AIRDROP_SOURCE_CONTRACT_ADDRESS.to_string(),
         json!(AIRDROP_SOURCE_TOKEN_ID),
         AIRDROP_TOKEN_NAME.to_string(),
