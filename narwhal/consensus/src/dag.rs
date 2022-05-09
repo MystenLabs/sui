@@ -138,4 +138,16 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
         )?;
         self.read_causal(*start_digest).await
     }
+
+    /// Removes a certificate from the Dag, reclaiming memory in the process.
+    pub fn remove(
+        &mut self,
+        digest: CertificateDigest,
+    ) -> Result<(), ValidatorDagError<PublicKey>> {
+        // TODO: not very satisfying re: atomicity
+        if self.dag.make_compressible(digest)? {
+            self.vertices.retain(|_k, v| v != &digest);
+        }
+        Ok(())
+    }
 }
