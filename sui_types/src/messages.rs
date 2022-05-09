@@ -932,31 +932,31 @@ impl Display for TransactionEffects {
         if !self.created.is_empty() {
             writeln!(writer, "Created Objects:")?;
             for ((id, _, _), owner) in &self.created {
-                writeln!(writer, "  - ID: {:?} , Owner: {}", id, owner)?;
+                writeln!(writer, "  - ID: {} , Owner: {}", id, owner)?;
             }
         }
         if !self.mutated.is_empty() {
             writeln!(writer, "Mutated Objects:")?;
             for ((id, _, _), owner) in &self.mutated {
-                writeln!(writer, "  - ID: {:?} , Owner: {}", id, owner)?;
+                writeln!(writer, "  - ID: {} , Owner: {}", id, owner)?;
             }
         }
         if !self.deleted.is_empty() {
             writeln!(writer, "Deleted Objects:")?;
             for (id, _, _) in &self.deleted {
-                writeln!(writer, "  - ID: {:?}", id)?;
+                writeln!(writer, "  - ID: {}", id)?;
             }
         }
         if !self.wrapped.is_empty() {
             writeln!(writer, "Wrapped Objects:")?;
             for (id, _, _) in &self.wrapped {
-                writeln!(writer, "  - ID: {:?}", id)?;
+                writeln!(writer, "  - ID: {}", id)?;
             }
         }
         if !self.unwrapped.is_empty() {
             writeln!(writer, "Unwrapped Objects:")?;
             for ((id, _, _), owner) in &self.unwrapped {
-                writeln!(writer, "  - ID: {:?} , Owner: {}", id, owner)?;
+                writeln!(writer, "  - ID: {} , Owner: {}", id, owner)?;
             }
         }
         write!(f, "{}", writer)
