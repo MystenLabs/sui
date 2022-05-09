@@ -19,7 +19,7 @@ struct Bar has key, store {
     value: u64,
 }
 ```
-Now `Bar` is also a Sui object type. When we put a Sui object of type `Bar` into a Sui object of type `Foo`, the Sui object of type `Bar` is said to be **wrapped**.
+Now `Bar` is also a Sui object type. When we put a Sui object of type `Bar` into a Sui object of type `Foo`, the Sui object of type `Bar` is said to be **wrapped** by `Foo` (which we call "the **wrapper** object).
 There are some interesting consequences of wrapping an Sui object into another. When an object is wrapped, this object no longer exists independently on-chain. We will no longer be able to look up this object by its ID. This object becomes part of the data of the object that wraps it. Most importantly, we can no longer pass the wrapped object as an argument in any way in Move calls. The only access point is through the wrapping object.
 There are a few common ways to wrap a Sui object into another Sui object, and there use cases are likely different. In the following, we will walk through three different ways to wrap a Sui object and their typical use cases.
 
