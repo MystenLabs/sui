@@ -145,6 +145,7 @@ impl Node {
             }
             false => {
                 debug!("Consensus is disabled: the primary will run on its own");
+                // TODO: this should instantiate a Dag::new and store the reference to it.
                 InnerDag::spawn(rx_new_certificates);
             }
         }

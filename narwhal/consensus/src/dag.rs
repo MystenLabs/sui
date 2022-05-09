@@ -17,11 +17,9 @@ use types::{Certificate, CertificateDigest, Round};
 
 use crate::DEFAULT_CHANNEL_SIZE;
 
-/*
-#[cfg(any(test, feature = "benchmark"))]
+#[cfg(any(test))]
 #[path = "tests/dag_tests.rs"]
 pub mod dag_tests;
-*/
 
 /// Dag represents the dag that is constructed  by the certificate of each round without any
 /// consensus running on top of it. This is a [`VerifyingKey`], [`Certificate`] and [`Round`]-aware
