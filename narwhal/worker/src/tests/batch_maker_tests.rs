@@ -10,7 +10,10 @@ use tokio::sync::mpsc::channel;
 async fn make_batch() {
     let (tx_transaction, rx_transaction) = channel(1);
     let (tx_message, mut rx_message) = channel(1);
-    let dummy_addresses = vec![(Ed25519PublicKey::default(), "127.0.0.1:0".parse().unwrap())];
+    let dummy_addresses = vec![(
+        Ed25519PublicKey::default(),
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
+    )];
 
     // Spawn a `BatchMaker` instance.
     BatchMaker::spawn(
@@ -40,7 +43,10 @@ async fn make_batch() {
 async fn batch_timeout() {
     let (tx_transaction, rx_transaction) = channel(1);
     let (tx_message, mut rx_message) = channel(1);
-    let dummy_addresses = vec![(Ed25519PublicKey::default(), "127.0.0.1:0".parse().unwrap())];
+    let dummy_addresses = vec![(
+        Ed25519PublicKey::default(),
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
+    )];
 
     // Spawn a `BatchMaker` instance.
     BatchMaker::spawn(

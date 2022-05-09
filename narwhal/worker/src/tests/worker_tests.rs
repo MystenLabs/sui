@@ -9,7 +9,7 @@ use primary::WorkerPrimaryMessage;
 use std::time::Duration;
 use store::rocks;
 use test_utils::{
-    batch, committee_with_base_port, digest_batch, keys, serialize_batch_message, temp_dir,
+    batch, committee, digest_batch, keys, serialize_batch_message, temp_dir,
     WorkerToPrimaryMockServer, WorkerToWorkerMockServer,
 };
 use types::{TransactionsClient, WorkerToWorkerClient};
@@ -18,7 +18,7 @@ use types::{TransactionsClient, WorkerToWorkerClient};
 async fn handle_clients_transactions() {
     let name = keys().pop().unwrap().public().clone();
     let id = 0;
-    let committee = committee_with_base_port(11_000);
+    let committee = committee();
     let parameters = Parameters {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
@@ -58,9 +58,9 @@ async fn handle_clients_transactions() {
     tokio::task::yield_now().await;
     // Send enough transactions to create a batch.
     let address = committee.worker(&name, &id).unwrap().transactions;
-    let mut client = TransactionsClient::connect(format!("http://{address}"))
-        .await
-        .unwrap();
+    let config = mysten_network::config::Config::new();
+    let channel = config.connect_lazy(&address).unwrap();
+    let mut client = TransactionsClient::new(channel);
     for tx in batch.0 {
         let txn = TransactionProto {
             transaction: Bytes::from(tx.clone()),
@@ -76,7 +76,7 @@ async fn handle_clients_transactions() {
 async fn handle_client_batch_request() {
     let name = keys().pop().unwrap().public().clone();
     let id = 0;
-    let committee = committee_with_base_port(11_001);
+    let committee = committee();
     let parameters = Parameters {
         max_header_delay: Duration::from_millis(100_000), // Ensure no batches are created.
         ..Parameters::default()
@@ -106,8 +106,9 @@ async fn handle_client_batch_request() {
     // Spawn a client to ask for batches and receive the reply.
     tokio::task::yield_now().await;
     let address = committee.worker(&name, &id).unwrap().worker_to_worker;
-    let url = format!("http://{}", address);
-    let mut client = WorkerToWorkerClient::connect(url).await.unwrap();
+    let config = mysten_network::config::Config::new();
+    let channel = config.connect_lazy(&address).unwrap();
+    let mut client = WorkerToWorkerClient::new(channel);
 
     // Send batch request.
     let digests = vec![digest_batch(batch.clone())];

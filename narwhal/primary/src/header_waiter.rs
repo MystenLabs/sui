@@ -272,7 +272,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                     if !retry.is_empty() {
                         let addresses = self.committee
                             .others_primaries(&self.name)
-                            .iter()
+                            .into_iter()
                             .map(|(_, x)| x.primary_to_primary)
                             .collect();
                         let message = PrimaryMessage::CertificatesRequest(retry, self.name.clone());

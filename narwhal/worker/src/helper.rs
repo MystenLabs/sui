@@ -72,7 +72,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                     for digest in digests {
                         match self.store.read(digest).await {
                             Ok(Some(data)) => {
-                                let _ = self.network.unreliable_send_message(address, Bytes::from(data)).await;
+                                let _ = self.network.unreliable_send_message(address.clone(), Bytes::from(data)).await;
                             }
                             Ok(None) => (),
                             Err(e) => error!("{e}"),

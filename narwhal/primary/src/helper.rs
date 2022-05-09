@@ -231,14 +231,14 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
             };
 
             self.primary_network
-                .unreliable_send(address, &message)
+                .unreliable_send(address.clone(), &message)
                 .await;
         } else {
             for certificate in certificates.into_iter().flatten() {
                 // TODO: Remove this deserialization-serialization in the critical path.
                 let message = PrimaryMessage::Certificate(certificate);
                 self.primary_network
-                    .unreliable_send(address, &message)
+                    .unreliable_send(address.clone(), &message)
                     .await;
             }
         }

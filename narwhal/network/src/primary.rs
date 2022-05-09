@@ -4,8 +4,9 @@
 use crate::{CancelHandler, RetryConfig};
 use crypto::traits::VerifyingKey;
 use futures::FutureExt;
+use multiaddr::Multiaddr;
 use rand::{prelude::SliceRandom as _, rngs::SmallRng, SeedableRng as _};
-use std::{collections::HashMap, net::SocketAddr};
+use std::collections::HashMap;
 use tokio::task::JoinHandle;
 use tonic::transport::Channel;
 use types::{
@@ -14,7 +15,8 @@ use types::{
 };
 
 pub struct PrimaryNetwork {
-    clients: HashMap<SocketAddr, PrimaryToPrimaryClient<Channel>>,
+    clients: HashMap<Multiaddr, PrimaryToPrimaryClient<Channel>>,
+    config: mysten_network::config::Config,
     retry_config: RetryConfig,
     /// Small RNG just used to shuffle nodes and randomize connections (not crypto related).
     rng: SmallRng,
@@ -30,6 +32,7 @@ impl Default for PrimaryNetwork {
 
         Self {
             clients: Default::default(),
+            config: Default::default(),
             retry_config,
             rng: SmallRng::from_entropy(),
         }
@@ -37,25 +40,25 @@ impl Default for PrimaryNetwork {
 }
 
 impl PrimaryNetwork {
-    fn client(&mut self, address: SocketAddr) -> PrimaryToPrimaryClient<Channel> {
+    fn client(&mut self, address: Multiaddr) -> PrimaryToPrimaryClient<Channel> {
         self.clients
-            .entry(address)
-            .or_insert_with(|| Self::create_client(address))
+            .entry(address.clone())
+            .or_insert_with(|| Self::create_client(&self.config, address))
             .clone()
     }
 
-    fn create_client(address: SocketAddr) -> PrimaryToPrimaryClient<Channel> {
-        // TODO use TLS
-        let url = format!("http://{}", address);
-        let channel = Channel::from_shared(url)
-            .expect("URI should be valid")
-            .connect_lazy();
+    fn create_client(
+        config: &mysten_network::config::Config,
+        address: Multiaddr,
+    ) -> PrimaryToPrimaryClient<Channel> {
+        //TODO don't panic here if address isn't supported
+        let channel = config.connect_lazy(&address).unwrap();
         PrimaryToPrimaryClient::new(channel)
     }
 
     pub async fn send<T: VerifyingKey>(
         &mut self,
-        address: SocketAddr,
+        address: Multiaddr,
         message: &PrimaryMessage<T>,
     ) -> CancelHandler<()> {
         let message =
@@ -65,7 +68,7 @@ impl PrimaryNetwork {
 
     async fn send_message(
         &mut self,
-        address: SocketAddr,
+        address: Multiaddr,
         message: BincodeEncodedPayload,
     ) -> CancelHandler<()> {
         let client = self.client(address);
@@ -86,7 +89,7 @@ impl PrimaryNetwork {
 
     pub async fn broadcast<T: VerifyingKey>(
         &mut self,
-        addresses: Vec<SocketAddr>,
+        addresses: Vec<Multiaddr>,
         message: &PrimaryMessage<T>,
     ) -> Vec<CancelHandler<()>> {
         let message =
@@ -101,7 +104,7 @@ impl PrimaryNetwork {
 
     pub async fn unreliable_send<T: VerifyingKey>(
         &mut self,
-        address: SocketAddr,
+        address: Multiaddr,
         message: &PrimaryMessage<T>,
     ) -> JoinHandle<()> {
         let message =
@@ -116,7 +119,7 @@ impl PrimaryNetwork {
     /// message only to them. This is useful to pick nodes with whom to sync.
     pub async fn unreliable_broadcast<T: VerifyingKey>(
         &mut self,
-        addresses: Vec<SocketAddr>,
+        addresses: Vec<Multiaddr>,
         message: &PrimaryMessage<T>,
     ) -> Vec<JoinHandle<()>> {
         let message =
@@ -139,7 +142,7 @@ impl PrimaryNetwork {
     /// message only to them. This is useful to pick nodes with whom to sync.
     pub async fn lucky_broadcast<T: VerifyingKey>(
         &mut self,
-        mut addresses: Vec<SocketAddr>,
+        mut addresses: Vec<Multiaddr>,
         message: &PrimaryMessage<T>,
         nodes: usize,
     ) -> Vec<JoinHandle<()>> {
@@ -164,29 +167,30 @@ impl PrimaryNetwork {
 
 #[derive(Default)]
 pub struct PrimaryToWorkerNetwork {
-    clients: HashMap<SocketAddr, PrimaryToWorkerClient<Channel>>,
+    clients: HashMap<Multiaddr, PrimaryToWorkerClient<Channel>>,
+    config: mysten_network::config::Config,
 }
 
 impl PrimaryToWorkerNetwork {
-    fn client(&mut self, address: SocketAddr) -> PrimaryToWorkerClient<Channel> {
+    fn client(&mut self, address: Multiaddr) -> PrimaryToWorkerClient<Channel> {
         self.clients
-            .entry(address)
-            .or_insert_with(|| Self::create_client(address))
+            .entry(address.clone())
+            .or_insert_with(|| Self::create_client(&self.config, address))
             .clone()
     }
 
-    fn create_client(address: SocketAddr) -> PrimaryToWorkerClient<Channel> {
-        // TODO use TLS
-        let url = format!("http://{}", address);
-        let channel = Channel::from_shared(url)
-            .expect("URI should be valid")
-            .connect_lazy();
+    fn create_client(
+        config: &mysten_network::config::Config,
+        address: Multiaddr,
+    ) -> PrimaryToWorkerClient<Channel> {
+        //TODO don't panic here if address isn't supported
+        let channel = config.connect_lazy(&address).unwrap();
         PrimaryToWorkerClient::new(channel)
     }
 
     pub async fn send<T: VerifyingKey>(
         &mut self,
-        address: SocketAddr,
+        address: Multiaddr,
         message: &PrimaryWorkerMessage<T>,
     ) -> JoinHandle<()> {
         let message =
@@ -199,7 +203,7 @@ impl PrimaryToWorkerNetwork {
 
     pub async fn broadcast<T: VerifyingKey>(
         &mut self,
-        addresses: Vec<SocketAddr>,
+        addresses: Vec<Multiaddr>,
         message: &PrimaryWorkerMessage<T>,
     ) -> Vec<JoinHandle<()>> {
         let message =

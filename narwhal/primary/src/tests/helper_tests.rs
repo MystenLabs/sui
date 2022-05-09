@@ -25,7 +25,7 @@ async fn test_process_certificates_stream_mode() {
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
     let key = keys().pop().unwrap();
-    let (name, committee) = resolve_name_and_committee(13080);
+    let (name, committee) = resolve_name_and_committee();
     let (tx_primaries, rx_primaries) = channel(10);
 
     // AND a helper
@@ -95,7 +95,7 @@ async fn test_process_certificates_batch_mode() {
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
     let key = keys().pop().unwrap();
-    let (name, committee) = resolve_name_and_committee(13020);
+    let (name, committee) = resolve_name_and_committee();
     let (tx_primaries, rx_primaries) = channel(10);
 
     // AND a helper
@@ -186,7 +186,7 @@ async fn test_process_payload_availability_success() {
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
     let key = keys().pop().unwrap();
-    let (name, committee) = resolve_name_and_committee(13710);
+    let (name, committee) = resolve_name_and_committee();
     let (tx_primaries, rx_primaries) = channel(10);
 
     // AND a helper
@@ -297,7 +297,7 @@ async fn test_process_payload_availability_when_failures() {
         Store::new(payload_map);
 
     let key = keys().pop().unwrap();
-    let (name, committee) = resolve_name_and_committee(11340);
+    let (name, committee) = resolve_name_and_committee();
     let (tx_primaries, rx_primaries) = channel(10);
 
     // AND a helper

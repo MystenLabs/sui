@@ -9,12 +9,12 @@
 )]
 
 use crypto::traits::{EncodeDecodeBase64, VerifyingKey};
+use multiaddr::Multiaddr;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
     fs::{self, OpenOptions},
     io::{BufWriter, Write as _},
-    net::SocketAddr,
     ops::Deref,
     time::Duration,
 };
@@ -23,7 +23,7 @@ use tracing::info;
 use utils::get_available_port;
 
 mod duration_format;
-mod utils;
+pub mod utils;
 
 #[derive(Error, Debug)]
 pub enum ConfigError {
@@ -116,7 +116,7 @@ pub struct Parameters {
 #[derive(Deserialize, Clone)]
 pub struct ConsensusAPIGrpcParameters {
     /// Socket address the server should be listening to.
-    pub socket_addr: String,
+    pub socket_addr: Multiaddr,
     /// The timeout configuration when requesting batches from workers.
     #[serde(with = "duration_format")]
     pub get_collections_timeout: Duration,
@@ -125,7 +125,9 @@ pub struct ConsensusAPIGrpcParameters {
 impl Default for ConsensusAPIGrpcParameters {
     fn default() -> Self {
         Self {
-            socket_addr: format!("127.0.0.1:{}", get_available_port()),
+            socket_addr: format!("/ip4/127.0.0.1/tcp/{}/http", get_available_port())
+                .parse()
+                .unwrap(),
             get_collections_timeout: Duration::from_millis(5_000),
         }
     }
@@ -227,19 +229,19 @@ impl Parameters {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PrimaryAddresses {
     /// Address to receive messages from other primaries (WAN).
-    pub primary_to_primary: SocketAddr,
+    pub primary_to_primary: Multiaddr,
     /// Address to receive messages from our workers (LAN).
-    pub worker_to_primary: SocketAddr,
+    pub worker_to_primary: Multiaddr,
 }
 
 #[derive(Clone, Serialize, Deserialize, Eq, Hash, PartialEq)]
 pub struct WorkerAddresses {
     /// Address to receive client transactions (WAN).
-    pub transactions: SocketAddr,
+    pub transactions: Multiaddr,
     /// Address to receive messages from other workers (WAN).
-    pub worker_to_worker: SocketAddr,
+    pub worker_to_worker: Multiaddr,
     /// Address to receive messages from our primary (LAN).
-    pub primary_to_worker: SocketAddr,
+    pub primary_to_worker: Multiaddr,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -390,7 +392,7 @@ mod tests {
                  "payload_availability_timeout": "4_000ms"
              },
              "consensus_api_grpc": {
-                 "socket_addr": "127.0.0.1:0",
+                 "socket_addr": "/ip4/127.0.0.1/tcp/0/http",
                  "get_collections_timeout": "5_000ms"
              },
              "max_concurrent_requests": 500000
@@ -431,7 +433,10 @@ mod tests {
                 .as_millis(),
             4_000
         );
-        assert!(params.consensus_api_grpc.socket_addr.contains("127.0.0.1:"));
+        assert_eq!(
+            params.consensus_api_grpc.socket_addr,
+            "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
+        );
         assert_eq!(
             params
                 .consensus_api_grpc
@@ -468,7 +473,7 @@ mod tests {
             "Synchronize payload (batches) timeout set to 2000 ms"
         ));
         assert!(logs_contain(
-            "Consensus API gRPC Server listening on 127.0.0.1"
+            "Consensus API gRPC Server listening on /ip4/127.0.0.1"
         ));
         assert!(logs_contain("Get collections timeout set to 5000 ms"));
         assert!(logs_contain("Max concurrent requests set to 500000"))

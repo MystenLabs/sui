@@ -22,11 +22,13 @@ consensus = { path = "../consensus" }
 crypto = { path = "../crypto" }
 primary = { path = "../primary" }
 tonic = "0.7"
+multiaddr = "0.14.0"
+
+types = { path = "../types" }
+worker = { path = "../worker" }
 
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "3b7daedf91fd8937dde26e905b8114cac459b866" }
-types = { path = "../types" }
-
-worker = { path = "../worker" }
+mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "3b7daedf91fd8937dde26e905b8114cac459b866" }
 
 [dev-dependencies]
 rand = "0.7.3"

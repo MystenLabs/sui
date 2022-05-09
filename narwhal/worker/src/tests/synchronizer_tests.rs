@@ -4,8 +4,8 @@
 use super::*;
 use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
 use test_utils::{
-    batch, batch_digest, batches, committee_with_base_port, keys, open_batch_store,
-    resolve_batch_digest, serialize_batch_message, WorkerToWorkerMockServer,
+    batch, batch_digest, batches, committee, keys, open_batch_store, resolve_batch_digest,
+    serialize_batch_message, WorkerToWorkerMockServer,
 };
 use tokio::{sync::mpsc::channel, time::timeout};
 
@@ -17,7 +17,7 @@ async fn synchronize() {
     let mut keys = keys();
     let name = keys.pop().unwrap().public().clone();
     let id = 0;
-    let committee = committee_with_base_port(9_000);
+    let committee = committee();
 
     // Create a new test store.
     let store = open_batch_store();
@@ -60,7 +60,7 @@ async fn test_successful_request_batch() {
     let mut keys = keys();
     let name = keys.pop().unwrap().public().clone();
     let id = 0;
-    let committee = committee_with_base_port(9_000);
+    let committee = committee();
 
     // Create a new test store.
     let store = open_batch_store();
@@ -115,7 +115,7 @@ async fn test_request_batch_not_found() {
     let mut keys = keys();
     let name = keys.pop().unwrap().public().clone();
     let id = 0;
-    let committee = committee_with_base_port(9_000);
+    let committee = committee();
 
     // Create a new test store.
     let store = open_batch_store();
@@ -169,7 +169,7 @@ async fn test_successful_batch_delete() {
     let mut keys = keys();
     let name = keys.pop().unwrap().public().clone();
     let id = 0;
-    let committee = committee_with_base_port(9_000);
+    let committee = committee();
 
     // Create a new test store.
     let store = open_batch_store();

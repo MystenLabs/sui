@@ -24,8 +24,8 @@ pub fn mock_committee(keys: &[Ed25519PublicKey]) -> Committee<Ed25519PublicKey> 
                     Authority {
                         stake: 1,
                         primary: PrimaryAddresses {
-                            primary_to_primary: "0.0.0.0:0".parse().unwrap(),
-                            worker_to_primary: "0.0.0.0:0".parse().unwrap(),
+                            primary_to_primary: "/ip4/0.0.0.0/tcp/0/http".parse().unwrap(),
+                            worker_to_primary: "/ip4/0.0.0.0/tcp/0/http".parse().unwrap(),
                         },
                         workers: HashMap::default(),
                     },

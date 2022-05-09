@@ -6,10 +6,10 @@ use crypto::traits::VerifyingKey;
 
 #[cfg(feature = "benchmark")]
 use blake2::digest::Update;
+use multiaddr::Multiaddr;
 use network::WorkerNetwork;
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto as _;
-use std::net::SocketAddr;
 use tokio::{
     sync::mpsc::{Receiver, Sender},
     time::{sleep, Duration, Instant},
@@ -35,7 +35,7 @@ pub struct BatchMaker<PublicKey> {
     /// Output channel to deliver sealed batches to the `QuorumWaiter`.
     tx_message: Sender<QuorumWaiterMessage<PublicKey>>,
     /// The network addresses of the other workers that share our worker id.
-    workers_addresses: Vec<(PublicKey, SocketAddr)>,
+    workers_addresses: Vec<(PublicKey, Multiaddr)>,
     /// Holds the current batch.
     current_batch: Batch,
     /// Holds the size of the current batch (in bytes).
@@ -50,7 +50,7 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
         max_batch_delay: Duration,
         rx_transaction: Receiver<Transaction>,
         tx_message: Sender<QuorumWaiterMessage<PublicKey>>,
-        workers_addresses: Vec<(PublicKey, SocketAddr)>,
+        workers_addresses: Vec<(PublicKey, Multiaddr)>,
     ) {
         tokio::spawn(async move {
             Self {

@@ -22,10 +22,11 @@ use crypto::{
     traits::{EncodeDecodeBase64, Signer, VerifyingKey},
     SignatureService,
 };
+use multiaddr::{Multiaddr, Protocol};
 use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
 use serde::{Deserialize, Serialize};
 use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
+    net::Ipv4Addr,
     sync::{atomic::AtomicU64, Arc},
 };
 use store::Store;
@@ -75,7 +76,7 @@ pub type PayloadToken = u8;
 pub struct Primary;
 
 impl Primary {
-    const INADDR_ANY: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+    const INADDR_ANY: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
 
     pub fn spawn<PublicKey: VerifyingKey, Signatory: Signer<PublicKey::Sig> + Send + 'static>(
         name: PublicKey,
@@ -121,18 +122,20 @@ impl Primary {
         let consensus_round = Arc::new(AtomicU64::new(0));
 
         // Spawn the network receiver listening to messages from the other primaries.
-        let mut address = committee
+        let address = committee
             .primary(&name)
             .expect("Our public key or worker id is not in the committee")
             .primary_to_primary;
-        address.set_ip(Primary::INADDR_ANY);
+        let address = address
+            .replace(0, |_protocol| Some(Protocol::Ip4(Primary::INADDR_ANY)))
+            .unwrap();
         PrimaryReceiverHandler {
             tx_primary_messages,
             tx_helper_requests,
             tx_payload_availability_responses,
             tx_certificate_responses,
         }
-        .spawn(address, parameters.max_concurrent_requests);
+        .spawn(address.clone(), parameters.max_concurrent_requests);
         info!(
             "Primary {} listening to primary messages on {}",
             name.encode_base64(),
@@ -140,18 +143,20 @@ impl Primary {
         );
 
         // Spawn the network receiver listening to messages from our workers.
-        let mut address = committee
+        let address = committee
             .primary(&name)
             .expect("Our public key or worker id is not in the committee")
             .worker_to_primary;
-        address.set_ip(Primary::INADDR_ANY);
+        let address = address
+            .replace(0, |_protocol| Some(Protocol::Ip4(Primary::INADDR_ANY)))
+            .unwrap();
         WorkerReceiverHandler {
             tx_our_digests,
             tx_others_digests,
             tx_batches,
             tx_batch_removal,
         }
-        .spawn(address);
+        .spawn(address.clone());
         info!(
             "Primary {} listening to workers messages on {}",
             name.encode_base64(),
@@ -300,7 +305,6 @@ impl Primary {
                 .primary(&name)
                 .expect("Our public key or worker id is not in the committee")
                 .primary_to_primary
-                .ip()
         );
     }
 }
@@ -315,12 +319,19 @@ struct PrimaryReceiverHandler<PublicKey: VerifyingKey> {
 }
 
 impl<PublicKey: VerifyingKey> PrimaryReceiverHandler<PublicKey> {
-    fn spawn(self, address: SocketAddr, max_concurrent_requests: usize) {
-        let service = tonic::transport::Server::builder()
-            .concurrency_limit_per_connection(max_concurrent_requests)
-            .add_service(PrimaryToPrimaryServer::new(self))
-            .serve(address);
-        tokio::spawn(service);
+    fn spawn(self, address: Multiaddr, max_concurrent_requests: usize) {
+        tokio::spawn(async move {
+            let mut config = mysten_network::config::Config::new();
+            config.concurrency_limit_per_connection = Some(max_concurrent_requests);
+            config
+                .server_builder()
+                .add_service(PrimaryToPrimaryServer::new(self))
+                .bind(&address)
+                .await
+                .unwrap()
+                .serve()
+                .await
+        });
     }
 }
 
@@ -391,11 +402,18 @@ struct WorkerReceiverHandler {
 }
 
 impl WorkerReceiverHandler {
-    fn spawn(self, address: SocketAddr) {
-        let service = tonic::transport::Server::builder()
-            .add_service(WorkerToPrimaryServer::new(self))
-            .serve(address);
-        tokio::spawn(service);
+    fn spawn(self, address: Multiaddr) {
+        tokio::spawn(async move {
+            let config = mysten_network::config::Config::default();
+            config
+                .server_builder()
+                .add_service(WorkerToPrimaryServer::new(self))
+                .bind(&address)
+                .await
+                .unwrap()
+                .serve()
+                .await
+        });
     }
 }
 

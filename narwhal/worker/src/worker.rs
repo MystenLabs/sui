@@ -10,11 +10,9 @@ use bytes::Bytes;
 use config::{Committee, Parameters, WorkerId};
 use crypto::traits::VerifyingKey;
 use futures::{Stream, StreamExt};
+use multiaddr::{Multiaddr, Protocol};
 use primary::{PrimaryWorkerMessage, WorkerPrimaryMessage};
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    pin::Pin,
-};
+use std::{net::Ipv4Addr, pin::Pin};
 use store::Store;
 use tokio::sync::mpsc::{channel, Sender};
 use tonic::{Request, Response, Status};
@@ -54,7 +52,7 @@ pub struct Worker<PublicKey: VerifyingKey> {
     store: Store<BatchDigest, SerializedBatchMessage>,
 }
 
-const INADDR_ANY: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+const INADDR_ANY: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
 
 impl<PublicKey: VerifyingKey> Worker<PublicKey> {
     pub fn spawn(
@@ -98,7 +96,6 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
                 .worker(&worker.name, &worker.id)
                 .expect("Our public key or worker id is not in the committee")
                 .transactions
-                .ip()
         );
     }
 
@@ -107,13 +104,15 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         let (tx_synchronizer, rx_synchronizer) = channel(CHANNEL_CAPACITY);
 
         // Receive incoming messages from our primary.
-        let mut address = self
+        let address = self
             .committee
             .worker(&self.name, &self.id)
             .expect("Our public key or worker id is not in the committee")
             .primary_to_worker;
-        address.set_ip(INADDR_ANY);
-        PrimaryReceiverHandler { tx_synchronizer }.spawn(address);
+        let address = address
+            .replace(0, |_protocol| Some(Protocol::Ip4(INADDR_ANY)))
+            .unwrap();
+        PrimaryReceiverHandler { tx_synchronizer }.spawn(address.clone());
 
         // The `Synchronizer` is responsible to keep the worker in sync with the others. It handles the commands
         // it receives from the primary (which are mainly notifications that we are out of sync).
@@ -142,13 +141,15 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         let (tx_processor, rx_processor) = channel(CHANNEL_CAPACITY);
 
         // We first receive clients' transactions from the network.
-        let mut address = self
+        let address = self
             .committee
             .worker(&self.name, &self.id)
             .expect("Our public key or worker id is not in the committee")
             .transactions;
-        address.set_ip(INADDR_ANY);
-        TxReceiverHandler { tx_batch_maker }.spawn(address);
+        let address = address
+            .replace(0, |_protocol| Some(Protocol::Ip4(INADDR_ANY)))
+            .unwrap();
+        TxReceiverHandler { tx_batch_maker }.spawn(address.clone());
 
         // The transactions are sent to the `BatchMaker` that assembles them into batches. It then broadcasts
         // (in a reliable manner) the batches to all other workers that share the same `id` as us. Finally, it
@@ -161,8 +162,8 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             /* workers_addresses */
             self.committee
                 .others_workers(&self.name, &self.id)
-                .iter()
-                .map(|(name, addresses)| (name.clone(), addresses.worker_to_worker))
+                .into_iter()
+                .map(|(name, addresses)| (name, addresses.worker_to_worker))
                 .collect(),
         );
 
@@ -198,18 +199,20 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         let (tx_processor, rx_processor) = channel(CHANNEL_CAPACITY);
 
         // Receive incoming messages from other workers.
-        let mut address = self
+        let address = self
             .committee
             .worker(&self.name, &self.id)
             .expect("Our public key or worker id is not in the committee")
             .worker_to_worker;
-        address.set_ip(INADDR_ANY);
+        let address = address
+            .replace(0, |_protocol| Some(Protocol::Ip4(INADDR_ANY)))
+            .unwrap();
         WorkerReceiverHandler {
             tx_worker_helper,
             tx_client_helper,
             tx_processor,
         }
-        .spawn(address, self.parameters.max_concurrent_requests);
+        .spawn(address.clone(), self.parameters.max_concurrent_requests);
 
         // The `Helper` is dedicated to reply to batch requests from other workers.
         Helper::spawn(
@@ -244,11 +247,18 @@ struct TxReceiverHandler {
 }
 
 impl TxReceiverHandler {
-    fn spawn(self, address: SocketAddr) {
-        let service = tonic::transport::Server::builder()
-            .add_service(TransactionsServer::new(self))
-            .serve(address);
-        tokio::spawn(service);
+    fn spawn(self, address: Multiaddr) {
+        tokio::spawn(async move {
+            let config = mysten_network::config::Config::new();
+            config
+                .server_builder()
+                .add_service(TransactionsServer::new(self))
+                .bind(&address)
+                .await
+                .unwrap()
+                .serve()
+                .await
+        });
     }
 }
 
@@ -294,12 +304,19 @@ struct WorkerReceiverHandler<PublicKey: VerifyingKey> {
 }
 
 impl<PublicKey: VerifyingKey> WorkerReceiverHandler<PublicKey> {
-    fn spawn(self, address: SocketAddr, max_concurrent_requests: usize) {
-        let service = tonic::transport::Server::builder()
-            .concurrency_limit_per_connection(max_concurrent_requests)
-            .add_service(WorkerToWorkerServer::new(self))
-            .serve(address);
-        tokio::spawn(service);
+    fn spawn(self, address: Multiaddr, max_concurrent_requests: usize) {
+        tokio::spawn(async move {
+            let mut config = mysten_network::config::Config::new();
+            config.concurrency_limit_per_connection = Some(max_concurrent_requests);
+            config
+                .server_builder()
+                .add_service(WorkerToWorkerServer::new(self))
+                .bind(&address)
+                .await
+                .unwrap()
+                .serve()
+                .await
+        });
     }
 }
 
@@ -373,11 +390,18 @@ struct PrimaryReceiverHandler<PublicKey: VerifyingKey> {
 }
 
 impl<PublicKey: VerifyingKey> PrimaryReceiverHandler<PublicKey> {
-    fn spawn(self, address: SocketAddr) {
-        let service = tonic::transport::Server::builder()
-            .add_service(PrimaryToWorkerServer::new(self))
-            .serve(address);
-        tokio::spawn(service);
+    fn spawn(self, address: Multiaddr) {
+        tokio::spawn(async move {
+            let config = mysten_network::config::Config::new();
+            config
+                .server_builder()
+                .add_service(PrimaryToWorkerServer::new(self))
+                .bind(&address)
+                .await
+                .unwrap()
+                .serve()
+                .await
+        });
     }
 }
 

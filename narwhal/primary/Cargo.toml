@@ -18,7 +18,6 @@ derive_builder = "0.11.2"
 ed25519-dalek = "1.0.1"
 futures = "0.3.21"
 serde = { version = "1.0.136", features = ["derive"] }
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "3b7daedf91fd8937dde26e905b8114cac459b866" }
 thiserror = "1.0.30"
 tokio = { version = "1.17.0", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.1", features = ["codec"] }
@@ -26,12 +25,15 @@ tracing = { version = "0.1.34", features = ["log"] }
 tonic = "0.7"
 prost = "0.10.1"
 rand = { version = "0.7.3", features = ["small_rng"] }
+multiaddr = "0.14.0"
+tower = "0.4.12"
 
 crypto = { path = "../crypto" }
 network = { path = "../network" }
 types = { path = "../types" }
-tower = "0.4.12"
 
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "3b7daedf91fd8937dde26e905b8114cac459b866" }
+mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "3b7daedf91fd8937dde26e905b8114cac459b866" }
 
 [dev-dependencies]
 itertools = "0.10.3"

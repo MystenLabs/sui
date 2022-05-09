@@ -43,15 +43,25 @@ fn get_registry() -> Result<Registry> {
             .map(|(i, kp)| {
                 let id = kp.public();
                 let primary = PrimaryAddresses {
-                    primary_to_primary: format!("127.0.0.1:{}", 100 + i).parse().unwrap(),
-                    worker_to_primary: format!("127.0.0.1:{}", 200 + i).parse().unwrap(),
+                    primary_to_primary: format!("/ip4/127.0.0.1/tcp/{}/http", 100 + i)
+                        .parse()
+                        .unwrap(),
+                    worker_to_primary: format!("/ip4/127.0.0.1/tcp/{}/http", 200 + i)
+                        .parse()
+                        .unwrap(),
                 };
                 let workers = vec![(
                     0,
                     WorkerAddresses {
-                        primary_to_worker: format!("127.0.0.1:{}", 300 + i).parse().unwrap(),
-                        transactions: format!("127.0.0.1:{}", 400 + i).parse().unwrap(),
-                        worker_to_worker: format!("127.0.0.1:{}", 500 + i).parse().unwrap(),
+                        primary_to_worker: format!("/ip4/127.0.0.1/tcp/{}/http", 300 + i)
+                            .parse()
+                            .unwrap(),
+                        transactions: format!("/ip4/127.0.0.1/tcp/{}/http", 400 + i)
+                            .parse()
+                            .unwrap(),
+                        worker_to_worker: format!("/ip4/127.0.0.1/tcp/{}/http", 500 + i)
+                            .parse()
+                            .unwrap(),
                     },
                 )]
                 .into_iter()

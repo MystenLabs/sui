@@ -135,7 +135,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         let addresses = self
             .committee
             .others_primaries(&self.name)
-            .iter()
+            .into_iter()
             .map(|(_, x)| x.primary_to_primary)
             .collect();
         let message = PrimaryMessage::Header(header.clone());
@@ -248,7 +248,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
             let addresses = self
                 .committee
                 .others_primaries(&self.name)
-                .iter()
+                .into_iter()
                 .map(|(_, x)| x.primary_to_primary)
                 .collect();
             let message = PrimaryMessage::Certificate(certificate.clone());

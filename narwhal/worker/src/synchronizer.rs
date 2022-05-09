@@ -221,7 +221,8 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                     if !retry.is_empty() {
                         let addresses = self.committee
                             .others_workers(&self.name, &self.id)
-                            .iter().map(|(_, address)| address.worker_to_worker)
+                            .into_iter()
+                            .map(|(_, address)| address.worker_to_worker)
                             .collect();
                         let message = WorkerMessage::BatchRequest(retry, self.name.clone());
                         self.network

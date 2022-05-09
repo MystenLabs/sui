@@ -5,8 +5,7 @@ use super::*;
 use crate::common::create_db_stores;
 use crypto::traits::KeyPair;
 use test_utils::{
-    certificate, committee, committee_with_base_port, header, headers, keys, votes,
-    PrimaryToPrimaryMockServer,
+    certificate, committee, header, headers, keys, votes, PrimaryToPrimaryMockServer,
 };
 use tokio::sync::mpsc::channel;
 use types::{BatchDigest, Header, Vote};
@@ -19,7 +18,7 @@ async fn process_header() {
     let name = kp.public().clone();
     let mut signature_service = SignatureService::new(kp);
 
-    let committee = committee_with_base_port(13_000);
+    let committee = committee();
 
     let (tx_sync_headers, _rx_sync_headers) = channel(1);
     let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
@@ -217,7 +216,7 @@ async fn process_votes() {
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
-    let committee = committee_with_base_port(13_100);
+    let committee = committee();
 
     let (tx_sync_headers, _rx_sync_headers) = channel(1);
     let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
@@ -265,7 +264,7 @@ async fn process_votes() {
     // Spawn all listeners to receive our newly formed certificate.
     let mut handles: Vec<_> = committee
         .others_primaries(&name)
-        .iter()
+        .into_iter()
         .map(|(_, address)| PrimaryToPrimaryMockServer::spawn(address.primary_to_primary))
         .collect();
 

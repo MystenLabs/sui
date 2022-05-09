@@ -4,14 +4,16 @@
 use crate::{CancelHandler, RetryConfig};
 use crypto::traits::VerifyingKey;
 use futures::FutureExt;
+use multiaddr::Multiaddr;
 use rand::{prelude::SliceRandom as _, rngs::SmallRng, SeedableRng as _};
-use std::{collections::HashMap, net::SocketAddr};
+use std::collections::HashMap;
 use tokio::task::JoinHandle;
 use tonic::transport::Channel;
 use types::{BincodeEncodedPayload, WorkerMessage, WorkerToWorkerClient};
 
 pub struct WorkerNetwork {
-    clients: HashMap<SocketAddr, WorkerToWorkerClient<Channel>>,
+    clients: HashMap<Multiaddr, WorkerToWorkerClient<Channel>>,
+    config: mysten_network::config::Config,
     retry_config: RetryConfig,
     /// Small RNG just used to shuffle nodes and randomize connections (not crypto related).
     rng: SmallRng,
@@ -27,6 +29,7 @@ impl Default for WorkerNetwork {
 
         Self {
             clients: Default::default(),
+            config: Default::default(),
             retry_config,
             rng: SmallRng::from_entropy(),
         }
@@ -34,25 +37,25 @@ impl Default for WorkerNetwork {
 }
 
 impl WorkerNetwork {
-    fn client(&mut self, address: SocketAddr) -> WorkerToWorkerClient<Channel> {
+    fn client(&mut self, address: Multiaddr) -> WorkerToWorkerClient<Channel> {
         self.clients
-            .entry(address)
-            .or_insert_with(|| Self::create_client(address))
+            .entry(address.clone())
+            .or_insert_with(|| Self::create_client(&self.config, address))
             .clone()
     }
 
-    fn create_client(address: SocketAddr) -> WorkerToWorkerClient<Channel> {
-        // TODO use TLS
-        let url = format!("http://{}", address);
-        let channel = Channel::from_shared(url)
-            .expect("URI should be valid")
-            .connect_lazy();
+    fn create_client(
+        config: &mysten_network::config::Config,
+        address: Multiaddr,
+    ) -> WorkerToWorkerClient<Channel> {
+        //TODO don't panic here if address isn't supported
+        let channel = config.connect_lazy(&address).unwrap();
         WorkerToWorkerClient::new(channel)
     }
 
     pub async fn send<T: VerifyingKey>(
         &mut self,
-        address: SocketAddr,
+        address: Multiaddr,
         message: &WorkerMessage<T>,
     ) -> CancelHandler<()> {
         let message =
@@ -62,7 +65,7 @@ impl WorkerNetwork {
 
     async fn send_message(
         &mut self,
-        address: SocketAddr,
+        address: Multiaddr,
         message: BincodeEncodedPayload,
     ) -> CancelHandler<()> {
         let client = self.client(address);
@@ -83,7 +86,7 @@ impl WorkerNetwork {
 
     pub async fn broadcast<T: VerifyingKey>(
         &mut self,
-        addresses: Vec<SocketAddr>,
+        addresses: Vec<Multiaddr>,
         message: &WorkerMessage<T>,
     ) -> Vec<CancelHandler<()>> {
         let message =
@@ -98,7 +101,7 @@ impl WorkerNetwork {
 
     pub async fn unreliable_send<T: VerifyingKey>(
         &mut self,
-        address: SocketAddr,
+        address: Multiaddr,
         message: &WorkerMessage<T>,
     ) -> JoinHandle<()> {
         let message =
@@ -108,7 +111,7 @@ impl WorkerNetwork {
 
     pub async fn unreliable_send_message<T: Into<BincodeEncodedPayload>>(
         &mut self,
-        address: SocketAddr,
+        address: Multiaddr,
         message: T,
     ) -> JoinHandle<()> {
         let message = message.into();
@@ -122,7 +125,7 @@ impl WorkerNetwork {
     /// message only to them. This is useful to pick nodes with whom to sync.
     pub async fn lucky_broadcast<T: VerifyingKey>(
         &mut self,
-        mut addresses: Vec<SocketAddr>,
+        mut addresses: Vec<Multiaddr>,
         message: &WorkerMessage<T>,
         nodes: usize,
     ) -> Vec<JoinHandle<()>> {

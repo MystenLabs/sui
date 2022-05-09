@@ -6,7 +6,7 @@ use crate::worker::WorkerMessage;
 use bytes::Bytes;
 use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
 use network::WorkerNetwork;
-use test_utils::{batch, committee_with_base_port, keys, WorkerToWorkerMockServer};
+use test_utils::{batch, committee, keys, WorkerToWorkerMockServer};
 use tokio::sync::mpsc::channel;
 
 #[tokio::test]
@@ -14,7 +14,7 @@ async fn wait_for_quorum() {
     let (tx_message, rx_message) = channel(1);
     let (tx_batch, mut rx_batch) = channel(1);
     let myself = keys().pop().unwrap().public().clone();
-    let committee = committee_with_base_port(7_000);
+    let committee = committee();
 
     // Spawn a `QuorumWaiter` instance.
     QuorumWaiter::spawn(committee.clone(), /* stake */ 1, rx_message, tx_batch);
@@ -30,7 +30,7 @@ async fn wait_for_quorum() {
     let mut listener_handles = Vec::new();
     for (name, address) in committee.others_workers(&myself, /* id */ &0) {
         let address = address.worker_to_worker;
-        let handle = WorkerToWorkerMockServer::spawn(address);
+        let handle = WorkerToWorkerMockServer::spawn(address.clone());
         names.push(name);
         addresses.push(address);
         listener_handles.push(handle);

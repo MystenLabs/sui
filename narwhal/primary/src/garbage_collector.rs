@@ -4,13 +4,11 @@
 use crate::primary::PrimaryWorkerMessage;
 use config::Committee;
 use crypto::traits::VerifyingKey;
+use multiaddr::Multiaddr;
 use network::PrimaryToWorkerNetwork;
-use std::{
-    net::SocketAddr,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
 };
 use tokio::sync::mpsc::Receiver;
 use types::Certificate;
@@ -22,7 +20,7 @@ pub struct GarbageCollector<PublicKey: VerifyingKey> {
     /// Receives the ordered certificates from consensus.
     rx_consensus: Receiver<Certificate<PublicKey>>,
     /// The network addresses of our workers.
-    addresses: Vec<SocketAddr>,
+    addresses: Vec<Multiaddr>,
     /// A network sender to notify our workers of cleanup events.
     worker_network: PrimaryToWorkerNetwork,
 }
@@ -37,7 +35,7 @@ impl<PublicKey: VerifyingKey> GarbageCollector<PublicKey> {
         let addresses = committee
             .our_workers(name)
             .expect("Our public key or worker id is not in the committee")
-            .iter()
+            .into_iter()
             .map(|x| x.primary_to_worker)
             .collect();
 

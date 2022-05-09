@@ -12,7 +12,7 @@ use bincode::deserialize;
 use crypto::{ed25519::Ed25519PublicKey, traits::VerifyingKey, Hash};
 use ed25519_dalek::Signer;
 use network::PrimaryToWorkerNetwork;
-use std::{collections::HashMap, net::SocketAddr};
+use std::collections::HashMap;
 use test_utils::{
     certificate, fixture_batch_with_transactions, fixture_header_builder,
     fixture_header_with_payload, keys, resolve_name_and_committee, PrimaryToWorkerMockServer,
@@ -33,7 +33,7 @@ async fn test_successfully_retrieve_block() {
     let (_, certificate_store, _) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(12000);
+    let (name, committee) = resolve_name_and_committee();
 
     // AND store certificate
     let header = fixture_header_with_payload(2);
@@ -127,7 +127,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let (_, certificate_store, _) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(14001);
+    let (name, committee) = resolve_name_and_committee();
 
     let key = keys().pop().unwrap();
     let mut block_ids = Vec::new();
@@ -263,7 +263,7 @@ async fn test_one_pending_request_for_block_at_time() {
     let (_, certificate_store, _) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(13002);
+    let (name, committee) = resolve_name_and_committee();
 
     // AND store certificate
     let header = fixture_header_with_payload(2);
@@ -331,7 +331,7 @@ async fn test_unlocking_pending_get_block_request_after_response() {
     let (_, certificate_store, _) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(13003);
+    let (name, committee) = resolve_name_and_committee();
 
     // AND store certificate
     let header = fixture_header_with_payload(2);
@@ -390,7 +390,7 @@ async fn test_batch_timeout() {
     let (_, certificate_store, _) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(13004);
+    let (name, committee) = resolve_name_and_committee();
 
     // AND store certificate
     let header = fixture_header_with_payload(2);
@@ -446,7 +446,7 @@ async fn test_batch_timeout() {
 async fn test_return_error_when_certificate_is_missing() {
     // GIVEN
     let (_, certificate_store, _) = create_db_stores();
-    let (name, committee) = resolve_name_and_committee(13005);
+    let (name, committee) = resolve_name_and_committee();
 
     // AND create a certificate but don't store it
     let certificate = Certificate::<Ed25519PublicKey>::default();
@@ -496,7 +496,7 @@ async fn test_return_error_when_certificate_is_missing() {
 // worker_listener listens to TCP requests. The worker responds to the
 // RequestBatch requests for the provided expected_batches.
 pub fn worker_listener<PublicKey: VerifyingKey>(
-    address: SocketAddr,
+    address: multiaddr::Multiaddr,
     expected_batches: HashMap<BatchDigest, BatchMessage>,
     tx_batch_messages: Sender<BatchResult>,
 ) -> JoinHandle<()> {

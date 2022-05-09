@@ -9,16 +9,13 @@ use config::WorkerId;
 use consensus::ConsensusOutput;
 use crypto::traits::VerifyingKey;
 use futures::stream::StreamExt;
-use std::{
-    collections::{HashMap, HashSet},
-    net::SocketAddr,
-};
+use multiaddr::Multiaddr;
+use std::collections::{HashMap, HashSet};
 use store::Store;
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     task::JoinHandle,
 };
-use tonic::transport::Channel;
 use tracing::warn;
 use types::{BatchDigest, BincodeEncodedPayload, ClientBatchRequest, WorkerToWorkerClient};
 use worker::SerializedBatchMessage;
@@ -30,7 +27,7 @@ pub struct BatchLoader<PublicKey: VerifyingKey> {
     /// Receive consensus outputs for which to download the associated transaction data.
     rx_input: Receiver<ConsensusOutput<PublicKey>>,
     /// The network addresses of the consensus workers.
-    addresses: HashMap<WorkerId, SocketAddr>,
+    addresses: HashMap<WorkerId, Multiaddr>,
     /// A map of connections with the consensus workers.
     connections: HashMap<WorkerId, Sender<Vec<BatchDigest>>>,
 }
@@ -40,7 +37,7 @@ impl<PublicKey: VerifyingKey> BatchLoader<PublicKey> {
     pub fn spawn(
         store: Store<BatchDigest, SerializedBatchMessage>,
         rx_input: Receiver<ConsensusOutput<PublicKey>>,
-        addresses: HashMap<WorkerId, SocketAddr>,
+        addresses: HashMap<WorkerId, Multiaddr>,
     ) -> JoinHandle<SubscriberResult<()>> {
         tokio::spawn(async move {
             Self {
@@ -73,7 +70,11 @@ impl<PublicKey: VerifyingKey> BatchLoader<PublicKey> {
 
                 let sender = self.connections.entry(worker_id).or_insert_with(|| {
                     let (sender, receiver) = channel(DEFAULT_CHANNEL_SIZE);
-                    SyncConnection::spawn::<PublicKey>(*address, self.store.clone(), receiver);
+                    SyncConnection::spawn::<PublicKey>(
+                        address.clone(),
+                        self.store.clone(),
+                        receiver,
+                    );
                     sender
                 });
 
@@ -91,7 +92,7 @@ impl<PublicKey: VerifyingKey> BatchLoader<PublicKey> {
 /// specific worker.
 struct SyncConnection {
     /// The address of the worker to connect with.
-    address: SocketAddr,
+    address: Multiaddr,
     /// The temporary storage holding all transactions' data (that may be too big to hold in memory).
     store: Store<BatchDigest, SerializedBatchMessage>,
     /// Receive the batches to download from the worker.
@@ -103,7 +104,7 @@ struct SyncConnection {
 impl SyncConnection {
     /// Spawn a new worker connection in a dedicated tokio task.
     pub fn spawn<PublicKey: VerifyingKey>(
-        address: SocketAddr,
+        address: Multiaddr,
         store: Store<BatchDigest, SerializedBatchMessage>,
         rx_request: Receiver<Vec<BatchDigest>>,
     ) {
@@ -121,10 +122,9 @@ impl SyncConnection {
 
     /// Main loop keeping the connection with a worker alive and receive batches to download.
     async fn run(&mut self) {
-        let url = format!("http://{}", self.address);
-        let channel = Channel::from_shared(url)
-            .expect("URI should be valid")
-            .connect_lazy();
+        let config = mysten_network::config::Config::new();
+        //TODO don't panic on bad address
+        let channel = config.connect_lazy(&self.address).unwrap();
         let mut client = WorkerToWorkerClient::new(channel);
 
         while let Some(digests) = self.rx_request.recv().await {

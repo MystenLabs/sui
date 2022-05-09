@@ -137,7 +137,7 @@ impl Executor {
             .expect("Our public key is not in the committee")
             .workers
             .iter()
-            .map(|(id, x)| (*id, x.worker_to_worker))
+            .map(|(id, x)| (*id, x.worker_to_worker.clone()))
             .collect();
         let batch_loader_handle = BatchLoader::spawn(store, rx_batch_loader, worker_addresses);
 

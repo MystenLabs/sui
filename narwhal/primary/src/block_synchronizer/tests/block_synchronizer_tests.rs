@@ -18,7 +18,6 @@ use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
 use serde::de::DeserializeOwned;
 use std::{
     collections::{HashMap, HashSet},
-    net::SocketAddr,
     time::Duration,
 };
 use test_utils::{
@@ -40,7 +39,7 @@ async fn test_successful_headers_synchronization() {
     let (_, certificate_store, payload_store) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(13600);
+    let (name, committee) = resolve_name_and_committee();
 
     let (tx_commands, rx_commands) = channel(10);
     let (tx_certificate_responses, rx_certificate_responses) = channel(10);
@@ -89,7 +88,7 @@ async fn test_successful_headers_synchronization() {
     // of requested certificates.
     let handlers: FuturesUnordered<JoinHandle<Vec<PrimaryMessage<Ed25519PublicKey>>>> = committee
         .others_primaries(&name)
-        .iter()
+        .into_iter()
         .map(|primary| {
             println!("New primary added: {:?}", primary.1.primary_to_primary);
             primary_listener::<PrimaryMessage<Ed25519PublicKey>>(1, primary.1.primary_to_primary)
@@ -195,7 +194,7 @@ async fn test_successful_payload_synchronization() {
     let (_, certificate_store, payload_store) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(13500);
+    let (name, committee) = resolve_name_and_committee();
 
     let (tx_commands, rx_commands) = channel(10);
     let (_tx_certificate_responses, rx_certificate_responses) = channel(10);
@@ -245,7 +244,7 @@ async fn test_successful_payload_synchronization() {
     let handlers_primaries: FuturesUnordered<JoinHandle<Vec<PrimaryMessage<Ed25519PublicKey>>>> =
         committee
             .others_primaries(&name)
-            .iter()
+            .into_iter()
             .map(|primary| {
                 println!("New primary added: {:?}", primary.1.primary_to_primary);
                 primary_listener::<PrimaryMessage<Ed25519PublicKey>>(
@@ -269,7 +268,7 @@ async fn test_successful_payload_synchronization() {
             println!("New worker added: {:?}", worker.1.primary_to_worker);
             worker_listener::<PrimaryWorkerMessage<Ed25519PublicKey>>(
                 -1,
-                worker.1.primary_to_worker,
+                worker.1.primary_to_worker.clone(),
             )
         })
         .collect();
@@ -392,7 +391,7 @@ async fn test_successful_payload_synchronization() {
 async fn test_multiple_overlapping_requests() {
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
-    let (name, committee) = resolve_name_and_committee(13001);
+    let (name, committee) = resolve_name_and_committee();
 
     let (_, rx_commands) = channel(10);
     let (_, rx_certificate_responses) = channel(10);
@@ -507,7 +506,7 @@ async fn test_timeout_while_waiting_for_certificates() {
     let (_, certificate_store, payload_store) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(13001);
+    let (name, committee) = resolve_name_and_committee();
     let key = keys().pop().unwrap();
 
     let (tx_commands, rx_commands) = channel(10);
@@ -594,7 +593,7 @@ async fn test_reply_with_certificates_already_in_storage() {
     let (_, certificate_store, payload_store) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(13001);
+    let (name, committee) = resolve_name_and_committee();
     let key = keys().pop().unwrap();
 
     let (_, rx_commands) = channel(10);
@@ -685,7 +684,7 @@ async fn test_reply_with_payload_already_in_storage() {
     let (_, certificate_store, payload_store) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(13001);
+    let (name, committee) = resolve_name_and_committee();
     let key = keys().pop().unwrap();
 
     let (_, rx_commands) = channel(10);
@@ -776,7 +775,7 @@ async fn test_reply_with_payload_already_in_storage() {
 
 pub fn primary_listener<T>(
     num_of_expected_responses: i32,
-    address: SocketAddr,
+    address: multiaddr::Multiaddr,
 ) -> JoinHandle<Vec<T>>
 where
     T: Send + DeserializeOwned + 'static,
@@ -812,7 +811,10 @@ where
 }
 
 // TODO: remove this duplication with an associated type
-pub fn worker_listener<T>(num_of_expected_responses: i32, address: SocketAddr) -> JoinHandle<Vec<T>>
+pub fn worker_listener<T>(
+    num_of_expected_responses: i32,
+    address: multiaddr::Multiaddr,
+) -> JoinHandle<Vec<T>>
 where
     T: Send + DeserializeOwned + 'static,
 {

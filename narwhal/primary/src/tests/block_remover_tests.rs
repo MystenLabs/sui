@@ -17,7 +17,7 @@ use crypto::{
 };
 use futures::{future::try_join_all, stream::FuturesUnordered};
 use network::PrimaryToWorkerNetwork;
-use std::{collections::HashMap, net::SocketAddr, time::Duration};
+use std::{collections::HashMap, time::Duration};
 use test_utils::{
     certificate, fixture_batch_with_transactions, fixture_header_builder, keys,
     resolve_name_and_committee, PrimaryToWorkerMockServer,
@@ -38,7 +38,7 @@ async fn test_successful_blocks_delete() {
     let (tx_delete_batches, rx_delete_batches) = channel(10);
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(14000);
+    let (name, committee) = resolve_name_and_committee();
 
     BlockRemover::spawn(
         name.clone(),
@@ -181,7 +181,7 @@ async fn test_timeout() {
     let (tx_delete_batches, rx_delete_batches) = channel(10);
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(14001);
+    let (name, committee) = resolve_name_and_committee();
 
     BlockRemover::spawn(
         name.clone(),
@@ -305,7 +305,7 @@ async fn test_unlocking_pending_requests() {
     let (tx_delete_batches, rx_delete_batches) = channel(10);
 
     // AND the necessary keys
-    let (name, committee) = resolve_name_and_committee(14001);
+    let (name, committee) = resolve_name_and_committee();
 
     let mut remover = BlockRemover {
         name,
@@ -402,12 +402,12 @@ async fn test_unlocking_pending_requests() {
 }
 
 pub fn worker_listener<PublicKey: VerifyingKey>(
-    address: SocketAddr,
+    address: multiaddr::Multiaddr,
     expected_batch_ids: Vec<BatchDigest>,
     tx_delete_batches: Sender<DeleteBatchResult>,
 ) -> JoinHandle<()> {
     println!("[{}] Setting up server", &address);
-    let mut recv = PrimaryToWorkerMockServer::spawn(address);
+    let mut recv = PrimaryToWorkerMockServer::spawn(address.clone());
     tokio::spawn(async move {
         let message = recv.recv().await.unwrap();
         match deserialize(&message.payload) {
