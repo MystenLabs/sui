@@ -6,17 +6,8 @@ Note that the SDK is still in development mode and some API functions are subjec
 
 ## Installation
 
-We haven't published the npm package yet, so right now you may use [npm link](https://docs.npmjs.com/cli/v8/commands/npm-link) to install it locally.
-
 ```bash
-cd sui/sdk/typescript
-yarn && yarn build && npm link
-```
-
-Then:
-```bash
-cd your/project
-npm link sui.js
+$ yarn add @mysten/sui.js
 ```
 
 ## Local Development Environment Setup
