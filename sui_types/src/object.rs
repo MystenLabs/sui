@@ -25,6 +25,7 @@ use serde_with::Bytes;
 use crate::coin::Coin;
 use crate::crypto::{sha3_hash, BcsSignable};
 use crate::error::{SuiError, SuiResult};
+use crate::id::{UniqueID, VersionedID, ID};
 use crate::json_schema;
 use crate::move_package::MovePackage;
 use crate::readable_serde::encoding::Base64;
@@ -186,12 +187,15 @@ pub enum SuiMoveStruct {
     Runtime(Vec<SuiMoveValue>),
     WithFields(Vec<(String, SuiMoveValue)>),
     WithTypes {
+        #[serde(rename = "type")]
         type_: String,
         fields: BTreeMap<String, SuiMoveValue>,
     },
 }
 
+#[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
+#[serde(untagged)]
 pub enum SuiMoveValue {
     // Move base types
     U8(u8),
@@ -203,22 +207,17 @@ pub enum SuiMoveValue {
     Struct(SuiMoveStruct),
     Signer(SuiAddress),
 
-    // Sui only base types
+    // Sui base types
     String(String),
-    ID(ObjectID),
-    UniqueID(ObjectID),
-    VersionedID {
-        id: ObjectID,
-        version: u64,
-    },
-    #[serde(rename_all = "camelCase")]
-    Coin {
-        coin_type: String,
-        id: ObjectID,
-        version: u64,
-        balance: u64,
-    },
+    ID(ID),
+    UniqueID(UniqueID),
+    VersionedID(VersionedID),
     Balance(u64),
+    ByteArray(
+        #[schemars(with = "json_schema::Base64")]
+        #[serde_as(as = "Readable<Base64, Bytes>")]
+        Vec<u8>,
+    ),
 }
 
 impl From<MoveValue> for SuiMoveValue {
@@ -230,6 +229,19 @@ impl From<MoveValue> for SuiMoveValue {
             MoveValue::Bool(value) => SuiMoveValue::Bool(value),
             MoveValue::Address(value) => SuiMoveValue::Address(ObjectID::from(value)),
             MoveValue::Vector(value) => {
+                if value.iter().all(|value| matches!(value, MoveValue::U8(_))) {
+                    let bytearray = value
+                        .iter()
+                        .flat_map(|value| {
+                            if let MoveValue::U8(u8) = value {
+                                Some(*u8)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    return SuiMoveValue::ByteArray(bytearray);
+                }
                 SuiMoveValue::Vector(value.into_iter().map(|value| value.into()).collect())
             }
             MoveValue::Struct(value) => {
@@ -261,7 +273,7 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
         .collect::<BTreeMap<_, SuiMoveValue>>();
     match struct_name.as_str() {
         "0x2::UTF8::String" | "0x1::ASCII::String" => {
-            if let Some(bytes) = fields["bytes"].try_get_bytes() {
+            if let SuiMoveValue::ByteArray(bytes) = fields["bytes"].clone() {
                 if let Ok(s) = String::from_utf8(bytes) {
                     return Some(SuiMoveValue::String(s));
                 }
@@ -270,18 +282,18 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
         "0x2::Url::Url" => return Some(fields["url"].clone()),
         "0x2::ID::ID" => {
             if let SuiMoveValue::Address(id) = fields["bytes"] {
-                return Some(SuiMoveValue::ID(id));
+                return Some(SuiMoveValue::ID(ID { bytes: id }));
             }
         }
         "0x2::ID::UniqueID" => {
             if let SuiMoveValue::ID(id) = fields["id"].clone() {
-                return Some(SuiMoveValue::UniqueID(id));
+                return Some(SuiMoveValue::UniqueID(UniqueID { id }));
             }
         }
         "0x2::ID::VersionedID" => {
             if let SuiMoveValue::UniqueID(id) = fields["id"].clone() {
                 if let SuiMoveValue::U64(version) = fields["version"].clone() {
-                    return Some(SuiMoveValue::VersionedID { id, version });
+                    return Some(SuiMoveValue::VersionedID(VersionedID { id, version }));
                 }
             }
         }
@@ -290,44 +302,10 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
                 return Some(SuiMoveValue::Balance(value));
             }
         }
-        "0x2::Coin::Coin" => {
-            if let SuiMoveValue::VersionedID { id, version } = fields["id"].clone() {
-                if let SuiMoveValue::Balance(balance) = fields["balance"].clone() {
-                    let coin_type = type_.type_params.first().unwrap().to_string();
-                    return Some(SuiMoveValue::Coin {
-                        coin_type,
-                        id,
-                        version,
-                        balance,
-                    });
-                }
-            }
-        }
         _ => {}
     }
 
     None
-}
-
-impl SuiMoveValue {
-    pub fn try_get_bytes(&self) -> Option<Vec<u8>> {
-        if let SuiMoveValue::Vector(v) = self {
-            let bytes = v
-                .iter()
-                .flat_map(|b| {
-                    if let SuiMoveValue::U8(u8) = b {
-                        Some(*u8)
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            if !bytes.is_empty() {
-                return Some(bytes);
-            }
-        }
-        None
-    }
 }
 
 impl From<MoveStruct> for SuiMoveStruct {
@@ -459,7 +437,7 @@ pub struct SuiMovePackage {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(tag = "objectType", rename_all = "camelCase")]
 pub enum SuiMoveData {
     MoveObject(SuiMoveValue),
     Package(SuiMovePackage),

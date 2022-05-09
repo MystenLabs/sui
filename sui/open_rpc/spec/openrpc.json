@@ -892,6 +892,18 @@
       "Hex": {
         "type": "string"
       },
+      "ID": {
+        "description": "Rust version of the Move Sui::ID::ID type",
+        "type": "object",
+        "required": [
+          "bytes"
+        ],
+        "properties": {
+          "bytes": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      },
       "Identifier": {
         "type": "string"
       },
@@ -1071,13 +1083,6 @@
             "$ref": "#/components/schemas/StructTag"
           }
         }
-      },
-      "MoveObjectType": {
-        "type": "string",
-        "enum": [
-          "moveObject",
-          "movePackage"
-        ]
       },
       "MovePackage": {
         "type": "object",
@@ -1268,17 +1273,23 @@
       "ObjectExistsResponse": {
         "type": "object",
         "required": [
-          "object",
+          "data",
           "objectRef",
-          "objectType"
+          "owner",
+          "previousTransaction"
         ],
         "properties": {
-          "object": true,
+          "data": {
+            "$ref": "#/components/schemas/SuiMoveData"
+          },
           "objectRef": {
             "$ref": "#/components/schemas/NamedObjectRef"
           },
-          "objectType": {
-            "$ref": "#/components/schemas/MoveObjectType"
+          "owner": {
+            "$ref": "#/components/schemas/Owner"
+          },
+          "previousTransaction": {
+            "$ref": "#/components/schemas/TransactionDigest"
           }
         }
       },
@@ -1647,6 +1658,207 @@
         "$ref": "#/components/schemas/Hex"
       },
       "SuiJsonValue": {},
+      "SuiMoveData": {
+        "oneOf": [
+          {
+            "type": "object",
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "uint8",
+                "minimum": 0.0
+              },
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              {
+                "type": "integer",
+                "format": "uint128",
+                "minimum": 0.0
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/components/schemas/ObjectID"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SuiMoveValue"
+                }
+              },
+              {
+                "$ref": "#/components/schemas/SuiMoveStruct"
+              },
+              {
+                "$ref": "#/components/schemas/SuiAddress"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/components/schemas/ID"
+              },
+              {
+                "$ref": "#/components/schemas/UniqueID"
+              },
+              {
+                "$ref": "#/components/schemas/VersionedID"
+              },
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              {
+                "$ref": "#/components/schemas/Base64"
+              }
+            ],
+            "required": [
+              "objectType"
+            ],
+            "properties": {
+              "objectType": {
+                "type": "string",
+                "enum": [
+                  "moveObject"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "disassembled",
+              "header",
+              "objectType",
+              "version"
+            ],
+            "properties": {
+              "disassembled": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "header": {
+                "type": "string"
+              },
+              "objectType": {
+                "type": "string",
+                "enum": [
+                  "package"
+                ]
+              },
+              "version": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "SuiMoveStruct": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiMoveValue"
+            }
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/components/schemas/SuiMoveValue"
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "fields",
+              "type"
+            ],
+            "properties": {
+              "fields": {
+                "type": "object",
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/SuiMoveValue"
+                }
+              },
+              "type": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "SuiMoveValue": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          },
+          {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          {
+            "type": "integer",
+            "format": "uint128",
+            "minimum": 0.0
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiMoveValue"
+            }
+          },
+          {
+            "$ref": "#/components/schemas/SuiMoveStruct"
+          },
+          {
+            "$ref": "#/components/schemas/SuiAddress"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "$ref": "#/components/schemas/ID"
+          },
+          {
+            "$ref": "#/components/schemas/UniqueID"
+          },
+          {
+            "$ref": "#/components/schemas/VersionedID"
+          },
+          {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          {
+            "$ref": "#/components/schemas/Base64"
+          }
+        ]
+      },
       "TransactionBytes": {
         "type": "object",
         "required": [
@@ -2136,6 +2348,36 @@
       },
       "TypeTagString": {
         "type": "string"
+      },
+      "UniqueID": {
+        "description": "Rust version of the Move Sui::ID::UniqueID type",
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ID"
+          }
+        }
+      },
+      "VersionedID": {
+        "description": "Rust version of the Move Sui::ID::VersionedID type",
+        "type": "object",
+        "required": [
+          "id",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/UniqueID"
+          },
+          "version": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
       }
     }
   }
