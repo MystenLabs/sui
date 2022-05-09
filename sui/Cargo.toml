@@ -31,7 +31,7 @@ tracing-subscriber = { version = "0.3.11", features = ["time", "registry", "env-
 serde-value = "0.7.0"
 serde-name = "0.2.0"
 dirs = "4.0.0"
-clap = { version = "3.1.14", features = ["derive"] }
+clap = { version = "3.1.17", features = ["derive"] }
 telemetry_subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d2976a45420147ad821baae96e6fe4b12215f743" }
 
 bcs = "0.1.3"

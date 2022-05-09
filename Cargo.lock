@@ -546,7 +546,7 @@ dependencies = [
  "ark-std",
  "blake2s_simd",
  "byteorder",
- "clap 3.1.15",
+ "clap 3.1.17",
  "csv",
  "env_logger",
  "hex",
@@ -769,9 +769,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.1.15"
+version = "3.1.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85a35a599b11c089a7f49105658d089b8f2cf0882993c17daf6de15285c2c35d"
+checksum = "47582c09be7c8b32c0ab3a6181825ababb713fde6fff20fc573a3870dd45c6a0"
 dependencies = [
  "atty",
  "bitflags",
@@ -2730,7 +2730,7 @@ version = "0.1.0"
 source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884df53c11bf34a664bc#4e025186af502c931318884df53c11bf34a664bc"
 dependencies = [
  "anyhow",
- "clap 3.1.15",
+ "clap 3.1.17",
  "crossterm 0.21.0",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -2748,7 +2748,7 @@ source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884d
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.1.15",
+ "clap 3.1.17",
  "codespan-reporting",
  "colored",
  "difference",
@@ -2802,7 +2802,7 @@ source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884d
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.1.15",
+ "clap 3.1.17",
  "codespan-reporting",
  "difference",
  "hex",
@@ -2846,7 +2846,7 @@ source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884d
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.1.15",
+ "clap 3.1.17",
  "codespan",
  "colored",
  "move-binary-format",
@@ -2865,7 +2865,7 @@ version = "0.1.0"
 source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884df53c11bf34a664bc#4e025186af502c931318884df53c11bf34a664bc"
 dependencies = [
  "anyhow",
- "clap 3.1.15",
+ "clap 3.1.17",
  "colored",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -2988,7 +2988,7 @@ source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884d
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.1.15",
+ "clap 3.1.17",
  "colored",
  "move-abigen",
  "move-binary-format",
@@ -3021,7 +3021,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "atty",
- "clap 3.1.15",
+ "clap 3.1.17",
  "codespan",
  "codespan-reporting",
  "futures",
@@ -3138,7 +3138,7 @@ source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884d
 dependencies = [
  "anyhow",
  "bytecode-interpreter-crypto",
- "clap 3.1.15",
+ "clap 3.1.17",
  "codespan-reporting",
  "itertools",
  "move-binary-format",
@@ -3202,7 +3202,7 @@ version = "0.1.0"
 source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884df53c11bf34a664bc#4e025186af502c931318884df53c11bf34a664bc"
 dependencies = [
  "anyhow",
- "clap 3.1.15",
+ "clap 3.1.17",
  "codespan-reporting",
  "colored",
  "itertools",
@@ -5007,7 +5007,7 @@ dependencies = [
  "base64ct",
  "bcs",
  "bytes",
- "clap 3.1.15",
+ "clap 3.1.17",
  "colored",
  "config 0.1.0",
  "crypto",
@@ -5089,7 +5089,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
- "clap 3.1.15",
+ "clap 3.1.17",
  "futures",
  "serde 1.0.137",
  "serde_json",
@@ -5222,7 +5222,7 @@ dependencies = [
  "bcs",
  "bincode",
  "bytes",
- "clap 3.1.15",
+ "clap 3.1.17",
  "ed25519-dalek",
  "executor",
  "fdlimit",
@@ -6332,7 +6332,7 @@ name = "x"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 3.1.15",
+ "clap 3.1.17",
  "nexlint",
  "nexlint-lints",
 ]
