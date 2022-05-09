@@ -11,7 +11,7 @@ struct Bar has store {
 ```
 > :bulb: For a struct type to be capable of being embedded in a Sui object struct (which will have `key` ability), the embedded struct type must have `store` ability.
 
-In the above example, `Bar` is a normal Move struct that cannot be used to construct Sui objects, since it doesn't have `key` ability. This is very common usage when we just need to organize data with good encapsulation.
+In the above example, `Bar` is a normal Move struct, but it is not a Sui object, since it doesn't have `key` ability. This is very common usage when we just need to organize data with good encapsulation.
 In some cases, however, we want to put a Sui object struct type as a field in another Sui object struct type. In the above example, if we change `Bar` into:
 ```rust
 struct Bar has key, store {
