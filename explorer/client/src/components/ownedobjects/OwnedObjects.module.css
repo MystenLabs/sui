@@ -13,11 +13,11 @@
 }
 
 .objectbox {
-    @apply border-solid border-stone-300 rounded-lg my-2 lg:self-center hover:shadow-md cursor-pointer break-all lg:w-[25vw];
+    @apply border-solid border-stone-300 rounded-lg my-2 lg:self-center hover:shadow-md cursor-pointer break-all lg:w-[21.8vw];
 }
 
 .objectbox > div {
-    @apply pt-2 pl-2 pr-1;
+    @apply py-1 px-1;
 }
 
 .objectbox > div:first-child > div {
@@ -25,7 +25,7 @@
 }
 
 .objectbox > div > div > span:first-child {
-    @apply mr-[1rem] uppercase font-sans font-semibold block xl:inline;
+    @apply mr-[0.25vw] uppercase font-sans font-bold block xl:inline;
 }
 
 .previewimage > div > img {
