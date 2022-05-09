@@ -1,15 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
 import {
     getSingleTransactionKind,
     getExecutionStatusType,
     getTotalGasUsed,
     getExecutionDetails,
 } from '@mysten/sui.js';
+import cl from 'classnames';
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import TransactionCard from '../../components/transaction-card/TransactionCard';
