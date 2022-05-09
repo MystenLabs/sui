@@ -42,7 +42,7 @@ struct Object has key, store {
     style: u8,
 }
 ```
-In a real application, we probably would make sure that there is a limited supply of the objects and there is a mechanism to mint them to a list of owners. For simplicity and demonstration purpose, here we will just make it straightforward to create:
+In a real application, we probably would make sure that there is a limited supply of the objects and there is a mechanism to mint them to a list of owners. For simplicity and demonstration purposes, here we will just make it straightforward to create:
 ```rust
 public(script) fun create_object(scarcity: u8, style: u8, ctx: &mut TxContext) {
     let object = Object {
@@ -60,13 +60,13 @@ public(script) fun transfer_object(object: Object, ctx: &mut TxContext) {
 }
 ```
 
-Now let's look at how we could enable a swap/trade between your object and others' objects. A straightforward idea is this: define a function that takes two objects from two accounts, and swap their ownership. But this doesn't work in Sui! Recall from Chapter 2 that only object owners can send a transaction to mutate the object. So one person cannot send a transaction that would swap their own object with someone else's object.
+Now let's look at how we could enable a swap/trade between your object and others' objects. A straightforward idea is this: define a function that takes two objects from two accounts and swaps their ownership. But this doesn't work in Sui! Recall from [chapter 2](ch2-using-objects.md) that only object owners can send a transaction to mutate the object. So one person cannot send a transaction that would swap their own object with someone else's object.
 
-In the future, we will likely introduce multi-sig transactions so that two people can sign the same transaction for this type of usecase. However you may not always be able to find someone to swap with right away. A multi-sig transaction won't work in this scenario. Even if you can, you may not want to carry the burden of finding a swap target.
+In the future, we will likely introduce multi-sig transactions so that two people can sign the same transaction for this type of use case. However, you may not always be able to find someone to swap with right away. A multi-sig transaction won't work in this scenario. Even if you can, you may not want to carry the burden of finding a swap target.
 
-Another common solution is to "send" your object to a pool (e.g. a marketplace in the case of NFT, or a liquidity pool in the case of tokens), and perform the swap in the pool (either right away, or later when there is demand). In future chapters, we will explore the concept of shared objects that can be mutated by anyone, and show that how it enables anyone to operate in a shared object pool. In this chapter, we will focus on how to achieve the same effect using owned objects. Transactions only using owned objects is faster and cheaper (in terms of gas) than using shared objects, since it does not require consensus in Sui.
+Another common solution is to "send" your object to a pool (e.g. a marketplace in the case of NFT, or a liquidity pool in the case of tokens), and perform the swap in the pool (either right away, or later when there is demand). In future chapters, we will explore the concept of shared objects that can be mutated by anyone and show that how it enables anyone to operate in a shared object pool. In this chapter, we will focus on how to achieve the same effect using owned objects. Transactions using only owned objects are faster and cheaper (in terms of gas) than using shared objects, since they do not require consensus in Sui.
 
-To be able to perform a swap of objects, both objects must be owned by the same account. We can imagine that a third party builds infrastructure to provide swap services. Anyone who wants to swap their object can send their objects to the third party, and the third party will help perform the swap and send them back. However, we don't fully trust the third party and don't want to give them full custody of our objects. To achieve this, we can use direct wrapping. We define a wrapper object type as following:
+To be able to perform a swap of objects, both objects must be owned by the same account. We can imagine that a third party builds infrastructure to provide swap services. Anyone who wants to swap their object can send their objects to the third party, and the third party will help perform the swap and send the objects back. But we don't fully trust the third party and don't want to give them full custody of our objects. To achieve this, we can use direct wrapping. We define a wrapper object type as following:
 ```rust
 struct ObjectWrapper has key {
     id: VersionedID,
@@ -75,7 +75,7 @@ struct ObjectWrapper has key {
     fee: Balance<SUI>,
 }
 ```
-`ObjectWrapper` defines a Sui object type, wraps the object that we want to swap as `to_swap`, and tracks the original owner of the object in `original_owner`. To make this more interesting and realistic, we can also expect that we may need to pay the third-party some fee for this swap. Below we define an interface to request a swap by someone who owns an `Object`:
+`ObjectWrapper` defines a Sui object type, wraps the object that we want to swap as `to_swap`, and tracks the original owner of the object in `original_owner`. To make this more interesting and realistic, we can also expect that we may need to pay the third party some fee for this swap. Below we define an interface to request a swap by someone who owns an `Object`:
 ```rust
 public(script) fun request_swap(object: Object, fee: Coin<SUI>, service_address: address, ctx: &mut TxContext) {
     assert!(Coin::value(&fee) >= MIN_FEE, 0);
@@ -88,16 +88,16 @@ public(script) fun request_swap(object: Object, fee: Coin<SUI>, service_address:
     Transfer::transfer(wrapper, service_address);
 }
 ```
-In the above entry function, to request for swapping an `object`, one must pass the object by value so that it's fully consumed and wrapped into `ObjectWrapper`. A fee (in the type of `Coin<SUI>`) is also provided. It also checks that the fee is sufficient. Note that we turn `Coin` into `Balance` when putting it into the `wrapper` object. This is because `Coin` is a Sui object type and only used to pass around as Sui objects (e.g. as entry function arguments or objects sent to addresses). For coin balances that need to be embedded in another Sui object struct, we use `Balance` instead because it's not a Sui object type and hence is much cheaper to use.
+In the above entry function, to request swapping an `object`, one must pass the object by value so that it's fully consumed and wrapped into `ObjectWrapper`. A fee (in the type of `Coin<SUI>`) is also provided. The function also checks that the fee is sufficient. Note that we turn `Coin` into `Balance` when putting it into the `wrapper` object. This is because `Coin` is a Sui object type and used only to pass around as Sui objects (e.g. as entry function arguments or objects sent to addresses). For coin balances that need to be embedded in another Sui object struct, we use `Balance` instead because it's not a Sui object type and hence is much cheaper to use.
 The wrapper object is then sent to the service operator, whose address is also specified in the call as `service_address`.
 
-Although the service operator (`service_address`) now owns the `ObjectWrapper`, which contains the object to be swapped, they cannot access the wrapped `Object. In particular, the operator cannot transfer it even though we have defined a `transfer_object` entry function for `Object`. This is because they cannot pass the wrapped `Object` as an argument to the function.
+Although the service operator (`service_address`) now owns the `ObjectWrapper`, which contains the object to be swapped, they cannot access the wrapped `Object`. In particular, the operator cannot transfer it even though we have defined a `transfer_object` entry function for `Object`. This is because the operator cannot pass the wrapped `Object` as an argument to the function.
 
-Finally, let's define the function that the service operator can call in order to perform a swap between two objects sent from two accounts. The function interface will look like the following:
+Finally, let's define the function that the service operator can call in order to perform a swap between two objects sent from two accounts. The function interface will resemble:
 ```rust
 public(script) fun execute_swap(wrapper1: ObjectWrapper, wrapper2: ObjectWrapper, ctx: &mut TxContext);
 ```
-where `wrapper1` and `wrapper2` are two wrapped objects that were sent from different objects owners to the service operator (hence the service operator owns both). Both wrapped objects are passed by value because they will eventually need to be unpacked.
+Where `wrapper1` and `wrapper2` are two wrapped objects that were sent from different object owners to the service operator. (Hence, the service operator owns both.) Both wrapped objects are passed by value because they will eventually need to be unpacked.
 We first check that the swap is indeed legit:
 ```rust
 assert!(wrapper1.to_swap.scarcity == wrapper2.to_swap.scarcity, 0);
@@ -130,21 +130,21 @@ let service_address = TxContext::sender(ctx);
 Balance::join(&mut fee1, fee2);
 Transfer::transfer(Coin::from_balance(fee1, ctx), service_address);
 ```
-`fee2` is merged into `fee1`, turned into a `Coin` and sent to the `service_address`. Finally we signal Sui that we have deleted both wrapper objects:
+`fee2` is merged into `fee1`, turned into a `Coin` and sent to the `service_address`. Finally, we signal Sui that we have deleted both wrapper objects:
 ```rust
 ID::delete(id1);
 ID::delete(id2);
 ```
 At the end of this call, the two objects have been swapped (sent to the opposite owner) and the service provider takes the service fee.
 
-Since the contract only defined one way to deal with `ObjectWrapper` which is `execute_swap`, there is no other way that the service operator can interact with `ObjectWrapper` even though they own them.
+Since the contract defined only one way to deal with `ObjectWrapper` - `execute_swap` - there is no other way the service operator can interact with `ObjectWrapper` despite its ownership.
 
 The full source code can be found in [TrustedSwap.move](../../../../sui_programmability/examples/objects_tutorial/sources/TrustedSwap.move).
 
 A more complex example of using direct wrapping can be found in [Escrow.move](../../../../sui_programmability/examples/defi/sources/Escrow.move).
 
 ### Wrapping through `Option`
-When Sui object type `Bar` is directly wrapped into `Foo`, there is not much flexiblity: a `Foo` object must has a `Bar` object in it, and in order to take out the `Bar` object one must destroy the `Foo` object. However, there are cases where we want more flexibility: the wrapping type may or may not always has the wrapped object in it, and the wrapped object may be replaced with a different object at some point.
+When Sui object type `Bar` is directly wrapped into `Foo`, there is not much flexiblity: a `Foo` object must have a `Bar` object in it, and in order to take out the `Bar` object one must destroy the `Foo` object. However, there are cases where we want more flexibility: the wrapping type may or may not always have the wrapped object in it, and the wrapped object may be replaced with a different object at some point.
 
 Let's demonstrate this use case by designing a simple game character: A warrior with a sword and shield. A warrior may or may not have a sword and shield, and they should be able to replace them anytime. To design this, we define a `SimpleWarrior` type as following:
 ```rust
@@ -166,7 +166,7 @@ struct Shield has key, store {
     armor: u8,
 }
 ```
-When we are creating a new warrior, we can set the `sword` and `shield` to none to indicate that there are no equipment yet:
+When we are creating a new warrior, we can set the `sword` and `shield` to `none` to indicate there is no equipment yet:
 ```rust
 public(script) fun create_warrior(ctx: &mut TxContext) {
     let warrior = SimpleWarrior {
@@ -189,7 +189,7 @@ public(script) fun equip_sword(warrior: &mut SimpleWarrior, sword: Sword, ctx: &
 ```
 In the above function, we are passing a `warrior` as mutable reference of `SimpleWarrior`, and a `sword` passed by value because we need to wrap it into the `warrior`.
 
-It is important to note that because `Sword` is a Sui object type without `drop` ability, if the warrior already has a sword equipped, that sword cannot just be dropped. If we make a call to `Option::fill` without first checking and taking out the existig sword, a runtime error may happen. Hence in `equip_sword`, we first check if there is already a sword equipped, and if so, we take it out and send it back to the sender. This matches what you would expect when you equip a new sword--you get the old sword back, if there is one.
+It is important to note that because `Sword` is a Sui object type without `drop` ability, if the warrior already has a sword equipped, that sword cannot just be dropped. If we make a call to `Option::fill` without first checking and taking out the existing sword, a runtime error may occur. Hence in `equip_sword`, we first check if there is already a sword equipped, and if so, we take it out and send it back to the sender. This matches what you would expect when you equip a new sword--you get the old sword back, if there is one.
 
 Full code can be found in [SimpleWarrior.move](../../../../sui_programmability/examples/objects_tutorial/sources/SimpleWarrior.move).
 
