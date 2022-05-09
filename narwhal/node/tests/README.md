@@ -15,7 +15,7 @@ https://github.com/novifinancial/serde-reflection
 In this example, we will update one of our core types (SuiError), and then update the manifest:
 
 ```
-huitseeker@Garillots-MBP.localdomain➜~/tmp/narwhal(main)» ruplacer --subvert 'DeleteBatches' 'RemoveBatches' --go                                                                                       [14:12:34]
+narwhal/node(main)» ruplacer --subvert 'DeleteBatches' 'RemoveBatches' --go                                                                                       [14:12:34]
 ./node/tests/staged/narwhal.yaml:70 - DeleteBatches:
 ./node/tests/staged/narwhal.yaml:70 + RemoveBatches:
 
@@ -41,24 +41,24 @@ Performed 7 replacements on 5 matching files
 Now our code is modified in a way that will make the format test fail: let's update the manifest.
 
 ```
-huitseeker@Garillots-MBP.localdomain➜~/tmp/narwhal(main)» cd node                                                                                                                                       [14:12:53]
-huitseeker@Garillots-MBP.localdomain➜tmp/narwhal/node(main)» cargo -q run --example generate-format -- print > tests/staged/narwhal.yaml
+narwhal/node(main)» cd node                                                                                                                                       [14:12:53]
+narwhal/node(main)» cargo -q run --example generate-format -- print > tests/staged/narwhal.yaml
 ```
 
 
 Let's check that we pass the test again:
 ```
-huitseeker@Garillots-MBP.localdomain➜tmp/narwhal/node(main)» cargo test -- format 2>&1 |tail -n 40                                                                                                      [14:13:47]
+narwhal/node(main)» cargo test -- format 2>&1 |tail -n 40                                                                                                      [14:13:47]
 
 running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-     Running tests/formats.rs (/Users/huitseeker/tmp/narwhal/target/debug/deps/formats-de36ac230681a99f)
+     Running tests/formats.rs (narwhal/target/debug/deps/formats-de36ac230681a99f)
 
 running 1 test
    Compiling typenum v1.15.0
-   Compiling network v0.1.0 (/Users/huitseeker/tmp/narwhal/network)
+   Compiling network v0.1.0 (narwhal/network)
    Compiling generic-array v0.14.5
    Compiling digest v0.9.0
    Compiling crypto-mac v0.8.0
@@ -77,19 +77,19 @@ running 1 test
    Compiling ark-ed-on-cp6-782 v0.3.0
    Compiling ark-ed-on-bw6-761 v0.3.0
    Compiling bls-crypto v0.2.0 (https://github.com/huitseeker/celo-bls-snark-rs?branch=updates-2#9f5a0e6f)
-   Compiling crypto v0.1.0 (/Users/huitseeker/tmp/narwhal/crypto)
-   Compiling config v0.1.0 (/Users/huitseeker/tmp/narwhal/config)
-   Compiling primary v0.1.0 (/Users/huitseeker/tmp/narwhal/primary)
-   Compiling consensus v0.1.0 (/Users/huitseeker/tmp/narwhal/consensus)
-   Compiling worker v0.1.0 (/Users/huitseeker/tmp/narwhal/worker)
-   Compiling node v0.1.0 (/Users/huitseeker/tmp/narwhal/node)
+   Compiling crypto v0.1.0 (narwhal/crypto)
+   Compiling config v0.1.0 (narwhal/config)
+   Compiling primary v0.1.0 (narwhal/primary)
+   Compiling consensus v0.1.0 (narwhal/consensus)
+   Compiling worker v0.1.0 (narwhal/worker)
+   Compiling node v0.1.0 (narwhal/node)
     Finished dev [unoptimized + debuginfo] target(s) in 7.68s
      Running `target/debug/examples/generate-format test`
 test test_format ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.08s
 
-huitseeker@Garillots-MBP.localdomain➜tmp/narwhal/node(main)» git status -s                                                                                                                              [14:14:39]
+narwhal/node(main)» git status -s                                                                                                                              [14:14:39]
  M src/generate_format.rs
  M tests/staged/narwhal.yaml
  M ../primary/src/primary.rs

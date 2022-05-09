@@ -184,7 +184,7 @@ The instance type selects the hardware on which to deploy the testbed. For examp
 If you require more nodes than data centers, the Python scripts will distribute the nodes as equally as possible amongst the data centers. All machines run a fresh install of Ubuntu Server 20.04.
 
 ### Step 4. Create a testbed
-The AWS instances are orchestrated with [Fabric](http://www.fabfile.org) from the file [fabfile.py](https://github.com/mystenlabs/narwhal/blob/main/benchmark/fabfile.pyy) (located in [narwhal/benchmarks](https://github.com/mystenlabs/narwhal/blob/main/benchmark)); you can list all possible commands as follows:
+The AWS instances are orchestrated with [Fabric](http://www.fabfile.org) from the file [fabfile.py](https://github.com/mystenlabs/narwhal/blob/main/benchmark/fabfile.py) (located in [narwhal/benchmarks](https://github.com/mystenlabs/narwhal/blob/main/benchmark)); you can list all possible commands as follows:
 ```
 $ cd narwhal/benchmark
 $ fab --list
