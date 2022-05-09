@@ -12,6 +12,7 @@ use crypto::{
     traits::{EncodeDecodeBase64, VerifyingKey},
     Digest, Hash, SignatureService, DIGEST_LEN,
 };
+use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -469,6 +470,12 @@ impl<PublicKey: VerifyingKey> PartialEq for Certificate<PublicKey> {
         ret &= self.round() == other.round();
         ret &= self.origin() == other.origin();
         ret
+    }
+}
+
+impl<PublicKey: VerifyingKey> Affiliated for Certificate<PublicKey> {
+    fn parents(&self) -> Vec<<Self as crypto::Hash>::TypedDigest> {
+        self.header.parents.iter().cloned().collect()
     }
 }
 

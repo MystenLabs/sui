@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use arc_swap::ArcSwap;
+use crypto::Digest;
 use dashmap::DashMap;
 use either::Either;
 use once_cell::sync::OnceCell;
@@ -40,6 +41,7 @@ pub trait Affiliated: crypto::Hash {
 /// /!\ Warning /!\: do not drop the heads of the graph without having given them new antecedents,
 /// as this will transitively drop all the nodes they point to and may cause loss of data.
 ///   
+#[derive(Debug)]
 pub struct NodeDag<T: Affiliated> {
     // Not that we should need to ever serialize this (we'd rather rebuild the Dag from a persistent store)
     // but the way to serialize this in key order is using serde_with and an annotation of:
@@ -48,11 +50,11 @@ pub struct NodeDag<T: Affiliated> {
 }
 
 #[derive(Debug, Error)]
-pub enum DagError<T: crypto::Hash> {
+pub enum DagError {
     #[error("No vertex known by this digest: {0}")]
-    UnknownDigest(T::TypedDigest),
+    UnknownDigest(Digest),
     #[error("The vertex known by this digest was dropped: {0}")]
-    DroppedDigest(T::TypedDigest),
+    DroppedDigest(Digest),
 }
 
 impl<T: Affiliated> NodeDag<T> {
@@ -66,11 +68,11 @@ impl<T: Affiliated> NodeDag<T> {
 
     /// Returns a weak reference to the requested vertex.
     /// This does not prevent the vertex from being dropped off the graph.
-    pub fn get_weak(&self, digest: T::TypedDigest) -> Result<WeakNodeRef<T>, DagError<T>> {
+    pub fn get_weak(&self, digest: T::TypedDigest) -> Result<WeakNodeRef<T>, DagError> {
         let node_ref = self
             .node_table
             .get(&digest)
-            .ok_or(DagError::UnknownDigest(digest))?;
+            .ok_or_else(|| DagError::UnknownDigest(digest.into()))?;
         match *node_ref {
             Either::Left(ref node) => Ok(node.clone()),
             Either::Right(ref node) => Ok(Arc::downgrade(node)),
@@ -79,14 +81,15 @@ impl<T: Affiliated> NodeDag<T> {
 
     // Returns a strong (`Arc`) reference to the graph node.
     // This bumps the reference count to the vertex and may prevent it from being GC-ed off the graph.
-    pub(crate) fn get(&self, digest: T::TypedDigest) -> Result<NodeRef<T>, DagError<T>> {
+    pub(crate) fn get(&self, digest: T::TypedDigest) -> Result<NodeRef<T>, DagError> {
         let node_ref = self
             .node_table
             .get(&digest)
-            .ok_or(DagError::UnknownDigest(digest))?;
+            .ok_or_else(|| DagError::UnknownDigest(digest.into()))?;
         match *node_ref {
             Either::Left(ref node) => Ok(NodeRef(
-                node.upgrade().ok_or(DagError::DroppedDigest(digest))?,
+                node.upgrade()
+                    .ok_or_else(|| DagError::DroppedDigest(digest.into()))?,
             )),
             // the node is a head of the graph, just return
             Either::Right(ref node) => Ok(node.clone()),
@@ -104,11 +107,11 @@ impl<T: Affiliated> NodeDag<T> {
     /// to many downward nodes and dropping them might GC large spans of the graph.
     ///
     /// This returns an error if the queried node is unknown
-    pub fn has_head(&self, hash: T::TypedDigest) -> Result<bool, DagError<T>> {
+    pub fn has_head(&self, hash: T::TypedDigest) -> Result<bool, DagError> {
         let node_ref = self
             .node_table
             .get(&hash)
-            .ok_or(DagError::UnknownDigest(hash))?;
+            .ok_or_else(|| DagError::UnknownDigest(hash.into()))?;
         match *node_ref {
             Either::Right(ref _node) => Ok(true),
             Either::Left(ref _node) => Ok(false),
@@ -119,7 +122,7 @@ impl<T: Affiliated> NodeDag<T> {
     /// Returns true if the node was made compressible, and false if it already was
     ///
     /// This returne an error if the queried node is unknown or dropped from the graph
-    pub fn make_compressible(&self, hash: T::TypedDigest) -> Result<bool, DagError<T>> {
+    pub fn make_compressible(&self, hash: T::TypedDigest) -> Result<bool, DagError> {
         let node_ref = self.get(hash)?;
         Ok(node_ref.make_compressible())
     }
@@ -136,7 +139,7 @@ impl<T: Affiliated> NodeDag<T> {
     /// - insertion should be idempotent
     /// - an unseen node is a head (not pointed) to by any other node.
     ///
-    pub fn try_insert(&mut self, value: T) -> Result<(), DagError<T>> {
+    pub fn try_insert(&mut self, value: T) -> Result<(), DagError> {
         let digest = value.digest();
         // Do we have this node already?
         if self.contains(digest) {

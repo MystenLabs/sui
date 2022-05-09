@@ -24,6 +24,7 @@ tonic = { version = "0.7", features = ["tls"] }
 
 config = { path = "../config" }
 crypto = { path = "../crypto" }
+dag = { path = "../dag" }
 
 [features]
 default = []

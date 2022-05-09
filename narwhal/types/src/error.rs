@@ -58,4 +58,7 @@ pub enum DagError {
 
     #[error("Message {0} (round {1}) too old")]
     TooOld(Digest, Round),
+
+    #[error("Dag invariant violation {0}")]
+    DagInvariantViolation(#[from] dag::node_dag::DagError),
 }
