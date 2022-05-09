@@ -18,13 +18,13 @@ Follow the [JSON RPC doc](https://github.com/MystenLabs/sui/blob/main/doc/src/bu
 
 The `JsonRpcProvider` class provides a connection to the JSON-RPC Server and should be used for all read-only operations. For example:
 
-Fetch objects owned by the address `C5206DD02C86A510C4848516229B02ADDFACBE55`
+Fetch objects owned by the address `0xbff6ccc8707aa517b4f1b95750a2a8c666012df3`
 
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider('https://gateway.devnet.sui.io:9000/');
 const objects = await provider.getOwnedObjectRefs(
-  'C5206DD02C86A510C4848516229B02ADDFACBE55'
+  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
 );
 ```
 
@@ -52,10 +52,10 @@ const signer = new RawSigner(
 );
 const txn = await signer.transferCoin({
   signer: keypair.getPublicKey().toSuiAddress(),
-  objectId: '5015b016ab570df14c87649eda918e09e5cc61e0',
-  gasPayment: '0a8c2a0fd59bf41678b2e22c3dd2b84425fb3673',
+  objectId: '0x5015b016ab570df14c87649eda918e09e5cc61e0',
+  gasPayment: '0x0a8c2a0fd59bf41678b2e22c3dd2b84425fb3673',
   gasBudget: 10000,
-  recipient: 'BFF6CCC8707AA517B4F1B95750A2A8C666012DF3',
+  recipient: '0xBFF6CCC8707AA517B4F1B95750A2A8C666012DF3',
 });
 ```
 

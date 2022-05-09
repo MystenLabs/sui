@@ -1453,12 +1453,13 @@
   integrity sha512-nkalE/f1RvRGChwBnEIoBfSEYOXnCRdleKuv6+lePbMDrMZXeDQnqak5XDOeBgrPPyPfAdcCu/B5z+v3VhplGg==
 
 "@mysten/sui.js@file:../../sdk/typescript":
-  version "0.1.1"
+  version "0.1.2"
   dependencies:
     bn.js "^5.2.0"
     buffer "^6.0.3"
     cross-fetch "^3.1.5"
     jayson "^3.6.6"
+    js-sha3 "^0.8.0"
     tweetnacl "^1.0.3"
     util "^0.12.4"
 
@@ -6165,6 +6166,11 @@ joi@^17.6.0:
     "@sideway/address" "^4.1.3"
     "@sideway/formula" "^3.0.0"
     "@sideway/pinpoint" "^2.0.0"
+
+js-sha3@^0.8.0:
+  version "0.8.0"
+  resolved "https://registry.yarnpkg.com/js-sha3/-/js-sha3-0.8.0.tgz#b9b7a5da73afad7dedd0f8c463954cbde6818840"
+  integrity sha512-gF1cRrHhIzNfToc802P800N8PpXS+evLLXfsVpowqmAFR9uwbi89WvXg2QspOmXL8QL86J4T1EpFu+yUkwJY3Q==
 
 "js-tokens@^3.0.0 || ^4.0.0", js-tokens@^4.0.0:
   version "4.0.0"
