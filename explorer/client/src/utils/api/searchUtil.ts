@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isObjectNotExistsInfo, isObjectRef } from 'sui.js';
+import { isObjectNotExistsInfo, isObjectRef } from '@mysten/sui.js';
 
 import { DefaultRpcClient as rpc } from './DefaultRpcClient';
 

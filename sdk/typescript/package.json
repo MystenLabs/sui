@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "Apache-2.0",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
@@ -30,8 +30,15 @@
     "singleQuote": true,
     "trailingComma": "es5"
   },
-  "name": "sui.js",
+  "name": "@mysten/sui.js",
   "author": "Mysten Labs <build@mystenlabs.com>",
+  "description": "Sui TypeScript API(Work in Progress)",
+  "bugs": {
+    "url": "https://github.com/MystenLabs/sui/issues/new"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "module": "dist/sui.js.esm.js",
   "size-limit": [
     {

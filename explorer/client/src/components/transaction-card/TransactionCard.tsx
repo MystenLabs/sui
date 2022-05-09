@@ -1,14 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Buffer } from 'buffer';
-import cl from 'classnames';
 import {
     getMoveCallTransaction,
     getPublishTransaction,
     getTransactionKind,
     getTransferTransaction,
-} from 'sui.js';
+} from '@mysten/sui.js';
+import { Buffer } from 'buffer';
+import cl from 'classnames';
 
 import Longtext from '../../components/longtext/Longtext';
 
@@ -18,7 +18,7 @@ import type {
     TransactionKindName,
     ExecutionStatusType,
     RawObjectRef,
-} from 'sui.js';
+} from '@mysten/sui.js';
 
 import styles from './TransactionCard.module.css';
 
