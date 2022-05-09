@@ -58,12 +58,4 @@ pub enum DagError {
 
     #[error("Message {0} (round {1}) too old")]
     TooOld(Digest, Round),
-
-    // The generic Dag structure
-    #[error("Dag invariant violation {0}")]
-    DagInvariantViolation(#[from] dag::node_dag::DagError),
-
-    // The Validator Dag (the generic Dag applied to NW certifcates)
-    #[error("validator Dag error {0}")]
-    ValidatorDagError(#[from] consensus::dag::ValidatorDagError),
 }

@@ -197,6 +197,14 @@ impl<T: Affiliated> NodeDag<T> {
     }
 }
 
+impl<T: Affiliated + Sync + Send + std::fmt::Debug> NodeDag<T> {
+    /// Performs a breadth-first traversal of the Dag starting at the given vertex
+    pub fn bft(&self, hash: T::TypedDigest) -> Result<impl Iterator<Item = NodeRef<T>>, DagError> {
+        let start = self.get(hash)?;
+        Ok(crate::bfs(start))
+    }
+}
+
 impl<T: Affiliated> Default for NodeDag<T> {
     fn default() -> Self {
         Self::new()

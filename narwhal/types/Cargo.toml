@@ -23,7 +23,6 @@ prost = "0.10"
 tonic = { version = "0.7", features = ["tls"] }
 
 config = { path = "../config" }
-consensus = { path = "../consensus" }
 crypto = { path = "../crypto" }
 dag = { path = "../dag" }
 
