@@ -114,7 +114,9 @@ export class JsonRpcProvider extends Provider {
       );
     } catch (err) {
       const list = digests.join(', ').substring(0, -2);
-      throw new Error(`Error getting transaction effects: ${err} for digests [${list}]`);
+      throw new Error(
+        `Error getting transaction effects: ${err} for digests [${list}]`
+      );
     }
   }
 
