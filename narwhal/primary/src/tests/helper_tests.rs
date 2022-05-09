@@ -384,5 +384,5 @@ async fn test_process_payload_availability_when_failures() {
     }
 
     // And ensure that log files include the error message
-    assert!(logs_contain("Error while retrieving certificates"));
+    assert!(logs_contain("Storage failure"));
 }

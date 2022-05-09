@@ -3,16 +3,29 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{primary::PrimaryMessage, PayloadToken};
 use config::{Committee, WorkerId};
-use crypto::traits::VerifyingKey;
+use crypto::traits::{EncodeDecodeBase64, VerifyingKey};
 use network::PrimaryNetwork;
-use store::Store;
+use store::{Store, StoreError};
+use thiserror::Error;
 use tokio::sync::mpsc::Receiver;
-use tracing::{error, warn};
+use tracing::{error, instrument};
 use types::{BatchDigest, Certificate, CertificateDigest};
 
 #[cfg(test)]
 #[path = "tests/helper_tests.rs"]
 mod helper_tests;
+
+#[derive(Debug, Error)]
+enum HelperError {
+    #[error("Received message from unknown authority {0}")]
+    UnknownAuthority(String),
+
+    #[error("Storage failure: {0}")]
+    StoreError(#[from] StoreError),
+
+    #[error("Invalid request received: {0}")]
+    InvalidRequest(String),
+}
 
 /// A task dedicated to help other authorities by replying to their certificate &
 /// payload availability requests.
@@ -60,7 +73,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                 // the data source (dictated by the digests parameter). The results
                 // will be emitted one by one to the consumer.
                 PrimaryMessage::CertificatesRequest(digests, origin) => {
-                    self.process_certificates(digests, origin, false).await;
+                    let _ = self.process_certificates(digests, origin, false).await;
                 }
                 // The CertificatesBatchRequest will find any certificates that exist in
                 // the data source (dictated by the digests parameter). The results will
@@ -69,7 +82,8 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                     certificate_ids,
                     requestor,
                 } => {
-                    self.process_certificates(certificate_ids, requestor, true)
+                    let _ = self
+                        .process_certificates(certificate_ids, requestor, true)
                         .await;
                 }
                 // A request that another primary sends us to ask whether we
@@ -78,7 +92,8 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                     certificate_ids,
                     requestor,
                 } => {
-                    self.process_payload_availability(certificate_ids, requestor)
+                    let _ = self
+                        .process_payload_availability(certificate_ids, requestor)
                         .await;
                 }
                 _ => {
@@ -92,17 +107,17 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
     /// certificate & batch data for each certificate digest in digests,
     /// and reports on each fully available item in the request in a
     /// PayloadAvailabilityResponse.
+    #[instrument(level="debug", skip_all, fields(certificate_ids = ?digests), err)]
     async fn process_payload_availability(
         &mut self,
         digests: Vec<CertificateDigest>,
         origin: PublicKey,
-    ) {
+    ) -> Result<(), HelperError> {
         // get the requestor's address.
         let address = match self.committee.primary(&origin) {
             Ok(x) => x.primary_to_primary,
-            Err(e) => {
-                warn!("Primary origin node not found in committee: {e}");
-                return;
+            Err(_) => {
+                return Err(HelperError::UnknownAuthority(origin.encode_base64()));
             }
         };
 
@@ -111,8 +126,6 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
         let certificates = match self.certificate_store.read_all(digests.to_owned()).await {
             Ok(certificates) => certificates,
             Err(err) => {
-                error!("Error while retrieving certificates: {err}");
-
                 // just return at this point. Send back to the requestor
                 // that we don't have availability - ideally we would like
                 // to communicate an error (so they could potentially retry).
@@ -126,7 +139,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                     .unreliable_send(address, &message)
                     .await;
 
-                return;
+                return Err(HelperError::StoreError(err));
             }
         };
 
@@ -163,30 +176,32 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
         self.primary_network
             .unreliable_send(address, &message)
             .await;
+
+        Ok(())
     }
 
+    #[instrument(level="debug", skip_all, fields(certificate_ids = ?digests, mode = batch_mode), err)]
     async fn process_certificates(
         &mut self,
         digests: Vec<CertificateDigest>,
         origin: PublicKey,
         batch_mode: bool,
-    ) {
+    ) -> Result<(), HelperError> {
         if digests.is_empty() {
-            warn!("Request with empty digests received - ignore request");
-            return;
+            return Err(HelperError::InvalidRequest(
+                "empty digests received - ignore request".to_string(),
+            ));
         }
 
         // get the requestor's address.
         let address = match self.committee.primary(&origin) {
             Ok(x) => x.primary_to_primary,
-            Err(e) => {
-                warn!("Primary origin node not found in committee: {e}");
-                return;
+            Err(_) => {
+                return Err(HelperError::UnknownAuthority(origin.encode_base64()));
             }
         };
 
         // TODO [issue #195]: Do some accounting to prevent bad nodes from monopolizing our resources.
-
         let certificates = match self.certificate_store.read_all(digests.to_owned()).await {
             Ok(certificates) => certificates,
             Err(err) => {
@@ -227,5 +242,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                     .await;
             }
         }
+
+        Ok(())
     }
 }
