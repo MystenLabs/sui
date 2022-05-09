@@ -14,7 +14,7 @@ futures = "0.3.21"
 serde = { version = "1.0.137", features = ["derive"] }
 serde_json = "1.0.80"
 tempfile = "3.3.0"
-tokio = { version = "1.17.0", features = ["full"] }
+tokio = { version = "1.18.2", features = ["full"] }
 rand = "0.7.3"
 toml = "0.5.9"
 strum = "0.24.0"
