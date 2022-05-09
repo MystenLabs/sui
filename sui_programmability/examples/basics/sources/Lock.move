@@ -13,13 +13,13 @@ module Basics::Lock {
     use Std::Option::{Self, Option};
 
     /// Lock is empty, nothing to take.
-    const ELOCK_IS_EMPTY: u64 = 0;
+    const ELockIsEmpty: u64 = 0;
 
     /// Key does not match the Lock.
-    const EKEY_MISMATCH: u64 = 1;
+    const EKeyMismatch: u64 = 1;
 
     /// Lock already contains something.
-    const ELOCK_IS_FULL: u64 = 2;
+    const ELockIsFull: u64 = 2;
 
     /// Lock that stores any content inside it.
     struct Lock<T: store + key> has key, store {
@@ -64,8 +64,8 @@ module Basics::Lock {
         key: &Key<T>,
         _ctx: &mut TxContext,
     ) {
-        assert!(Option::is_none(&lock.locked), ELOCK_IS_FULL);
-        assert!(&key.for == ID::id(lock), EKEY_MISMATCH);
+        assert!(Option::is_none(&lock.locked), ELockIsFull);
+        assert!(&key.for == ID::id(lock), EKeyMismatch);
 
         Option::fill(&mut lock.locked, obj);
     }
@@ -78,8 +78,8 @@ module Basics::Lock {
         lock: &mut Lock<T>,
         key: &Key<T>,
     ): T {
-        assert!(Option::is_some(&lock.locked), ELOCK_IS_EMPTY);
-        assert!(&key.for == ID::id(lock), EKEY_MISMATCH);
+        assert!(Option::is_some(&lock.locked), ELockIsEmpty);
+        assert!(&key.for == ID::id(lock), EKeyMismatch);
 
         Option::extract(&mut lock.locked)
     }
@@ -127,7 +127,7 @@ module Basics::LockTest {
         // key to User2, so that he can have access to the stored treasure.
         TestScenario::next_tx(scenario, &user1);
         {
-            let key = TestScenario::take_object<Key<Treasure>>(scenario);
+            let key = TestScenario::take_owned<Key<Treasure>>(scenario);
 
             Transfer::transfer(key, user2);
         };
@@ -135,14 +135,15 @@ module Basics::LockTest {
         // User2 is impatient and he decides to take the treasure.
         TestScenario::next_tx(scenario, &user2);
         {
-            let lock = TestScenario::take_object<Lock<Treasure>>(scenario);
-            let key = TestScenario::take_object<Key<Treasure>>(scenario);
+            let lock_wrapper = TestScenario::take_shared<Lock<Treasure>>(scenario);
+            let lock = TestScenario::borrow_mut(&mut lock_wrapper);
+            let key = TestScenario::take_owned<Key<Treasure>>(scenario);
             let ctx = TestScenario::ctx(scenario);
 
-            Lock::take<Treasure>(&mut lock, &key, ctx);
+            Lock::take<Treasure>(lock, &key, ctx);
 
-            TestScenario::return_object<Lock<Treasure>>(scenario, lock);
-            TestScenario::return_object<Key<Treasure>>(scenario, key);
+            TestScenario::return_shared(scenario, lock_wrapper);
+            TestScenario::return_owned(scenario, key);
         };
     }
 }

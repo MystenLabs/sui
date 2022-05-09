@@ -59,7 +59,7 @@ module Sui::CrossChainAirdropTests {
     public(script) fun claim_token(scenario: &mut Scenario, oracle_address: &address, token_id: u64) {
         TestScenario::next_tx(scenario, oracle_address);
         {
-            let oracle = TestScenario::take_object<CrossChainAirdropOracle>(scenario);
+            let oracle = TestScenario::take_owned<CrossChainAirdropOracle>(scenario);
             let ctx = TestScenario::ctx(scenario);
             CrossChainAirdrop::claim(
                 &mut oracle,
@@ -70,13 +70,13 @@ module Sui::CrossChainAirdropTests {
                 TOKEN_URI,
                 ctx,
             );
-            TestScenario::return_object(scenario, oracle);
+            TestScenario::return_owned(scenario, oracle);
         };
     }
 
     public(script) fun owns_object(scenario: &mut Scenario, owner: &address): bool{
         // Verify the token has been transfer to the recipient
         TestScenario::next_tx(scenario, owner);
-        TestScenario::can_take_object<ERC721>(scenario)
+        TestScenario::can_take_owned<ERC721>(scenario)
     }
 }

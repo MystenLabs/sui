@@ -13,7 +13,7 @@ overall status of Sui, including timelines for launching devnet, testnet, and ma
 
 ## Join the community
 
-To connect with the Sui community, join our [Discord](https://discord.gg/mysten).
+To connect with the Sui community, join our [Discord](https://discord.gg/sui).
 
 ## File issues
 
@@ -38,7 +38,7 @@ at [Install Sui](../build/install.md#source-code).
 
 Start by creating your own fork of the repo:
 ```bash
-gh fork https://github.com/mystenlabs/sui.git # or alternatively, clone your fork
+$ gh repo fork https://github.com/mystenlabs/sui.git # or alternatively, clone your fork
 cargo install --path sui/sui # put Sui CLI's in your PATH
 cd sui
 cargo build --all --all-targets # check that build works

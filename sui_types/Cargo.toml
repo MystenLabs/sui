@@ -7,40 +7,42 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = { version = "1.0.56", features = ["backtrace"] }
+anyhow = { version = "1.0.57", features = ["backtrace"] }
 bcs = "0.1.3"
 bincode = "1.3.3"
 itertools = "0.10.3"
-once_cell = "1.9.0"
+once_cell = "1.10.0"
 rand = "0.7.3"
-serde = { version = "1.0.136", features = ["derive"] }
+serde = { version = "1.0.137", features = ["derive"] }
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 serde-name = "0.2.0"
 sha3 = "0.10.1"
-thiserror = "1.0.30"
+thiserror = "1.0.31"
 hex = "0.4.3"
-serde_bytes = "0.11.5"
-serde_json = "1.0.79"
-serde_with = { version = "1.12.0", features = ["base64", "hex"] }
+serde_bytes = "0.11.6"
+serde_json = "1.0.80"
+serde_with = { version = "1.13.0", features = ["base64", "hex"] }
 signature = "1.5.0"
 static_assertions = "1.1.0"
-opentelemetry = { version = "0.17", features = ["rt-tokio"] }
+opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
 parking_lot = "0.12.0"
 base64ct = { version = "1.5.0", features = ["alloc"] }
 sha2 = "0.10.2"
 zeroize = "1.5.4"
 hkdf = "0.12.3"
 digest = "0.10.3"
+schemars ="0.8.8"
+tonic = "0.7"
 
 name_variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "97a056f85555fa2afe497d6abb7cf6bf8faa63cf" }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "e44bca4513a6ff6c97399cd79e82e4bc00571ac3" }
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d2976a45420147ad821baae96e6fe4b12215f743" }
 
-move-binary-format = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646", features = ["address20"] }
-move-disassembler = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
-move-ir-types = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "6a80792ecbf16d74bf1d57e48a576377f0879646" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc", features = ["address20"] }
+move-disassembler = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
+move-ir-types = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
+move-vm-types = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
 
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "aad875a157ba1897b7f277dae7d9cb1deef7955c", package = "executor" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "aad875a157ba1897b7f277dae7d9cb1deef7955c", package = "crypto" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "72efe71f0615f91f861cc658e031b763ba30fd5b", package = "executor" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "72efe71f0615f91f861cc658e031b763ba30fd5b", package = "crypto" }

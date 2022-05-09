@@ -107,7 +107,7 @@ fn single_param() {
             SignatureToken::TypeParameter(0),
             tx_context_param(tx_context),
         ],
-        vec![SignatureToken::U64],
+        vec![],
         vec![AbilitySet::EMPTY],
     );
 
@@ -414,6 +414,67 @@ fn nested_template_vector_param_key() {
     let module = builder.get_module();
     assert!(
         verify_module(module).is_ok(),
+        "{}",
+        format_assert_msg(module)
+    );
+}
+
+#[test]
+fn return_values() {
+    let (mut builder, _) = ModuleBuilder::default();
+
+    add_function(
+        &mut builder,
+        "foo",
+        vec![],
+        vec![SignatureToken::U64],
+        vec![],
+    );
+    let module = builder.get_module();
+    assert!(
+        verify_module(module).is_err(),
+        "{}",
+        format_assert_msg(module)
+    );
+
+    add_function(
+        &mut builder,
+        "foo",
+        vec![],
+        vec![SignatureToken::U64, SignatureToken::U8],
+        vec![],
+    );
+    let module = builder.get_module();
+    assert!(
+        verify_module(module).is_err(),
+        "{}",
+        format_assert_msg(module)
+    );
+
+    add_function(
+        &mut builder,
+        "foo",
+        vec![],
+        vec![SignatureToken::Vector(Box::new(SignatureToken::U8))],
+        vec![],
+    );
+    let module = builder.get_module();
+    assert!(
+        verify_module(module).is_err(),
+        "{}",
+        format_assert_msg(module)
+    );
+
+    add_function(
+        &mut builder,
+        "foo",
+        vec![],
+        vec![SignatureToken::Reference(Box::new(SignatureToken::U8))],
+        vec![],
+    );
+    let module = builder.get_module();
+    assert!(
+        verify_module(module).is_err(),
         "{}",
         format_assert_msg(module)
     );

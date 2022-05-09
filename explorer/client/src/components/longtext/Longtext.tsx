@@ -14,6 +14,7 @@ function Longtext({
     text,
     category = 'unknown',
     isLink = true,
+    alttext = '',
 }: {
     text: string;
     category:
@@ -23,6 +24,7 @@ function Longtext({
         | 'ethAddress'
         | 'unknown';
     isLink?: boolean;
+    alttext?: string;
 }) {
     const [isCopyIcon, setCopyIcon] = useState(true);
     const [pleaseWait, setPleaseWait] = useState(false);
@@ -58,7 +60,7 @@ function Longtext({
         if (category === 'unknown') {
             textComponent = (
                 <span className={styles.longtext} onClick={navigateUnknown}>
-                    {text}
+                    {alttext ? alttext : text}
                 </span>
             );
         } else if (category === 'ethAddress') {
@@ -71,13 +73,16 @@ function Longtext({
             );
         } else {
             textComponent = (
-                <Link className={styles.longtext} to={`/${category}/${text}`}>
-                    {text}
+                <Link
+                    className={styles.longtext}
+                    to={`/${category}/${encodeURIComponent(text)}`}
+                >
+                    {alttext ? alttext : text}
                 </Link>
             );
         }
     } else {
-        textComponent = <span>{text}</span>;
+        textComponent = <span>{alttext ? alttext : text}</span>;
     }
 
     return (

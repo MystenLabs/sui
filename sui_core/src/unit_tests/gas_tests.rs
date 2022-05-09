@@ -164,6 +164,12 @@ async fn test_native_transfer_insufficient_gas_execution() {
         gas_coin.value(),
         budget - effects.status.gas_cost_summary().gas_used()
     );
+    // After a failed transfer, the version should have been incremented,
+    // but the owner of the object should remain the same, unchanged.
+    let ((_, version, _), owner) = effects.mutated_excluding_gas().next().unwrap();
+    assert_eq!(version, &gas_object.version());
+    assert_eq!(owner, &gas_object.owner);
+
     assert_eq!(
         effects.status.unwrap_err().1,
         SuiError::InsufficientGas {
@@ -207,7 +213,8 @@ async fn test_publish_gas() -> SuiResult {
         .certified_transaction
         .as_ref()
         .unwrap()
-        .transaction
+        .data
+        .kind
         .single_transactions()
         .next()
         .unwrap()
@@ -314,9 +321,9 @@ async fn test_move_call_gas() -> SuiResult {
 
     let module = ident_str!("ObjectBasics").to_owned();
     let function = ident_str!("create").to_owned();
-    let pure_args = vec![
-        16u64.to_le_bytes().to_vec(),
-        bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
+    let args = vec![
+        CallArg::Pure(16u64.to_le_bytes().to_vec()),
+        CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
     ];
     let data = TransactionData::new_move_call(
         sender,
@@ -325,9 +332,7 @@ async fn test_move_call_gas() -> SuiResult {
         function.clone(),
         Vec::new(),
         gas_object.compute_object_reference(),
-        Vec::new(),
-        vec![],
-        pure_args.clone(),
+        args.clone(),
         GAS_VALUE_FOR_TESTING,
     );
     let signature = Signature::new(&data, &sender_key);
@@ -387,9 +392,7 @@ async fn test_move_call_gas() -> SuiResult {
         ident_str!("delete").to_owned(),
         vec![],
         gas_object.compute_object_reference(),
-        vec![created_object_ref],
-        vec![],
-        vec![],
+        vec![CallArg::ImmOrOwnedObject(created_object_ref)],
         expected_gas_balance,
     );
     let signature = Signature::new(&data, &sender_key);
@@ -415,9 +418,7 @@ async fn test_move_call_gas() -> SuiResult {
         function,
         Vec::new(),
         gas_object.compute_object_reference(),
-        Vec::new(),
-        vec![],
-        pure_args,
+        args,
         budget,
     );
     let signature = Signature::new(&data, &sender_key);
@@ -425,15 +426,11 @@ async fn test_move_call_gas() -> SuiResult {
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
     let effects = response.signed_effects.unwrap().effects;
     let (gas_cost, err) = effects.status.unwrap_err();
-    // This is to show that even though we ran out of gas during Move VM execution,
-    // we will still try to charge for gas object mutation, which will lead to
-    // the error below.
-    assert_eq!(
-        err,
-        SuiError::InsufficientGas {
-            error: "Ran out of gas while deducting computation cost".to_owned()
-        }
-    );
+    // We will run out of gas during VM execution.
+    assert!(matches!(err, SuiError::AbortedExecution { .. }));
+    assert!(err
+        .to_string()
+        .contains("VMError with status OUT_OF_GAS at location Module ModuleId"));
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
     let expected_gas_balance = expected_gas_balance - gas_cost.gas_used() + gas_cost.storage_rebate;
     assert_eq!(

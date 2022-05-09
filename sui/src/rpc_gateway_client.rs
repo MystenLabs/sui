@@ -1,21 +1,23 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::rest_gateway::responses::ObjectResponse;
-use crate::rpc_gateway::{
-    Base64EncodedBytes, RpcGatewayClient as RpcGateway, SignedTransaction, TransactionBytes,
-};
 use anyhow::Error;
 use async_trait::async_trait;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
-use sui_core::gateway_state::gateway_responses::TransactionResponse;
-use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
-use sui_types::messages::{CertifiedTransaction, Transaction, TransactionData};
-use sui_types::object::ObjectRead;
 use tokio::runtime::Handle;
+
+use sui_core::gateway_state::gateway_responses::{TransactionEffectsResponse, TransactionResponse};
+use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
+use sui_core::sui_json::SuiJsonValue;
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
+use sui_types::json_schema::Base64;
+use sui_types::messages::{Transaction, TransactionData};
+use sui_types::object::ObjectRead;
+
+use crate::rpc_gateway::responses::ObjectResponse;
+use crate::rpc_gateway::{RpcGatewayClient as RpcGateway, SignedTransaction, TransactionBytes};
 
 pub struct RpcGatewayClient {
     client: HttpClient,
@@ -68,18 +70,10 @@ impl GatewayAPI for RpcGatewayClient {
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
+        arguments: Vec<SuiJsonValue>,
         gas_object_ref: ObjectRef,
-        object_arguments: Vec<ObjectRef>,
-        shared_object_arguments: Vec<ObjectID>,
-        pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
     ) -> Result<TransactionData, Error> {
-        let pure_arguments = pure_arguments.into_iter().map(Base64EncodedBytes).collect();
-        let object_arguments = object_arguments
-            .into_iter()
-            .map(|object_ref| object_ref.0)
-            .collect();
-
         let bytes: TransactionBytes = self
             .client
             .move_call(
@@ -87,12 +81,13 @@ impl GatewayAPI for RpcGatewayClient {
                 package_object_ref.0,
                 module,
                 function,
-                type_arguments,
-                pure_arguments,
+                type_arguments
+                    .into_iter()
+                    .map(|tag| tag.try_into())
+                    .collect::<Result<Vec<_>, _>>()?,
+                arguments,
                 gas_object_ref.0,
                 gas_budget,
-                object_arguments,
-                shared_object_arguments,
             )
             .await?;
         bytes.to_data()
@@ -105,7 +100,7 @@ impl GatewayAPI for RpcGatewayClient {
         gas_object_ref: ObjectRef,
         gas_budget: u64,
     ) -> Result<TransactionData, Error> {
-        let package_bytes = package_bytes.into_iter().map(Base64EncodedBytes).collect();
+        let package_bytes = package_bytes.into_iter().map(Base64).collect();
         let bytes: TransactionBytes = self
             .client
             .publish(signer, package_bytes, gas_object_ref.0, gas_budget)
@@ -197,7 +192,7 @@ impl GatewayAPI for RpcGatewayClient {
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<CertifiedTransaction, Error> {
+    ) -> Result<TransactionEffectsResponse, Error> {
         Ok(self.client.get_transaction(digest).await?)
     }
 }

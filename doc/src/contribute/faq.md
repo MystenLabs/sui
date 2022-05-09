@@ -3,7 +3,7 @@ title: Sui Frequently Asked Questions
 ---
 
 This page contains answers to frequently asked questions (FAQs) about Sui and Mysten Labs. 
-Ask more in [Discord](https://discord.gg/mysten), see where we are headed in our
+Ask more in [Discord](https://discord.gg/sui), see where we are headed in our
 [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap), and
 find full details in our
 [white paper](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf).
@@ -18,8 +18,8 @@ Use these online resources:
 
 * Sui Website: [https://sui.io/](https://sui.io/)
 * Sui Developer Portal: [https://docs.sui.io/](https://docs.sui.io/)
-* Sui Smart Contract White Paper: [https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) 
-* SDK reference: [https://app.swaggerhub.com/apis/MystenLabs/sui-api/](https://app.swaggerhub.com/apis/MystenLabs/sui-api/)  
+* Sui Smart Contract White Paper: [https://sui.io/whitepaper](https://sui.io/whitepaper) 
+* SDK reference: [Sui JSON-RPC](https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/sui/open_rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false)  
 
 
 ### What does Sui offer over other blockchains?
@@ -78,7 +78,7 @@ No. More information is forthcoming.
 
 ### How can I join the Sui network? How do I participate in the Sui project?
 
-Join our [Discord](https://discord.gg/mysten) and follow our [Twitter](https://twitter.com/Mysten_Labs) for the latest updates and announcements.
+Join our [Discord](https://discord.gg/sui) and follow our [Twitter](https://twitter.com/Mysten_Labs) for the latest updates and announcements.
 
 For developers:
 
@@ -97,7 +97,7 @@ We are seeking partners that can contribute to the ecosystem primarily in develo
 
 
 ### With whom can I talk about a partnership or strategic investment? How can I discuss Sui in person?
-Start in [Discord](https://discord.gg/mysten).
+Start in [Discord](https://discord.gg/sui).
 
 
 ### Where can I see the investors of the project?
@@ -129,7 +129,7 @@ Section four in the [Sui Smart Contract Platform](https://github.com/MystenLabs/
 
 ### Can I run a Sui validator node?
 
-We do not yet have a public devnet or testnet that will allow others to operate Sui nodes, but both are on our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap). Right now, you can run a local, non-networked Sui node for development. Check out our [Wallet](https://docs.sui.io/build/wallet) documentation to get started. You can interact with the local node via either the [Wallet CLI](../build/wallet#command-line-mode) or [REST API](../build/rest-api).
+We do not yet have a public devnet or testnet that will allow others to operate Sui nodes, but both are on our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap). Right now, you can run a local, non-networked Sui node for development. Check out our [Wallet](https://docs.sui.io/build/wallet) documentation to get started. You can interact with the local node via either the [Wallet CLI](../build/wallet#command-line-mode) or [RPC API](../build/json-rpc).
 
 ### What does a local node do and what are the hardware requirements to run it? How is it different from a testnet node?
 

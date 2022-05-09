@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::gateway_state::GatewayTxSeqNumber;
-
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -12,6 +11,7 @@ use std::path::Path;
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
+use sui_types::object::OBJECT_START_VERSION;
 use tracing::warn;
 use typed_store::rocks::{DBBatch, DBMap};
 
@@ -60,9 +60,8 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     owner_index: DBMap<(SuiAddress, ObjectID), ObjectRef>,
 
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
-    /// NOTE: after a lock is deleted the corresponding entry here could be deleted, but right
-    /// now this is not done. If a certificate is processed (see `certificates`) the
-    /// transaction can also be deleted from this structure.
+    /// NOTE: after a lock is deleted (after a certificate is processed) the corresponding entry here
+    /// could be deleted, but right now this is only done on gateways, not done on authorities.
     transactions: DBMap<TransactionDigest, TransactionEnvelope<S>>,
 
     /// This is a map between the transaction digest and the corresponding certificate for all
@@ -114,6 +113,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     /// Open an authority store by directory path
     pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Self {
         let mut options = db_options.unwrap_or_default();
+
+        // One common issue when running tests on Mac is that the default ulimit is too low,
+        // leading to I/O errors such as "Too many open files". Raising fdlimit to bypass it.
+        options.set_max_open_files((fdlimit::raise_fd_limit().unwrap() / 8) as i32);
 
         /* The table cache is locked for updates and this determines the number
            of shareds, ie 2^10. Increase in case of lock contentions.
@@ -205,14 +208,27 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         }
     }
 
-    /// Returns true if we have a signed_effects structure for this transaction digest
+    /// Returns the TransactionEffects if we have an effects structure for this transaction digest
+    pub fn get_effects(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<TransactionEffects> {
+        self.effects
+            .get(transaction_digest)?
+            .map(|data| data.effects)
+            .ok_or(SuiError::TransactionNotFound {
+                digest: *transaction_digest,
+            })
+    }
+
+    /// Returns true if we have an effects structure for this transaction digest
     pub fn effects_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
         self.effects
             .contains_key(transaction_digest)
             .map_err(|e| e.into())
     }
 
-    /// Returns true if we have a signed_effects structure for this transaction digest
+    /// Returns true if we have a transaction structure for this transaction digest
     pub fn transaction_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
         self.transactions
             .contains_key(transaction_digest)
@@ -335,7 +351,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         &self,
         object_id: ObjectID,
         seq: Option<SequenceNumber>,
-    ) -> Result<Vec<(ObjectRef, TransactionDigest)>, SuiError> {
+    ) -> Result<impl Iterator<Item = (ObjectRef, TransactionDigest)> + '_, SuiError> {
         let seq_inner = seq.unwrap_or_else(|| SequenceNumber::from(0));
         let obj_dig_inner = ObjectDigest::new([0; 32]);
 
@@ -344,14 +360,13 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             .iter()
             // The object id [0; 16] is the smallest possible
             .skip_to(&(object_id, seq_inner, obj_dig_inner))?
-            .take_while(|((id, iseq, _digest), _txd)| {
+            .take_while(move |((id, iseq, _digest), _txd)| {
                 let mut flag = id == &object_id;
-                if seq.is_some() {
-                    flag &= seq_inner == *iseq;
+                if let Some(seq_num) = seq {
+                    flag &= seq_num == *iseq;
                 }
                 flag
-            })
-            .collect())
+            }))
     }
 
     /// Read a lock for a specific (transaction, shared object) pair.
@@ -456,9 +471,9 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     pub fn set_transaction_lock(
         &self,
         owned_input_objects: &[ObjectRef],
-        tx_digest: TransactionDigest,
         transaction: TransactionEnvelope<S>,
     ) -> Result<(), SuiError> {
+        let tx_digest = *transaction.digest();
         let lock_batch = self
             .transaction_lock
             .batch()
@@ -486,7 +501,6 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             for lock in locks {
                 // The object / version must exist, and therefore lock initialized.
                 let lock = lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
-
                 if let Some(previous_tx_digest) = lock {
                     if previous_tx_digest != tx_digest {
                         warn!(prev_tx_digest =? previous_tx_digest,
@@ -541,11 +555,8 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         )?;
 
         // Cleanup the lock of the shared objects.
-        let write_batch = self.remove_shared_objects_locks(
-            write_batch,
-            transaction_digest,
-            &certificate.transaction,
-        )?;
+        let write_batch =
+            self.remove_shared_objects_locks(write_batch, transaction_digest, certificate)?;
 
         // Safe to unwrap since the "true" flag ensures we get a sequence value back.
         self.batch_update_objects(
@@ -572,10 +583,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     /// need to recreate the temporary store based on the inputs and effects to update it properly.
     pub fn update_gateway_state(
         &self,
-        active_inputs: &[(InputObjectKind, Object)],
+        active_inputs: Vec<(InputObjectKind, Object)>,
         mutated_objects: HashMap<ObjectRef, Object>,
         certificate: CertifiedTransaction,
-        effects: TransactionEffects,
+        effects: TransactionEffectsEnvelope<S>,
         sequence_number: GatewayTxSeqNumber,
     ) -> SuiResult {
         let transaction_digest = certificate.digest();
@@ -584,10 +595,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         for (_, object) in mutated_objects {
             temporary_store.write_object(object);
         }
-        for obj_ref in &effects.deleted {
+        for obj_ref in &effects.effects.deleted {
             temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Normal);
         }
-        for obj_ref in &effects.wrapped {
+        for obj_ref in &effects.effects.wrapped {
             temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Wrap);
         }
 
@@ -597,6 +608,12 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         write_batch = write_batch.insert_batch(
             &self.certificates,
             std::iter::once((transaction_digest, &certificate)),
+        )?;
+
+        // Store the unsigned effects of the transaction
+        write_batch = write_batch.insert_batch(
+            &self.effects,
+            std::iter::once((transaction_digest, effects)),
         )?;
 
         // Once a transaction is done processing and effects committed, we no longer
@@ -797,7 +814,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         &self,
         mut write_batch: DBBatch,
         transaction_digest: &TransactionDigest,
-        transaction: &Transaction,
+        transaction: &CertifiedTransaction,
     ) -> SuiResult<DBBatch> {
         let mut sequenced_to_delete = Vec::new();
         let mut schedule_to_delete = Vec::new();
@@ -824,17 +841,18 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         let certificate_to_write = std::iter::once((transaction_digest, &certificate));
 
         // Make an iterator to update the locks of the transaction's shared objects.
-        let ids = certificate.transaction.shared_input_objects();
+        let ids = certificate.shared_input_objects();
         let versions = self.schedule.multi_get(ids)?;
 
-        let ids = certificate.transaction.shared_input_objects();
+        let ids = certificate.shared_input_objects();
         let (sequenced_to_write, schedule_to_write): (Vec<_>, Vec<_>) = ids
             .zip(versions.iter())
             .map(|(id, v)| {
-                let version = v.unwrap_or_else(SequenceNumber::new);
-                let next_version = v
-                    .map(|v| v.increment())
-                    .unwrap_or_else(|| SequenceNumber::from(1));
+                // If it is the first time the shared object has been sequenced, assign it the default
+                // sequence number (`OBJECT_START_VERSION`). Otherwise use the `scheduled` map to
+                // to assign the next sequence number.
+                let version = v.unwrap_or_else(|| OBJECT_START_VERSION);
+                let next_version = version.increment();
 
                 let sequenced = ((transaction_digest, *id), version);
                 let scheduled = (id, next_version);

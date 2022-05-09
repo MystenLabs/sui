@@ -8,25 +8,34 @@ use rand::distributions::{Distribution, Uniform};
 use rand::rngs::OsRng;
 use std::collections::{BTreeMap, HashMap};
 
+pub type EpochId = u64;
+
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Committee {
+    pub epoch: EpochId,
     pub voting_rights: BTreeMap<AuthorityName, usize>,
     pub total_votes: usize,
+    // Note: this is a derived structure, no need to store.
     pub expanded_keys: HashMap<AuthorityName, PublicKey>,
 }
 
 impl Committee {
-    pub fn new(voting_rights: BTreeMap<AuthorityName, usize>) -> Self {
+    pub fn new(epoch: EpochId, voting_rights: BTreeMap<AuthorityName, usize>) -> Self {
         let total_votes = voting_rights.iter().map(|(_, votes)| votes).sum();
         let expanded_keys: HashMap<_, _> = voting_rights
             .iter()
             .map(|(addr, _)| (*addr, (*addr).try_into().expect("Invalid Authority Key")))
             .collect();
         Committee {
+            epoch,
             voting_rights,
             total_votes,
             expanded_keys,
         }
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        self.epoch
     }
 
     /// Samples authorities by weight

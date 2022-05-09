@@ -1,4 +1,8 @@
+# IDE
+**/.history/
 **/.vscode/
+
+# OSX
 .DS_Store
 
 # Rust build directory
@@ -18,6 +22,3 @@ storage/
 
 # Python
 .pyc
-
-# Cargo
-Cargo.lock

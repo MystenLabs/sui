@@ -1,0 +1,4 @@
+processed 2 tasks
+
+task 1 'publish'. lines 5-24:
+Error: Failed to verify the Move module, reason: "'init' function can have 0 or 1 parameter(s)".

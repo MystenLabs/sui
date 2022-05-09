@@ -3,23 +3,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
+use crate::committee::EpochId;
 use crate::crypto::{
-    sha3_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature, BcsSignable,
+    sha3_hash, AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignature, BcsSignable,
     EmptySignInfo, Signable, Signature, VerificationObligation,
 };
 use crate::gas::GasCostSummary;
+use crate::json_schema;
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use crate::readable_serde::encoding::Base64;
 use crate::readable_serde::Readable;
 use base64ct::Encoding;
 use itertools::Either;
-use move_binary_format::{access::ModuleAccess, CompiledModule};
+use move_binary_format::access::ModuleAccess;
+use move_binary_format::CompiledModule;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
     value::MoveStructLayout,
 };
 use name_variant::NamedVariant;
 use once_cell::sync::OnceCell;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
 use serde_with::serde_as;
@@ -34,13 +38,24 @@ use std::{
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
+pub enum CallArg {
+    // contains no structs or objects
+    Pure(Vec<u8>),
+    // TODO support more than one object (object vector of some sort)
+    // A Move object, either immutable, or owned mutable.
+    ImmOrOwnedObject(ObjectRef),
+    // A Move object that's shared and mutable.
+    SharedObject(ObjectID),
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Transfer {
     pub recipient: SuiAddress,
     pub object_ref: ObjectRef,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct MoveCall {
     // Although `package` represents a read-only Move package,
     // we still want to use a reference instead of just object ID.
@@ -48,22 +63,24 @@ pub struct MoveCall {
     // used in an order (through the object digest) without having to
     // re-execute the order on a quorum of authorities.
     pub package: ObjectRef,
+    #[schemars(with = "json_schema::Identifier")]
     pub module: Identifier,
+    #[schemars(with = "json_schema::Identifier")]
     pub function: Identifier,
+    #[schemars(with = "Vec<json_schema::TypeTag>")]
     pub type_arguments: Vec<TypeTag>,
-    pub object_arguments: Vec<ObjectRef>,
-    pub shared_object_arguments: Vec<ObjectID>,
-    pub pure_arguments: Vec<Vec<u8>>,
+    pub arguments: Vec<CallArg>,
 }
 
 #[serde_as]
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct MoveModulePublish {
+    #[schemars(with = "Vec<String>")]
     #[serde_as(as = "Vec<Readable<Base64, Bytes>>")]
     pub modules: Vec<Vec<u8>>,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
 pub enum SingleTransactionKind {
     /// Initiate an object transfer between addresses
     Transfer(Transfer),
@@ -76,26 +93,18 @@ pub enum SingleTransactionKind {
 
 impl SingleTransactionKind {
     pub fn contains_shared_object(&self) -> bool {
-        match &self {
-            Self::Transfer(..) => false,
-            Self::Call(c) => !c.shared_object_arguments.is_empty(),
-            Self::Publish(..) => false,
-        }
+        self.shared_input_objects().next().is_some()
     }
 
-    pub fn shared_input_objects(&self) -> &[ObjectID] {
+    pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
         match &self {
-            Self::Call(c) => &c.shared_object_arguments,
-            _ => &[],
-        }
-    }
-
-    pub fn input_object_count(&self) -> usize {
-        match &self {
-            Self::Transfer(_) => 1,
-            Self::Call(c) => 1 + c.object_arguments.len() + c.shared_object_arguments.len(),
-            // We always special handle Publish, hence the result doesn't matter.
-            Self::Publish(_) => 0,
+            Self::Call(MoveCall { arguments, .. }) => {
+                Either::Left(arguments.iter().filter_map(|arg| match arg {
+                    CallArg::Pure(_) | CallArg::ImmOrOwnedObject(_) => None,
+                    CallArg::SharedObject(id) => Some(id),
+                }))
+            }
+            _ => Either::Right(std::iter::empty()),
         }
     }
 
@@ -105,37 +114,28 @@ impl SingleTransactionKind {
     /// TODO: use an iterator over references here instead of a Vec to avoid allocations.
     pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
         let input_objects = match &self {
-            Self::Transfer(t) => {
-                vec![InputObjectKind::ImmOrOwnedMoveObject(t.object_ref)]
+            Self::Transfer(Transfer { object_ref, .. }) => {
+                vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
             }
-            Self::Call(c) => {
-                let mut call_inputs = Vec::with_capacity(
-                    1 + c.object_arguments.len() + c.shared_object_arguments.len(),
-                );
-                call_inputs.extend(
-                    c.object_arguments
-                        .clone()
-                        .into_iter()
-                        .map(InputObjectKind::ImmOrOwnedMoveObject)
-                        .collect::<Vec<_>>(),
-                );
-                call_inputs.extend(
-                    c.shared_object_arguments
-                        .iter()
-                        .cloned()
-                        .map(InputObjectKind::SharedMoveObject)
-                        .collect::<Vec<_>>(),
-                );
-                call_inputs.push(InputObjectKind::MovePackage(c.package.0));
-                call_inputs
-            }
-            Self::Publish(m) => {
+            Self::Call(MoveCall {
+                arguments, package, ..
+            }) => arguments
+                .iter()
+                .filter_map(|arg| match arg {
+                    CallArg::Pure(_) => None,
+                    CallArg::ImmOrOwnedObject(object_ref) => {
+                        Some(InputObjectKind::ImmOrOwnedMoveObject(*object_ref))
+                    }
+                    CallArg::SharedObject(id) => Some(InputObjectKind::SharedMoveObject(*id)),
+                })
+                .chain([InputObjectKind::MovePackage(package.0)])
+                .collect(),
+            Self::Publish(MoveModulePublish { modules }) => {
                 // For module publishing, all the dependent packages are implicit input objects
                 // because they must all be on-chain in order for the package to publish.
                 // All authorities must have the same view of those dependencies in order
                 // to achieve consistent publish results.
-                let compiled_modules = m
-                    .modules
+                let compiled_modules = modules
                     .iter()
                     .filter_map(|bytes| match CompiledModule::deserialize(bytes) {
                         Ok(m) => Some(m),
@@ -184,8 +184,7 @@ impl Display for SingleTransactionKind {
                 writeln!(writer, "Package ID : {}", c.package.0.to_hex_literal())?;
                 writeln!(writer, "Module : {}", c.module)?;
                 writeln!(writer, "Function : {}", c.function)?;
-                writeln!(writer, "Object Arguments : {:?}", c.object_arguments)?;
-                writeln!(writer, "Pure Arguments : {:?}", c.pure_arguments)?;
+                writeln!(writer, "Arguments : {:?}", c.arguments)?;
                 writeln!(writer, "Type Arguments : {:?}", c.type_arguments)?;
             }
         }
@@ -195,13 +194,29 @@ impl Display for SingleTransactionKind {
 
 // TODO: Make SingleTransactionKind a Box
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, NamedVariant)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, NamedVariant, JsonSchema)]
 pub enum TransactionKind {
     /// A single transaction.
     Single(SingleTransactionKind),
     /// A batch of single transactions.
     Batch(Vec<SingleTransactionKind>),
     // .. more transaction types go here
+}
+
+impl TransactionKind {
+    pub fn single_transactions(&self) -> impl Iterator<Item = &SingleTransactionKind> {
+        match self {
+            TransactionKind::Single(s) => Either::Left(std::iter::once(s)),
+            TransactionKind::Batch(b) => Either::Right(b.iter()),
+        }
+    }
+
+    pub fn into_single_transactions(self) -> impl Iterator<Item = SingleTransactionKind> {
+        match self {
+            TransactionKind::Single(s) => Either::Left(std::iter::once(s)),
+            TransactionKind::Batch(b) => Either::Right(b.into_iter()),
+        }
+    }
 }
 
 impl Display for TransactionKind {
@@ -223,7 +238,7 @@ impl Display for TransactionKind {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct TransactionData {
     pub kind: TransactionKind,
     sender: SuiAddress,
@@ -256,9 +271,7 @@ where
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         gas_payment: ObjectRef,
-        object_arguments: Vec<ObjectRef>,
-        shared_object_arguments: Vec<ObjectID>,
-        pure_arguments: Vec<Vec<u8>>,
+        arguments: Vec<CallArg>,
         gas_budget: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::Call(MoveCall {
@@ -266,9 +279,7 @@ where
             module,
             function,
             type_arguments,
-            object_arguments,
-            shared_object_arguments,
-            pure_arguments,
+            arguments,
         }));
         Self::new(kind, sender, gas_payment, gas_budget)
     }
@@ -321,6 +332,35 @@ where
     pub fn to_base64(&self) -> String {
         base64ct::Base64::encode_string(&self.to_bytes())
     }
+
+    pub fn gas_payment_object_ref(&self) -> &ObjectRef {
+        &self.gas_payment
+    }
+
+    pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
+        let mut inputs = match &self.kind {
+            TransactionKind::Single(s) => s.input_objects()?,
+            TransactionKind::Batch(b) => {
+                let mut result = vec![];
+                for kind in b {
+                    fp_ensure!(
+                        !matches!(kind, &SingleTransactionKind::Publish(..)),
+                        SuiError::InvalidBatchTransaction {
+                            error: "Publish transaction is not allowed in Batch Transaction"
+                                .to_owned(),
+                        }
+                    );
+                    let sub = kind.input_objects()?;
+                    result.extend(sub);
+                }
+                result
+            }
+        };
+        inputs.push(InputObjectKind::ImmOrOwnedMoveObject(
+            *self.gas_payment_object_ref(),
+        ));
+        Ok(inputs)
+    }
 }
 
 /// A transaction signed by a client, optionally signed by an authority (depending on `S`).
@@ -329,9 +369,13 @@ where
 /// universally in the transactions storage in `SuiDataStore`, shared by both authorities
 /// and non-authorities: authorities store signed transactions, while non-authorities
 /// store unsigned transactions.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(remote = "TransactionEnvelope")]
 pub struct TransactionEnvelope<S> {
+    // This is a cache of an otherwise expensive to compute value.
+    // DO NOT serialize or deserialize from the network or disk.
+    #[serde(skip)]
+    transaction_digest: OnceCell<TransactionDigest>,
     // Deserialization sets this to "false"
     #[serde(skip)]
     pub is_checked: bool,
@@ -339,14 +383,14 @@ pub struct TransactionEnvelope<S> {
     pub data: TransactionData,
     /// tx_signature is signed by the transaction sender, applied on `data`.
     pub tx_signature: Signature,
-    /// auth_signature, if available, is signed by an authority, applied on `data`.
-    pub auth_signature: S,
+    /// authority signature information, if available, is signed by an authority, applied on `data`.
+    pub auth_sign_info: S,
     // Note: If any new field is added here, make sure the Hash and PartialEq
     // implementation are adjusted to include that new field (unless the new field
     // does not participate in the hash and comparison).
 }
 
-impl<S: AuthoritySignInfoTrait> TransactionEnvelope<S> {
+impl<S> TransactionEnvelope<S> {
     pub fn check_signature(&self) -> Result<(), SuiError> {
         // We use this flag to see if someone has checked this before
         // and therefore we can skip the check. Note that the flag has
@@ -357,11 +401,11 @@ impl<S: AuthoritySignInfoTrait> TransactionEnvelope<S> {
         }
 
         let mut obligation = VerificationObligation::default();
-        self.add_to_verification_obligation(&mut obligation)?;
+        self.add_tx_sig_to_verification_obligation(&mut obligation)?;
         obligation.verify_all().map(|_| ())
     }
 
-    pub fn add_to_verification_obligation(
+    pub fn add_tx_sig_to_verification_obligation(
         &self,
         obligation: &mut VerificationObligation,
     ) -> SuiResult<()> {
@@ -382,68 +426,26 @@ impl<S: AuthoritySignInfoTrait> TransactionEnvelope<S> {
     }
 
     pub fn gas_payment_object_ref(&self) -> &ObjectRef {
-        &self.data.gas_payment
+        self.data.gas_payment_object_ref()
     }
 
     pub fn contains_shared_object(&self) -> bool {
-        match &self.data.kind {
-            TransactionKind::Single(s) => s.contains_shared_object(),
-            TransactionKind::Batch(b) => b.iter().any(|kind| kind.contains_shared_object()),
-        }
+        self.shared_input_objects().next().is_some()
     }
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
         match &self.data.kind {
-            TransactionKind::Single(s) => Either::Left(s.shared_input_objects().iter()),
+            TransactionKind::Single(s) => Either::Left(s.shared_input_objects()),
             TransactionKind::Batch(b) => {
                 Either::Right(b.iter().flat_map(|kind| kind.shared_input_objects()))
             }
         }
     }
 
-    pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
-        let mut inputs = match &self.data.kind {
-            TransactionKind::Single(s) => s.input_objects()?,
-            TransactionKind::Batch(b) => {
-                let mut result = vec![];
-                for kind in b {
-                    fp_ensure!(
-                        !matches!(kind, &SingleTransactionKind::Publish(..)),
-                        SuiError::InvalidBatchTransaction {
-                            error: "Publish transaction is now allowed in Batch Transaction"
-                                .to_owned(),
-                        }
-                    );
-                    let sub = kind.input_objects()?;
-                    debug_assert_eq!(sub.len(), kind.input_object_count());
-                    result.extend(sub);
-                }
-                result
-            }
-        };
-        inputs.push(InputObjectKind::ImmOrOwnedMoveObject(
-            *self.gas_payment_object_ref(),
-        ));
-        Ok(inputs)
-    }
-
-    pub fn single_transactions(&self) -> impl Iterator<Item = &SingleTransactionKind> {
-        match &self.data.kind {
-            TransactionKind::Single(s) => Either::Left(std::iter::once(s)),
-            TransactionKind::Batch(b) => Either::Right(b.iter()),
-        }
-    }
-
-    pub fn into_single_transactions(self) -> impl Iterator<Item = SingleTransactionKind> {
-        match self.data.kind {
-            TransactionKind::Single(s) => Either::Left(std::iter::once(s)),
-            TransactionKind::Batch(b) => Either::Right(b.into_iter()),
-        }
-    }
-
-    // Derive a cryptographic hash of the transaction.
-    pub fn digest(&self) -> TransactionDigest {
-        TransactionDigest::new(sha3_hash(&self.data))
+    /// Get the transaction digest and write it to the cache
+    pub fn digest(&self) -> &TransactionDigest {
+        self.transaction_digest
+            .get_or_init(|| TransactionDigest::new(sha3_hash(&self.data)))
     }
 
     pub fn input_objects_in_compiled_modules(
@@ -517,10 +519,11 @@ impl Transaction {
 
     pub fn new(data: TransactionData, signature: Signature) -> Self {
         Self {
+            transaction_digest: OnceCell::new(),
             is_checked: false,
             data,
             tx_signature: signature,
-            auth_signature: EmptySignInfo {},
+            auth_sign_info: EmptySignInfo {},
         }
     }
 }
@@ -544,16 +547,19 @@ pub type SignedTransaction = TransactionEnvelope<AuthoritySignInfo>;
 impl SignedTransaction {
     /// Use signing key to create a signed object.
     pub fn new(
+        epoch: EpochId,
         transaction: Transaction,
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
         let signature = AuthoritySignature::new(&transaction.data, secret);
         Self {
+            transaction_digest: OnceCell::new(),
             is_checked: transaction.is_checked,
             data: transaction.data,
             tx_signature: transaction.tx_signature,
-            auth_signature: AuthoritySignInfo {
+            auth_sign_info: AuthoritySignInfo {
+                epoch,
                 authority,
                 signature,
             },
@@ -563,11 +569,11 @@ impl SignedTransaction {
     /// Verify the signature and return the non-zero voting right of the authority.
     pub fn check(&self, committee: &Committee) -> Result<usize, SuiError> {
         self.check_signature()?;
-        let weight = committee.weight(&self.auth_signature.authority);
+        let weight = committee.weight(&self.auth_sign_info.authority);
         fp_ensure!(weight > 0, SuiError::UnknownSigner);
-        self.auth_signature
+        self.auth_sign_info
             .signature
-            .check(&self.data, self.auth_signature.authority)?;
+            .check(&self.data, self.auth_sign_info.authority)?;
         Ok(weight)
     }
 
@@ -582,51 +588,19 @@ impl SignedTransaction {
 impl Hash for SignedTransaction {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.data.hash(state);
-        self.auth_signature.authority.hash(state);
+        self.auth_sign_info.hash(state);
     }
 }
 
 impl PartialEq for SignedTransaction {
     fn eq(&self, other: &Self) -> bool {
-        // We do not compare the signatures, because there can be multiple
+        // We do not compare the tx_signature, because there can be multiple
         // valid signatures for the same data and signer.
-        self.data == other.data && self.auth_signature.authority == other.auth_signature.authority
+        self.data == other.data && self.auth_sign_info == other.auth_sign_info
     }
 }
 
-/// An transaction signed by a quorum of authorities
-///
-/// Note: the signature set of this data structure is not necessarily unique in the system,
-/// i.e. there can be several valid certificates per transaction.
-///
-/// As a consequence, we check this struct does not implement Hash or Eq, see the note below.
-///
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CertifiedTransaction {
-    // This is a cache of an otherwise expensive to compute value.
-    // DO NOT serialize or deserialize from the network or disk.
-    #[serde(skip)]
-    transaction_digest: OnceCell<TransactionDigest>,
-    // Deserialization sets this to "false"
-    #[serde(skip)]
-    pub is_checked: bool,
-
-    pub transaction: Transaction,
-    pub signatures: Vec<(AuthorityName, AuthoritySignature)>,
-}
-
-// Note: if you meet an error due to this line it may be because you need an Eq implementation for `CertifiedTransaction`,
-// or one of the structs that include it, i.e. `ConfirmationTransaction`, `TransactionInfoResponse` or `ObjectInfoResponse`.
-//
-// Please note that any such implementation must be agnostic to the exact set of signatures in the certificate, as
-// clients are allowed to equivocate on the exact nature of valid certificates they send to the system. This assertion
-// is a simple tool to make sure certificates are accounted for correctly - should you remove it, you're on your own to
-// maintain the invariant that valid certificates with distinct signatures are equivalent, but yet-unchecked
-// certificates that differ on signers aren't.
-//
-// see also https://github.com/MystenLabs/sui/issues/266
-//
-static_assertions::assert_not_impl_any!(CertifiedTransaction: Hash, Eq, PartialEq);
+pub type CertifiedTransaction = TransactionEnvelope<AuthorityQuorumSignInfo>;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConfirmationTransaction {
@@ -646,8 +620,10 @@ pub struct AccountInfoRequest {
 /// is over the batch end marker.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct BatchInfoRequest {
-    pub start: TxSequenceNumber,
-    pub end: TxSequenceNumber,
+    // The sequence number at which to start the seuqence to return, or None for the latest.
+    pub start: Option<TxSequenceNumber>,
+    // The total number of items to receive. Could receive a bit more or a bit less.
+    pub length: u64,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -786,16 +762,16 @@ pub enum CallResult {
     AddrVecVec(Vec<Vec<AccountAddress>>),
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub enum ExecutionStatus {
     // Gas used in the success case.
     Success {
         gas_cost: GasCostSummary,
-        results: Vec<CallResult>,
     },
     // Gas used in the failed case, and the error.
     Failure {
         gas_cost: GasCostSummary,
+        #[schemars(with = "String")]
         error: Box<SuiError>,
     },
 }
@@ -816,12 +792,9 @@ impl ExecutionStatus {
         matches!(self, ExecutionStatus::Failure { .. })
     }
 
-    pub fn unwrap(self) -> (GasCostSummary, Vec<CallResult>) {
+    pub fn unwrap(self) -> GasCostSummary {
         match self {
-            ExecutionStatus::Success {
-                gas_cost: gas_used,
-                results,
-            } => (gas_used, results),
+            ExecutionStatus::Success { gas_cost: gas_used } => gas_used,
             ExecutionStatus::Failure { .. } => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
@@ -854,10 +827,12 @@ impl ExecutionStatus {
 }
 
 /// The response from processing a transaction or a certified transaction
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct TransactionEffects {
     // The status of the execution
     pub status: ExecutionStatus,
+    // The object references of the shared objects used in this transaction. Empty if no shared objects were used.
+    pub shared_objects: Vec<ObjectRef>,
     // The transaction digest
     pub transaction_digest: TransactionDigest,
     // ObjectRef and owner of new objects created.
@@ -924,6 +899,7 @@ impl TransactionEffects {
 
     pub fn to_sign_effects(
         self,
+        epoch: EpochId,
         authority_name: &AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> SignedTransactionEffects {
@@ -932,6 +908,7 @@ impl TransactionEffects {
         SignedTransactionEffects {
             effects: self,
             auth_signature: AuthoritySignInfo {
+                epoch,
                 authority: *authority_name,
                 signature,
             },
@@ -954,20 +931,32 @@ impl Display for TransactionEffects {
         writeln!(writer, "Status : {:?}", self.status)?;
         if !self.created.is_empty() {
             writeln!(writer, "Created Objects:")?;
-            for (obj, _) in &self.created {
-                writeln!(writer, "{:?} {:?} {:?}", obj.0, obj.1, obj.2)?;
+            for ((id, _, _), owner) in &self.created {
+                writeln!(writer, "  - ID: {:?} , Owner: {}", id, owner)?;
             }
         }
         if !self.mutated.is_empty() {
             writeln!(writer, "Mutated Objects:")?;
-            for (obj, _) in &self.mutated {
-                writeln!(writer, "{:?} {:?} {:?}", obj.0, obj.1, obj.2)?;
+            for ((id, _, _), owner) in &self.mutated {
+                writeln!(writer, "  - ID: {:?} , Owner: {}", id, owner)?;
             }
         }
         if !self.deleted.is_empty() {
             writeln!(writer, "Deleted Objects:")?;
-            for obj in &self.deleted {
-                writeln!(writer, "{:?} {:?} {:?}", obj.0, obj.1, obj.2)?;
+            for (id, _, _) in &self.deleted {
+                writeln!(writer, "  - ID: {:?}", id)?;
+            }
+        }
+        if !self.wrapped.is_empty() {
+            writeln!(writer, "Wrapped Objects:")?;
+            for (id, _, _) in &self.wrapped {
+                writeln!(writer, "  - ID: {:?}", id)?;
+            }
+        }
+        if !self.unwrapped.is_empty() {
+            writeln!(writer, "Unwrapped Objects:")?;
+            for ((id, _, _), owner) in &self.unwrapped {
+                writeln!(writer, "  - ID: {:?} , Owner: {}", id, owner)?;
             }
         }
         write!(f, "{}", writer)
@@ -991,10 +980,7 @@ impl SignedTransactionEffects {
 
 impl PartialEq for SignedTransactionEffects {
     fn eq(&self, other: &Self) -> bool {
-        // We do not compare the authority signatures, because there can be multiple
-        // valid signatures for the same data and signer.
-        self.effects == other.effects
-            && self.auth_signature.authority == other.auth_signature.authority
+        self.effects == other.effects && self.auth_signature == other.auth_signature
     }
 }
 
@@ -1065,7 +1051,7 @@ impl<'a> SignatureAggregator<'a> {
         authority: AuthorityName,
         signature: AuthoritySignature,
     ) -> Result<Option<CertifiedTransaction>, SuiError> {
-        signature.check(&self.partial.transaction.data, authority)?;
+        signature.check(&self.partial.data, authority)?;
         // Check that each authority only appears once.
         fp_ensure!(
             !self.used_authorities.contains(&authority),
@@ -1077,7 +1063,10 @@ impl<'a> SignatureAggregator<'a> {
         fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
         self.weight += voting_rights;
         // Update certificate.
-        self.partial.signatures.push((authority, signature));
+        self.partial
+            .auth_sign_info
+            .signatures
+            .push((authority, signature));
 
         if self.weight >= self.committee.quorum_threshold() {
             Ok(Some(self.partial.clone()))
@@ -1090,29 +1079,33 @@ impl<'a> SignatureAggregator<'a> {
 impl CertifiedTransaction {
     pub fn new(transaction: Transaction) -> CertifiedTransaction {
         CertifiedTransaction {
-            transaction_digest: OnceCell::new(),
+            transaction_digest: transaction.transaction_digest,
             is_checked: false,
-            transaction,
-            signatures: Vec::new(),
+            data: transaction.data,
+            tx_signature: transaction.tx_signature,
+            auth_sign_info: AuthorityQuorumSignInfo {
+                epoch: 0,
+                signatures: Vec::new(),
+            },
         }
     }
 
     pub fn new_with_signatures(
+        epoch: EpochId,
         transaction: Transaction,
         signatures: Vec<(AuthorityName, AuthoritySignature)>,
     ) -> CertifiedTransaction {
         CertifiedTransaction {
-            transaction_digest: OnceCell::new(),
+            transaction_digest: transaction.transaction_digest,
             is_checked: false,
-            transaction,
-            signatures,
+            data: transaction.data,
+            tx_signature: transaction.tx_signature,
+            auth_sign_info: AuthorityQuorumSignInfo { epoch, signatures },
         }
     }
 
-    /// Get the transaction digest and write it to the cache
-    pub fn digest(&self) -> &TransactionDigest {
-        self.transaction_digest
-            .get_or_init(|| self.transaction.digest())
+    pub fn to_transaction(self) -> Transaction {
+        Transaction::new(self.data, self.tx_signature)
     }
 
     /// Verify the certificate.
@@ -1135,11 +1128,19 @@ impl CertifiedTransaction {
         committee: &Committee,
         obligation: &mut VerificationObligation,
     ) -> SuiResult<()> {
+        // Check epoch
+        fp_ensure!(
+            self.auth_sign_info.epoch == committee.epoch(),
+            SuiError::WrongEpoch {
+                expected_epoch: committee.epoch()
+            }
+        );
+
         // First check the quorum is sufficient
 
         let mut weight = 0;
         let mut used_authorities = HashSet::new();
-        for (authority, _) in self.signatures.iter() {
+        for (authority, _) in self.auth_sign_info.signatures.iter() {
             // Check that each authority only appears once.
             fp_ensure!(
                 !used_authorities.contains(authority),
@@ -1157,18 +1158,17 @@ impl CertifiedTransaction {
         );
 
         // Add the obligation of the transaction
-        self.transaction
-            .add_to_verification_obligation(obligation)?;
+        self.add_tx_sig_to_verification_obligation(obligation)?;
 
         // Create obligations for the committee signatures
 
         let mut message = Vec::new();
-        self.transaction.data.write(&mut message);
+        self.data.write(&mut message);
 
         let idx = obligation.messages.len();
         obligation.messages.push(message);
 
-        for tuple in self.signatures.iter() {
+        for tuple in self.auth_sign_info.signatures.iter() {
             let (authority, signature) = tuple;
             // do we know, or can we build a valid public key?
             match committee.expanded_keys.get(authority) {
@@ -1193,15 +1193,17 @@ impl CertifiedTransaction {
 impl Display for CertifiedTransaction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
+        writeln!(writer, "Transaction Hash: {:?}", self.digest())?;
         writeln!(
             writer,
             "Signed Authorities : {:?}",
-            self.signatures
+            self.auth_sign_info
+                .signatures
                 .iter()
                 .map(|(name, _)| name)
                 .collect::<Vec<_>>()
         )?;
-        write!(writer, "{}", &self.transaction.data.kind)?;
+        write!(writer, "{}", &self.data.kind)?;
         write!(f, "{}", writer)
     }
 }

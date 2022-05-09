@@ -6,7 +6,6 @@
     rust_2018_idioms,
     rust_2021_compatibility
 )]
-#![deny(warnings)]
 
 use move_core_types::account_address::AccountAddress;
 
@@ -22,6 +21,7 @@ pub mod event;
 pub mod gas;
 pub mod gas_coin;
 pub mod id;
+pub mod json_schema;
 pub mod messages;
 pub mod move_package;
 pub mod object;

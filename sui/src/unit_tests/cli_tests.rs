@@ -1,35 +1,36 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
-use std::fs::read_dir;
-use std::ops::Add;
-use std::path::PathBuf;
-use std::str;
-use std::time::Duration;
+use std::{
+    collections::BTreeSet, fmt::Write, fs::read_dir, ops::Add, path::PathBuf, str, time::Duration,
+};
 
-use crate::cli_tests::sui_network::start_test_network;
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use serde_json::{json, Value};
-use std::fmt::Write;
-use sui::config::{
-    AccountConfig, Config, GenesisConfig, NetworkConfig, ObjectConfig, PersistedConfig,
-    WalletConfig, AUTHORITIES_DB_NAME,
-};
-use sui::gateway_config::{GatewayConfig, GatewayType};
-use sui::keystore::KeystoreType;
-use sui::sui_commands::{SuiCommand, SuiNetwork};
-use sui::sui_json::SuiJsonValue;
-use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
-use sui::{SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
-use sui_core::gateway_state::gateway_responses::SwitchResponse;
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
-use sui_types::crypto::get_key_pair;
-use sui_types::gas_coin::GasCoin;
-use sui_types::messages::TransactionEffects;
-use sui_types::object::{Object, ObjectRead, GAS_VALUE_FOR_TESTING};
 use tracing_test::traced_test;
+
+use sui::{
+    config::{
+        AccountConfig, Config, GatewayConfig, GatewayType, GenesisConfig, NetworkConfig,
+        ObjectConfig, PersistedConfig, WalletConfig, AUTHORITIES_DB_NAME, SUI_GATEWAY_CONFIG,
+        SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
+    },
+    keystore::KeystoreType,
+    sui_commands::{SuiCommand, SuiNetwork, SUI_AUTHORITY_KEYS},
+    wallet_commands::{WalletCommandResult, WalletCommands, WalletContext},
+};
+use sui_core::gateway_state::gateway_responses::SwitchResponse;
+use sui_core::sui_json::SuiJsonValue;
+use sui_types::{
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    crypto::{get_key_pair, random_key_pairs},
+    gas_coin::GasCoin,
+    messages::TransactionEffects,
+    object::{Object, ObjectRead, GAS_VALUE_FOR_TESTING},
+};
+
+use crate::cli_tests::sui_network::start_test_network;
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
 const AIRDROP_SOURCE_CONTRACT_ADDRESS: &str = "bc4ca0eda7647a8ab7c2061c2e118a18a936f13d";
@@ -82,12 +83,13 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         .flat_map(|r| r.map(|file| file.file_name().to_str().unwrap().to_owned()))
         .collect::<Vec<_>>();
 
-    assert_eq!(5, files.len());
+    assert_eq!(6, files.len());
     assert!(files.contains(&SUI_WALLET_CONFIG.to_string()));
     assert!(files.contains(&SUI_GATEWAY_CONFIG.to_string()));
     assert!(files.contains(&AUTHORITIES_DB_NAME.to_string()));
     assert!(files.contains(&SUI_NETWORK_CONFIG.to_string()));
     assert!(files.contains(&"wallet.key".to_string()));
+    assert!(files.contains(&SUI_AUTHORITY_KEYS.to_string()));
 
     // Check network config
     let network_conf =
@@ -170,7 +172,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
 
-    let network = start_test_network(working_dir.path(), None).await?;
+    let network = start_test_network(working_dir.path(), None, None).await?;
 
     // Create Wallet context with the oracle account
     let wallet_conf_path = working_dir.path().join(SUI_WALLET_CONFIG);
@@ -303,11 +305,11 @@ async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
     let (network, mut context, address) = setup_network_and_wallet().await?;
 
     let result = WalletCommands::CreateExampleNFT {
-        name: Option::None,
-        description: Option::None,
-        url: Option::None,
-        gas: Option::None,
-        gas_budget: Option::None,
+        name: None,
+        description: None,
+        url: None,
+        gas: None,
+        gas_budget: None,
     }
     .execute(&mut context)
     .await?;
@@ -336,7 +338,18 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
     // Create and save genesis config file
     // Create 4 authorities, 1 account with 1 gas object with custom id
-    let mut config = GenesisConfig::default_genesis(working_dir.path())?;
+    let key_pairs = random_key_pairs(4);
+
+    let mut config = GenesisConfig::default_genesis(
+        working_dir.path(),
+        Some((
+            key_pairs
+                .iter()
+                .map(|kp| *kp.public_key_bytes())
+                .collect::<Vec<_>>(),
+            key_pairs[0].copy(),
+        )),
+    )?;
     config.accounts.clear();
     let object_id = ObjectID::random();
     config.accounts.push(AccountConfig {
@@ -345,9 +358,10 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
             object_id,
             gas_value: 500,
         }],
+        gas_object_ranges: None,
     });
 
-    let network = start_test_network(working_dir.path(), Some(config)).await?;
+    let network = start_test_network(working_dir.path(), Some(config), Some(key_pairs)).await?;
 
     // Wallet config
     let mut context = WalletContext::new(&working_dir.path().join(SUI_WALLET_CONFIG))?;
@@ -388,7 +402,20 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     // Create and save genesis config file
     // Create 4 authorities and 1 account
     let num_authorities = 4;
-    let mut config = GenesisConfig::custom_genesis(working_dir, num_authorities, 1, 1)?;
+    let key_pairs = random_key_pairs(num_authorities);
+    let mut config = GenesisConfig::custom_genesis(
+        working_dir,
+        num_authorities,
+        1,
+        1,
+        Some((
+            key_pairs
+                .iter()
+                .map(|kp| *kp.public_key_bytes())
+                .collect::<Vec<_>>(),
+            key_pairs[0].copy(),
+        )),
+    )?;
     config
         .move_packages
         .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_1"));
@@ -397,7 +424,7 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
         .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_2"));
 
     // Start network
-    let network = start_test_network(working_dir, Some(config)).await?;
+    let network = start_test_network(working_dir, Some(config), Some(key_pairs)).await?;
 
     assert!(logs_contain("Loading 2 Move packages"));
     // Checks network config contains package ids
@@ -437,7 +464,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
         .execute(&mut context)
         .await?
         .print(true);
-    let obj_owner = format!("{:?}", address);
+    let obj_owner = format!("{}", address);
 
     retry_assert!(
         logs_contain(obj_owner.as_str()),
@@ -1023,7 +1050,7 @@ fn test_bug_1078() {
 #[tokio::test]
 async fn test_switch_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
-    let network = start_test_network(working_dir.path(), None).await?;
+    let network = start_test_network(working_dir.path(), None, None).await?;
 
     // Create Wallet context.
     let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
@@ -1059,16 +1086,22 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
 
     // Switch the address
     let addr2 = context.config.accounts.get(1).cloned().unwrap();
-    let resp = WalletCommands::Switch { address: addr2 }
-        .execute(&mut context)
-        .await?;
+    let resp = WalletCommands::Switch {
+        address: Some(addr2),
+        gateway: None,
+    }
+    .execute(&mut context)
+    .await?;
     assert_eq!(addr2, context.active_address()?);
     assert_ne!(addr1, context.active_address()?);
     assert_eq!(
         format!("{resp}"),
         format!(
             "{}",
-            WalletCommandResult::Switch(SwitchResponse { address: addr2 })
+            WalletCommandResult::Switch(SwitchResponse {
+                address: Some(addr2),
+                gateway: None
+            })
         )
     );
 
@@ -1086,15 +1119,21 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
 
     // Check that we can switch to this address
     // Switch the address
-    let resp = WalletCommands::Switch { address: new_addr }
-        .execute(&mut context)
-        .await?;
+    let resp = WalletCommands::Switch {
+        address: Some(new_addr),
+        gateway: None,
+    }
+    .execute(&mut context)
+    .await?;
     assert_eq!(new_addr, context.active_address()?);
     assert_eq!(
         format!("{resp}"),
         format!(
             "{}",
-            WalletCommandResult::Switch(SwitchResponse { address: new_addr })
+            WalletCommandResult::Switch(SwitchResponse {
+                address: Some(new_addr),
+                gateway: None
+            })
         )
     );
     network.kill().await?;
@@ -1106,7 +1145,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn test_active_address_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
-    let network = start_test_network(working_dir.path(), None).await?;
+    let network = start_test_network(working_dir.path(), None, None).await?;
 
     // Create Wallet context.
     let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
@@ -1136,14 +1175,20 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
     assert_eq!(a, addr1);
 
     let addr2 = context.config.accounts.get(1).cloned().unwrap();
-    let resp = WalletCommands::Switch { address: addr2 }
-        .execute(&mut context)
-        .await?;
+    let resp = WalletCommands::Switch {
+        address: Some(addr2),
+        gateway: None,
+    }
+    .execute(&mut context)
+    .await?;
     assert_eq!(
         format!("{resp}"),
         format!(
             "{}",
-            WalletCommandResult::Switch(SwitchResponse { address: addr2 })
+            WalletCommandResult::Switch(SwitchResponse {
+                address: Some(addr2),
+                gateway: None
+            })
         )
     );
     network.kill().await?;
@@ -1321,7 +1366,7 @@ async fn setup_network_and_wallet() -> Result<(SuiNetwork, WalletContext, SuiAdd
 {
     let working_dir = tempfile::tempdir()?;
 
-    let network = start_test_network(working_dir.path(), None).await?;
+    let network = start_test_network(working_dir.path(), None, None).await?;
 
     // Create Wallet context.
     let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);

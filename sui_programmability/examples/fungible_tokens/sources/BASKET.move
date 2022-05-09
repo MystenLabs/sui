@@ -9,6 +9,7 @@
 module FungibleTokens::BASKET {
     use FungibleTokens::MANAGED::MANAGED;
     use Sui::Coin::{Self, Coin, TreasuryCap};
+    use Sui::Balance::{Self, Balance};
     use Sui::ID::VersionedID;
     use Sui::SUI::SUI;
     use Sui::Transfer;
@@ -24,13 +25,13 @@ module FungibleTokens::BASKET {
         /// capability allowing the reserve to mint and burn BASKET
         treasury_cap: TreasuryCap<BASKET>,
         /// SUI coins held in the reserve
-        sui: Coin<SUI>,
+        sui: Balance<SUI>,
         /// MANAGED coins held in the reserve
-        managed: Coin<MANAGED>,
+        managed: Balance<MANAGED>,
     }
 
     /// Needed to deposit a 1:1 ratio of SUI and MANAGED for minting, but deposited a different ratio
-    const EBAD_DEPOSIT_RATIO: u64 = 0;
+    const EBadDepositRatio: u64 = 0;
 
     fun init(ctx: &mut TxContext) {
         // Get a treasury cap for the coin put it in the reserve
@@ -38,8 +39,8 @@ module FungibleTokens::BASKET {
         Transfer::share_object(Reserve {
             id: TxContext::new_id(ctx),
             treasury_cap,
-            sui: Coin::zero<SUI>(ctx),
-            managed: Coin::zero<MANAGED>(ctx),
+            sui: Balance::zero<SUI>(),
+            managed: Balance::zero<MANAGED>(),
         })
     }
 
@@ -50,10 +51,10 @@ module FungibleTokens::BASKET {
         reserve: &mut Reserve, sui: Coin<SUI>, managed: Coin<MANAGED>, ctx: &mut TxContext
     ): Coin<BASKET> {
         let num_sui = Coin::value(&sui);
-        assert!(num_sui == Coin::value(&managed), EBAD_DEPOSIT_RATIO);
+        assert!(num_sui == Coin::value(&managed), EBadDepositRatio);
 
-        Coin::join(&mut reserve.sui, sui);
-        Coin::join(&mut reserve.managed, managed);
+        Coin::deposit(&mut reserve.sui, sui);
+        Coin::deposit(&mut reserve.managed, managed);
         Coin::mint(num_sui, &mut reserve.treasury_cap, ctx)
     }
 
@@ -77,12 +78,12 @@ module FungibleTokens::BASKET {
 
     /// Return the number of SUI in the reserve
     public fun sui_supply(reserve: &Reserve): u64 {
-        Coin::value(&reserve.sui)
+        Balance::value(&reserve.sui)
     }
 
     /// Return the number of MANAGED in the reserve
     public fun managed_supply(reserve: &Reserve): u64 {
-        Coin::value(&reserve.managed)
+        Balance::value(&reserve.managed)
     }
 
     #[test_only]
