@@ -2199,7 +2199,7 @@ dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-http-client",
  "jsonrpsee-http-server",
- "jsonrpsee-proc-macros 0.11.0 (git+https://github.com/paritytech/jsonrpsee.git?rev=661870a0ab4159b2bb104ace25a2cb817a097e03)",
+ "jsonrpsee-proc-macros 0.11.0",
  "jsonrpsee-types",
  "jsonrpsee-ws-client",
  "jsonrpsee-ws-server",
@@ -2290,8 +2290,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e7e19642c62b191afcd74fb8cab29f209f5fc24fbd2efed1ffd4393ef447428"
+source = "git+https://github.com/paritytech/jsonrpsee.git?rev=661870a0ab4159b2bb104ace25a2cb817a097e03#661870a0ab4159b2bb104ace25a2cb817a097e03"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -2301,8 +2300,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-proc-macros"
-version = "0.11.0"
-source = "git+https://github.com/paritytech/jsonrpsee.git?rev=661870a0ab4159b2bb104ace25a2cb817a097e03#661870a0ab4159b2bb104ace25a2cb817a097e03"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b75da57d54817577801c2f7a1b638610819dfd86f0470c21a2af81b06eb41ba6"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -4948,7 +4948,7 @@ dependencies = [
  "futures",
  "hex",
  "jsonrpsee",
- "jsonrpsee-proc-macros 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-proc-macros 0.12.0",
  "move-binary-format",
  "move-bytecode-utils",
  "move-bytecode-verifier",
