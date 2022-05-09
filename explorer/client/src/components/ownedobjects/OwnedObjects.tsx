@@ -1,9 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { getObjectContent, getObjectExistsResponse } from '@mysten/sui.js';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getObjectContent, getObjectExistsResponse } from 'sui.js';
 
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { parseImageURL, parseObjectType } from '../../utils/objectUtils';

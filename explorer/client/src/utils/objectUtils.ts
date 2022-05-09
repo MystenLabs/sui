@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { ObjectExistsInfo } from 'sui.js';
+import type { ObjectExistsInfo } from '@mysten/sui.js';
 
 export function parseImageURL(data: any): string {
     return (
