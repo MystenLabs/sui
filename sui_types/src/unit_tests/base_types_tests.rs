@@ -3,18 +3,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![allow(clippy::blacklisted_name)]
-use super::*;
-use crate::crypto::{get_key_pair_from_bytes, AuthoritySignature, KeyPair};
 
+use std::str::FromStr;
+
+use base64ct::{Base64, Encoding};
 use move_binary_format::file_format;
 
+use crate::crypto::{get_key_pair_from_bytes, AuthoritySignature, KeyPair};
 use crate::{
     crypto::{get_key_pair, BcsSignable, Signature},
     gas_coin::GasCoin,
     object::Object,
+    SUI_FRAMEWORK_ADDRESS,
 };
-use base64ct::{Base64, Encoding};
-use std::str::FromStr;
+
+use super::*;
 
 #[derive(Serialize, Deserialize)]
 struct Foo(String);
@@ -98,8 +101,7 @@ fn test_object_id_display() {
 
     let id = ObjectID::from_hex(hex).unwrap();
 
-    assert_eq!(format!("{id}"), upper_hex);
-    assert_eq!(format!("{:?}", id), upper_hex);
+    assert_eq!(format!("{:?}", id), format!("0x{hex}"));
     assert_eq!(format!("{:X}", id), upper_hex);
     assert_eq!(format!("{:x}", id), hex);
     assert_eq!(format!("{:#x}", id), format!("0x{hex}"));
@@ -158,10 +160,10 @@ fn test_object_id_deserialize_from_json_value() {
 
 #[test]
 fn test_object_id_serde_json() {
-    let hex = "ca843279e342714123456784cead5e4d5999a3d0";
-    let json_hex = "\"ca843279e342714123456784cead5e4d5999a3d0\"";
+    let hex = "0xca843279e342714123456784cead5e4d5999a3d0";
+    let json_hex = "\"0xca843279e342714123456784cead5e4d5999a3d0\"";
 
-    let obj_id = ObjectID::from_hex(hex).unwrap();
+    let obj_id = ObjectID::from_hex_literal(hex).unwrap();
 
     let json = serde_json::to_string(&obj_id).unwrap();
     let json_obj_id: ObjectID = serde_json::from_str(json_hex).unwrap();
@@ -188,9 +190,41 @@ fn test_object_id_serde_with_expected_value() {
     let json_serialized = serde_json::to_string(&object_id).unwrap();
     let bcs_serialized = bcs::to_bytes(&object_id).unwrap();
 
-    let expected_json_address = "\"47b720e60abbfd38c38e1e1726c9660082f0c734\"";
+    let expected_json_address = "\"0x47b720e60abbfd38c38e1e1726c9660082f0c734\"";
     assert_eq!(expected_json_address, json_serialized);
     assert_eq!(object_id_vec, bcs_serialized);
+}
+
+#[test]
+fn test_object_id_zero_padding() {
+    let hex = "0x2";
+    let long_hex = "0x0000000000000000000000000000000000000002";
+    let long_hex_alt = "0000000000000000000000000000000000000002";
+    let obj_id_1 = ObjectID::from_hex_literal(hex).unwrap();
+    let obj_id_2 = ObjectID::from_hex_literal(long_hex).unwrap();
+    let obj_id_3 = ObjectID::from_hex(long_hex_alt).unwrap();
+    let obj_id_4: ObjectID = serde_json::from_str(&format!("\"{}\"", hex)).unwrap();
+    let obj_id_5: ObjectID = serde_json::from_str(&format!("\"{}\"", long_hex)).unwrap();
+    let obj_id_6: ObjectID = serde_json::from_str(&format!("\"{}\"", long_hex_alt)).unwrap();
+    assert_eq!(SUI_FRAMEWORK_ADDRESS, obj_id_1.0);
+    assert_eq!(SUI_FRAMEWORK_ADDRESS, obj_id_2.0);
+    assert_eq!(SUI_FRAMEWORK_ADDRESS, obj_id_3.0);
+    assert_eq!(SUI_FRAMEWORK_ADDRESS, obj_id_4.0);
+    assert_eq!(SUI_FRAMEWORK_ADDRESS, obj_id_5.0);
+    assert_eq!(SUI_FRAMEWORK_ADDRESS, obj_id_6.0);
+}
+
+#[test]
+fn test_address_display() {
+    let hex = "ca843279e3427144cead5e4d5999a3d05999a3d0";
+    let upper_hex = "CA843279E3427144CEAD5E4D5999A3D05999A3D0";
+
+    let id = SuiAddress::from_str(hex).unwrap();
+    assert_eq!(format!("{:?}", id), format!("0x{hex}"));
+    assert_eq!(format!("{:X}", id), upper_hex);
+    assert_eq!(format!("{:x}", id), hex);
+    assert_eq!(format!("{:#x}", id), format!("0x{hex}"));
+    assert_eq!(format!("{:#X}", id), format!("0x{upper_hex}"));
 }
 
 #[test]
@@ -209,7 +243,7 @@ fn test_address_serde_not_human_readable() {
 fn test_address_serde_human_readable() {
     let address = SuiAddress::random_for_testing_only();
     let serialized = serde_json::to_string(&address).unwrap();
-    assert_eq!(format!("\"{}\"", hex::encode(address)), serialized);
+    assert_eq!(format!("\"0x{}\"", hex::encode(address)), serialized);
     let deserialized: SuiAddress = serde_json::from_str(&serialized).unwrap();
     assert_eq!(deserialized, address);
 }
@@ -223,7 +257,7 @@ fn test_address_serde_with_expected_value() {
     let json_serialized = serde_json::to_string(&address).unwrap();
     let bcs_serialized = bcs::to_bytes(&address).unwrap();
 
-    let expected_json_address = "\"2acac93ce94b67fbe03894fc3a393df45c7cd3bf\"";
+    let expected_json_address = "\"0x2acac93ce94b67fbe03894fc3a393df45c7cd3bf\"";
     assert_eq!(expected_json_address, json_serialized);
     assert_eq!(address_vec, bcs_serialized);
 }
