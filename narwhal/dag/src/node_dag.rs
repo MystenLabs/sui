@@ -81,6 +81,7 @@ impl<T: Affiliated> NodeDag<T> {
 
     // Returns a strong (`Arc`) reference to the graph node.
     // This bumps the reference count to the vertex and may prevent it from being GC-ed off the graph.
+    // This is not publicly accessible, so as to not let wandering references to DAG nodes prevent GC logic
     pub(crate) fn get(&self, digest: T::TypedDigest) -> Result<NodeRef<T>, DagError> {
         let node_ref = self
             .node_table
@@ -96,10 +97,16 @@ impl<T: Affiliated> NodeDag<T> {
         }
     }
 
-    /// Returns whether the vertex pointed to by the hash passed as an argument is
-    /// contained in the DAG.
+    /// Returns whether the vertex pointed to by the hash passed as an argument was
+    /// contained in the DAG at any point in the past.
     pub fn contains(&self, hash: T::TypedDigest) -> bool {
         self.node_table.contains_key(&hash)
+    }
+
+    /// Returns whether the vertex pointed to by the hash passed as an argument is
+    /// contained in the DAG and still a live (uncompressed) reference.
+    pub fn contains_live(&self, digest: T::TypedDigest) -> bool {
+        self.get(digest).is_ok()
     }
 
     /// Returns whether the vertex pointed to by the hash passed as an argument is a

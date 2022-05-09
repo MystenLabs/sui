@@ -3,7 +3,8 @@
 
 use crypto::{traits::VerifyingKey, Hash};
 use dag::node_dag::NodeDag;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::RangeInclusive};
+use thiserror::Error;
 use tokio::{sync::mpsc::Receiver, task::JoinHandle};
 use tracing::instrument;
 use types::{error::DagResult, Certificate, CertificateDigest, Round};
@@ -21,7 +22,13 @@ pub struct Dag<PublicKey: VerifyingKey> {
     dag: NodeDag<Certificate<PublicKey>>,
 
     /// Secondary index: An authority-aware map of the DAG's veertex Certificates
-    vertices: BTreeMap<(Round, PublicKey), CertificateDigest>,
+    vertices: BTreeMap<(PublicKey, Round), CertificateDigest>,
+}
+
+#[derive(Debug, Error)]
+pub enum ValidatorDagError<PublicKey: VerifyingKey> {
+    #[error("No remaining certificates for this authority: {0}")]
+    OutOfCertificates(PublicKey),
 }
 
 impl<PublicKey: VerifyingKey> Dag<PublicKey> {
@@ -38,7 +45,6 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
     }
 
     async fn run(&mut self) {
-        // at the moment just receive the certificate and throw away
         while let Some(certificate) = self.rx_primary.recv().await {
             // The Core (process_certificate) guarantees the certificate
             // has gone through causal completion => this is ready to be inserted
@@ -46,6 +52,7 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
         }
     }
 
+    /// Inserts a Certificate in the Dag. The certificate must have been validated and so must all its parents, recursively
     #[instrument(level = "debug", err)]
     pub fn insert(&mut self, certificate: Certificate<PublicKey>) -> DagResult<()> {
         let digest = certificate.digest();
@@ -54,7 +61,37 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
 
         // This fails if the validation of the certificate is incomplete
         self.dag.try_insert(certificate)?;
-        self.vertices.insert((round, origin), digest);
+        // TODO: atomicity with the previous
+        self.vertices.insert((origin, round), digest);
         Ok(())
+    }
+
+    pub fn contains(&self, digest: CertificateDigest) -> bool {
+        self.dag.contains_live(digest)
+    }
+
+    /// Returns the oldest and newest rounds for which a validator has (live) certificates in the DAG
+    pub fn rounds(&mut self, origin: PublicKey) -> DagResult<std::ops::RangeInclusive<Round>> {
+        let range = self
+            .vertices
+            .range((origin, Round::MIN)..(origin, Round::MAX));
+
+        // In non-pathological cases, the range is non-empty, and has a lot of dropped nodes towards the beginning
+        // yet this can't be a take_while because the DAG removal may be non-contiguous.
+        //
+        // Hence we rely on removals cleaning the secondary index.
+        let strong_references = range.flat_map(|((key, round), val)| {
+            if self.contains(*val) {
+                Some(round)
+            } else {
+                None
+            }
+        });
+        let earliest = strong_references.next();
+        let latest = strong_references.last().or(earliest);
+        match (earliest, latest) {
+            (Some(init), Some(end)) => Ok(RangeInclusive::new(*init, *end)),
+            _ => Err(ValidatorDagError::OutOfCertificates(origin)),
+        }
     }
 }
