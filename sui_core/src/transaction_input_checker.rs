@@ -135,7 +135,7 @@ where
         .kind
         .single_transactions()
         .filter_map(|s| {
-            if let SingleTransactionKind::Transfer(t) = s {
+            if let SingleTransactionKind::TransferCoin(t) = s {
                 Some(t.object_ref.0)
             } else {
                 None
