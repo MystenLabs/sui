@@ -3268,9 +3268,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "name_variant"
+name = "name-variant"
 version = "1.0.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=d2976a45420147ad821baae96e6fe4b12215f743#d2976a45420147ad821baae96e6fe4b12215f743"
+source = "git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866#3b7daedf91fd8937dde26e905b8114cac459b866"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5051,7 +5051,7 @@ dependencies = [
  "sui-types",
  "sui-verifier",
  "sui_core",
- "telemetry_subscribers",
+ "telemetry-subscribers",
  "tempfile",
  "test_utils",
  "tokio",
@@ -5183,7 +5183,7 @@ dependencies = [
  "move-disassembler",
  "move-ir-types",
  "move-vm-types",
- "name_variant",
+ "name-variant",
  "once_cell",
  "opentelemetry",
  "parking_lot 0.12.0",
@@ -5200,7 +5200,7 @@ dependencies = [
  "static_assertions",
  "thiserror",
  "tonic",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=d2976a45420147ad821baae96e6fe4b12215f743)",
+ "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
  "zeroize",
 ]
 
@@ -5261,7 +5261,7 @@ dependencies = [
  "tokio-util 0.7.1",
  "tracing",
  "tracing-test",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=d2976a45420147ad821baae96e6fe4b12215f743)",
+ "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
 ]
 
 [[package]]
@@ -5311,9 +5311,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "telemetry_subscribers"
+name = "telemetry-subscribers"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=d2976a45420147ad821baae96e6fe4b12215f743#d2976a45420147ad821baae96e6fe4b12215f743"
+source = "git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866#3b7daedf91fd8937dde26e905b8114cac459b866"
 dependencies = [
  "opentelemetry",
  "opentelemetry-jaeger",
@@ -5398,7 +5398,7 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.1",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=d2976a45420147ad821baae96e6fe4b12215f743)",
+ "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
 ]
 
 [[package]]
@@ -5853,7 +5853,7 @@ checksum = "0685c84d5d54d1c26f7d3eb96cd41550adb97baed141a761cf335d3d33bcd0ae"
 [[package]]
 name = "typed-store"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/mysten-infra.git?rev=808de09203d147b43d59114b8afd9e51cbcf5778#808de09203d147b43d59114b8afd9e51cbcf5778"
+source = "git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866#3b7daedf91fd8937dde26e905b8114cac459b866"
 dependencies = [
  "bincode",
  "collectable",
@@ -5867,7 +5867,7 @@ dependencies = [
 [[package]]
 name = "typed-store"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=d2976a45420147ad821baae96e6fe4b12215f743#d2976a45420147ad821baae96e6fe4b12215f743"
+source = "git+https://github.com/mystenlabs/mysten-infra.git?rev=808de09203d147b43d59114b8afd9e51cbcf5778#808de09203d147b43d59114b8afd9e51cbcf5778"
 dependencies = [
  "bincode",
  "collectable",
