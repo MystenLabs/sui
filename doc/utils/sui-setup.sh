@@ -1,7 +1,7 @@
 #!/bin/bash
 # Prereqs: Rust Cargo, Git CLI, and GitHub account
-# Usage: set up environment for Sui development all in one command and directory
-# Run `<root>/sui/doc/utils/sui-setup.sh` in your desired install directory
+# Usage: set up environment for Sui development
+# Run `sui-setup.sh` in the directory to download source
 shopt -s nullglob
 set -e
 set -o pipefail
@@ -17,13 +17,15 @@ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "dev
 
 ## Install Move Analyzer language server plugin
 cargo install --git https://github.com/move-language/move move-analyzer
-## Get the VSCode extension at: https://marketplace.visualstudio.com/items?itemName=move.move-analyzer
 
 ## Download Sui source code
 git clone https://github.com/MystenLabs/sui.git
 
 ## Create Wallet configuration
 sui genesis --force
+
+## Recommend manual install of VSCode extension
+echo "Now install the Move Analyzer VSCode extension per: https://marketplace.visualstudio.com/items?itemName=move.move-analyzer"
 
 # unset it now
 shopt -u nullglob
