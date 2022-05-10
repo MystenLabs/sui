@@ -44,7 +44,9 @@ pub fn test_authority_configs() -> (Vec<AuthorityInfo>, Vec<KeyPair>) {
                     .unwrap(),
                 db_path: PathBuf::new(),
                 stake: 1,
-                consensus_address: format!("127.0.0.1:{consensus_port}").parse().unwrap(),
+                consensus_address: format!("/ip4/127.0.0.1/tcp/{consensus_port}/http")
+                    .parse()
+                    .unwrap(),
             }
         })
         .collect();

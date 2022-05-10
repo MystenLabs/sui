@@ -581,7 +581,7 @@ async fn make_server_with_genesis_ctx(
     Ok(AuthorityServer::new(
         authority.network_address.clone(),
         Arc::new(state),
-        authority.consensus_address,
+        authority.consensus_address.clone(),
         /* tx_consensus_listener */ tx_sui_to_consensus,
     ))
 }
@@ -660,7 +660,7 @@ pub async fn make_authority(
     Ok(AuthorityServer::new(
         authority.network_address.clone(),
         authority_state,
-        authority.consensus_address,
+        authority.consensus_address.clone(),
         /* tx_consensus_listener */ tx_sui_to_consensus,
     ))
 }

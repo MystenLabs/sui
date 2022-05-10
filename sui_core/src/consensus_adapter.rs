@@ -1,12 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
-use futures::SinkExt;
+use multiaddr::Multiaddr;
 use narwhal_executor::SubscriberResult;
+use narwhal_types::TransactionProto;
+use narwhal_types::TransactionsClient;
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
-    net::SocketAddr,
 };
 use sui_types::{
     committee::Committee,
@@ -14,7 +15,6 @@ use sui_types::{
     messages::{ConsensusTransaction, TransactionInfoResponse},
 };
 use tokio::{
-    net::TcpStream,
     sync::{
         mpsc::{Receiver, Sender},
         oneshot,
@@ -22,7 +22,6 @@ use tokio::{
     task::JoinHandle,
     time::{timeout, Duration},
 };
-use tokio_util::codec::{FramedWrite, LengthDelimitedCodec};
 use tracing::debug;
 
 #[cfg(test)]
@@ -59,7 +58,8 @@ type ConsensusOutput = (
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusAdapter {
     /// The network address of the consensus node.
-    consensus_address: SocketAddr,
+    _consensus_address: Multiaddr,
+    consensus_client: TransactionsClient<sui_network::tonic::transport::Channel>,
     /// The Sui committee information.
     committee: Committee,
     /// A channel to notify the consensus listener to take action for a transactions.
@@ -73,29 +73,21 @@ pub struct ConsensusAdapter {
 impl ConsensusAdapter {
     /// Make a new Consensus submitter instance.
     pub fn new(
-        consensus_address: SocketAddr,
+        consensus_address: Multiaddr,
         committee: Committee,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
         max_delay: Duration,
     ) -> Self {
+        let consensus_client = TransactionsClient::new(
+            mysten_network::client::connect_lazy(&consensus_address).unwrap(),
+        );
         Self {
-            consensus_address,
+            _consensus_address: consensus_address,
+            consensus_client,
             committee,
             tx_consensus_listener,
             max_delay,
         }
-    }
-
-    /// Attempt to reconnect with a the consensus node.
-    async fn reconnect(
-        address: SocketAddr,
-    ) -> SuiResult<FramedWrite<TcpStream, LengthDelimitedCodec>> {
-        let stream = TcpStream::connect(address)
-            .await
-            .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))?;
-
-        let stream = FramedWrite::new(stream, LengthDelimitedCodec::builder().new_codec());
-        Ok(stream)
     }
 
     /// Check if this authority should submit the transaction to consensus.
@@ -127,11 +119,9 @@ impl ConsensusAdapter {
 
         // Check if this authority submits the transaction to consensus.
         if Self::should_submit(certificate) {
-            // TODO [issue #1452]: We are re-creating a connection every time. This is wasteful but
-            // does not require to take self as a mutable reference.
-            Self::reconnect(self.consensus_address)
-                .await?
-                .send(bytes)
+            self.consensus_client
+                .clone()
+                .submit_transaction(TransactionProto { transaction: bytes })
                 .await
                 .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))?;
         }
