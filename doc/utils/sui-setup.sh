@@ -1,7 +1,7 @@
 #!/bin/bash
 # Prereqs: Rust Cargo, Git CLI, and GitHub account
 # Usage: set up environment for Sui development
-# Run `sui-setup.sh` in the directory to download source
+# Run `<root>/sui/doc/utils/sui-setup.sh` in the directory to download source
 shopt -s nullglob
 set -e
 set -o pipefail
