@@ -230,6 +230,7 @@ impl Primary {
             rx_payload_availability_responses,
             PrimaryNetwork::default(),
             payload_store.clone(),
+            certificate_store.clone(),
             parameters.block_synchronizer,
         );
 
