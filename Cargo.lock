@@ -5311,6 +5311,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "bytes",
+ "mysten-network",
  "prost",
  "serde 1.0.137",
  "sui-types",
