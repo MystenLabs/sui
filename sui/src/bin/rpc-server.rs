@@ -55,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
     let config_path = options
         .config
         .unwrap_or(sui_config_dir()?.join("gateway.conf"));
-    info!("Gateway config file path: {:?}", config_path);
+    info!(?config_path, "Gateway config file path");
 
     let server_builder = HttpServerBuilder::default();
     let mut ac_builder = AccessControlBuilder::default();
@@ -67,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let acl = ac_builder.build();
-    info!("{:?}", acl);
+    info!(?acl);
 
     let server = server_builder
         .set_access_control(acl)
@@ -86,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
 
     let addr = server.local_addr()?;
     let server_handle = server.start(module)?;
-    info!("Sui RPC Gateway listening on local_addr:{}", addr);
+    info!(local_addr =? addr, "Sui RPC Gateway listening on local_addr");
 
     server_handle.await;
     Ok(())
