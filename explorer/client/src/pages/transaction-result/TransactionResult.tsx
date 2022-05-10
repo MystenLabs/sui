@@ -9,7 +9,7 @@ import {
 } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import theme from '../../styles/theme.module.css';
@@ -187,6 +187,24 @@ const TransactionResultLoaded = ({ txData }: { txData: DataType }) => {
 
 function TransactionResult() {
     const { id } = useParams();
+    const { state } = useLocation();
+
+    const checkState = (
+        state: any
+    ): state is { data: TransactionEffectsResponse } => {
+        return state !== null && 'data' in state;
+    };
+
+    if (checkState(state) && id) {
+        return (
+            <TransactionResultLoaded
+                txData={transformTransactionResponse(
+                    state.data as TransactionEffectsResponse,
+                    id
+                )}
+            />
+        );
+    }
 
     if (typeof id === 'string') {
         return useRealData ? (
