@@ -1,4 +1,4 @@
-name: Continuous Integration - Docs
+name: Docs
 
 on:
   push:
