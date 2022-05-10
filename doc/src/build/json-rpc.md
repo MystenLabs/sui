@@ -92,12 +92,12 @@ The output you see should resemble the following (abbreviated to show only two o
       "objects" : [
          {
             "digest" : "zpa45U9ANfA9A6iS01NvAoVH0RbYB6a5rjhgh2Hb/GE=",
-            "objectId" : "17b348903b0cfb75fc9ab5426bb69d83d1e756a5",
+            "objectId" : "0x17b348903b0cfb75fc9ab5426bb69d83d1e756a5",
             "version" : 1
          },
          {
             "digest" : "8SPi0h6xVMVNBvGzzF4RfuOoaXISdtiB5aT7+BYDbxg=",
-            "objectId" : "7599d8ea1de4c9616d077f16ca0eb38cdecacc07",
+            "objectId" : "0x7599d8ea1de4c9616d077f16ca0eb38cdecacc07",
             "version" : 1
          },
          ...
@@ -153,7 +153,7 @@ The signing tool will create and print out the signature and public key informat
 You will see output resembling:
 ```shell
 2022-04-25T18:50:06.031722Z  INFO sui::sui_commands: Data to sign : VHJhbnNhY3Rpb25EYXRhOjoAAFHe8jecgzoGWyGlZ1sJ2KBFN8aZF7NIkDsM+3X8mrVCa7adg9HnVqUBAAAAAAAAACDOlrjlT0A18D0DqJLTU28ChUfRFtgHprmuOGCHYdv8YVHe8jecgzoGWyGlZ1sJ2KBFN8aZdZnY6h3kyWFtB38Wyg6zjN7KzAcBAAAAAAAAACDxI+LSHrFUxU0G8bPMXhF+46hpchJ22IHlpPv4FgNvGOgDAAAAAAAA
-2022-04-25T18:50:06.031765Z  INFO sui::sui_commands: Address : 51DEF2379C833A065B21A5675B09D8A04537C699
+2022-04-25T18:50:06.031765Z  INFO sui::sui_commands: Address : 0x51def2379c833a065b21a5675b09d8a04537c699
 2022-04-25T18:50:06.031911Z  INFO sui::sui_commands: Public Key Base64: H82FDLUZN1u0+6UdZilxu9HDT5rPd3khKo2UJoCPJFo=
 2022-04-25T18:50:06.031925Z  INFO sui::sui_commands: Signature : 6vc+ku0RsMKdky8DRfoy/hw6eCQ3YsadH6rZ9WUCwGTAumuWER3TOJRw7u7F4QaHkqUsIPfJN9GRraSX+N8ADQ==
 ```
@@ -201,11 +201,11 @@ curl --location --request POST $SUI_RPC_HOST \
               "method": "sui_moveCall",
               "params": [
                   "{{owner_address}}",
-                  "0000000000000000000000000000000000000002",
+                  "0x2",
                   "Coin",
                   "transfer_",
                   ["0x2::SUI::SUI"],
-                  ["0x{{coin_object_id}}",10000, "0x{{recipient_address}}"],
+                  ["{{coin_object_id}}",10000, "{{recipient_address}}"],
                   "{{gas_object_id}}",
                   2000
               ],
@@ -294,7 +294,7 @@ Below you can see a truncated sample output of [sui_publish](#sui_publish). One 
 ```
 {
     "package": [
-            "13e3ec7279060663e1bbc45aaf5859113fc164d2",
+            "0x13e3ec7279060663e1bbc45aaf5859113fc164d2",
     ...
 }
 ```
