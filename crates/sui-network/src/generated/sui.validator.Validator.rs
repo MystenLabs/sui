@@ -81,7 +81,7 @@ pub mod validator_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = crate::codec::BincodeCodec::default();
+            let codec = mysten_network::codec::BincodeCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.validator.Validator/Transaction",
             );
@@ -103,7 +103,7 @@ pub mod validator_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = crate::codec::BincodeCodec::default();
+            let codec = mysten_network::codec::BincodeCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.validator.Validator/ConfirmationTransaction",
             );
@@ -125,7 +125,7 @@ pub mod validator_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = crate::codec::BincodeCodec::default();
+            let codec = mysten_network::codec::BincodeCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.validator.Validator/ConsensusTransaction",
             );
@@ -147,7 +147,7 @@ pub mod validator_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = crate::codec::BincodeCodec::default();
+            let codec = mysten_network::codec::BincodeCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.validator.Validator/AccountInfo",
             );
@@ -169,7 +169,7 @@ pub mod validator_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = crate::codec::BincodeCodec::default();
+            let codec = mysten_network::codec::BincodeCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.validator.Validator/ObjectInfo",
             );
@@ -191,7 +191,7 @@ pub mod validator_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = crate::codec::BincodeCodec::default();
+            let codec = mysten_network::codec::BincodeCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.validator.Validator/TransactionInfo",
             );
@@ -215,7 +215,7 @@ pub mod validator_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = crate::codec::BincodeCodec::default();
+            let codec = mysten_network::codec::BincodeCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.validator.Validator/BatchInfo",
             );
@@ -358,7 +358,7 @@ pub mod validator_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = TransactionSvc(inner);
-                        let codec = crate::codec::BincodeCodec::default();
+                        let codec = mysten_network::codec::BincodeCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -401,7 +401,7 @@ pub mod validator_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ConfirmationTransactionSvc(inner);
-                        let codec = crate::codec::BincodeCodec::default();
+                        let codec = mysten_network::codec::BincodeCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -444,7 +444,7 @@ pub mod validator_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ConsensusTransactionSvc(inner);
-                        let codec = crate::codec::BincodeCodec::default();
+                        let codec = mysten_network::codec::BincodeCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -487,7 +487,7 @@ pub mod validator_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = AccountInfoSvc(inner);
-                        let codec = crate::codec::BincodeCodec::default();
+                        let codec = mysten_network::codec::BincodeCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -527,7 +527,7 @@ pub mod validator_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ObjectInfoSvc(inner);
-                        let codec = crate::codec::BincodeCodec::default();
+                        let codec = mysten_network::codec::BincodeCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -570,7 +570,7 @@ pub mod validator_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = TransactionInfoSvc(inner);
-                        let codec = crate::codec::BincodeCodec::default();
+                        let codec = mysten_network::codec::BincodeCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -612,7 +612,7 @@ pub mod validator_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = BatchInfoSvc(inner);
-                        let codec = crate::codec::BincodeCodec::default();
+                        let codec = mysten_network::codec::BincodeCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
