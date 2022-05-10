@@ -153,7 +153,7 @@ The signing tool will create and print out the signature and public key informat
 You will see output resembling:
 ```shell
 2022-04-25T18:50:06.031722Z  INFO sui::sui_commands: Data to sign : VHJhbnNhY3Rpb25EYXRhOjoAAFHe8jecgzoGWyGlZ1sJ2KBFN8aZF7NIkDsM+3X8mrVCa7adg9HnVqUBAAAAAAAAACDOlrjlT0A18D0DqJLTU28ChUfRFtgHprmuOGCHYdv8YVHe8jecgzoGWyGlZ1sJ2KBFN8aZdZnY6h3kyWFtB38Wyg6zjN7KzAcBAAAAAAAAACDxI+LSHrFUxU0G8bPMXhF+46hpchJ22IHlpPv4FgNvGOgDAAAAAAAA
-2022-04-25T18:50:06.031765Z  INFO sui::sui_commands: Address : 0x51DEF2379C833A065B21A5675B09D8A04537C699
+2022-04-25T18:50:06.031765Z  INFO sui::sui_commands: Address : 0x51def2379c833a065b21a5675b09d8a04537c699
 2022-04-25T18:50:06.031911Z  INFO sui::sui_commands: Public Key Base64: H82FDLUZN1u0+6UdZilxu9HDT5rPd3khKo2UJoCPJFo=
 2022-04-25T18:50:06.031925Z  INFO sui::sui_commands: Signature : 6vc+ku0RsMKdky8DRfoy/hw6eCQ3YsadH6rZ9WUCwGTAumuWER3TOJRw7u7F4QaHkqUsIPfJN9GRraSX+N8ADQ==
 ```
