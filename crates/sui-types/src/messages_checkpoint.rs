@@ -417,7 +417,7 @@ impl CheckpointFragment {
         // - check the signatures on the proposed checkpoints.
         // - check that the waypoint is between the checkpoints.
         // - check the waypoint is valid.
-        // - check that the certs includes all missing certs.
+        // - check that the certs includes all missing certs on either side.
         Ok(())
     }
 }

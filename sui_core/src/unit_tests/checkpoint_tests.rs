@@ -1014,14 +1014,14 @@ fn set_fragment_reconstruct() {
         cps1.committee.clone(),
         &[fragment12.clone(), fragment34.clone()],
     );
-    assert!(attempt1.is_err());
+    assert!(matches!(attempt1, Ok(None)));
 
     let fragment41 = p4.diff_with(&p1);
     let attempt2 =
         FragmentReconstruction::construct(0, cps1.committee, &[fragment12, fragment34, fragment41]);
     assert!(attempt2.is_ok());
 
-    let reconstruction = attempt2.unwrap();
+    let reconstruction = attempt2.unwrap().unwrap();
     assert_eq!(reconstruction.global.authority_waypoints.len(), 4);
 }
 
@@ -1052,7 +1052,7 @@ fn set_fragment_reconstruct_two_components() {
     let fragment_xy = p_x.diff_with(&p_y);
 
     let attempt1 = FragmentReconstruction::construct(0, committee.clone(), &[fragment_xy.clone()]);
-    assert!(attempt1.is_err());
+    assert!(matches!(attempt1, Ok(None)));
 
     // Make a daisy chain of the other proposals
     let mut fragments = vec![fragment_xy];
@@ -1069,12 +1069,12 @@ fn set_fragment_reconstruct_two_components() {
 
         let attempt2 = FragmentReconstruction::construct(0, committee.clone(), &fragments);
         // Error until we have the full 5 others
-        assert!(attempt2.is_err());
+        assert!(matches!(attempt2, Ok(None)));
     }
 
     let attempt2 = FragmentReconstruction::construct(0, committee, &fragments);
     assert!(attempt2.is_ok());
 
-    let reconstruction = attempt2.unwrap();
+    let reconstruction = attempt2.unwrap().unwrap();
     assert_eq!(reconstruction.global.authority_waypoints.len(), 5);
 }
