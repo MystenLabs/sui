@@ -16,7 +16,6 @@ use std::{
     fmt::{Display, Formatter, Write},
     fs::{self, create_dir_all, File},
     io::BufReader,
-    net::{SocketAddr, ToSocketAddrs},
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
 };
@@ -69,50 +68,10 @@ pub struct AuthorityInfo {
     pub network_address: Multiaddr,
     pub db_path: PathBuf,
     pub stake: usize,
-    pub consensus_address: SocketAddr,
+    pub consensus_address: Multiaddr,
 }
 
 type AuthorityKeys = (Vec<PublicKeyBytes>, KeyPair);
-
-// Warning: to_socket_addrs() is blocking and can fail.  Be careful where you use it.
-fn socket_addr_from_hostport(host: &str, port: u16) -> SocketAddr {
-    let mut addresses = format!("{host}:{port}")
-        .to_socket_addrs()
-        .unwrap_or_else(|e| panic!("Cannot parse or resolve hostnames for {host}:{port}: {e}"));
-    addresses
-        .next()
-        .unwrap_or_else(|| panic!("Hostname/IP resolution failed for {host}"))
-}
-
-//TODO remove this when the config properly handles setting narwhal addresses
-fn socket_addr_from_multiaddr(address: &Multiaddr, port_offset: Option<u16>) -> SocketAddr {
-    let mut iter = address.iter();
-
-    let host = match iter.next().unwrap() {
-        Protocol::Dns(host) => host.to_string(),
-        Protocol::Ip4(ip) => ip.to_string(),
-        Protocol::Ip6(ip) => ip.to_string(),
-        _ => panic!("unexpected protocol"),
-    };
-
-    let port = match iter.next().unwrap() {
-        Protocol::Tcp(port) => {
-            if let Some(offset) = port_offset {
-                port + offset
-            } else {
-                port
-            }
-        }
-        _ => panic!("unexpected protocol"),
-    };
-
-    let mut addresses = format!("{host}:{port}")
-        .to_socket_addrs()
-        .unwrap_or_else(|e| panic!("Cannot parse or resolve hostnames for {host}:{port}: {e}"));
-    addresses
-        .next()
-        .unwrap_or_else(|| panic!("Hostname/IP resolution failed for {host}"))
-}
 
 // Custom deserializer with optional default fields
 impl<'de> Deserialize<'de> for AuthorityInfo {
@@ -148,10 +107,11 @@ impl<'de> Deserialize<'de> for AuthorityInfo {
             DEFAULT_WEIGHT
         };
         let consensus_address = if let Some(val) = json.get("consensus_address") {
-            SocketAddr::deserialize(val).map_err(serde::de::Error::custom)?
+            Multiaddr::deserialize(val).map_err(serde::de::Error::custom)?
         } else {
-            let port = utils::get_available_port();
-            socket_addr_from_hostport("127.0.0.1", port)
+            format!("/ip4/127.0.0.1/tcp/{}/http", utils::get_available_port())
+                .parse()
+                .unwrap()
         };
 
         Ok(AuthorityInfo {
@@ -221,27 +181,18 @@ impl NetworkConfig {
                         .make_narwhal_public_key()
                         .expect("Can't get narwhal public key");
                     let primary = PrimaryAddresses {
-                        primary_to_primary: socket_addr_from_multiaddr(
-                            &x.network_address,
-                            Some(100),
-                        ),
-                        worker_to_primary: socket_addr_from_multiaddr(
-                            &x.network_address,
-                            Some(200),
-                        ),
+                        primary_to_primary: update_tcp_port_in_multiaddr(&x.network_address, 100),
+                        worker_to_primary: update_tcp_port_in_multiaddr(&x.network_address, 200),
                     };
                     let workers = [(
                         /* worker_id */ 0,
                         WorkerAddresses {
-                            primary_to_worker: socket_addr_from_multiaddr(
+                            primary_to_worker: update_tcp_port_in_multiaddr(
                                 &x.network_address,
-                                Some(300),
+                                300,
                             ),
-                            transactions: x.consensus_address,
-                            worker_to_worker: socket_addr_from_multiaddr(
-                                &x.network_address,
-                                Some(400),
-                            ),
+                            transactions: x.consensus_address.clone(),
+                            worker_to_worker: update_tcp_port_in_multiaddr(&x.network_address, 400),
                         },
                     )]
                     .iter()
@@ -502,15 +453,23 @@ pub fn make_default_narwhal_committee(
                     .expect("Can't get narwhal public key");
 
                 let primary = PrimaryAddresses {
-                    primary_to_primary: socket_addr_from_hostport("127.0.0.1", ports[i][0]),
-                    worker_to_primary: socket_addr_from_hostport("127.0.0.1", ports[i][1]),
+                    primary_to_primary: format!("/ip4/127.0.0.1/tcp/{}/http", ports[i][0])
+                        .parse()
+                        .unwrap(),
+                    worker_to_primary: format!("/ip4/127.0.0.1/tcp/{}/http", ports[i][1])
+                        .parse()
+                        .unwrap(),
                 };
                 let workers = [(
                     /* worker_id */ 0,
                     WorkerAddresses {
-                        primary_to_worker: socket_addr_from_hostport("127.0.0.1", ports[i][2]),
-                        transactions: x.consensus_address,
-                        worker_to_worker: socket_addr_from_hostport("127.0.0.1", ports[i][3]),
+                        primary_to_worker: format!("/ip4/127.0.0.1/tcp/{}/http", ports[i][2])
+                            .parse()
+                            .unwrap(),
+                        transactions: x.consensus_address.clone(),
+                        worker_to_worker: format!("/ip4/127.0.0.1/tcp/{}/http", ports[i][3])
+                            .parse()
+                            .unwrap(),
                     },
                 )]
                 .iter()
@@ -526,4 +485,15 @@ pub fn make_default_narwhal_committee(
             })
             .collect(),
     })
+}
+
+fn update_tcp_port_in_multiaddr(addr: &Multiaddr, offset: u16) -> Multiaddr {
+    addr.replace(1, |protocol| {
+        if let Protocol::Tcp(port) = protocol {
+            Some(Protocol::Tcp(port + offset))
+        } else {
+            panic!("expected tcp protocol at index 1");
+        }
+    })
+    .expect("tcp protocol at index 1")
 }

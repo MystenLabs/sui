@@ -9,7 +9,7 @@ use crate::{
 use async_trait::async_trait;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
-use std::{io, net::SocketAddr, sync::Arc, time::Duration};
+use std::{io, sync::Arc, time::Duration};
 use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
@@ -65,7 +65,7 @@ impl AuthorityServer {
     pub fn new(
         address: Multiaddr,
         state: Arc<AuthorityState>,
-        consensus_address: SocketAddr,
+        consensus_address: Multiaddr,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
     ) -> Self {
         let consensus_adapter = ConsensusAdapter::new(
