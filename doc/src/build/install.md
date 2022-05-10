@@ -57,7 +57,9 @@ You can start exploring Sui's source code by looking into the following primary 
 * [sui-network](https://github.com/MystenLabs/sui/tree/main/crates/sui-network) - networking interfaces
 
 And see the Rust [Crates](https://doc.rust-lang.org/rust-by-example/crates.html) in use at:
-https://mystenlabs.github.io/mysten-infra/
+* https://mystenlabs.github.io/sui/ - the Sui blockchain
+* https://mystenlabs.github.io/narwhal/ - The Narwhal and Tusk consensus engine
+* https://mystenlabs.github.io/mysten-infra/ - Mysten Labs infrastructure
 
 To contribute updates to Sui code, [send pull requests](../contribute/index.md#send-pull-requests) our way.
 
