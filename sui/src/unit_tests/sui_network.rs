@@ -5,8 +5,8 @@ use anyhow::anyhow;
 use std::path::Path;
 use sui::{
     config::{
-        AuthorityInfo, Config, GatewayConfig, GatewayType, GenesisConfig, WalletConfig,
-        SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
+        Config, GatewayConfig, GatewayType, GenesisConfig, WalletConfig, SUI_GATEWAY_CONFIG,
+        SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
     },
     keystore::KeystoreType,
     sui_commands::{genesis, SuiNetwork},
@@ -55,11 +55,7 @@ pub async fn start_test_network(
         ));
     }
 
-    genesis_config.authorities = genesis_config
-        .authorities
-        .into_iter()
-        .map(|info| AuthorityInfo { port: 0, ..info })
-        .collect();
+    genesis_config.authorities = genesis_config.authorities.into_iter().collect();
 
     let (network_config, accounts, mut keystore) = genesis(genesis_config, None).await?;
     let key_pair_refs = key_pairs.iter().collect::<Vec<_>>();
@@ -75,7 +71,7 @@ pub async fn start_test_network(
         .into_iter()
         .zip(&network.spawned_authorities)
         .map(|(mut info, server)| {
-            info.port = server.get_port();
+            info.network_address = server.address().to_owned();
             info
         })
         .collect::<Vec<_>>();

@@ -11,13 +11,10 @@ use crate::benchmark::{
     validator_preparer::ValidatorPreparer,
 };
 use futures::{join, StreamExt};
+use multiaddr::Multiaddr;
 use rayon::{iter::ParallelIterator, prelude::*};
 use std::{panic, thread, thread::sleep, time::Duration};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
-use sui_network::{
-    network::{NetworkClient, NetworkServer},
-    tonic,
-};
 use sui_types::{
     batch::UpdateItem,
     messages::{BatchInfoRequest, BatchInfoResponseItem},
@@ -43,14 +40,7 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
         BenchmarkType::MicroBenchmark { host, port, type_ } => (host, port, type_),
     };
 
-    let network_client = NetworkClient::new(
-        host.clone(),
-        port,
-        benchmark.buffer_size,
-        Duration::from_micros(benchmark.send_timeout_us),
-        Duration::from_micros(benchmark.recv_timeout_us),
-    );
-    let network_server = NetworkServer::new(host, port, benchmark.buffer_size);
+    let address: Multiaddr = format!("/dns/{host}/tcp/{port}/http").parse().unwrap();
     let connections = if benchmark.tcp_connections > 0 {
         benchmark.tcp_connections
     } else {
@@ -60,14 +50,12 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
         benchmark.running_mode,
         benchmark.working_dir,
         benchmark.committee_size,
-        network_client.base_address(),
-        network_client.base_port(),
+        address.clone(),
         benchmark.db_cpus,
     );
     match type_ {
         MicroBenchmarkType::Throughput { num_transactions } => run_throughout_microbench(
-            network_client,
-            network_server,
+            address,
             connections,
             benchmark.batch_size,
             !benchmark.use_native,
@@ -79,8 +67,7 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
             chunk_size,
             period_us,
         } => run_latency_microbench(
-            network_client,
-            network_server,
+            address,
             connections,
             !benchmark.use_native,
             num_chunks,
@@ -92,8 +79,7 @@ fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
 }
 
 fn run_throughout_microbench(
-    network_client: NetworkClient,
-    network_server: NetworkServer,
+    address: Multiaddr,
     connections: usize,
     batch_size: usize,
     use_move: bool,
@@ -124,21 +110,20 @@ fn run_throughout_microbench(
         &mut validator_preparer,
     );
 
-    validator_preparer.deploy_validator(network_server);
+    validator_preparer.deploy_validator(address.clone());
 
     let result = panic::catch_unwind(|| {
         // Follower to observe batches
-        let follower_network_client = network_client.clone();
+        let addr = address.clone();
         thread::spawn(move || {
-            get_multithread_runtime()
-                .block_on(async move { run_follower(follower_network_client).await });
+            get_multithread_runtime().block_on(async move { run_follower(addr).await });
         });
 
         sleep(Duration::from_secs(3));
 
         // Run load
         let (elapsed, resp) = get_multithread_runtime()
-            .block_on(async move { send_tx_chunks(txes, network_client, connections).await });
+            .block_on(async move { send_tx_chunks(txes, address, connections).await });
 
         let _: Vec<_> = resp
             .into_par_iter()
@@ -160,8 +145,7 @@ fn run_throughout_microbench(
 }
 
 fn run_latency_microbench(
-    network_client: NetworkClient,
-    _network_server: NetworkServer,
+    address: Multiaddr,
     connections: usize,
     use_move: bool,
     num_chunks: usize,
@@ -193,22 +177,23 @@ fn run_latency_microbench(
     let tracer_txes =
         tx_cr.generate_transactions(1, use_move, 1, num_chunks, None, &mut validator_preparer);
 
-    validator_preparer.deploy_validator(_network_server);
+    validator_preparer.deploy_validator(address.clone());
 
     let result = panic::catch_unwind(|| {
         let runtime = get_multithread_runtime();
         // Prep the generators
-        let (mut load_gen, mut tracer_gen) = runtime.block_on(async move {
-            join!(
-                FixedRateLoadGenerator::new(
-                    load_gen_txes,
-                    period_us,
-                    network_client.clone(),
-                    connections,
-                ),
-                FixedRateLoadGenerator::new(tracer_txes, period_us, network_client, 1),
-            )
-        });
+        let (mut load_gen, mut tracer_gen) =
+            runtime.block_on(async move {
+                join!(
+                    FixedRateLoadGenerator::new(
+                        load_gen_txes,
+                        period_us,
+                        address.clone(),
+                        connections,
+                    ),
+                    FixedRateLoadGenerator::new(tracer_txes, period_us, address.clone(), 1),
+                )
+            });
 
         // Run the load gen and tracers
         let (load_latencies, tracer_latencies) =
@@ -231,23 +216,10 @@ fn run_latency_microbench(
     }
 }
 
-async fn run_follower(network_client: NetworkClient) {
+async fn run_follower(address: Multiaddr) {
     // We spawn a second client that listens to the batch interface
     let _batch_client_handle = tokio::task::spawn(async move {
-        let uri = format!(
-            "http://{}:{}",
-            network_client.base_address(),
-            network_client.base_port()
-        )
-        .parse()
-        .unwrap();
-        let channel = tonic::transport::Channel::builder(uri)
-            .connect_timeout(network_client.send_timeout())
-            .timeout(network_client.recv_timeout())
-            .connect()
-            .await
-            .unwrap();
-        let authority_client = NetworkAuthorityClient::with_channel(channel, network_client);
+        let authority_client = NetworkAuthorityClient::connect(&address).await.unwrap();
 
         let mut start = 0;
 

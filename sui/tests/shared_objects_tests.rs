@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use sui::config::AuthorityInfo;
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
-use sui_network::network::NetworkClient;
 use sui_types::{
     base_types::ObjectRef,
     error::SuiResult,
@@ -42,15 +41,7 @@ async fn submit_single_owner_transaction(
 }
 
 fn get_client(config: &AuthorityInfo) -> NetworkAuthorityClient {
-    let network_config = NetworkClient::new(
-        config.host.clone(),
-        config.port,
-        0,
-        std::time::Duration::from_secs(30),
-        std::time::Duration::from_secs(30),
-    );
-
-    NetworkAuthorityClient::new(network_config)
+    NetworkAuthorityClient::connect_lazy(&config.network_address).unwrap()
 }
 
 /// Keep submitting the certificates of a shared-object transaction until it is sequenced by

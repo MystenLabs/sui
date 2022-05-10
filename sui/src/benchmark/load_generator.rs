@@ -7,6 +7,7 @@ use futures::{
     stream::StreamExt,
     SinkExt,
 };
+use multiaddr::Multiaddr;
 use rayon::prelude::*;
 use std::{
     io,
@@ -18,7 +19,6 @@ use sui_core::{
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     authority_server::{AuthorityServer, AuthorityServerHandle},
 };
-use sui_network::network::{NetworkClient, NetworkServer};
 use sui_types::{committee::Committee, messages::*};
 use tokio::{sync::Notify, time};
 use tracing::{error, info};
@@ -42,14 +42,14 @@ pub fn check_transaction_response(reply_message: Result<TransactionInfoResponse,
 
 pub async fn send_tx_chunks(
     tx_chunks: Vec<(Transaction, CertifiedTransaction)>,
-    net_client: NetworkClient,
+    address: Multiaddr,
     conn: usize,
 ) -> (u128, Vec<Result<TransactionInfoResponse, io::Error>>) {
     let time_start = Instant::now();
 
     let mut tasks = Vec::new();
     for tx_chunks in tx_chunks.chunks(tx_chunks.len() / conn) {
-        let client = NetworkAuthorityClient::new(net_client.clone());
+        let client = NetworkAuthorityClient::connect_lazy(&address).unwrap();
         let txns = tx_chunks.to_vec();
 
         let task = tokio::spawn(async move {
@@ -85,14 +85,14 @@ pub async fn send_tx_chunks(
 
 pub async fn send_transactions(
     tx_chunks: Vec<Transaction>,
-    net_client: NetworkClient,
+    address: Multiaddr,
     conn: usize,
 ) -> (u128, Vec<Result<TransactionInfoResponse, io::Error>>) {
     let time_start = Instant::now();
 
     let mut tasks = Vec::new();
     for tx_chunks in tx_chunks.chunks(tx_chunks.len() / conn) {
-        let client = NetworkAuthorityClient::new(net_client.clone());
+        let client = NetworkAuthorityClient::connect_lazy(&address).unwrap();
         let txns = tx_chunks.to_vec();
 
         let task = tokio::spawn(async move {
@@ -123,14 +123,14 @@ pub async fn send_transactions(
 
 pub async fn send_confs(
     tx_chunks: Vec<CertifiedTransaction>,
-    net_client: NetworkClient,
+    address: Multiaddr,
     conn: usize,
 ) -> (u128, Vec<Result<TransactionInfoResponse, io::Error>>) {
     let time_start = Instant::now();
 
     let mut tasks = Vec::new();
     for tx_chunks in tx_chunks.chunks(tx_chunks.len() / conn) {
-        let client = NetworkAuthorityClient::new(net_client.clone());
+        let client = NetworkAuthorityClient::connect_lazy(&address).unwrap();
         let txns = tx_chunks.to_vec();
 
         let task = tokio::spawn(async move {
@@ -163,11 +163,11 @@ async fn send_tx_chunks_notif(
     notif: Arc<Notify>,
     tx_chunk: Vec<(Transaction, CertifiedTransaction)>,
     result_chann_tx: &mut MpscSender<u128>,
-    net_client: NetworkClient,
+    address: Multiaddr,
     conn: usize,
 ) {
     notif.notified().await;
-    let r = send_tx_chunks(tx_chunk, net_client, conn).await;
+    let r = send_tx_chunks(tx_chunk, address, conn).await;
     result_chann_tx.send(r.0).await.unwrap();
 
     let _: Vec<_> =
@@ -180,8 +180,8 @@ pub struct FixedRateLoadGenerator {
     /// The time between sending transactions chunks
     /// Anything below 10ms causes degradation in resolution
     pub period_us: u64,
-    /// The network client to send transactions on
-    pub network_client: NetworkClient,
+    /// The address of the validator to send txns to
+    pub address: Multiaddr,
 
     pub tick_notifier: Arc<Notify>,
 
@@ -201,7 +201,7 @@ impl FixedRateLoadGenerator {
     pub async fn new(
         transactions: Vec<(Transaction, CertifiedTransaction)>,
         period_us: u64,
-        network_client: NetworkClient,
+        address: Multiaddr,
         connections: usize,
     ) -> Self {
         let mut handles = vec![];
@@ -220,10 +220,10 @@ impl FixedRateLoadGenerator {
             let notif = tick_notifier.clone();
             let mut result_chann_tx = result_chann_tx.clone();
             let tx_chunk = tx_chunk.to_vec();
-            let client = network_client.clone();
+            let address = address.clone();
 
             handles.push(tokio::spawn(async move {
-                send_tx_chunks_notif(notif, tx_chunk, &mut result_chann_tx, client, conn).await;
+                send_tx_chunks_notif(notif, tx_chunk, &mut result_chann_tx, address, conn).await;
             }));
         }
 
@@ -231,7 +231,7 @@ impl FixedRateLoadGenerator {
 
         Self {
             period_us,
-            network_client,
+            address,
             transactions,
             connections,
             results_chann_rx,
@@ -267,7 +267,7 @@ impl FixedRateLoadGenerator {
 }
 
 pub async fn spawn_authority_server(
-    network_server: NetworkServer,
+    listen_address: Multiaddr,
     state: AuthorityState,
 ) -> AuthorityServerHandle {
     // The following two fields are only needed for shared objects (not by this bench).
@@ -275,9 +275,7 @@ pub async fn spawn_authority_server(
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     let server = AuthorityServer::new(
-        network_server.base_address,
-        network_server.base_port,
-        network_server.buffer_size,
+        listen_address,
         Arc::new(state),
         consensus_address,
         tx_consensus_listener,
@@ -293,19 +291,19 @@ async fn send_tx_chunks_for_quorum_notif(
     notif: Arc<Notify>,
     tx_chunk: Vec<Transaction>,
     result_chann_tx: &mut MpscSender<(u128, usize)>,
-    net_client: NetworkClient,
+    address: Multiaddr,
     stake: usize,
     conn: usize,
 ) {
     notif.notified().await;
-    let r = send_transactions(tx_chunk, net_client.clone(), conn).await;
+    let r = send_transactions(tx_chunk, address.clone(), conn).await;
 
     match result_chann_tx.send((r.0, stake)).await {
         Ok(_) => (),
         Err(e) => {
             // Disconnect is okay since we may leave f running
             if !e.is_disconnected() {
-                panic!("Send failed! {:?}", net_client)
+                panic!("Send failed! {:?}", address)
             }
         }
     }
@@ -321,7 +319,7 @@ async fn send_tx_for_quorum(
     order_chunk: Vec<Transaction>,
     conf_chunk: Vec<CertifiedTransaction>,
     result_chann_tx: &mut MpscSender<u128>,
-    net_clients: Vec<(NetworkClient, usize)>,
+    net_clients: Vec<(Multiaddr, usize)>,
     conn: usize,
     quorum_threshold: usize,
 ) {
@@ -452,24 +450,11 @@ impl MultiFixedRateLoadGenerator {
         connections: usize,
 
         network_cfg: &NetworkConfig,
-        recv_timeout: Duration,
-        send_timeout: Duration,
     ) -> Self {
-        let network_clients_stake: Vec<(NetworkClient, usize)> = network_cfg
+        let network_clients_stake: Vec<(Multiaddr, usize)> = network_cfg
             .authorities
             .iter()
-            .map(|q| {
-                (
-                    NetworkClient::new(
-                        q.host.clone(),
-                        q.port,
-                        network_cfg.buffer_size,
-                        send_timeout,
-                        recv_timeout,
-                    ),
-                    q.stake,
-                )
-            })
+            .map(|q| (q.network_address.clone(), q.stake))
             .collect();
         let committee_quorum_threshold = Committee::from(network_cfg).quorum_threshold();
         let mut handles = vec![];
