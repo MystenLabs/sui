@@ -114,7 +114,7 @@ async fn request_gas(
 ) -> impl IntoResponse {
     let result = match payload {
         FaucetRequest::FixedAmountRequest(request) => {
-            info!("Got a request: {:?}", request);
+            info!(request =? request, "Got a request");
             state
                 .faucet
                 .send(
@@ -127,12 +127,12 @@ async fn request_gas(
     match result {
         Ok(v) => {
             let response = FaucetResponse::from(v);
-            info!("Request succeeded, sending back response: {:?}", &response);
+            info!(response =? response, "Request succeeded, sending back response");
             (StatusCode::CREATED, Json(response))
         }
         Err(v) => {
             let response = FaucetResponse::from(v);
-            warn!("Request failed, sending back response: {:?}", &response);
+            warn!(response =? response, "Request failed, sending back response");
             (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
         }
     }
@@ -141,7 +141,7 @@ async fn request_gas(
 async fn create_wallet_context() -> Result<WalletContext, anyhow::Error> {
     // Create Wallet context.
     let wallet_conf = sui_config_dir()?.join(SUI_WALLET_CONFIG);
-    info!("Initialize wallet from config path: {:?}", wallet_conf);
+    info!(config_path =? wallet_conf, "Initialize wallet from config");
     let mut context = WalletContext::new(&wallet_conf)?;
     let address = context
         .config

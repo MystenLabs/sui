@@ -88,13 +88,15 @@ fn socket_addr_from_hostport(host: &str, port: u16) -> SocketAddr {
 
 // When validators start they need to find peers in the committee
 // Here we give them some time to retry connecting with exponentially back-off
-// TODO: for testnet, we may need to tune the parameters to allow
-// more asynchronous starting.
+// TODO:
+// 1: move the numbers to a config
+// 2: for testnet, we may need to tune the parameters to allow
+//    more asynchronous starting.
 fn socket_addr_from_hostport_retry(host: &str, port: u16) -> SocketAddr {
     let back_off = ExponentialBackoffBuilder::new()
         .with_initial_interval(Duration::from_secs(2))
         .with_multiplier(2.0)
-        .with_max_elapsed_time(Some(Duration::from_secs(30)))
+        .with_max_elapsed_time(Some(Duration::from_secs(120)))
         .build();
     let addr = retry(back_off, || {
         info!("Trying to resolve {host}:{port}");
@@ -221,31 +223,30 @@ impl NetworkConfig {
                         .public_key
                         .make_narwhal_public_key()
                         .expect("Can't get narwhal public key");
-
-                    debug!("Resolving {}:{} for {}", &x.host, &x.port, name);
+                    debug!(validator =? name, host =? &x.host, port =? &x.port, "Resolving dns name");
 
                     let primary = PrimaryAddresses {
                         primary_to_primary: socket_addr_from_hostport_retry(&x.host, x.port + 100),
                         worker_to_primary: socket_addr_from_hostport_retry(&x.host, x.port + 200),
                     };
-                    let p2w = socket_addr_from_hostport_retry(&x.host, x.port + 300);
-                    let w2w = socket_addr_from_hostport_retry(&x.host, x.port + 400);
+                    let primary_to_worker = socket_addr_from_hostport_retry(&x.host, x.port + 300);
+                    let worker_to_worker = socket_addr_from_hostport_retry(&x.host, x.port + 400);
 
                     debug!(
-                        "p2p: {}, w2p: {}, p2w: {}, consensus: {}, w2w: {}",
-                        primary.primary_to_primary,
-                        primary.worker_to_primary,
-                        &p2w,
-                        &x.consensus_address,
-                        &w2w,
+                        p2p =? primary.primary_to_primary,
+                        w2p =? primary.worker_to_primary,
+                        p2w =? &primary_to_worker,
+                        consensus =? &x.consensus_address,
+                        w2w = ? &worker_to_worker,
+                        "Resolved dns name",
                     );
 
                     let workers = [(
                         /* worker_id */ 0,
                         WorkerAddresses {
-                            primary_to_worker: p2w,
+                            primary_to_worker,
                             transactions: x.consensus_address,
-                            worker_to_worker: w2w,
+                            worker_to_worker,
                         },
                     )]
                     .iter()
@@ -480,7 +481,10 @@ impl<C> DerefMut for PersistedConfig<C> {
     }
 }
 
-/// Make a default Narwhal-compatible committee running locally
+/// Make a Narwhal-compatible committee running locally
+/// Only for dev or test enviroments.
+/// For distributed committee like in production, you may be
+/// looking for `fn make_narwhal_committee`
 /// Ports are overridden by next available port id.
 pub fn make_local_narwhal_committee(
     authorities: &[AuthorityInfo],

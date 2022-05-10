@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     config::{
-        make_local_narwhal_committee, sui_config_dir, AuthorityInfo, Config,
-        GatewayConfig, GatewayType, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
+        make_local_narwhal_committee, sui_config_dir, AuthorityInfo, Config, GatewayConfig,
+        GatewayType, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
         CONSENSUS_DB_NAME, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
     },
     keystore::{Keystore, KeystoreType, SuiKeystore},
