@@ -37,12 +37,12 @@ sui-framework = { path = "../sui_programmability/framework" }
 sui-network = { path = "../crates/sui-network" }
 sui-types = { path = "../sui_types" }
 
-move-binary-format = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc", features = ["address20"] }
-move-package = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5", features = ["address20"] }
+move-package = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
+move-vm-runtime = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
+move-vm-types = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
 
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d2976a45420147ad821baae96e6fe4b12215f743"}
 
