@@ -138,7 +138,7 @@ const TransactionResultAPI = ({ id }: { id: string }) => {
     if (showTxState.loadState === 'pending') {
         return (
             <div className={theme.textresults}>
-                <div className={styles.content}>Loading...</div>
+                <div>Loading...</div>
             </div>
         );
     }

@@ -21,7 +21,7 @@ import type {
     RawObjectRef,
 } from '@mysten/sui.js';
 
-import styles from './TransactionView.module.css';
+import styles from './TransactionResult.module.css';
 
 type TxDataProps = CertifiedTransaction & {
     status: ExecutionStatusType;
