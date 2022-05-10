@@ -4,7 +4,6 @@
 use std::time::Duration;
 
 use sui_adapter::genesis;
-use sui_network::network::NetworkClient;
 use sui_types::{base_types::SequenceNumber, crypto::get_key_pair, object::Object};
 use tracing_test::traced_test;
 
@@ -90,14 +89,10 @@ pub async fn test_gossip_no_network() {
             .authority_clients
             .iter()
             .map(|(name, _)| {
-                let net = NetworkAuthorityClient::new(NetworkClient::new(
-                    "127.0.0.1".to_string(),
-                    // !!! This port does not exist
-                    332,
-                    65_000,
-                    Duration::from_secs(1),
-                    Duration::from_secs(1),
-                ));
+                let net = NetworkAuthorityClient::connect_lazy(
+                    &"/ip4/127.0.0.1/tcp/332/http".parse().unwrap(),
+                )
+                .unwrap();
                 (*name, net)
             })
             .collect(),

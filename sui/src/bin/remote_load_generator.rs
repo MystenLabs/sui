@@ -8,7 +8,6 @@ use sui::benchmark::load_generator::MultiFixedRateLoadGenerator;
 
 use std::panic;
 use std::path::PathBuf;
-use std::time::Duration;
 use sui::benchmark::transaction_creator::TransactionCreator;
 use sui::benchmark::validator_preparer::ValidatorPreparer;
 use sui::config::{NetworkConfig, PersistedConfig};
@@ -78,8 +77,6 @@ pub fn main() {
         remote_config.object_id_offset,
         &remote_config.account_keypair,
         network_config,
-        Duration::from_micros(benchmark.send_timeout_us),
-        Duration::from_micros(benchmark.recv_timeout_us),
         validator_preparer,
     );
     println!("{:?}", g);
@@ -96,9 +93,6 @@ fn run_latency_microbench(
     sender: &KeyPair,
 
     network_config: NetworkConfig,
-
-    send_timeout: Duration,
-    recv_timeout: Duration,
 
     mut validator_preparer: ValidatorPreparer,
 ) -> MicroBenchmarkResult {
@@ -137,8 +131,6 @@ fn run_latency_microbench(
                 period_us,
                 connections,
                 &network_config,
-                recv_timeout,
-                send_timeout,
             ))
         });
 

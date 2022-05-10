@@ -39,8 +39,9 @@ pub fn test_authority_configs() -> (Vec<AuthorityInfo>, Vec<KeyPair>) {
             AuthorityInfo {
                 address,
                 public_key: *key.public_key_bytes(),
-                host: "127.0.0.1".to_string(),
-                port: authority_port,
+                network_address: format!("/ip4/127.0.0.1/tcp/{authority_port}/http")
+                    .parse()
+                    .unwrap(),
                 db_path: PathBuf::new(),
                 stake: 1,
                 consensus_address: format!("127.0.0.1:{consensus_port}").parse().unwrap(),
@@ -102,7 +103,6 @@ where
         let handle = make_authority(
             /* authority */ config,
             key_pair,
-            NETWORK_BUFFER_SIZE,
             state,
             &consensus_committee,
             /* consensus_store_path */ tempfile::tempdir().unwrap().path(),
