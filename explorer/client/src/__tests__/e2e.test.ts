@@ -169,7 +169,7 @@ describe('End-to-end Tests', () => {
         });
     });
 
-    describe('Enables clicking links to', () => {
+    describe('Owned Objects have links that enable', () => {
         const navigationTemplate = async (
             page: any,
             parentValue: string,
@@ -207,7 +207,7 @@ describe('End-to-end Tests', () => {
             );
             expect(parentText.trim()).toBe(parentValue);
         };
-        it('go from address to object and back', async () => {
+        it('going from address to object and back', async () => {
             await navigationTemplate(
                 page,
                 'receiverAddress',
@@ -216,10 +216,10 @@ describe('End-to-end Tests', () => {
                 1
             );
         });
-        it('go from object to child object and back', async () => {
+        it('going from object to child object and back', async () => {
             await navigationTemplate(page, 'player2', 'objects', 'Image1', 1);
         });
-        it('go from parent to broken image object and back', async () => {
+        it('going from parent to broken image object and back', async () => {
             const parentValue = 'ObjectWBrokenChild';
             await page.goto(`${BASE_URL}/objects/${parentValue}`);
 
