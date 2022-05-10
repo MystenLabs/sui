@@ -6,7 +6,7 @@
 use crate::{args::*, in_memory_storage::InMemoryStorage};
 use anyhow::{anyhow, bail};
 use bimap::btree::BiBTreeMap;
-use itertools::{Either, Itertools};
+use itertools::Itertools;
 use move_binary_format::{file_format::CompiledScript, CompiledModule};
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::{
@@ -323,7 +323,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                         "task {}, lines {}-{}. Unbound fake id {}",
                         number, start_line, command_lines_stop, fake_id
                     ),
-                    Some(res) => ObjectID::from(res),
+                    Some(res) => res,
                 };
                 let obj = match self.storage.get_object(&id) {
                     None => return Ok(Some(format!("No object at id {}", fake_id))),
@@ -444,9 +444,6 @@ impl<'a> SuiTestAdapter<'a> {
             &self.native_functions,
             gas_status,
         )?;
-        for ((id, _, _), _) in &created {
-            self.enumerate_fake(*id);
-        }
         let (_objects, _active_inputs, written, deleted, _events) = temporary_store.into_inner();
         let created_set: BTreeSet<_> = created.iter().map(|((id, _, _), _)| *id).collect();
         let mut created_ids: Vec<_> = created_set.iter().copied().collect();
@@ -456,12 +453,24 @@ impl<'a> SuiTestAdapter<'a> {
             .filter(|id| !created_set.contains(id))
             .collect();
         let mut deleted_ids: Vec<_> = deleted.keys().copied().collect();
-        deleted_ids.sort_by_key(|id| self.get_object_sorting_key(id));
+        // update storage
         Arc::get_mut(&mut self.storage)
             .unwrap()
             .finish(written, deleted);
-        created_ids.sort_by_key(|id| self.get_object_sorting_key(id));
-        written_ids.sort_by_key(|id| self.get_object_sorting_key(id));
+        // enumerate objects after written to storage, sort by a "stable" sorting as the
+        // object ID is not stable
+        let mut created_ids_vec = created
+            .iter()
+            .map(|((id, _, _), _)| *id)
+            .collect::<Vec<_>>();
+        created_ids_vec.sort_by_key(|id| self.get_object_sorting_key(id));
+        for id in &created_ids_vec {
+            self.enumerate_fake(*id);
+        }
+        // sort by fake id
+        created_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        written_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         match status {
             ExecutionStatus::Success { .. } => Ok(TxnSummary {
                 created: created_ids,
@@ -474,28 +483,15 @@ impl<'a> SuiTestAdapter<'a> {
 
     // stable way of sorting objects by type. Does not however, produce a stable sorting
     // between objects of the same type
-    fn get_object_sorting_key<'b>(
-        &'b self,
-        id: &ObjectID,
-    ) -> Either<(FakeID, &'b IdentStr, &'b IdentStr, &'b [TypeTag]), (FakeID, Vec<&'b str>)> {
-        let fake_id = self.real_to_fake_object_id(id).unwrap();
+    fn get_object_sorting_key(&self, id: &ObjectID) -> String {
         match &self.storage.get_object(id).unwrap().data {
-            sui_types::object::Data::Move(obj) => {
-                let struct_tag = &obj.type_;
-                Either::Left((
-                    fake_id,
-                    struct_tag.module.as_ident_str(),
-                    struct_tag.name.as_ident_str(),
-                    &struct_tag.type_params,
-                ))
-            }
-            sui_types::object::Data::Package(pkg) => Either::Right((
-                fake_id,
-                pkg.serialized_module_map()
-                    .keys()
-                    .map(|s| s.as_str())
-                    .collect(),
-            )),
+            sui_types::object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_)),
+            sui_types::object::Data::Package(pkg) => pkg
+                .serialized_module_map()
+                .keys()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(","),
         }
     }
 
@@ -566,21 +562,14 @@ impl<'a> SuiTestAdapter<'a> {
         }
         let mut hex_candidate = String::new();
         let mut result = String::new();
-        let mut chars = input.as_ref().chars();
+        let mut chars = input.as_ref().chars().peekable();
         let mut cur = chars.next();
         while let Some(c) = cur {
             match c {
-                '0' if hex_candidate.is_empty() => {
-                    cur = chars.next();
-                    match cur {
-                        Some('x') => {
-                            hex_candidate.push_str("0x");
-                        }
-                        c_opt => {
-                            result.push('0');
-                            c_opt.map(|c| result.push(c));
-                        }
-                    }
+                '0' if hex_candidate.is_empty() && matches!(chars.peek(), Some('x')) => {
+                    let c = chars.next().unwrap();
+                    assert!(c == 'x');
+                    hex_candidate.push_str("0x");
                 }
                 '0'..='9' | 'a'..='f' | 'A'..='F' => hex_candidate.push(c),
                 _ => {
