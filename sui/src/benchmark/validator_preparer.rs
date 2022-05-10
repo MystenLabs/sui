@@ -7,6 +7,7 @@ use crate::benchmark::load_generator::spawn_authority_server;
 use crate::config::NetworkConfig;
 use crate::config::{AccountConfig, Config, GenesisConfig, ObjectConfig};
 
+use multiaddr::Multiaddr;
 use rocksdb::Options;
 use std::collections::BTreeMap;
 use std::{
@@ -20,7 +21,6 @@ use std::{
 };
 use sui_adapter::genesis;
 use sui_core::authority::*;
-use sui_network::network::NetworkServer;
 use sui_types::{
     base_types::{SuiAddress, *},
     committee::*,
@@ -101,8 +101,7 @@ impl ValidatorPreparer {
         running_mode: RunningMode,
         working_dir: Option<PathBuf>,
         committee_size: usize,
-        validator_host: &str,
-        validator_port: u16,
+        validator_address: Multiaddr,
         db_cpus: usize,
     ) -> Self {
         let (keys, mut genesis_config) = set_up_authorities_and_committee(committee_size)
@@ -126,8 +125,7 @@ impl ValidatorPreparer {
         match running_mode {
             RunningMode::SingleValidatorProcess => {
                 // Honor benchmark's host:port setting
-                genesis_config.authorities[0].port = validator_port;
-                genesis_config.authorities[0].host = validator_host.into();
+                genesis_config.authorities[0].network_address = validator_address;
                 Self {
                     running_mode,
                     keys,
@@ -171,7 +169,7 @@ impl ValidatorPreparer {
         }
     }
 
-    pub fn deploy_validator(&mut self, _network_server: NetworkServer) {
+    pub fn deploy_validator(&mut self, address: Multiaddr) {
         match self.running_mode {
             RunningMode::SingleValidatorProcess => {
                 if let ValidatorConfig::LocalSingleValidatorProcessConfig {
@@ -209,7 +207,7 @@ impl ValidatorPreparer {
                     thread::spawn(move || {
                         info!("Spawning a validator thread...");
                         get_multithread_runtime().block_on(async move {
-                            let server = spawn_authority_server(_network_server, state).await;
+                            let server = spawn_authority_server(address, state).await;
                             if let Err(e) = server.join().await {
                                 error!("Server ended with an error: {e}");
                             }

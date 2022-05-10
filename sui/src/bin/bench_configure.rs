@@ -66,8 +66,7 @@ fn main() {
 
         let auth = AuthorityInfo {
             address: validator_address,
-            host,
-            port,
+            network_address: format!("/dns/{host}/tcp/{port}/http").parse().unwrap(),
             db_path: path.to_path_buf(),
             stake,
             consensus_address,

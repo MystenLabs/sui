@@ -7,15 +7,15 @@ use crate::{
     consensus_adapter::{ConsensusAdapter, ConsensusListenerMessage},
 };
 use async_trait::async_trait;
-use futures::{stream::BoxStream, FutureExt, TryStreamExt};
+use futures::{stream::BoxStream, TryStreamExt};
+use multiaddr::Multiaddr;
 use std::{io, net::SocketAddr, sync::Arc, time::Duration};
 use sui_network::{
     api::{Validator, ValidatorServer},
-    network::NetworkServer,
     tonic,
 };
 use sui_types::{crypto::VerificationObligation, error::*, messages::*};
-use tokio::{net::TcpListener, sync::mpsc::Sender};
+use tokio::sync::mpsc::Sender;
 use tracing::{info, Instrument};
 
 #[cfg(test)]
@@ -27,7 +27,7 @@ const MAX_DELAY_MILLIS: u64 = 5_000; // 5 sec
 
 pub struct AuthorityServerHandle {
     tx_cancellation: tokio::sync::oneshot::Sender<()>,
-    local_addr: SocketAddr,
+    local_addr: Multiaddr,
     handle: tokio::task::JoinHandle<Result<(), tonic::transport::Error>>,
 }
 
@@ -48,13 +48,13 @@ impl AuthorityServerHandle {
         Ok(())
     }
 
-    pub fn get_port(&self) -> u16 {
-        self.local_addr.port()
+    pub fn address(&self) -> &Multiaddr {
+        &self.local_addr
     }
 }
 
 pub struct AuthorityServer {
-    server: NetworkServer,
+    address: Multiaddr,
     pub state: Arc<AuthorityState>,
     consensus_adapter: ConsensusAdapter,
     min_batch_size: u64,
@@ -63,22 +63,19 @@ pub struct AuthorityServer {
 
 impl AuthorityServer {
     pub fn new(
-        base_address: String,
-        base_port: u16,
-        buffer_size: usize,
+        address: Multiaddr,
         state: Arc<AuthorityState>,
         consensus_address: SocketAddr,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
     ) -> Self {
         let consensus_adapter = ConsensusAdapter::new(
             consensus_address,
-            buffer_size,
             state.committee.clone(),
             tx_consensus_listener,
             /* max_delay */ Duration::from_millis(2_000),
         );
         Self {
-            server: NetworkServer::new(base_address, base_port, buffer_size),
+            address,
             state,
             consensus_adapter,
             min_batch_size: MIN_BATCH_SIZE,
@@ -104,38 +101,31 @@ impl AuthorityServer {
     }
 
     pub async fn spawn(self) -> Result<AuthorityServerHandle, io::Error> {
-        let address = format!("{}:{}", self.server.base_address, self.server.base_port);
-        self.spawn_with_bind_address(&address).await
+        let address = self.address.clone();
+        self.spawn_with_bind_address(address).await
     }
 
     pub async fn spawn_with_bind_address(
         self,
-        address: &str,
+        address: Multiaddr,
     ) -> Result<AuthorityServerHandle, io::Error> {
         // Start the batching subsystem
         let _join_handle = self
             .spawn_batch_subsystem(self.min_batch_size, self.max_delay)
             .await;
 
-        let std_listener = std::net::TcpListener::bind(address)?;
-
-        let local_addr = std_listener.local_addr()?;
-        let host = local_addr.ip();
-        let port = local_addr.port();
-        info!("Listening to TCP traffic on {host}:{port}");
-        // see https://fly.io/blog/the-tokio-1-x-upgrade/#tcplistener-from_std-needs-to-be-set-to-nonblocking
-        std_listener.set_nonblocking(true)?;
-        let listener =
-            tokio_stream::wrappers::TcpListenerStream::new(TcpListener::from_std(std_listener)?);
-
-        let (tx_cancellation, rx_cancellation) = tokio::sync::oneshot::channel();
-        let service = tonic::transport::Server::builder()
+        let mut server = mysten_network::config::Config::new()
+            .server_builder()
             .add_service(ValidatorServer::new(self))
-            .serve_with_incoming_shutdown(listener, rx_cancellation.map(|_| ()));
+            .bind(&address)
+            .await
+            .unwrap();
+        let local_addr = server.local_addr().to_owned();
+        info!("Listening to traffic on {local_addr}");
         let handle = AuthorityServerHandle {
-            tx_cancellation,
+            tx_cancellation: server.take_cancel_handle().unwrap(),
             local_addr,
-            handle: tokio::spawn(service),
+            handle: tokio::spawn(server.serve()),
         };
         Ok(handle)
     }

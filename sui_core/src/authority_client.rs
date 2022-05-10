@@ -5,8 +5,9 @@
 use crate::authority::AuthorityState;
 use async_trait::async_trait;
 use futures::{stream::BoxStream, TryStreamExt};
+use multiaddr::Multiaddr;
 use std::sync::Arc;
-use sui_network::{api::ValidatorClient, network::NetworkClient, tonic};
+use sui_network::{api::ValidatorClient, tonic};
 use sui_types::{error::SuiError, messages::*};
 
 #[cfg(test)]
@@ -65,33 +66,22 @@ pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoRespon
 
 #[derive(Clone)]
 pub struct NetworkAuthorityClient {
-    _network_client: NetworkClient,
     client: ValidatorClient<tonic::transport::Channel>,
 }
 
 impl NetworkAuthorityClient {
-    pub fn new(network_client: NetworkClient) -> Self {
-        let uri = format!(
-            "http://{}:{}",
-            network_client.base_address(),
-            network_client.base_port()
-        )
-        .parse()
-        .unwrap();
-        let channel = tonic::transport::Channel::builder(uri)
-            .connect_timeout(network_client.send_timeout())
-            .timeout(network_client.recv_timeout())
-            .connect_lazy();
-        let client = ValidatorClient::new(channel);
-        Self {
-            _network_client: network_client,
-            client,
-        }
+    pub async fn connect(address: &Multiaddr) -> anyhow::Result<Self> {
+        let channel = mysten_network::client::connect(address).await?;
+        Ok(Self::new(channel))
     }
 
-    pub fn with_channel(channel: tonic::transport::Channel, network_client: NetworkClient) -> Self {
+    pub fn connect_lazy(address: &Multiaddr) -> anyhow::Result<Self> {
+        let channel = mysten_network::client::connect_lazy(address)?;
+        Ok(Self::new(channel))
+    }
+
+    pub fn new(channel: tonic::transport::Channel) -> Self {
         Self {
-            _network_client: network_client,
             client: ValidatorClient::new(channel),
         }
     }

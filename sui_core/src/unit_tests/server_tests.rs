@@ -10,7 +10,6 @@ use crate::{
 };
 use futures::StreamExt;
 use std::sync::Arc;
-use sui_network::network::NetworkClient;
 use sui_types::{
     base_types::{dbg_addr, dbg_object_id, TransactionDigest},
     batch::UpdateItem,
@@ -34,9 +33,7 @@ async fn test_start_stop_batch_subsystem() {
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     let server = Arc::new(AuthorityServer::new(
-        "127.0.0.1".to_string(),
-        999,
-        65000,
+        "/ip4/127.0.0.1/tcp/999/http".parse().unwrap(),
         Arc::new(authority_state),
         consensus_address,
         tx_consensus_listener,
@@ -68,9 +65,7 @@ async fn test_simple_request() {
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     let server = AuthorityServer::new(
-        "127.0.0.1".to_string(),
-        0,
-        65000,
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
         Arc::new(authority_state),
         consensus_address,
         tx_consensus_listener,
@@ -78,15 +73,9 @@ async fn test_simple_request() {
 
     let server_handle = server.spawn().await.unwrap();
 
-    let network_config = NetworkClient::new(
-        server_handle.local_addr.ip().to_string(),
-        server_handle.local_addr.port(),
-        0,
-        std::time::Duration::from_secs(30),
-        std::time::Duration::from_secs(30),
-    );
-
-    let client = NetworkAuthorityClient::new(network_config);
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
 
     let req = ObjectInfoRequest::latest_object_info_request(
         object_id,
@@ -108,9 +97,7 @@ async fn test_subscription() {
 
     // Start the batch server
     let mut server = AuthorityServer::new(
-        "127.0.0.1".to_string(),
-        0,
-        65000,
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
         Arc::new(authority_state),
         consensus_address,
         tx_consensus_listener,
@@ -125,15 +112,9 @@ async fn test_subscription() {
 
     let server_handle = server.spawn().await.unwrap();
 
-    let network_config = NetworkClient::new(
-        server_handle.local_addr.ip().to_string(),
-        server_handle.local_addr.port(),
-        0,
-        std::time::Duration::from_secs(30),
-        std::time::Duration::from_secs(30),
-    );
-
-    let client = NetworkAuthorityClient::new(network_config);
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
 
     let tx_zero = TransactionDigest::new([0; 32]);
     for _i in 0u64..105 {
@@ -291,9 +272,7 @@ async fn test_subscription_safe_client() {
     // Start the batch server
     let state = Arc::new(authority_state);
     let server = Arc::new(AuthorityServer::new(
-        "127.0.0.1".to_string(),
-        998,
-        65000,
+        "/ip4/127.0.0.1/tcp/998/http".parse().unwrap(),
         state.clone(),
         consensus_address,
         tx_consensus_listener,

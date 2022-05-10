@@ -33,7 +33,6 @@ use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::authority_server::AuthorityServer;
 use sui_core::authority_server::AuthorityServerHandle;
 use sui_core::consensus_adapter::ConsensusListener;
-use sui_network::network::NetworkClient;
 use sui_types::base_types::encode_bytes_hex;
 use sui_types::base_types::{decode_bytes_hex, ObjectID};
 use sui_types::base_types::{SequenceNumber, SuiAddress, TxContext};
@@ -137,7 +136,7 @@ impl SuiCommand {
                 if *dump_addresses {
                     for auth in config.authorities.iter() {
                         let addr = SuiAddress::from(&auth.public_key);
-                        println!("{}:{} - {}", auth.host, auth.port, addr);
+                        println!("{} - {}", auth.network_address, addr);
                     }
                 }
                 Ok(())
@@ -343,7 +342,6 @@ impl SuiNetwork {
                 authority,
                 key_pair,
                 &committee,
-                config.buffer_size,
                 &consensus_committee,
                 &consensus_store_path,
                 &consensus_parameters,
@@ -514,7 +512,6 @@ pub async fn genesis(
             &committee,
             preload_modules.clone(),
             &preload_objects,
-            network_config.buffer_size,
             &mut genesis_ctx.clone(),
         )
         .await?;
@@ -527,7 +524,6 @@ pub async fn make_server(
     authority: &AuthorityInfo,
     key_pair: &KeyPair,
     committee: &Committee,
-    buffer_size: usize,
     consensus_committee: &ConsensusCommittee<Ed25519PublicKey>,
     consensus_store_path: &Path,
     consensus_parameters: &ConsensusParameters,
@@ -546,7 +542,6 @@ pub async fn make_server(
     make_authority(
         authority,
         key_pair,
-        buffer_size,
         state,
         consensus_committee,
         consensus_store_path,
@@ -562,7 +557,6 @@ async fn make_server_with_genesis_ctx(
     committee: &Committee,
     preload_modules: Vec<Vec<CompiledModule>>,
     preload_objects: &[Object],
-    buffer_size: usize,
     genesis_ctx: &mut TxContext,
 ) -> SuiResult<AuthorityServer> {
     let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
@@ -585,9 +579,7 @@ async fn make_server_with_genesis_ctx(
 
     let (tx_sui_to_consensus, _rx_sui_to_consensus) = channel(1);
     Ok(AuthorityServer::new(
-        authority.host.clone(),
-        authority.port,
-        buffer_size,
+        authority.network_address.clone(),
         Arc::new(state),
         authority.consensus_address,
         /* tx_consensus_listener */ tx_sui_to_consensus,
@@ -599,7 +591,6 @@ async fn make_server_with_genesis_ctx(
 pub async fn make_authority(
     authority: &AuthorityInfo,
     key_pair: &KeyPair,
-    buffer_size: usize,
     state: AuthorityState,
     consensus_committee: &ConsensusCommittee<Ed25519PublicKey>,
     consensus_store_path: &Path,
@@ -645,14 +636,12 @@ pub async fn make_authority(
     // to all authorities in the system.
     let _active_authority: Option<()> = if let Some(network) = net_parameters {
         let mut authority_clients = BTreeMap::new();
+        let mut config = mysten_network::config::Config::new();
+        config.connect_timeout = Some(Duration::from_secs(5));
+        config.request_timeout = Some(Duration::from_secs(5));
         for info in &network {
-            let client = NetworkAuthorityClient::new(NetworkClient::new(
-                info.host.clone(),
-                info.port,
-                buffer_size,
-                Duration::from_secs(5),
-                Duration::from_secs(5),
-            ));
+            let channel = config.connect_lazy(&info.network_address).unwrap();
+            let client = NetworkAuthorityClient::new(channel);
             authority_clients.insert(info.public_key, client);
         }
 
@@ -669,9 +658,7 @@ pub async fn make_authority(
 
     // Return new authority server. It listen to users transactions and send back replies.
     Ok(AuthorityServer::new(
-        authority.host.clone(),
-        authority.port,
-        buffer_size,
+        authority.network_address.clone(),
         authority_state,
         authority.consensus_address,
         /* tx_consensus_listener */ tx_sui_to_consensus,

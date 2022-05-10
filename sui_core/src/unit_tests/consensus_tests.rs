@@ -21,9 +21,6 @@ use sui_types::{
 use test_utils::{network::test_listener, test_keys};
 use tokio::sync::mpsc::channel;
 
-/// Default network buffer size.
-const NETWORK_BUFFER_SIZE: usize = 65_000;
-
 /// Fixture: a few test gas objects.
 pub fn test_gas_objects() -> Vec<Object> {
     (0..4)
@@ -151,7 +148,6 @@ async fn submit_transaction_to_consensus() {
     // Make a new consensus submitter instance.
     let submitter = ConsensusAdapter::new(
         consensus_address,
-        NETWORK_BUFFER_SIZE,
         state.committee.clone(),
         tx_consensus_listener,
         /* max_delay */ Duration::from_millis(1_000),

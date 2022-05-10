@@ -16,7 +16,6 @@ use sui_core::{
     authority_client::NetworkAuthorityClient,
     gateway_state::{GatewayClient, GatewayState},
 };
-use sui_network::network::NetworkClient;
 use sui_types::{
     base_types::AuthorityName,
     committee::{Committee, EpochId},
@@ -41,10 +40,7 @@ impl Display for GatewayType {
                     "Gateway state DB folder path : {:?}",
                     config.db_folder_path
                 )?;
-                let authorities = config
-                    .authorities
-                    .iter()
-                    .map(|info| format!("{}:{}", info.host, info.port));
+                let authorities = config.authorities.iter().map(|info| &info.network_address);
                 writeln!(
                     writer,
                     "Authorities : {:?}",
@@ -98,14 +94,12 @@ impl GatewayConfig {
 
     pub fn make_authority_clients(&self) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
         let mut authority_clients = BTreeMap::new();
+        let mut config = mysten_network::config::Config::new();
+        config.connect_timeout = Some(self.send_timeout);
+        config.request_timeout = Some(self.recv_timeout);
         for authority in &self.authorities {
-            let client = NetworkAuthorityClient::new(NetworkClient::new(
-                authority.host.clone(),
-                authority.port,
-                self.buffer_size,
-                self.send_timeout,
-                self.recv_timeout,
-            ));
+            let channel = config.connect_lazy(&authority.network_address).unwrap();
+            let client = NetworkAuthorityClient::new(channel);
             authority_clients.insert(authority.public_key, client);
         }
         authority_clients

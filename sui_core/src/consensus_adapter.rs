@@ -60,8 +60,6 @@ type ConsensusOutput = (
 pub struct ConsensusAdapter {
     /// The network address of the consensus node.
     consensus_address: SocketAddr,
-    /// The network buffer size.
-    buffer_size: usize,
     /// The Sui committee information.
     committee: Committee,
     /// A channel to notify the consensus listener to take action for a transactions.
@@ -76,14 +74,12 @@ impl ConsensusAdapter {
     /// Make a new Consensus submitter instance.
     pub fn new(
         consensus_address: SocketAddr,
-        buffer_size: usize,
         committee: Committee,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
         max_delay: Duration,
     ) -> Self {
         Self {
             consensus_address,
-            buffer_size,
             committee,
             tx_consensus_listener,
             max_delay,
@@ -93,18 +89,12 @@ impl ConsensusAdapter {
     /// Attempt to reconnect with a the consensus node.
     async fn reconnect(
         address: SocketAddr,
-        buffer_size: usize,
     ) -> SuiResult<FramedWrite<TcpStream, LengthDelimitedCodec>> {
         let stream = TcpStream::connect(address)
             .await
             .map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))?;
 
-        let stream = FramedWrite::new(
-            stream,
-            LengthDelimitedCodec::builder()
-                .max_frame_length(buffer_size)
-                .new_codec(),
-        );
+        let stream = FramedWrite::new(stream, LengthDelimitedCodec::builder().new_codec());
         Ok(stream)
     }
 
@@ -139,7 +129,7 @@ impl ConsensusAdapter {
         if Self::should_submit(certificate) {
             // TODO [issue #1452]: We are re-creating a connection every time. This is wasteful but
             // does not require to take self as a mutable reference.
-            Self::reconnect(self.consensus_address, self.buffer_size)
+            Self::reconnect(self.consensus_address)
                 .await?
                 .send(bytes)
                 .await

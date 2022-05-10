@@ -3,6 +3,7 @@
 
 use anyhow::anyhow;
 use clap::*;
+use multiaddr::Multiaddr;
 use narwhal_config::Parameters as ConsensusParameters;
 use std::path::PathBuf;
 use sui::{
@@ -35,7 +36,7 @@ struct ValidatorOpt {
     pub network_config_path: Option<PathBuf>,
 
     #[clap(long, help = "Specify host:port to listen on")]
-    listen_address: Option<String>,
+    listen_address: Option<Multiaddr>,
 }
 
 #[tokio::main]
@@ -81,7 +82,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let listen_address = cfg
         .listen_address
-        .unwrap_or(format!("{}:{}", authority.host, authority.port));
+        .unwrap_or_else(|| authority.network_address.clone());
 
     let consensus_committee = network_config.make_narwhal_committee();
 
@@ -95,8 +96,8 @@ async fn main() -> Result<(), anyhow::Error> {
         .join(encode_bytes_hex(&authority.public_key));
 
     info!(
-        "Initializing authority {:?} listening on {} (public addr: {}:{})",
-        authority.public_key, listen_address, authority.host, authority.port
+        "Initializing authority {:?} listening on {} (public addr: {})",
+        authority.public_key, listen_address, authority.network_address
     );
 
     // Pass in the newtwork parameters of all authorities
@@ -105,14 +106,13 @@ async fn main() -> Result<(), anyhow::Error> {
         authority,
         &network_config.key_pair,
         &Committee::from(&network_config),
-        network_config.buffer_size,
         &consensus_committee,
         &consensus_store_path,
         &consensus_parameters,
         Some(net),
     )
     .await?
-    .spawn_with_bind_address(&listen_address)
+    .spawn_with_bind_address(listen_address)
     .await
     .unwrap()
     .join()
