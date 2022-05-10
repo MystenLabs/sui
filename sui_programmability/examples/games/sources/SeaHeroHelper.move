@@ -11,16 +11,15 @@ module Games::SeaHeroHelper {
     use Games::SeaHero::{Self, SeaMonster, RUM};
     use Games::Hero::Hero;
     use Sui::Coin::{Self, Coin};
-    use Sui::ID::{Self, VersionedID};
     use Sui::Transfer;
+    use Sui::SuiObject;
     use Sui::TxContext::{Self, TxContext};
 
     /// Created by `monster_owner`, a player with a monster that's too strong
     /// for them to slay + transferred to a player who can slay the monster.
     /// The two players split the reward for slaying the monster according to
     /// the `helper_reward` parameter.
-    struct HelpMeSlayThisMonster has key {
-        id: VersionedID,
+    struct HelpMeSlayThisMonster has store {
         /// Monster to be slay by the owner of this object
         monster: SeaMonster,
         /// Identity of the user that originally owned the monster
@@ -49,12 +48,14 @@ module Games::SeaHeroHelper {
             EINVALID_HELPER_REWARD
         );
         Transfer::transfer(
-            HelpMeSlayThisMonster {
-                id: TxContext::new_id(ctx),
-                monster,
-                monster_owner: TxContext::sender(ctx),
-                helper_reward
-            },
+            SuiObject::create(
+                HelpMeSlayThisMonster {
+                    monster,
+                    monster_owner: TxContext::sender(ctx),
+                    helper_reward
+                },
+                ctx,
+            ),
             helper
         )
     }
@@ -65,12 +66,10 @@ module Games::SeaHeroHelper {
         hero: &Hero, wrapper: HelpMeSlayThisMonster, ctx: &mut TxContext,
     ): Coin<RUM> {
         let HelpMeSlayThisMonster {
-            id,
             monster,
             monster_owner,
             helper_reward
         } = wrapper;
-        ID::delete(id);
         let owner_reward = SeaHero::slay(hero, monster);
         let helper_reward = Coin::withdraw(&mut owner_reward, helper_reward, ctx);
         Transfer::transfer(Coin::from_balance(owner_reward, ctx), monster_owner);
@@ -79,20 +78,25 @@ module Games::SeaHeroHelper {
 
     /// Helper can call this if they can't help slay the monster or don't want
     /// to, and are willing to kindly return the monster to its owner.
-    public fun return_to_owner(wrapper: HelpMeSlayThisMonster) {
+    public fun return_to_owner(wrapper: HelpMeSlayThisMonster, ctx: &mut TxContext) {
         let HelpMeSlayThisMonster {
-            id,
             monster,
             monster_owner,
             helper_reward: _
         } = wrapper;
-        ID::delete(id);
-        SeaHero::transfer_monster(monster, monster_owner)
+        SeaHero::transfer_monster(
+            SuiObject::create(monster, ctx),
+            monster_owner,
+        )
     }
 
     /// Return the number of coins that `wrapper.owner` will earn if the
     /// the helper slays the monster in `wrapper.
     public fun owner_reward(wrapper: &HelpMeSlayThisMonster): u64 {
         SeaHero::monster_reward(&wrapper.monster) - wrapper.helper_reward
+    }
+
+    public fun monster(self: &HelpMeSlayThisMonster): &SeaMonster {
+        &self.monster
     }
 }

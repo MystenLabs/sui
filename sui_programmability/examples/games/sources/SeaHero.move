@@ -12,8 +12,9 @@ module Games::SeaHero {
     use Games::Hero::{Self, Hero};
 
     use Sui::Balance::{Self, Balance};
-    use Sui::ID::{Self, VersionedID};
+    use Sui::ID::VersionedID;
     use Sui::Coin::{Self, TreasuryCap};
+    use Sui::SuiObject::{Self, SuiObject};
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
 
@@ -32,8 +33,7 @@ module Games::SeaHero {
     }
 
     /// A new kind of monster for the hero to fight
-    struct SeaMonster has key, store {
-        id: VersionedID,
+    struct SeaMonster has store {
         /// Tokens that the user will earn for slaying this monster
         reward: Balance<RUM>
     }
@@ -76,8 +76,7 @@ module Games::SeaHero {
     /// exchange.
     /// Aborts if the hero is not strong enough to slay the monster
     public fun slay(hero: &Hero, monster: SeaMonster): Balance<RUM> {
-        let SeaMonster { id, reward } = monster;
-        ID::delete(id);
+        let SeaMonster { reward } = monster;
         // Hero needs strength greater than the reward value to defeat the
         // monster
         assert!(
@@ -107,17 +106,16 @@ module Games::SeaHero {
         // ensure monster supply cap is respected
         assert!(admin.monster_max - 1 >= admin.monsters_created, 2);
 
-        let monster = SeaMonster {
-            id: TxContext::new_id(ctx),
+        let monster = SuiObject::create(SeaMonster {
             reward: Coin::mint_balance(reward_amount, &mut admin.treasury_cap)
-        };
+        }, ctx);
         admin.monsters_created = admin.monsters_created + 1;
         Transfer::transfer(monster, recipient);
     }
 
     /// Send `monster` to `recipient`
     public fun transfer_monster(
-        monster: SeaMonster, recipient: address
+        monster: SuiObject<SeaMonster>, recipient: address
     ) {
         Transfer::transfer(monster, recipient)
     }
