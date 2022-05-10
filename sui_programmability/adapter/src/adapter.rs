@@ -39,10 +39,6 @@ use std::{
 
 pub use move_vm_runtime::move_vm::MoveVM;
 
-#[cfg(test)]
-#[path = "unit_tests/adapter_tests.rs"]
-mod adapter_tests;
-
 pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
     MoveVM::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)
 }
