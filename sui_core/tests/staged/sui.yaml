@@ -203,9 +203,9 @@ SignedBatch:
 SingleTransactionKind:
   ENUM:
     0:
-      Transfer:
+      TransferCoin:
         NEWTYPE:
-          TYPENAME: Transfer
+          TYPENAME: TransferCoin
     1:
       Publish:
         NEWTYPE:
@@ -606,7 +606,7 @@ TransactionKind:
         NEWTYPE:
           SEQ:
             TYPENAME: SingleTransactionKind
-Transfer:
+TransferCoin:
   STRUCT:
     - recipient:
         TYPENAME: SuiAddress

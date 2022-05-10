@@ -13,7 +13,7 @@ use sui_types::{
     gas::{self, SuiGasStatus},
     messages::{
         ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind, TransactionData,
-        TransactionEffects, Transfer,
+        TransactionEffects, TransferCoin,
     },
     object::Object,
     storage::{BackingPackageStore, Storage},
@@ -86,7 +86,7 @@ fn execute_transaction<S: BackingPackageStore>(
     // once across single tx, we should be able to run them in parallel.
     for single_tx in transaction_data.kind.into_single_transactions() {
         result = match single_tx {
-            SingleTransactionKind::Transfer(Transfer {
+            SingleTransactionKind::TransferCoin(TransferCoin {
                 recipient,
                 object_ref,
             }) => {

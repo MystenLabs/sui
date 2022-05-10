@@ -41,7 +41,7 @@ fn make_transfer_transaction(
             ],
         })
     } else {
-        SingleTransactionKind::Transfer(Transfer {
+        SingleTransactionKind::TransferCoin(TransferCoin {
             recipient,
             object_ref,
         })
