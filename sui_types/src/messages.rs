@@ -984,7 +984,7 @@ impl PartialEq for SignedTransactionEffects {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub enum InputObjectKind {
     // A Move package, must be immutable.
     MovePackage(ObjectID),

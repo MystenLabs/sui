@@ -1,11 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::rpc_gateway::responses::SuiTypeTag;
-use crate::{
-    config::{GatewayConfig, PersistedConfig},
-    rpc_gateway::responses::{GetObjectInfoResponse, NamedObjectRef, ObjectResponse},
-};
+use std::path::Path;
+
 use anyhow::anyhow;
 use async_trait::async_trait;
 use ed25519_dalek::ed25519::signature::Signature;
@@ -15,13 +12,16 @@ use move_core_types::identifier::Identifier;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{base64, serde_as};
-use std::path::Path;
+use tracing::debug;
+
 use sui_core::gateway_state::{
     gateway_responses::{TransactionEffectsResponse, TransactionResponse},
     GatewayClient, GatewayState, GatewayTxSeqNumber,
 };
 use sui_core::sui_json::SuiJsonValue;
 use sui_open_rpc_macros::open_rpc;
+use sui_types::base_types::ObjectRef;
+use sui_types::messages::InputObjectKind;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     crypto,
@@ -31,7 +31,12 @@ use sui_types::{
     messages::{Transaction, TransactionData},
     object::ObjectRead,
 };
-use tracing::debug;
+
+use crate::rpc_gateway::responses::SuiTypeTag;
+use crate::{
+    config::{GatewayConfig, PersistedConfig},
+    rpc_gateway::responses::{GetObjectInfoResponse, NamedObjectRef, ObjectResponse},
+};
 
 pub mod responses;
 
@@ -64,7 +69,7 @@ pub trait RpcGateway {
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
         recipient: SuiAddress,
     ) -> RpcResult<TransactionBytes>;
@@ -79,7 +84,7 @@ pub trait RpcGateway {
         #[schemars(with = "json_schema::Identifier")] function: Identifier,
         type_arguments: Vec<SuiTypeTag>,
         arguments: Vec<SuiJsonValue>,
-        gas_object_id: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
@@ -89,7 +94,7 @@ pub trait RpcGateway {
         &self,
         sender: SuiAddress,
         compiled_modules: Vec<Base64>,
-        gas_object_id: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
@@ -99,7 +104,7 @@ pub trait RpcGateway {
         signer: SuiAddress,
         coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
@@ -109,7 +114,7 @@ pub trait RpcGateway {
         signer: SuiAddress,
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
@@ -186,46 +191,34 @@ impl RpcGatewayServer for RpcGatewayImpl {
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
         recipient: SuiAddress,
     ) -> RpcResult<TransactionBytes> {
         let data = self
             .gateway
-            .transfer_coin(signer, object_id, gas_payment, gas_budget, recipient)
+            .transfer_coin(signer, object_id, gas, gas_budget, recipient)
             .await?;
-        Ok(TransactionBytes {
-            tx_bytes: data.to_bytes(),
-        })
+        Ok(TransactionBytes::from_data(data)?)
     }
 
     async fn publish(
         &self,
         sender: SuiAddress,
         compiled_modules: Vec<Base64>,
-        gas_object_id: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         let compiled_modules = compiled_modules
             .into_iter()
             .map(|data| data.to_vec())
             .collect::<Vec<_>>();
-
-        let gas_obj_ref = self
-            .gateway
-            .get_object_info(gas_object_id)
-            .await?
-            .reference()
-            .map_err(|e| anyhow!(e))?;
-
         let data = self
             .gateway
-            .publish(sender, compiled_modules, gas_obj_ref, gas_budget)
+            .publish(sender, compiled_modules, gas, gas_budget)
             .await?;
 
-        Ok(TransactionBytes {
-            tx_bytes: data.to_bytes(),
-        })
+        Ok(TransactionBytes::from_data(data)?)
     }
 
     async fn split_coin(
@@ -233,22 +226,14 @@ impl RpcGatewayServer for RpcGatewayImpl {
         signer: SuiAddress,
         coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         let data = self
             .gateway
-            .split_coin(
-                signer,
-                coin_object_id,
-                split_amounts,
-                gas_payment,
-                gas_budget,
-            )
+            .split_coin(signer, coin_object_id, split_amounts, gas, gas_budget)
             .await?;
-        Ok(TransactionBytes {
-            tx_bytes: data.to_bytes(),
-        })
+        Ok(TransactionBytes::from_data(data)?)
     }
 
     async fn merge_coin(
@@ -256,16 +241,14 @@ impl RpcGatewayServer for RpcGatewayImpl {
         signer: SuiAddress,
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         let data = self
             .gateway
-            .merge_coins(signer, primary_coin, coin_to_merge, gas_payment, gas_budget)
+            .merge_coins(signer, primary_coin, coin_to_merge, gas, gas_budget)
             .await?;
-        Ok(TransactionBytes {
-            tx_bytes: data.to_bytes(),
-        })
+        Ok(TransactionBytes::from_data(data)?)
     }
 
     async fn get_owned_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse> {
@@ -315,26 +298,14 @@ impl RpcGatewayServer for RpcGatewayImpl {
         function: Identifier,
         type_arguments: Vec<SuiTypeTag>,
         rpc_arguments: Vec<SuiJsonValue>,
-        gas_object_id: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         let data = async {
-            let package_object_ref = self
-                .gateway
-                .get_object_info(package_object_id)
-                .await?
-                .reference()?;
-            // Fetch the object info for the gas obj
-            let gas_obj_ref = self
-                .gateway
-                .get_object_info(gas_object_id)
-                .await?
-                .reference()?;
-
             self.gateway
                 .move_call(
                     signer,
-                    package_object_ref,
+                    package_object_id,
                     module,
                     function,
                     type_arguments
@@ -342,15 +313,13 @@ impl RpcGatewayServer for RpcGatewayImpl {
                         .map(|tag| tag.try_into())
                         .collect::<Result<Vec<_>, _>>()?,
                     rpc_arguments,
-                    gas_obj_ref,
+                    gas,
                     gas_budget,
                 )
                 .await
         }
         .await?;
-        Ok(TransactionBytes {
-            tx_bytes: data.to_bytes(),
-        })
+        Ok(TransactionBytes::from_data(data)?)
     }
 
     async fn sync_account_state(&self, address: SuiAddress) -> RpcResult<()> {
@@ -416,9 +385,19 @@ pub struct TransactionBytes {
     #[schemars(with = "json_schema::Base64")]
     #[serde_as(as = "base64::Base64")]
     pub tx_bytes: Vec<u8>,
+    pub gas: ObjectRef,
+    pub input_objects: Vec<InputObjectKind>,
 }
 
 impl TransactionBytes {
+    pub fn from_data(data: TransactionData) -> Result<Self, anyhow::Error> {
+        Ok(Self {
+            tx_bytes: data.to_bytes(),
+            gas: data.gas(),
+            input_objects: data.input_objects()?,
+        })
+    }
+
     pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
         TransactionData::from_signable_bytes(&self.tx_bytes)
     }
