@@ -23,7 +23,7 @@ crypto = { path = "../crypto" }
 primary = { path = "../primary" }
 tonic = "0.7"
 
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "808de09203d147b43d59114b8afd9e51cbcf5778" }
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "3b7daedf91fd8937dde26e905b8114cac459b866" }
 types = { path = "../types" }
 
 worker = { path = "../worker" }
