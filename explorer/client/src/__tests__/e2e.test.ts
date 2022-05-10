@@ -167,6 +167,26 @@ describe('End-to-end Tests', () => {
             const value = await page.evaluate((el: any) => el.textContent, el);
             expect(value.trim()).toBe(successID);
         });
+        it('can go to object and back', async () => {
+            const objectID = '7bc832ec31709638cd8d9323e90edf332gff4389';
+            await page.goto(`${BASE_URL}/transactions/${successID}`);
+
+            //Go to Object
+            const objectLink = await page.$(
+                'div#txview > div:nth-child(4) > div:nth-child(2)'
+            );
+            await objectLink.click();
+            const el = await page.$('#objectID');
+            const value = await page.evaluate((x: any) => x.textContent, el);
+            expect(value.trim()).toBe(objectID);
+
+            //Go back to Transaction
+            const lastTransactionLink = await page.$('#lasttxID > a');
+            await lastTransactionLink.click();
+            const el2 = await page.$('#transactionID');
+            const value2 = await page.evaluate((x: any) => x.textContent, el2);
+            expect(value2.trim()).toBe(successID);
+        });
     });
 
     describe('Owned Objects have links that enable', () => {

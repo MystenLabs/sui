@@ -196,8 +196,8 @@ function TransactionView({ txdata }: { txdata: DataType }) {
     return (
         <>
             {txdata && (
-                <div className={styles.transactioncard}>
-                    <div className={styles.txcard}>
+                <div>
+                    <div id="txview" className={styles.txcard}>
                         {formatTxResponse(txdata, txdata.txId).map(
                             (itm: any, index: number) => (
                                 <div

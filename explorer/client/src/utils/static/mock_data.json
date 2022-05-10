@@ -432,6 +432,7 @@
             "readonly": "true",
             "objType": "0x2::Coin::Coin<0x2::USD::USD>",
             "data": {
+                "tx_digest": "Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4=",
                 "contents": {
                     "id": {},
                     "balance": 100
@@ -624,6 +625,7 @@
             "ethAddress": "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D",
             "ethTokenId": "8937",
             "data": {
+                "tx_digest": "Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4=",
                 "contents": {
                     "display": "https://lh3.googleusercontent.com/xcPvABPQX6sG4Wwg1FsD-ztMUZwp6NeZQLTWX1PfiWvti9cFfDXw5gxvBhg6S4B5Q4CFiZV4nWGRQnzfL0YJpL_yWVgHVZ_DOFSM=w600",
                     "background": "Orange",
@@ -888,18 +890,18 @@
                     "kind": {
                         "Single": {
                             "Transfer": {
-                                "recipient": "3aa29bad2ea941491da6e8eff55167987dd3de8d",
+                                "recipient": "receiverAddress",
                                 "object_ref": [
-                                    "dcf1bfacbf42eeb7b5e69843ddc084139773882c",
+                                    "7bc832ec31709638cd8d9323e90edf332gff4389",
                                     1,
                                     "cqYpJFiXpjT5cSBjF7S1QxWaub6PUBkgiV1vZoIk9/E="
                                 ]
                             }
                         }
                     },
-                    "sender": "813ec1ab1e1797c79d1e1fcbebebc27a1fd21f07",
+                    "sender": "senderAddress",
                     "gas_payment": [
-                        "fd6bd9290f69879db94ed73efb6b0c805a6ca961",
+                        "standaloneObject",
                         5633,
                         "ipBwvC8OECrp2pjJsGsZTJiYiAkv6wH6bi5ANpADsYw="
                     ],
@@ -940,7 +942,7 @@
                 "mutated": [
                     [
                         [
-                            "dcf1bfacbf42eeb7b5e69843ddc084139773882c",
+                            "7bc832ec31709638cd8d9323e90edf332gff4389",
                             2,
                             "A6HE1BDkN8360mzg4WtRUliiE8HE/7mtZC3MNRFwFWc="
                         ],
@@ -950,7 +952,7 @@
                     ],
                     [
                         [
-                            "fd6bd9290f69879db94ed73efb6b0c805a6ca961",
+                            "standaloneObject",
                             5634,
                             "oCajXdK8h9s3aKl2A+ifHxn3y8YTJyagL+eLT0vvHP0="
                         ],
@@ -964,7 +966,7 @@
                 "wrapped": [],
                 "gas_object": [
                     [
-                        "fd6bd9290f69879db94ed73efb6b0c805a6ca961",
+                        "standaloneObject",
                         5634,
                         "oCajXdK8h9s3aKl2A+ifHxn3y8YTJyagL+eLT0vvHP0="
                     ],
