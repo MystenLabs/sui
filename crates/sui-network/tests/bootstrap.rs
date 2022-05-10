@@ -15,7 +15,7 @@ fn bootstrap() {
     let out_dir = PathBuf::from(std::env!("CARGO_MANIFEST_DIR"))
         .join("src")
         .join("generated");
-    let codec_path = "crate::codec::BincodeCodec";
+    let codec_path = "mysten_network::codec::BincodeCodec";
 
     let validator_service = Service::builder()
         .name("Validator")
