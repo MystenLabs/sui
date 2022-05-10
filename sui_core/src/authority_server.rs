@@ -8,9 +8,6 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::{stream::BoxStream, FutureExt, TryStreamExt};
-use prometheus_exporter::prometheus::{
-    register_int_counter, register_int_counter_vec, IntCounter, IntCounterVec,
-};
 use std::{io, net::SocketAddr, sync::Arc, time::Duration};
 use sui_network::{
     api::{BincodeEncodedPayload, Validator, ValidatorServer},
@@ -27,37 +24,6 @@ mod server_tests;
 
 const MIN_BATCH_SIZE: u64 = 1000;
 const MAX_DELAY_MILLIS: u64 = 5_000; // 5 sec
-const PROM_PORT_ADDR: &str = "127.0.0.1:9184";
-
-/// Prometheus metrics which can be displayed in Grafana, queried and alerted on
-pub struct AuthorityMetrics {
-    total_requests: IntCounter,
-    requests_by_route: IntCounterVec,
-    error_requests: IntCounter,
-}
-
-impl AuthorityMetrics {
-    pub fn new() -> AuthorityMetrics {
-        Self {
-            total_requests: register_int_counter!(
-                "total_server_requests",
-                "Total number of authority server requests"
-            )
-            .unwrap(),
-            requests_by_route: register_int_counter_vec!(
-                "server_requests_by_route",
-                "Number of authority requests by route",
-                &["request_enum"]
-            )
-            .unwrap(),
-            error_requests: register_int_counter!(
-                "error_server_requests",
-                "Number of requests which resulted in errors"
-            )
-            .unwrap(),
-        }
-    }
-}
 
 pub struct AuthorityServerHandle {
     tx_cancellation: tokio::sync::oneshot::Sender<()>,
@@ -93,7 +59,6 @@ pub struct AuthorityServer {
     consensus_adapter: ConsensusAdapter,
     min_batch_size: u64,
     max_delay: Duration,
-    metrics: AuthorityMetrics,
 }
 
 impl AuthorityServer {
@@ -113,18 +78,12 @@ impl AuthorityServer {
             /* max_delay */ Duration::from_millis(2_000),
         );
 
-        // Start Prometheus metrics HTTP server/scrape point
-        let prom_binding = PROM_PORT_ADDR.parse().unwrap();
-        prometheus_exporter::start(prom_binding).expect("Failed to start Prometheus exporter");
-        info!("Starting Prometheus HTTP endpoint at {}", PROM_PORT_ADDR);
-
         Self {
             server: NetworkServer::new(base_address, base_port, buffer_size),
             state,
             consensus_adapter,
             min_batch_size: MIN_BATCH_SIZE,
             max_delay: Duration::from_millis(MAX_DELAY_MILLIS),
-            metrics: AuthorityMetrics::new(),
         }
     }
 

@@ -32,6 +32,7 @@ prometheus_exporter = "0.8.4"
 bincode = "1.3.3"
 fdlimit = "0.2.1"
 schemars = "0.8.8"
+lazy_static = "1.4.0"
 
 sui-adapter = { path = "../sui_programmability/adapter" }
 sui-framework = { path = "../sui_programmability/framework" }

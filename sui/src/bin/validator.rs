@@ -18,6 +18,8 @@ use sui_types::{
 };
 use tracing::{error, info};
 
+const PROM_PORT_ADDR: &str = "127.0.0.1:9184";
+
 #[derive(Parser)]
 #[clap(
     name = "Sui Validator",
@@ -110,10 +112,13 @@ async fn main() -> Result<(), anyhow::Error> {
         .join(CONSENSUS_DB_NAME)
         .join(encode_bytes_hex(&authority.public_key));
 
-    info!(
-        "Initializing authority {:?} listening on {} (public addr: {}:{})",
-        authority.public_key, listen_address, authority.host, authority.port
+    info!(authority =? authority.public_key, host =? authority.host, port = authority.port,
+        "Initializing authority listening on {}", listen_address
     );
+
+    let prom_binding = PROM_PORT_ADDR.parse().unwrap();
+    info!("Starting Prometheus HTTP endpoint at {}", PROM_PORT_ADDR);
+    prometheus_exporter::start(prom_binding).expect("Failed to start Prometheus exporter");
 
     // Pass in the newtwork parameters of all authorities
     let net = network_config.get_authority_infos();
