@@ -62,10 +62,9 @@
           }
         },
         {
-          "name": "gas_payment",
+          "name": "gas",
           "summary": "",
           "description": "",
-          "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
@@ -166,10 +165,9 @@
           }
         },
         {
-          "name": "gas_object_id",
+          "name": "gas",
           "summary": "",
           "description": "",
-          "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
@@ -222,10 +220,9 @@
           }
         },
         {
-          "name": "gas_object_id",
+          "name": "gas",
           "summary": "",
           "description": "",
-          "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
@@ -289,10 +286,9 @@
           }
         },
         {
-          "name": "gas_payment",
+          "name": "gas",
           "summary": "",
           "description": "",
-          "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
@@ -351,10 +347,9 @@
           }
         },
         {
-          "name": "gas_payment",
+          "name": "gas",
           "summary": "",
           "description": "",
-          "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
@@ -899,6 +894,59 @@
       },
       "Identifier": {
         "type": "string"
+      },
+      "InputObjectKind": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "MovePackage"
+            ],
+            "properties": {
+              "MovePackage": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "ImmOrOwnedMoveObject"
+            ],
+            "properties": {
+              "ImmOrOwnedMoveObject": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ObjectDigest"
+                  }
+                ],
+                "maxItems": 3,
+                "minItems": 3
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "SharedMoveObject"
+            ],
+            "properties": {
+              "SharedMoveObject": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "MergeCoinResponse": {
         "type": "object",
@@ -1602,9 +1650,33 @@
       "TransactionBytes": {
         "type": "object",
         "required": [
+          "gas",
+          "input_objects",
           "tx_bytes"
         ],
         "properties": {
+          "gas": {
+            "type": "array",
+            "items": [
+              {
+                "$ref": "#/components/schemas/ObjectID"
+              },
+              {
+                "$ref": "#/components/schemas/SequenceNumber"
+              },
+              {
+                "$ref": "#/components/schemas/ObjectDigest"
+              }
+            ],
+            "maxItems": 3,
+            "minItems": 3
+          },
+          "input_objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InputObjectKind"
+            }
+          },
           "tx_bytes": {
             "$ref": "#/components/schemas/Base64"
           }
