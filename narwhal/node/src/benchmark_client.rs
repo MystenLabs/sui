@@ -6,7 +6,6 @@ use bytes::{BufMut as _, BytesMut};
 use clap::{crate_name, crate_version, App, AppSettings};
 use futures::{future::join_all, StreamExt};
 use rand::Rng;
-use std::net::SocketAddr;
 use tokio::{
     net::TcpStream,
     time::{interval, sleep, Duration, Instant},
@@ -14,6 +13,7 @@ use tokio::{
 use tracing::{info, subscriber::set_global_default, warn};
 use tracing_subscriber::filter::EnvFilter;
 use types::{TransactionProto, TransactionsClient};
+use url::Url;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -43,11 +43,10 @@ async fn main() -> Result<()> {
 
     set_global_default(subscriber).expect("Failed to set subscriber");
 
-    let target = matches
-        .value_of("ADDR")
-        .unwrap()
-        .parse::<SocketAddr>()
-        .context("Invalid socket address format")?;
+    let target_str = matches.value_of("ADDR").unwrap();
+    let target = target_str
+        .parse::<Url>()
+        .with_context(|| format!("Invalid url format {target_str}"))?;
     let size = matches
         .value_of("size")
         .unwrap()
@@ -62,9 +61,9 @@ async fn main() -> Result<()> {
         .values_of("nodes")
         .unwrap_or_default()
         .into_iter()
-        .map(|x| x.parse::<SocketAddr>())
+        .map(|x| x.parse::<Url>())
         .collect::<Result<Vec<_>, _>>()
-        .context("Invalid socket address format")?;
+        .with_context(|| format!("Invalid url format {target_str}"))?;
 
     info!("Node address: {target}");
 
@@ -89,10 +88,10 @@ async fn main() -> Result<()> {
 }
 
 struct Client {
-    target: SocketAddr,
+    target: Url,
     size: usize,
     rate: u64,
-    nodes: Vec<SocketAddr>,
+    nodes: Vec<Url>,
 }
 
 impl Client {
@@ -108,7 +107,7 @@ impl Client {
         }
 
         // Connect to the mempool.
-        let mut client = TransactionsClient::connect(format!("http://{}", self.target))
+        let mut client = TransactionsClient::connect(self.target.as_str().to_owned())
             .await
             .context(format!("failed to connect to {}", self.target))?;
 
@@ -165,7 +164,10 @@ impl Client {
         info!("Waiting for all nodes to be online...");
         join_all(self.nodes.iter().cloned().map(|address| {
             tokio::spawn(async move {
-                while TcpStream::connect(address).await.is_err() {
+                while TcpStream::connect(&*address.socket_addrs(|| None).unwrap())
+                    .await
+                    .is_err()
+                {
                     sleep(Duration::from_millis(10)).await;
                 }
             })

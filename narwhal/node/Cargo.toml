@@ -22,6 +22,7 @@ tokio-util = { version = "0.7.1", features = ["codec"] }
 tracing = { version = "0.1.34", features = ["log"] }
 tracing-log = "0.1.3"
 tracing-subscriber = { version = "0.3.11", features = ["time", "env-filter"] }
+url = "2.2.2"
 
 config = { path = "../config" }
 consensus = { path = "../consensus" }

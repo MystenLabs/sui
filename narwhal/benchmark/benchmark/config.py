@@ -1,6 +1,7 @@
 # Copyright(C) Facebook, Inc. and its affiliates.
 from json import dump, load
 from collections import OrderedDict
+from benchmark.utils import multiaddr_to_url_data
 
 
 class ConfigError(Exception):
@@ -65,17 +66,17 @@ class Committee:
         for name, hosts in addresses.items():
             host = hosts.pop(0)
             primary_addr = {
-                'primary_to_primary': f'{host}:{port}',
-                'worker_to_primary': f'{host}:{port + 1}'
+                'primary_to_primary': f'/ip4/{host}/tcp/{port}/http',
+                'worker_to_primary': f'/ip4/{host}/tcp/{port + 1}/http'
             }
             port += 2
 
             workers_addr = OrderedDict()
             for j, host in enumerate(hosts):
                 workers_addr[j] = {
-                    'primary_to_worker': f'{host}:{port}',
-                    'transactions': f'{host}:{port + 1}',
-                    'worker_to_worker': f'{host}:{port + 2}',
+                    'primary_to_worker': f'/ip4/{host}/tcp/{port}/http',
+                    'transactions': f'/ip4/{host}/tcp/{port + 1}/http',
+                    'worker_to_worker': f'/ip4/{host}/tcp/{port + 2}/http',
                 }
                 port += 3
 
@@ -91,7 +92,8 @@ class Committee:
         addresses = []
         good_nodes = self.size() - faults
         for authority in list(self.json['authorities'].values())[:good_nodes]:
-            addresses += [authority['primary']['primary_to_primary']]
+            addresses += [multiaddr_to_url_data(
+                authority['primary']['primary_to_primary'])]
         return addresses
 
     def workers_addresses(self, faults=0):
@@ -102,7 +104,8 @@ class Committee:
         for authority in list(self.json['authorities'].values())[:good_nodes]:
             authority_addresses = []
             for id, worker in authority['workers'].items():
-                authority_addresses += [(id, worker['transactions'])]
+                authority_addresses += [(id,
+                                         multiaddr_to_url_data(worker['transactions']))]
             addresses.append(authority_addresses)
         return addresses
 
@@ -146,7 +149,8 @@ class Committee:
             dump(self.json, f, indent=4, sort_keys=True)
 
     @staticmethod
-    def ip(address):
+    def ip(multi_address):
+        address = multiaddr_to_url_data(multi_address)
         assert isinstance(address, str)
         return address.split(':')[0]
 

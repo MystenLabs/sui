@@ -139,7 +139,7 @@ class LogParser:
             )
         }
 
-        ip = search(r'booted on (\d+.\d+.\d+.\d+)', log).group(1)
+        ip = search(r'booted on (/ip4/\d+.\d+.\d+.\d+)', log).group(1)
 
         return proposals, commits, configs, ip
 
@@ -153,7 +153,7 @@ class LogParser:
         tmp = findall(r'Batch ([^ ]+) contains sample tx (\d+)', log)
         samples = {int(s): d for d, s in tmp}
 
-        ip = search(r'booted on (\d+.\d+.\d+.\d+)', log).group(1)
+        ip = search(r'booted on (/ip4/\d+.\d+.\d+.\d+)', log).group(1)
 
         return sizes, samples, ip
 
