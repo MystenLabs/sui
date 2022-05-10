@@ -6,6 +6,7 @@ use crate::{
     multiaddr::{parse_dns, parse_ip4, parse_ip6, parse_unix},
 };
 use anyhow::{anyhow, Result};
+use futures::FutureExt;
 use multiaddr::{Multiaddr, Protocol};
 use std::{convert::Infallible, net::SocketAddr};
 use tokio::net::{TcpListener, ToSocketAddrs, UnixListener};
@@ -108,6 +109,8 @@ impl ServerBuilder {
     pub async fn bind(self, addr: &Multiaddr) -> Result<Server> {
         let mut iter = addr.iter();
 
+        let (tx_cancellation, rx_cancellation) = tokio::sync::oneshot::channel();
+        let rx_cancellation = rx_cancellation.map(|_| ());
         let (local_addr, server): (Multiaddr, BoxFuture<(), tonic::transport::Error>) =
             match iter.next().ok_or_else(|| anyhow!("malformed addr"))? {
                 Protocol::Dns(_) => {
@@ -115,21 +118,30 @@ impl ServerBuilder {
                     let (local_addr, incoming) =
                         tcp_listener_and_update_multiaddr(addr, (dns_name.as_ref(), tcp_port))
                             .await?;
-                    let server = Box::pin(self.router.serve_with_incoming(incoming));
+                    let server = Box::pin(
+                        self.router
+                            .serve_with_incoming_shutdown(incoming, rx_cancellation),
+                    );
                     (local_addr, server)
                 }
                 Protocol::Ip4(_) => {
                     let (socket_addr, _http_or_https) = parse_ip4(addr)?;
                     let (local_addr, incoming) =
                         tcp_listener_and_update_multiaddr(addr, socket_addr).await?;
-                    let server = Box::pin(self.router.serve_with_incoming(incoming));
+                    let server = Box::pin(
+                        self.router
+                            .serve_with_incoming_shutdown(incoming, rx_cancellation),
+                    );
                     (local_addr, server)
                 }
                 Protocol::Ip6(_) => {
                     let (socket_addr, _http_or_https) = parse_ip6(addr)?;
                     let (local_addr, incoming) =
                         tcp_listener_and_update_multiaddr(addr, socket_addr).await?;
-                    let server = Box::pin(self.router.serve_with_incoming(incoming));
+                    let server = Box::pin(
+                        self.router
+                            .serve_with_incoming_shutdown(incoming, rx_cancellation),
+                    );
                     (local_addr, server)
                 }
                 // Protocol::Memory(_) => todo!(),
@@ -139,7 +151,10 @@ impl ServerBuilder {
                     let uds = UnixListener::bind(path.as_ref())?;
                     let uds_stream = UnixListenerStream::new(uds);
                     let local_addr = addr.to_owned();
-                    let server = Box::pin(self.router.serve_with_incoming(uds_stream));
+                    let server = Box::pin(
+                        self.router
+                            .serve_with_incoming_shutdown(uds_stream, rx_cancellation),
+                    );
                     (local_addr, server)
                 }
                 unsupported => return Err(anyhow!("unsupported protocol {unsupported}")),
@@ -147,6 +162,7 @@ impl ServerBuilder {
 
         Ok(Server {
             server,
+            cancel_handle: Some(tx_cancellation),
             local_addr,
             health_reporter: self.health_reporter,
         })
@@ -171,6 +187,7 @@ async fn tcp_listener<T: ToSocketAddrs>(address: T) -> Result<(SocketAddr, TcpLi
 
 pub struct Server {
     server: BoxFuture<(), tonic::transport::Error>,
+    cancel_handle: Option<tokio::sync::oneshot::Sender<()>>,
     local_addr: Multiaddr,
     health_reporter: tonic_health::server::HealthReporter,
 }
@@ -186,6 +203,10 @@ impl Server {
 
     pub fn health_reporter(&self) -> tonic_health::server::HealthReporter {
         self.health_reporter.clone()
+    }
+
+    pub fn take_cancel_handle(&mut self) -> Option<tokio::sync::oneshot::Sender<()>> {
+        self.cancel_handle.take()
     }
 }
 
