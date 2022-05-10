@@ -14,6 +14,7 @@ import { useParams } from 'react-router-dom';
 import ErrorResult from '../../components/error-result/ErrorResult';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
+import { findDataFromID } from '../../utils/static/searchUtil';
 import { type DataType } from './TransactionResultType';
 import TransactionView from './TransactionView';
 
@@ -92,6 +93,28 @@ const getCreatedOrMutatedData = (
         : [];
 };
 
+const transformTransactionResponse = (
+    txObj: TransactionEffectsResponse,
+    id: string
+) => {
+    const executionStatus = txObj.effects.status;
+    const status = getExecutionStatusType(executionStatus);
+    const details = getExecutionDetails(executionStatus);
+    return {
+        ...txObj.certificate,
+        status,
+        gasFee: getTotalGasUsed(executionStatus),
+        txError:
+            'error' in details
+                ? details.error[Object.keys(details.error)[0]].error
+                : '',
+        txId: id,
+        loadState: 'loaded',
+        mutated: getCreatedOrMutatedData(txObj.effects, 'mutated'),
+        created: getCreatedOrMutatedData(txObj.effects, 'created'),
+    };
+};
+
 const TransactionResultAPI = ({ id }: { id: string }) => {
     const [showTxState, setTxState] = useState(initState);
     useEffect(() => {
@@ -100,23 +123,7 @@ const TransactionResultAPI = ({ id }: { id: string }) => {
         }
         fetchTransactionData(id)
             .then((txObj) => {
-                console.log(txObj);
-                const executionStatus = txObj.effects.status;
-                const status = getExecutionStatusType(executionStatus);
-                const details = getExecutionDetails(executionStatus);
-                setTxState({
-                    ...txObj.certificate,
-                    status,
-                    gasFee: getTotalGasUsed(executionStatus),
-                    txError:
-                        'error' in details
-                            ? details.error[Object.keys(details.error)[0]].error
-                            : '',
-                    txId: id,
-                    loadState: 'loaded',
-                    mutated: getCreatedOrMutatedData(txObj.effects, 'mutated'),
-                    created: getCreatedOrMutatedData(txObj.effects, 'created'),
-                });
+                setTxState(transformTransactionResponse(txObj, id));
             })
             .catch((err) => {
                 console.log('Error fetching transaction data', err);
@@ -158,7 +165,13 @@ const TransactionResultAPI = ({ id }: { id: string }) => {
 };
 
 const TransactionResultStatic = ({ id }: { id: string }) => {
-    return <div />;
+    const entry = findDataFromID(id, undefined);
+
+    return (
+        <TransactionResultLoaded
+            txData={transformTransactionResponse(entry, id)}
+        />
+    );
 };
 
 const TransactionResultLoaded = ({ txData }: { txData: DataType }) => {

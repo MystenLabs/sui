@@ -32,7 +32,7 @@ type TxDataProps = CertifiedTransaction & {
 };
 
 // Generate an Arr of Obj with Label and Value
-// TODO rewrite to use sue.js, verify tx types and dynamically generate list
+// TODO rewrite to use sui.js, verify tx types and dynamically generate list
 function formatTxResponse(tx: TxDataProps, txId: string) {
     // Todo add batch kind
     const txKindName = getTransactionKind(tx.data);
@@ -217,6 +217,11 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                                 ? styles[itm.classAttr]
                                                 : ''
                                         )}
+                                        id={
+                                            itm.label === 'Transaction ID'
+                                                ? 'transactionID'
+                                                : ''
+                                        }
                                     >
                                         {itm.list ? (
                                             <ul className={styles.listitems}>

@@ -151,6 +151,24 @@ describe('End-to-end Tests', () => {
         });
     });
 
+    describe('Transaction Results', () => {
+        const successID = 'Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4=';
+        it('can be searched', async () => {
+            await page.goto(BASE_URL);
+            await searchText(page, successID);
+            const el = await page.$('#transactionID');
+            const value = await page.evaluate((el: any) => el.textContent, el);
+            expect(value.trim()).toBe(successID);
+        });
+
+        it('can be reached through URL', async () => {
+            await page.goto(`${BASE_URL}/transactions/${successID}`);
+            const el = await page.$('#transactionID');
+            const value = await page.evaluate((el: any) => el.textContent, el);
+            expect(value.trim()).toBe(successID);
+        });
+    });
+
     describe('Enables clicking links to', () => {
         const navigationTemplate = async (
             page: any,
