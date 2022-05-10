@@ -249,7 +249,7 @@ pub struct SimpleTransactionSigner {
 
 impl WalletCommands {
     pub async fn execute(
-        &mut self,
+        self,
         context: &mut WalletContext,
     ) -> Result<WalletCommandResult, anyhow::Error> {
         let ret = Ok(match self {
@@ -258,13 +258,13 @@ impl WalletCommands {
                 gas,
                 gas_budget,
             } => {
-                let sender = context.try_get_object_owner(gas).await?;
+                let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
 
-                let compiled_modules = build_move_package_to_bytes(Path::new(path), false)?;
+                let compiled_modules = build_move_package_to_bytes(Path::new(&path), false)?;
                 let data = context
                     .gateway
-                    .publish(sender, compiled_modules, *gas, *gas_budget)
+                    .publish(sender, compiled_modules, gas, gas_budget)
                     .await?;
                 let signature = context
                     .keystore
@@ -282,7 +282,7 @@ impl WalletCommands {
 
             WalletCommands::Object { id } => {
                 // Fetch the object ref
-                let object_read = context.gateway.get_object_info(*id).await?;
+                let object_read = context.gateway.get_object_info(id).await?;
                 WalletCommandResult::Object(object_read)
             }
             WalletCommands::Call {
@@ -307,12 +307,12 @@ impl WalletCommands {
                 gas,
                 gas_budget,
             } => {
-                let from = context.get_object_owner(object_id).await?;
+                let from = context.get_object_owner(&object_id).await?;
                 let time_start = Instant::now();
 
                 let data = context
                     .gateway
-                    .transfer_coin(from, *object_id, *gas, *gas_budget, *to)
+                    .transfer_coin(from, object_id, gas, gas_budget, to)
                     .await?;
                 let signature = context
                     .keystore
@@ -339,18 +339,12 @@ impl WalletCommands {
             }
 
             WalletCommands::Objects { address } => {
-                let address = match address {
-                    Some(a) => *a,
-                    None => context.active_address()?,
-                };
+                let address = address.unwrap_or(context.active_address()?);
                 WalletCommandResult::Objects(context.gateway.get_owned_objects(address).await?)
             }
 
             WalletCommands::SyncClientState { address } => {
-                let address = match address {
-                    Some(a) => *a,
-                    None => context.active_address()?,
-                };
+                let address = address.unwrap_or(context.active_address()?);
                 context.gateway.sync_account_state(address).await?;
                 WalletCommandResult::SyncClientState
             }
@@ -361,10 +355,7 @@ impl WalletCommands {
                 WalletCommandResult::NewAddress(address)
             }
             WalletCommands::Gas { address } => {
-                let address = match address {
-                    Some(a) => *a,
-                    None => context.active_address()?,
-                };
+                let address = address.unwrap_or(context.active_address()?);
                 let coins = context
                     .gas_objects(address)
                     .await?
@@ -380,10 +371,10 @@ impl WalletCommands {
                 gas,
                 gas_budget,
             } => {
-                let signer = context.get_object_owner(coin_id).await?;
+                let signer = context.get_object_owner(&coin_id).await?;
                 let data = context
                     .gateway
-                    .split_coin(signer, *coin_id, amounts.clone(), *gas, *gas_budget)
+                    .split_coin(signer, coin_id, amounts, gas, gas_budget)
                     .await?;
                 let signature = context
                     .keystore
@@ -403,10 +394,10 @@ impl WalletCommands {
                 gas,
                 gas_budget,
             } => {
-                let signer = context.get_object_owner(primary_coin).await?;
+                let signer = context.get_object_owner(&primary_coin).await?;
                 let data = context
                     .gateway
-                    .merge_coins(signer, *primary_coin, *coin_to_merge, *gas, *gas_budget)
+                    .merge_coins(signer, primary_coin, coin_to_merge, gas, gas_budget)
                     .await?;
                 let signature = context
                     .keystore
@@ -423,29 +414,26 @@ impl WalletCommands {
             }
             WalletCommands::Switch { address, gateway } => {
                 if let Some(addr) = address {
-                    if !context.config.accounts.contains(addr) {
+                    if !context.config.accounts.contains(&addr) {
                         return Err(anyhow!("Address {} not managed by wallet", addr));
                     }
-                    context.config.active_address = Some(*addr);
+                    context.config.active_address = Some(addr);
                     context.config.save()?;
                 }
 
-                if let Some(gateway) = gateway {
+                if let Some(gateway) = &gateway {
                     // TODO: handle embedded gateway
                     context.config.gateway = GatewayType::RPC(gateway.clone());
                     context.config.save()?;
                 }
 
-                if Option::is_none(address) && Option::is_none(gateway) {
+                if Option::is_none(&address) && Option::is_none(&gateway) {
                     return Err(anyhow!(
                         "No address or gateway specified. Please Specify one."
                     ));
                 }
 
-                WalletCommandResult::Switch(SwitchResponse {
-                    address: *address,
-                    gateway: gateway.clone(),
-                })
+                WalletCommandResult::Switch(SwitchResponse { address, gateway })
             }
             WalletCommands::ActiveAddress {} => {
                 WalletCommandResult::ActiveAddress(context.active_address().ok())
@@ -458,9 +446,9 @@ impl WalletCommands {
                 gas_budget,
             } => {
                 let args_json = json!([
-                    unwrap_or(name, EXAMPLE_NFT_NAME),
-                    unwrap_or(description, EXAMPLE_NFT_DESCRIPTION),
-                    unwrap_or(url, EXAMPLE_NFT_URL)
+                    unwrap_or(&name, EXAMPLE_NFT_NAME),
+                    unwrap_or(&description, EXAMPLE_NFT_DESCRIPTION),
+                    unwrap_or(&url, EXAMPLE_NFT_URL)
                 ]);
                 let mut args = vec![];
                 for a in args_json.as_array().unwrap() {
@@ -472,8 +460,8 @@ impl WalletCommands {
                     "mint",
                     &[],
                     gas,
-                    &gas_budget.unwrap_or(3000),
-                    &args,
+                    gas_budget.unwrap_or(3000),
+                    args,
                     context,
                 )
                 .await?;
@@ -698,20 +686,20 @@ async fn call_move(
     args: &[SuiJsonValue],
     context: &mut WalletContext,
 ) -> Result<(SuiCertifiedTransaction, SuiTransactionEffects), anyhow::Error> {
-    let gas_owner = context.try_get_object_owner(gas).await?;
+    let gas_owner = context.try_get_object_owner(&gas).await?;
     let sender = gas_owner.unwrap_or(context.active_address()?);
 
     let data = context
         .gateway
         .move_call(
             sender,
-            *package,
+            package,
             module.to_string(),
             function.to_string(),
             type_args.to_owned(),
             args.to_vec(),
-            *gas,
-            *gas_budget,
+            gas,
+            gas_budget,
         )
         .await?;
     let signature = context
@@ -734,7 +722,7 @@ async fn call_move(
     Ok((cert, effects))
 }
 
-fn unwrap_or<'a>(val: &'a mut Option<String>, default: &'a str) -> &'a str {
+fn unwrap_or<'a>(val: &'a Option<String>, default: &'a str) -> &'a str {
     match val {
         Some(v) => v,
         None => default,
