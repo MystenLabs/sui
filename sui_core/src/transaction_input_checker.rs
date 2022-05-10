@@ -131,17 +131,25 @@ where
     // Gather all objects and errors.
     let mut all_objects = Vec::with_capacity(input_objects.len());
     let mut errors = Vec::new();
-    let transfer_object_ids: HashSet<_> = transaction
-        .kind
-        .single_transactions()
-        .filter_map(|s| {
-            if let SingleTransactionKind::TransferCoin(t) = s {
-                Some(t.object_ref.0)
-            } else {
-                None
+    let mut transfer_object_ids = HashSet::new();
+    for single_tx in transaction.kind.single_transactions() {
+        if let SingleTransactionKind::TransferCoin(t) = single_tx {
+            match t.object_ref {
+                Some((id, _, _)) => {
+                    transfer_object_ids.insert(id);
+                }
+                None => {
+                    fp_ensure!(
+                        !transaction.kind.is_batch_transaction(),
+                        SuiError::InvalidBatchTransaction {
+                            error: "CoinTransfers within a batch transaction must explicitly specify transfer object".to_owned()
+                        }
+                    );
+                }
             }
-        })
-        .collect();
+        }
+    }
+
     for (object_kind, object) in input_objects.into_iter().zip(objects) {
         // All objects must exist in the DB.
         let object = match object {

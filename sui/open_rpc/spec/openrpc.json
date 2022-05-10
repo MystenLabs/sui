@@ -2070,12 +2070,15 @@
       "TransferCoin": {
         "type": "object",
         "required": [
-          "object_ref",
           "recipient"
         ],
         "properties": {
           "object_ref": {
-            "type": "array",
+            "description": "The coin object to be transferred. If it's None, the gas object will be transferred. This cannot be None when in a batch transaction.",
+            "type": [
+              "array",
+              "null"
+            ],
             "items": [
               {
                 "$ref": "#/components/schemas/ObjectID"

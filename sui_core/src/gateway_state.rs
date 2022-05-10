@@ -738,13 +738,24 @@ where
         gas_budget: u64,
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error> {
-        let gas_payment = self
-            .choose_gas_for_address(signer, gas_budget, gas, vec![object_id])
-            .await?;
         let object = self.get_object(&object_id).await?;
         let object_ref = object.compute_object_reference();
-        let data =
-            TransactionData::new_transfer(recipient, object_ref, signer, gas_payment, gas_budget);
+        let data = match gas {
+            Some(gas_object_id) => {
+                let gas_object_ref = self
+                    .get_object(&gas_object_id)
+                    .await?
+                    .compute_object_reference();
+                TransactionData::new_transfer(
+                    recipient,
+                    object_ref,
+                    signer,
+                    gas_object_ref,
+                    gas_budget,
+                )
+            }
+            None => TransactionData::new_transfer_gas(recipient, object_ref, signer, gas_budget),
+        };
         Ok(data)
     }
 

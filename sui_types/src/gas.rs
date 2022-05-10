@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    base_types::SuiAddress,
     error::{SuiError, SuiResult},
     gas_coin::GasCoin,
-    object::Object,
+    object::{Object, Owner},
 };
 use move_core_types::gas_schedule::{
     AbstractMemorySize, GasAlgebra, GasCarrier, GasPrice, GasUnits, InternalGasUnits,
@@ -325,7 +326,19 @@ pub fn start_gas_metering(
 /// Subtract the gas balance of \p gas_object by \p amount.
 /// This function should never fail, since we checked that the budget is always
 /// less than balance, and the amount is capped at the budget.
-pub fn deduct_gas(gas_object: &mut Object, deduct_amount: u64, rebate_amount: u64) {
+/// If a `new_owner` is specified, this function also "transfers" this gas object
+/// to the new owner. Doing so in the same function guarantees that the gas object
+/// is ever only updated once during the transaction.
+pub fn deduct_gas_and_maybe_transfer(
+    gas_object: &mut Object,
+    deduct_amount: u64,
+    rebate_amount: u64,
+    new_owner: Option<SuiAddress>,
+) {
+    if let Some(owner) = new_owner {
+        gas_object.owner = Owner::AddressOwner(owner);
+    }
+
     // The object must be a gas coin as we have checked in transaction handle phase.
     let gas_coin = GasCoin::try_from(&*gas_object).unwrap();
     let balance = gas_coin.value();

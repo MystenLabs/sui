@@ -143,8 +143,8 @@ pub enum WalletCommands {
         #[clap(long)]
         coin_object_id: ObjectID,
 
-        /// ID of the gas object for gas payment, in 20 bytes Hex string
-        /// If not provided, a gas object with at least gas_budget value will be selected
+        /// ID of the gas object for gas payment, in 20 bytes Hex string.
+        /// If not provided, gas will be deducted from the to-be-transferred coin itself.
         #[clap(long)]
         gas: Option<ObjectID>,
 

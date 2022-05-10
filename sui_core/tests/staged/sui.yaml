@@ -611,10 +611,11 @@ TransferCoin:
     - recipient:
         TYPENAME: SuiAddress
     - object_ref:
-        TUPLE:
-          - TYPENAME: ObjectID
-          - TYPENAME: SequenceNumber
-          - TYPENAME: ObjectDigest
+        OPTION:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
 TypeTag:
   ENUM:
     0:

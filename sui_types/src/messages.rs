@@ -52,7 +52,9 @@ pub enum CallArg {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct TransferCoin {
     pub recipient: SuiAddress,
-    pub object_ref: ObjectRef,
+    /// The coin object to be transferred. If it's None, the gas object will be transferred.
+    /// This cannot be None when in a batch transaction.
+    pub object_ref: Option<ObjectRef>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
@@ -114,9 +116,10 @@ impl SingleTransactionKind {
     /// TODO: use an iterator over references here instead of a Vec to avoid allocations.
     pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
         let input_objects = match &self {
-            Self::TransferCoin(TransferCoin { object_ref, .. }) => {
-                vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
-            }
+            Self::TransferCoin(TransferCoin { object_ref, .. }) => match object_ref {
+                Some(object_ref) => vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)],
+                None => vec![],
+            },
             Self::Call(MoveCall {
                 arguments, package, ..
             }) => arguments
@@ -164,34 +167,6 @@ impl SingleTransactionKind {
     }
 }
 
-impl Display for SingleTransactionKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut writer = String::new();
-        match &self {
-            Self::TransferCoin(t) => {
-                writeln!(writer, "Transaction Kind : Transfer")?;
-                writeln!(writer, "Recipient : {}", t.recipient)?;
-                let (object_id, seq, digest) = t.object_ref;
-                writeln!(writer, "Object ID : {}", &object_id)?;
-                writeln!(writer, "Sequence Number : {:?}", seq)?;
-                writeln!(writer, "Object Digest : {}", encode_bytes_hex(&digest.0))?;
-            }
-            Self::Publish(_p) => {
-                writeln!(writer, "Transaction Kind : Publish")?;
-            }
-            Self::Call(c) => {
-                writeln!(writer, "Transaction Kind : Call")?;
-                writeln!(writer, "Package ID : {}", c.package.0.to_hex_literal())?;
-                writeln!(writer, "Module : {}", c.module)?;
-                writeln!(writer, "Function : {}", c.function)?;
-                writeln!(writer, "Arguments : {:?}", c.arguments)?;
-                writeln!(writer, "Type Arguments : {:?}", c.type_arguments)?;
-            }
-        }
-        write!(f, "{}", writer)
-    }
-}
-
 // TODO: Make SingleTransactionKind a Box
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, NamedVariant, JsonSchema)]
@@ -217,24 +192,9 @@ impl TransactionKind {
             TransactionKind::Batch(b) => Either::Right(b.into_iter()),
         }
     }
-}
 
-impl Display for TransactionKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut writer = String::new();
-        match &self {
-            Self::Single(s) => {
-                writeln!(writer, "{}", s)?;
-            }
-            Self::Batch(b) => {
-                writeln!(writer, "Transaction Kind : Batch")?;
-                writeln!(writer, "List of transactions in the batch:")?;
-                for kind in b {
-                    writeln!(writer, "{}", kind)?;
-                }
-            }
-        }
-        write!(f, "{}", writer)
+    pub fn is_batch_transaction(&self) -> bool {
+        matches!(self, TransactionKind::Batch(_))
     }
 }
 
@@ -293,9 +253,23 @@ where
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::TransferCoin(TransferCoin {
             recipient,
-            object_ref,
+            object_ref: Some(object_ref),
         }));
         Self::new(kind, sender, gas_payment, gas_budget)
+    }
+
+    /// Create a native coin transfer transaction that pays gas using the transfer coin.
+    pub fn new_transfer_gas(
+        recipient: SuiAddress,
+        object_ref: ObjectRef,
+        sender: SuiAddress,
+        gas_budget: u64,
+    ) -> Self {
+        let kind = TransactionKind::Single(SingleTransactionKind::TransferCoin(TransferCoin {
+            recipient,
+            object_ref: None,
+        }));
+        Self::new(kind, sender, object_ref, gas_budget)
     }
 
     pub fn new_module(
@@ -360,6 +334,54 @@ where
             *self.gas_payment_object_ref(),
         ));
         Ok(inputs)
+    }
+}
+
+fn fmt_single_transaction(
+    transaction: &SingleTransactionKind,
+    gas_payment: &ObjectRef,
+    writer: &mut String,
+) -> std::fmt::Result {
+    match &transaction {
+        SingleTransactionKind::TransferCoin(t) => {
+            writeln!(writer, "Transaction Kind : Transfer")?;
+            writeln!(writer, "Recipient : {}", t.recipient)?;
+            let (object_id, _, _) = t.object_ref.as_ref().unwrap_or(gas_payment);
+            writeln!(writer, "Object ID : {}", &object_id)
+        }
+        SingleTransactionKind::Publish(_p) => {
+            writeln!(writer, "Transaction Kind : Publish")
+        }
+        SingleTransactionKind::Call(c) => {
+            writeln!(writer, "Transaction Kind : Call")?;
+            writeln!(writer, "Package ID : {}", c.package.0.to_hex_literal())?;
+            writeln!(writer, "Module : {}", c.module)?;
+            writeln!(writer, "Function : {}", c.function)?;
+            writeln!(writer, "Arguments : {:?}", c.arguments)?;
+            writeln!(writer, "Type Arguments : {:?}", c.type_arguments)
+        }
+    }
+}
+
+impl Display for TransactionData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+        writeln!(writer, "Gas Object ID : {}", self.gas_payment.0)?;
+        match &self.kind {
+            TransactionKind::Single(s) => {
+                fmt_single_transaction(s, &self.gas_payment, &mut writer)?;
+            }
+            TransactionKind::Batch(b) => {
+                writeln!(writer, "Transaction Kind : Batch")?;
+                writeln!(writer, "List of transactions in the batch:")?;
+                for s in b {
+                    fmt_single_transaction(s, &self.gas_payment, &mut writer)?;
+                    writeln!(writer)?;
+                }
+            }
+        };
+
+        write!(f, "{}", writer)
     }
 }
 
@@ -1203,7 +1225,7 @@ impl Display for CertifiedTransaction {
                 .map(|(name, _)| name)
                 .collect::<Vec<_>>()
         )?;
-        write!(writer, "{}", &self.data.kind)?;
+        write!(writer, "{}", &self.data)?;
         write!(f, "{}", writer)
     }
 }

@@ -82,6 +82,7 @@ fn execute_transaction<S: BackingPackageStore>(
         .clone();
 
     let mut result = Ok(());
+    let mut new_gas_owner = None;
     // TODO: Since we require all mutable objects to not show up more than
     // once across single tx, we should be able to run them in parallel.
     for single_tx in transaction_data.kind.into_single_transactions() {
@@ -90,13 +91,18 @@ fn execute_transaction<S: BackingPackageStore>(
                 recipient,
                 object_ref,
             }) => {
-                // unwrap is is safe because we built the object map from the transactions
-                let object = temporary_store
-                    .objects()
-                    .get(&object_ref.0)
-                    .unwrap()
-                    .clone();
-                transfer(temporary_store, object, recipient)
+                match &object_ref {
+                    Some((object_id, _, _)) => {
+                        // unwrap is safe because we built the object map from the transactions
+                        let object = temporary_store.read_object(object_id).unwrap().clone();
+                        transfer(temporary_store, object, recipient)
+                    }
+                    None => {
+                        debug_assert!(new_gas_owner.is_none());
+                        new_gas_owner = Some(recipient);
+                        Ok(())
+                    }
+                }
             }
             SingleTransactionKind::Call(MoveCall {
                 package,
@@ -159,7 +165,7 @@ fn execute_transaction<S: BackingPackageStore>(
     let cost_summary = gas_status.summary(result.is_ok());
     let gas_used = cost_summary.gas_used();
     let gas_rebate = cost_summary.storage_rebate;
-    gas::deduct_gas(&mut gas_object, gas_used, gas_rebate);
+    gas::deduct_gas_and_maybe_transfer(&mut gas_object, gas_used, gas_rebate, new_gas_owner);
     temporary_store.write_object(gas_object);
 
     // TODO: Return cost_summary so that the detailed summary exists in TransactionEffects for

@@ -889,7 +889,6 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[traced_test]
 #[tokio::test]
 async fn test_native_transfer() -> Result<(), anyhow::Error> {
@@ -914,28 +913,21 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     // Print it out to CLI/logs
     resp.print(true);
 
-    let dumy_obj = Object::with_id_owner_for_testing(ObjectID::random(), address);
-
-    // Get the mutated objects
     let (mut_obj1, mut_obj2) =
         if let WalletCommandResult::Transfer(_, _, TransactionEffects { mutated, .. }) = resp {
-            (mutated.get(0).unwrap().0, mutated.get(1).unwrap().0)
+            assert_eq!(mutated.len(), 2);
+            retry_assert!(
+                logs_contain(&format!("{}", mutated[0].0 .0)),
+                Duration::from_millis(5000)
+            );
+            retry_assert!(
+                logs_contain(&format!("{}", mutated[1].0 .0)),
+                Duration::from_millis(5000)
+            );
+            (mutated[0].0, mutated[1].0)
         } else {
-            assert!(false);
-            (
-                dumy_obj.compute_object_reference(),
-                dumy_obj.compute_object_reference(),
-            )
+            panic!("Response is not WalletCommandResult::Transfer");
         };
-
-    retry_assert!(
-        logs_contain(&format!("{}", mut_obj1.0)),
-        Duration::from_millis(5000)
-    );
-    retry_assert!(
-        logs_contain(&format!("{}", mut_obj2.0)),
-        Duration::from_millis(5000)
-    );
 
     // Sync both to fetch objects
     WalletCommands::SyncClientState {
@@ -958,9 +950,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let mut_obj1 = if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
         object
     } else {
-        // Fail this way because Panic! causes test issues
-        assert!(false);
-        dumy_obj.clone()
+        panic!("Response is not WalletCommands::Object");
     };
 
     let resp = WalletCommands::Object { id: mut_obj2.0 }
@@ -969,9 +959,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let mut_obj2 = if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
         object
     } else {
-        // Fail this way because Panic! causes test issues
-        assert!(false);
-        dumy_obj
+        panic!("Response is not WalletCommands::Object");
     };
 
     let (gas, obj) = if mut_obj1.get_single_owner().unwrap() == address {
@@ -1008,28 +996,17 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     // Print it out to CLI/logs
     resp.print(true);
 
-    let dumy_obj = Object::with_id_owner_for_testing(ObjectID::random(), address);
-
     // Get the mutated objects
-    let (mut_obj1, mut_obj2) =
-        if let WalletCommandResult::Transfer(_, _, TransactionEffects { mutated, .. }) = resp {
-            (mutated.get(0).unwrap().0, mutated.get(1).unwrap().0)
-        } else {
-            assert!(false);
-            (
-                dumy_obj.compute_object_reference(),
-                dumy_obj.compute_object_reference(),
-            )
-        };
-
-    retry_assert!(
-        logs_contain(&format!("{}", mut_obj1.0)),
-        Duration::from_millis(5000)
-    );
-    retry_assert!(
-        logs_contain(&format!("{}", mut_obj2.0)),
-        Duration::from_millis(5000)
-    );
+    if let WalletCommandResult::Transfer(_, _, TransactionEffects { mutated, .. }) = resp {
+        assert_eq!(mutated.len(), 1);
+        let object_ref = mutated[0].0;
+        retry_assert!(
+            logs_contain(&format!("{}", object_ref.0)),
+            Duration::from_millis(5000)
+        );
+    } else {
+        panic!("Response is not WalletCommandResult::Transfer");
+    }
 
     network.kill().await?;
     Ok(())

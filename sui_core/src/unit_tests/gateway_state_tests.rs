@@ -44,14 +44,14 @@ async fn transfer_coin(
     signer: SuiAddress,
     key: &KeyPair,
     coin_object_id: ObjectID,
-    gas_object_id: ObjectID,
+    gas_object_id: Option<ObjectID>,
     recipient: SuiAddress,
 ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
     let data = gateway
         .transfer_coin(
             signer,
             coin_object_id,
-            Some(gas_object_id),
+            gas_object_id,
             GAS_VALUE_FOR_TESTING,
             recipient,
         )
@@ -82,7 +82,7 @@ async fn test_transfer_coin() {
         addr1,
         &key1,
         coin_object.id(),
-        gas_object.id(),
+        Some(gas_object.id()),
         addr2,
     )
     .await
@@ -93,6 +93,29 @@ async fn test_transfer_coin() {
         Owner::AddressOwner(addr2)
     );
     assert_eq!(gateway.get_total_transaction_number().unwrap(), 1);
+}
+
+#[tokio::test]
+async fn test_transfer_coin_same_gas() {
+    // Transfer coin and pay gas with the same coin.
+    let (addr1, key1) = get_key_pair();
+    let (addr2, _key2) = get_key_pair();
+
+    let coin_object = Object::with_owner_for_testing(addr1);
+
+    let genesis_objects = authority_genesis_objects(4, vec![coin_object.clone()]);
+    let gateway = create_gateway_state(genesis_objects).await;
+
+    let (_cert, effects) = transfer_coin(&gateway, addr1, &key1, coin_object.id(), None, addr2)
+        .await
+        .unwrap();
+    assert_eq!(effects.mutated.len(), 1);
+    assert_eq!(effects.mutated_excluding_gas().next(), None,);
+    assert_eq!(effects.gas_object.1, Owner::AddressOwner(addr2),);
+    assert_eq!(gateway.get_total_transaction_number().unwrap(), 1);
+    let new_coin = gateway.get_object(&coin_object.id()).await.unwrap();
+    // Since gas has been deducted from the same coin, its balance should become smaller.
+    assert!(new_coin.to_coin().unwrap().value() < GAS_VALUE_FOR_TESTING);
 }
 
 #[tokio::test]
@@ -424,7 +447,7 @@ async fn test_transfer_coin_with_retry() {
         addr1,
         &key1,
         coin_object.id(),
-        gas_object.id(),
+        Some(gas_object.id()),
         addr2,
     )
     .await
@@ -457,7 +480,7 @@ async fn test_transfer_coin_with_retry() {
         addr1,
         &key1,
         coin_object.id(),
-        gas_object.id(),
+        Some(gas_object.id()),
         addr2,
     )
     .await

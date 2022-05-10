@@ -438,6 +438,14 @@ impl Object {
         }
     }
 
+    pub fn decrement_version_must_succeed(&mut self) {
+        let move_obj = self.data.try_as_move_mut().unwrap();
+        let new_version = move_obj.version().decrement().unwrap();
+        move_obj
+            .version_bytes_mut()
+            .copy_from_slice(bcs::to_bytes(&new_version).unwrap().as_slice());
+    }
+
     pub fn type_(&self) -> Option<&StructTag> {
         self.data.type_()
     }
@@ -584,13 +592,16 @@ impl Object {
         Ok(type_tag)
     }
 
+    pub fn to_coin(&self) -> Option<Coin> {
+        match &self.data {
+            Data::Move(m) => bcs::from_bytes::<Coin>(&m.contents).ok(),
+            Data::Package(_) => None,
+        }
+    }
+
     pub fn is_transfer_eligible(&self) -> SuiResult {
         fp_ensure!(self.is_owned(), SuiError::TransferUnownedError);
-        let is_coin = match &self.data {
-            Data::Move(m) => bcs::from_bytes::<Coin>(&m.contents).is_ok(),
-            Data::Package(_) => false,
-        };
-        fp_ensure!(is_coin, SuiError::TransferNonCoinError);
+        fp_ensure!(self.to_coin().is_some(), SuiError::TransferNonCoinError);
         Ok(())
     }
 }
