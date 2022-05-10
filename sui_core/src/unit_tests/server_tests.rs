@@ -29,7 +29,7 @@ async fn test_start_stop_batch_subsystem() {
         .expect("Init batches failed!");
 
     // The following two fields are only needed for shared objects (not by this bench).
-    let consensus_address = "127.0.0.1:0".parse().unwrap();
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     let server = Arc::new(AuthorityServer::new(
@@ -61,7 +61,7 @@ async fn test_simple_request() {
     let authority_state = init_state_with_object_id(sender, object_id).await;
 
     // The following two fields are only needed for shared objects (not by this bench).
-    let consensus_address = "127.0.0.1:0".parse().unwrap();
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     let server = AuthorityServer::new(
@@ -92,7 +92,7 @@ async fn test_subscription() {
     let authority_state = init_state_with_object_id(sender, object_id).await;
 
     // The following two fields are only needed for shared objects (not by this bench).
-    let consensus_address = "127.0.0.1:0".parse().unwrap();
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     // Start the batch server
@@ -266,7 +266,7 @@ async fn test_subscription_safe_client() {
     let authority_state = init_state_with_object_id(sender, object_id).await;
 
     // The following two fields are only needed for shared objects (not by this bench).
-    let consensus_address = "127.0.0.1:0".parse().unwrap();
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     // Start the batch server
