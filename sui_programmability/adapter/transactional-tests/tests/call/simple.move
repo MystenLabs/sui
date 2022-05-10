@@ -1,6 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//# init --addresses Test=0x0 A=0x42
+
+//# publish
 module Test::M1 {
     use Sui::ID::VersionedID;
     use Sui::TxContext::{Self, TxContext};
@@ -23,3 +26,7 @@ module Test::M1 {
         )
     }
 }
+
+//# run Test::M1::create --args 0 @A
+
+//# view-object 105
