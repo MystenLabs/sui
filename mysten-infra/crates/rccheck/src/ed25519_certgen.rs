@@ -3,6 +3,7 @@
 
 use ed25519::pkcs8::EncodePrivateKey;
 
+use pkcs8::der::Encode;
 use rcgen::{CertificateParams, KeyPair, SignatureAlgorithm};
 
 use crate::Certifiable;
@@ -25,7 +26,7 @@ fn dalek_to_keypair_bytes(dalek_kp: ed25519_dalek::Keypair) -> ed25519::KeypairB
 
 fn keypair_bytes_to_pkcs8_n_algo(
     kpb: ed25519::KeypairBytes,
-) -> Result<(pkcs8::PrivateKeyDocument, &'static SignatureAlgorithm), pkcs8::Error> {
+) -> Result<(pkcs8::der::SecretDocument, &'static SignatureAlgorithm), pkcs8::Error> {
     // PKCS#8 v2 as described in [RFC 5958].
     // PKCS#8 v2 keys include an additional public key field.
     let pkcs8 = kpb.to_pkcs8_der()?;
@@ -83,11 +84,11 @@ impl Certifiable for Ed25519 {
         let (pkcs_bytes, alg) =
             keypair_bytes_to_pkcs8_n_algo(keypair_bytes).map_err(anyhow::Error::new)?;
 
-        let certificate = gen_certificate(subject_names, (pkcs_bytes.as_ref(), alg))?;
+        let certificate = gen_certificate(subject_names, (pkcs_bytes.as_bytes(), alg))?;
         Ok(certificate)
     }
 
-    /// This produces X.509 `SubjectPublicKeyInfo` (SPKI) as defined in [RFC 5280 Section 4.1.2.7].
+    /// This produces X.509 `SubjectPublicKeyInfo` (SPKI) as defined in [RFC 5280 Section 4.1.2.7](https://datatracker.ietf.org/doc/html/rfc5280).
     /// in DER-encoded format, serialized to a byte string.
     /// Example
     /// ```
@@ -112,6 +113,8 @@ impl Certifiable for Ed25519 {
         };
 
         // Infallible because we know the public key is valid.
-        pkcs8::der::Encodable::to_vec(&key_info).expect("Dalek public key should be valid!")
+        key_info
+            .to_vec()
+            .expect("Dalek public key should be valid!")
     }
 }
