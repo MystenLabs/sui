@@ -1029,38 +1029,17 @@
             "effects": {
                 "status": {
                     "Failure": {
-                        "gas_cost": {
-                            "computation_cost": 41,
-                            "storage_cost": 30,
-                            "storage_rebate": 30
+                        "error": {
+                            "someError": {
+                                "error": "something went wrong"
+                            }
                         }
                     }
                 },
                 "shared_objects": [],
-                "transaction_digest": "Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4=",
+                "transaction_digest": "GHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=",
                 "created": [],
-                "mutated": [
-                    [
-                        [
-                            "7bc832ec31709638cd8d9323e90edf332gff4389",
-                            2,
-                            "A6HE1BDkN8360mzg4WtRUliiE8HE/7mtZC3MNRFwFWc="
-                        ],
-                        {
-                            "AddressOwner": "3aa29bad2ea941491da6e8eff55167987dd3de8d"
-                        }
-                    ],
-                    [
-                        [
-                            "standaloneObject",
-                            5634,
-                            "oCajXdK8h9s3aKl2A+ifHxn3y8YTJyagL+eLT0vvHP0="
-                        ],
-                        {
-                            "AddressOwner": "813ec1ab1e1797c79d1e1fcbebebc27a1fd21f07"
-                        }
-                    ]
-                ],
+                "mutated": [],
                 "unwrapped": [],
                 "deleted": [],
                 "wrapped": [],
@@ -1075,10 +1054,7 @@
                     }
                 ],
                 "events": [],
-                "dependencies": [
-                    "1klAsrCDeDvf7tokZzAhzJhz8uQHlQa4c7pxR77te78=",
-                    "/5e4BE6M+xgCAgplpecVX+DUBW91eF5OwGpwvflx6II="
-                ]
+                "dependencies": []
             }
         }
     ]
