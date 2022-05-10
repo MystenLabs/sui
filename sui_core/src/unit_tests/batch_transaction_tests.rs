@@ -29,7 +29,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
         init_state_with_ids([sender; TOTAL].into_iter().zip(all_ids.clone().into_iter())).await;
     let mut transactions = vec![];
     for obj_id in all_ids.iter().take(N) {
-        transactions.push(SingleTransactionKind::Transfer(Transfer {
+        transactions.push(SingleTransactionKind::TransferCoin(TransferCoin {
             recipient,
             object_ref: authority_state
                 .get_object(obj_id)
@@ -99,7 +99,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
         init_state_with_ids([sender; TOTAL].into_iter().zip(all_ids.clone().into_iter())).await;
     let mut transactions = vec![];
     for obj_id in all_ids.iter().take(N) {
-        transactions.push(SingleTransactionKind::Transfer(Transfer {
+        transactions.push(SingleTransactionKind::TransferCoin(TransferCoin {
             recipient,
             object_ref: authority_state
                 .get_object(obj_id)
