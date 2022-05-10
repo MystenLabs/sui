@@ -5,7 +5,7 @@ use anyhow::{anyhow, bail};
 use std::path::Path;
 use sui::{
     config::{
-        AuthorityPrivateInfo, Config, GatewayConfig, GatewayType, GenesisConfig, WalletConfig,
+        AuthorityInfo, Config, GatewayConfig, GatewayType, GenesisConfig, WalletConfig,
         SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
     },
     keystore::KeystoreType,
@@ -81,7 +81,7 @@ pub async fn start_test_network(
     let authorities = genesis_config
         .authorities
         .into_iter()
-        .map(|info| AuthorityPrivateInfo { port: 0, ..info })
+        .map(|info| AuthorityInfo { port: 0, ..info })
         .collect();
     genesis_config.authorities = authorities;
 
@@ -99,7 +99,7 @@ pub async fn start_test_network(
         .into_iter()
         .zip(&network.spawned_authorities)
         .map(|(mut info, server)| {
-            info.base_port = server.get_port();
+            info.port = server.get_port();
             info
         })
         .collect::<Vec<_>>();

@@ -61,16 +61,8 @@ pub const AUTHORITIES_DB_NAME: &str = "authorities_db";
 pub const DEFAULT_STARTING_PORT: u16 = 10000;
 pub const CONSENSUS_DB_NAME: &str = "consensus_db";
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct AuthorityInfo {
-    #[serde(serialize_with = "bytes_as_hex", deserialize_with = "bytes_from_hex")]
-    pub name: AuthorityName,
-    pub host: String,
-    pub base_port: u16,
-}
-
 #[derive(Serialize, Debug, Clone)]
-pub struct AuthorityPrivateInfo {
+pub struct AuthorityInfo {
     pub address: SuiAddress,
     pub public_key: PublicKeyBytes,
     pub host: String,
@@ -80,19 +72,6 @@ pub struct AuthorityPrivateInfo {
     pub consensus_address: SocketAddr,
 }
 
-impl AuthorityPrivateInfo {
-    pub fn copy(&self) -> Self {
-        Self {
-            address: self.address,
-            host: self.host.clone(),
-            port: self.port,
-            db_path: self.db_path.clone(),
-            stake: self.stake,
-            consensus_address: self.consensus_address,
-            public_key: self.public_key,
-        }
-    }
-}
 type AuthorityKeys = (Vec<PublicKeyBytes>, KeyPair);
 
 // Warning: to_socket_addrs() is blocking and can fail.  Be careful where you use it.
@@ -106,7 +85,7 @@ fn socket_addr_from_hostport(host: &str, port: u16) -> SocketAddr {
 }
 
 // Custom deserializer with optional default fields
-impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
+impl<'de> Deserialize<'de> for AuthorityInfo {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::de::Deserializer<'de>,
@@ -148,7 +127,7 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
             socket_addr_from_hostport("127.0.0.1", port)
         };
 
-        Ok(AuthorityPrivateInfo {
+        Ok(AuthorityInfo {
             address: SuiAddress::from(&public_key_bytes),
             public_key: public_key_bytes,
             host,
@@ -192,7 +171,7 @@ impl Display for WalletConfig {
 #[derive(Serialize, Deserialize)]
 pub struct NetworkConfig {
     pub epoch: EpochId,
-    pub authorities: Vec<AuthorityPrivateInfo>,
+    pub authorities: Vec<AuthorityInfo>,
     pub buffer_size: usize,
     pub loaded_move_packages: Vec<(PathBuf, ObjectID)>,
     pub key_pair: KeyPair,
@@ -202,14 +181,7 @@ impl Config for NetworkConfig {}
 
 impl NetworkConfig {
     pub fn get_authority_infos(&self) -> Vec<AuthorityInfo> {
-        self.authorities
-            .iter()
-            .map(|info| AuthorityInfo {
-                name: info.public_key,
-                host: info.host.clone(),
-                base_port: info.port,
-            })
-            .collect()
+        self.authorities.clone()
     }
 
     pub fn make_narwhal_committee(&self) -> ConsensusCommittee<Ed25519PublicKey> {
@@ -263,7 +235,7 @@ impl From<&NetworkConfig> for Committee {
 #[derive(Serialize, Deserialize)]
 #[serde(default)]
 pub struct GenesisConfig {
-    pub authorities: Vec<AuthorityPrivateInfo>,
+    pub authorities: Vec<AuthorityInfo>,
     pub accounts: Vec<AccountConfig>,
     pub move_packages: Vec<PathBuf>,
     pub sui_framework_lib_path: PathBuf,
@@ -345,7 +317,7 @@ impl GenesisConfig {
         let mut authorities = Vec::with_capacity(num_authorities);
         for _ in 0..num_authorities {
             // Get default authority config from deserialization logic.
-            let mut authority = AuthorityPrivateInfo::deserialize(Value::String(String::new()))?;
+            let mut authority = AuthorityInfo::deserialize(Value::String(String::new()))?;
             authority.db_path = working_dir
                 .join(AUTHORITIES_DB_NAME)
                 .join(encode_bytes_hex(&authority.public_key));
@@ -468,7 +440,7 @@ impl<C> DerefMut for PersistedConfig<C> {
 
 /// Make a default Narwhal-compatible committee.
 pub fn make_default_narwhal_committee(
-    authorities: &[AuthorityPrivateInfo],
+    authorities: &[AuthorityInfo],
 ) -> Result<ConsensusCommittee<Ed25519PublicKey>, anyhow::Error> {
     let mut ports = Vec::new();
     for _ in authorities {
