@@ -1,0 +1,13 @@
+processed 4 tasks
+
+task 1 'publish'. lines 6-28:
+created: object(103)
+written: object(102)
+
+task 2 'run'. lines 30-30:
+created: object(105)
+written: object(104)
+
+task 3 'view-object'. lines 32-32:
+Owner: Account Address ( A )
+Contents: Test::M1::Object {id: Sui::ID::VersionedID {id: Sui::ID::UniqueID {id: Sui::ID::ID {bytes: fake(105)}}, version: 1u64}, value: 0u64}

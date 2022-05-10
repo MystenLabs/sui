@@ -849,62 +849,6 @@ fn publish_from_src(
 }
 
 #[test]
-fn test_simple_call() {
-    let native_functions =
-        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_packages();
-    let mut storage = InMemoryStorage::new(genesis_objects);
-
-    // create gas object for payment
-    let gas_object =
-        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
-
-    // publish modules at a given path
-    publish_from_src(
-        &mut storage,
-        &native_functions,
-        "src/unit_tests/data/simple_call",
-        gas_object,
-        GAS_BUDGET,
-    )
-    .unwrap();
-    storage.flush();
-
-    // call published module function
-    let obj_val = 42u64;
-
-    let addr = base_types::get_new_address();
-    let pure_args = vec![
-        obj_val.to_le_bytes().to_vec(),
-        bcs::to_bytes(&AccountAddress::from(addr)).unwrap(),
-    ];
-
-    call(
-        &mut storage,
-        &native_functions,
-        "M1",
-        "create",
-        GAS_BUDGET,
-        Vec::new(),
-        Vec::new(),
-        pure_args,
-    )
-    .unwrap();
-
-    // check if the object was created and if it has the right value
-    let id = storage.get_created_keys().pop().unwrap();
-    storage.flush();
-    let obj = storage.read_object(&id).unwrap();
-    assert!(obj.owner == addr);
-    assert_eq!(obj.version(), SequenceNumber::from(1));
-    let move_obj = obj.data.try_as_move().unwrap();
-    assert_eq!(
-        u64::from_le_bytes(move_obj.type_specific_contents().try_into().unwrap()),
-        obj_val
-    );
-}
-
-#[test]
 fn test_child_of_shared_object() {
     // TODO: Also add test cases where there are circular dependencies in the input.
     let native_functions =
@@ -1007,44 +951,4 @@ fn test_child_of_shared_object() {
         vec![],
     )
     .unwrap();
-}
-
-#[test]
-/// Tests publishing of a module with a constructor that creates a
-/// single object with a single u64 value 42.
-fn test_publish_init() {
-    let native_functions =
-        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_packages();
-    let mut storage = InMemoryStorage::new(genesis_objects);
-
-    // create gas object for payment
-    let gas_object =
-        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
-
-    // publish modules at a given path
-    publish_from_src(
-        &mut storage,
-        &native_functions,
-        "src/unit_tests/data/publish_init",
-        gas_object,
-        GAS_BUDGET,
-    )
-    .unwrap();
-
-    // a package object and a fresh object in the constructor should
-    // have been created
-    assert_eq!(storage.created().len(), 2);
-    let to_check = mem::take(&mut storage.temporary.created);
-    let mut move_obj_exists = false;
-    for o in to_check.values() {
-        if let Data::Move(move_obj) = &o.data {
-            move_obj_exists = true;
-            assert_eq!(
-                u64::from_le_bytes(move_obj.type_specific_contents().try_into().unwrap()),
-                42u64
-            );
-        }
-    }
-    assert!(move_obj_exists);
 }
