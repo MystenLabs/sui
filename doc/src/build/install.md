@@ -56,6 +56,9 @@ You can start exploring Sui's source code by looking into the following primary 
 * [explorer](https://github.com/MystenLabs/sui/tree/main/explorer) - object explorer for the Sui network
 * [sui-network](https://github.com/MystenLabs/sui/tree/main/crates/sui-network) - networking interfaces
 
+And see the Rust [Crates](https://doc.rust-lang.org/rust-by-example/crates.html) in use at:
+https://mystenlabs.github.io/mysten-infra/
+
 To contribute updates to Sui code, [send pull requests](../contribute/index.md#send-pull-requests) our way.
 
 ## Next steps
