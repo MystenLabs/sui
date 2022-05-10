@@ -16,9 +16,9 @@ $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "d
 ```
 
 This will put these binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
-* [`sui-move`](move.md): Build and test Move packages.
-* [`wallet`](wallet.md): Run a local Sui network and gateway service accessible via the wallet CLI. The wallet CLI manage keypairs to sign/send transactions.
-* [`rpc-server`](json-rpc.md): Run a local Sui network and gateway service accessible via an RPC interface.
+* [`sui-move`](move.md) - build and test Move packages
+* [`wallet`](wallet.md) - run a local Sui network and gateway service accessible via the wallet CLI. The wallet CLI manage keypairs to sign/send transactions
+* [`rpc-server`](json-rpc.md) - run a local Sui network and gateway service accessible via an RPC interface
 
 Confirm the install with:
 
@@ -48,13 +48,17 @@ $ git clone https://github.com/MystenLabs/sui.git
 ```
 
 You can start exploring Sui's source code by looking into the following primary directories:
-
 * [sui](https://github.com/MystenLabs/sui/tree/main/sui) - the Sui binaries (`wallet`, `sui-move`, and more)
 * [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui's Move language integration also including games and other Move code examples for testing and reuse
 * [sui_core](https://github.com/MystenLabs/sui/tree/main/sui_core) - authority server and Sui Gateway
 * [sui_types](https://github.com/MystenLabs/sui/tree/main/sui_types) - coins, gas, and other object types
 * [explorer](https://github.com/MystenLabs/sui/tree/main/explorer) - object explorer for the Sui network
 * [sui-network](https://github.com/MystenLabs/sui/tree/main/crates/sui-network) - networking interfaces
+
+And see the Rust [Crates](https://doc.rust-lang.org/rust-by-example/crates.html) in use at:
+* https://mystenlabs.github.io/sui/ - the Sui blockchain
+* https://mystenlabs.github.io/narwhal/ - the Narwhal and Tusk consensus engine
+* https://mystenlabs.github.io/mysten-infra/ - Mysten Labs infrastructure
 
 To contribute updates to Sui code, [send pull requests](../contribute/index.md#send-pull-requests) our way.
 
