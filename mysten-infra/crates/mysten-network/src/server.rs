@@ -220,3 +220,79 @@ fn update_tcp_port_in_multiaddr(addr: &Multiaddr, port: u16) -> Multiaddr {
     })
     .expect("tcp protocol at index 1")
 }
+
+#[cfg(test)]
+mod test {
+    use crate::config::Config;
+    use multiaddr::multiaddr;
+    use multiaddr::Multiaddr;
+    use tonic_health::proto::health_client::HealthClient;
+    use tonic_health::proto::HealthCheckRequest;
+
+    #[test]
+    fn document_multiaddr_limitation_for_unix_protocol() {
+        // You can construct a multiaddr by hand (ie binary format) just fine
+        let path = "/tmp/foo";
+        let addr = multiaddr!(Unix(path), Http);
+
+        // But it doesn't round-trip in the human readable format
+        let s = addr.to_string();
+        assert!(s.parse::<Multiaddr>().is_err());
+    }
+
+    async fn test_multiaddr(address: Multiaddr) {
+        let config = Config::new();
+        let mut server = config.server_builder().bind(&address).await.unwrap();
+        let address = server.local_addr().to_owned();
+        let cancel_handle = server.take_cancel_handle().unwrap();
+        let server_handle = tokio::spawn(server.serve());
+        let channel = config.connect(&address).await.unwrap();
+        let mut client = HealthClient::new(channel);
+
+        client
+            .check(HealthCheckRequest {
+                service: "".to_owned(),
+            })
+            .await
+            .unwrap();
+
+        cancel_handle.send(()).unwrap();
+        server_handle.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn dns() {
+        let address: Multiaddr = "/dns/localhost/tcp/0/http".parse().unwrap();
+        test_multiaddr(address).await;
+    }
+
+    #[tokio::test]
+    async fn ip4() {
+        let address: Multiaddr = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+        test_multiaddr(address).await;
+    }
+
+    #[tokio::test]
+    async fn ip6() {
+        let address: Multiaddr = "/ip6/::1/tcp/0/http".parse().unwrap();
+        test_multiaddr(address).await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn unix() {
+        // Note that this only works when constructing a multiaddr by hand and not via the
+        // human-readable format
+        let path = "unix-domain-socket";
+        let address = multiaddr!(Unix(path), Http);
+        test_multiaddr(address).await;
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[should_panic]
+    #[tokio::test]
+    async fn missing_http_protocol() {
+        let address: Multiaddr = "/dns/localhost/tcp/0".parse().unwrap();
+        test_multiaddr(address).await;
+    }
+}
