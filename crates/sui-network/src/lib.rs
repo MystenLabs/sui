@@ -3,6 +3,5 @@
 
 pub mod api;
 pub mod codec;
-pub mod network;
 
 pub use tonic;

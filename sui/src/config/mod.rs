@@ -4,6 +4,7 @@
 
 use crate::keystore::KeystoreType;
 use anyhow::bail;
+use multiaddr::{Multiaddr, Protocol};
 use narwhal_config::{
     Authority, Committee as ConsensusCommittee, PrimaryAddresses, Stake, WorkerAddresses,
 };
@@ -65,8 +66,7 @@ pub const CONSENSUS_DB_NAME: &str = "consensus_db";
 pub struct AuthorityInfo {
     pub address: SuiAddress,
     pub public_key: PublicKeyBytes,
-    pub host: String,
-    pub port: u16,
+    pub network_address: Multiaddr,
     pub db_path: PathBuf,
     pub stake: usize,
     pub consensus_address: SocketAddr,
@@ -76,6 +76,36 @@ type AuthorityKeys = (Vec<PublicKeyBytes>, KeyPair);
 
 // Warning: to_socket_addrs() is blocking and can fail.  Be careful where you use it.
 fn socket_addr_from_hostport(host: &str, port: u16) -> SocketAddr {
+    let mut addresses = format!("{host}:{port}")
+        .to_socket_addrs()
+        .unwrap_or_else(|e| panic!("Cannot parse or resolve hostnames for {host}:{port}: {e}"));
+    addresses
+        .next()
+        .unwrap_or_else(|| panic!("Hostname/IP resolution failed for {host}"))
+}
+
+//TODO remove this when the config properly handles setting narwhal addresses
+fn socket_addr_from_multiaddr(address: &Multiaddr, port_offset: Option<u16>) -> SocketAddr {
+    let mut iter = address.iter();
+
+    let host = match iter.next().unwrap() {
+        Protocol::Dns(host) => host.to_string(),
+        Protocol::Ip4(ip) => ip.to_string(),
+        Protocol::Ip6(ip) => ip.to_string(),
+        _ => panic!("unexpected protocol"),
+    };
+
+    let port = match iter.next().unwrap() {
+        Protocol::Tcp(port) => {
+            if let Some(offset) = port_offset {
+                port + offset
+            } else {
+                port
+            }
+        }
+        _ => panic!("unexpected protocol"),
+    };
+
     let mut addresses = format!("{host}:{port}")
         .to_socket_addrs()
         .unwrap_or_else(|e| panic!("Cannot parse or resolve hostnames for {host}:{port}: {e}"));
@@ -98,15 +128,12 @@ impl<'de> Deserialize<'de> for AuthorityInfo {
         } else {
             *new_key_pair.public_key_bytes()
         };
-        let host = if let Some(val) = json.get("host") {
-            String::deserialize(val).map_err(serde::de::Error::custom)?
+        let network_address = if let Some(val) = json.get("network_address") {
+            Multiaddr::deserialize(val).map_err(serde::de::Error::custom)?
         } else {
-            "127.0.0.1".to_string()
-        };
-        let port = if let Some(val) = json.get("port") {
-            u16::deserialize(val).map_err(serde::de::Error::custom)?
-        } else {
-            utils::get_available_port()
+            format!("/ip4/127.0.0.1/tcp/{}/http", utils::get_available_port())
+                .parse()
+                .unwrap()
         };
         let db_path = if let Some(val) = json.get("db_path") {
             PathBuf::deserialize(val).map_err(serde::de::Error::custom)?
@@ -130,8 +157,7 @@ impl<'de> Deserialize<'de> for AuthorityInfo {
         Ok(AuthorityInfo {
             address: SuiAddress::from(&public_key_bytes),
             public_key: public_key_bytes,
-            host,
-            port,
+            network_address,
             db_path,
             stake,
             consensus_address,
@@ -195,15 +221,27 @@ impl NetworkConfig {
                         .make_narwhal_public_key()
                         .expect("Can't get narwhal public key");
                     let primary = PrimaryAddresses {
-                        primary_to_primary: socket_addr_from_hostport(&x.host, x.port + 100),
-                        worker_to_primary: socket_addr_from_hostport(&x.host, x.port + 200),
+                        primary_to_primary: socket_addr_from_multiaddr(
+                            &x.network_address,
+                            Some(100),
+                        ),
+                        worker_to_primary: socket_addr_from_multiaddr(
+                            &x.network_address,
+                            Some(200),
+                        ),
                     };
                     let workers = [(
                         /* worker_id */ 0,
                         WorkerAddresses {
-                            primary_to_worker: socket_addr_from_hostport(&x.host, x.port + 300),
+                            primary_to_worker: socket_addr_from_multiaddr(
+                                &x.network_address,
+                                Some(300),
+                            ),
                             transactions: x.consensus_address,
-                            worker_to_worker: socket_addr_from_hostport(&x.host, x.port + 400),
+                            worker_to_worker: socket_addr_from_multiaddr(
+                                &x.network_address,
+                                Some(400),
+                            ),
                         },
                     )]
                     .iter()
