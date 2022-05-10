@@ -1,8 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { isTransactionBytes } from '../../index.guard';
+import { JsonRpcClient } from '../../rpc/client';
 import { Base64DataBuffer } from '../../serialization/base64';
-import { TransferTransaction, TxnDataSerializer } from './txn-data-serializer';
+import {
+  TransferCoinTransaction,
+  TxnDataSerializer,
+} from './txn-data-serializer';
 
 /**
  * This is a temporary implementation of the `TxnDataSerializer` class
@@ -12,8 +17,7 @@ import { TransferTransaction, TxnDataSerializer } from './txn-data-serializer';
  * the encoding.
  */
 export class RpcTxnDataSerializer implements TxnDataSerializer {
-  //@ts-ignore
-  private endpointURL: string;
+  private client: JsonRpcClient;
 
   /**
    * Establish a connection to a Sui Gateway endpoint
@@ -21,13 +25,20 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
    * @param endpoint URL to the Sui Gateway endpoint
    */
   constructor(endpoint: string) {
-    this.endpointURL = endpoint;
+    this.client = new JsonRpcClient(endpoint);
   }
 
-  async new_transfer(
-    _transaction: TransferTransaction
-  ): Promise<Base64DataBuffer> {
-    throw new Error('Method not implemented.');
+  async newTransferCoin(t: TransferCoinTransaction): Promise<Base64DataBuffer> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_transferCoin',
+        [t.signer, t.objectId, t.gasPayment, t.gasBudget, t.recipient],
+        isTransactionBytes
+      );
+      return new Base64DataBuffer(resp.tx_bytes);
+    } catch (err) {
+      throw new Error(`Error transferring coin: ${err}`);
+    }
   }
 
   // TODO: add more interface methods

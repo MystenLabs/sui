@@ -121,6 +121,21 @@ export type EmptySignInfo = object;
 export type AuthorityName = string;
 export type AuthoritySignature = string;
 
+export type TransactionBytes = {
+  tx_bytes: string;
+};
+
+export type TransactionResponse = {
+  EffectResponse: TransactionEffectsResponse;
+  // TODO: Add Publish, MergeCoin, SplitCoin Response
+};
+
+export type SignedTransaction = {
+  tx_bytes: string;
+  signature: string;
+  pub_key: string;
+};
+
 /* ---------------------------- Helper functions ---------------------------- */
 
 export function getSingleTransactionKind(

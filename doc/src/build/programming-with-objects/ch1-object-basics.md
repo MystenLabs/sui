@@ -159,11 +159,11 @@ $ wallet publish --path $ROOT/sui_programmability/examples/objects_tutorial --ga
 You can find the published package object ID in the **Publish Results** output:
 ```
 ----- Publish Results ----
-The newly published package object: (57258F32746FD1443F2A077C0C6EC03282087C19, SequenceNumber(1), o#b3a8e284dea7482891768e166e4cd16f9749e0fa90eeb0834189016c42327401)
+The newly published package object: (0x57258f32746fd1443f2a077c0c6ec03282087c19, SequenceNumber(1), o#b3a8e284dea7482891768e166e4cd16f9749e0fa90eeb0834189016c42327401)
 ```
-Note that the exact data you see will be different. The first hex string in that triple is the package object ID (`57258F32746FD1443F2A077C0C6EC03282087C19` in this case). For convenience, let's save it to an environment variable:
+Note that the exact data you see will be different. The first hex string in that triple is the package object ID (`0x57258f32746fd1443f2a077c0c6ec03282087c19` in this case). For convenience, let's save it to an environment variable:
 ```
-$ export PACKAGE=57258F32746FD1443F2A077C0C6EC03282087C19
+$ export PACKAGE=0x57258f32746fd1443f2a077c0c6ec03282087c19
 ```
 Next we can call the function to create a color object:
 ```
@@ -173,11 +173,11 @@ In the **Transaction Effects** portion of the output, you will see an object sho
 
 ```
 Created Objects:
-5EB2C3E55693282FAA7F5B07CE1C4803E6FDC1BB SequenceNumber(1) o#691b417670979c6c192bdfd643630a125961c71c841a6c7d973cf9429c792efa
+0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb SequenceNumber(1) o#691b417670979c6c192bdfd643630a125961c71c841a6c7d973cf9429c792efa
 ```
 Again, for convenience, let's save the object ID:
 ```
-$ export OBJECT=5EB2C3E55693282FAA7F5B07CE1C4803E6FDC1BB
+$ export OBJECT=0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb
 ```
 We can inspect this object and see what kind of object it is:
 ```
@@ -187,7 +187,7 @@ This will show you the metadata of the object with its type:
 ```
 Owner: AddressOwner(k#5db53ebb05fd3ea5f1d163d9d487ee8cd7b591ee)
 Version: 1
-ID: 5EB2C3E55693282FAA7F5B07CE1C4803E6FDC1BB
+ID: 0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb
 Readonly: false
 Type: 0x57258f32746fd1443f2a077c0c6ec03282087c19::ColorObject
 ```

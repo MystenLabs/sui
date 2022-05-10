@@ -50,7 +50,7 @@ pub enum CallArg {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct Transfer {
+pub struct TransferCoin {
     pub recipient: SuiAddress,
     pub object_ref: ObjectRef,
 }
@@ -82,8 +82,8 @@ pub struct MoveModulePublish {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
 pub enum SingleTransactionKind {
-    /// Initiate an object transfer between addresses
-    Transfer(Transfer),
+    /// Initiate a coin transfer between addresses
+    TransferCoin(TransferCoin),
     /// Publish a new Move module
     Publish(MoveModulePublish),
     /// Call a function in a published Move module
@@ -114,7 +114,7 @@ impl SingleTransactionKind {
     /// TODO: use an iterator over references here instead of a Vec to avoid allocations.
     pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
         let input_objects = match &self {
-            Self::Transfer(Transfer { object_ref, .. }) => {
+            Self::TransferCoin(TransferCoin { object_ref, .. }) => {
                 vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
             }
             Self::Call(MoveCall {
@@ -168,7 +168,7 @@ impl Display for SingleTransactionKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         match &self {
-            Self::Transfer(t) => {
+            Self::TransferCoin(t) => {
                 writeln!(writer, "Transaction Kind : Transfer")?;
                 writeln!(writer, "Recipient : {}", t.recipient)?;
                 let (object_id, seq, digest) = t.object_ref;
@@ -291,7 +291,7 @@ where
         gas_payment: ObjectRef,
         gas_budget: u64,
     ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::Transfer(Transfer {
+        let kind = TransactionKind::Single(SingleTransactionKind::TransferCoin(TransferCoin {
             recipient,
             object_ref,
         }));
@@ -932,31 +932,31 @@ impl Display for TransactionEffects {
         if !self.created.is_empty() {
             writeln!(writer, "Created Objects:")?;
             for ((id, _, _), owner) in &self.created {
-                writeln!(writer, "  - ID: {:?} , Owner: {}", id, owner)?;
+                writeln!(writer, "  - ID: {} , Owner: {}", id, owner)?;
             }
         }
         if !self.mutated.is_empty() {
             writeln!(writer, "Mutated Objects:")?;
             for ((id, _, _), owner) in &self.mutated {
-                writeln!(writer, "  - ID: {:?} , Owner: {}", id, owner)?;
+                writeln!(writer, "  - ID: {} , Owner: {}", id, owner)?;
             }
         }
         if !self.deleted.is_empty() {
             writeln!(writer, "Deleted Objects:")?;
             for (id, _, _) in &self.deleted {
-                writeln!(writer, "  - ID: {:?}", id)?;
+                writeln!(writer, "  - ID: {}", id)?;
             }
         }
         if !self.wrapped.is_empty() {
             writeln!(writer, "Wrapped Objects:")?;
             for (id, _, _) in &self.wrapped {
-                writeln!(writer, "  - ID: {:?}", id)?;
+                writeln!(writer, "  - ID: {}", id)?;
             }
         }
         if !self.unwrapped.is_empty() {
             writeln!(writer, "Unwrapped Objects:")?;
             for ((id, _, _), owner) in &self.unwrapped {
-                writeln!(writer, "  - ID: {:?} , Owner: {}", id, owner)?;
+                writeln!(writer, "  - ID: {} , Owner: {}", id, owner)?;
             }
         }
         write!(f, "{}", writer)

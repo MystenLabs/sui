@@ -1,0 +1,4 @@
+{
+    "extends": "./configs/ts/tsconfig.dev",
+    "include": ["./src", "./configs"]
+}

@@ -429,7 +429,6 @@ pub struct MultiFixedRateLoadGenerator {
     /// Anything below 10ms causes degradation in resolution
     pub period_us: u64,
 
-    //pub network_config: Vec<AuthorityPrivateInfo>,
     pub tick_notifier: Arc<Notify>,
 
     /// Number of TCP connections to open

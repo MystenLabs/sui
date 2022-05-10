@@ -105,7 +105,7 @@ in the wallet configuration (with some values omitted):
 ```json
 {
   "accounts": [
-    "48cf013a76d583c027720f7f9852deac7c84b923",
+    "0x48cf013a76d583c027720f7f9852deac7c84b923",
     ...
   ],
   "keystore": {
@@ -306,11 +306,11 @@ The result of running this command should resemble the following output:
 
 ```shell
 Showing 5 results.
-66AF3898E7558B79E115AB61184A958497D1905A
-AE6FB6036570FEC1DF71599740C132CDF5B45B9D
-45CDA12E3BAFE3017B4B3CD62C493E5FBAAD7FB0
-EF999DBDB19CCCA504EEF5432CEC69EA8A1D4A1B
-4489AB46A230C1876578441D68F25BF968E6F2B0
+0x66af3898e7558b79e115ab61184a958497d1905a
+0xae6fb6036570fec1df71599740c132cdf5b45b9d
+0x45cda12e3bafe3017b4b3cd62c493e5fbaad7fb0
+0xef999dbdb19ccca504eef5432cec69ea8a1d4a1b
+0x4489ab46a230c1876578441d68f25bf968e6f2b0
 ```
 
 But the actual address values will most likely differ
@@ -340,19 +340,19 @@ $ wallet active-address
 Which will reveal an address resembing:
 
 ```shell
-562F07CF6369E8D22DBF226A5BFEDC6300014837
+0x562f07cf6369e8d22dbf226a5bfedc6300014837
 ```
 
 Changing the default address is as easy as calling the `switch` command:
 
 ```shell
-$ wallet switch --address 913CF36F370613ED131868AC6F9DA2420166062E
+$ wallet switch --address 0x913cf36f370613ed131868ac6f9da2420166062e
 ```
 
 You will see output like:
 
 ```shell
-Active address switched to 913CF36F370613ED131868AC6F9DA2420166062E
+Active address switched to 0x913cf36f370613ed131868ac6f9da2420166062e
 ```
 
 One can call, for example, the `objects` command with or without an address specified.
@@ -360,16 +360,18 @@ When not specified, the active address is used.
 
 ```
 sui>-$ objects
-Showing 5 results.
-(0B8A4620426E526FA42995CF26EB610BFE6BF063, SequenceNumber(0), o#6ea7e2d4bf47b3cc219fdc44bf15530244d3b3d1838d59586c0bb41d3db92221)
+                 Object ID                  |  Version   |                                Digest                               
+------------------------------------------------------------------------------------------------------------------------------
+ 0x0b8a4620426e526fa42995cf26eb610bfe6bf063 |     0      | o#6ea7e2d4bf47b3cc219fdc44bf15530244d3b3d1838d59586c0bb41d3db92221
 
-sui>-$ objects --address 913CF36F370613ED131868AC6F9DA2420166062E
-Showing 5 results.
-(0B8A4620426E526FA42995CF26EB610BFE6BF063, SequenceNumber(0), o#6ea7e2d4bf47b3cc219fdc44bf15530244d3b3d1838d59586c0bb41d3db92221)
+sui>-$ objects --address 0x913cf36f370613ed131868ac6f9da2420166062e
+                 Object ID                  |  Version   |                                Digest                               
+------------------------------------------------------------------------------------------------------------------------------
+ 0x0b8a4620426e526fa42995cf26eb610bfe6bf063 |     0      | o#6ea7e2d4bf47b3cc219fdc44bf15530244d3b3d1838d59586c0bb41d3db92221
 ```
 
 All commands where `address` is omitted will now use the newly specified active address:
-913CF36F370613ED131868AC6F9DA2420166062E
+0x913cf36f370613ed131868ac6f9da2420166062e
 
 Note that if one calls a command that uses a gas object not owned by the active address,
 the address owned by the gas object is temporarily used for the transaction.
@@ -397,26 +399,26 @@ $ wallet gas
 You will see output like:
 
 ```
-                Object ID                 |  Version   |  Gas Value
-----------------------------------------------------------------------
- 0B8A4620426E526FA42995CF26EB610BFE6BF063 |     0      |   100000
- 3C0763CCDEA4FF5A4557505A62AB5E1DAF91F4A2 |     0      |   100000
- 45A589A9E760D7F75D399327AC0FCBA21495C22E |     0      |   100000
- 4C377A3A9D4B1B9C92189DD12BB1DCD0302A954B |     0      |   100000
- F2961464AC6860A05D21B48C020B7E121399965C |     0      |   100000
+                Object ID                   |  Version   |  Gas Value
+------------------------------------------------------------------------
+ 0x0b8a4620426e526fa42995cf26eb610bfe6bf063 |     0      |   100000
+ 0x3c0763ccdea4ff5a4557505a62ab5e1daf91f4a2 |     0      |   100000
+ 0x45a589a9e760d7f75d399327ac0fcba21495c22e |     0      |   100000
+ 0x4c377a3a9d4b1b9c92189dd12bb1dcd0302a954b |     0      |   100000
+ 0xf2961464ac6860a05d21b48c020b7e121399965c |     0      |   100000
 ```
 
 If one does not want to use the active address, the addresses can be specified:
 
 ```shell
-$ wallet gas --address 562F07CF6369E8D22DBF226A5BFEDC6300014837
-                Object ID                 |  Version   |  Gas Value
-----------------------------------------------------------------------
- A8DDC2661A19010E5F85CBF6D905DDFBE4DD0320 |     0      |   100000
- B2683D0B592E5B002D110989A52943BC9DA19158 |     0      |   100000
- B41BF45B01C9BEFCE3A0A371E2B98E062691438D |     0      |   100000
- BA9E10F319182F3BD584EDB92C7899CC6D018723 |     0      |   100000
- F8BFE77A5B21E7ABFA3BC285991F9DA4E5CC2D7B |     0      |   100000
+$ wallet gas --address 0x562f07cf6369e8d22dbf226a5bfedc6300014837
+                Object ID                   |  Version   |  Gas Value
+------------------------------------------------------------------------
+ 0xa8ddc2661a19010e5f85cbf6d905ddfbe4dd0320 |     0      |   100000
+ 0xb2683d0b592e5b002d110989a52943bc9da19158 |     0      |   100000
+ 0xb41bf45b01c9befce3a0a371e2b98e062691438d |     0      |   100000
+ 0xba9e10f319182f3bd584edb92c7899cc6d018723 |     0      |   100000
+ 0xf8bfe77a5b21e7abfa3bc285991f9da4e5cc2d7b |     0      |   100000
 
 ```
 
@@ -436,7 +438,7 @@ $ wallet new-address
 The output shows a confirmation after the account has been created:
 
 ```
-Created new keypair for address : C72CF3ADCC4D11C03079CEF2C8992AEA5268677A
+Created new keypair for address : 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
 ```
 
 ### Add existing accounts to `wallet.conf` manually
@@ -469,18 +471,19 @@ OPTIONS:
 To view the objects owned by the accounts created in genesis, run the following command (substitute the address with one of the genesis addresses in your wallet):
 
 ```shell
-$ wallet objects --address 66AF3898E7558B79E115AB61184A958497D1905A
+$ wallet objects --address 0x66af3898e7558b79e115ab61184a958497d1905a
 ```
 
 The result should resemble the following, which shows the object in the format of (`object_id`, `sequence_number`, `object_hash`).
 
 ```shell
-Showing 5 results.
-(00A0A5211F6EDCF4BA09D23B8A7250072BE1EDB6, SequenceNumber(0), o#fbb33b6524d4a648fd5fff8dc93f3d6858945959b710a0893c2b86504b38f731)
-(054C8263C73ABD697A0F5AA8990D6D7668CE3D0D, SequenceNumber(0), o#cb99c4b8bb83a0b0111583cd2671f27d6eaeb89f89fd7ae822dc335f1a09e187)
-(804AEAA287A7F87DD22A0885BD9E09AFF71F1033, SequenceNumber(0), o#3a7684039086ad33ea313f37d21ddaedd1cd95ed1f9564a61ba18f8e81ea017b)
-(DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1, SequenceNumber(0), o#db58b72bd45fb8331558a01baec42ad1575c5870bee882be5bae29c91856fe74)
-(EEA4167BE074537F4A2879C7781D8EF4FFD651CC, SequenceNumber(0), o#ded63e5faac3953b25d55634a3471a27696f4886a293c7c6812123784548b7d4)
+                 Object ID                  |  Version   |                                Digest                               
+------------------------------------------------------------------------------------------------------------------------------
+ 0x00a0a5211f6edcf4ba09d23b8a7250072be1edb6 |     0      | o#fbb33b6524d4a648fd5fff8dc93f3d6858945959b710a0893c2b86504b38f731
+ 0x054c8263c73abd697a0f5aa8990d6d7668ce3d0d |     0      | o#cb99c4b8bb83a0b0111583cd2671f27d6eaeb89f89fd7ae822dc335f1a09e187
+ 0x804aeaa287a7f87dd22a0885bd9e09aff71f1033 |     0      | o#3a7684039086ad33ea313f37d21ddaedd1cd95ed1f9564a61ba18f8e81ea017b
+ 0xda2237a9890bccebeeeae0d23ec739f00d2ce2b1 |     0      | o#db58b72bd45fb8331558a01baec42ad1575c5870bee882be5bae29c91856fe74
+ 0xeea4167be074537f4a2879c7781d8ef4ffd651cc |     0      | o#ded63e5faac3953b25d55634a3471a27696f4886a293c7c6812123784548b7d4
 ```
 
 If you want to view more information about the objects, you can use the `object` command.
@@ -503,16 +506,15 @@ OPTIONS:
 To view the object, use the following command:
 
 ```bash
-$ wallet object --id EEA4167BE074537F4A2879C7781D8EF4FFD651CC
+$ wallet object --id 0x124bbde643189b573c98d05c092f4927225421d7
 ```
 
 This should give you output similar to the following:
 
 ```shell
-Owner: AddressOwner(k#66af3898e7558b79e115ab61184a958497d1905a)
-Version: 0
-ID: EEA4167BE074537F4A2879C7781D8EF4FFD651CC
-Readonly: false
+ID: 0x124bbde643189b573c98d05c092f4927225421d7
+Version: 1
+Owner: Account Address ( 0x62cd5bc220b28a34265bcb24995fb45a51d39832 )
 Type: 0x2::Coin::Coin<0x2::SUI::SUI>
 ```
 
@@ -524,7 +526,40 @@ flag to view the raw JSON representation of the object.
 Here is an example:
 
 ```json
-{"contents":{"fields":{"id":{"fields":{"id":{"fields":{"id":{"fields":{"bytes":"eea4167be074537f4a2879c7781d8ef4ffd651cc"},"type":"0x2::ID::ID"}},"type":"0x2::ID::UniqueID"},"version":0},"type":"0x2::ID::VersionedID"},"value":100000},"type":"0x2::Coin::Coin<0x2::SUI::SUI>"},"owner":{"AddressOwner":[102,175,56,152,231,85,139,121,225,21,171,97,24,74,149,132,151,209,144,90]},"tx_digest":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
+{
+  "contents": {
+    "fields": {
+      "balance": {
+        "fields": {
+          "value": 99126
+        },
+        "type": "0x2::Balance::Balance<0x2::SUI::SUI>"
+      },
+      "id": {
+        "fields": {
+          "id": {
+            "fields": {
+              "id": {
+                "fields": {
+                  "bytes": "124bbde643189b573c98d05c092f4927225421d7"
+                },
+                "type": "0x2::ID::ID"
+              }
+            },
+            "type": "0x2::ID::UniqueID"
+          },
+          "version": 1
+        },
+        "type": "0x2::ID::VersionedID"
+      }
+    },
+    "type": "0x2::Coin::Coin<0x2::SUI::SUI>"
+  },
+  "owner": {
+    "AddressOwner": "0x62cd5bc220b28a34265bcb24995fb45a51d39832"
+  },
+  "tx_digest": "9811H0rZPbDwZ1dWRFLzQoKJarCue108+pzhGH7dAv4="
+}
 ```
 
 ## Transferring coins
@@ -534,9 +569,10 @@ Coins *are* objects yet have a specific use case that allow for native commands 
 If you inspect a newly created account, you would expect the account does not own any object. Let us inspect the fresh account we create in the [Generating a new account](#generating-a-new-account) section (`C72CF3ADCC4D11C03079CEF2C8992AEA5268677A`):
 
 ```shell
-$ wallet objects --address C72CF3ADCC4D11C03079CEF2C8992AEA5268677A
+$ wallet objects --address 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
+                 Object ID                  |  Version   |                                Digest                               
+------------------------------------------------------------------------------------------------------------------------------
 Showing 0 results.
-
 ```
 
 To add objects to the account, you can [invoke a Move function](#calling-move-code),
@@ -569,10 +605,10 @@ coin is not specified, one that meets the budget is picked. Gas budget sets a
 cap for how much gas you want to spend. We are still finalizing our gas metering
 mechanisms. For now, just set something large enough.
 
-Here is an example transfer of an object to account `F456EBEF195E4A231488DF56B762AC90695BE2DD`:
+Here is an example transfer of an object to account `0xf456ebef195e4a231488df56b762ac90695be2dd`:
 
 ```shell
-$ wallet transfer-coin --to C72CF3ADCC4D11C03079CEF2C8992AEA5268677A --coin-object-id DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1 --gas-budget 100
+$ wallet transfer-coin --to 0xc72cf3adcc4d11c03079cef2c8992aea5268677a --coin-object-id 0xda2237a9890bccebeeeae0d23ec739f00d2ce2b1 --gas-budget 100
 ```
 
 With output like:
@@ -582,24 +618,25 @@ Transfer confirmed after 4412 us
 ----- Certificate ----
 Signed Authorities : [k#21d89c3a12409b7aeadf36a9753417ead5fa9ea607ccb666e83b739b8a73c5e8, k#8d86bef2f8ae835d4763c9a697ad5c458130907996d59adc4ea5be37f2e0fab2, k#f9664056f3cc46b03e86beeb3febf99af1c9ec3f6aa709a1dbd101c9e9a79c3a]
 Transaction Kind : Transfer
-Recipient : C72CF3ADCC4D11C03079CEF2C8992AEA5268677A
-Object ID : DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1
+Recipient : 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
+Object ID : 0xda2237a9890bccebeeeae0d23ec739f00d2ce2b1
 Sequence Number : SequenceNumber(0)
 Object Digest : db58b72bd45fb8331558a01baec42ad1575c5870bee882be5bae29c91856fe74
 
 ----- Transaction Effects ----
 Status : Success { gas_used: 18, results: [] }
 Mutated Objects:
-00A0A5211F6EDCF4BA09D23B8A7250072BE1EDB6 SequenceNumber(1) o#0a4be8bae4e4ea4d8e3a9f5d4ff8533aa36bff247238ab668edc1e5369843c64
-DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1 SequenceNumber(1) o#f77edd77f5c154a850078b81b320870890bbb4f06d18f80fd512b1cc26bc3297
+0x00a0a5211f6edcf4ba09d23b8a7250072be1edb6 SequenceNumber(1) o#0a4be8bae4e4ea4d8e3a9f5d4ff8533aa36bff247238ab668edc1e5369843c64
+0xda2237a9890bccebeeeae0d23ec739f00d2ce2b1 SequenceNumber(1) o#f77edd77f5c154a850078b81b320870890bbb4f06d18f80fd512b1cc26bc3297
 ```
 
 The account will now have one object:
 
 ```shell
-$ wallet objects --address C72CF3ADCC4D11C03079CEF2C8992AEA5268677A
-Showing 1 results.
-(DA2237A9890BCCEBEEEAE0D23EC739F00D2CE2B1, SequenceNumber(1), o#f77edd77f5c154a850078b81b320870890bbb4f06d18f80fd512b1cc26bc3297)
+$ wallet objects --address 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
+                 Object ID                  |  Version   |                                Digest                               
+------------------------------------------------------------------------------------------------------------------------------
+ 0xda2237a9890bccebeeeae0d23ec739f00d2ce2b1 |     0      | o#f77edd77f5c154a850078b81b320870890bbb4f06d18f80fd512b1cc26bc3297
 ```
 
 ## Creating example NFTs
@@ -617,7 +654,7 @@ Successfully created an ExampleNFT:
 
 Owner: AddressOwner(k#66af3898e7558b79e115ab61184a958497d1905a)
 Version: 1
-ID: 70874F1ABD0A9A0126726A626FF48374F7B2D9C6
+ID: 0x70874f1abd0a9a0126726a626ff48374f7b2d9c6
 Readonly: false
 Type: 0x2::DevNetNFT::DevNetNFT
 ```
@@ -674,27 +711,28 @@ OPTIONS:
 Here is an example of how to merge coins. To merge coins, you will need at lease three coin objects -
 two coin objects for merging, and one for the gas payment.
 You also need to specify the maximum gas budget that should be expanded for the coin merge operations.
-Let us examine objects owned by address `EF999DBDB19CCCA504EEF5432CEC69EA8A1D4A1B`
+Let us examine objects owned by address `0xef999dbdb19ccca504eef5432cec69ea8a1d4a1b`
 and use the first coin (gas) object as the one to be the result of the merge, the second one to be merged, and the third one to be used as payment:
 
 ```shell
-$ wallet objects --address EF999DBDB19CCCA504EEF5432CEC69EA8A1D4A1B
+$ wallet objects --address 0xef999dbdb19ccca504eef5432cec69ea8a1d4a1b
 ```
 
 And its output:
 
 ```
-Showing 5 results.
-(149A3493C97FAFC696526052FE08E77043D4BE0B, SequenceNumber(0), o#2d50f098c913e1863ece507dcdcd5a291252f6c1df89ec8f16c62b542ac723b5)
-(1B19F74AD77A95D7562432F6991AC9EC1EA2C57C, SequenceNumber(0), o#d390dc554759f892a714b2659046f3f47830cd789b3ec1df9d40bd876c3e1352)
-(4C21FCC8CA953162877FE740F78D9C109145CC73, SequenceNumber(0), o#18229401e7eb96bc23878e1f33d134e19ea5fd0a031bdb323c83baae4eab7097)
-(646902FA947ABF2E125131AF0F3A9D5697C8F884, SequenceNumber(0), o#f0bc58de072c0f028b02a0fe53644a74e5b490652c49471a99ffccb2fbb0e60e)
-(BEC3BF567A6E32508C96663A339635DC0FB0095C, SequenceNumber(0), o#cfafb0b086cb2df2e8dfb25d84948a45aa19578c45bbaef98d1d5fbcf266db40)
+                 Object ID                  |  Version   |                                Digest                               
+------------------------------------------------------------------------------------------------------------------------------
+ 0x149a3493c97fafc696526052fe08e77043d4be0b |     0      | o#2d50f098c913e1863ece507dcdcd5a291252f6c1df89ec8f16c62b542ac723b5
+ 0x1b19f74ad77a95d7562432f6991ac9ec1ea2c57c |     0      | o#d390dc554759f892a714b2659046f3f47830cd789b3ec1df9d40bd876c3e1352
+ 0x4c21fcc8ca953162877fe740f78d9c109145cc73 |     0      | o#18229401e7eb96bc23878e1f33d134e19ea5fd0a031bdb323c83baae4eab7097
+ 0x646902fa947abf2e125131af0f3a9d5697c8f884 |     0      | o#f0bc58de072c0f028b02a0fe53644a74e5b490652c49471a99ffccb2fbb0e60e
+ 0xbec3bf567a6e32508c96663a339635dc0fb0095c |     0      | o#cfafb0b086cb2df2e8dfb25d84948a45aa19578c45bbaef98d1d5fbcf266db40
 ```
 
 Then we merge:
 ```shell
-$ wallet merge-coin --primary-coin 149A3493C97FAFC696526052FE08E77043D4BE0B  --coin-to-merge 1B19F74AD77A95D7562432F6991AC9EC1EA2C57C --gas-budget 1000
+$ wallet merge-coin --primary-coin 0x149a3493c97fafc696526052fe08e77043d4be0b  --coin-to-merge 0x1b19f74ad77a95d7562432f6991ac9ec1ea2c57c --gas-budget 1000
 ```
 
 With results resembling:
@@ -707,13 +745,13 @@ Gas Budget : 1000
 Package ID : 0x2
 Module : Coin
 Function : join_
-Object Arguments : [(149A3493C97FAFC696526052FE08E77043D4BE0B, SequenceNumber(0), o#2d50f098c913e1863ece507dcdcd5a291252f6c1df89ec8f16c62b542ac723b5), (1B19F74AD77A95D7562432F6991AC9EC1EA2C57C, SequenceNumber(0), o#d390dc554759f892a714b2659046f3f47830cd789b3ec1df9d40bd876c3e1352)]
+Object Arguments : [(0x149a3493c97fafc696526052fe08e77043d4be0b, SequenceNumber(0), o#2d50f098c913e1863ece507dcdcd5a291252f6c1df89ec8f16c62b542ac723b5), (1B19F74AD77A95D7562432F6991AC9EC1EA2C57C, SequenceNumber(0), o#d390dc554759f892a714b2659046f3f47830cd789b3ec1df9d40bd876c3e1352)]
 Pure Arguments : []
 Type Arguments : [Struct(StructTag { address: 0000000000000000000000000000000000000002, module: Identifier("SUI"), name: Identifier("SUI"), type_params: [] })]
 
 ----- Merge Coin Results ----
-Updated Coin : Coin { id: 149A3493C97FAFC696526052FE08E77043D4BE0B, value: 200000 }
-Updated Gas : Coin { id: 4C21FCC8CA953162877FE740F78D9C109145CC73, value: 99995 }
+Updated Coin : Coin { id: 0x149a3493c97fafc696526052fe08e77043d4be0b, value: 200000 }
+Updated Gas : Coin { id: 0x4c21fcc8ca953162877fe740f78d9c109145cc73, value: 99995 }
 ```
 
 ### Split coins
@@ -740,21 +778,22 @@ OPTIONS:
 For splitting coins, you will need at lease two coins to execute the `split-coin` command,
 one coin to split, one for the gas payment.
 
-Let us examine objects owned by address `45CDA12E3BAFE3017B4B3CD62C493E5FBAAD7FB0`:
+Let us examine objects owned by address `0x45cda12e3bafe3017b4b3cd62c493e5fbaad7fb0`:
 
 ```shell
-$ wallet objects --address 45CDA12E3BAFE3017B4B3CD62C493E5FBAAD7FB0
+$ wallet objects --address 0x45cda12e3bafe3017b4b3cd62c493e5fbaad7fb0
 ```
 
 With output resembling:
 
-```
+```                 Object ID                  |  Version   |                                Digest                               
+------------------------------------------------------------------------------------------------------------------------------
+ 0x13347bd461e8a2b9ee5de7f6131063a3050a45c4 |     0      | o#4ca351cbf507cac8162cb8278a38c1c9cdf4c6d2be05f2bee405da02ce8a4aa1
+ 0xb402f52ba6216a770939e6d4922ae6d6d05c2256 |     0      | o#b95d120c36fab571c2389bccf507530a39e0055cdd9e9793aaf4ef691b1b8c96
+ 0xba280146ecd5f74f5a0f31de4d1883bc078d3729 |     0      | o#edb2c038d6fd258b71d811cfa941216991d3a6bf99a783c90835becd443eb66c
+ 0xbd0c7b951a255b078044ef492099cd6e0ed1fd9b |     0      | o#9a937af506d95bb1ffc77ff8f8cc0fbcc550c566f9b41289e1f17d67fd1b9bf8
+ 0xfc4d67d8c7db119901ef0a0d4bc9ec61584a0b2d |     0      | o#f1c1ca7cb3ef5f3e2a4fff5ec4ebc657388b1e2142432f66199886904eaf1669
 Showing 5 results.
-(13347BD461E8A2B9EE5DE7F6131063A3050A45C4, SequenceNumber(0), o#4ca351cbf507cac8162cb8278a38c1c9cdf4c6d2be05f2bee405da02ce8a4aa1)
-(B402F52BA6216A770939E6D4922AE6D6D05C2256, SequenceNumber(0), o#b95d120c36fab571c2389bccf507530a39e0055cdd9e9793aaf4ef691b1b8c96)
-(BA280146ECD5F74F5A0F31DE4D1883BC078D3729, SequenceNumber(0), o#edb2c038d6fd258b71d811cfa941216991d3a6bf99a783c90835becd443eb66c)
-(BD0C7B951A255B078044EF492099CD6E0ED1FD9B, SequenceNumber(0), o#9a937af506d95bb1ffc77ff8f8cc0fbcc550c566f9b41289e1f17d67fd1b9bf8)
-(FC4D67D8C7DB119901EF0A0D4BC9EC61584A0B2D, SequenceNumber(0), o#f1c1ca7cb3ef5f3e2a4fff5ec4ebc657388b1e2142432f66199886904eaf1669)
 ```
 
 Here is an example of splitting coins. We are splitting out three new coins from the original coin (first one on the list above),
@@ -762,7 +801,7 @@ with values of 1000, 5000 and 3000, respectively; note the `--amounts` argument 
 We use the second coin on the list to pay for this transaction.
 
 ```shell
-$ wallet split-coin --coin-id 13347BD461E8A2B9EE5DE7F6131063A3050A45C4 --amounts 1000 5000 3000 --gas-budget 1000
+$ wallet split-coin --coin-id 0x13347bd461e8a2b9ee5de7f6131063a3050a45c4 --amounts 1000 5000 3000 --gas-budget 1000
 ```
 
 You will see output resembling:
@@ -775,27 +814,29 @@ Gas Budget : 1000
 Package ID : 0x2
 Module : Coin
 Function : split_vec
-Object Arguments : [(13347BD461E8A2B9EE5DE7F6131063A3050A45C4, SequenceNumber(0), o#4ca351cbf507cac8162cb8278a38c1c9cdf4c6d2be05f2bee405da02ce8a4aa1)]
+Object Arguments : [(0x13347bd461e8a2b9ee5de7f6131063a3050a45c4, SequenceNumber(0), o#4ca351cbf507cac8162cb8278a38c1c9cdf4c6d2be05f2bee405da02ce8a4aa1)]
 Pure Arguments : [[3, 232, 3, 0, 0, 0, 0, 0, 0, 136, 19, 0, 0, 0, 0, 0, 0, 184, 11, 0, 0, 0, 0, 0, 0]]
 Type Arguments : [Struct(StructTag { address: 0000000000000000000000000000000000000002, module: Identifier("SUI"), name: Identifier("SUI"), type_params: [] })]
 
 ----- Split Coin Results ----
-Updated Coin : Coin { id: 13347BD461E8A2B9EE5DE7F6131063A3050A45C4, value: 91000 }
-New Coins : Coin { id: 72129FBF3168C37A4DD8EC7EE69DA28D0D4D4636, value: 5000 },
-            Coin { id: 821942C9375B644C6FC7531E46A70ACB98FB5180, value: 1000 },
-            Coin { id: D2E65E9A3107662F7B6399BD1D82C235CFD8C874, value: 3000 }
-Updated Gas : Coin { id: B402F52BA6216A770939E6D4922AE6D6D05C2256, value: 99780 }
+Updated Coin : Coin { id: 0x13347bd461e8a2b9ee5de7f6131063a3050a45c4, value: 91000 }
+New Coins : Coin { id: 0x72129fbf3168c37a4dd8ec7ee69da28d0d4d4636, value: 5000 },
+            Coin { id: 0x821942c9375b644c6fc7531e46a70acb98fb5180, value: 1000 },
+            Coin { id: 0xd2e65e9a3107662f7b6399bd1d82c235cfd8c874, value: 3000 }
+Updated Gas : Coin { id: 0xb402f52ba6216a770939e6d4922ae6d6d05c2256, value: 99780 }
 
-$ wallet objects --address 45CDA12E3BAFE3017B4B3CD62C493E5FBAAD7FB0
+$ wallet objects --address 0x45cda12e3bafe3017b4b3cd62c493e5fbaad7fb0
+                 Object ID                  |  Version   |                                Digest                               
+------------------------------------------------------------------------------------------------------------------------------
+ 0x13347bd461e8a2b9ee5de7f6131063a3050a45c4 |     1      | o#4f86a454ed9aa482adcbfece78cdd77d491d4e768aa8034af78a237d18e09f9f
+ 0x72129fbf3168c37a4dd8ec7ee69da28d0d4d4636 |     1      | o#247905d1c8eee09b4d3bd02f4229376cd7482705e28ef7ff4ca86774d09c72b8
+ 0x821942c9375b644c6fc7531e46a70acb98fb5180 |     1      | o#51aefcb853df1d24b98b975795e21b90496135e292967f7dee0a8fc12079d3af
+ 0xb402f52ba6216a770939e6d4922ae6d6d05c2256 |     1      | o#9a20e2565db46aa371ab7932ab4b35494ef2e6a2251955a326e5f0fea6c0ee00
+ 0xba280146ecd5f74f5a0f31de4d1883bc078d3729 |     0      | o#edb2c038d6fd258b71d811cfa941216991d3a6bf99a783c90835becd443eb66c
+ 0xbd0c7b951a255b078044ef492099cd6e0ed1fd9b |     0      | o#9a937af506d95bb1ffc77ff8f8cc0fbcc550c566f9b41289e1f17d67fd1b9bf8
+ 0xd2e65e9a3107662f7b6399bd1d82c235cfd8c874 |     1      | o#c904eaa7b7cc659bc34beec8e7d5ab2cfc51236d498c12cde0d7542b3b1d8b89
+ 0xfc4d67d8c7db119901ef0a0d4bc9ec61584a0b2d |     0      | o#f1c1ca7cb3ef5f3e2a4fff5ec4ebc657388b1e2142432f66199886904eaf1669
 Showing 8 results.
-(13347BD461E8A2B9EE5DE7F6131063A3050A45C4, SequenceNumber(1), o#4f86a454ed9aa482adcbfece78cdd77d491d4e768aa8034af78a237d18e09f9f)
-(72129FBF3168C37A4DD8EC7EE69DA28D0D4D4636, SequenceNumber(1), o#247905d1c8eee09b4d3bd02f4229376cd7482705e28ef7ff4ca86774d09c72b8)
-(821942C9375B644C6FC7531E46A70ACB98FB5180, SequenceNumber(1), o#51aefcb853df1d24b98b975795e21b90496135e292967f7dee0a8fc12079d3af)
-(B402F52BA6216A770939E6D4922AE6D6D05C2256, SequenceNumber(1), o#9a20e2565db46aa371ab7932ab4b35494ef2e6a2251955a326e5f0fea6c0ee00)
-(BA280146ECD5F74F5A0F31DE4D1883BC078D3729, SequenceNumber(0), o#edb2c038d6fd258b71d811cfa941216991d3a6bf99a783c90835becd443eb66c)
-(BD0C7B951A255B078044EF492099CD6E0ED1FD9B, SequenceNumber(0), o#9a937af506d95bb1ffc77ff8f8cc0fbcc550c566f9b41289e1f17d67fd1b9bf8)
-(D2E65E9A3107662F7B6399BD1D82C235CFD8C874, SequenceNumber(1), o#c904eaa7b7cc659bc34beec8e7d5ab2cfc51236d498c12cde0d7542b3b1d8b89)
-(FC4D67D8C7DB119901EF0A0D4BC9EC61584A0B2D, SequenceNumber(0), o#f1c1ca7cb3ef5f3e2a4fff5ec4ebc657388b1e2142432f66199886904eaf1669)
 ```
 
 From the result, we can see three new coins were created in the transaction.
@@ -819,22 +860,24 @@ coins as this can be accomplished with a built-in wallet
 [command](#transferring-coins) - we chose this example due to its
 simplicity.
 
-Let us examine objects owned by address `AE6FB6036570FEC1DF71599740C132CDF5B45B9D`:
+Let us examine objects owned by address `0xae6fb6036570fec1df71599740c132cdf5b45b9d`:
 
 ```shell
-$ wallet objects --address AE6FB6036570FEC1DF71599740C132CDF5B45B9D
+$ wallet objects --address ae6fb6036570fec1df71599740c132cdf5b45b9d
+                 Object ID                  |  Version   |                                Digest                               
+------------------------------------------------------------------------------------------------------------------------------
+ 0x5044dc15d3c71d500116eb026e8b70d0a180f3ac |     0      | o#748fabf1f7f92c8d00b54f5b431fd4e28d9dfd642cc0bc5c48b16dc0efdc58c1
+ 0x749e3ee0e0ac93bfc06ed58972efe87717a428da |     0      | o#05efb7971ec89b78fd512913fb6f9bfbd0b5ffd2e99775493f9703ff153b3998
+ 0x98765d1cbc66bdfc443aa60b614427470b266b28 |     0      | o#5f1696a263b9c97ba2e50175db0af1052a70943148b697fca98f98781482eba5
+ 0xa9e4fda731fc888cc536da62c887c63e9becbe77 |     0      | o#ed2945e8d8a8a6c2f3fdc75a84c6cea2a9d74e2fce90779d6d3955c9416a75a1
+ 0xb6e55f0eb3b820cb848b3bbb6db4bc34e54f2413 |     0      | o#4c6be9267d9aeb43f024c1604c765e3f127f8bc2dc4174a5fea5f26d1f7ed03e
 Showing 5 results.
-(5044DC15D3C71D500116EB026E8B70D0A180F3AC, SequenceNumber(0), o#748fabf1f7f92c8d00b54f5b431fd4e28d9dfd642cc0bc5c48b16dc0efdc58c1)
-(749E3EE0E0AC93BFC06ED58972EFE87717A428DA, SequenceNumber(0), o#05efb7971ec89b78fd512913fb6f9bfbd0b5ffd2e99775493f9703ff153b3998)
-(98765D1CBC66BDFC443AA60B614427470B266B28, SequenceNumber(0), o#5f1696a263b9c97ba2e50175db0af1052a70943148b697fca98f98781482eba5)
-(A9E4FDA731FC888CC536DA62C887C63E9BECBE77, SequenceNumber(0), o#ed2945e8d8a8a6c2f3fdc75a84c6cea2a9d74e2fce90779d6d3955c9416a75a1)
-(B6E55F0EB3B820CB848B3BBB6DB4BC34E54F2413, SequenceNumber(0), o#4c6be9267d9aeb43f024c1604c765e3f127f8bc2dc4174a5fea5f26d1f7ed03e)
 ```
 
 Now that we know which objects are owned by that address,
 we can transfer one of them to another address, say the fresh one
 we created in the [Generating a new account](#generating-a-new-account) section
-(`C72CF3ADCC4D11C03079CEF2C8992AEA5268677A`). We can try any object,
+(`0xc72cf3adcc4d11c03079cef2c8992aea5268677a`). We can try any object,
 but for the sake of this exercise, let's choose the last one on the
 list.
 
@@ -842,7 +885,7 @@ We will perform the transfer by calling the `transfer` function from
 the SUI module using the following Sui Wallet command:
 
 ```shell
-$ wallet call --function transfer --module SUI --package 0x2 --args \"0x5044DC15D3C71D500116EB026E8B70D0A180F3AC\" \"0xF456EBEF195E4A231488DF56B762AC90695BE2DD\" --gas-budget 1000
+$ wallet call --function transfer --module SUI --package 0x2 --args 0x5044DC15D3C71D500116EB026E8B70D0A180F3AC 0xF456EBEF195E4A231488DF56B762AC90695BE2DD --gas-budget 1000
 ```
 
 This is a pretty complicated command so let's explain all of its
@@ -883,15 +926,15 @@ Gas Budget : 1000
 Package ID : 0x2
 Module : SUI
 Function : transfer
-Object Arguments : [(5044DC15D3C71D500116EB026E8B70D0A180F3AC, SequenceNumber(0), o#748fabf1f7f92c8d00b54f5b431fd4e28d9dfd642cc0bc5c48b16dc0efdc58c1)]
+Object Arguments : [(0x5044dc15d3c71d500116eb026e8b70d0a180f3ac, SequenceNumber(0), o#748fabf1f7f92c8d00b54f5b431fd4e28d9dfd642cc0bc5c48b16dc0efdc58c1)]
 Pure Arguments : [[244, 86, 235, 239, 25, 94, 74, 35, 20, 136, 223, 86, 183, 98, 172, 144, 105, 91, 226, 221]]
 Type Arguments : []
 
 ----- Transaction Effects ----
 Status : Success { gas_used: 11, results: [] }
 Mutated Objects:
-5044DC15D3C71D500116EB026E8B70D0A180F3AC SequenceNumber(1) o#6b384c50aa19204f3dd98dd52b39217ff234ed321cc2666b91ba6dadc14bd837
-B6E55F0EB3B820CB848B3BBB6DB4BC34E54F2413 SequenceNumber(1) o#227a2127b17bdfd36c1f7982969588c3baea7a96f7019158018be1c4f152db04
+0x5044dc15d3c71d500116eb026e8b70d0a180f3ac SequenceNumber(1) o#6b384c50aa19204f3dd98dd52b39217ff234ed321cc2666b91ba6dadc14bd837
+0xb6e55f0eb3b820cb848b3bbb6db4bc34e54f2413 SequenceNumber(1) o#227a2127b17bdfd36c1f7982969588c3baea7a96f7019158018be1c4f152db04
 ```
 
 This output indicates the gas object
@@ -902,12 +945,14 @@ of the `transfer` function) by querying objects that are now owned by
 the sender:
 
 ```shell
-$ wallet objects --address AE6FB6036570FEC1DF71599740C132CDF5B45B9D
+$ wallet objects --address 0xae6fb6036570fec1df71599740c132cdf5b45b9d
+                 Object ID                  |  Version   |                                Digest                               
+------------------------------------------------------------------------------------------------------------------------------
+ 0x749e3ee0e0ac93bfc06ed58972efe87717a428da |     0      | o#05efb7971ec89b78fd512913fb6f9bfbd0b5ffd2e99775493f9703ff153b3998
+ 0x98765d1cbc66bdfc443aa60b614427470b266b28 |     0      | o#5f1696a263b9c97ba2e50175db0af1052a70943148b697fca98f98781482eba5
+ 0xa9e4fda731fc888cc536da62c887c63e9becbe77 |     0      | o#ed2945e8d8a8a6c2f3fdc75a84c6cea2a9d74e2fce90779d6d3955c9416a75a1
+ 0xb6e55f0eb3b820cb848b3bbb6db4bc34e54f2413 |     1      | o#227a2127b17bdfd36c1f7982969588c3baea7a96f7019158018be1c4f152db04
 Showing 4 results.
-(749E3EE0E0AC93BFC06ED58972EFE87717A428DA, SequenceNumber(0), o#05efb7971ec89b78fd512913fb6f9bfbd0b5ffd2e99775493f9703ff153b3998)
-(98765D1CBC66BDFC443AA60B614427470B266B28, SequenceNumber(0), o#5f1696a263b9c97ba2e50175db0af1052a70943148b697fca98f98781482eba5)
-(A9E4FDA731FC888CC536DA62C887C63E9BECBE77, SequenceNumber(0), o#ed2945e8d8a8a6c2f3fdc75a84c6cea2a9d74e2fce90779d6d3955c9416a75a1)
-(B6E55F0EB3B820CB848B3BBB6DB4BC34E54F2413, SequenceNumber(1), o#227a2127b17bdfd36c1f7982969588c3baea7a96f7019158018be1c4f152db04)
 ```
 
 We can now see this address no longer owns the transferred object.
@@ -915,7 +960,7 @@ And if we inspect this object, we can see it has the new
 owner, different from the original one:
 
 ```shell
-$ wallet object --id 5044DC15D3C71D500116EB026E8B70D0A180F3AC
+$ wallet object --id 0x5044dc15d3c71d500116eb026e8b70d0a180f3ac
 ```
 
 Resulting in:
@@ -923,7 +968,7 @@ Resulting in:
 ```
 Owner: AddressOwner(k#f456ebef195e4a231488df56b762ac90695be2dd)
 Version: 1
-ID: 5044DC15D3C71D500116EB026E8B70D0A180F3AC
+ID: 0x5044dc15d3c71d500116eb026e8b70d0a180f3ac
 Readonly: false
 Type: 0x2::Coin::Coin<0x2::SUI::SUI>
 ```
@@ -948,21 +993,23 @@ an upper limit (we use 1000 as our gas budget.
 Let us use the same address for publishing that we used for calling Move code in the previous [section](#calling-move-code) (`AE6FB6036570FEC1DF71599740C132CDF5B45B9D`) which now has 4 objecst left:
 
 ```shell
-$ wallet objects --address AE6FB6036570FEC1DF71599740C132CDF5B45B9D
+$ wallet objects --address 0xae6fb6036570fec1df71599740c132cdf5b45b9d
 ```
 
 Outputting:
 
 ```
-(749E3EE0E0AC93BFC06ED58972EFE87717A428DA, SequenceNumber(0), o#05efb7971ec89b78fd512913fb6f9bfbd0b5ffd2e99775493f9703ff153b3998)
-(98765D1CBC66BDFC443AA60B614427470B266B28, SequenceNumber(0), o#5f1696a263b9c97ba2e50175db0af1052a70943148b697fca98f98781482eba5)
-(A9E4FDA731FC888CC536DA62C887C63E9BECBE77, SequenceNumber(0), o#ed2945e8d8a8a6c2f3fdc75a84c6cea2a9d74e2fce90779d6d3955c9416a75a1)
-(B6E55F0EB3B820CB848B3BBB6DB4BC34E54F2413, SequenceNumber(1), o#227a2127b17bdfd36c1f7982969588c3baea7a96f7019158018be1c4f152db04)
+                 Object ID                  |  Version   |                                Digest                               
+------------------------------------------------------------------------------------------------------------------------------
+ 0x749e3ee0e0ac93bfc06ed58972efe87717a428da |     0      | o#05efb7971ec89b78fd512913fb6f9bfbd0b5ffd2e99775493f9703ff153b3998
+ 0x98765d1cbc66bdfc443aa60b614427470b266b28 |     0      | o#5f1696a263b9c97ba2e50175db0af1052a70943148b697fca98f98781482eba5
+ 0xa9e4fda731fc888cc536da62c887c63e9becbe77 |     0      | o#ed2945e8d8a8a6c2f3fdc75a84c6cea2a9d74e2fce90779d6d3955c9416a75a1
+ 0xb6e55f0eb3b820cb848b3bbb6db4bc34e54f2413 |     1      | o#227a2127b17bdfd36c1f7982969588c3baea7a96f7019158018be1c4f152db04
 Showing 4 results.
 ```
 
 The whole command to publish a package for address
-`AE6FB6036570FEC1DF71599740C132CDF5B45B9D` resembles the following (assuming
+`0xae6fb6036570fec1df71599740c132cdf5b45b9d` resembles the following (assuming
 that the location of the package's sources is in the `PATH_TO_PACKAGE`
 environment variable):
 
@@ -979,18 +1026,18 @@ Transaction Kind : Publish
 Gas Budget : 30000
 
 ----- Publish Results ----
-The newly published package object: (BAEEF9626CC17311E6A3EE99B44CA453D2CC390F, SequenceNumber(1), o#9bf20104335bcffcaa51e39737206e87df53b6f907afca6117c82818e704968e)
+The newly published package object: (0xbaeef9626cc17311e6a3ee99b44ca453d2cc390f, SequenceNumber(1), o#9bf20104335bcffcaa51e39737206e87df53b6f907afca6117c82818e704968e)
 List of objects created by running module initializers:
 Owner: AddressOwner(k#ae6fb6036570fec1df71599740c132cdf5b45b9d)
 Version: 1
-ID: FDEE51771AE2A264D61EB8A7726D43948B278B90
+ID: 0xfdee51771ae2a264d61eb8a7726d43948b278b90
 Readonly: false
 Type: 0xbaeef9626cc17311e6a3ee99b44ca453d2cc390f::M1::Forge
-Updated Gas : Coin { id: 749E3EE0E0AC93BFC06ED58972EFE87717A428DA, value: 99232 }
+Updated Gas : Coin { id: 0x749e3ee0e0ac93bfc06ed58972efe87717a428da, value: 99232 }
 ```
 
 Please note that running this command resulted in creating an object representing the published package.
-From now on, we can use the package object ID (`52FA2FF453CFECBA06BB84B3B43147C586960E69`) in the Sui wallet's call
+From now on, we can use the package object ID (`0x52fa2ff453cfecba06bb84b3b43147c586960e69`) in the Sui wallet's call
 command just like we used `0x2` for built-in packages in the
 [Calling Move code](#calling-move-code) section.
 
@@ -1028,10 +1075,10 @@ Example `genesis.conf`:
   ],
   "accounts": [
     {
-      "address": "bd654f352c895d9ec14c491d3f2b4e1f98fb07323383bebe9f95ab625bff2fa0",
+      "address": "0xbd654f352c895d9ec14c491d3f2b4e1f98fb07323383bebe9f95ab625bff2fa0",
       "gas_objects": [
         {
-          "object_id": "5c68ac7ba66ef69fdea0651a21b531a37bf342b7",
+          "object_id": "0x5c68ac7ba66ef69fdea0651a21b531a37bf342b7",
           "gas_value": 1000
         }
       ]
@@ -1075,7 +1122,7 @@ If you use any custom accounts in `genesis.conf`, ensure you have a correspondin
   ],
   "accounts": [
     {
-      "address": "09818AAC3EDF9CF9B006B70C36E7241768B26386",
+      "address": "0x09818aac3edf9cf9b006b70c36e7241768b26386",
       "gas_objects": [
         {
           "object_id": "0000000000000000000000000000000000000003",

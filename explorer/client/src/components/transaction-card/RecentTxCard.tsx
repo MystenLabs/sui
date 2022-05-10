@@ -1,16 +1,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
     getSingleTransactionKind,
     getTransactionKind,
     getTransferTransaction,
     getExecutionStatusType,
     getTotalGasUsed,
-} from 'sui.js';
+} from '@mysten/sui.js';
+import cl from 'classnames';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
@@ -23,7 +23,7 @@ import type {
     TransactionEffectsResponse,
     ExecutionStatusType,
     TransactionKindName,
-} from 'sui.js';
+} from '@mysten/sui.js';
 
 import styles from './RecentTxCard.module.css';
 

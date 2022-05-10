@@ -557,7 +557,7 @@ dependencies = [
  "ark-std",
  "blake2s_simd",
  "byteorder",
- "clap 3.1.15",
+ "clap 3.1.17",
  "csv",
  "env_logger",
  "hex",
@@ -780,9 +780,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.1.15"
+version = "3.1.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85a35a599b11c089a7f49105658d089b8f2cf0882993c17daf6de15285c2c35d"
+checksum = "47582c09be7c8b32c0ab3a6181825ababb713fde6fff20fc573a3870dd45c6a0"
 dependencies = [
  "atty",
  "bitflags",
@@ -1741,6 +1741,10 @@ name = "futures-timer"
 version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e64b03909df88034c26dc1547e8970b91f98bdb65165d6a4e9110d94263dbb2c"
+dependencies = [
+ "gloo-timers",
+ "send_wrapper",
+]
 
 [[package]]
 name = "futures-util"
@@ -1835,6 +1839,49 @@ dependencies = [
  "bitflags",
  "ignore",
  "walkdir",
+]
+
+[[package]]
+name = "gloo-net"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6d37f728c2b2b8c568bd2efb34ce9087e347c182db68f101a969b4fe23054d5"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "futures-sink",
+ "gloo-utils",
+ "js-sys",
+ "pin-project",
+ "serde 1.0.137",
+ "serde_json",
+ "thiserror",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "gloo-timers"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fb7d06c1c8cc2a29bee7ec961009a0b2caa0793ee4900c2ffb348734ba1c8f9"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "gloo-utils"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c0bbef55e98d946adbd89f3c65a497cf9adb995a73b99573f30180e8813ab21"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
@@ -2203,25 +2250,33 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee"
-version = "0.11.0"
-source = "git+https://github.com/paritytech/jsonrpsee.git?rev=661870a0ab4159b2bb104ace25a2cb817a097e03#661870a0ab4159b2bb104ace25a2cb817a097e03"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad6f9ff3481f3069c92474b697c104502f7e9191d29b34bfa38ae9a19415f1cd"
 dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
  "jsonrpsee-http-client",
  "jsonrpsee-http-server",
- "jsonrpsee-proc-macros 0.11.0 (git+https://github.com/paritytech/jsonrpsee.git?rev=661870a0ab4159b2bb104ace25a2cb817a097e03)",
+ "jsonrpsee-proc-macros",
  "jsonrpsee-types",
+ "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
  "jsonrpsee-ws-server",
+ "tracing",
 ]
 
 [[package]]
 name = "jsonrpsee-client-transport"
-version = "0.11.0"
-source = "git+https://github.com/paritytech/jsonrpsee.git?rev=661870a0ab4159b2bb104ace25a2cb817a097e03#661870a0ab4159b2bb104ace25a2cb817a097e03"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4358e100faf43b2f3b7b0ecf0ad4ce3e6275fe12fda8428dedda2979751dd184"
 dependencies = [
+ "anyhow",
+ "futures-channel",
+ "futures-timer",
  "futures-util",
+ "gloo-net",
  "http",
  "jsonrpsee-core",
  "jsonrpsee-types",
@@ -2238,8 +2293,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-core"
-version = "0.11.0"
-source = "git+https://github.com/paritytech/jsonrpsee.git?rev=661870a0ab4159b2bb104ace25a2cb817a097e03#661870a0ab4159b2bb104ace25a2cb817a097e03"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e1d26ab3868749d6f716345a5fbd3334a100c0709fe464bd9189ee9d78adcde"
 dependencies = [
  "anyhow",
  "arrayvec 0.7.2",
@@ -2260,12 +2316,14 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
 name = "jsonrpsee-http-client"
-version = "0.11.0"
-source = "git+https://github.com/paritytech/jsonrpsee.git?rev=661870a0ab4159b2bb104ace25a2cb817a097e03#661870a0ab4159b2bb104ace25a2cb817a097e03"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11e689d2d20891e636919ead565fef2ebf8a7ad863ddcd9ff112a79b281fcba1"
 dependencies = [
  "async-trait",
  "hyper",
@@ -2282,8 +2340,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-http-server"
-version = "0.11.0"
-source = "git+https://github.com/paritytech/jsonrpsee.git?rev=661870a0ab4159b2bb104ace25a2cb817a097e03#661870a0ab4159b2bb104ace25a2cb817a097e03"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee87f19a7a01a55248fc4b4861d822331c4fd60151d99e7ac9c6771999132671"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -2300,20 +2359,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-proc-macros"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e7e19642c62b191afcd74fb8cab29f209f5fc24fbd2efed1ffd4393ef447428"
-dependencies = [
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "jsonrpsee-proc-macros"
-version = "0.11.0"
-source = "git+https://github.com/paritytech/jsonrpsee.git?rev=661870a0ab4159b2bb104ace25a2cb817a097e03#661870a0ab4159b2bb104ace25a2cb817a097e03"
+checksum = "b75da57d54817577801c2f7a1b638610819dfd86f0470c21a2af81b06eb41ba6"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -2323,8 +2371,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-types"
-version = "0.11.0"
-source = "git+https://github.com/paritytech/jsonrpsee.git?rev=661870a0ab4159b2bb104ace25a2cb817a097e03#661870a0ab4159b2bb104ace25a2cb817a097e03"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5fe5a629443d17a30ff564881ba68881a710fd7eb02a538087b0bc51cb4962c"
 dependencies = [
  "anyhow",
  "beef",
@@ -2335,9 +2384,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpsee-wasm-client"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b8e908214ac419d4931726d4026d0e3ab8a304577b6ea561c1a72328cebf9e9"
+dependencies = [
+ "jsonrpsee-client-transport",
+ "jsonrpsee-core",
+ "jsonrpsee-types",
+]
+
+[[package]]
 name = "jsonrpsee-ws-client"
-version = "0.11.0"
-source = "git+https://github.com/paritytech/jsonrpsee.git?rev=661870a0ab4159b2bb104ace25a2cb817a097e03#661870a0ab4159b2bb104ace25a2cb817a097e03"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba31eb2b9a4b73d8833f53fe55e579516289f8b31adb6104b3dbc629755acf7d"
 dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
@@ -2346,8 +2407,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-ws-server"
-version = "0.11.0"
-source = "git+https://github.com/paritytech/jsonrpsee.git?rev=661870a0ab4159b2bb104ace25a2cb817a097e03#661870a0ab4159b2bb104ace25a2cb817a097e03"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "179fe584af5c0145f922c581770d073c661a514ae6cdfa5b1a0bce41fdfdf646"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -2679,7 +2741,7 @@ version = "0.1.0"
 source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884df53c11bf34a664bc#4e025186af502c931318884df53c11bf34a664bc"
 dependencies = [
  "anyhow",
- "clap 3.1.15",
+ "clap 3.1.17",
  "crossterm 0.21.0",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -2697,7 +2759,7 @@ source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884d
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.1.15",
+ "clap 3.1.17",
  "codespan-reporting",
  "colored",
  "difference",
@@ -2751,7 +2813,7 @@ source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884d
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.1.15",
+ "clap 3.1.17",
  "codespan-reporting",
  "difference",
  "hex",
@@ -2795,7 +2857,7 @@ source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884d
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.1.15",
+ "clap 3.1.17",
  "codespan",
  "colored",
  "move-binary-format",
@@ -2814,7 +2876,7 @@ version = "0.1.0"
 source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884df53c11bf34a664bc#4e025186af502c931318884df53c11bf34a664bc"
 dependencies = [
  "anyhow",
- "clap 3.1.15",
+ "clap 3.1.17",
  "colored",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -2937,7 +2999,7 @@ source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884d
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.1.15",
+ "clap 3.1.17",
  "colored",
  "move-abigen",
  "move-binary-format",
@@ -2970,7 +3032,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "atty",
- "clap 3.1.15",
+ "clap 3.1.17",
  "codespan",
  "codespan-reporting",
  "futures",
@@ -3087,7 +3149,7 @@ source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884d
 dependencies = [
  "anyhow",
  "bytecode-interpreter-crypto",
- "clap 3.1.15",
+ "clap 3.1.17",
  "codespan-reporting",
  "itertools",
  "move-binary-format",
@@ -3151,7 +3213,7 @@ version = "0.1.0"
 source = "git+https://github.com/move-language/move?rev=4e025186af502c931318884df53c11bf34a664bc#4e025186af502c931318884df53c11bf34a664bc"
 dependencies = [
  "anyhow",
- "clap 3.1.15",
+ "clap 3.1.17",
  "codespan-reporting",
  "colored",
  "itertools",
@@ -3978,18 +4040,18 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.37"
+version = "1.0.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec757218438d5fda206afc041538b2f6d889286160d649a86a24d37e1235afd1"
+checksum = "9027b48e9d4c9175fa2218adf3557f91c1137021739951d4932f5f8268ac48aa"
 dependencies = [
  "unicode-xid",
 ]
 
 [[package]]
 name = "prost"
-version = "0.10.1"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a07b0857a71a8cb765763950499cae2413c3f9cede1133478c43600d9e146890"
+checksum = "bc03e116981ff7d8da8e5c220e374587b98d294af7ba7dd7fda761158f00086f"
 dependencies = [
  "bytes",
  "prost-derive",
@@ -4531,6 +4593,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "send_wrapper"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f638d531eccd6e23b980caf34876660d38e265409d8e99b397ab71eb3612fad0"
+
+[[package]]
 name = "serde"
 version = "0.8.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4951,7 +5019,7 @@ dependencies = [
  "base64ct",
  "bcs",
  "bytes",
- "clap 3.1.15",
+ "clap 3.1.17",
  "colored",
  "config 0.1.0",
  "crypto",
@@ -4960,7 +5028,7 @@ dependencies = [
  "futures",
  "hex",
  "jsonrpsee",
- "jsonrpsee-proc-macros 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-proc-macros",
  "move-binary-format",
  "move-bytecode-utils",
  "move-bytecode-verifier",
@@ -5033,7 +5101,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
- "clap 3.1.15",
+ "clap 3.1.17",
  "futures",
  "serde 1.0.137",
  "serde_json",
@@ -5166,7 +5234,7 @@ dependencies = [
  "bcs",
  "bincode",
  "bytes",
- "clap 3.1.15",
+ "clap 3.1.17",
  "ed25519-dalek",
  "executor",
  "fdlimit",
@@ -5440,9 +5508,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.18.1"
+version = "1.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dce653fb475565de9f6fb0614b28bca8df2c430c0cf84bcd9c843f15de5414cc"
+checksum = "4903bf0427cf68dddd5aa6a93220756f8be0c34fcfa9f5e6191e103e15a31395"
 dependencies = [
  "bytes",
  "libc",
@@ -5482,9 +5550,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-rustls"
-version = "0.23.3"
+version = "0.23.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4151fda0cf2798550ad0b34bcfc9b9dcc2a9d2471c895c68f3a8818e54f2389e"
+checksum = "c43ee83903113e03984cb9e5cebe6c04a5116269e900e3ddba8f068a62adda59"
 dependencies = [
  "rustls",
  "tokio",
@@ -5544,9 +5612,9 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30fb54bf1e446f44d870d260d99957e7d11fb9d0a0f5bd1a662ad1411cc103f9"
+checksum = "5be9d60db39854b30b835107500cf0aca0b0d14d6e1c3de124217c23a29c2ddb"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -6035,6 +6103,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27370197c907c55e3f1a9fbe26f44e937fe6451368324e009cba39e139dc08ad"
 dependencies = [
  "cfg-if 1.0.0",
+ "serde 1.0.137",
+ "serde_json",
  "wasm-bindgen-macro",
 ]
 
@@ -6051,6 +6121,18 @@ dependencies = [
  "quote",
  "syn",
  "wasm-bindgen-shared",
+]
+
+[[package]]
+name = "wasm-bindgen-futures"
+version = "0.4.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f741de44b75e14c35df886aff5f1eb73aa114fa5d4d00dcd37b5e01259bf3b2"
+dependencies = [
+ "cfg-if 1.0.0",
+ "js-sys",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
@@ -6262,7 +6344,7 @@ name = "x"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 3.1.15",
+ "clap 3.1.17",
  "nexlint",
  "nexlint-lints",
 ]

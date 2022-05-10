@@ -14,7 +14,7 @@ futures = "0.3.21"
 serde = { version = "1.0.137", features = ["derive"] }
 serde_json = "1.0.80"
 tempfile = "3.3.0"
-tokio = { version = "1.17.0", features = ["full"] }
+tokio = { version = "1.18.2", features = ["full"] }
 rand = "0.7.3"
 toml = "0.5.9"
 strum = "0.24.0"
@@ -31,7 +31,7 @@ tracing-subscriber = { version = "0.3.11", features = ["time", "registry", "env-
 serde-value = "0.7.0"
 serde-name = "0.2.0"
 dirs = "4.0.0"
-clap = { version = "3.1.14", features = ["derive"] }
+clap = { version = "3.1.17", features = ["derive"] }
 backoff = "0.4.0"
 telemetry_subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d2976a45420147ad821baae96e6fe4b12215f743" }
 
@@ -63,8 +63,8 @@ narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "72efe71
 
 once_cell = "1.10.0"
 
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee.git", rev = "661870a0ab4159b2bb104ace25a2cb817a097e03", features = ["full"] }
-jsonrpsee-proc-macros = "0.11.0"
+jsonrpsee = { version = "0.12.0", features = ["full"] }
+jsonrpsee-proc-macros = "0.12.0"
 schemars = "0.8.8"
 shell-words = "1.1.0"
 
