@@ -8,10 +8,10 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-move-binary-format = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc", features = ["address20"] }
-move-disassembler = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
-move-ir-types = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5", features = ["address20"] }
+move-disassembler = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
+move-ir-types = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
 
 sui-types = { path = "../../sui_types" }
