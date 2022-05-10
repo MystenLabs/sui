@@ -1,7 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import mockObjectData from './mock_data.json';
+import latestTxData from './latest_transactions.json';
+import mockData from './mock_data.json';
 import mockOwnedObjectData from './owned_object.json';
 
 const navigateWithUnknown = async (input: string, navigate: Function) => {
@@ -22,9 +23,16 @@ const navigateWithUnknown = async (input: string, navigate: Function) => {
 const findDataFromID = (targetID: string | undefined, state: any) =>
     state?.category !== undefined
         ? state
-        : mockObjectData.data.find(({ id }) => id === targetID);
+        : mockData.data.find(({ id }) => id === targetID);
 
 const findOwnedObjectsfromID = (targetID: string | undefined) =>
     mockOwnedObjectData?.data?.find(({ id }) => id === targetID)?.objects;
 
-export { findDataFromID, navigateWithUnknown, findOwnedObjectsfromID };
+const getAllMockTransaction = () => latestTxData.data;
+
+export {
+    findDataFromID,
+    navigateWithUnknown,
+    findOwnedObjectsfromID,
+    getAllMockTransaction,
+};
