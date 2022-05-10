@@ -11,6 +11,7 @@ import { Buffer } from 'buffer';
 import cl from 'classnames';
 
 import Longtext from '../../components/longtext/Longtext';
+import { type DataType } from './TransactionResultType';
 
 import type {
     CertifiedTransaction,
@@ -20,7 +21,7 @@ import type {
     RawObjectRef,
 } from '@mysten/sui.js';
 
-import styles from './TransactionCard.module.css';
+import styles from './TransactionView.module.css';
 
 type TxDataProps = CertifiedTransaction & {
     status: ExecutionStatusType;
@@ -191,19 +192,7 @@ function formatByTransactionKind(
     }
 }
 
-type Props = {
-    txdata: CertifiedTransaction & {
-        loadState: string;
-        txId: string;
-        status: ExecutionStatusType;
-        gasFee: number;
-        txError: string;
-        mutated: RawObjectRef[];
-        created: RawObjectRef[];
-    };
-};
-
-function TransactionCard({ txdata }: Props) {
+function TransactionView({ txdata }: { txdata: DataType }) {
     return (
         <>
             {txdata && (
@@ -358,4 +347,4 @@ function TransactionCard({ txdata }: Props) {
     );
 }
 
-export default TransactionCard;
+export default TransactionView;

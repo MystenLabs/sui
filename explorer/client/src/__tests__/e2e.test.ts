@@ -102,96 +102,9 @@ describe('End-to-end Tests', () => {
         });
     });
 
-    // TODO - rewrite this test to use the new transaction data and state object
-    /*
-    describe('Transaction Results', () => {
-        //Specific to transaction tests:
-        const successTransactionID = 'txCreateSuccess';
-        const failTransactionID = 'txFails';
-        const pendingTransactionID = 'txSendPending';
-        const missingDataTransactionID = 'txMissingData';
-
-        const checkStatus = async (
-            page: any,
-            expected: 'success' | 'pending' | 'fail'
-        ) => {
-            const actual = await page.$eval(
-                '#transactionStatus',
-                (el: any) => el.textContent
-            );
-            expect(actual).toBe(expected);
-        };
-
-        it('can be searched', async () => {
-            await page.goto(BASE_URL);
-            await searchText(page, successTransactionID);
-            const el = await page.$('#transactionID');
-            const value = await page.evaluate((el: any) => el.textContent, el);
-            expect(value.trim()).toBe(successTransactionID);
-        });
-
-        it('can be reached through URL', async () => {
-            await page.goto(BASE_URL);
-            await page.goto(`${BASE_URL}/transactions/${successTransactionID}`);
-            const el = await page.$('#transactionID');
-            const value = await page.evaluate((el: any) => el.textContent, el);
-            expect(value.trim()).toBe(successTransactionID);
-        });
-        it('has correct structure', async () => {
-            await page.goto(`${BASE_URL}/transactions/${successTransactionID}`);
-
-            const labels = [
-                'Transaction ID',
-                'Status',
-                'From',
-                'Event',
-                'Object',
-                'To',
-            ];
-
-            for (let i = 1; i <= labels.length; i++) {
-                const value = await page.$eval(
-                    `div#textResults > div:nth-child(${i}) > div:nth-child(1)`,
-                    (el: any) => el.textContent
-                );
-                expect(value.trim()).toBe(labels[i - 1]);
-            }
-        });
-
-        it('can be a success', async () => {
-            await page.goto(`${BASE_URL}/transactions/${successTransactionID}`);
-            await checkStatus(page, 'success');
-        });
-
-        it('can be pending', async () => {
-            await page.goto(`${BASE_URL}/transactions/${pendingTransactionID}`);
-            await checkStatus(page, 'pending');
-        });
-        it('can fail', async () => {
-            await page.goto(`${BASE_URL}/transactions/${failTransactionID}`);
-            await checkStatus(page, 'fail');
-        });
-        it('can have missing data', async () => {
-            await page.goto(
-                `${BASE_URL}/transactions/${missingDataTransactionID}`
-            );
-            await expectErrorResult(page);
-        });
-    });
-*/
     describe('Object Results', () => {
         const successObjectID = 'CollectionObject';
         const problemObjectID = 'ProblemObject';
-        const readOnlyObject = 'ComponentObject';
-        const notReadOnlyObject = 'CollectionObject';
-
-        const checkStatus = async (page: any, expected: 'True' | 'False') => {
-            const actual = await page.$eval(
-                '#readOnlyStatus',
-                (el: any) => el.textContent
-            );
-            expect(actual).toBe(expected);
-        };
 
         it('can be searched', async () => {
             await page.goto(BASE_URL);
@@ -208,34 +121,7 @@ describe('End-to-end Tests', () => {
             const value = await page.evaluate((el: any) => el.textContent, el);
             expect(value.trim()).toBe(successObjectID);
         });
-        it('has correct structure', async () => {
-            await page.goto(`${BASE_URL}/objects/${successObjectID}`);
 
-            const labels = [
-                'Object ID',
-                'Version',
-                'Read Only?',
-                'Type',
-                'Owner',
-            ];
-
-            for (let i = 1; i <= labels.length; i++) {
-                const value = await page.$eval(
-                    `div#descriptionResults > div:nth-child(${i}) > div:nth-child(1)`,
-                    (el: any) => el.textContent
-                );
-                expect(value.trim()).toBe(labels[i - 1]);
-            }
-        });
-        it('can be read only', async () => {
-            await page.goto(`${BASE_URL}/objects/${readOnlyObject}`);
-            await checkStatus(page, 'True');
-        });
-
-        it('can be not read only', async () => {
-            await page.goto(`${BASE_URL}/objects/${notReadOnlyObject}`);
-            await checkStatus(page, 'False');
-        });
         it('can have missing data', async () => {
             await page.goto(`${BASE_URL}/objects/${problemObjectID}`);
             await expectErrorResult(page);
@@ -259,24 +145,12 @@ describe('End-to-end Tests', () => {
             const value = await page.evaluate((el: any) => el.textContent, el);
             expect(value.trim()).toBe(successAddressID);
         });
-        it('has correct structure', async () => {
-            await page.goto(`${BASE_URL}/addresses/${successAddressID}`);
-
-            const labels = ['Address', 'Owned Objects'];
-
-            for (let i = 1; i <= labels.length; i++) {
-                const value = await page.$eval(
-                    `div#textResults > div:nth-child(${i}) > div:nth-child(1)`,
-                    (el: any) => el.textContent
-                );
-                expect(value.trim()).toBe(labels[i - 1]);
-            }
-        });
         it('displays error when no objects', async () => {
             await page.goto(`${BASE_URL}/objects/${noObjectsAddressID}`);
             await expectErrorResult(page);
         });
     });
+
     describe('Enables clicking links to', () => {
         const navigationTemplate = async (
             page: any,
