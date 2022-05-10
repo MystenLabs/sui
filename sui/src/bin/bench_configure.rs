@@ -12,8 +12,7 @@ use std::{
 use sui::{
     benchmark::bench_types::RemoteLoadGenConfig,
     config::{
-        AccountConfig, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig,
-        ObjectConfigRange,
+        AccountConfig, AuthorityInfo, Config, GenesisConfig, NetworkConfig, ObjectConfigRange,
     },
 };
 
@@ -65,7 +64,7 @@ fn main() {
             port + 1,
         );
 
-        let auth = AuthorityPrivateInfo {
+        let auth = AuthorityInfo {
             address: validator_address,
             host,
             port,

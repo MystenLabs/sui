@@ -44,7 +44,7 @@ impl Display for GatewayType {
                 let authorities = config
                     .authorities
                     .iter()
-                    .map(|info| format!("{}:{}", info.host, info.base_port));
+                    .map(|info| format!("{}:{}", info.host, info.port));
                 writeln!(
                     writer,
                     "Authorities : {:?}",
@@ -91,7 +91,7 @@ impl GatewayConfig {
         let voting_rights = self
             .authorities
             .iter()
-            .map(|authority| (authority.name, 1))
+            .map(|authority| (authority.public_key, 1))
             .collect();
         Committee::new(self.epoch, voting_rights)
     }
@@ -101,12 +101,12 @@ impl GatewayConfig {
         for authority in &self.authorities {
             let client = NetworkAuthorityClient::new(NetworkClient::new(
                 authority.host.clone(),
-                authority.base_port,
+                authority.port,
                 self.buffer_size,
                 self.send_timeout,
                 self.recv_timeout,
             ));
-            authority_clients.insert(authority.name, client);
+            authority_clients.insert(authority.public_key, client);
         }
         authority_clients
     }

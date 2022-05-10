@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     config::{
-        make_default_narwhal_committee, sui_config_dir, AuthorityInfo, AuthorityPrivateInfo,
-        Config, GatewayConfig, GatewayType, GenesisConfig, NetworkConfig, PersistedConfig,
-        WalletConfig, CONSENSUS_DB_NAME, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
+        make_default_narwhal_committee, sui_config_dir, AuthorityInfo, Config, GatewayConfig,
+        GatewayType, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
+        CONSENSUS_DB_NAME, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
     },
     keystore::{Keystore, KeystoreType, SuiKeystore},
 };
@@ -524,7 +524,7 @@ pub async fn genesis(
 }
 
 pub async fn make_server(
-    authority: &AuthorityPrivateInfo,
+    authority: &AuthorityInfo,
     key_pair: &KeyPair,
     committee: &Committee,
     buffer_size: usize,
@@ -557,7 +557,7 @@ pub async fn make_server(
 }
 
 async fn make_server_with_genesis_ctx(
-    authority: &AuthorityPrivateInfo,
+    authority: &AuthorityInfo,
     key_pair: &KeyPair,
     committee: &Committee,
     preload_modules: Vec<Vec<CompiledModule>>,
@@ -597,7 +597,7 @@ async fn make_server_with_genesis_ctx(
 /// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,
 /// and a consensus listener bridging the consensus node and the sui authority.
 pub async fn make_authority(
-    authority: &AuthorityPrivateInfo,
+    authority: &AuthorityInfo,
     key_pair: &KeyPair,
     buffer_size: usize,
     state: AuthorityState,
@@ -648,12 +648,12 @@ pub async fn make_authority(
         for info in &network {
             let client = NetworkAuthorityClient::new(NetworkClient::new(
                 info.host.clone(),
-                info.base_port,
+                info.port,
                 buffer_size,
                 Duration::from_secs(5),
                 Duration::from_secs(5),
             ));
-            authority_clients.insert(info.name, client);
+            authority_clients.insert(info.public_key, client);
         }
 
         let _active_authority = ActiveAuthority::new(authority_state.clone(), authority_clients)?;
