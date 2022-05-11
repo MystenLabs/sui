@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use futures::future;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
+use once_cell::sync::Lazy;
 use prometheus_exporter::prometheus::{
     register_histogram, register_int_counter, Histogram, IntCounter,
 };
@@ -164,14 +165,7 @@ impl Default for GatewayMetrics {
 
 // One cannot register a metric multiple times.  We protect initialization with lazy_static
 // for cases such as local tests or "sui start" which starts multiple authorities in one process.
-lazy_static! {
-    static ref METRICS: Arc<GatewayMetrics> = Arc::new(GatewayMetrics::new());
-}
-
-/// Returns a new copy of GatewayMetrics
-pub fn gateway_metrics() -> Arc<GatewayMetrics> {
-    METRICS.clone()
-}
+pub static METRICS: Lazy<GatewayMetrics> = Lazy::new(GatewayMetrics::new);
 
 pub struct GatewayState<A> {
     authorities: AuthorityAggregator<A>,
@@ -182,7 +176,7 @@ pub struct GatewayState<A> {
     /// It's useful if we need some kind of ordering for transactions
     /// from a gateway.
     next_tx_seq_number: AtomicU64,
-    metrics: Arc<GatewayMetrics>,
+    metrics: &'static GatewayMetrics,
 }
 
 impl<A> GatewayState<A> {
@@ -205,7 +199,7 @@ impl<A> GatewayState<A> {
             store,
             authorities,
             next_tx_seq_number,
-            metrics: METRICS.clone(),
+            metrics: &METRICS,
         })
     }
 

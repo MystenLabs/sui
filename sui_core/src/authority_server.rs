@@ -169,12 +169,6 @@ impl Validator for AuthorityServer {
         Ok(tonic::Response::new(info))
     }
 
-    // // Tally requests by "route" or SerializedMessage enum name
-    // self.metrics
-    //     .requests_by_route
-    //     .with_label_values(&[message.enum_name()])
-    //     .inc();
-
     async fn confirmation_transaction(
         &self,
         request: tonic::Request<CertifiedTransaction>,

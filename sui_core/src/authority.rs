@@ -16,6 +16,7 @@ use move_core_types::{
 };
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use narwhal_executor::{ExecutionIndices, ExecutionState};
+use once_cell::sync::Lazy;
 use prometheus_exporter::prometheus::{
     register_histogram, register_int_counter, Histogram, IntCounter,
 };
@@ -155,9 +156,7 @@ impl Default for AuthorityMetrics {
 
 // One cannot register a metric multiple times.  We protect initialization with lazy_static
 // for cases such as local tests or "sui start" which starts multiple authorities in one process.
-lazy_static! {
-    static ref METRICS: Arc<AuthorityMetrics> = Arc::new(AuthorityMetrics::new());
-}
+pub static METRICS: Lazy<AuthorityMetrics> = Lazy::new(AuthorityMetrics::new);
 
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
@@ -196,7 +195,7 @@ pub struct AuthorityState {
     /// Ensures there can only be a single consensus client is updating the state.
     pub consensus_guardrail: AtomicUsize,
 
-    pub metrics: Arc<AuthorityMetrics>,
+    pub metrics: &'static AuthorityMetrics,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -701,7 +700,7 @@ impl AuthorityState {
                     .expect("Notifier cannot start."),
             ),
             consensus_guardrail: AtomicUsize::new(0),
-            metrics: METRICS.clone(),
+            metrics: &METRICS,
         };
 
         state

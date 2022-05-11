@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::AuthorityAPI;
-use crate::gateway_state::{gateway_metrics, GatewayMetrics};
+use crate::gateway_state::{GatewayMetrics, METRICS};
 use crate::safe_client::SafeClient;
 
 use futures::{future, StreamExt};
@@ -20,7 +20,6 @@ use tracing::{debug, trace, Instrument};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use tokio::time::timeout;
@@ -43,7 +42,7 @@ pub struct AuthorityAggregator<A> {
     /// How to talk to this committee.
     pub authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
     // Metrics
-    pub metrics: Arc<GatewayMetrics>,
+    pub metrics: &'static GatewayMetrics,
 }
 
 impl<A> AuthorityAggregator<A> {
@@ -54,7 +53,7 @@ impl<A> AuthorityAggregator<A> {
                 .into_iter()
                 .map(|(name, api)| (name, SafeClient::new(api, committee.clone(), name)))
                 .collect(),
-            metrics: gateway_metrics(),
+            metrics: &METRICS,
         }
     }
 }

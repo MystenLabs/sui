@@ -101,6 +101,7 @@ async fn main() -> Result<(), anyhow::Error> {
         "Initializing authority listening on {}", listen_address
     );
 
+    // TODO: Switch from prometheus exporter. See https://github.com/MystenLabs/sui/issues/1907
     let prom_binding = PROM_PORT_ADDR.parse().unwrap();
     info!("Starting Prometheus HTTP endpoint at {}", PROM_PORT_ADDR);
     prometheus_exporter::start(prom_binding).expect("Failed to start Prometheus exporter");
