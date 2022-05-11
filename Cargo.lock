@@ -5037,6 +5037,7 @@ dependencies = [
  "futures",
  "hex",
  "jsonrpsee",
+ "jsonrpsee-core",
  "jsonrpsee-proc-macros",
  "move-binary-format",
  "move-bytecode-utils",
