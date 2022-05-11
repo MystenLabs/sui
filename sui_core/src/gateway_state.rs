@@ -613,7 +613,6 @@ where
         }
     }
 
-    // TODO: expose this in GatewayAPI?
     async fn get_owned_coins(
         &self,
         address: SuiAddress,
