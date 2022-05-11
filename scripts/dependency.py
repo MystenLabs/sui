@@ -6,13 +6,11 @@ import os
 import re
 
 ROOT = os.path.join(os.path.dirname(__file__), "../")
-PATTERN = re.compile(
-    '(.+)={git="https://github.com/.+/move",(?:rev|branch)=".+"(,.*)?}'
-)
-
+PATTERN = None
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--project", default="move")
     subparser = parser.add_subparsers(
         dest="command",
         description="""
@@ -30,7 +28,6 @@ def parse_args():
     upgrade_group.add_argument("--rev")
     upgrade_group.add_argument("--branch")
     return parser.parse_args()
-
 
 def scan_file(file, process_line, depth=0):
     new_content = []
@@ -64,20 +61,27 @@ def try_match_line(line):
         return (name, extra)
     return None
 
-def switch_to_local():
+def switch_to_local(project):
+    default_path_map = {
+        "move": "move/language",
+        "narwhal": "narwhal",
+    }
     # Packages that don't directly map to a directory under move/language
     # go here as special cases. By default, we just use language/[name].
-    path_map = {
-        "move-bytecode-utils": "tools/move-bytecode-utils",
-        "move-disassembler": "tools/move-disassembler",
-        "move-ir-types": "move-ir/types",
-        "move-cli": "tools/move-cli",
-        "move-core-types": "move-core/types",
-        "move-package": "tools/move-package",
-        "move-unit-test": "tools/move-unit-test",
-        "move-vm-runtime": "move-vm/runtime",
-        "move-vm-types": "move-vm/types",
-        "move-transactional-test-runner": "testing-infra/transactional-test-runner",
+    subpath_path_map = {
+        "move": {
+            "move-bytecode-utils": "tools/move-bytecode-utils",
+            "move-disassembler": "tools/move-disassembler",
+            "move-ir-types": "move-ir/types",
+            "move-cli": "tools/move-cli",
+            "move-core-types": "move-core/types",
+            "move-package": "tools/move-package",
+            "move-unit-test": "tools/move-unit-test",
+            "move-vm-runtime": "move-vm/runtime",
+            "move-vm-types": "move-vm/types",
+            "move-transactional-test-runner": "testing-infra/transactional-test-runner",
+        },
+        "narwhal": {},
     }
 
     def process_line(line, depth):
@@ -85,22 +89,27 @@ def switch_to_local():
         if m:
             (name, extra) = m
             go_back = "".join(["../"] * (depth + 1))
-            return '{} = {{ path = "{}move/language/{}"{} }}\n'.format(
-                name, go_back, path_map.get(name, name), extra
+            path = default_path_map[project]
+            if project == "move":
+                subpath = subpath_path_map[project].get(name, name)
+            elif project == "narwhal":
+                subpath = name.replace("narwhal-", "")
+            return '{} = {{ path = "{}{}/{}"{} }}\n'.format(
+                name, go_back, path, subpath, extra
             )
         return line
 
     scan_files(ROOT, process_line)
 
 
-def upgrade_revision(repo, rev, branch):
+def upgrade_revision(project, repo, rev, branch):
     assert (args.rev is None) != (args.branch is None)
     def process_line(line, _):
         m = try_match_line(line)
         if m:
             (name, extra) = m
-            return '{} = {{ git = "https://github.com/{}/move", {} = "{}"{} }}\n'.format(
-                name, repo,
+            return '{} = {{ git = "https://github.com/{}/{}", {} = "{}"{} }}\n'.format(
+                name, repo, project,
                 "branch" if branch else "rev",
                 branch if branch else rev,
                 extra
@@ -111,8 +120,14 @@ def upgrade_revision(repo, rev, branch):
 
 
 args = parse_args()
+assert(args.project == "move" or args.project == "narwhal")
+
+PATTERN = re.compile(
+    '(.+)={git="https://github.com/.+/' + args.project + '",(?:rev|branch)="[^"]+"(,.*)?}'
+)
+
 if args.command == "local":
-    switch_to_local()
+    switch_to_local(args.project)
 else:
     assert args.command == "upgrade"
-    upgrade_revision(args.repo, args.rev, args.branch)
+    upgrade_revision(args.project, args.repo, args.rev, args.branch)
