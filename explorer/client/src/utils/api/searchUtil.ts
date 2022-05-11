@@ -29,10 +29,12 @@ export const navigateWithUnknown = async (
         };
     });
 
-    const txDetailsPromise = rpc.getTransaction(input).then((data) => ({
-        category: 'transactions',
-        data: data,
-    }));
+    const txDetailsPromise = rpc
+        .getTransactionWithEffects(input)
+        .then((data) => ({
+            category: 'transactions',
+            data: data,
+        }));
 
     return (
         Promise.any([objInfoPromise, addrPromise, txDetailsPromise])

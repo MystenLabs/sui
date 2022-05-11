@@ -7,6 +7,7 @@ import { useLocation, useParams } from 'react-router-dom';
 import ErrorResult from '../../components/error-result/ErrorResult';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
+import { IS_STATIC_ENV } from '../../utils/envUtil';
 import ObjectLoaded from './ObjectLoaded';
 import {
     instanceOfDataType,
@@ -93,11 +94,11 @@ const ObjectResult = (): JSX.Element => {
     }
 
     if (objID !== undefined) {
-        if (process.env.REACT_APP_DATA !== 'static') {
-            return <ObjectResultAPI objID={objID} />;
-        } else {
-            return <ObjectResultStatic objID={objID} />;
-        }
+        return IS_STATIC_ENV ? (
+            <ObjectResultStatic objID={objID} />
+        ) : (
+            <ObjectResultAPI objID={objID} />
+        );
     }
 
     return <Fail objID={objID} />;

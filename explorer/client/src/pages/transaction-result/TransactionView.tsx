@@ -11,6 +11,7 @@ import { Buffer } from 'buffer';
 import cl from 'classnames';
 
 import Longtext from '../../components/longtext/Longtext';
+import { type DataType } from './TransactionResultType';
 
 import type {
     CertifiedTransaction,
@@ -20,7 +21,7 @@ import type {
     RawObjectRef,
 } from '@mysten/sui.js';
 
-import styles from './TransactionCard.module.css';
+import styles from './TransactionResult.module.css';
 
 type TxDataProps = CertifiedTransaction & {
     status: ExecutionStatusType;
@@ -31,7 +32,7 @@ type TxDataProps = CertifiedTransaction & {
 };
 
 // Generate an Arr of Obj with Label and Value
-// TODO rewrite to use sue.js, verify tx types and dynamically generate list
+// TODO rewrite to use sui.js, verify tx types and dynamically generate list
 function formatTxResponse(tx: TxDataProps, txId: string) {
     // Todo add batch kind
     const txKindName = getTransactionKind(tx.data);
@@ -191,24 +192,12 @@ function formatByTransactionKind(
     }
 }
 
-type Props = {
-    txdata: CertifiedTransaction & {
-        loadState: string;
-        txId: string;
-        status: ExecutionStatusType;
-        gasFee: number;
-        txError: string;
-        mutated: RawObjectRef[];
-        created: RawObjectRef[];
-    };
-};
-
-function TransactionCard({ txdata }: Props) {
+function TransactionView({ txdata }: { txdata: DataType }) {
     return (
         <>
             {txdata && (
-                <div className={styles.transactioncard}>
-                    <div className={styles.txcard}>
+                <div>
+                    <div id="txview" className={styles.txcard}>
                         {formatTxResponse(txdata, txdata.txId).map(
                             (itm: any, index: number) => (
                                 <div
@@ -228,6 +217,11 @@ function TransactionCard({ txdata }: Props) {
                                                 ? styles[itm.classAttr]
                                                 : ''
                                         )}
+                                        id={
+                                            itm.label === 'Transaction ID'
+                                                ? 'transactionID'
+                                                : ''
+                                        }
                                     >
                                         {itm.list ? (
                                             <ul className={styles.listitems}>
@@ -358,4 +352,4 @@ function TransactionCard({ txdata }: Props) {
     );
 }
 
-export default TransactionCard;
+export default TransactionView;

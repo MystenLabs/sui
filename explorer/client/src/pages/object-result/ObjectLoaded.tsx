@@ -196,7 +196,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
             <div className={styles.resultbox}>
                 {viewedData.url !== '' && (
                     <div className={styles.display}>
-                        <DisplayBox display={viewedData.url} tag="imageURL" />
+                        <DisplayBox display={viewedData.url} />
                     </div>
                 )}
                 <div
@@ -234,7 +234,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             {data.data?.tx_digest && (
                                 <div>
                                     <div>Last Transaction ID</div>
-                                    <div id="transactionID">
+                                    <div id="lasttxID">
                                         <Longtext
                                             text={data.data?.tx_digest}
                                             category="transactions"
