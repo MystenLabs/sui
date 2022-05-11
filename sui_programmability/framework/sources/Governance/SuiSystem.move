@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Sui::SuiSystem {
+    use Sui::Balance::{Self, Balance};
     use Sui::Coin::{Self, Coin, TreasuryCap};
-    use Sui::Balance::Balance;
+    use Sui::Delegation::{Self, Delegation};
+    use Sui::EpochRewardRecord::{Self, EpochRewardRecord};
     use Sui::ID::VersionedID;
     use Sui::SUI::SUI;
     use Sui::Transfer;
@@ -17,6 +19,8 @@ module Sui::SuiSystem {
     // TDOO: We will likely add more, a few potential ones:
     // - the change in stake across epochs can be at most +/- x%
     // - the change in the validator set across epochs can be at most x validators
+    //
+    // TODO: The stake threshold should be % threshold instead of amount threshold.
     struct SystemParameters has store {
         /// Lower-bound on the amount of stake required to become a validator.
         min_validator_stake: u64,
@@ -40,6 +44,9 @@ module Sui::SuiSystem {
         storage_fund: Balance<SUI>,
         /// A list of system config parameters.
         parameters: SystemParameters,
+        /// The delegation reward pool. All delegation reward goes into this.
+        /// Delegation reward claims withdraw from this.
+        delegation_reward: Balance<SUI>,
     }
 
     // ==== functions that can only be called by Genesis ====
@@ -67,6 +74,7 @@ module Sui::SuiSystem {
                 max_validator_stake,
                 max_validator_candidate_count,
             },
+            delegation_reward: Balance::zero(),
         };
         Transfer::share_object(state);
     }
@@ -86,7 +94,7 @@ module Sui::SuiSystem {
         ctx: &mut TxContext,
     ) {
         assert!(
-            ValidatorSet::get_total_validator_candidate_count(&self.validators) < self.parameters.max_validator_candidate_count,
+            ValidatorSet::total_validator_candidate_count(&self.validators) < self.parameters.max_validator_candidate_count,
             0
         );
         let stake_amount = Coin::value(&stake);
@@ -152,21 +160,100 @@ module Sui::SuiSystem {
         )
     }
 
+    public(script) fun request_add_delegation(
+        self: &mut SuiSystemState,
+        delegate_stake: Coin<SUI>,
+        validator_address: address,
+        ctx: &mut TxContext,
+    ) {
+        let amount = Coin::value(&delegate_stake);
+        ValidatorSet::request_add_delegation(&mut self.validators, validator_address, amount);
+
+        // Delegation starts from the next epoch.
+        let starting_epoch = self.epoch + 1;
+        Delegation::create(starting_epoch, validator_address, delegate_stake, ctx);
+    }
+
+    public(script) fun request_remove_delegation(
+        self: &mut SuiSystemState,
+        delegation: &mut Delegation,
+        ctx: &mut TxContext,
+    ) {
+        ValidatorSet::request_remove_delegation(
+            &mut self.validators,
+            Delegation::validator(delegation),
+            Delegation::delegate_amount(delegation),
+        );
+        Delegation::undelegate(delegation, self.epoch, ctx)
+    }
+
+    // TODO: Once we support passing vector of object references as arguments,
+    // we should support passing a vector of &mut EpochRewardRecord,
+    // which will allow delegators to claim all their reward in one transaction.
+    public(script) fun claim_delegation_reward(
+        self: &mut SuiSystemState,
+        delegation: &mut Delegation,
+        epoch_reward_record: &mut EpochRewardRecord,
+        ctx: &mut TxContext,
+    ) {
+        let epoch = EpochRewardRecord::epoch(epoch_reward_record);
+        let validator = EpochRewardRecord::validator(epoch_reward_record);
+        assert!(Delegation::can_claim_reward(delegation, epoch, validator), 0);
+        let reward_amount = EpochRewardRecord::claim_reward(
+            epoch_reward_record,
+            Delegation::delegate_amount(delegation),
+        );
+        let reward = Balance::split(&mut self.delegation_reward, reward_amount);
+        Delegation::claim_reward(delegation, reward, ctx);
+    }
+
     /// This function should be called at the end of an epoch, and advances the system to the next epoch.
+    /// It does the following things:
+    /// 1. Add storage charge to the storage fund.
+    /// 2. Distribute computation charge to validator stake and delegation stake.
+    /// 3. Create reward information records for each validator in this epoch.
+    /// 4. Update all validators.
     public(script) fun advance_epoch(
         self: &mut SuiSystemState,
         new_epoch: u64,
+        storage_charge: u64,
+        computation_charge: u64,
         ctx: &mut TxContext,
     ) {
         // Only an active validator can make a call to this function.
         assert!(ValidatorSet::is_active_validator(&self.validators, TxContext::sender(ctx)), 0);
+
+        let storage_reward = Balance::create_with_value(storage_charge);
+        let computation_reward = Balance::create_with_value(computation_charge);
+
+        let delegation_stake = ValidatorSet::delegation_stake(&self.validators);
+        let validator_stake = ValidatorSet::validator_stake(&self.validators);
+        let storage_fund = Balance::value(&self.storage_fund);
+        let total_stake = delegation_stake + validator_stake + storage_fund;
+
+        let delegator_reward_amount = delegation_stake * computation_charge / total_stake;
+        let delegator_reward = Balance::split(&mut computation_reward, delegator_reward_amount);
+        Balance::join(&mut self.storage_fund, storage_reward);
+        Balance::join(&mut self.delegation_reward, delegator_reward);
+
+        ValidatorSet::create_epoch_records(
+            &self.validators,
+            self.epoch,
+            computation_charge,
+            total_stake,
+            ctx,
+        );
 
         self.epoch = self.epoch + 1;
         // Sanity check to make sure we are advancing to the right epoch.
         assert!(new_epoch == self.epoch, 0);
         ValidatorSet::advance_epoch(
             &mut self.validators,
+            &mut computation_reward,
             ctx,
-        )
+        );
+        // Because of precision issues with integer divisions, we expect that there will be some
+        // remaining balance in `computation_reward`. All of these go to the storage fund.
+        Balance::join(&mut self.storage_fund, computation_reward)
     }
 }

@@ -3,9 +3,9 @@
 
 #[test_only]
 module Sui::ValidatorSetTests {
+    use Sui::Balance;
     use Sui::Coin;
-    //use Sui::ID;
-    //use Sui::SUI::SUI;
+    use Sui::SUI::SUI;
     use Sui::TxContext::{Self, TxContext};
     use Sui::Validator::{Self, Validator};
     use Sui::ValidatorSet;
@@ -20,8 +20,8 @@ module Sui::ValidatorSetTests {
 
         // Create a validator set with only the first validator in it.
         let validator_set = ValidatorSet::new(vector[validator1]);
-        assert!(ValidatorSet::get_total_validator_candidate_count(&validator_set) == 1, 0);
-        assert!(ValidatorSet::total_stake(&validator_set) == 100, 0);
+        assert!(ValidatorSet::total_validator_candidate_count(&validator_set) == 1, 0);
+        assert!(ValidatorSet::validator_stake(&validator_set) == 100, 0);
 
         // Add the other 3 validators one by one.
         ValidatorSet::request_add_validator(
@@ -29,8 +29,8 @@ module Sui::ValidatorSetTests {
             validator2,
         );
         // Adding validator during the epoch should not affect stake and quorum threshold.
-        assert!(ValidatorSet::get_total_validator_candidate_count(&validator_set) == 2, 0);
-        assert!(ValidatorSet::total_stake(&validator_set) == 100, 0);
+        assert!(ValidatorSet::total_validator_candidate_count(&validator_set) == 2, 0);
+        assert!(ValidatorSet::validator_stake(&validator_set) == 100, 0);
 
         ValidatorSet::request_add_validator(
             &mut validator_set,
@@ -44,7 +44,7 @@ module Sui::ValidatorSetTests {
         );
         // Adding stake to existing active validator during the epoch
         // should not change total stake.
-        assert!(ValidatorSet::total_stake(&validator_set) == 100, 0);
+        assert!(ValidatorSet::validator_stake(&validator_set) == 100, 0);
 
         ValidatorSet::request_withdraw_stake(
             &mut validator_set,
@@ -52,30 +52,32 @@ module Sui::ValidatorSetTests {
             100 /* min_validator_stake */,
             &ctx1,
         );
-        assert!(ValidatorSet::total_stake(&validator_set) == 100, 0);
+        assert!(ValidatorSet::validator_stake(&validator_set) == 100, 0);
 
         ValidatorSet::request_add_validator(
             &mut validator_set,
             validator4,
         );
 
-        ValidatorSet::advance_epoch(&mut validator_set, &mut ctx1);
-        // The total stake should reflect 4 validators.
-        assert!(ValidatorSet::get_total_validator_candidate_count(&validator_set) == 4, 0);
-        assert!(ValidatorSet::total_stake(&validator_set) == 1000, 0);
+        let reward = Balance::zero<SUI>();
+        ValidatorSet::advance_epoch(&mut validator_set, &mut reward, &mut ctx1);
+        // The total stake and quorum should reflect 4 validators.
+        assert!(ValidatorSet::total_validator_candidate_count(&validator_set) == 4, 0);
+        assert!(ValidatorSet::validator_stake(&validator_set) == 1000, 0);
 
         ValidatorSet::request_remove_validator(
             &mut validator_set,
             &ctx1,
         );
         // Total validator candidate count changes, but total stake remains during epoch.
-        assert!(ValidatorSet::get_total_validator_candidate_count(&validator_set) == 3, 0);
-        assert!(ValidatorSet::total_stake(&validator_set) == 1000, 0);
-        ValidatorSet::advance_epoch(&mut validator_set, &mut ctx1);
+        assert!(ValidatorSet::total_validator_candidate_count(&validator_set) == 3, 0);
+        assert!(ValidatorSet::validator_stake(&validator_set) == 1000, 0);
+        ValidatorSet::advance_epoch(&mut validator_set, &mut reward, &mut ctx1);
         // Validator1 is gone.
-        assert!(ValidatorSet::total_stake(&validator_set) == 900, 0);
+        assert!(ValidatorSet::validator_stake(&validator_set) == 900, 0);
 
         ValidatorSet::destroy_for_testing(validator_set, &mut ctx1);
+        Balance::destroy_zero(reward);
     }
 
     fun create_validator(addr: address, hint: u8): (TxContext, Validator) {
