@@ -26,6 +26,7 @@ div.txcardgrid > div:first-child {
     @apply w-11/12 md:w-10/12  mx-auto mb-28 mt-10 m-auto;
 
     max-width: 1200px;
+    margin-bottom: 2rem;
 }
 
 div.txadd {
