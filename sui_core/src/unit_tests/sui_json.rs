@@ -290,6 +290,7 @@ fn test_basic_args_linter_top_level() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sui_programmability/examples/nfts");
     let compiled_modules = sui_framework::build_and_verify_user_package(&path).unwrap();
     let example_package = Object::new_package(compiled_modules, TransactionDigest::genesis());
+    let example_package = example_package.data.try_as_package().unwrap();
 
     let module = Identifier::new("Geniteam").unwrap();
     let function = Identifier::new("create_monster").unwrap();
@@ -350,7 +351,7 @@ fn test_basic_args_linter_top_level() {
     .collect();
 
     let json_args =
-        resolve_move_function_args(&example_package, module.clone(), function.clone(), args)
+        resolve_move_function_args(example_package, module.clone(), function.clone(), args)
             .unwrap();
 
     assert!(!json_args.is_empty());
@@ -388,14 +389,17 @@ fn test_basic_args_linter_top_level() {
     .iter()
     .map(|q| SuiJsonValue::new(q.clone()).unwrap())
     .collect();
-    assert!(resolve_move_function_args(&example_package, module, function, args).is_err());
+    assert!(resolve_move_function_args(example_package, module, function, args).is_err());
 
     // Test with vecu8 as address
     let genesis_objs = sui_adapter::genesis::clone_genesis_packages();
     let framework_pkg = genesis_objs
         .iter()
         .find(|q| q.id() == ObjectID::from(SUI_FRAMEWORK_ADDRESS))
-        .expect("Unable to find framework object");
+        .expect("Unable to find framework object")
+        .data
+        .try_as_package()
+        .unwrap();
 
     let module = Identifier::new("ObjectBasics").unwrap();
     let function = Identifier::new("create").unwrap();

@@ -1,31 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{Debug, Display, Formatter};
 use std::mem::size_of;
 
-use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue};
-use move_disassembler::disassembler::Disassembler;
-use move_ir_types::location::Spanned;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
 use serde_with::serde_as;
 use serde_with::Bytes;
 
 use crate::coin::Coin;
 use crate::crypto::{sha3_hash, BcsSignable};
 use crate::error::{SuiError, SuiResult};
-use crate::id::{UniqueID, VersionedID, ID};
 use crate::json_schema;
 use crate::move_package::MovePackage;
 use crate::readable_serde::encoding::Base64;
@@ -162,12 +155,21 @@ impl MoveObject {
     }
 
     /// Convert `self` to the JSON representation dictated by `layout`.
-    pub fn to_json(&self, layout: &MoveStructLayout) -> Result<SuiMoveData, SuiError> {
+    pub fn to_move_value(&self, layout: &MoveStructLayout) -> Result<MoveValue, SuiError> {
         MoveStruct::simple_deserialize(&self.contents, layout)
             .map_err(|e| SuiError::ObjectSerializationError {
                 error: e.to_string(),
             })
-            .map(|move_struct| SuiMoveData::MoveObject(MoveValue::Struct(move_struct).into()))
+            .map(MoveValue::Struct)
+    }
+
+    /// Convert `self` to the JSON representation dictated by `layout`.
+    pub fn to_move_value_with_resolver(
+        &self,
+        format: ObjectFormatOptions,
+        resolver: &impl GetModule,
+    ) -> Result<MoveValue, SuiError> {
+        self.to_move_value(&self.get_layout(format, resolver)?)
     }
 
     /// Approximate size of the object in bytes. This is used for gas metering.
@@ -178,156 +180,6 @@ impl MoveObject {
         let seriealized_type_tag =
             bcs::to_bytes(&self.type_).expect("Serializing type tag should not fail");
         self.contents.len() + seriealized_type_tag.len()
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
-#[serde(untagged)]
-pub enum SuiMoveStruct {
-    Runtime(Vec<SuiMoveValue>),
-    WithFields(Vec<(String, SuiMoveValue)>),
-    WithTypes {
-        #[serde(rename = "type")]
-        type_: String,
-        fields: BTreeMap<String, SuiMoveValue>,
-    },
-}
-
-#[serde_as]
-#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
-#[serde(untagged)]
-pub enum SuiMoveValue {
-    // Move base types
-    U8(u8),
-    U64(u64),
-    U128(u128),
-    Bool(bool),
-    Address(ObjectID),
-    Vector(Vec<SuiMoveValue>),
-    Struct(SuiMoveStruct),
-    Signer(SuiAddress),
-
-    // Sui base types
-    String(String),
-    ID(ID),
-    UniqueID(UniqueID),
-    VersionedID(VersionedID),
-    Balance(u64),
-    ByteArray(
-        #[schemars(with = "json_schema::Base64")]
-        #[serde_as(as = "Readable<Base64, Bytes>")]
-        Vec<u8>,
-    ),
-}
-
-impl From<MoveValue> for SuiMoveValue {
-    fn from(value: MoveValue) -> Self {
-        match value {
-            MoveValue::U8(value) => SuiMoveValue::U8(value),
-            MoveValue::U64(value) => SuiMoveValue::U64(value),
-            MoveValue::U128(value) => SuiMoveValue::U128(value),
-            MoveValue::Bool(value) => SuiMoveValue::Bool(value),
-            MoveValue::Address(value) => SuiMoveValue::Address(ObjectID::from(value)),
-            MoveValue::Vector(value) => {
-                if value.iter().all(|value| matches!(value, MoveValue::U8(_))) {
-                    let bytearray = value
-                        .iter()
-                        .flat_map(|value| {
-                            if let MoveValue::U8(u8) = value {
-                                Some(*u8)
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>();
-                    return SuiMoveValue::ByteArray(bytearray);
-                }
-                SuiMoveValue::Vector(value.into_iter().map(|value| value.into()).collect())
-            }
-            MoveValue::Struct(value) => {
-                // Best effort Sui core type conversion
-                if let MoveStruct::WithTypes { type_, fields } = &value {
-                    if let Some(value) = try_convert_type(type_, fields) {
-                        return value;
-                    }
-                };
-                SuiMoveValue::Struct(value.into())
-            }
-            MoveValue::Signer(value) => {
-                SuiMoveValue::Signer(SuiAddress::from(ObjectID::from(value)))
-            }
-        }
-    }
-}
-
-fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Option<SuiMoveValue> {
-    let struct_name = format!(
-        "0x{}::{}::{}",
-        type_.address.short_str_lossless(),
-        type_.module,
-        type_.name
-    );
-    let fields = fields
-        .iter()
-        .map(|(id, value)| (id.to_string(), value.clone().into()))
-        .collect::<BTreeMap<_, SuiMoveValue>>();
-    match struct_name.as_str() {
-        "0x2::UTF8::String" | "0x1::ASCII::String" => {
-            if let SuiMoveValue::ByteArray(bytes) = fields["bytes"].clone() {
-                if let Ok(s) = String::from_utf8(bytes) {
-                    return Some(SuiMoveValue::String(s));
-                }
-            }
-        }
-        "0x2::Url::Url" => return Some(fields["url"].clone()),
-        "0x2::ID::ID" => {
-            if let SuiMoveValue::Address(id) = fields["bytes"] {
-                return Some(SuiMoveValue::ID(ID { bytes: id }));
-            }
-        }
-        "0x2::ID::UniqueID" => {
-            if let SuiMoveValue::ID(id) = fields["id"].clone() {
-                return Some(SuiMoveValue::UniqueID(UniqueID { id }));
-            }
-        }
-        "0x2::ID::VersionedID" => {
-            if let SuiMoveValue::UniqueID(id) = fields["id"].clone() {
-                if let SuiMoveValue::U64(version) = fields["version"].clone() {
-                    return Some(SuiMoveValue::VersionedID(VersionedID { id, version }));
-                }
-            }
-        }
-        "0x2::Balance::Balance" => {
-            if let SuiMoveValue::U64(value) = fields["value"].clone() {
-                return Some(SuiMoveValue::Balance(value));
-            }
-        }
-        _ => {}
-    }
-
-    None
-}
-
-impl From<MoveStruct> for SuiMoveStruct {
-    fn from(move_struct: MoveStruct) -> Self {
-        match move_struct {
-            MoveStruct::Runtime(value) => {
-                SuiMoveStruct::Runtime(value.into_iter().map(|value| value.into()).collect())
-            }
-            MoveStruct::WithFields(value) => SuiMoveStruct::WithFields(
-                value
-                    .into_iter()
-                    .map(|(id, value)| (id.into_string(), value.into()))
-                    .collect(),
-            ),
-            MoveStruct::WithTypes { type_, fields } => SuiMoveStruct::WithTypes {
-                type_: type_.to_string(),
-                fields: fields
-                    .into_iter()
-                    .map(|(id, value)| (id.into_string(), value.into()))
-                    .collect(),
-            },
-        }
     }
 }
 
@@ -373,74 +225,6 @@ impl Data {
             Package(_) => None,
         }
     }
-
-    /// Convert `self` to the JSON representation dictated by `format`.
-    /// If `self` is a Move value, the `resolver` value must contain the module that declares `self.type_` and the (transitive)
-    /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
-    pub fn to_json_with_resolver(
-        &self,
-        format: ObjectFormatOptions,
-        resolver: &impl GetModule,
-    ) -> Result<SuiMoveData, SuiError> {
-        let layout = match self {
-            Data::Move(m) => Some(m.get_layout(format, resolver)?),
-            Data::Package(_) => None,
-        };
-        self.to_json(&layout)
-    }
-
-    /// Convert `self` to the JSON representation dictated by `format`.
-    /// If `self` is a Move value, the `resolver` value must contain the module that declares `self.type_` and the (transitive)
-    /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
-    pub fn to_json(&self, layout: &Option<MoveStructLayout>) -> Result<SuiMoveData, SuiError> {
-        use Data::*;
-        match self {
-            Move(m) => match layout {
-                Some(l) => m.to_json(l),
-                None => Err(SuiError::ObjectSerializationError {
-                    error: "Layout is required to convert Move object to json".to_owned(),
-                }),
-            },
-            Package(p) => {
-                let mut disassembled = BTreeMap::new();
-                for (name, bytecode) in p.serialized_module_map() {
-                    let module = CompiledModule::deserialize(bytecode)
-                        .expect("Adapter publish flow ensures that this bytecode deserializes");
-                    let view = BinaryIndexedView::Module(&module);
-                    let d = Disassembler::from_view(view, Spanned::unsafe_no_loc(()).loc).map_err(
-                        |e| SuiError::ObjectSerializationError {
-                            error: e.to_string(),
-                        },
-                    )?;
-                    let bytecode_str =
-                        d.disassemble()
-                            .map_err(|e| SuiError::ObjectSerializationError {
-                                error: e.to_string(),
-                            })?;
-                    disassembled.insert(name.to_string(), Value::String(bytecode_str));
-                }
-                Ok(SuiMoveData::Package(SuiMovePackage {
-                    version: "".to_string(),
-                    header: "".to_string(),
-                    disassembled,
-                }))
-            }
-        }
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize, JsonSchema)]
-pub struct SuiMovePackage {
-    version: String,
-    header: String,
-    disassembled: BTreeMap<String, Value>,
-}
-
-#[derive(Debug, Deserialize, Serialize, JsonSchema)]
-#[serde(tag = "objectType", rename_all = "camelCase")]
-pub enum SuiMoveData {
-    MoveObject(SuiMoveValue),
-    Package(SuiMovePackage),
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema)]
@@ -480,7 +264,7 @@ impl Owner {
     }
 }
 
-impl std::cmp::PartialEq<SuiAddress> for Owner {
+impl PartialEq<SuiAddress> for Owner {
     fn eq(&self, other: &SuiAddress) -> bool {
         match self {
             Self::AddressOwner(address) => address == other,
@@ -489,7 +273,7 @@ impl std::cmp::PartialEq<SuiAddress> for Owner {
     }
 }
 
-impl std::cmp::PartialEq<ObjectID> for Owner {
+impl PartialEq<ObjectID> for Owner {
     fn eq(&self, other: &ObjectID) -> bool {
         let other_id: SuiAddress = (*other).into();
         match self {
@@ -715,24 +499,6 @@ impl Object {
             Data::Move(m) => Ok(Some(m.get_layout(format, resolver)?)),
             Data::Package(_) => Ok(None),
         }
-    }
-
-    /// Convert `self` to the JSON representation dictated by `format`.
-    /// If `self` is a Move value, the `resolver` value must contain the module that declares `self.type_` and the (transitive)
-    /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
-    pub fn to_json(&self, layout: &Option<MoveStructLayout>) -> Result<Value, SuiError> {
-        let contents = self.data.to_json(layout)?;
-        let owner =
-            serde_json::to_value(&self.owner).map_err(|e| SuiError::ObjectSerializationError {
-                error: e.to_string(),
-            })?;
-        let previous_transaction =
-            serde_json::to_value(&self.previous_transaction).map_err(|e| {
-                SuiError::ObjectSerializationError {
-                    error: e.to_string(),
-                }
-            })?;
-        Ok(json!({ "contents": contents, "owner": owner, "tx_digest": previous_transaction }))
     }
 
     /// Treat the object type as a Move struct with one type parameter,

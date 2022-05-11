@@ -20,20 +20,22 @@ pub const UNIQUE_ID_STRUCT_NAME: &IdentStr = ident_str!("UniqueID");
 pub const ID_STRUCT_NAME: &IdentStr = ID_MODULE_NAME;
 
 /// Rust version of the Move Sui::ID::VersionedID type
-#[derive(Debug, Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Clone, Eq, PartialEq)]
 pub struct VersionedID {
     pub id: UniqueID,
     pub version: u64,
 }
 
 /// Rust version of the Move Sui::ID::UniqueID type
-#[derive(Debug, Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Clone, Eq, PartialEq)]
+#[serde(transparent)]
 pub struct UniqueID {
     pub id: ID,
 }
 
 /// Rust version of the Move Sui::ID::ID type
-#[derive(Debug, Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Clone, Eq, PartialEq)]
+#[serde(transparent)]
 pub struct ID {
     pub bytes: ObjectID,
 }

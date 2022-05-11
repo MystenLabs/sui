@@ -11,6 +11,7 @@ use std::time::Duration;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::future;
+use move_bytecode_utils::module_cache::ModuleCache;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use once_cell::sync::Lazy;
@@ -21,6 +22,7 @@ use tracing::{debug, error, Instrument};
 
 use sui_adapter::adapter::resolve_and_type_check;
 use sui_types::gas_coin::GasCoin;
+use sui_types::object::ObjectFormatOptions;
 use sui_types::{
     base_types::*,
     coin,
@@ -253,8 +255,8 @@ pub trait GatewayAPI {
         &self,
         signer: SuiAddress,
         package_object_id: ObjectID,
-        module: Identifier,
-        function: Identifier,
+        module: String,
+        function: String,
         type_arguments: Vec<TypeTag>,
         arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
@@ -303,13 +305,13 @@ pub trait GatewayAPI {
     ) -> Result<TransactionData, anyhow::Error>;
 
     /// Get the object information
-    async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error>;
+    async fn get_object_info(&self, object_id: ObjectID) -> Result<SuiObjectRead, anyhow::Error>;
 
     /// Get refs of all objects we own from local cache.
     async fn get_owned_objects(
         &self,
         account_addr: SuiAddress,
-    ) -> Result<Vec<ObjectRef>, anyhow::Error>;
+    ) -> Result<Vec<SuiObjectRef>, anyhow::Error>;
 
     /// Get the total number of transactions ever happened in history.
     fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error>;
@@ -339,31 +341,37 @@ impl<A> GatewayState<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    // TODO: This is expensive and unnecessary.
-    // We should make sure that the framework package exists in the gateway store and read it.
-    // Or even better, we should cache the reference in GatewayState struct.
     pub async fn get_framework_object_ref(&self) -> Result<ObjectRef, anyhow::Error> {
-        let info = self
-            .get_object_info(ObjectID::from(SUI_FRAMEWORK_ADDRESS))
-            .await?;
-        Ok(info.reference()?)
+        Ok(self
+            .get_object_ref(&ObjectID::from(SUI_FRAMEWORK_ADDRESS))
+            .await?)
     }
 
+    // Get object locally, try get from the network if not found.
     async fn get_object(&self, object_id: &ObjectID) -> SuiResult<Object> {
         Ok(if let Some(object) = self.store.get_object(object_id)? {
             debug!(?object_id, ?object, "Fetched object from local store");
             object
         } else {
             let object = self
-                .get_object_info(*object_id)
-                .await
-                .map_err(|_| SuiError::ObjectNotFound {
-                    object_id: *object_id,
-                })?
+                .download_object_from_authorities(*object_id)
+                .await?
                 .into_object()?;
             debug!(?object_id, ?object, "Fetched object from validators");
             object
         })
+    }
+
+    async fn get_sui_object(&self, object_id: &ObjectID) -> Result<SuiObject, anyhow::Error> {
+        let object = self.get_object(object_id).await?;
+        let cache = ModuleCache::new(&*self.store);
+        let layout = object.get_layout(ObjectFormatOptions::default(), &cache)?;
+        SuiObject::try_from(object, layout)
+    }
+
+    async fn get_object_ref(&self, object_id: &ObjectID) -> SuiResult<ObjectRef> {
+        let object = self.get_object(object_id).await?;
+        Ok(object.compute_object_reference())
     }
 
     async fn set_transaction_lock(
@@ -391,8 +399,9 @@ where
         let mut objects = self.read_objects_from_store(&input_objects).await?;
         for (object_opt, kind) in objects.iter_mut().zip(&input_objects) {
             if object_opt.is_none() {
-                if let ObjectRead::Exists(_, object, _) =
-                    self.get_object_info(kind.object_id()).await?
+                if let ObjectRead::Exists(_, object, _) = self
+                    .download_object_from_authorities(kind.object_id())
+                    .await?
                 {
                     *object_opt = Some(object);
                 }
@@ -633,12 +642,12 @@ where
             }
             .into()
         );
-        let updated_coin = self.get_object(coin_object_id).await?;
+        let updated_coin = self.get_sui_object(coin_object_id).await?;
         let mut new_coins = Vec::with_capacity(created.len());
         for ((id, _, _), _) in created {
-            new_coins.push(self.get_object(id).await?);
+            new_coins.push(self.get_sui_object(id).await?);
         }
-        let updated_gas = self.get_object(&gas_payment).await?;
+        let updated_gas = self.get_sui_object(&gas_payment).await?;
 
         debug!(
             ?updated_coin,
@@ -907,17 +916,23 @@ where
         &self,
         signer: SuiAddress,
         package_object_id: ObjectID,
-        module: Identifier,
-        function: Identifier,
+        module: String,
+        function: String,
         type_arguments: Vec<TypeTag>,
         arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
+        let module = Identifier::new(module)?;
+        let function = Identifier::new(function)?;
         let package_obj = self.get_object(&package_object_id).await?;
         let package_obj_ref = package_obj.compute_object_reference();
-        let json_args =
-            resolve_move_function_args(&package_obj, module.clone(), function.clone(), arguments)?;
+        let json_args = resolve_move_function_args(
+            package_obj.data.try_as_package().unwrap(),
+            module.clone(),
+            function.clone(),
+            arguments,
+        )?;
 
         // Fetch all the objects needed for this call
         let mut objects = BTreeMap::new();
@@ -1029,8 +1044,7 @@ where
         let gas = self
             .choose_gas_for_address(signer, gas_budget, gas, vec![coin_to_merge, primary_coin])
             .await?;
-        let primary_coin = self.get_object(&primary_coin).await?;
-        let primary_coin_ref = primary_coin.compute_object_reference();
+        let primary_coin_ref = self.get_object_ref(&primary_coin).await?;
         let coin_to_merge = self.get_object(&coin_to_merge).await?;
         let coin_to_merge_ref = coin_to_merge.compute_object_reference();
 
@@ -1052,16 +1066,18 @@ where
         Ok(data)
     }
 
-    async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error> {
+    async fn get_object_info(&self, object_id: ObjectID) -> Result<SuiObjectRead, anyhow::Error> {
         let result = self.download_object_from_authorities(object_id).await?;
-        Ok(result)
+        Ok(result.try_into()?)
     }
 
     async fn get_owned_objects(
         &self,
         account_addr: SuiAddress,
-    ) -> Result<Vec<ObjectRef>, anyhow::Error> {
-        Ok(self.store.get_account_objects(account_addr)?)
+    ) -> Result<Vec<SuiObjectRef>, anyhow::Error> {
+        let refs: Vec<ObjectRef> = self.store.get_account_objects(account_addr)?;
+        let refs = refs.into_iter().map(SuiObjectRef::from).collect();
+        Ok(refs)
     }
 
     fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
