@@ -37,9 +37,7 @@ In Sui, Move is used to define, create and manage programmable Sui
 imposes additional restrictions on the code that can be written in
 Move, effectively using a subset of Move (a.k.a. *Sui Move*), which
 makes certain parts of the original Move documentation not applicable
-to smart contract development in Sui (e.g., there is no concept of a
-[script](https://github.com/diem/move/blob/main/language/documentation/book/src/modules-and-scripts.md#scripts)
-in Sui Move). Consequently, it's best to simply follow this tutorial
+to smart contract development in Sui. Consequently, it's best to simply follow this tutorial
 and relevant Move documentation links provided in the tutorial.
 
 Before we look at the Move code included with Sui, let's talk briefly
@@ -254,13 +252,10 @@ that it will do what it is intended to do.)
 
 In general, an entry function, must satisfy the following properties:
 
-- be public
+- have `public(script)` visibility modifier
 - have no return value
-- have parameters ordered as follows:
-  - one or more Sui objects (or vectors of objects)
-  - one or more primitive types (or vectors of such types)
-  - a mutable reference to an instance of the `TxContext` struct
-  defined in the [TxContext module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/TxContext.move)
+- have a mutable reference to an instance of the `TxContext` struct
+  defined in the [TxContext module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/TxContext.move) as the last parameter
 
 More, concretely, the `transfer` function is public, has no return
 value, and has three parameters:
@@ -659,11 +654,13 @@ struct available for function definitions:
 
 We can now build the module extended with the new functions but still
 have only one test defined. Let us change that by adding another test
-function:
+function. Note that this function needs to have `public(script)`
+visibility modifier to be able to call other functions with the same
+modifier, such as our entry function `sword_create`.
 
 ``` rust
     #[test]
-    public fun test_sword_transactions() {
+    public(script) fun test_sword_transactions() {
         use Sui::TestScenario;
 
         let admin = @0xABBA;
