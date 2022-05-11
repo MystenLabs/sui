@@ -16,8 +16,8 @@ use sui_types::json_schema::Base64;
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 
+use crate::api::{RpcGatewayClient as RpcGateway, SignedTransaction, TransactionBytes};
 use crate::rpc_gateway::responses::ObjectResponse;
-use crate::rpc_gateway::{RpcGatewayClient as RpcGateway, SignedTransaction, TransactionBytes};
 
 pub struct RpcGatewayClient {
     client: HttpClient,

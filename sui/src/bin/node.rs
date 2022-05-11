@@ -14,49 +14,46 @@ use std::{
 use sui::{
     api::{RpcGatewayOpenRpc, RpcGatewayServer},
     config::sui_config_dir,
-    rpc_gateway::RpcGatewayImpl,
+    sui_node::SuiNode,
 };
 use tracing::info;
 
-const DEFAULT_RPC_SERVER_PORT: &str = "5001";
-const DEFAULT_RPC_SERVER_ADDR_IPV4: &str = "127.0.0.1";
-
-#[cfg(test)]
-#[path = "../unit_tests/rpc_server_tests.rs"]
-mod rpc_server_tests;
+const DEFAULT_NODE_SERVER_PORT: &str = "5002";
+const DEFAULT_NODE_SERVER_ADDR_IPV4: &str = "127.0.0.1";
 
 #[derive(Parser)]
 #[clap(
-    name = "Sui RPC Gateway",
+    name = "Sui Node",
     about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
     rename_all = "kebab-case"
 )]
-struct RpcGatewayOpt {
+struct SuiNodeOpt {
     #[clap(long)]
     config: Option<PathBuf>,
 
-    #[clap(long, default_value = DEFAULT_RPC_SERVER_PORT)]
+    #[clap(long, default_value = DEFAULT_NODE_SERVER_PORT)]
     port: u16,
 
-    #[clap(long, default_value = DEFAULT_RPC_SERVER_ADDR_IPV4)]
+    #[clap(long, default_value = DEFAULT_NODE_SERVER_ADDR_IPV4)]
     host: Ipv4Addr,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let config = telemetry_subscribers::TelemetryConfig {
-        service_name: "rpc_gateway".into(),
+        service_name: "sui_node".into(),
         enable_tracing: std::env::var("SUI_TRACING_ENABLE").is_ok(),
         json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
         ..Default::default()
     };
     #[allow(unused)]
     let guard = telemetry_subscribers::init(config);
-    let options: RpcGatewayOpt = RpcGatewayOpt::parse();
+
+    let options: SuiNodeOpt = SuiNodeOpt::parse();
     let config_path = options
         .config
-        .unwrap_or(sui_config_dir()?.join("gateway.conf"));
-    info!("Gateway config file path: {:?}", config_path);
+        .unwrap_or(sui_config_dir()?.join("node.conf"));
+    info!("Node config file path: {:?}", config_path);
 
     let server_builder = HttpServerBuilder::default();
     let mut ac_builder = AccessControlBuilder::default();
@@ -78,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
     let mut module = RpcModule::new(());
     let open_rpc = RpcGatewayOpenRpc::open_rpc();
     module.register_method("rpc.discover", move |_, _| Ok(open_rpc.clone()))?;
-    module.merge(RpcGatewayImpl::new(&config_path)?.into_rpc())?;
+    module.merge(SuiNode::new(&config_path)?.into_rpc())?;
 
     info!(
         "Available JSON-RPC methods : {:?}",
