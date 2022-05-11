@@ -72,7 +72,7 @@ async fn test_transfer_coin() -> Result<(), anyhow::Error> {
         .transfer_coin(
             *address,
             objects.first().unwrap().0,
-            objects.last().unwrap().0,
+            Some(objects.last().unwrap().0),
             1000,
             *address,
         )
@@ -115,7 +115,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     .collect::<Vec<_>>();
 
     let tx_data: TransactionBytes = http_client
-        .publish(*address, compiled_modules, gas.0, 10000)
+        .publish(*address, compiled_modules, Some(gas.0), 10000)
         .await?;
 
     let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;
@@ -162,7 +162,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
             function,
             vec![],
             json_args,
-            gas.0,
+            Some(gas.0),
             1000,
         )
         .await?;
@@ -222,7 +222,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     let mut tx_responses = Vec::new();
     for (id, _, _) in &objects[..objects.len() - 1] {
         let tx_data: TransactionBytes = http_client
-            .transfer_coin(*address, *id, *gas_id, 1000, *address)
+            .transfer_coin(*address, *id, Some(*gas_id), 1000, *address)
             .await?;
 
         let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;

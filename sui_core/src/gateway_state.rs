@@ -13,9 +13,10 @@ use async_trait::async_trait;
 use futures::future;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
-use sui_adapter::adapter::resolve_and_type_check;
 use tracing::{debug, error, Instrument};
 
+use sui_adapter::adapter::resolve_and_type_check;
+use sui_types::gas_coin::GasCoin;
 use sui_types::{
     base_types::*,
     coin,
@@ -121,7 +122,7 @@ pub trait GatewayAPI {
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error>;
@@ -135,12 +136,12 @@ pub trait GatewayAPI {
     async fn move_call(
         &self,
         signer: SuiAddress,
-        package_object_ref: ObjectRef,
+        package_object_id: ObjectID,
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         arguments: Vec<SuiJsonValue>,
-        gas_object_ref: ObjectRef,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -149,7 +150,7 @@ pub trait GatewayAPI {
         &self,
         signer: SuiAddress,
         package_bytes: Vec<Vec<u8>>,
-        gas_object_ref: ObjectRef,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -164,7 +165,7 @@ pub trait GatewayAPI {
         signer: SuiAddress,
         coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -181,7 +182,7 @@ pub trait GatewayAPI {
         signer: SuiAddress,
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -233,14 +234,20 @@ where
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> SuiResult<Object> {
-        let object = self
-            .store
-            .get_object(object_id)?
-            .ok_or(SuiError::ObjectNotFound {
-                object_id: *object_id,
-            })?;
-        debug!(?object_id, ?object, "Fetched object from local store");
-        Ok(object)
+        Ok(if let Some(object) = self.store.get_object(object_id)? {
+            debug!(?object_id, ?object, "Fetched object from local store");
+            object
+        } else {
+            let object = self
+                .get_object_info(*object_id)
+                .await
+                .map_err(|_| SuiError::ObjectNotFound {
+                    object_id: *object_id,
+                })?
+                .into_object()?;
+            debug!(?object_id, ?object, "Fetched object from validators");
+            object
+        })
     }
 
     async fn set_transaction_lock(
@@ -583,6 +590,44 @@ where
         }
     }
 
+    async fn choose_gas_for_address(
+        &self,
+        address: SuiAddress,
+        budget: u64,
+        gas: Option<ObjectID>,
+        used_coins: Vec<ObjectID>,
+    ) -> Result<ObjectRef, anyhow::Error> {
+        if let Some(id) = gas {
+            Ok(self.get_object(&id).await?.compute_object_reference())
+        } else {
+            let used_coins = used_coins.into_iter().collect::<BTreeSet<_>>();
+            for (id, balance) in self.get_owned_coins(address).await.unwrap() {
+                if balance >= budget && !used_coins.contains(&id.0) {
+                    return Ok(id);
+                }
+            }
+            return Err(anyhow!(
+                "No non-argument gas objects found with value >= budget {}",
+                budget
+            ));
+        }
+    }
+
+    async fn get_owned_coins(
+        &self,
+        address: SuiAddress,
+    ) -> Result<Vec<(ObjectRef, u64)>, anyhow::Error> {
+        let mut coins = Vec::new();
+        for (id, _, _) in self.store.get_account_objects(address)? {
+            let object = self.get_object(&id).await?;
+            if matches!(object.data.type_(), Some(ty)  if *ty == GasCoin::type_()) {
+                let gas_coin = GasCoin::try_from(object.data.try_as_move().unwrap())?;
+                coins.push((object.compute_object_reference(), gas_coin.value()));
+            }
+        }
+        Ok(coins)
+    }
+
     #[cfg(test)]
     pub fn highest_known_version(&self, object_id: &ObjectID) -> Result<SequenceNumber, SuiError> {
         self.latest_object_ref(object_id)
@@ -689,24 +734,17 @@ where
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error> {
-        // TODO: We should be passing in object_ref directly instead of object_id.
+        let gas_payment = self
+            .choose_gas_for_address(signer, gas_budget, gas, vec![object_id])
+            .await?;
         let object = self.get_object(&object_id).await?;
         let object_ref = object.compute_object_reference();
-        let gas_payment = self.get_object(&gas_payment).await?;
-        let gas_payment_ref = gas_payment.compute_object_reference();
-
-        let data = TransactionData::new_transfer(
-            recipient,
-            object_ref,
-            signer,
-            gas_payment_ref,
-            gas_budget,
-        );
-
+        let data =
+            TransactionData::new_transfer(recipient, object_ref, signer, gas_payment, gas_budget);
         Ok(data)
     }
 
@@ -736,15 +774,16 @@ where
     async fn move_call(
         &self,
         signer: SuiAddress,
-        package_object_ref: ObjectRef,
+        package_object_id: ObjectID,
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         arguments: Vec<SuiJsonValue>,
-        gas_object_ref: ObjectRef,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        let package_obj = self.get_object(&package_object_ref.0).await?;
+        let package_obj = self.get_object(&package_object_id).await?;
+        let package_obj_ref = package_obj.compute_object_reference();
         let json_args =
             resolve_move_function_args(&package_obj, module.clone(), function.clone(), arguments)?;
 
@@ -768,6 +807,11 @@ where
             })
         }
 
+        let forbidden_gas_objects = objects.keys().copied().collect();
+        let gas = self
+            .choose_gas_for_address(signer, gas_budget, gas, forbidden_gas_objects)
+            .await?;
+
         // Pass in the objects for a deeper check
         let compiled_module = package_obj
             .data
@@ -784,11 +828,11 @@ where
 
         let data = TransactionData::new_move_call(
             signer,
-            package_object_ref,
+            package_obj_ref,
             module,
             function,
             type_arguments,
-            gas_object_ref,
+            gas,
             args,
             gas_budget,
         );
@@ -801,10 +845,13 @@ where
         &self,
         signer: SuiAddress,
         package_bytes: Vec<Vec<u8>>,
-        gas_object_ref: ObjectRef,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        let data = TransactionData::new_module(signer, gas_object_ref, package_bytes, gas_budget);
+        let gas = self
+            .choose_gas_for_address(signer, gas_budget, gas, vec![])
+            .await?;
+        let data = TransactionData::new_module(signer, gas, package_bytes, gas_budget);
         Ok(data)
     }
 
@@ -813,23 +860,22 @@ where
         signer: SuiAddress,
         coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        // TODO: We should be passing in object_refs directly instead of object_ids.
+        let gas = self
+            .choose_gas_for_address(signer, gas_budget, gas, vec![coin_object_id])
+            .await?;
         let coin_object = self.get_object(&coin_object_id).await?;
         let coin_object_ref = coin_object.compute_object_reference();
-        let gas_payment = self.get_object(&gas_payment).await?;
-        let gas_payment_ref = gas_payment.compute_object_reference();
         let coin_type = coin_object.get_move_template_type()?;
-
         let data = TransactionData::new_move_call(
             signer,
             self.get_framework_object_ref().await?,
             coin::COIN_MODULE_NAME.to_owned(),
             coin::COIN_SPLIT_VEC_FUNC_NAME.to_owned(),
             vec![coin_type],
-            gas_payment_ref,
+            gas,
             vec![
                 CallArg::ImmOrOwnedObject(coin_object_ref),
                 CallArg::Pure(bcs::to_bytes(&split_amounts)?),
@@ -845,26 +891,25 @@ where
         signer: SuiAddress,
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        // TODO: We should be passing in object_refs directly instead of object_ids.
+        let gas = self
+            .choose_gas_for_address(signer, gas_budget, gas, vec![coin_to_merge, primary_coin])
+            .await?;
         let primary_coin = self.get_object(&primary_coin).await?;
         let primary_coin_ref = primary_coin.compute_object_reference();
         let coin_to_merge = self.get_object(&coin_to_merge).await?;
         let coin_to_merge_ref = coin_to_merge.compute_object_reference();
-        let gas_payment = self.get_object(&gas_payment).await?;
-        let gas_payment_ref = gas_payment.compute_object_reference();
 
         let coin_type = coin_to_merge.get_move_template_type()?;
-
         let data = TransactionData::new_move_call(
             signer,
             self.get_framework_object_ref().await?,
             coin::COIN_MODULE_NAME.to_owned(),
             coin::COIN_JOIN_FUNC_NAME.to_owned(),
             vec![coin_type],
-            gas_payment_ref,
+            gas,
             vec![
                 CallArg::ImmOrOwnedObject(primary_coin_ref),
                 CallArg::ImmOrOwnedObject(coin_to_merge_ref),
