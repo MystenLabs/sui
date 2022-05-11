@@ -3,7 +3,7 @@
 
 use crypto::{traits::VerifyingKey, Hash};
 use dag::node_dag::NodeDag;
-use std::{collections::BTreeMap, ops::RangeInclusive};
+use std::{collections::BTreeMap, ops::RangeInclusive, sync::RwLock};
 use thiserror::Error;
 use tokio::{
     sync::{
@@ -39,7 +39,7 @@ pub struct InnerDag<PublicKey: VerifyingKey> {
     dag: NodeDag<Certificate<PublicKey>>,
 
     /// Secondary index: An authority-aware map of the DAG's veertex Certificates
-    vertices: BTreeMap<(PublicKey, Round), CertificateDigest>,
+    vertices: RwLock<BTreeMap<(PublicKey, Round), CertificateDigest>>,
 }
 
 /// The publicly exposed Dag handle, to which one can expose commands
@@ -94,7 +94,7 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
                 rx_primary,
                 rx_commands,
                 dag: NodeDag::new(),
-                vertices: BTreeMap::new(),
+                vertices: RwLock::new(BTreeMap::new()),
             }
             .run()
             .await
@@ -146,10 +146,13 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
         let round = certificate.round();
         let origin = certificate.origin();
 
-        // This fails if the validation of the certificate is incomplete
-        self.dag.try_insert(certificate)?;
-        // TODO: atomicity with the previous
-        self.vertices.insert((origin, round), digest);
+        {
+            // TODO: lock-free atomicity (per-key guard here)
+            let mut vertices = self.vertices.write().unwrap();
+            // This fails if the validation of the certificate is incomplete
+            self.dag.try_insert(certificate)?;
+            vertices.insert((origin, round), digest);
+        }
         Ok(())
     }
 
@@ -165,25 +168,28 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
         &mut self,
         origin: PublicKey,
     ) -> Result<std::ops::RangeInclusive<Round>, ValidatorDagError<PublicKey>> {
-        let range = self
-            .vertices
-            .range((origin.clone(), Round::MIN)..(origin.clone(), Round::MAX));
+        let (earliest, latest) = {
+            let vertices = self.vertices.read().unwrap();
+            let range = vertices.range((origin.clone(), Round::MIN)..(origin.clone(), Round::MAX));
 
-        // In non-pathological cases, the range is non-empty, and has a lot of dropped nodes towards the beginning
-        // yet this can't be a take_while because the DAG removal may be non-contiguous.
-        //
-        // Hence we rely on removals cleaning the secondary index.
-        let mut strong_references = range.flat_map(|((_key, round), val)| {
-            if self.contains(*val) {
-                Some(round)
-            } else {
-                None
-            }
-        });
-        let earliest = strong_references.next();
-        let latest = strong_references.last().or(earliest);
+            // In non-pathological cases, the range is non-empty, and has a lot of dropped nodes towards the beginning
+            // yet this can't be a take_while because the DAG removal may be non-contiguous.
+            //
+            // Hence we rely on removals cleaning the secondary index.
+            let mut strong_references = range.flat_map(|((_key, round), val)| {
+                if self.contains(*val) {
+                    Some(round)
+                } else {
+                    None
+                }
+            });
+
+            let earliest = strong_references.next().cloned();
+            let latest = strong_references.last().cloned().or(earliest);
+            (earliest, latest)
+        };
         match (earliest, latest) {
-            (Some(init), Some(end)) => Ok(RangeInclusive::new(*init, *end)),
+            (Some(init), Some(end)) => Ok(RangeInclusive::new(init, end)),
             _ => Err(ValidatorDagError::OutOfCertificates(origin)),
         }
     }
@@ -207,7 +213,8 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
         origin: PublicKey,
         round: Round,
     ) -> Result<impl Iterator<Item = CertificateDigest>, ValidatorDagError<PublicKey>> {
-        let start_digest = self.vertices.get(&(origin.clone(), round)).ok_or(
+        let vertices = self.vertices.read().unwrap();
+        let start_digest = vertices.get(&(origin.clone(), round)).ok_or(
             ValidatorDagError::NoCertificateForCoordinates(origin, round),
         )?;
         self.read_causal(*start_digest)
@@ -215,9 +222,12 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
 
     /// Removes a certificate from the Dag, reclaiming memory in the process.
     fn remove(&mut self, digest: CertificateDigest) -> Result<(), ValidatorDagError<PublicKey>> {
-        // TODO: not very satisfying re: atomicity
-        if self.dag.make_compressible(digest)? {
-            self.vertices.retain(|_k, v| v != &digest);
+        {
+            // TODO: lock-free atomicity
+            let mut vertices = self.vertices.write().unwrap();
+            if self.dag.make_compressible(digest)? {
+                vertices.retain(|_k, v| v != &digest);
+            }
         }
         Ok(())
     }
@@ -232,7 +242,7 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
                 rx_primary,
                 rx_commands,
                 dag: NodeDag::new(),
-                vertices: BTreeMap::new(),
+                vertices: RwLock::new(BTreeMap::new()),
             }
             .run()
             .await
