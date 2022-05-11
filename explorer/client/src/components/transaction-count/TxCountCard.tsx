@@ -63,7 +63,7 @@ function TxCountCardAPI() {
         return (
             <ErrorResult
                 id=""
-                errorMsg="There was an issue getting the transaction count"
+                errorMsg="Error getting total transaction count"
             />
         );
     }
