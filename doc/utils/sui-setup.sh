@@ -3,7 +3,12 @@
 #!/bin/bash
 # Prereqs: Rust Cargo, Git CLI, and GitHub account
 # Usage: set up environment for Sui development
-# Run `sui-setup.sh` in the directory to download source
+# First run these commands tow download the script
+# curl https://raw.githubusercontent.com/MystenLabs/sui/main/doc/utils/sui-setup.sh -o sui-setup.sh
+# chmod 755 sui-setup.sh
+# Then run `sui-setup.sh` in a directory to download source
+# For example, to use the same
+# ./sui-setup.sh
 shopt -s nullglob
 set -e
 set -o pipefail
