@@ -11,7 +11,6 @@ use jsonrpsee::{
     http_client::{HttpClient, HttpClientBuilder},
     http_server::{HttpServerBuilder, HttpServerHandle},
 };
-use move_core_types::identifier::Identifier;
 
 use sui::{
     api::{RpcGatewayClient, RpcGatewayServer, SignedTransaction, TransactionBytes},
@@ -20,14 +19,15 @@ use sui::{
     rpc_gateway::{responses::ObjectResponse, RpcGatewayImpl},
     sui_commands::SuiNetwork,
 };
-use sui_core::gateway_state::gateway_responses::{TransactionEffectsResponse, TransactionResponse};
+use sui_core::gateway_state::gateway_responses::{
+    SuiObjectRead, TransactionEffectsResponse, TransactionResponse,
+};
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_core::sui_json::SuiJsonValue;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     json_schema::Base64,
-    object::ObjectRead,
     SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -41,12 +41,7 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
 
     http_client.sync_account_state(*address).await?;
     let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
-    let result = result
-        .objects
-        .into_iter()
-        .map(|o| o.to_object_ref())
-        .collect::<Result<Vec<_>, _>>()?;
-
+    let result = result.objects;
     assert_eq!(5, result.len());
     Ok(())
 }
@@ -58,17 +53,13 @@ async fn test_transfer_coin() -> Result<(), anyhow::Error> {
     let address = test_network.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
     let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
-    let objects = result
-        .objects
-        .into_iter()
-        .map(|o| o.to_object_ref())
-        .collect::<Result<Vec<_>, _>>()?;
+    let objects = result.objects;
 
     let tx_data: TransactionBytes = http_client
         .transfer_coin(
             *address,
-            objects.first().unwrap().0,
-            Some(objects.last().unwrap().0),
+            objects.first().unwrap().object_id,
+            Some(objects.last().unwrap().object_id),
             1000,
             *address,
         )
@@ -94,11 +85,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let address = test_network.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
     let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
-    let objects = result
-        .objects
-        .into_iter()
-        .map(|o| o.to_object_ref())
-        .collect::<Result<Vec<_>, _>>()?;
+    let objects = result.objects;
 
     let gas = objects.first().unwrap();
 
@@ -111,7 +98,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     .collect::<Vec<_>>();
 
     let tx_data: TransactionBytes = http_client
-        .publish(*address, compiled_modules, Some(gas.0), 10000)
+        .publish(*address, compiled_modules, Some(gas.object_id), 10000)
         .await?;
 
     let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;
@@ -133,17 +120,13 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let address = test_network.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
     let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
-    let objects = result
-        .objects
-        .into_iter()
-        .map(|o| o.to_object_ref())
-        .collect::<Result<Vec<_>, _>>()?;
+    let objects = result.objects;
 
     let gas = objects.first().unwrap();
 
     let package_id = ObjectID::new(SUI_FRAMEWORK_ADDRESS.into_bytes());
-    let module = Identifier::new("ObjectBasics")?;
-    let function = Identifier::new("create")?;
+    let module = "ObjectBasics".to_string();
+    let function = "create".to_string();
 
     let json_args = vec![
         SuiJsonValue::from_str("10000")?,
@@ -158,7 +141,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
             function,
             vec![],
             json_args,
-            Some(gas.0),
+            Some(gas.object_id),
             1000,
         )
         .await?;
@@ -182,16 +165,12 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
     let address = test_network.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
     let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
-    let result = result
-        .objects
-        .into_iter()
-        .map(|o| o.to_object_ref())
-        .collect::<Result<Vec<_>, _>>()?;
+    let result = result.objects;
 
-    for (id, _, _) in result {
-        let result: ObjectRead = http_client.get_object_info(id).await?;
+    for oref in result {
+        let result: SuiObjectRead = http_client.get_object_info(oref.object_id).await?;
         assert!(
-            matches!(result, ObjectRead::Exists((obj_id,_,_), object, _) if id == obj_id && &object.owner.get_owner_address()? == address)
+            matches!(result, SuiObjectRead::Exists(object) if oref.object_id == object.id() && &object.owner.get_owner_address()? == address)
         );
     }
     Ok(())
@@ -206,19 +185,15 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     http_client.sync_account_state(*address).await?;
 
     let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
-    let objects = result
-        .objects
-        .into_iter()
-        .map(|o| o.to_object_ref())
-        .collect::<Result<Vec<_>, _>>()?;
+    let objects = result.objects;
 
-    let (gas_id, _, _) = objects.last().unwrap();
+    let gas_id = objects.last().unwrap().object_id;
 
     // Make some transactions
     let mut tx_responses = Vec::new();
-    for (id, _, _) in &objects[..objects.len() - 1] {
+    for oref in &objects[..objects.len() - 1] {
         let tx_data: TransactionBytes = http_client
-            .transfer_coin(*address, *id, Some(*gas_id), 1000, *address)
+            .transfer_coin(*address, oref.object_id, Some(gas_id), 1000, *address)
             .await?;
 
         let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;

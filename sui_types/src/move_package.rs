@@ -7,10 +7,14 @@ use crate::{
     base_types::ObjectID,
     error::{SuiError, SuiResult},
 };
+use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::CompiledModule;
 use move_core_types::identifier::Identifier;
+use move_disassembler::disassembler::Disassembler;
+use move_ir_types::location::Spanned;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::Bytes;
 use std::collections::BTreeMap;
@@ -57,6 +61,27 @@ impl MovePackage {
             })?;
         Ok(CompiledModule::deserialize(bytes)
             .expect("Unwrap safe because Sui serializes/verifies modules before publishing them"))
+    }
+
+    pub fn disassemble(&self) -> SuiResult<BTreeMap<String, Value>> {
+        let mut disassembled = BTreeMap::new();
+        for (name, bytecode) in self.serialized_module_map() {
+            let module = CompiledModule::deserialize(bytecode)
+                .expect("Adapter publish flow ensures that this bytecode deserializes");
+            let view = BinaryIndexedView::Module(&module);
+            let d = Disassembler::from_view(view, Spanned::unsafe_no_loc(()).loc).map_err(|e| {
+                SuiError::ObjectSerializationError {
+                    error: e.to_string(),
+                }
+            })?;
+            let bytecode_str = d
+                .disassemble()
+                .map_err(|e| SuiError::ObjectSerializationError {
+                    error: e.to_string(),
+                })?;
+            disassembled.insert(name.to_string(), Value::String(bytecode_str));
+        }
+        Ok(disassembled)
     }
 }
 

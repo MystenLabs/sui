@@ -4,17 +4,17 @@
 use anyhow::Error;
 use async_trait::async_trait;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
-use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use tokio::runtime::Handle;
 
-use sui_core::gateway_state::gateway_responses::{TransactionEffectsResponse, TransactionResponse};
+use sui_core::gateway_state::gateway_responses::{
+    SuiObjectRead, SuiObjectRef, TransactionEffectsResponse, TransactionResponse,
+};
 use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
 use sui_core::sui_json::SuiJsonValue;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::json_schema::Base64;
 use sui_types::messages::{Transaction, TransactionData};
-use sui_types::object::ObjectRead;
 
 use crate::api::{RpcGatewayClient as RpcGateway, SignedTransaction, TransactionBytes};
 use crate::rpc_gateway::responses::ObjectResponse;
@@ -67,8 +67,8 @@ impl GatewayAPI for RpcGatewayClient {
         &self,
         signer: SuiAddress,
         package_object_id: ObjectID,
-        module: Identifier,
-        function: Identifier,
+        module: String,
+        function: String,
         type_arguments: Vec<TypeTag>,
         arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
@@ -138,18 +138,16 @@ impl GatewayAPI for RpcGatewayClient {
         bytes.to_data()
     }
 
-    async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, Error> {
+    async fn get_object_info(&self, object_id: ObjectID) -> Result<SuiObjectRead, Error> {
         Ok(self.client.get_object_info(object_id).await?)
     }
 
-    async fn get_owned_objects(&self, account_addr: SuiAddress) -> Result<Vec<ObjectRef>, Error> {
+    async fn get_owned_objects(
+        &self,
+        account_addr: SuiAddress,
+    ) -> Result<Vec<SuiObjectRef>, Error> {
         let object_response: ObjectResponse = self.client.get_owned_objects(account_addr).await?;
-        let object_refs = object_response
-            .objects
-            .into_iter()
-            .map(|o| o.to_object_ref())
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(object_refs)
+        Ok(object_response.objects)
     }
 
     fn get_total_transaction_number(&self) -> Result<u64, Error> {

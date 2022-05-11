@@ -7,9 +7,9 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use ed25519_dalek::ed25519::signature::Signature;
 use jsonrpsee::core::RpcResult;
-use move_core_types::identifier::Identifier;
 use tracing::debug;
 
+use sui_core::gateway_state::gateway_responses::SuiObjectRead;
 use sui_core::gateway_state::{
     gateway_responses::{TransactionEffectsResponse, TransactionResponse},
     GatewayClient, GatewayState, GatewayTxSeqNumber,
@@ -21,14 +21,13 @@ use sui_types::{
     crypto::SignableBytes,
     json_schema::Base64,
     messages::{Transaction, TransactionData},
-    object::ObjectRead,
 };
 
 use crate::rpc_gateway::responses::SuiTypeTag;
 use crate::{
     api::{RpcGatewayServer, SignedTransaction, TransactionBytes},
     config::{GatewayConfig, PersistedConfig},
-    rpc_gateway::responses::{GetObjectInfoResponse, NamedObjectRef, ObjectResponse},
+    rpc_gateway::responses::ObjectResponse,
 };
 
 pub mod responses;
@@ -125,27 +124,12 @@ impl RpcGatewayServer for RpcGatewayImpl {
 
     async fn get_owned_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse> {
         debug!("get_objects : {}", owner);
-        let objects = self
-            .gateway
-            .get_owned_objects(owner)
-            .await?
-            .into_iter()
-            .map(NamedObjectRef::from)
-            .collect();
+        let objects = self.gateway.get_owned_objects(owner).await?;
         Ok(ObjectResponse { objects })
     }
 
-    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<ObjectRead> {
+    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<SuiObjectRead> {
         Ok(self.gateway.get_object_info(object_id).await?)
-    }
-
-    async fn get_object_typed_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse> {
-        Ok(self
-            .gateway
-            .get_object_info(object_id)
-            .await?
-            .try_into()
-            .map_err(|e| anyhow!("{}", e))?)
     }
 
     async fn execute_transaction(
@@ -166,8 +150,8 @@ impl RpcGatewayServer for RpcGatewayImpl {
         &self,
         signer: SuiAddress,
         package_object_id: ObjectID,
-        module: Identifier,
-        function: Identifier,
+        module: String,
+        function: String,
         type_arguments: Vec<SuiTypeTag>,
         rpc_arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,

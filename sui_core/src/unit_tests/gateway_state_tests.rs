@@ -196,16 +196,12 @@ async fn test_coin_split() {
         (gas_object.id(), gas_object.version().increment()),
         (response.updated_gas.id(), response.updated_gas.version())
     );
-    let update_coin = GasCoin::try_from(response.updated_coin.data.try_as_move().unwrap()).unwrap();
+    let update_coin = GasCoin::try_from(&response.updated_coin).unwrap();
     assert_eq!(update_coin.value(), GAS_VALUE_FOR_TESTING - total_amount);
     let split_coin_values = response
         .new_coins
         .iter()
-        .map(|o| {
-            GasCoin::try_from(o.data.try_as_move().unwrap())
-                .unwrap()
-                .value()
-        })
+        .map(|o| GasCoin::try_from(o).unwrap().value())
         .collect::<BTreeSet<_>>();
     assert_eq!(
         split_amounts,
@@ -298,7 +294,7 @@ async fn test_coin_merge() {
         (gas_object.id(), gas_object.version().increment()),
         (response.updated_gas.id(), response.updated_gas.version())
     );
-    let update_coin = GasCoin::try_from(response.updated_coin.data.try_as_move().unwrap()).unwrap();
+    let update_coin = GasCoin::try_from(&response.updated_coin).unwrap();
     assert_eq!(update_coin.value(), GAS_VALUE_FOR_TESTING * 2);
 }
 

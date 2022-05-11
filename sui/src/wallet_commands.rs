@@ -13,11 +13,12 @@ use std::{
 use anyhow::anyhow;
 use clap::*;
 use colored::Colorize;
-use move_core_types::{identifier::Identifier, language_storage::TypeTag, parser::parse_type_tag};
+use move_core_types::{language_storage::TypeTag, parser::parse_type_tag};
 use serde::Serialize;
 use serde_json::json;
 use tracing::info;
 
+use sui_core::gateway_state::gateway_responses::{SuiObject, SuiObjectRead, SuiObjectRef};
 use sui_core::gateway_state::{
     gateway_responses::{MergeCoinResponse, PublishResponse, SplitCoinResponse, SwitchResponse},
     GatewayClient,
@@ -25,10 +26,9 @@ use sui_core::gateway_state::{
 use sui_core::sui_json::SuiJsonValue;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SuiAddress},
+    base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
     messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects},
-    object::{Object, ObjectRead, ObjectRead::Exists},
     SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -104,10 +104,10 @@ pub enum WalletCommands {
         package: ObjectID,
         /// The name of the module in the package
         #[clap(long)]
-        module: Identifier,
+        module: String,
         /// Function name in module
         #[clap(long)]
-        function: Identifier,
+        function: String,
         /// Function name in module
         #[clap(
         long,
@@ -367,7 +367,7 @@ impl WalletCommands {
                     .await?
                     .iter()
                     // Ok to unwrap() since `get_gas_objects` guarantees gas
-                    .map(|q| GasCoin::try_from(&q.1).unwrap())
+                    .map(|(_, object)| GasCoin::try_from(object).unwrap())
                     .collect();
                 WalletCommandResult::Gas(coins)
             }
@@ -465,8 +465,8 @@ impl WalletCommands {
                 }
                 let (_, effects) = call_move(
                     &ObjectID::from(SUI_FRAMEWORK_ADDRESS),
-                    &Identifier::new("DevNetNFT").unwrap(),
-                    &Identifier::new("mint").unwrap(),
+                    "DevNetNFT",
+                    "mint",
                     &[],
                     gas,
                     &gas_budget.unwrap_or(3000),
@@ -532,17 +532,17 @@ impl WalletContext {
     pub async fn gas_objects(
         &self,
         address: SuiAddress,
-    ) -> Result<Vec<(u64, Object)>, anyhow::Error> {
+    ) -> Result<Vec<(u64, SuiObject)>, anyhow::Error> {
         let object_refs = self.gateway.get_owned_objects(address).await?;
 
         // TODO: We should ideally fetch the objects from local cache
         let mut values_objects = Vec::new();
-        for (id, _, _) in object_refs {
-            match self.gateway.get_object_info(id).await? {
-                Exists(_, o, _) => {
-                    if matches!( o.type_(), Some(v)  if *v == GasCoin::type_()) {
+        for oref in object_refs {
+            match self.gateway.get_object_info(oref.object_id).await? {
+                SuiObjectRead::Exists(o) => {
+                    if matches!( o.data.type_(), Some(v)  if *v == GasCoin::type_().to_string()) {
                         // Okay to unwrap() since we already checked type
-                        let gas_coin = GasCoin::try_from(o.data.try_as_move().unwrap())?;
+                        let gas_coin = GasCoin::try_from(&o)?;
                         values_objects.push((gas_coin.value(), o));
                     }
                 }
@@ -575,7 +575,7 @@ impl WalletContext {
         address: SuiAddress,
         budget: u64,
         forbidden_gas_objects: BTreeSet<ObjectID>,
-    ) -> Result<(u64, Object), anyhow::Error> {
+    ) -> Result<(u64, SuiObject), anyhow::Error> {
         for o in self.gas_objects(address).await.unwrap() {
             if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.id()) {
                 return Ok(o);
@@ -619,14 +619,14 @@ impl Display for WalletCommandResult {
                     "Object ID", "Version", "Digest"
                 )?;
                 writeln!(writer, "{}", ["-"; 126].join(""))?;
-                for (id, version, digest) in object_refs {
+                for oref in object_refs {
                     writeln!(
                         writer,
                         " {0: ^42} | {1: ^10} | {2: ^34?}",
-                        id,
-                        version.value(),
-                        digest
-                    )?;
+                        oref.object_id,
+                        oref.version.value(),
+                        oref.digest
+                    )?
                 }
                 writeln!(writer, "Showing {} results.", object_refs.len())?;
             }
@@ -685,8 +685,8 @@ impl Display for WalletCommandResult {
 
 async fn call_move(
     package: &ObjectID,
-    module: &Identifier,
-    function: &Identifier,
+    module: &str,
+    function: &str,
     type_args: &[TypeTag],
     gas: &Option<ObjectID>,
     gas_budget: &u64,
@@ -701,8 +701,8 @@ async fn call_move(
         .move_call(
             sender,
             *package,
-            module.to_owned(),
-            function.to_owned(),
+            module.to_string(),
+            function.to_string(),
             type_args.to_owned(),
             args.to_vec(),
             *gas,
@@ -751,8 +751,7 @@ impl Debug for WalletCommandResult {
         let s = unwrap_err_to_string(|| match self {
             WalletCommandResult::Object(object_read) => {
                 let object = object_read.object()?;
-                let layout = object_read.layout()?;
-                Ok(serde_json::to_string_pretty(&object.to_json(layout)?)?)
+                Ok(serde_json::to_string_pretty(&object)?)
             }
             _ => Ok(serde_json::to_string_pretty(self)?),
         });
@@ -787,7 +786,7 @@ impl WalletCommandResult {
 #[serde(untagged)]
 pub enum WalletCommandResult {
     Publish(PublishResponse),
-    Object(ObjectRead),
+    Object(SuiObjectRead),
     Call(CertifiedTransaction, TransactionEffects),
     Transfer(
         // Skipping serialisation for elapsed time.
@@ -796,7 +795,7 @@ pub enum WalletCommandResult {
         TransactionEffects,
     ),
     Addresses(Vec<SuiAddress>),
-    Objects(Vec<ObjectRef>),
+    Objects(Vec<SuiObjectRef>),
     SyncClientState,
     NewAddress(SuiAddress),
     Gas(Vec<GasCoin>),
@@ -804,5 +803,5 @@ pub enum WalletCommandResult {
     MergeCoin(MergeCoinResponse),
     Switch(SwitchResponse),
     ActiveAddress(Option<SuiAddress>),
-    CreateExampleNFT(ObjectRead),
+    CreateExampleNFT(SuiObjectRead),
 }

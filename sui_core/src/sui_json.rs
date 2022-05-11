@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 use sui_types::base_types::{decode_bytes_hex, ObjectID, SuiAddress};
-use sui_types::object::Object;
+use sui_types::move_package::MovePackage;
 
 const HEX_PREFIX: &str = "0x";
 
@@ -308,17 +308,13 @@ fn resolve_call_args(
 /// Resolve a the JSON args of a function into the expected formats to make them usable by Move call
 /// This is because we have special types which we need to specify in other formats
 pub fn resolve_move_function_args(
-    package: &Object,
+    package: &MovePackage,
     module_ident: Identifier,
     function: Identifier,
     combined_args_json: Vec<SuiJsonValue>,
 ) -> Result<Vec<SuiJsonCallArg>, anyhow::Error> {
     // Extract the expected function signature
-    let module = package
-        .data
-        .try_as_package()
-        .ok_or_else(|| anyhow!("Cannot get package from object"))?
-        .deserialize_module(&module_ident)?;
+    let module = package.deserialize_module(&module_ident)?;
     let function_str = function.as_ident_str();
     let fdef = module
         .function_defs

@@ -3,10 +3,10 @@
 
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
-use move_core_types::identifier::Identifier;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{base64, serde_as};
+use sui_core::gateway_state::gateway_responses::SuiObjectRead;
 use sui_core::gateway_state::{
     gateway_responses::{TransactionEffectsResponse, TransactionResponse},
     GatewayTxSeqNumber,
@@ -23,11 +23,10 @@ use sui_types::{
     json_schema,
     json_schema::Base64,
     messages::TransactionData,
-    object::ObjectRead,
 };
 
+use crate::rpc_gateway::responses::ObjectResponse;
 use crate::rpc_gateway::responses::SuiTypeTag;
-use crate::rpc_gateway::responses::{GetObjectInfoResponse, ObjectResponse};
 
 #[open_rpc(
     name = "Sui JSON-RPC",
@@ -41,10 +40,6 @@ use crate::rpc_gateway::responses::{GetObjectInfoResponse, ObjectResponse};
 )]
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcGateway {
-    /// Return the object information for a specified object
-    #[method(name = "getObjectTypedInfo")]
-    async fn get_object_typed_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse>;
-
     /// Create a transaction to transfer a Sui coin from one address to another.
     #[method(name = "transferCoin")]
     async fn transfer_coin(
@@ -62,8 +57,8 @@ pub trait RpcGateway {
         &self,
         signer: SuiAddress,
         package_object_id: ObjectID,
-        #[schemars(with = "json_schema::Identifier")] module: Identifier,
-        #[schemars(with = "json_schema::Identifier")] function: Identifier,
+        module: String,
+        function: String,
         type_arguments: Vec<SuiTypeTag>,
         arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
@@ -140,7 +135,7 @@ pub trait RpcGateway {
     /// Low level API to get object info. Client Applications should prefer to use
     /// `get_object_typed_info` instead.
     #[method(name = "getObjectInfoRaw")]
-    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<ObjectRead>;
+    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<SuiObjectRead>;
 }
 
 #[serde_as]

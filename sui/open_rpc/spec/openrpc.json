@@ -16,30 +16,6 @@
   },
   "methods": [
     {
-      "name": "sui_getObjectTypedInfo",
-      "description": "Return the object information for a specified object",
-      "params": [
-        {
-          "name": "object_id",
-          "summary": "",
-          "description": "",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        }
-      ],
-      "result": {
-        "name": "GetObjectInfoResponse",
-        "summary": "",
-        "description": "",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/GetObjectInfoResponse"
-        }
-      }
-    },
-    {
       "name": "sui_transferCoin",
       "description": "Create a transaction to transfer a Sui coin from one address to another.",
       "params": [
@@ -128,7 +104,7 @@
           "description": "",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/Identifier"
+            "type": "string"
           }
         },
         {
@@ -137,7 +113,7 @@
           "description": "",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/Identifier"
+            "type": "string"
           }
         },
         {
@@ -596,12 +572,12 @@
         }
       ],
       "result": {
-        "name": "ObjectRead",
+        "name": "SuiObjectRead",
         "summary": "",
         "description": "",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/ObjectRead"
+          "$ref": "#/components/schemas/SuiObjectRead"
         }
       }
     }
@@ -711,6 +687,23 @@
             "additionalProperties": false
           }
         ]
+      },
+      "Coin": {
+        "type": "object",
+        "required": [
+          "id",
+          "value"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/VersionedID"
+          },
+          "value": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
       },
       "Data": {
         "oneOf": [
@@ -831,78 +824,8 @@
           }
         }
       },
-      "GetObjectInfoResponse": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "details",
-              "status"
-            ],
-            "properties": {
-              "details": {
-                "$ref": "#/components/schemas/ObjectExistsResponse"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "Exists"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "details",
-              "status"
-            ],
-            "properties": {
-              "details": {
-                "$ref": "#/components/schemas/ObjectNotExistsResponse"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "NotExists"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "details",
-              "status"
-            ],
-            "properties": {
-              "details": {
-                "$ref": "#/components/schemas/NamedObjectRef"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "Deleted"
-                ]
-              }
-            }
-          }
-        ]
-      },
       "Hex": {
         "type": "string"
-      },
-      "ID": {
-        "description": "Rust version of the Move Sui::ID::ID type",
-        "type": "object",
-        "required": [
-          "bytes"
-        ],
-        "properties": {
-          "bytes": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        }
       },
       "Identifier": {
         "type": "string"
@@ -980,7 +903,7 @@
             "description": "The updated original coin object after merge",
             "allOf": [
               {
-                "$ref": "#/components/schemas/Object"
+                "$ref": "#/components/schemas/SuiObject"
               }
             ]
           },
@@ -988,7 +911,7 @@
             "description": "The updated gas payment object after deducting payment",
             "allOf": [
               {
-                "$ref": "#/components/schemas/Object"
+                "$ref": "#/components/schemas/SuiObject"
               }
             ]
           }
@@ -1040,21 +963,6 @@
           }
         }
       },
-      "MoveFieldLayout": {
-        "type": "object",
-        "required": [
-          "layout",
-          "name"
-        ],
-        "properties": {
-          "layout": {
-            "$ref": "#/components/schemas/MoveTypeLayout"
-          },
-          "name": {
-            "$ref": "#/components/schemas/Identifier"
-          }
-        }
-      },
       "MoveModulePublish": {
         "type": "object",
         "required": [
@@ -1102,130 +1010,6 @@
           }
         }
       },
-      "MoveStructLayout": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "Runtime"
-            ],
-            "properties": {
-              "Runtime": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/MoveTypeLayout"
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "WithFields"
-            ],
-            "properties": {
-              "WithFields": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/MoveFieldLayout"
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "WithTypes"
-            ],
-            "properties": {
-              "WithTypes": {
-                "type": "object",
-                "required": [
-                  "fields",
-                  "type_"
-                ],
-                "properties": {
-                  "fields": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/MoveFieldLayout"
-                    }
-                  },
-                  "type_": {
-                    "$ref": "#/components/schemas/StructTag"
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
-      "MoveTypeLayout": {
-        "oneOf": [
-          {
-            "type": "string",
-            "enum": [
-              "bool",
-              "u8",
-              "u64",
-              "u128",
-              "address",
-              "signer"
-            ]
-          },
-          {
-            "type": "object",
-            "required": [
-              "vector"
-            ],
-            "properties": {
-              "vector": {
-                "$ref": "#/components/schemas/MoveTypeLayout"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "struct"
-            ],
-            "properties": {
-              "struct": {
-                "$ref": "#/components/schemas/MoveStructLayout"
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
-      "NamedObjectRef": {
-        "type": "object",
-        "required": [
-          "digest",
-          "objectId",
-          "version"
-        ],
-        "properties": {
-          "digest": {
-            "description": "Base64 string representing the object digest",
-            "type": "string"
-          },
-          "objectId": {
-            "description": "Hex code as string representing the object id",
-            "type": "string"
-          },
-          "version": {
-            "description": "Object version.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      },
       "Object": {
         "type": "object",
         "required": [
@@ -1270,146 +1054,8 @@
       "ObjectDigest": {
         "$ref": "#/components/schemas/Base64"
       },
-      "ObjectExistsResponse": {
-        "type": "object",
-        "required": [
-          "data",
-          "objectRef",
-          "owner",
-          "previousTransaction"
-        ],
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/SuiMoveData"
-          },
-          "objectRef": {
-            "$ref": "#/components/schemas/NamedObjectRef"
-          },
-          "owner": {
-            "$ref": "#/components/schemas/Owner"
-          },
-          "previousTransaction": {
-            "$ref": "#/components/schemas/TransactionDigest"
-          }
-        }
-      },
       "ObjectID": {
         "$ref": "#/components/schemas/Hex"
-      },
-      "ObjectNotExistsResponse": {
-        "type": "object",
-        "required": [
-          "objectId"
-        ],
-        "properties": {
-          "objectId": {
-            "type": "string"
-          }
-        }
-      },
-      "ObjectRead": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "details",
-              "status"
-            ],
-            "properties": {
-              "details": {
-                "$ref": "#/components/schemas/ObjectID"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "NotExists"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "details",
-              "status"
-            ],
-            "properties": {
-              "details": {
-                "type": "array",
-                "items": [
-                  {
-                    "type": "array",
-                    "items": [
-                      {
-                        "$ref": "#/components/schemas/ObjectID"
-                      },
-                      {
-                        "$ref": "#/components/schemas/SequenceNumber"
-                      },
-                      {
-                        "$ref": "#/components/schemas/ObjectDigest"
-                      }
-                    ],
-                    "maxItems": 3,
-                    "minItems": 3
-                  },
-                  {
-                    "$ref": "#/components/schemas/Object"
-                  },
-                  {
-                    "anyOf": [
-                      {
-                        "$ref": "#/components/schemas/MoveStructLayout"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                ],
-                "maxItems": 3,
-                "minItems": 3
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "Exists"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "details",
-              "status"
-            ],
-            "properties": {
-              "details": {
-                "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SequenceNumber"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ObjectDigest"
-                  }
-                ],
-                "maxItems": 3,
-                "minItems": 3
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "Deleted"
-                ]
-              }
-            }
-          }
-        ]
       },
       "ObjectResponse": {
         "type": "object",
@@ -1420,7 +1066,7 @@
           "objects": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/NamedObjectRef"
+              "$ref": "#/components/schemas/SuiObjectRef"
             }
           }
         }
@@ -1607,14 +1253,14 @@
             "description": "All the newly created coin objects generated from the split",
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Object"
+              "$ref": "#/components/schemas/SuiObject"
             }
           },
           "updated_coin": {
             "description": "The updated original coin object after split",
             "allOf": [
               {
-                "$ref": "#/components/schemas/Object"
+                "$ref": "#/components/schemas/SuiObject"
               }
             ]
           },
@@ -1622,7 +1268,7 @@
             "description": "The updated gas payment object after deducting payment",
             "allOf": [
               {
-                "$ref": "#/components/schemas/Object"
+                "$ref": "#/components/schemas/SuiObject"
               }
             ]
           }
@@ -1657,107 +1303,58 @@
       "SuiAddress": {
         "$ref": "#/components/schemas/Hex"
       },
-      "SuiJsonValue": {},
-      "SuiMoveData": {
+      "SuiData": {
         "oneOf": [
           {
             "type": "object",
-            "anyOf": [
-              {
-                "type": "integer",
-                "format": "uint8",
-                "minimum": 0.0
-              },
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "type": "integer",
-                "format": "uint128",
-                "minimum": 0.0
-              },
-              {
-                "type": "boolean"
-              },
-              {
-                "$ref": "#/components/schemas/ObjectID"
-              },
-              {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SuiMoveValue"
-                }
-              },
-              {
-                "$ref": "#/components/schemas/SuiMoveStruct"
-              },
-              {
-                "$ref": "#/components/schemas/SuiAddress"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "$ref": "#/components/schemas/ID"
-              },
-              {
-                "$ref": "#/components/schemas/UniqueID"
-              },
-              {
-                "$ref": "#/components/schemas/VersionedID"
-              },
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/Base64"
-              }
-            ],
             "required": [
-              "objectType"
+              "contents",
+              "dataType",
+              "type"
             ],
             "properties": {
-              "objectType": {
+              "contents": {
+                "$ref": "#/components/schemas/SuiMoveValue"
+              },
+              "dataType": {
                 "type": "string",
                 "enum": [
                   "moveObject"
                 ]
+              },
+              "type": {
+                "type": "string"
               }
             }
           },
           {
             "type": "object",
             "required": [
-              "disassembled",
-              "header",
-              "objectType",
-              "version"
+              "dataType",
+              "id",
+              "module_map"
             ],
             "properties": {
-              "disassembled": {
-                "type": "object",
-                "additionalProperties": true
-              },
-              "header": {
-                "type": "string"
-              },
-              "objectType": {
+              "dataType": {
                 "type": "string",
                 "enum": [
                   "package"
                 ]
               },
-              "version": {
-                "type": "string"
+              "id": {
+                "$ref": "#/components/schemas/ObjectID"
+              },
+              "module_map": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
               }
             }
           }
         ]
       },
+      "SuiJsonValue": {},
       "SuiMoveStruct": {
         "anyOf": [
           {
@@ -1841,10 +1438,10 @@
             "type": "string"
           },
           {
-            "$ref": "#/components/schemas/ID"
+            "$ref": "#/components/schemas/ObjectID"
           },
           {
-            "$ref": "#/components/schemas/UniqueID"
+            "$ref": "#/components/schemas/ObjectID"
           },
           {
             "$ref": "#/components/schemas/VersionedID"
@@ -1856,8 +1453,157 @@
           },
           {
             "$ref": "#/components/schemas/Base64"
+          },
+          {
+            "$ref": "#/components/schemas/Coin"
           }
         ]
+      },
+      "SuiObject": {
+        "type": "object",
+        "required": [
+          "data",
+          "owner",
+          "previous_transaction",
+          "reference",
+          "storage_rebate"
+        ],
+        "properties": {
+          "data": {
+            "description": "The meat of the object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SuiData"
+              }
+            ]
+          },
+          "owner": {
+            "description": "The owner that unlocks this object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Owner"
+              }
+            ]
+          },
+          "previous_transaction": {
+            "description": "The digest of the transaction that created or last mutated this object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            ]
+          },
+          "reference": {
+            "$ref": "#/components/schemas/SuiObjectRef"
+          },
+          "storage_rebate": {
+            "description": "The amount of SUI we would rebate if this object gets deleted. This number is re-calculated each time the object is mutated based on the present storage gas price.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
+      "SuiObjectRead": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "details",
+              "status"
+            ],
+            "properties": {
+              "details": {
+                "$ref": "#/components/schemas/SuiObject"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "Exists"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "details",
+              "status"
+            ],
+            "properties": {
+              "details": {
+                "$ref": "#/components/schemas/ObjectID"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "NotExists"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "details",
+              "status"
+            ],
+            "properties": {
+              "details": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ObjectDigest"
+                  }
+                ],
+                "maxItems": 3,
+                "minItems": 3
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "Deleted"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "SuiObjectRef": {
+        "type": "object",
+        "required": [
+          "digest",
+          "objectId",
+          "version"
+        ],
+        "properties": {
+          "digest": {
+            "description": "Base64 string representing the object digest",
+            "type": "string"
+          },
+          "objectId": {
+            "description": "Hex code as string representing the object id",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            ]
+          },
+          "version": {
+            "description": "Object version.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SequenceNumber"
+              }
+            ]
+          }
+        }
       },
       "TransactionBytes": {
         "type": "object",
@@ -2349,18 +2095,6 @@
       "TypeTagString": {
         "type": "string"
       },
-      "UniqueID": {
-        "description": "Rust version of the Move Sui::ID::UniqueID type",
-        "type": "object",
-        "required": [
-          "id"
-        ],
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/ID"
-          }
-        }
-      },
       "VersionedID": {
         "description": "Rust version of the Move Sui::ID::VersionedID type",
         "type": "object",
@@ -2370,7 +2104,7 @@
         ],
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/UniqueID"
+            "$ref": "#/components/schemas/ObjectID"
           },
           "version": {
             "type": "integer",
