@@ -51,7 +51,7 @@ async fn transfer_coin(
         .transfer_coin(
             signer,
             coin_object_id,
-            gas_object_id,
+            Some(gas_object_id),
             GAS_VALUE_FOR_TESTING,
             recipient,
         )
@@ -140,7 +140,7 @@ async fn test_publish() {
         .publish(
             addr1,
             compiled_modules,
-            gas_object.compute_object_reference(),
+            Some(gas_object.id()),
             GAS_VALUE_FOR_TESTING,
         )
         .await
@@ -174,7 +174,7 @@ async fn test_coin_split() {
             addr1,
             coin_object.id(),
             split_amounts.clone(),
-            gas_object.id(),
+            Some(gas_object.id()),
             GAS_VALUE_FOR_TESTING,
         )
         .await
@@ -231,7 +231,7 @@ async fn test_coin_split_insufficient_gas() {
             addr1,
             coin_object.id(),
             split_amounts.clone(),
-            gas_object.id(),
+            Some(gas_object.id()),
             20, /* Insufficient gas */
         )
         .await
@@ -276,7 +276,7 @@ async fn test_coin_merge() {
             addr1,
             coin_object1.id(),
             coin_object2.id(),
-            gas_object.id(),
+            Some(gas_object.id()),
             GAS_VALUE_FOR_TESTING,
         )
         .await
@@ -327,7 +327,7 @@ async fn test_recent_transactions() -> Result<(), anyhow::Error> {
     let mut digests = vec![];
     for obj_id in [object1.id(), object2.id(), object3.id()] {
         let data = gateway
-            .transfer_coin(addr1, obj_id, gas_object.id(), 50000, addr2)
+            .transfer_coin(addr1, obj_id, Some(gas_object.id()), 50000, addr2)
             .await
             .unwrap();
         let signature = key1.sign(&data.to_bytes());
@@ -371,7 +371,7 @@ async fn test_equivocation_resilient() {
             .transfer_coin(
                 addr1,
                 coin_object.id(),
-                gas_object.id(),
+                Some(gas_object.id()),
                 GAS_VALUE_FOR_TESTING,
                 recipient,
             )

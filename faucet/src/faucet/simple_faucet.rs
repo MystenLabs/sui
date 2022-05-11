@@ -116,7 +116,7 @@ impl SimpleFaucet {
                 signer,
                 coin_id,
                 amounts.to_vec().clone(),
-                gas_object_id,
+                Some(gas_object_id),
                 budget,
             )
             .await?;
@@ -146,7 +146,7 @@ impl SimpleFaucet {
 
         let data = context
             .gateway
-            .transfer_coin(signer, coin_id, gas_object_id, budget, recipient)
+            .transfer_coin(signer, coin_id, Some(gas_object_id), budget, recipient)
             .await?;
         let signature = context
             .keystore
