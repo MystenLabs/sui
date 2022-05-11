@@ -50,7 +50,7 @@ pub enum SuiError {
     LockErrors { errors: Vec<SuiError> },
     #[error("Attempt to transfer an object that's not owned.")]
     TransferUnownedError,
-    #[error("Attempt to transfer an object that's not a coin.")]
+    #[error("Attempt to transfer an object that's not a coin. Object transfer must be done using a distinct Move function call.")]
     TransferNonCoinError,
     #[error("A move package is expected, instead a move object is passed: {object_id}")]
     MoveObjectAsPackage { object_id: ObjectID },
@@ -58,11 +58,11 @@ pub enum SuiError {
     MovePackageAsObject { object_id: ObjectID },
     #[error("Expecting a singler owner, shared ownership found")]
     UnexpectedOwnerType,
-    #[error("Shared mutable object not yet supported")]
+    #[error("Shared object not yet supported")]
     UnsupportedSharedObjectError,
     #[error("Object used as shared is not shared.")]
     NotSharedObjectError,
-    #[error("An object that's owned by another object cannot be deleted or wrapped. It must be transerred to an account address first before deletion")]
+    #[error("An object that's owned by another object cannot be deleted or wrapped. It must be transferred to an account address first before deletion")]
     DeleteObjectOwnedObject,
     #[error("The shared locks for this transaction have not yet been set.")]
     SharedObjectLockNotSetObject,
@@ -215,6 +215,18 @@ pub enum SuiError {
     InvalidMoveEvent { error: String },
     #[error("Circular object ownership detected")]
     CircularObjectOwnership,
+    #[error("When an (either direct or indirect) child object of a shared object is passed as a Move argument,\
+        either the child object's type or the shared object's type must be defined in the same module \
+        as the called function. This is violated by object {child} (defined in module '{child_module}'), \
+        whose ancestor {ancestor} is a shared object (defined in module '{ancestor_module}'), \
+        and neither are defined in this module '{current_module}'")]
+    InvalidSharedChildUse {
+        child: ObjectID,
+        child_module: String,
+        ancestor: ObjectID,
+        ancestor_module: String,
+        current_module: String,
+    },
 
     // Gas related errors
     #[error("Gas budget set higher than max: {error:?}.")]

@@ -1,13 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SignedTransaction, TransactionResponse, Provider } from './provider';
+import { Provider } from './provider';
 import { JsonRpcClient } from '../rpc/client';
 import {
   isGetObjectInfoResponse,
   isGetOwnedObjectRefsResponse,
   isGetTxnDigestsResponse,
   isTransactionEffectsResponse,
+  isTransactionResponse,
 } from '../index.guard';
 import {
   CertifiedTransaction,
@@ -17,6 +18,8 @@ import {
   ObjectRef,
   TransactionDigest,
   TransactionEffectsResponse,
+  SignedTransaction,
+  TransactionResponse,
 } from '../types';
 import { transformGetObjectInfoResponse } from '../types/framework/transformer';
 
@@ -30,7 +33,7 @@ export class JsonRpcProvider extends Provider {
    *
    * @param endpoint URL to the Sui Gateway endpoint
    */
-  constructor(endpoint: string) {
+  constructor(public endpoint: string) {
     super();
     this.client = new JsonRpcClient(endpoint);
   }
@@ -64,6 +67,24 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
+  async getObjectInfoBatch(
+    objectIds: string[]
+  ): Promise<GetObjectInfoResponse[]> {
+    const requests = objectIds.map(id => ({
+      method: 'sui_getObjectTypedInfo',
+      args: [id],
+    }));
+    try {
+      const responses = await this.client.batchRequestWithType(
+        requests,
+        isGetObjectInfoResponse
+      );
+      return responses.map(r => transformGetObjectInfoResponse(r));
+    } catch (err) {
+      throw new Error(`Error fetching object info: ${err} for id ${objectIds}`);
+    }
+  }
+
   // Transactions
   async getTransactionWithEffects(
     digest: TransactionDigest
@@ -78,6 +99,26 @@ export class JsonRpcProvider extends Provider {
     } catch (err) {
       throw new Error(
         `Error getting transaction with effects: ${err} for digest ${digest}`
+      );
+    }
+  }
+
+  async getTransactionWithEffectsBatch(
+    digests: TransactionDigest[]
+  ): Promise<TransactionEffectsResponse[]> {
+    const requests = digests.map(d => ({
+      method: 'sui_getTransaction',
+      args: [d],
+    }));
+    try {
+      return await this.client.batchRequestWithType(
+        requests,
+        isTransactionEffectsResponse
+      );
+    } catch (err) {
+      const list = digests.join(', ').substring(0, -2);
+      throw new Error(
+        `Error getting transaction effects: ${err} for digests [${list}]`
       );
     }
   }
@@ -98,9 +139,20 @@ export class JsonRpcProvider extends Provider {
   }
 
   async executeTransaction(
-    _txn: SignedTransaction
+    txn: SignedTransaction
   ): Promise<TransactionResponse> {
-    throw new Error('Method not implemented.');
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_executeTransaction',
+        [txn],
+        isTransactionResponse
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(
+        `Error executing transaction: ${err} for txn ${JSON.stringify(txn)}`
+      );
+    }
   }
 
   async getTotalTransactionNumber(): Promise<number> {
@@ -146,6 +198,4 @@ export class JsonRpcProvider extends Provider {
       );
     }
   }
-
-  // TODO: add more interface methods
 }

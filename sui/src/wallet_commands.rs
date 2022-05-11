@@ -3,7 +3,7 @@
 
 use core::fmt;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeSet,
     fmt::{Debug, Display, Formatter, Write},
     path::Path,
     sync::{Arc, RwLock},
@@ -22,10 +22,12 @@ use sui_core::gateway_state::{
     gateway_responses::{MergeCoinResponse, PublishResponse, SplitCoinResponse, SwitchResponse},
     GatewayClient,
 };
-use sui_core::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
+use sui_core::sui_json::SuiJsonValue;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::{
-    base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress},
+    base_types::{ObjectID, ObjectRef, SuiAddress},
+    error::SuiError,
+    fp_ensure,
     gas_coin::GasCoin,
     messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects},
     object::{Object, ObjectRead, ObjectRead::Exists},
@@ -59,7 +61,7 @@ pub enum WalletCommands {
     Switch {
         /// An Sui address to be used as the active address for subsequent
         /// commands.
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         address: Option<SuiAddress>,
         /// The gateway URL (e.g., local rpc server, devnet rpc server, etc) to be
         /// used for subsequent commands.
@@ -130,16 +132,16 @@ pub enum WalletCommands {
         gas_budget: u64,
     },
 
-    /// Transfer an object
-    #[clap(name = "transfer")]
+    /// Transfer coin object
+    #[clap(name = "transfer-coin")]
     Transfer {
         /// Recipient address
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         to: SuiAddress,
 
-        /// Object to transfer, in 20 bytes Hex string
+        /// Coin to transfer, in 20 bytes Hex string
         #[clap(long)]
-        object_id: ObjectID,
+        coin_object_id: ObjectID,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
@@ -153,7 +155,7 @@ pub enum WalletCommands {
     /// Synchronize client state with authorities.
     #[clap(name = "sync")]
     SyncClientState {
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         address: Option<SuiAddress>,
     },
 
@@ -169,7 +171,7 @@ pub enum WalletCommands {
     #[clap(name = "objects")]
     Objects {
         /// Address owning the objects
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         address: Option<SuiAddress>,
     },
 
@@ -177,7 +179,7 @@ pub enum WalletCommands {
     #[clap(name = "gas")]
     Gas {
         /// Address owning the objects
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         address: Option<SuiAddress>,
     },
 
@@ -256,16 +258,13 @@ impl WalletCommands {
                 gas,
                 gas_budget,
             } => {
-                let gas_object = context
-                    .choose_gas_for_wallet(*gas, *gas_budget, BTreeSet::new())
-                    .await?;
-                let sender = gas_object.owner.get_owner_address()?;
-                let gas_obj_ref = gas_object.compute_object_reference();
+                let sender = context.try_get_object_owner(gas).await?;
+                let sender = sender.unwrap_or(context.active_address()?);
 
                 let compiled_modules = build_move_package_to_bytes(Path::new(path), false)?;
                 let data = context
                     .gateway
-                    .publish(sender, compiled_modules, gas_obj_ref, *gas_budget)
+                    .publish(sender, compiled_modules, *gas, *gas_budget)
                     .await?;
                 let signature = context
                     .keystore
@@ -304,42 +303,16 @@ impl WalletCommands {
 
             WalletCommands::Transfer {
                 to,
-                object_id,
+                coin_object_id: object_id,
                 gas,
                 gas_budget,
             } => {
-                let obj = context
-                    .gateway
-                    .get_object_info(*object_id)
-                    .await?
-                    .object()?
-                    .clone();
-                let forbidden_gas_objects = BTreeSet::from([*object_id]);
-
-                // If this isnt the active account, and no gas is specified, derive sender and gas from object to be sent
-                let gas_object = if context.active_address()? != obj.owner.get_owner_address()?
-                    && gas.is_none()
-                {
-                    context
-                        .gas_for_owner_budget(
-                            obj.owner.get_owner_address()?,
-                            *gas_budget,
-                            forbidden_gas_objects,
-                        )
-                        .await?
-                        .1
-                } else {
-                    context
-                        .choose_gas_for_wallet(*gas, *gas_budget, forbidden_gas_objects)
-                        .await?
-                };
-                let from = gas_object.owner.get_owner_address()?;
-
+                let from = context.get_object_owner(object_id).await?;
                 let time_start = Instant::now();
 
                 let data = context
                     .gateway
-                    .transfer_coin(from, *object_id, gas_object.id(), *gas_budget, *to)
+                    .transfer_coin(from, *object_id, *gas, *gas_budget, *to)
                     .await?;
                 let signature = context
                     .keystore
@@ -406,20 +379,10 @@ impl WalletCommands {
                 gas,
                 gas_budget,
             } => {
-                let forbidden_gas_objects = BTreeSet::from([*coin_id]);
-                let gas_object = context
-                    .choose_gas_for_wallet(*gas, *gas_budget, forbidden_gas_objects)
-                    .await?;
-                let signer = gas_object.owner.get_owner_address()?;
+                let signer = context.get_object_owner(coin_id).await?;
                 let data = context
                     .gateway
-                    .split_coin(
-                        signer,
-                        *coin_id,
-                        amounts.clone(),
-                        gas_object.id(),
-                        *gas_budget,
-                    )
+                    .split_coin(signer, *coin_id, amounts.clone(), *gas, *gas_budget)
                     .await?;
                 let signature = context
                     .keystore
@@ -439,21 +402,10 @@ impl WalletCommands {
                 gas,
                 gas_budget,
             } => {
-                let forbidden_gas_objects = BTreeSet::from([*primary_coin, *coin_to_merge]);
-                let gas_object = context
-                    .choose_gas_for_wallet(*gas, *gas_budget, forbidden_gas_objects)
-                    .await?;
-
-                let signer = gas_object.owner.get_owner_address()?;
+                let signer = context.get_object_owner(primary_coin).await?;
                 let data = context
                     .gateway
-                    .merge_coins(
-                        signer,
-                        *primary_coin,
-                        *coin_to_merge,
-                        gas_object.id(),
-                        *gas_budget,
-                    )
+                    .merge_coins(signer, *primary_coin, *coin_to_merge, *gas, *gas_budget)
                     .await?;
                 let signature = context
                     .keystore
@@ -603,35 +555,20 @@ impl WalletContext {
         Ok(values_objects)
     }
 
-    /// Choose ideal gas object based on the budget and provided gas if any
-    async fn choose_gas_for_wallet(
-        &mut self,
-        specified_gas: Option<ObjectID>,
-        budget: u64,
-        forbidden_gas_objects: BTreeSet<ObjectID>,
-    ) -> Result<Object, anyhow::Error> {
-        Ok(match specified_gas {
-            None => {
-                let addr = self.active_address()?;
-                self.gas_for_owner_budget(addr, budget, forbidden_gas_objects)
-                    .await?
-                    .1
-            }
-            Some(g) => {
-                if forbidden_gas_objects.contains(&g) {
-                    return Err(anyhow!(
-                        "Gas {} cannot be used as payment and in transaction input",
-                        g
-                    ));
-                }
+    pub async fn get_object_owner(&self, id: &ObjectID) -> Result<SuiAddress, anyhow::Error> {
+        let object = self.gateway.get_object_info(*id).await?.into_object()?;
+        Ok(object.owner.get_owner_address()?)
+    }
 
-                let gas_object_read = self.gateway.get_object_info(g).await?;
-                // You could technically try to pay with a gas not owned by user.
-                // Especially if one forgets to switch account
-                // Allow it still
-                gas_object_read.object()?.clone()
-            }
-        })
+    pub async fn try_get_object_owner(
+        &self,
+        id: &Option<ObjectID>,
+    ) -> Result<Option<SuiAddress>, anyhow::Error> {
+        if let Some(id) = id {
+            Ok(Some(self.get_object_owner(id).await?))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Find a gas object which fits the budget
@@ -678,10 +615,22 @@ impl Display for WalletCommandResult {
                 }
             }
             WalletCommandResult::Objects(object_refs) => {
-                writeln!(writer, "Showing {} results.", object_refs.len())?;
-                for object_ref in object_refs {
-                    writeln!(writer, "{:?}", object_ref)?;
+                writeln!(
+                    writer,
+                    " {0: ^42} | {1: ^10} | {2: ^68}",
+                    "Object ID", "Version", "Digest"
+                )?;
+                writeln!(writer, "{}", ["-"; 126].join(""))?;
+                for (id, version, digest) in object_refs {
+                    writeln!(
+                        writer,
+                        " {0: ^42} | {1: ^10} | {2: ^34?}",
+                        id,
+                        version.value(),
+                        digest
+                    )?;
                 }
+                writeln!(writer, "Showing {} results.", object_refs.len())?;
             }
             WalletCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
@@ -693,7 +642,7 @@ impl Display for WalletCommandResult {
                 // TODO: generalize formatting of CLI
                 writeln!(
                     writer,
-                    " {0: ^40} | {1: ^10} | {2: ^11}",
+                    " {0: ^42} | {1: ^10} | {2: ^11}",
                     "Object ID", "Version", "Gas Value"
                 )?;
                 writeln!(
@@ -703,7 +652,7 @@ impl Display for WalletCommandResult {
                 for gas in gases {
                     writeln!(
                         writer,
-                        " {0: ^40} | {1: ^10} | {2: ^11}",
+                        " {0: ^42} | {1: ^10} | {2: ^11}",
                         gas.id(),
                         u64::from(gas.version()),
                         gas.value()
@@ -746,39 +695,19 @@ async fn call_move(
     args: &[SuiJsonValue],
     context: &mut WalletContext,
 ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-    let package_obj_info = context.gateway.get_object_info(*package).await?;
-    let package_obj = package_obj_info.object()?;
-    let package_obj_ref = package_obj_info.reference().unwrap();
-
-    // Resolving the args in client side to identify forbidden_gas_objects
-    let json_args =
-        resolve_move_function_args(package_obj, module.clone(), function.clone(), args.to_vec())?;
-    // Fetch all the objects needed for this call
-    let mut objects = BTreeMap::new();
-    for json_arg in json_args {
-        if let SuiJsonCallArg::Object(id) = json_arg {
-            let obj = context.gateway.get_object_info(id).await?.into_object()?;
-            objects.insert(id, obj);
-        }
-    }
-    let forbidden_gas_objects = objects.keys().copied().collect();
-    let gas_object = context
-        .choose_gas_for_wallet(*gas, *gas_budget, forbidden_gas_objects)
-        .await?;
-    let sender = gas_object.owner.get_owner_address()?;
-    // Fetch the object info for the gas obj
-    let gas_obj_ref = gas_object.compute_object_reference();
+    let gas_owner = context.try_get_object_owner(gas).await?;
+    let sender = gas_owner.unwrap_or(context.active_address()?);
 
     let data = context
         .gateway
         .move_call(
             sender,
-            package_obj_ref,
+            *package,
             module.to_owned(),
             function.to_owned(),
             type_args.to_owned(),
             args.to_vec(),
-            gas_obj_ref,
+            *gas,
             *gas_budget,
         )
         .await?;
@@ -787,9 +716,19 @@ async fn call_move(
         .read()
         .unwrap()
         .sign(&sender, &data.to_bytes())?;
+    let transaction = Transaction::new(data, signature);
+    // Shared objects are not yet supported end-to-end.
+    // Disabling it by default at the moment. However we could still use it
+    // if we pass environment variable SHARED to the wallet.
+    if std::env::var("SHARED").is_err() {
+        fp_ensure!(
+            !transaction.contains_shared_object(),
+            SuiError::UnsupportedSharedObjectError.into()
+        );
+    }
     let (cert, effects) = context
         .gateway
-        .execute_transaction(Transaction::new(data, signature))
+        .execute_transaction(transaction)
         .await?
         .to_effect_response()?;
 
@@ -824,9 +763,9 @@ impl Debug for WalletCommandResult {
             WalletCommandResult::Object(object_read) => {
                 let object = object_read.object()?;
                 let layout = object_read.layout()?;
-                Ok(object.to_json(layout)?.to_string())
+                Ok(serde_json::to_string_pretty(&object.to_json(layout)?)?)
             }
-            _ => Ok(serde_json::to_string(self)?),
+            _ => Ok(serde_json::to_string_pretty(self)?),
         });
         write!(f, "{}", s)
     }

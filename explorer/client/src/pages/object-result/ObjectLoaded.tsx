@@ -1,13 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
-import { type AddressOwner } from '../../utils/api/SuiRpcClient';
+import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
 import { parseImageURL } from '../../utils/objectUtils';
 import {
     asciiFromNumberBytes,
@@ -47,13 +47,6 @@ function ObjectLoaded({ data }: { data: DataType }) {
 
     //TODO - a backend convention on how owned objects are labelled and how values are stored
     //This would facilitate refactoring the below and stopping bugs when a variant is missed:
-    const checkIsIDType = (key: string, value: any) =>
-        /owned/.test(key) ||
-        (/_id/.test(key) && value?.bytes) ||
-        value?.vec ||
-        key === 'objects';
-    const checkVecOfSingleID = (value: any) =>
-        Array.isArray(value) && value.length > 0 && value[0]?.bytes;
     const addrOwnerPattern = /^AddressOwner\(k#/;
     const endParensPattern = /\){1}$/;
 
@@ -185,30 +178,18 @@ function ObjectLoaded({ data }: { data: DataType }) {
         .filter(([key, _]) => /name/i.test(key))
         .map(([_, value]) => value);
 
-    const ownedObjects = Object.entries(viewedData.data?.contents)
-        .filter(([key, value]) => checkIsIDType(key, value))
-        .map(([key, value]) => {
-            if (value?.bytes !== undefined) return [key, [value.bytes]];
-
-            if (checkVecOfSingleID(value.vec))
-                return [
-                    key,
-                    value.vec.map((value2: { bytes: string }) => value2?.bytes),
-                ];
-
-            if (checkVecOfSingleID(value))
-                return [
-                    key,
-                    value.map((value2: { bytes: string }) => value2?.bytes),
-                ];
-
-            return [key, []];
-        });
-
     const properties = Object.entries(viewedData.data?.contents)
         //TO DO: remove when have distinct 'name' field in Description
         .filter(([key, _]) => !/name/i.test(key))
         .filter(([_, value]) => checkIsPropertyType(value));
+
+    const descriptionTitle =
+        data.objType === 'Move Package' ? 'Package Description' : 'Description';
+
+    const detailsTitle =
+        data.objType === 'Move Package'
+            ? 'Disassembled Bytecode'
+            : 'Properties';
 
     return (
         <>
@@ -233,7 +214,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                         className={styles.clickableheader}
                         onClick={clickSetShowDescription}
                     >
-                        Description {showDescription ? '' : '+'}
+                        {descriptionTitle} {showDescription ? '' : '+'}
                     </h2>
                     {showDescription && (
                         <div
@@ -250,12 +231,23 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     />
                                 </div>
                             </div>
+                            {data.data?.tx_digest && (
+                                <div>
+                                    <div>Last Transaction ID</div>
+                                    <div id="transactionID">
+                                        <Longtext
+                                            text={data.data?.tx_digest}
+                                            category="transactions"
+                                            isLink={true}
+                                        />
+                                    </div>
+                                </div>
+                            )}
 
                             <div>
                                 <div>Version</div>
                                 <div>{data.version}</div>
                             </div>
-
                             {data.readonly && (
                                 <div>
                                     <div>Read Only?</div>
@@ -276,21 +268,32 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     )}
                                 </div>
                             )}
-
                             <div>
                                 <div>Type</div>
-                                <div>{prepObjTypeValue(data.objType)}</div>
-                            </div>
-                            <div>
-                                <div>Owner</div>
-                                <div id="owner">
-                                    <Longtext
-                                        text={extractOwnerData(data.owner)}
-                                        category="unknown"
-                                        isLink={true}
-                                    />
+                                <div>
+                                    {data.objType === 'Move Package'
+                                        ? 'Library'
+                                        : prepObjTypeValue(data.objType)}
                                 </div>
                             </div>
+                            {data.objType !== 'Move Package' && (
+                                <div>
+                                    <div>Owner</div>
+                                    <div id="owner">
+                                        <Longtext
+                                            text={extractOwnerData(data.owner)}
+                                            category="unknown"
+                                            // TODO: make this more elegant
+                                            isLink={
+                                                extractOwnerData(data.owner) !==
+                                                    'Immutable' &&
+                                                extractOwnerData(data.owner) !==
+                                                    'Shared'
+                                            }
+                                        />
+                                    </div>
+                                </div>
+                            )}
                             {data.contract_id && (
                                 <div>
                                     <div>Contract ID</div>
@@ -301,7 +304,6 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     />
                                 </div>
                             )}
-
                             {data.ethAddress && (
                                 <div>
                                     <div>Ethereum Contract Address</div>
@@ -328,13 +330,13 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             )}
                         </div>
                     )}
-                    {properties.length > 0 && (
+                    {properties.length > 0 && data.objType !== 'Move Package' && (
                         <>
                             <h2
                                 className={styles.clickableheader}
                                 onClick={clickSetShowProperties}
                             >
-                                Properties {showProperties ? '' : '+'}
+                                {detailsTitle} {showProperties ? '' : '+'}
                             </h2>
                             {showProperties && (
                                 <div className={styles.propertybox}>
@@ -348,30 +350,38 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             )}
                         </>
                     )}
-                    {ownedObjects.length > 0 && (
-                        <>
+                    {}
+                    {data.objType !== 'Move Package' ? (
+                        <h2
+                            className={styles.clickableheader}
+                            onClick={clickSetShowConnectedEntities}
+                        >
+                            Child Objects {showConnectedEntities ? '' : '+'}
+                        </h2>
+                    ) : (
+                        <div>
                             <h2
                                 className={styles.clickableheader}
-                                onClick={clickSetShowConnectedEntities}
+                                onClick={clickSetShowProperties}
                             >
-                                Owned Objects {showConnectedEntities ? '' : '+'}
+                                Modules {showProperties ? '' : '+'}
                             </h2>
-                            {showConnectedEntities && (
-                                <div className={theme.textresults}>
-                                    {ownedObjects.map(
-                                        ([key, value], index1) => (
-                                            <div
-                                                key={`ConnectedEntity-${index1}`}
-                                            >
-                                                <div>{prepLabel(key)}</div>
-                                                <OwnedObjects id={data.id} />
-                                            </div>
-                                        )
-                                    )}
+                            {showProperties && (
+                                <div className={styles.bytecodebox}>
+                                    {properties.map(([key, value], index) => (
+                                        <div key={`property-${index}`}>
+                                            <div>{prepLabel(key)}</div>
+                                            <div>{value}</div>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
-                        </>
+                        </div>
                     )}
+                    {showConnectedEntities &&
+                        data.objType !== 'Move Package' && (
+                            <OwnedObjects id={data.id} />
+                        )}
                 </div>
             </div>
         </>

@@ -10,10 +10,14 @@ describe('Test Objects Definition', () => {
   it('Test against different object definitions', () => {
     validate('coin');
     validate('example_nft');
+    validate('move_package');
+    validate('hero');
   });
 });
 
-function validate(key: 'coin' | 'example_nft'): GetObjectInfoResponse {
+function validate(
+  key: 'coin' | 'example_nft' | 'move_package' | 'hero'
+): GetObjectInfoResponse {
   const data = mockObjectData[key];
   expect(isGetObjectInfoResponse(data)).toBeTruthy();
   return data as GetObjectInfoResponse;

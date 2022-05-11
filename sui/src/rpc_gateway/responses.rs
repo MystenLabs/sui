@@ -45,7 +45,7 @@ impl NamedObjectRef {
 impl From<ObjectRef> for NamedObjectRef {
     fn from((object_id, version, digest): ObjectRef) -> Self {
         Self {
-            object_id: object_id.to_hex(),
+            object_id: format!("{:#x}", object_id),
             version: version.value(),
             digest: Base64::encode_string(digest.as_ref()),
         }

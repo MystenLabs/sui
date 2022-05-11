@@ -1,16 +1,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
     getSingleTransactionKind,
     getTransactionKind,
     getTransferTransaction,
     getExecutionStatusType,
     getTotalGasUsed,
-} from 'sui.js';
+} from '@mysten/sui.js';
+import cl from 'classnames';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
@@ -23,7 +23,7 @@ import type {
     TransactionEffectsResponse,
     ExecutionStatusType,
     TransactionKindName,
-} from 'sui.js';
+} from '@mysten/sui.js';
 
 import styles from './RecentTxCard.module.css';
 
@@ -45,58 +45,46 @@ type TxnData = {
 async function getRecentTransactions(txNum: number): Promise<TxnData[]> {
     try {
         // Get the latest transactions
-        // TODO add batch transaction kind TransactionDigest
-        // TODO sui.js to get the latest transactions meta data
         const transactions = await rpc
             .getRecentTransactions(txNum)
             .then((res: GetTxnDigestsResponse) => res);
 
-        const txLatest = await Promise.all(
-            transactions.map(async (tx) => {
-                const [seq, digest] = tx;
-                return await rpc
-                    .getTransactionWithEffects(digest)
-                    .then((txEff: TransactionEffectsResponse) => {
-                        const res: CertifiedTransaction = txEff.certificate;
-                        const singleTransaction = getSingleTransactionKind(
-                            res.data
+        const digests = transactions.map((tx) => tx[1]);
+        const txLatest = await rpc
+            .getTransactionWithEffectsBatch(digests)
+            .then((txEffs: TransactionEffectsResponse[]) => {
+                return txEffs.map((txEff, i) => {
+                    const [seq, digest] = transactions[i];
+                    const res: CertifiedTransaction = txEff.certificate;
+                    const singleTransaction = getSingleTransactionKind(
+                        res.data
+                    );
+                    if (!singleTransaction) {
+                        throw new Error(
+                            `Transaction kind not supported yet ${res.data.kind}`
                         );
-                        if (!singleTransaction) {
-                            throw new Error(
-                                `Transaction kind not supported yet ${res.data.kind}`
-                            );
-                        }
-                        const txKind = getTransactionKind(res.data);
-                        const recipient = getTransferTransaction(
-                            res.data
-                        )?.recipient;
+                    }
+                    const txKind = getTransactionKind(res.data);
+                    const recipient = getTransferTransaction(
+                        res.data
+                    )?.recipient;
 
-                        return {
-                            seq,
-                            txId: digest,
-                            status: getExecutionStatusType(
-                                txEff.effects.status
-                            ),
-                            txGas: getTotalGasUsed(txEff.effects.status),
-                            kind: txKind,
-                            From: res.data.sender,
-                            ...(recipient
-                                ? {
-                                      To: recipient,
-                                  }
-                                : {}),
-                        };
-                    })
-                    .catch((err) => {
-                        console.error(
-                            'Failed to get transaction details for txn digest',
-                            digest,
-                            err
-                        );
-                        return null;
-                    });
-            })
-        );
+                    return {
+                        seq,
+                        txId: digest,
+                        status: getExecutionStatusType(txEff.effects.status),
+                        txGas: getTotalGasUsed(txEff.effects.status),
+                        kind: txKind,
+                        From: res.data.sender,
+                        ...(recipient
+                            ? {
+                                  To: recipient,
+                              }
+                            : {}),
+                    };
+                });
+            });
+
         // Remove failed transactions and sort by sequence number
         return txLatest
             .filter((itm) => itm)
@@ -141,14 +129,16 @@ function LatestTxCard() {
             .catch((err) => {
                 setResults({
                     ...initState,
+                    loadState: 'fail',
                 });
+                setIsLoaded(false);
             });
 
         return () => {
             isMounted = false;
         };
     }, []);
-    if (!isLoaded) {
+    if (results.loadState === 'pending') {
         return (
             <div className={theme.textresults}>
                 <div className={styles.content}>Loading...</div>
@@ -159,10 +149,14 @@ function LatestTxCard() {
     if (!isLoaded && results.loadState === 'fail') {
         return (
             <ErrorResult
-                id="latestTx"
-                errorMsg="There was an issue getting the latest transaction"
+                id=""
+                errorMsg="There was an issue getting the latest transactions"
             />
         );
+    }
+
+    if (results.loadState === 'loaded' && !results.latestTx.length) {
+        return <ErrorResult id="" errorMsg="No Transactions Found" />;
     }
 
     return (
@@ -181,9 +175,9 @@ function LatestTxCard() {
                     >
                         <div className={styles.txcardgridlarge}>TxId</div>
                         <div className={styles.txtype}>TxType</div>
-                        <div className={styles.txgas}>Status</div>
+                        <div className={styles.txstatus}>Status</div>
                         <div className={styles.txgas}>Gas</div>
-                        <div className={styles.txadd}>Sender & Receiver</div>
+                        <div className={styles.txadd}>Addresses</div>
                     </div>
                     {results.latestTx.map((tx, index) => (
                         <div
@@ -204,7 +198,7 @@ function LatestTxCard() {
                             <div
                                 className={cl(
                                     styles[tx.status.toLowerCase()],
-                                    styles.txgas
+                                    styles.txstatus
                                 )}
                             >
                                 {tx.status === 'Success' ? '✔' : '✖'}

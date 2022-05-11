@@ -1,0 +1,20 @@
+{
+    "name": "AUTO_UPDATED",
+    "description": "AUTO_UPDATED",
+    "version": "AUTO_UPDATED",
+    "manifest_version": 3,
+    "background": {
+        "service_worker": "background.js"
+    },
+    "permissions": ["storage"],
+    "action": {
+        "default_popup": "ui.html"
+    },
+    "host_permissions": [],
+    "icons": {
+        "16": "manifest/icons/sui-icon-16.png",
+        "32": "manifest/icons/sui-icon-32.png",
+        "48": "manifest/icons/sui-icon-48.png",
+        "128": "manifest/icons/sui-icon-128.png"
+    }
+}

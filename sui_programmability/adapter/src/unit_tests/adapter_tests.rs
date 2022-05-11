@@ -197,7 +197,10 @@ fn call(
     // TODO improve API here
     let args = object_args
         .into_iter()
-        .map(|obj| CallArg::ImmOrOwnedObject(obj.compute_object_reference()))
+        .map(|obj| match obj.owner {
+            Owner::Shared => CallArg::SharedObject(obj.id()),
+            _ => CallArg::ImmOrOwnedObject(obj.compute_object_reference()),
+        })
         .chain(pure_args.into_iter().map(CallArg::Pure))
         .collect();
     adapter::execute(
@@ -846,97 +849,106 @@ fn publish_from_src(
 }
 
 #[test]
-fn test_simple_call() {
+fn test_child_of_shared_object() {
+    // TODO: Also add test cases where there are circular dependencies in the input.
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
     let genesis_objects = genesis::clone_genesis_packages();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
-    // crate gas object for payment
+    // create gas object for payment
     let gas_object =
         Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
 
-    // publish modules at a given path
     publish_from_src(
         &mut storage,
         &native_functions,
-        "src/unit_tests/data/simple_call",
+        "src/unit_tests/data/child_of_shared_object",
         gas_object,
         GAS_BUDGET,
     )
     .unwrap();
     storage.flush();
-
-    // call published module function
-    let obj_val = 42u64;
-
-    let addr = base_types::get_new_address();
-    let pure_args = vec![
-        obj_val.to_le_bytes().to_vec(),
-        bcs::to_bytes(&AccountAddress::from(addr)).unwrap(),
-    ];
 
     call(
         &mut storage,
         &native_functions,
-        "M1",
+        "O3",
         "create",
         GAS_BUDGET,
-        Vec::new(),
-        Vec::new(),
-        pure_args,
+        vec![],
+        vec![],
+        vec![],
     )
     .unwrap();
 
-    // check if the object was created and if it has the right value
-    let id = storage.get_created_keys().pop().unwrap();
+    let o3_id = storage.get_created_keys().pop().unwrap();
     storage.flush();
-    let obj = storage.read_object(&id).unwrap();
-    assert!(obj.owner == addr);
-    assert_eq!(obj.version(), SequenceNumber::from(1));
-    let move_obj = obj.data.try_as_move().unwrap();
-    assert_eq!(
-        u64::from_le_bytes(move_obj.type_specific_contents().try_into().unwrap()),
-        obj_val
-    );
-}
+    let o3 = storage.read_object(&o3_id).unwrap().clone();
 
-#[test]
-/// Tests publishing of a module with a constructor that creates a
-/// single object with a single u64 value 42.
-fn test_publish_init() {
-    let native_functions =
-        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_packages();
-    let mut storage = InMemoryStorage::new(genesis_objects);
-
-    // crate gas object for payment
-    let gas_object =
-        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
-
-    // publish modules at a given path
-    publish_from_src(
+    call(
         &mut storage,
         &native_functions,
-        "src/unit_tests/data/publish_init",
-        gas_object,
+        "O2",
+        "create_shared",
         GAS_BUDGET,
+        vec![],
+        vec![o3],
+        vec![],
     )
     .unwrap();
 
-    // a package object and a fresh object in the constructor should
-    // have been crated
-    assert_eq!(storage.created().len(), 2);
-    let to_check = mem::take(&mut storage.temporary.created);
-    let mut move_obj_exists = false;
-    for o in to_check.values() {
-        if let Data::Move(move_obj) = &o.data {
-            move_obj_exists = true;
-            assert_eq!(
-                u64::from_le_bytes(move_obj.type_specific_contents().try_into().unwrap()),
-                42u64
-            );
-        }
-    }
-    assert!(move_obj_exists);
+    let o2_id = storage.get_created_keys().pop().unwrap();
+    storage.flush();
+    let o2_shared = storage.read_object(&o2_id).unwrap().clone();
+    let o3 = storage.read_object(&o3_id).unwrap().clone();
+
+    call(
+        &mut storage,
+        &native_functions,
+        "O2",
+        "use_o2_o3",
+        GAS_BUDGET,
+        vec![],
+        vec![o2_shared, o3],
+        vec![],
+    )
+    .unwrap();
+
+    storage.flush();
+    let o2_shared = storage.read_object(&o2_id).unwrap().clone();
+    let o3 = storage.read_object(&o3_id).unwrap().clone();
+
+    let result = call(
+        &mut storage,
+        &native_functions,
+        "O1",
+        "use_o2_o3",
+        GAS_BUDGET,
+        vec![],
+        vec![o2_shared, o3],
+        vec![],
+    );
+    // Using O2 and O3 in O1 is illegal when O2 is a shared object and O3 is its child.
+    assert!(matches!(
+        result,
+        Err(SuiError::InvalidSharedChildUse { .. })
+    ));
+
+    storage.flush();
+    let o2_shared = storage.read_object(&o2_id).unwrap().clone();
+    let o3 = storage.read_object(&o3_id).unwrap().clone();
+
+    // Using O2 and O3 in O2 should be OK.
+    call(
+        &mut storage,
+        &native_functions,
+        "O2",
+        "use_o2_o3",
+        GAS_BUDGET,
+        vec![],
+        vec![o2_shared, o3],
+        vec![],
+    )
+    .unwrap();
 }

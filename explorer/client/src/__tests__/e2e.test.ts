@@ -53,6 +53,19 @@ const searchText = async (page: any, text: string) => {
     await page.click('#searchBtn');
 };
 
+//Standardized CSS Selectors
+
+const coinGroup = (num: number) => {
+    const trunk = `#groupCollection > div:nth-child(${num})`;
+    return {
+        base: () => trunk,
+        field: (numField: number) =>
+            `${trunk} > div > div:nth-child(${numField})`,
+    };
+};
+
+const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num})`;
+
 describe('End-to-end Tests', () => {
     beforeAll(async () => {
         browser = await puppeteer.launch();
@@ -90,7 +103,7 @@ describe('End-to-end Tests', () => {
     });
 
     // TODO - rewrite this test to use the new transaction data and state object
-    /* 
+    /*
     describe('Transaction Results', () => {
         //Specific to transaction tests:
         const successTransactionID = 'txCreateSuccess';
@@ -249,7 +262,7 @@ describe('End-to-end Tests', () => {
         it('has correct structure', async () => {
             await page.goto(`${BASE_URL}/addresses/${successAddressID}`);
 
-            const labels = ['Address ID', 'Owned Objects'];
+            const labels = ['Address', 'Owned Objects'];
 
             for (let i = 1; i <= labels.length; i++) {
                 const value = await page.$eval(
@@ -275,9 +288,7 @@ describe('End-to-end Tests', () => {
             await page.goto(`${BASE_URL}/${parentIsA}/${parentValue}`);
 
             //Click on child in Owned Objects List:
-            const objectLink = await page.$(
-                `div#ownedObjects > div:nth-child(${parentToChildNo})`
-            );
+            const objectLink = await page.$(nftObject(parentToChildNo));
             await objectLink.click();
 
             //Check ID of child object:
@@ -292,7 +303,7 @@ describe('End-to-end Tests', () => {
             const ownerLink = await page.$('div#owner > span:first-child');
             await ownerLink.click();
 
-            //Looking for object or address ID?
+            //Looking for object or address?
             const lookingFor =
                 parentIsA === 'addresses' ? '#addressID' : '#objectID';
 
@@ -309,27 +320,19 @@ describe('End-to-end Tests', () => {
                 page,
                 'receiverAddress',
                 'addresses',
-                'playerOne',
+                'player1',
                 1
             );
         });
         it('go from object to child object and back', async () => {
-            await navigationTemplate(
-                page,
-                'playerTwo',
-                'objects',
-                'standaloneObject',
-                1
-            );
+            await navigationTemplate(page, 'player2', 'objects', 'Image1', 1);
         });
         it('go from parent to broken image object and back', async () => {
-            const parentValue = 'ObjectThatOwns';
+            const parentValue = 'ObjectWBrokenChild';
             await page.goto(`${BASE_URL}/objects/${parentValue}`);
 
             //Click on child in Owned Objects List:
-            const objectLink = await page.$(
-                `div#ownedObjects > div:nth-child(2)`
-            );
+            const objectLink = await page.$(nftObject(1));
             await objectLink.click();
 
             // First see Please Wait Message:
@@ -375,9 +378,7 @@ describe('End-to-end Tests', () => {
             await page.goto(`${BASE_URL}/addresses/${address}`);
             const btn = await page.$('#nextBtn');
             await btn.click();
-            const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(2)'
-            );
+            const objectLink = await page.$(nftObject(1));
             await objectLink.click();
 
             const objectIDEl = await page.$('#objectID');
@@ -386,16 +387,15 @@ describe('End-to-end Tests', () => {
                 (el: any) => el.textContent,
                 objectIDEl
             );
-            expect(objectValue.trim()).toBe('playerTwo');
+            expect(objectValue.trim()).toBe('player0');
         });
         it('to go to the last page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
+
             const btn = await page.$('#lastBtn');
             await btn.click();
-            const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(1)'
-            );
+            const objectLink = await page.$(nftObject(1));
             await objectLink.click();
 
             const objectIDEl = await page.$('#objectID');
@@ -404,11 +404,14 @@ describe('End-to-end Tests', () => {
                 (el: any) => el.textContent,
                 objectIDEl
             );
-            expect(objectValue.trim()).toBe('standaloneObject');
+            expect(objectValue.trim()).toBe(
+                '7bc832ec31709638cd8d9323e90edf332gff4389'
+            );
         });
         it('where last and next disappear in final page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
+
             const btn = await page.$('#lastBtn');
             await btn.click();
 
@@ -423,13 +426,12 @@ describe('End-to-end Tests', () => {
         it('to go back a page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
+
             await page.$('#lastBtn').then((btn: any) => btn.click());
 
             await page.$('#backBtn').then((btn: any) => btn.click());
 
-            const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(2)'
-            );
+            const objectLink = await page.$(nftObject(1));
             await objectLink.click();
 
             const objectIDEl = await page.$('#objectID');
@@ -438,21 +440,20 @@ describe('End-to-end Tests', () => {
                 (el: any) => el.textContent,
                 objectIDEl
             );
-            expect(objectValue.trim()).toBe('playerTwo');
+            expect(objectValue.trim()).toBe('player0');
         });
 
         it('to go to first page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
+
             await page.$('#lastBtn').then((btn: any) => btn.click());
 
             await page.$('#backBtn').then((btn: any) => btn.click());
 
             await page.$('#firstBtn').then((btn: any) => btn.click());
 
-            const objectLink = await page.$(
-                'div#ownedObjects > div:nth-child(4)'
-            );
+            const objectLink = await page.$(nftObject(1));
             await objectLink.click();
 
             const objectIDEl = await page.$('#objectID');
@@ -461,11 +462,13 @@ describe('End-to-end Tests', () => {
                 (el: any) => el.textContent,
                 objectIDEl
             );
-            expect(objectValue.trim()).toBe('ComponentObject');
+            expect(objectValue.trim()).toBe('ChildObjectWBrokenImage');
         });
         it('where first and back disappear in first page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
+            const btn1 = await page.$(coinGroup(1).base());
+            await btn1.click();
 
             //Next and Last buttons are not disabled:
             await checkIsNotDisabled(page, '#nextBtn');
@@ -473,6 +476,40 @@ describe('End-to-end Tests', () => {
             //First and Back buttons are disabled:
             await checkIsDisabled(page, '#firstBtn');
             await checkIsDisabled(page, '#backBtn');
+        });
+    });
+    describe('Group View', () => {
+        it('evaluates balance', async () => {
+            const address = 'ownsAllAddress';
+            await page.goto(`${BASE_URL}/addresses/${address}`);
+
+            expect(
+                await page.$eval(
+                    coinGroup(1).field(1),
+                    (el: any) => el.textContent
+                )
+            ).toBe('Type0x2::USD::USD');
+
+            expect(
+                await page.$eval(
+                    coinGroup(1).field(2),
+                    (el: any) => el.textContent
+                )
+            ).toBe('Balance300');
+
+            expect(
+                await page.$eval(
+                    coinGroup(2).field(1),
+                    (el: any) => el.textContent
+                )
+            ).toBe('TypeSUI');
+
+            expect(
+                await page.$eval(
+                    coinGroup(2).field(2),
+                    (el: any) => el.textContent
+                )
+            ).toBe('Balance200');
         });
     });
 });

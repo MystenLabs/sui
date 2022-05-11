@@ -47,13 +47,13 @@ impl GatewayAPI for RpcGatewayClient {
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
         recipient: SuiAddress,
     ) -> Result<TransactionData, Error> {
         let bytes: TransactionBytes = self
             .client
-            .transfer_coin(signer, object_id, gas_payment, gas_budget, recipient)
+            .transfer_coin(signer, object_id, gas, gas_budget, recipient)
             .await?;
         bytes.to_data()
     }
@@ -66,19 +66,19 @@ impl GatewayAPI for RpcGatewayClient {
     async fn move_call(
         &self,
         signer: SuiAddress,
-        package_object_ref: ObjectRef,
+        package_object_id: ObjectID,
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         arguments: Vec<SuiJsonValue>,
-        gas_object_ref: ObjectRef,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, Error> {
         let bytes: TransactionBytes = self
             .client
             .move_call(
                 signer,
-                package_object_ref.0,
+                package_object_id,
                 module,
                 function,
                 type_arguments
@@ -86,7 +86,7 @@ impl GatewayAPI for RpcGatewayClient {
                     .map(|tag| tag.try_into())
                     .collect::<Result<Vec<_>, _>>()?,
                 arguments,
-                gas_object_ref.0,
+                gas,
                 gas_budget,
             )
             .await?;
@@ -97,13 +97,13 @@ impl GatewayAPI for RpcGatewayClient {
         &self,
         signer: SuiAddress,
         package_bytes: Vec<Vec<u8>>,
-        gas_object_ref: ObjectRef,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, Error> {
         let package_bytes = package_bytes.into_iter().map(Base64).collect();
         let bytes: TransactionBytes = self
             .client
-            .publish(signer, package_bytes, gas_object_ref.0, gas_budget)
+            .publish(signer, package_bytes, gas, gas_budget)
             .await?;
         bytes.to_data()
     }
@@ -113,18 +113,12 @@ impl GatewayAPI for RpcGatewayClient {
         signer: SuiAddress,
         coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, Error> {
         let bytes: TransactionBytes = self
             .client
-            .split_coin(
-                signer,
-                coin_object_id,
-                split_amounts,
-                gas_payment,
-                gas_budget,
-            )
+            .split_coin(signer, coin_object_id, split_amounts, gas, gas_budget)
             .await?;
         bytes.to_data()
     }
@@ -134,12 +128,12 @@ impl GatewayAPI for RpcGatewayClient {
         signer: SuiAddress,
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, Error> {
         let bytes: TransactionBytes = self
             .client
-            .merge_coin(signer, primary_coin, coin_to_merge, gas_payment, gas_budget)
+            .merge_coin(signer, primary_coin, coin_to_merge, gas, gas_budget)
             .await?;
         bytes.to_data()
     }

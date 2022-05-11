@@ -16,10 +16,10 @@ use move_core_types::language_storage::TypeTag;
 use prometheus_exporter::prometheus::{
     register_histogram, register_int_counter, Histogram, IntCounter,
 };
-use sui_adapter::adapter::resolve_and_type_check;
-use tracing::{error, Instrument};
+use tracing::{debug, error, Instrument};
 
-use sui_types::gas::{self, SuiGasStatus};
+use sui_adapter::adapter::resolve_and_type_check;
+use sui_types::gas_coin::GasCoin;
 use sui_types::{
     base_types::*,
     coin,
@@ -53,6 +53,8 @@ pub type GatewayClient = Box<dyn GatewayAPI + Sync + Send>;
 pub type GatewayTxSeqNumber = u64;
 
 const MAX_TX_RANGE_SIZE: u64 = 4096;
+/// Number of times to retry failed TX
+const MAX_NUM_TX_RETRIES: usize = 5;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 pub struct GatewayMetrics {
@@ -62,6 +64,8 @@ pub struct GatewayMetrics {
     num_tx_movecall: IntCounter,
     num_tx_splitcoin: IntCounter,
     num_tx_mergecoin: IntCounter,
+    total_tx_retries: IntCounter,
+    shared_obj_tx: IntCounter,
     pub total_tx_certificates: IntCounter,
     pub num_signatures: Histogram,
     pub num_good_stake: Histogram,
@@ -111,6 +115,16 @@ impl GatewayMetrics {
             total_tx_certificates: register_int_counter!(
                 "total_tx_certificates",
                 "Total number of certificates made from validators",
+            )
+            .unwrap(),
+            total_tx_retries: register_int_counter!(
+                "total_tx_retries",
+                "Total number of retries for transactions",
+            )
+            .unwrap(),
+            shared_obj_tx: register_int_counter!(
+                "gateway_shared_obj_tx",
+                "Number of transactions involving shared objects"
             )
             .unwrap(),
             // It's really important to use the right histogram buckets for accurate histogram collection.
@@ -230,7 +244,7 @@ pub trait GatewayAPI {
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error>;
@@ -244,12 +258,12 @@ pub trait GatewayAPI {
     async fn move_call(
         &self,
         signer: SuiAddress,
-        package_object_ref: ObjectRef,
+        package_object_id: ObjectID,
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         arguments: Vec<SuiJsonValue>,
-        gas_object_ref: ObjectRef,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -258,7 +272,7 @@ pub trait GatewayAPI {
         &self,
         signer: SuiAddress,
         package_bytes: Vec<Vec<u8>>,
-        gas_object_ref: ObjectRef,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -273,7 +287,7 @@ pub trait GatewayAPI {
         signer: SuiAddress,
         coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -290,7 +304,7 @@ pub trait GatewayAPI {
         signer: SuiAddress,
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -342,13 +356,20 @@ where
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> SuiResult<Object> {
-        let object = self
-            .store
-            .get_object(object_id)?
-            .ok_or(SuiError::ObjectNotFound {
-                object_id: *object_id,
-            })?;
-        Ok(object)
+        Ok(if let Some(object) = self.store.get_object(object_id)? {
+            debug!(?object_id, ?object, "Fetched object from local store");
+            object
+        } else {
+            let object = self
+                .get_object_info(*object_id)
+                .await
+                .map_err(|_| SuiError::ObjectNotFound {
+                    object_id: *object_id,
+                })?
+                .into_object()?;
+            debug!(?object_id, ?object, "Fetched object from validators");
+            object
+        })
     }
 
     async fn set_transaction_lock(
@@ -356,40 +377,25 @@ where
         mutable_input_objects: &[ObjectRef],
         transaction: Transaction,
     ) -> Result<(), SuiError> {
+        debug!(
+            ?mutable_input_objects,
+            ?transaction,
+            "Setting transaction lock"
+        );
         self.store
             .set_transaction_lock(mutable_input_objects, transaction)
     }
 
-    async fn check_gas(
+    /// Make sure all objects in the input exist in the gateway store.
+    /// If any object does not exist in the store, give it a chance
+    /// to download from authorities.
+    async fn sync_input_objects_with_authorities(
         &self,
-        gas_payment_id: ObjectID,
-        gas_budget: u64,
-    ) -> SuiResult<(Object, SuiGasStatus<'_>)> {
-        let gas_object = self.get_object(&gas_payment_id).await?;
-        gas::check_gas_balance(&gas_object, gas_budget)?;
-        // TODO: Pass in real computation gas unit price and storage gas unit price.
-        let gas_status = gas::start_gas_metering(gas_budget, 1, 1)?;
-        Ok((gas_object, gas_status))
-    }
-
-    /// Execute (or retry) a transaction and execute the Confirmation Transaction.
-    /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
-    async fn execute_transaction_impl(
-        &self,
-        transaction: Transaction,
-    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        transaction.check_signature()?;
-        self.check_gas(
-            transaction.gas_payment_object_ref().0,
-            transaction.data.gas_budget,
-        )
-        .await?;
-
+        transaction: &Transaction,
+    ) -> Result<(), anyhow::Error> {
         let input_objects = transaction.data.input_objects()?;
         let mut objects = self.read_objects_from_store(&input_objects).await?;
         for (object_opt, kind) in objects.iter_mut().zip(&input_objects) {
-            // If any object does not exist in the store, give it a chance
-            // to download from authorities.
             if object_opt.is_none() {
                 if let ObjectRead::Exists(_, object, _) =
                     self.get_object_info(kind.object_id()).await?
@@ -398,12 +404,29 @@ where
                 }
             }
         }
+        debug!(?transaction, "Synced input objects with authorities");
+        Ok(())
+    }
 
-        let objects_by_kind =
-            transaction_input_checker::check_locks(&transaction.data, input_objects, objects)
-                .instrument(tracing::trace_span!("tx_check_locks"))
-                .await?;
-        let owned_objects = transaction_input_checker::filter_owned_objects(&objects_by_kind);
+    /// Execute (or retry) a transaction and execute the Confirmation Transaction.
+    /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
+    async fn execute_transaction_impl(
+        &self,
+        transaction: Transaction,
+    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+        transaction.verify_signature()?;
+
+        self.sync_input_objects_with_authorities(&transaction)
+            .await?;
+
+        let (_gas_status, all_objects) = transaction_input_checker::check_transaction_input(
+            &self.store,
+            &transaction,
+            &self.metrics.shared_obj_tx,
+        )
+        .await?;
+
+        let owned_objects = transaction_input_checker::filter_owned_objects(&all_objects);
         self.set_transaction_lock(&owned_objects, transaction.clone())
             .instrument(tracing::trace_span!("db_set_transaction_lock"))
             .await?;
@@ -435,6 +458,12 @@ where
         }
         let (new_certificate, effects) = exec_result?;
 
+        debug!(
+            ?new_certificate,
+            ?effects,
+            "Transaction completed successfully"
+        );
+
         // Download the latest content of every mutated object from the authorities.
         let mutated_object_refs: BTreeSet<_> = effects
             .mutated_and_created()
@@ -444,7 +473,7 @@ where
             .download_objects_from_authorities(mutated_object_refs)
             .await?;
         self.store.update_gateway_state(
-            objects_by_kind,
+            all_objects,
             mutated_objects,
             new_certificate.clone(),
             effects.clone().to_unsigned_effects(),
@@ -465,6 +494,8 @@ where
                 self.store.insert_object_direct(*obj_ref, object)?;
             }
         }
+        debug!(?result, "Downloaded object from authorities");
+
         Ok(result)
     }
 
@@ -491,6 +522,7 @@ where
                 error: "Failed to download some objects after transaction succeeded".to_owned(),
             }
         );
+        debug!(?object_refs, "Downloaded objects from authorities");
         Ok(objects)
     }
 
@@ -558,6 +590,15 @@ where
         let updated_gas = updated_gas.ok_or(SuiError::InconsistentGatewayResult {
             error: "No gas updated".to_owned(),
         })?;
+
+        debug!(
+            ?package,
+            ?created_objects,
+            ?updated_gas,
+            ?certificate,
+            "Created Publish response"
+        );
+
         Ok(TransactionResponse::PublishResponse(PublishResponse {
             certificate,
             package,
@@ -604,6 +645,15 @@ where
             new_coins.push(self.get_object(id).await?);
         }
         let updated_gas = self.get_object(&gas_payment).await?;
+
+        debug!(
+            ?updated_coin,
+            ?new_coins,
+            ?updated_gas,
+            ?certificate,
+            "Created Split Coin response"
+        );
+
         Ok(TransactionResponse::SplitCoinResponse(SplitCoinResponse {
             certificate,
             updated_coin,
@@ -641,6 +691,14 @@ where
         );
         let updated_coin = self.get_object_info(*primary_coin).await?.into_object()?;
         let updated_gas = self.get_object_info(gas_payment).await?.into_object()?;
+
+        debug!(
+            ?updated_coin,
+            ?updated_gas,
+            ?certificate,
+            "Created Merge Coin response"
+        );
+
         Ok(TransactionResponse::MergeCoinResponse(MergeCoinResponse {
             certificate,
             updated_coin,
@@ -659,6 +717,44 @@ where
             }
             .into())
         }
+    }
+
+    async fn choose_gas_for_address(
+        &self,
+        address: SuiAddress,
+        budget: u64,
+        gas: Option<ObjectID>,
+        used_coins: Vec<ObjectID>,
+    ) -> Result<ObjectRef, anyhow::Error> {
+        if let Some(id) = gas {
+            Ok(self.get_object(&id).await?.compute_object_reference())
+        } else {
+            let used_coins = used_coins.into_iter().collect::<BTreeSet<_>>();
+            for (id, balance) in self.get_owned_coins(address).await.unwrap() {
+                if balance >= budget && !used_coins.contains(&id.0) {
+                    return Ok(id);
+                }
+            }
+            return Err(anyhow!(
+                "No non-argument gas objects found with value >= budget {}",
+                budget
+            ));
+        }
+    }
+
+    async fn get_owned_coins(
+        &self,
+        address: SuiAddress,
+    ) -> Result<Vec<(ObjectRef, u64)>, anyhow::Error> {
+        let mut coins = Vec::new();
+        for (id, _, _) in self.store.get_account_objects(address)? {
+            let object = self.get_object(&id).await?;
+            if matches!(object.data.type_(), Some(ty)  if *ty == GasCoin::type_()) {
+                let gas_coin = GasCoin::try_from(object.data.try_as_move().unwrap())?;
+                coins.push((object.compute_object_reference(), gas_coin.value()));
+            }
+        }
+        Ok(coins)
     }
 
     #[cfg(test)]
@@ -688,12 +784,57 @@ where
         tx: Transaction,
     ) -> Result<TransactionResponse, anyhow::Error> {
         let tx_kind = tx.data.kind.clone();
+        let tx_digest = tx.digest();
+
+        debug!(?tx_digest, ?tx, "Received execute_transaction request");
+
+        let span = tracing::debug_span!(
+            "gateway_execute_transaction",
+            ?tx_digest,
+            tx_kind = tx.data.kind_as_str()
+        );
+
         // Use start_coarse_time() if the below turns out to have a perf impact
         let timer = self.metrics.transaction_latency.start_timer();
-        let (certificate, effects) = self.execute_transaction_impl(tx).await?;
+        let mut res = self
+            .execute_transaction_impl(tx.clone())
+            .instrument(span.clone())
+            .await;
         // NOTE: below only records latency if this completes.
         timer.stop_and_record();
 
+        let mut remaining_retries = MAX_NUM_TX_RETRIES;
+        while res.is_err() {
+            if remaining_retries == 0 {
+                error!(
+                    num_retries = MAX_NUM_TX_RETRIES,
+                    ?tx_digest,
+                    ?tx,
+                    "All transaction retries failed"
+                );
+                // Okay to unwrap since we checked that this is an error
+                return Err(res.unwrap_err());
+            }
+            remaining_retries -= 1;
+            self.metrics.total_tx_retries.inc();
+
+            debug!(
+                remaining_retries,
+                ?tx_digest,
+                ?tx,
+                "Retrying failed transaction"
+            );
+
+            res = self
+                .execute_transaction_impl(tx.clone())
+                .instrument(span.clone())
+                .await;
+        }
+
+        // Okay to unwrap() since we checked that this is Ok
+        let (certificate, effects) = res.unwrap();
+
+        debug!(?tx, ?certificate, ?effects, "Transaction succeeded");
         // Create custom response base on the request type
         if let TransactionKind::Single(tx_kind) = tx_kind {
             match tx_kind {
@@ -731,24 +872,17 @@ where
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error> {
-        // TODO: We should be passing in object_ref directly instead of object_id.
+        let gas_payment = self
+            .choose_gas_for_address(signer, gas_budget, gas, vec![object_id])
+            .await?;
         let object = self.get_object(&object_id).await?;
         let object_ref = object.compute_object_reference();
-        let gas_payment = self.get_object(&gas_payment).await?;
-        let gas_payment_ref = gas_payment.compute_object_reference();
-
-        let data = TransactionData::new_transfer(
-            recipient,
-            object_ref,
-            signer,
-            gas_payment_ref,
-            gas_budget,
-        );
-
+        let data =
+            TransactionData::new_transfer(recipient, object_ref, signer, gas_payment, gas_budget);
         Ok(data)
     }
 
@@ -759,6 +893,13 @@ where
             .authorities
             .sync_all_owned_objects(account_addr, Duration::from_secs(60))
             .await?;
+
+        debug!(
+            ?active_object_certs,
+            deletec = ?_deleted_refs_certs,
+            ?account_addr,
+            "Syncing account states"
+        );
 
         for (object, _option_layout, _option_cert) in active_object_certs {
             self.store
@@ -771,15 +912,16 @@ where
     async fn move_call(
         &self,
         signer: SuiAddress,
-        package_object_ref: ObjectRef,
+        package_object_id: ObjectID,
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         arguments: Vec<SuiJsonValue>,
-        gas_object_ref: ObjectRef,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        let package_obj = self.get_object(&package_object_ref.0).await?;
+        let package_obj = self.get_object(&package_object_id).await?;
+        let package_obj_ref = package_obj.compute_object_reference();
         let json_args =
             resolve_move_function_args(&package_obj, module.clone(), function.clone(), arguments)?;
 
@@ -803,6 +945,11 @@ where
             })
         }
 
+        let forbidden_gas_objects = objects.keys().copied().collect();
+        let gas = self
+            .choose_gas_for_address(signer, gas_budget, gas, forbidden_gas_objects)
+            .await?;
+
         // Pass in the objects for a deeper check
         let compiled_module = package_obj
             .data
@@ -819,14 +966,16 @@ where
 
         let data = TransactionData::new_move_call(
             signer,
-            package_object_ref,
+            package_obj_ref,
             module,
             function,
             type_arguments,
-            gas_object_ref,
+            gas,
             args,
             gas_budget,
         );
+
+        debug!(?data, "Created Move Call transaction data");
         Ok(data)
     }
 
@@ -834,10 +983,13 @@ where
         &self,
         signer: SuiAddress,
         package_bytes: Vec<Vec<u8>>,
-        gas_object_ref: ObjectRef,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        let data = TransactionData::new_module(signer, gas_object_ref, package_bytes, gas_budget);
+        let gas = self
+            .choose_gas_for_address(signer, gas_budget, gas, vec![])
+            .await?;
+        let data = TransactionData::new_module(signer, gas, package_bytes, gas_budget);
         Ok(data)
     }
 
@@ -846,29 +998,29 @@ where
         signer: SuiAddress,
         coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        // TODO: We should be passing in object_refs directly instead of object_ids.
+        let gas = self
+            .choose_gas_for_address(signer, gas_budget, gas, vec![coin_object_id])
+            .await?;
         let coin_object = self.get_object(&coin_object_id).await?;
         let coin_object_ref = coin_object.compute_object_reference();
-        let gas_payment = self.get_object(&gas_payment).await?;
-        let gas_payment_ref = gas_payment.compute_object_reference();
         let coin_type = coin_object.get_move_template_type()?;
-
         let data = TransactionData::new_move_call(
             signer,
             self.get_framework_object_ref().await?,
             coin::COIN_MODULE_NAME.to_owned(),
             coin::COIN_SPLIT_VEC_FUNC_NAME.to_owned(),
             vec![coin_type],
-            gas_payment_ref,
+            gas,
             vec![
                 CallArg::ImmOrOwnedObject(coin_object_ref),
                 CallArg::Pure(bcs::to_bytes(&split_amounts)?),
             ],
             gas_budget,
         );
+        debug!(?data, "Created Split Coin transaction data");
         Ok(data)
     }
 
@@ -877,32 +1029,32 @@ where
         signer: SuiAddress,
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
-        gas_payment: ObjectID,
+        gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        // TODO: We should be passing in object_refs directly instead of object_ids.
+        let gas = self
+            .choose_gas_for_address(signer, gas_budget, gas, vec![coin_to_merge, primary_coin])
+            .await?;
         let primary_coin = self.get_object(&primary_coin).await?;
         let primary_coin_ref = primary_coin.compute_object_reference();
         let coin_to_merge = self.get_object(&coin_to_merge).await?;
         let coin_to_merge_ref = coin_to_merge.compute_object_reference();
-        let gas_payment = self.get_object(&gas_payment).await?;
-        let gas_payment_ref = gas_payment.compute_object_reference();
 
         let coin_type = coin_to_merge.get_move_template_type()?;
-
         let data = TransactionData::new_move_call(
             signer,
             self.get_framework_object_ref().await?,
             coin::COIN_MODULE_NAME.to_owned(),
             coin::COIN_JOIN_FUNC_NAME.to_owned(),
             vec![coin_type],
-            gas_payment_ref,
+            gas,
             vec![
                 CallArg::ImmOrOwnedObject(primary_coin_ref),
                 CallArg::ImmOrOwnedObject(coin_to_merge_ref),
             ],
             gas_budget,
         );
+        debug!(?data, "Created Merge Coin transaction data");
         Ok(data)
     }
 
@@ -948,7 +1100,9 @@ where
             }
             .into()
         );
-        Ok(self.store.transactions_in_seq_range(start, end)?)
+        let res = self.store.transactions_in_seq_range(start, end)?;
+        debug!(?start, ?end, ?res, "Fetched transactions");
+        Ok(res)
     }
 
     fn get_recent_transactions(

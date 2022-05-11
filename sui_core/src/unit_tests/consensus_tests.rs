@@ -1,29 +1,29 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::authority::authority_tests::get_genesis_package_by_module;
-use crate::authority::authority_tests::init_state_with_objects;
-use crate::authority::AuthorityState;
-use move_core_types::account_address::AccountAddress;
-use move_core_types::ident_str;
-use narwhal_executor::ExecutionIndices;
-use sui_adapter::genesis;
-use sui_types::base_types::{ObjectID, TransactionDigest};
-use sui_types::crypto::Signature;
-use sui_types::gas_coin::GasCoin;
-use sui_types::messages::ConfirmationTransaction;
-use sui_types::messages::{
-    CallArg, CertifiedTransaction, SignatureAggregator, Transaction, TransactionData,
+use crate::authority::{
+    authority_tests::{get_genesis_package_by_module, init_state_with_objects},
+    AuthorityState,
 };
-use sui_types::object::OBJECT_START_VERSION;
-use sui_types::object::{MoveObject, Object, Owner};
-use sui_types::serialize::serialize_transaction_info;
-use test_utils::network::test_listener;
+use move_core_types::{account_address::AccountAddress, ident_str};
+use narwhal_executor::ExecutionIndices;
+use narwhal_types::Transactions;
+use narwhal_types::TransactionsServer;
+use narwhal_types::{Empty, TransactionProto};
+use sui_adapter::genesis;
+use sui_network::tonic;
+use sui_types::{
+    base_types::{ObjectID, TransactionDigest},
+    crypto::Signature,
+    gas_coin::GasCoin,
+    messages::{
+        CallArg, CertifiedTransaction, ConfirmationTransaction, SignatureAggregator, Transaction,
+        TransactionData,
+    },
+    object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
+};
 use test_utils::test_keys;
 use tokio::sync::mpsc::channel;
-
-/// Default network buffer size.
-const NETWORK_BUFFER_SIZE: usize = 65_000;
 
 /// Fixture: a few test gas objects.
 pub fn test_gas_objects() -> Vec<Object> {
@@ -138,7 +138,7 @@ async fn listen_to_sequenced_transaction() {
 #[tokio::test]
 async fn submit_transaction_to_consensus() {
     // TODO [issue #932]: Use a port allocator to avoid port conflicts.
-    let consensus_address = "127.0.0.1:12456".parse().unwrap();
+    let consensus_address: Multiaddr = "/dns/localhost/tcp/12456/http".parse().unwrap();
     let (tx_consensus_listener, mut rx_consensus_listener) = channel(1);
 
     // Initialize an authority with a (owned) gas object and a shared object; then
@@ -151,15 +151,14 @@ async fn submit_transaction_to_consensus() {
 
     // Make a new consensus submitter instance.
     let submitter = ConsensusAdapter::new(
-        consensus_address,
-        NETWORK_BUFFER_SIZE,
+        consensus_address.clone(),
         state.committee.clone(),
         tx_consensus_listener,
         /* max_delay */ Duration::from_millis(1_000),
     );
 
     // Spawn a network listener to receive the transaction (emulating the consensus node).
-    let handle = test_listener(consensus_address);
+    let mut handle = ConsensusMockServer::spawn(consensus_address);
 
     // Notify the submitter when a consensus transaction has been sequenced and executed.
     tokio::spawn(async move {
@@ -182,7 +181,7 @@ async fn submit_transaction_to_consensus() {
         let result = state
             .handle_confirmation_transaction(confirmation_transaction)
             .await
-            .map(|info| serialize_transaction_info(&info));
+            .map(|info| bincode::serialize(&info).unwrap());
 
         // Reply to the submitter.
         replier.send(result).unwrap();
@@ -195,10 +194,52 @@ async fn submit_transaction_to_consensus() {
     assert!(result.is_ok());
 
     // Ensure the consensus node got the transaction.
-    let bytes = handle.await.unwrap();
+    let bytes = handle.recv().await.unwrap().transaction;
     match bincode::deserialize(&bytes).unwrap() {
         ConsensusTransaction::UserTransaction(x) => {
             assert_eq!(x.to_transaction(), expected_transaction)
         }
+    }
+}
+
+pub struct ConsensusMockServer {
+    sender: Sender<TransactionProto>,
+}
+
+impl ConsensusMockServer {
+    pub fn spawn(address: Multiaddr) -> Receiver<TransactionProto> {
+        let (sender, receiver) = channel(1);
+        tokio::spawn(async move {
+            let config = mysten_network::config::Config::new();
+            let mock = Self { sender };
+            config
+                .server_builder()
+                .add_service(TransactionsServer::new(mock))
+                .bind(&address)
+                .await
+                .unwrap()
+                .serve()
+                .await
+        });
+        receiver
+    }
+}
+
+#[tonic::async_trait]
+impl Transactions for ConsensusMockServer {
+    /// Submit a Transactions
+    async fn submit_transaction(
+        &self,
+        request: tonic::Request<TransactionProto>,
+    ) -> Result<tonic::Response<Empty>, tonic::Status> {
+        self.sender.send(request.into_inner()).await.unwrap();
+        Ok(tonic::Response::new(Empty {}))
+    }
+    /// Submit a Transactions
+    async fn submit_transaction_stream(
+        &self,
+        _request: tonic::Request<tonic::Streaming<TransactionProto>>,
+    ) -> Result<tonic::Response<Empty>, tonic::Status> {
+        unimplemented!()
     }
 }

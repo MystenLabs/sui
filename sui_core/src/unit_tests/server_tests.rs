@@ -10,7 +10,6 @@ use crate::{
 };
 use futures::StreamExt;
 use std::sync::Arc;
-use sui_network::network::NetworkClient;
 use sui_types::{
     base_types::{dbg_addr, dbg_object_id, TransactionDigest},
     batch::UpdateItem,
@@ -30,13 +29,11 @@ async fn test_start_stop_batch_subsystem() {
         .expect("Init batches failed!");
 
     // The following two fields are only needed for shared objects (not by this bench).
-    let consensus_address = "127.0.0.1:0".parse().unwrap();
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     let server = Arc::new(AuthorityServer::new(
-        "127.0.0.1".to_string(),
-        999,
-        65000,
+        "/ip4/127.0.0.1/tcp/999/http".parse().unwrap(),
         Arc::new(authority_state),
         consensus_address,
         tx_consensus_listener,
@@ -52,7 +49,7 @@ async fn test_start_stop_batch_subsystem() {
 
     // This should return immediately.
     join.await
-        .expect("Error stoping subsystem")
+        .expect("Error stopping subsystem")
         .expect("Subsystem crashed?");
 }
 
@@ -64,13 +61,11 @@ async fn test_simple_request() {
     let authority_state = init_state_with_object_id(sender, object_id).await;
 
     // The following two fields are only needed for shared objects (not by this bench).
-    let consensus_address = "127.0.0.1:0".parse().unwrap();
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     let server = AuthorityServer::new(
-        "127.0.0.1".to_string(),
-        0,
-        65000,
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
         Arc::new(authority_state),
         consensus_address,
         tx_consensus_listener,
@@ -78,15 +73,9 @@ async fn test_simple_request() {
 
     let server_handle = server.spawn().await.unwrap();
 
-    let network_config = NetworkClient::new(
-        server_handle.local_addr.ip().to_string(),
-        server_handle.local_addr.port(),
-        0,
-        std::time::Duration::from_secs(30),
-        std::time::Duration::from_secs(30),
-    );
-
-    let client = NetworkAuthorityClient::new(network_config);
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
 
     let req = ObjectInfoRequest::latest_object_info_request(
         object_id,
@@ -103,14 +92,12 @@ async fn test_subscription() {
     let authority_state = init_state_with_object_id(sender, object_id).await;
 
     // The following two fields are only needed for shared objects (not by this bench).
-    let consensus_address = "127.0.0.1:0".parse().unwrap();
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     // Start the batch server
     let mut server = AuthorityServer::new(
-        "127.0.0.1".to_string(),
-        0,
-        65000,
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
         Arc::new(authority_state),
         consensus_address,
         tx_consensus_listener,
@@ -125,15 +112,9 @@ async fn test_subscription() {
 
     let server_handle = server.spawn().await.unwrap();
 
-    let network_config = NetworkClient::new(
-        server_handle.local_addr.ip().to_string(),
-        server_handle.local_addr.port(),
-        0,
-        std::time::Duration::from_secs(30),
-        std::time::Duration::from_secs(30),
-    );
-
-    let client = NetworkAuthorityClient::new(network_config);
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
 
     let tx_zero = TransactionDigest::new([0; 32]);
     for _i in 0u64..105 {
@@ -247,7 +228,7 @@ async fn test_subscription() {
     let inner_server2 = state.clone();
 
     loop {
-        // Send a trasnaction
+        // Send a transaction
         let ticket = inner_server2.batch_notifier.ticket().expect("all good");
         db3.executed_sequence
             .insert(&ticket.seq(), &tx_zero)
@@ -285,15 +266,13 @@ async fn test_subscription_safe_client() {
     let authority_state = init_state_with_object_id(sender, object_id).await;
 
     // The following two fields are only needed for shared objects (not by this bench).
-    let consensus_address = "127.0.0.1:0".parse().unwrap();
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     // Start the batch server
     let state = Arc::new(authority_state);
     let server = Arc::new(AuthorityServer::new(
-        "127.0.0.1".to_string(),
-        998,
-        65000,
+        "/ip4/127.0.0.1/tcp/998/http".parse().unwrap(),
         state.clone(),
         consensus_address,
         tx_consensus_listener,

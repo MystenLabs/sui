@@ -64,7 +64,9 @@ Yes, the token name will be SUI.
 
 ### When is the Sui devnet/testnet/mainnet launching?
 
-A testnet is coming in a few months. See our roadmap: \
+We have launched our [Sui DevNet](../explore/devnet.md) in May 2022. A testnet is coming in a few months. 
+
+See our roadmap: \
 [https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap) 
 
 
@@ -93,7 +95,7 @@ We have a number of examples and demos available for viewing at: [https://docs.s
 
 ### Are you looking for partners?
 
-We are seeking partners that can contribute to the ecosystem primarily in development by building apps with the SDK now so they can be ready to launch when the network goes live.
+We are seeking partners that can contribute to the ecosystem primarily in development by building apps with the SDK now so they can be ready to launch when the network goes live. If interested, please apply using the [Sui Partnerships Form](https://bit.ly/suiform).
 
 
 ### With whom can I talk about a partnership or strategic investment? How can I discuss Sui in person?
@@ -129,7 +131,7 @@ Section four in the [Sui Smart Contract Platform](https://github.com/MystenLabs/
 
 ### Can I run a Sui validator node?
 
-We do not yet have a public devnet or testnet that will allow others to operate Sui nodes, but both are on our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap). Right now, you can run a local, non-networked Sui node for development. Check out our [Wallet](https://docs.sui.io/build/wallet) documentation to get started. You can interact with the local node via either the [Wallet CLI](../build/wallet#command-line-mode) or [RPC API](../build/json-rpc).
+We now have a public [Sui DevNet](../explore/devnet.md) with nodes operated by Mysten Labs. Soon we will have a TestNet that allow others to operate Sui nodes, but both are on our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap). Right now, you can run a local, non-networked Sui node for development. Check out our [Wallet](https://docs.sui.io/build/wallet) documentation to get started. You can interact with the local node via either the [Wallet CLI](../build/wallet#command-line-mode) or [RPC API](../build/json-rpc).
 
 ### What does a local node do and what are the hardware requirements to run it? How is it different from a testnet node?
 

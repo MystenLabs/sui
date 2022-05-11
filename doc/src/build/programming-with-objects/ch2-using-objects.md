@@ -167,9 +167,9 @@ Now we can try to transfer it to another account address. First let's see what o
 ```
 $ wallet addresses
 ```
-Since the default current address is the first address, let's pick the second address in the list as the recipient. In my case, I have `1416F3D5AF469905B0580B9AF843EC82D02EFD30`. Let's save it for convenience:
+Since the default current address is the first address, let's pick the second address in the list as the recipient. In my case, I have `0x1416f3d5af469905b0580b9af843ec82d02efd30`. Let's save it for convenience:
 ```
-$ export RECIPIENT=1416F3D5AF469905B0580B9AF843EC82D02EFD30
+$ export RECIPIENT=0x1416f3d5af469905b0580b9af843ec82d02efd30
 ```
 Now let's transfer the object to this address:
 ```

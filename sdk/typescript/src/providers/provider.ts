@@ -6,16 +6,9 @@ import {
   ObjectRef,
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
+  TransactionResponse,
+  SignedTransaction,
 } from '../types';
-
-export interface SignedTransaction {
-  txBytes: string;
-  signature: string;
-  pubKey: string;
-}
-
-// TODO: use correct types here
-export type TransactionResponse = string;
 
 ///////////////////////////////
 // Exported Abstracts

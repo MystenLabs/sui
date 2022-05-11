@@ -1,7 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type AddressOwner } from '../../utils/api/SuiRpcClient';
+import { getMovePackageContent, getObjectContent } from '@mysten/sui.js';
+
+import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
+import { parseObjectType } from '../../utils/objectUtils';
 
 import type {
     GetObjectInfoResponse,
@@ -9,7 +12,7 @@ import type {
     ObjectNotExistsInfo,
     ObjectOwner,
     ObjectRef,
-} from 'sui.js';
+} from '@mysten/sui.js';
 
 export type DataType = {
     id: string;
@@ -27,7 +30,7 @@ export type DataType = {
             [key: string]: any;
         };
         owner?: { ObjectOwner: [] };
-        tx_digest?: number[] | string;
+        tx_digest?: string;
     };
     loadState?: string;
 };
@@ -47,16 +50,18 @@ export function translate(o: GetObjectInfoResponse): DataType {
         case 'Exists': {
             const {
                 objectRef: { objectId, version },
-                object: { contents, owner, tx_digest },
+                object: { owner, tx_digest },
             } = details as ObjectExistsInfo;
 
             return {
                 id: objectId,
                 version: version.toString(),
-                objType: contents['type'],
+                objType: parseObjectType(details as ObjectExistsInfo)!,
                 owner: parseOwner(owner),
                 data: {
-                    contents: contents.fields,
+                    contents:
+                        getObjectContent(o)?.fields ??
+                        getMovePackageContent(o)!,
                     tx_digest,
                 },
             };

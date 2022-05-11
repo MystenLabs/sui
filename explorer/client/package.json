@@ -35,13 +35,14 @@
         "react-ace": "^9.5.0",
         "react-dom": "^17.0.2",
         "react-router-dom": "^6.2.1",
-        "sui.js": "file:../../sdk/typescript",
+        "@mysten/sui.js": "file:../../sdk/typescript",
         "swr": "^1.2.2",
         "web-vitals": "^2.1.4"
     },
     "scripts": {
         "start": "react-scripts start",
         "start:static": "REACT_APP_DATA=static PORT=8080 react-scripts start",
+        "start:local": "REACT_APP_DATA=local PORT=8080 react-scripts start",
         "test": "npx start-server-and-test 'yarn start:static' 8080 'react-scripts test --detectOpenHandles --watchAll=false'",
         "build": "react-scripts build",
         "eslint:check": "eslint --max-warnings=0 .eslintrc.js \"./src/**/*.{js,jsx,ts,tsx}\"",
