@@ -13,14 +13,13 @@
         "@types/react": "^17.0.39",
         "@types/react-dom": "^17.0.11",
         "autoprefixer": "^10.4.2",
-        "concurrently": "^7.0.0",
         "eslint-config-prettier": "^8.3.0",
         "jest-puppeteer": "^6.1.0",
         "onchange": "^7.1.0",
         "postcss": "^8.4.6",
         "prettier": "2.5.1",
-        "puppeteer": "^13.5.1",
         "react-scripts": "5.0.1",
+        "puppeteer": "^13.5.1",
         "stylelint": "^14.5.0",
         "stylelint-config-prettier": "^9.0.3",
         "stylelint-config-standard": "^25.0.0",
@@ -29,12 +28,11 @@
         "typescript": "^4.5.5"
     },
     "dependencies": {
-        "@mysten/sui.js": "file:../../sdk/typescript",
         "classnames": "^2.3.1",
         "react": "^17.0.2",
         "react-dom": "^17.0.2",
         "react-router-dom": "^6.2.1",
-        "swr": "^1.2.2",
+        "@mysten/sui.js": "file:../../sdk/typescript",
         "web-vitals": "^2.1.4"
     },
     "scripts": {
