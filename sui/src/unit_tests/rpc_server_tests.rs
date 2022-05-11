@@ -14,12 +14,10 @@ use jsonrpsee::{
 use move_core_types::identifier::Identifier;
 
 use sui::{
+    api::{RpcGatewayClient, RpcGatewayServer, SignedTransaction, TransactionBytes},
     config::{PersistedConfig, WalletConfig, SUI_GATEWAY_CONFIG, SUI_WALLET_CONFIG},
     keystore::{Keystore, SuiKeystore},
-    rpc_gateway::{
-        responses::ObjectResponse, RpcGatewayClient, RpcGatewayImpl, RpcGatewayServer,
-        SignedTransaction, TransactionBytes,
-    },
+    rpc_gateway::{responses::ObjectResponse, RpcGatewayImpl},
     sui_commands::SuiNetwork,
 };
 use sui_core::gateway_state::gateway_responses::{TransactionEffectsResponse, TransactionResponse};

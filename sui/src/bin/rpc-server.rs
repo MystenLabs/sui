@@ -12,8 +12,9 @@ use std::{
     path::PathBuf,
 };
 use sui::{
+    api::{RpcGatewayOpenRpc, RpcGatewayServer},
     config::sui_config_dir,
-    rpc_gateway::{RpcGatewayImpl, RpcGatewayOpenRpc, RpcGatewayServer},
+    rpc_gateway::RpcGatewayImpl,
 };
 use tracing::info;
 

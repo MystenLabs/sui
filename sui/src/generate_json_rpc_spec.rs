@@ -8,7 +8,7 @@ use clap::ArgEnum;
 use clap::Parser;
 use pretty_assertions::assert_str_eq;
 
-use sui::rpc_gateway::RpcGatewayOpenRpc;
+use sui::api::RpcGatewayOpenRpc;
 
 #[derive(Debug, Parser, Clone, Copy, ArgEnum)]
 enum Action {
