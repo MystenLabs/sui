@@ -136,6 +136,11 @@ pub struct CheckpointLocals {
     pub current_proposal: Option<CheckpointProposal>,
 }
 
+pub trait ConsensusSender: Send + Sync + 'static {
+    // Sned an item to the consensus
+    fn send_to_consensus(&self, fragment: CheckpointFragment) -> Result<(), SuiError>;
+}
+
 pub struct CheckpointStore {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
@@ -191,6 +196,9 @@ pub struct CheckpointStore {
 
     /// A single entry table to store locals.
     pub locals: DBMap<DBLabel, CheckpointLocals>,
+
+    // Consensus sender
+    sender: Option<Box<dyn ConsensusSender>>,
 }
 
 impl CheckpointStore {
@@ -248,6 +256,12 @@ impl CheckpointStore {
     /// Read the local variables
     pub fn get_locals(&self) -> Arc<CheckpointLocals> {
         self.memory_locals.load().clone().unwrap()
+    }
+
+    /// Set the consensus sender for this checkpointing function
+    pub fn set_consensus(&mut self, sender: Box<dyn ConsensusSender>) -> Result<(), SuiError> {
+        self.sender = Some(sender);
+        Ok(())
     }
 
     /* TODO: Crash recovery logic.
@@ -329,6 +343,7 @@ impl CheckpointStore {
             fragments,
             memory_locals: ArcSwapOption::from(None),
             locals,
+            sender: None,
         };
 
         // Initialize the locals
@@ -564,7 +579,14 @@ impl CheckpointStore {
 
         let locals = self.get_locals();
         if !locals.no_more_fragments {
-            // TODO: Send to consensus for sequencing.
+            // Send to consensus for sequencing.
+            if let Some(sender) = &self.sender {
+                sender.send_to_consensus(_fragment.clone())?;
+            } else {
+                return Err(SuiError::GenericAuthorityError {
+                    error: "No consensus sender configured".to_string(),
+                });
+            }
         }
 
         // NOTE: we should charge the node that sends this into consensus
