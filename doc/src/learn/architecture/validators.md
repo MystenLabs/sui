@@ -7,7 +7,7 @@ The Sui network is operated by a set of independent *validators*, each running i
 Sui uses proof of stake (PoS) to determine which validators operate the network and their voting power. Validators are incentivized to participate in good faith via a share of transaction fees, staking rewards, and slashing to punish misbehavior.
 
 ## Epochs
-Operation of the Sui network is temporally partitioned into non-overlapping, fixed-duration (e.g. 24-hour) *epochs*. During a particular epoch, the set of validators participating in the network is fixed. At an epoch boundary, reconfiguration occurs and can change the set of validators participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as [genesis](wallet.md#genesis) and the new set of validators as the operators.
+Operation of the Sui network is temporally partitioned into non-overlapping, fixed-duration (e.g. 24-hour) *epochs*. During a particular epoch, the set of validators participating in the network is fixed. At an epoch boundary, reconfiguration occurs and can change the set of validators participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as [genesis](../../build/wallet.md#genesis) and the new set of validators as the operators.
 
 ## Committees
 A *committee* is a set of validators whose combined voting power is >2/3 of the total during a particular epoch. For example, in a Sui instance operated by four validators that all have the same voting power, any group containing three validators is a committee.
@@ -44,5 +44,5 @@ Now, once this is done we can process all certificates that had their locks set,
 
 ## Further reading
 
-* Transactions take objects as input and produce objects as output&mdash;check out the [objects](objects.md) section to learn more about the structure and attributes of objects.
-* Sui supports several different transaction types&mdash;see the [transactions](transactions.md) section for full details.
+* Transactions take objects as input and produce objects as output&mdash;check out the [objects](../../build/objects.md) section to learn more about the structure and attributes of objects.
+* Sui supports several different transaction types&mdash;see the [transactions](../../build/transactions.md) section for full details.
