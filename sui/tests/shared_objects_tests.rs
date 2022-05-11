@@ -4,7 +4,7 @@ use sui::config::AuthorityInfo;
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_types::{
     base_types::ObjectRef,
-    error::SuiResult,
+    error::{SuiError, SuiResult},
     messages::{
         CallArg, ConfirmationTransaction, ConsensusTransaction, ExecutionStatus, Transaction,
         TransactionInfoResponse,
@@ -66,8 +66,14 @@ async fn submit_shared_object_transaction(
 
         let mut replies = Vec::new();
         for result in futures::future::join_all(futures).await {
-            replies.push(Some(result))
+            let reply = match &result {
+                Ok(_) => Some(result),
+                Err(SuiError::ConsensusConnectionBroken(..)) => None,
+                Err(..) => Some(result),
+            };
+            replies.push(reply)
         }
+
         if replies.iter().any(|x| x.is_some()) {
             // Remove all `ConsensusConnectionBroken` replies.
             break replies.into_iter().flatten().collect();
