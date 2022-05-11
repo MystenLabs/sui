@@ -9,8 +9,7 @@ import ErrorResult from '../error-result/ErrorResult';
 
 import styles from './TxCountCard.module.css';
 
-
-const initState = { count: 0, loadState: 'pending' }
+const initState = { count: 0, loadState: 'pending' };
 
 async function getTransactionCount(): Promise<number> {
     return rpc.getTotalTransactionNumber();
@@ -20,15 +19,13 @@ function TxCountCard({ count }: { count: number | string }) {
     return (
         <div className={styles.txcount} id="txcount">
             Total Transactions
-            <div>
-                {count}
-            </div>
+            <div>{count}</div>
         </div>
     );
 }
 
 function TxCountCardStatic() {
-    return <TxCountCard count={3030}/>;
+    return <TxCountCard count={3030} />;
 }
 
 function TxCountCardAPI() {
@@ -59,7 +56,7 @@ function TxCountCardAPI() {
         };
     }, []);
     if (results.loadState === 'pending') {
-        return (<TxCountCard count=''/>);
+        return <TxCountCard count="" />;
     }
 
     if (!isLoaded && results.loadState === 'fail') {
