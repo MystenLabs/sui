@@ -254,11 +254,8 @@ In general, an entry function, must satisfy the following properties:
 
 - have `public(script)` visibility modifier
 - have no return value
-- have parameters ordered as follows:
-  - one or more Sui objects (or vectors of objects)
-  - one or more primitive types (or vectors of such types)
-  - a mutable reference to an instance of the `TxContext` struct
-  defined in the [TxContext module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/TxContext.move)
+- have a mutable reference to an instance of the `TxContext` struct
+  defined in the [TxContext module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/TxContext.move) as the last parameter
 
 More, concretely, the `transfer` function is public, has no return
 value, and has three parameters:
