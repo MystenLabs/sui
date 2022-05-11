@@ -213,7 +213,6 @@ function LatestTxCardAPI() {
         let isMounted = true;
         getRecentTransactions(15)
             .then((resp: any) => {
-                console.log(resp);
                 if (isMounted) {
                     setIsLoaded(true);
                 }
