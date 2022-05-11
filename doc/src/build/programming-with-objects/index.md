@@ -25,7 +25,7 @@ Install:
   - Passing Move objects as arguments, mutating objects, deleting objects.
 - [Chapter 3: Immutable Objects](../../build//programming-with-objects/ch3-immutable-objects.md)
   - Freezing an object, using immutable objects.
-- Chapter 4: Object Wrapping
+- [Chapter 4: Object Wrapping](../../build//programming-with-objects/ch4-object-wrapping.md)
   - Wrapping objects in another object.
 - Chapter 5: Child Objects
   - Enabling objects to own other objects, transferring objects to objects, adding child objects, removing child objects.
