@@ -1,0 +1,22 @@
+{
+    "data": [
+        {
+            "From": "senderAddress",
+            "To": "receiverAddress",
+            "kind": "Transfer",
+            "seq": 7787,
+            "status": "Success",
+            "txGas": 41,
+            "txId": "Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4="
+        },
+        {
+            "From": "senderAddress",
+            "To": "receiverAddress",
+            "kind": "Transfer",
+            "seq": 7787,
+            "status": "Failure",
+            "txGas": 41,
+            "txId": "GHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8="
+        }
+    ]
+}

@@ -9,12 +9,15 @@ import {
 } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
-import TransactionCard from '../../components/transaction-card/TransactionCard';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
+import { IS_STATIC_ENV } from '../../utils/envUtil';
+import { findDataFromID } from '../../utils/static/searchUtil';
+import { type DataType } from './TransactionResultType';
+import TransactionView from './TransactionView';
 
 import type {
     CertifiedTransaction,
@@ -64,8 +67,6 @@ const initState: TxnState = {
     created: [],
 };
 
-const useRealData = process.env.REACT_APP_DATA !== 'static';
-// if dev fetch data from mock_data.json
 function fetchTransactionData(
     txId: string | undefined
 ): Promise<TransactionEffectsResponse> {
@@ -73,10 +74,6 @@ function fetchTransactionData(
         if (!txId) {
             throw new Error('No Txid found');
         }
-        if (!useRealData) {
-            throw new Error('Method not implemented for mock data.');
-        }
-
         return rpc
             .getTransactionWithEffects(txId)
             .then((txEff: TransactionEffectsResponse) => txEff);
@@ -95,32 +92,37 @@ const getCreatedOrMutatedData = (
         : [];
 };
 
-function TransactionResult() {
-    const { id } = useParams();
-    const [showTxState, setTxState] = useState(initState);
+const transformTransactionResponse = (
+    txObj: TransactionEffectsResponse,
+    id: string
+) => {
+    const executionStatus = txObj.effects.status;
+    const status = getExecutionStatusType(executionStatus);
+    const details = getExecutionDetails(executionStatus);
+    return {
+        ...txObj.certificate,
+        status,
+        gasFee: getTotalGasUsed(executionStatus),
+        txError:
+            'error' in details
+                ? details.error[Object.keys(details.error)[0]].error
+                : '',
+        txId: id,
+        loadState: 'loaded',
+        mutated: getCreatedOrMutatedData(txObj.effects, 'mutated'),
+        created: getCreatedOrMutatedData(txObj.effects, 'created'),
+    };
+};
 
+const TransactionResultAPI = ({ id }: { id: string }) => {
+    const [showTxState, setTxState] = useState(initState);
     useEffect(() => {
         if (id == null) {
             return;
         }
         fetchTransactionData(id)
             .then((txObj) => {
-                const executionStatus = txObj.effects.status;
-                const status = getExecutionStatusType(executionStatus);
-                const details = getExecutionDetails(executionStatus);
-                setTxState({
-                    ...txObj.certificate,
-                    status,
-                    gasFee: getTotalGasUsed(executionStatus),
-                    txError:
-                        'error' in details
-                            ? details.error[Object.keys(details.error)[0]].error
-                            : '',
-                    txId: id,
-                    loadState: 'loaded',
-                    mutated: getCreatedOrMutatedData(txObj.effects, 'mutated'),
-                    created: getCreatedOrMutatedData(txObj.effects, 'created'),
-                });
+                setTxState(transformTransactionResponse(txObj, id));
             })
             .catch((err) => {
                 console.log('Error fetching transaction data', err);
@@ -135,39 +137,83 @@ function TransactionResult() {
     if (showTxState.loadState === 'pending') {
         return (
             <div className={theme.textresults}>
-                <div className={styles.content}>Loading...</div>
+                <div>Loading...</div>
             </div>
         );
     }
+    if (
+        id &&
+        showTxState.loadState === 'loaded' &&
+        getSingleTransactionKind(showTxState.data) !== null
+    ) {
+        return <TransactionResultLoaded txData={showTxState} />;
+    }
     // For Batch transactions show error
     // TODO update Error screen and account for Batch transactions
-    if (
-        !id ||
-        showTxState.loadState === 'fail' ||
-        getSingleTransactionKind(showTxState.data) == null
-    ) {
-        return (
-            <ErrorResult
-                id={id}
-                errorMsg={
-                    !id
-                        ? "Can't search for a transaction without a digest"
-                        : 'There was an issue with the data on the following transaction'
-                }
-            />
-        );
-    }
 
+    return (
+        <ErrorResult
+            id={id}
+            errorMsg={
+                !id
+                    ? "Can't search for a transaction without a digest"
+                    : 'There was an issue with the data on the following transaction'
+            }
+        />
+    );
+};
+
+const TransactionResultStatic = ({ id }: { id: string }) => {
+    const entry = findDataFromID(id, undefined);
+
+    return (
+        <TransactionResultLoaded
+            txData={transformTransactionResponse(entry, id)}
+        />
+    );
+};
+
+const TransactionResultLoaded = ({ txData }: { txData: DataType }) => {
     return (
         <div className={cl(theme.textresults, styles.txdetailsbg)}>
             <div className={theme.txdetailstitle}>
                 <h3>Transaction Details</h3>
             </div>
-            {showTxState.loadState === 'loaded' && (
-                <TransactionCard txdata={showTxState} />
-            )}
+            <TransactionView txdata={txData} />
         </div>
     );
+};
+
+function TransactionResult() {
+    const { id } = useParams();
+    const { state } = useLocation();
+
+    const checkStateHasData = (
+        state: any
+    ): state is { data: TransactionEffectsResponse } => {
+        return state !== null && 'data' in state;
+    };
+
+    const checkIsString = (value: any): value is string =>
+        typeof value === 'string';
+
+    if (checkStateHasData(state) && id) {
+        return (
+            <TransactionResultLoaded
+                txData={transformTransactionResponse(state.data, id)}
+            />
+        );
+    }
+
+    if (checkIsString(id)) {
+        return IS_STATIC_ENV ? (
+            <TransactionResultStatic id={id} />
+        ) : (
+            <TransactionResultAPI id={id} />
+        );
+    }
+
+    return <ErrorResult id={id} errorMsg={'ID not a valid string'} />;
 }
 
 export default TransactionResult;

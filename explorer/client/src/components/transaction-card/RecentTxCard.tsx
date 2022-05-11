@@ -15,6 +15,8 @@ import { Link } from 'react-router-dom';
 import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
+import { IS_STATIC_ENV } from '../../utils/envUtil';
+import { getAllMockTransaction } from '../../utils/static/searchUtil';
 import ErrorResult from '../error-result/ErrorResult';
 
 import type {
@@ -111,54 +113,11 @@ function truncate(fullStr: string, strLen: number, separator: string) {
     );
 }
 
-function LatestTxCard() {
-    const [isLoaded, setIsLoaded] = useState(false);
-    const [results, setResults] = useState(initState);
-    useEffect(() => {
-        let isMounted = true;
-        getRecentTransactions(15)
-            .then((resp: any) => {
-                if (isMounted) {
-                    setIsLoaded(true);
-                }
-                setResults({
-                    loadState: 'loaded',
-                    latestTx: resp,
-                });
-            })
-            .catch((err) => {
-                setResults({
-                    ...initState,
-                    loadState: 'fail',
-                });
-                setIsLoaded(false);
-            });
-
-        return () => {
-            isMounted = false;
-        };
-    }, []);
-    if (results.loadState === 'pending') {
-        return (
-            <div className={theme.textresults}>
-                <div className={styles.content}>Loading...</div>
-            </div>
-        );
-    }
-
-    if (!isLoaded && results.loadState === 'fail') {
-        return (
-            <ErrorResult
-                id=""
-                errorMsg="There was an issue getting the latest transactions"
-            />
-        );
-    }
-
-    if (results.loadState === 'loaded' && !results.latestTx.length) {
-        return <ErrorResult id="" errorMsg="No Transactions Found" />;
-    }
-
+function LatestTxView({
+    results,
+}: {
+    results: { loadState: string; latestTx: TxnData[] };
+}) {
     return (
         <div className={styles.txlatestesults}>
             <div className={styles.txcardgrid}>
@@ -233,5 +192,72 @@ function LatestTxCard() {
         </div>
     );
 }
+
+function LatestTxCardStatic() {
+    const latestTx = getAllMockTransaction().map((tx) => ({
+        ...tx,
+        status: tx.status as ExecutionStatusType,
+        kind: tx.kind as TransactionKindName,
+    }));
+    const results = {
+        loadState: 'loaded',
+        latestTx: latestTx,
+    };
+    return <LatestTxView results={results} />;
+}
+
+function LatestTxCardAPI() {
+    const [isLoaded, setIsLoaded] = useState(false);
+    const [results, setResults] = useState(initState);
+    useEffect(() => {
+        let isMounted = true;
+        getRecentTransactions(15)
+            .then((resp: any) => {
+                if (isMounted) {
+                    setIsLoaded(true);
+                }
+                setResults({
+                    loadState: 'loaded',
+                    latestTx: resp,
+                });
+            })
+            .catch((err) => {
+                setResults({
+                    ...initState,
+                    loadState: 'fail',
+                });
+                setIsLoaded(false);
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+    if (results.loadState === 'pending') {
+        return (
+            <div className={theme.textresults}>
+                <div className={styles.content}>Loading...</div>
+            </div>
+        );
+    }
+
+    if (!isLoaded && results.loadState === 'fail') {
+        return (
+            <ErrorResult
+                id=""
+                errorMsg="There was an issue getting the latest transactions"
+            />
+        );
+    }
+
+    if (results.loadState === 'loaded' && !results.latestTx.length) {
+        return <ErrorResult id="" errorMsg="No Transactions Found" />;
+    }
+
+    return <LatestTxView results={results} />;
+}
+
+const LatestTxCard = () =>
+    IS_STATIC_ENV ? <LatestTxCardStatic /> : <LatestTxCardAPI />;
 
 export default LatestTxCard;
