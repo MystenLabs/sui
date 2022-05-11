@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
+import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { parseImageURL, parseObjectType } from '../../utils/objectUtils';
 import { navigateWithUnknown } from '../../utils/searchUtil';
 import {
@@ -41,13 +42,8 @@ const IS_COIN_TYPE = (typeDesc: string): boolean => /::Coin::/.test(typeDesc);
 const lastRowHas2Elements = (itemList: any[]): boolean =>
     itemList.length % 3 === 2;
 
-function OwnedObject({ id }: { id: string }) {
-    if (process.env.REACT_APP_DATA === 'static') {
-        return <OwnedObjectStatic id={id} />;
-    } else {
-        return <OwnedObjectAPI id={id} />;
-    }
-}
+const OwnedObject = ({ id }: { id: string }) =>
+    IS_STATIC_ENV ? <OwnedObjectStatic id={id} /> : <OwnedObjectAPI id={id} />;
 
 function OwnedObjectStatic({ id }: { id: string }) {
     const objects = findOwnedObjectsfromID(id);

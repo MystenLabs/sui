@@ -14,6 +14,7 @@ import { useLocation, useParams } from 'react-router-dom';
 import ErrorResult from '../../components/error-result/ErrorResult';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
+import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { findDataFromID } from '../../utils/static/searchUtil';
 import { type DataType } from './TransactionResultType';
 import TransactionView from './TransactionView';
@@ -65,8 +66,6 @@ const initState: TxnState = {
     mutated: [],
     created: [],
 };
-
-const useRealData = process.env.REACT_APP_DATA !== 'static';
 
 function fetchTransactionData(
     txId: string | undefined
@@ -189,28 +188,28 @@ function TransactionResult() {
     const { id } = useParams();
     const { state } = useLocation();
 
-    const checkState = (
+    const checkStateHasData = (
         state: any
     ): state is { data: TransactionEffectsResponse } => {
         return state !== null && 'data' in state;
     };
 
-    if (checkState(state) && id) {
+    const checkIsString = (value: any): value is string =>
+        typeof value === 'string';
+
+    if (checkStateHasData(state) && id) {
         return (
             <TransactionResultLoaded
-                txData={transformTransactionResponse(
-                    state.data as TransactionEffectsResponse,
-                    id
-                )}
+                txData={transformTransactionResponse(state.data, id)}
             />
         );
     }
 
-    if (typeof id === 'string') {
-        return useRealData ? (
-            <TransactionResultAPI id={id as string} />
+    if (checkIsString(id)) {
+        return IS_STATIC_ENV ? (
+            <TransactionResultStatic id={id} />
         ) : (
-            <TransactionResultStatic id={id as string} />
+            <TransactionResultAPI id={id} />
         );
     }
 

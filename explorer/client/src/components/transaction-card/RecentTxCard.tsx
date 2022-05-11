@@ -15,6 +15,7 @@ import { Link } from 'react-router-dom';
 import Longtext from '../../components/longtext/Longtext';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
+import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { getAllMockTransaction } from '../../utils/static/searchUtil';
 import ErrorResult from '../error-result/ErrorResult';
 
@@ -43,7 +44,6 @@ type TxnData = {
     From: string;
 };
 
-const useRealData = process.env.REACT_APP_DATA !== 'static';
 async function getRecentTransactions(txNum: number): Promise<TxnData[]> {
     try {
         // Get the latest transactions
@@ -258,8 +258,7 @@ function LatestTxCardAPI() {
     return <LatestTxView results={results} />;
 }
 
-function LatestTxCard() {
-    return useRealData ? <LatestTxCardAPI /> : <LatestTxCardStatic />;
-}
+const LatestTxCard = () =>
+    IS_STATIC_ENV ? <LatestTxCardStatic /> : <LatestTxCardAPI />;
 
 export default LatestTxCard;
