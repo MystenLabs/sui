@@ -19,6 +19,7 @@ use tracing::info;
 
 const DEFAULT_RPC_SERVER_PORT: &str = "5001";
 const DEFAULT_RPC_SERVER_ADDR_IPV4: &str = "127.0.0.1";
+const PROM_PORT_ADDR: &str = "127.0.0.1:9184";
 
 #[cfg(test)]
 #[path = "../unit_tests/rpc_server_tests.rs"]
@@ -87,6 +88,10 @@ async fn main() -> anyhow::Result<()> {
     let addr = server.local_addr()?;
     let server_handle = server.start(module)?;
     info!(local_addr =? addr, "Sui RPC Gateway listening on local_addr");
+
+    let prom_binding = PROM_PORT_ADDR.parse().unwrap();
+    info!("Starting Prometheus HTTP endpoint at {}", PROM_PORT_ADDR);
+    prometheus_exporter::start(prom_binding).expect("Failed to start Prometheus exporter");
 
     server_handle.await;
     Ok(())

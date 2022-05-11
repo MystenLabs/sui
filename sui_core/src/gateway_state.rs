@@ -13,6 +13,9 @@ use async_trait::async_trait;
 use futures::future;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
+use prometheus_exporter::prometheus::{
+    register_histogram, register_int_counter, Histogram, IntCounter,
+};
 use sui_adapter::adapter::resolve_and_type_check;
 use tracing::{error, Instrument};
 
@@ -51,6 +54,101 @@ pub type GatewayTxSeqNumber = u64;
 
 const MAX_TX_RANGE_SIZE: u64 = 4096;
 
+/// Prometheus metrics which can be displayed in Grafana, queried and alerted on
+pub struct GatewayMetrics {
+    total_tx_processed: IntCounter,
+    total_tx_errored: IntCounter,
+    num_tx_publish: IntCounter,
+    num_tx_movecall: IntCounter,
+    num_tx_splitcoin: IntCounter,
+    num_tx_mergecoin: IntCounter,
+    pub total_tx_certificates: IntCounter,
+    pub num_signatures: Histogram,
+    pub num_good_stake: Histogram,
+    pub num_bad_stake: Histogram,
+    pub transaction_latency: Histogram,
+}
+
+impl GatewayMetrics {
+    pub fn new() -> GatewayMetrics {
+        Self {
+            total_tx_processed: register_int_counter!(
+                "total_tx_processed",
+                "Total number of transaction certificates processed in Gateway"
+            )
+            .unwrap(),
+            total_tx_errored: register_int_counter!(
+                "total_tx_errored",
+                "Total number of transactions which errored out"
+            )
+            .unwrap(),
+            // total_effects == total transactions finished
+            num_tx_publish: register_int_counter!(
+                "num_tx_publish",
+                "Number of publish transactions",
+            )
+            .unwrap(),
+            num_tx_movecall: register_int_counter!(
+                "num_tx_movecall",
+                "Number of MOVE call transactions",
+            )
+            .unwrap(),
+            num_tx_splitcoin: register_int_counter!(
+                "num_tx_splitcoin",
+                "Number of split coin transactions",
+            )
+            .unwrap(),
+            num_tx_mergecoin: register_int_counter!(
+                "num_tx_mergecoin",
+                "Number of merge coin transactions",
+            )
+            .unwrap(),
+            total_tx_certificates: register_int_counter!(
+                "total_tx_certificates",
+                "Total number of certificates made from validators",
+            )
+            .unwrap(),
+            num_signatures: register_histogram!(
+                "num_signatures_per_tx",
+                "Number of signatures collected per transaction"
+            )
+            .unwrap(),
+            num_good_stake: register_histogram!(
+                "num_good_stake_per_tx",
+                "Amount of good stake collected per transaction"
+            )
+            .unwrap(),
+            num_bad_stake: register_histogram!(
+                "num_bad_stake_per_tx",
+                "Amount of bad stake collected per transaction"
+            )
+            .unwrap(),
+            transaction_latency: register_histogram!(
+                "transaction_latency",
+                "Latency of execute_transaction_impl"
+            )
+            .unwrap(),
+        }
+    }
+}
+
+impl Default for GatewayMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// One cannot register a metric multiple times.  We protect initialization with lazy_static
+// for cases such as local tests or "sui start" which starts multiple authorities in one process.
+lazy_static! {
+    static ref METRICS: Arc<GatewayMetrics> = Arc::new(GatewayMetrics::new());
+}
+
+/// Returns a new copy of GatewayMetrics
+pub fn gateway_metrics() -> Arc<GatewayMetrics> {
+    METRICS.clone()
+}
+
 pub struct GatewayState<A> {
     authorities: AuthorityAggregator<A>,
     store: Arc<GatewayStore>,
@@ -60,6 +158,7 @@ pub struct GatewayState<A> {
     /// It's useful if we need some kind of ordering for transactions
     /// from a gateway.
     next_tx_seq_number: AtomicU64,
+    metrics: Arc<GatewayMetrics>,
 }
 
 impl<A> GatewayState<A> {
@@ -82,6 +181,7 @@ impl<A> GatewayState<A> {
             store,
             authorities,
             next_tx_seq_number,
+            metrics: METRICS.clone(),
         })
     }
 
@@ -317,7 +417,10 @@ where
             .execute_transaction(&transaction)
             .instrument(span)
             .await;
+
+        self.metrics.total_tx_processed.inc();
         if exec_result.is_err() {
+            self.metrics.total_tx_errored.inc();
             error!("{:?}", exec_result);
         }
         let (new_certificate, effects) = exec_result?;
@@ -575,22 +678,30 @@ where
         tx: Transaction,
     ) -> Result<TransactionResponse, anyhow::Error> {
         let tx_kind = tx.data.kind.clone();
+        // Use start_coarse_time() if the below turns out to have a perf impact
+        let timer = self.metrics.transaction_latency.start_timer();
         let (certificate, effects) = self.execute_transaction_impl(tx).await?;
+        // NOTE: below only records latency if this completes.
+        timer.stop_and_record();
 
         // Create custom response base on the request type
         if let TransactionKind::Single(tx_kind) = tx_kind {
             match tx_kind {
                 SingleTransactionKind::Publish(_) => {
-                    return self.create_publish_response(certificate, effects).await
+                    self.metrics.num_tx_publish.inc();
+                    return self.create_publish_response(certificate, effects).await;
                 }
                 // Work out if the transaction is split coin or merge coin transaction
                 SingleTransactionKind::Call(move_call) => {
+                    self.metrics.num_tx_movecall.inc();
                     if move_call.package == self.get_framework_object_ref().await?
                         && move_call.module.as_ref() == coin::COIN_MODULE_NAME
                     {
                         if move_call.function.as_ref() == coin::COIN_SPLIT_VEC_FUNC_NAME {
+                            self.metrics.num_tx_splitcoin.inc();
                             return self.create_split_coin_response(certificate, effects).await;
                         } else if move_call.function.as_ref() == coin::COIN_JOIN_FUNC_NAME {
+                            self.metrics.num_tx_mergecoin.inc();
                             return self.create_merge_coin_response(certificate, effects).await;
                         }
                     }
