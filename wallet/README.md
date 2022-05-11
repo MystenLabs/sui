@@ -43,3 +43,9 @@ Same as above the output is [dist/](./dist/).
 ## Install the extension to Chrome
 
 After building the app, the extension needs to be installed to Chrome. Follow the steps [here](https://developer.chrome.com/docs/extensions/mv3/getstarted/#unpacked) and install the app from the [dist/](./dist/) directory.
+
+## Testing
+
+```
+npm run test
+```
