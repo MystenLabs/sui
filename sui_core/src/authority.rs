@@ -85,6 +85,11 @@ pub struct AuthorityMetrics {
     batch_size: Histogram,
 }
 
+// Override default Prom buckets for positive numbers in 0-50k range
+const POSITIVE_INT_BUCKETS: &[f64] = &[
+    1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
+];
+
 impl AuthorityMetrics {
     pub fn new() -> AuthorityMetrics {
         Self {
@@ -123,17 +128,20 @@ impl AuthorityMetrics {
             .unwrap(),
             num_input_objs: register_histogram!(
                 "num_input_objects",
-                "Distribution of number of input TX objects per TX"
+                "Distribution of number of input TX objects per TX",
+                POSITIVE_INT_BUCKETS.to_vec()
             )
             .unwrap(),
             num_shared_objects: register_histogram!(
                 "num_shared_objects",
-                "Number of shared input objects per TX"
+                "Number of shared input objects per TX",
+                POSITIVE_INT_BUCKETS.to_vec()
             )
             .unwrap(),
             batch_size: register_histogram!(
                 "batch_size",
-                "Distribution of size of transaction batch"
+                "Distribution of size of transaction batch",
+                POSITIVE_INT_BUCKETS.to_vec()
             )
             .unwrap(),
         }

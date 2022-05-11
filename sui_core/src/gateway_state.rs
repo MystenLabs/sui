@@ -69,6 +69,11 @@ pub struct GatewayMetrics {
     pub transaction_latency: Histogram,
 }
 
+// Override default Prom buckets for positive numbers in 0-50k range
+const POSITIVE_INT_BUCKETS: &[f64] = &[
+    1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
+];
+
 impl GatewayMetrics {
     pub fn new() -> GatewayMetrics {
         Self {
@@ -108,19 +113,24 @@ impl GatewayMetrics {
                 "Total number of certificates made from validators",
             )
             .unwrap(),
+            // It's really important to use the right histogram buckets for accurate histogram collection.
+            // Otherwise values get clipped
             num_signatures: register_histogram!(
                 "num_signatures_per_tx",
-                "Number of signatures collected per transaction"
+                "Number of signatures collected per transaction",
+                POSITIVE_INT_BUCKETS.to_vec()
             )
             .unwrap(),
             num_good_stake: register_histogram!(
                 "num_good_stake_per_tx",
-                "Amount of good stake collected per transaction"
+                "Amount of good stake collected per transaction",
+                POSITIVE_INT_BUCKETS.to_vec()
             )
             .unwrap(),
             num_bad_stake: register_histogram!(
                 "num_bad_stake_per_tx",
-                "Amount of bad stake collected per transaction"
+                "Amount of bad stake collected per transaction",
+                POSITIVE_INT_BUCKETS.to_vec()
             )
             .unwrap(),
             transaction_latency: register_histogram!(
