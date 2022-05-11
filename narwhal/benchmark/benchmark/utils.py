@@ -151,14 +151,14 @@ def progress_bar(iterable, prefix='', suffix='', decimals=1, length=30, fill='â–
     print()
 
 
-class AddressError(Exception, multiaddr.exceptions.Error):
+class AddressError(multiaddr.exceptions.Error):
     """Raised when the provided daemon location Multiaddr does not match any
     of the supported patterns."""
     __slots__ = ("addr",)
 
     def __init__(self, addr) -> None:
         self.addr = addr
-        Exception.__init__(
+        multiaddr.exceptions.Error.__init__(
             self, "Unsupported Multiaddr pattern: {0!r}".format(addr))
 
 
