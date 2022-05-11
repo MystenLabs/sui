@@ -353,18 +353,7 @@ function OwnedObjectView({ results }: { results: resultType }) {
                 >
                     {entryObj.display !== undefined && (
                         <div className={styles.previewimage}>
-                            <DisplayBox
-                                display={entryObj.display}
-                                // TODO: clean this logic
-                                tag={
-                                    typeof entryObj.display === 'object' &&
-                                    'category' in entryObj.display &&
-                                    entryObj.display['category'] ===
-                                        'moveScript'
-                                        ? 'moveScript'
-                                        : 'imageURL'
-                                }
-                            />
+                            <DisplayBox display={entryObj.display} />
                         </div>
                     )}
                     {Object.entries(entryObj).map(([key, value], index2) => (

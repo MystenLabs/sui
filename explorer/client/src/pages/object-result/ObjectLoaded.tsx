@@ -196,7 +196,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
             <div className={styles.resultbox}>
                 {viewedData.url !== '' && (
                     <div className={styles.display}>
-                        <DisplayBox display={viewedData.url} tag="imageURL" />
+                        <DisplayBox display={viewedData.url} />
                     </div>
                 )}
                 <div
