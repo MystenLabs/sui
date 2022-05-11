@@ -268,14 +268,12 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     )}
                                 </div>
                             )}
-                            <div>
-                                <div>Type</div>
+                            {data.objType !== 'Move Package' && (
                                 <div>
-                                    {data.objType === 'Move Package'
-                                        ? 'Library'
-                                        : prepObjTypeValue(data.objType)}
+                                    <div>Type</div>
+                                    <div>{prepObjTypeValue(data.objType)}</div>
                                 </div>
-                            </div>
+                            )}
                             {data.objType !== 'Move Package' && (
                                 <div>
                                     <div>Owner</div>
