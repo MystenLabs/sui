@@ -320,7 +320,6 @@ impl SuiNetwork {
         );
 
         let consensus_committee = make_default_narwhal_committee(&config.authorities)?;
-        let consensus_parameters = ConsensusParameters::default();
 
         // Pass in the newtwork parameters of all authorities
         let net = config.get_authority_infos();
@@ -328,6 +327,7 @@ impl SuiNetwork {
         let mut spawned_authorities = Vec::new();
 
         for authority in &config.authorities {
+            let consensus_parameters = ConsensusParameters::default();
             let key_pair = key_pairs.get(&authority.public_key).unwrap_or_else(|| {
                 panic!(
                     "Can't find key pair for authority {:?}",
