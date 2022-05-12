@@ -233,8 +233,8 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             </div>
                             {data.data?.tx_digest && (
                                 <div>
-                                    <div>Last Transaction ID</div>
-                                    <div id="lasttxID">
+                                    <div>Last Transaction</div>
+                                    <div id="lasttx">
                                         <Longtext
                                             text={data.data?.tx_digest}
                                             category="transactions"

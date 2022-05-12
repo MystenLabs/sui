@@ -181,7 +181,7 @@ describe('End-to-end Tests', () => {
             expect(value.trim()).toBe(objectID);
 
             //Go back to Transaction
-            const lastTransactionLink = await page.$('#lasttxID > a');
+            const lastTransactionLink = await page.$('#lasttx > a');
             await lastTransactionLink.click();
             const el2 = await page.$('#transactionID');
             const value2 = await page.evaluate((x: any) => x.textContent, el2);
