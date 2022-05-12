@@ -88,7 +88,7 @@ impl Primary {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         tx_consensus: Sender<Certificate<PublicKey>>,
         rx_consensus: Receiver<Certificate<PublicKey>>,
-        external_consensus: bool,
+        internal_consensus: bool,
     ) {
         let (tx_others_digests, rx_others_digests) = channel(CHANNEL_CAPACITY);
         let (tx_our_digests, rx_our_digests) = channel(CHANNEL_CAPACITY);
@@ -288,7 +288,7 @@ impl Primary {
             rx_helper_requests,
         );
 
-        if external_consensus {
+        if !internal_consensus {
             // Spawn a grpc server to accept requests from external consensus layer.
             ConsensusAPIGrpc::spawn(
                 parameters.consensus_api_grpc.socket_addr,

@@ -97,7 +97,7 @@ impl Node {
         // If an external consensus will be used, then this bool will also ensure that the
         // corresponding gRPC server that is used for communication between narwhal and
         // external consensus is also spawned.
-        consensus: bool,
+        internal_consensus: bool,
         // The state used by the client to execute transactions.
         execution_state: Arc<State>,
         // A channel to output transactions execution confirmations.
@@ -125,11 +125,11 @@ impl Node {
             store.payload_store.clone(),
             /* tx_consensus */ tx_new_certificates,
             /* rx_consensus */ rx_feedback,
-            consensus,
+            internal_consensus,
         );
 
-        // Check whether to run consensus.
-        match consensus {
+        // Check whether to run internal consensus.
+        match internal_consensus {
             true => {
                 Self::spawn_consensus(
                     name,
