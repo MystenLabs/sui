@@ -967,7 +967,7 @@ dependencies = [
  "serde_bytes",
  "tokio",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "typed-store",
  "types",
 ]
 
@@ -1646,7 +1646,7 @@ dependencies = [
  "tokio-util 0.7.1",
  "tonic",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "typed-store",
  "types",
  "worker",
 ]
@@ -3634,7 +3634,7 @@ dependencies = [
  "tracing",
  "tracing-log",
  "tracing-subscriber 0.3.11",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "typed-store",
  "types",
  "worker",
 ]
@@ -4242,7 +4242,7 @@ dependencies = [
  "tonic",
  "tower",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "typed-store",
  "types",
 ]
 
@@ -5582,7 +5582,7 @@ dependencies = [
  "static_assertions",
  "thiserror",
  "tonic",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "typed-store",
  "zeroize",
 ]
 
@@ -5648,7 +5648,7 @@ dependencies = [
  "tokio-util 0.7.1",
  "tracing",
  "tracing-test",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "typed-store",
  "types",
 ]
 
@@ -5666,7 +5666,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.11",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=e44bca4513a6ff6c97399cd79e82e4bc00571ac3)",
+ "typed-store",
 ]
 
 [[package]]
@@ -5803,7 +5803,7 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.1",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "typed-store",
 ]
 
 [[package]]
@@ -6336,20 +6336,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "typed-store"
-version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=e44bca4513a6ff6c97399cd79e82e4bc00571ac3#e44bca4513a6ff6c97399cd79e82e4bc00571ac3"
-dependencies = [
- "bincode",
- "collectable",
- "eyre",
- "rocksdb",
- "serde 1.0.137",
- "thiserror",
- "tokio",
-]
-
-[[package]]
 name = "typenum"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6375,7 +6361,7 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.1",
  "tonic",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "typed-store",
 ]
 
 [[package]]
@@ -6850,7 +6836,7 @@ dependencies = [
  "tonic",
  "tower",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "typed-store",
  "types",
 ]
 
