@@ -16,7 +16,7 @@ An *accumulator* makes sure the transaction is received by a quorum of validator
 and the objects they produce, laid out as dependencies. Validators cannot execute a transaction dependent on objects created by a prior
 transaction that has not finished. Rather than total order, Sui uses causal order (a partial order).
 
-For more information, see [Causal order vs total order](sui-compared#causal-order-vs-total-order). 
+For more information, see [Causal order vs total order](sui-compared.md#causal-order-vs-total-order). 
 
 
 ### Certificate
