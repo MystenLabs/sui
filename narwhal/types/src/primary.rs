@@ -527,20 +527,35 @@ pub struct BatchMessage {
     pub transactions: Batch,
 }
 
+pub type BlockRemoverResult<T> = Result<T, BlockRemoverError>;
+
+#[derive(Clone, Debug)]
+pub struct BlockRemoverError {
+    pub ids: Vec<CertificateDigest>,
+    pub error: BlockRemoverErrorKind,
+}
+
+// TODO: refactor BlockError & BlockRemoverError to be one type shared by get/remove collections.
+#[derive(Clone, Debug, PartialEq)]
+pub enum BlockRemoverErrorKind {
+    Timeout,
+    Failed,
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub enum BlockErrorType {
+pub enum BlockErrorKind {
     BlockNotFound,
     BatchTimeout,
     BatchError,
 }
 
+pub type BlockResult<T> = Result<T, BlockError>;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct BlockError {
     pub id: CertificateDigest,
-    pub error: BlockErrorType,
+    pub error: BlockErrorKind,
 }
-
-pub type BlockResult<T> = Result<T, BlockError>;
 
 impl<T> From<BlockError> for BlockResult<T> {
     fn from(error: BlockError) -> Self {
@@ -554,7 +569,7 @@ impl fmt::Display for BlockError {
     }
 }
 
-impl fmt::Display for BlockErrorType {
+impl fmt::Display for BlockErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }

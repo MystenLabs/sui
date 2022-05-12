@@ -22,7 +22,7 @@ use tokio::{
 };
 use tracing::{error, log::debug};
 use types::{
-    BatchDigest, BatchMessage, BlockError, BlockErrorType, BlockResult, Certificate,
+    BatchDigest, BatchMessage, BlockError, BlockErrorKind, BlockResult, Certificate,
     CertificateDigest, Header,
 };
 use Result::*;
@@ -399,7 +399,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
                 get_block_sender
                     .send(Err(BlockError {
                         id,
-                        error: BlockErrorType::BlockNotFound,
+                        error: BlockErrorKind::BlockNotFound,
                     }))
                     .expect("Couldn't send BlockNotFound error for a GetBlock request");
             }
@@ -427,7 +427,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
                 sender
                     .send(Err(BlockError {
                         id,
-                        error: BlockErrorType::BlockNotFound,
+                        error: BlockErrorKind::BlockNotFound,
                     }))
                     .expect("Couldn't send BlockNotFound error for a GetBlock request");
 
@@ -626,12 +626,12 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
     ) -> BlockResult<BatchMessage> {
         // ensure that we won't wait forever for a batch result to come
         let r = match timeout(BATCH_RETRIEVE_TIMEOUT, batch_receiver).await {
-            Ok(Ok(result)) => result.or(Err(BlockErrorType::BatchError)),
+            Ok(Ok(result)) => result.or(Err(BlockErrorKind::BatchError)),
             Ok(Err(err)) => {
                 println!("Receiver error: {err}");
-                Err(BlockErrorType::BatchError)
+                Err(BlockErrorKind::BatchError)
             }
-            Err(_) => Err(BlockErrorType::BatchTimeout),
+            Err(_) => Err(BlockErrorKind::BatchTimeout),
         };
 
         r.map_err(|e| BlockError {

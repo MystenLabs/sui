@@ -100,13 +100,9 @@ impl Primary {
         let (tx_certificates_loopback, rx_certificates_loopback) = channel(CHANNEL_CAPACITY);
         let (tx_primary_messages, rx_primary_messages) = channel(CHANNEL_CAPACITY);
         let (tx_helper_requests, rx_helper_requests) = channel(CHANNEL_CAPACITY);
-        // _tx_get_block_commands should be used by the handler that will issue the requests
-        // to fetch the collections from Narwhal (e.x the get_collections endpoint).
         let (tx_get_block_commands, rx_get_block_commands) = channel(CHANNEL_CAPACITY);
         let (tx_batches, rx_batches) = channel(CHANNEL_CAPACITY);
-        // _tx_block_removal_commands should be used by the handler that will issue the requests
-        // to remove collections from Narwhal (e.x the remove_collections endpoint).
-        let (_tx_block_removal_commands, rx_block_removal_commands) = channel(CHANNEL_CAPACITY);
+        let (tx_block_removal_commands, rx_block_removal_commands) = channel(CHANNEL_CAPACITY);
         let (tx_batch_removal, rx_batch_removal) = channel(CHANNEL_CAPACITY);
         let (_tx_block_synchronizer_commands, rx_block_synchronizer_commands) =
             channel(CHANNEL_CAPACITY);
@@ -293,7 +289,9 @@ impl Primary {
             ConsensusAPIGrpc::spawn(
                 parameters.consensus_api_grpc.socket_addr,
                 tx_get_block_commands,
+                tx_block_removal_commands,
                 parameters.consensus_api_grpc.get_collections_timeout,
+                parameters.consensus_api_grpc.remove_collections_timeout,
             );
         }
 

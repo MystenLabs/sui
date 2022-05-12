@@ -41,6 +41,11 @@ node_params = {
         'payload_synchronize_timeout': '2000ms',
         'payload_availability_timeout': '2000ms'
     },
+    "consensus_api_grpc": {
+        "socket_addr": "/ip4/127.0.0.1/tcp/0/http",
+        "get_collections_timeout": "5_000ms",
+        "remove_collections_timeout": "5_000ms"
+    },
     'max_concurrent_requests': 500_000
 }
 ```
@@ -55,6 +60,9 @@ They are defined as follows:
 * `certificates_synchronize_timeout`: The timeout configuration when requesting certificates from peers.
 * `payload_synchronize_timeout`: Timeout when has requested the payload for a certificate and is waiting to receive them.
 * `payload_availability_timeout`: The timeout configuration when for when we ask the other peers to discover who has the payload available for the dictated certificates.
+* `socket_addr`: The socket address the consensus api gRPC server should be listening to.
+* `get_collections_timeout`: The timeout configuration when requesting batches from workers.
+* `remove_collections_timeout`: The timeout configuration when removing batches from workers.
 * `max_concurrent_requests`: The maximum number of concurrent requests for primary-to-primary and worker-to-worker messages.
 
 ### Run the benchmark

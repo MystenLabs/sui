@@ -93,6 +93,12 @@ pub struct GetCollectionsRequest {
     pub collection_ids: ::prost::alloc::vec::Vec<CertificateDigest>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RemoveCollectionsRequest {
+    /// List of collections to be removed.
+    #[prost(message, repeated, tag="1")]
+    pub collection_ids: ::prost::alloc::vec::Vec<CertificateDigest>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetCollectionsResponse {
     /// TODO: Revisit this for spec compliance.  
     /// List of retrieval results of collections.
@@ -207,6 +213,26 @@ pub mod validator_client {
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/narwhal.Validator/GetCollections",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        /// Removes each provided collection.
+        pub async fn remove_collections(
+            &mut self,
+            request: impl tonic::IntoRequest<super::RemoveCollectionsRequest>,
+        ) -> Result<tonic::Response<super::Empty>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/narwhal.Validator/RemoveCollections",
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
@@ -703,6 +729,11 @@ pub mod validator_server {
             &self,
             request: tonic::Request<super::GetCollectionsRequest>,
         ) -> Result<tonic::Response<super::GetCollectionsResponse>, tonic::Status>;
+        /// Removes each provided collection.
+        async fn remove_collections(
+            &self,
+            request: tonic::Request<super::RemoveCollectionsRequest>,
+        ) -> Result<tonic::Response<super::Empty>, tonic::Status>;
     }
     /// The consensus to mempool interface for validator actions.
     #[derive(Debug)]
@@ -781,6 +812,46 @@ pub mod validator_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetCollectionsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/narwhal.Validator/RemoveCollections" => {
+                    #[allow(non_camel_case_types)]
+                    struct RemoveCollectionsSvc<T: Validator>(pub Arc<T>);
+                    impl<
+                        T: Validator,
+                    > tonic::server::UnaryService<super::RemoveCollectionsRequest>
+                    for RemoveCollectionsSvc<T> {
+                        type Response = super::Empty;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::RemoveCollectionsRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move {
+                                (*inner).remove_collections(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = RemoveCollectionsSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

@@ -35,7 +35,8 @@ def local(ctx, debug=True):
         },
         "consensus_api_grpc": {
             "socket_addr": "/ip4/127.0.0.1/tcp/0/http",
-            "get_collections_timeout": "5_000ms"
+            "get_collections_timeout": "5_000ms",
+            "remove_collections_timeout": "5_000ms"
         },
         'max_concurrent_requests': 2
     }
@@ -127,7 +128,8 @@ def remote(ctx, debug=False):
         },
         "consensus_api_grpc": {
             "socket_addr": "/ip4/127.0.0.1/tcp/0/http",
-            "get_collections_timeout": "5_000ms"
+            "get_collections_timeout": "5_000ms",
+            "remove_collections_timeout": "5_000ms"
         },
         'max_concurrent_requests': 500_000
     }

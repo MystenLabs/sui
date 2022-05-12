@@ -101,6 +101,11 @@ message GetCollectionsRequest {
     repeated CertificateDigest collection_ids = 1;
 }
 
+message RemoveCollectionsRequest {
+    // List of collections to be removed.
+    repeated CertificateDigest collection_ids = 1;
+}
+
 message GetCollectionsResponse {
     // TODO: Revisit this for spec compliance.  
     // List of retrieval results of collections.
@@ -121,6 +126,8 @@ message Empty {
 service Validator {
     // Returns the collection contents for each requested collection
     rpc GetCollections (GetCollectionsRequest) returns (GetCollectionsResponse);
+    // Removes each provided collection.
+    rpc RemoveCollections (RemoveCollectionsRequest) returns (Empty);
 }
 
 // The primary-to-primary interface

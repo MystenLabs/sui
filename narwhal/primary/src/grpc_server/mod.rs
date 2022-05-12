@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use self::validator::NarwhalValidator;
-use crate::BlockCommand;
+use crate::{BlockCommand, BlockRemoverCommand};
 use multiaddr::Multiaddr;
 use std::time::Duration;
 use tokio::sync::mpsc::Sender;
@@ -14,20 +14,26 @@ mod validator;
 pub struct ConsensusAPIGrpc {
     socket_addr: Multiaddr,
     tx_get_block_commands: Sender<BlockCommand>,
+    tx_block_removal_commands: Sender<BlockRemoverCommand>,
     get_collections_timeout: Duration,
+    remove_collections_timeout: Duration,
 }
 
 impl ConsensusAPIGrpc {
     pub fn spawn(
         socket_addr: Multiaddr,
         tx_get_block_commands: Sender<BlockCommand>,
+        tx_block_removal_commands: Sender<BlockRemoverCommand>,
         get_collections_timeout: Duration,
+        remove_collections_timeout: Duration,
     ) {
         tokio::spawn(async move {
             let _ = Self {
                 socket_addr,
                 tx_get_block_commands,
+                tx_block_removal_commands,
                 get_collections_timeout,
+                remove_collections_timeout,
             }
             .run()
             .await
@@ -38,7 +44,9 @@ impl ConsensusAPIGrpc {
     async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let narwhal = NarwhalValidator::new(
             self.tx_get_block_commands.to_owned(),
+            self.tx_block_removal_commands.to_owned(),
             self.get_collections_timeout,
+            self.remove_collections_timeout,
         );
 
         let config = mysten_network::config::Config::default();

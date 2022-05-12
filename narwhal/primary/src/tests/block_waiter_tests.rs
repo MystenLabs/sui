@@ -3,7 +3,7 @@ use crate::{BlockCommand, BlockWaiter};
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     block_waiter::{
-        BatchResult, BlockError, BlockErrorType, BlockResult, GetBlockResponse, GetBlocksResponse,
+        BatchResult, BlockError, BlockErrorKind, BlockResult, GetBlockResponse, GetBlocksResponse,
     },
     common::create_db_stores,
     PrimaryWorkerMessage,
@@ -191,7 +191,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let missing_block_id = CertificateDigest::default();
     expected_get_block_responses.push(Err(BlockError {
         id: missing_block_id,
-        error: BlockErrorType::BlockNotFound,
+        error: BlockErrorKind::BlockNotFound,
     }));
 
     block_ids.push(missing_block_id);
@@ -434,7 +434,7 @@ async fn test_batch_timeout() {
             let block_error = result.err().unwrap();
 
             assert_eq!(block_error.id, block_id.clone());
-            assert_eq!(block_error.error, BlockErrorType::BatchTimeout);
+            assert_eq!(block_error.error, BlockErrorKind::BatchTimeout);
         },
         () = &mut timer => {
             panic!("Timeout, no result has been received in time")
@@ -485,7 +485,7 @@ async fn test_return_error_when_certificate_is_missing() {
             let block_error = result.err().unwrap();
 
             assert_eq!(block_error.id, block_id.clone());
-            assert_eq!(block_error.error, BlockErrorType::BlockNotFound);
+            assert_eq!(block_error.error, BlockErrorKind::BlockNotFound);
         },
         () = &mut timer => {
             panic!("Timeout, no result has been received in time")

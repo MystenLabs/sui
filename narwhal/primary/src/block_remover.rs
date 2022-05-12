@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use crate::{block_remover::BlockErrorType::Failed, utils, PayloadToken, PrimaryWorkerMessage};
+use crate::{utils, PayloadToken, PrimaryWorkerMessage};
 use config::{Committee, WorkerId};
 use crypto::{traits::VerifyingKey, Digest, Hash};
 use futures::{
@@ -22,11 +22,11 @@ use tokio::{
     task::JoinHandle,
     time::timeout,
 };
-use tracing::{
-    error,
-    log::{debug, warn},
+use tracing::{debug, error, warn};
+use types::{
+    BatchDigest, BlockRemoverError, BlockRemoverErrorKind, BlockRemoverResult, Certificate,
+    CertificateDigest, Header, HeaderDigest,
 };
-use types::{BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest};
 
 const BATCH_DELETE_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -48,22 +48,8 @@ pub enum BlockRemoverCommand {
 
 #[derive(Clone, Debug)]
 pub struct RemoveBlocksResponse {
-    // the block ids to remove
+    // the block ids removed
     ids: Vec<CertificateDigest>,
-}
-
-type BlockRemoverResult<T> = Result<T, BlockRemoverError>;
-
-#[derive(Clone, Debug)]
-pub struct BlockRemoverError {
-    ids: Vec<CertificateDigest>,
-    error: BlockErrorType,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum BlockErrorType {
-    Timeout,
-    Failed,
 }
 
 pub type DeleteBatchResult = Result<DeleteBatchMessage, DeleteBatchMessage>;
@@ -203,6 +189,7 @@ pub struct BlockRemover<PublicKey: VerifyingKey> {
 
     map_tx_worker_removal_results: HashMap<RequestKey, oneshot::Sender<DeleteBatchResult>>,
 
+    // TODO: Change to a oneshot channel instead of an mpsc channel
     /// Receives all the responses to the requests to delete a batch.
     rx_delete_batches: Receiver<DeleteBatchResult>,
 }
@@ -310,7 +297,7 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
                         senders,
                         Err(BlockRemoverError {
                             ids: block_ids,
-                            error: BlockErrorType::Failed,
+                            error: BlockRemoverErrorKind::Failed,
                         }),
                     )
                     .await;
@@ -453,7 +440,10 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
                         error!("Error while reading certificate {:?}", err);
 
                         sender
-                            .send(Err(BlockRemoverError { ids, error: Failed }))
+                            .send(Err(BlockRemoverError {
+                                ids,
+                                error: BlockRemoverErrorKind::Failed,
+                            }))
                             .await
                             .expect("Couldn't send error to channel");
                     }
@@ -529,11 +519,11 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
     async fn wait_for_delete_response(
         request_key: RequestKey,
         rx: oneshot::Receiver<DeleteBatchResult>,
-    ) -> Result<RequestKey, BlockErrorType> {
+    ) -> Result<RequestKey, BlockRemoverErrorKind> {
         match timeout(BATCH_DELETE_TIMEOUT, rx).await {
             Ok(Ok(_)) => Ok(request_key),
-            Ok(Err(_)) => Err(BlockErrorType::Failed),
-            Err(_) => Err(BlockErrorType::Timeout),
+            Ok(Err(_)) => Err(BlockRemoverErrorKind::Failed),
+            Err(_) => Err(BlockRemoverErrorKind::Timeout),
         }
     }
 
