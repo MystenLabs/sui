@@ -122,6 +122,13 @@ The `RUST_LOG` environment variable can be used to set both the overall logging 
 individual components, and even filtering down to specific spans or tags within spans are possible too.
 For more details, please see the [EnvFilter](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) docs.
 
+## Metrics
+
+Sui includes Prometheus-based metrics:
+* `rpc_requests_by_route` and related for RPC Server API metrics and latencies (see `rpc-server.rs`)
+* Gateway transaction metrics (see `GatewayMetrics` struct in `gateway-state.rs`)
+* Validator transaction metrics (see `AuthorityMetrics` in `authority.rs`)
+
 ## Viewing logs, traces, metrics
 
 The tracing architecture is based on the idea of [subscribers](https://github.com/tokio-rs/tracing#project-layout) which
@@ -148,6 +155,8 @@ In the graph above, there are multiple subscribers, JSON logs can be for example
 
 The use of a log and metrics aggregator such as Vector allows for easy reconfiguration without interrupting the validator server,
 as well as offloading observability traffic.
+
+Metrics: served with a Prometheus scrape endpoint, by default at `<host>:9184/metrics`.
 
 ### Stdout (default)
 
@@ -176,12 +185,18 @@ Also notice `elapsed_milliseconds` which logs the duration of each span.
 
 To see nested spans visualized with [Jaeger](https://www.jaegertracing.io), do the following:
 
-1. Run this to get a local Jaeger container: `docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest`.
-1. Run Sui like this (trace enables the most detailed spans): `SUI_TRACING_ENABLE=1 RUST_LOG="info,sui_core=trace" ./sui start`.
+1. Run this to get a local Jaeger container:
+   ```shell
+   $ docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest
+   ```
+1. Run Sui like this (trace enables the most detailed spans):
+   ```shell
+   $ SUI_TRACING_ENABLE=1 RUST_LOG="info,sui_core=trace" ./sui start
+   ```
 1. Run some transfers with wallet, or run the benchmarking tool.
-1. Browse to `http://localhost:16686/` and select Sui as the Service.
+4. Browse to `http://localhost:16686/` and select Sui as the service.
 
-NOTE: separate spans (which are not nested) are not connected as a single trace for now.
+> **Note:** Separate spans (which are not nested) are not connected as a single trace for now.
 
 ### Live async inspection / Tokio Console
 
@@ -191,4 +206,4 @@ NOTE: separate spans (which are not nested) are not connected as a single trace 
 2. Start Sui with `SUI_TOKIO_CONSOLE` set to 1.
 3. Clone the console repo and `cargo run` to launch the console.
 
-NOTE: Adding Tokio-console support may significantly slow down Sui validators/gateways.
+> **Note:** Adding Tokio-console support may significantly slow down Sui validators/gateways.

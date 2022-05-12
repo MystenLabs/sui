@@ -1,15 +1,23 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
-use crate::authority::authority_tests::init_state_with_object_id;
-use sui_types::base_types::{dbg_addr, dbg_object_id, TransactionDigest};
-use sui_types::object::ObjectFormatOptions;
-use sui_types::serialize::{deserialize_message, serialize_object_info_request};
-use typed_store::Map;
-
 use super::*;
+use crate::{
+    authority::authority_tests::init_state_with_object_id,
+    authority_client::{
+        AuthorityAPI, LocalAuthorityClient, LocalAuthorityClientFaultConfig, NetworkAuthorityClient,
+    },
+};
+use futures::StreamExt;
+use std::sync::Arc;
+use sui_types::{
+    base_types::{dbg_addr, dbg_object_id, TransactionDigest},
+    batch::UpdateItem,
+    object::ObjectFormatOptions,
+};
+
+use crate::safe_client::SafeClient;
+use typed_store::Map;
 
 #[tokio::test]
 async fn test_start_stop_batch_subsystem() {
@@ -21,13 +29,11 @@ async fn test_start_stop_batch_subsystem() {
         .expect("Init batches failed!");
 
     // The following two fields are only needed for shared objects (not by this bench).
-    let consensus_address = "127.0.0.1:0".parse().unwrap();
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     let server = Arc::new(AuthorityServer::new(
-        "127.0.0.1".to_string(),
-        999,
-        65000,
+        "/ip4/127.0.0.1/tcp/999/http".parse().unwrap(),
         Arc::new(authority_state),
         consensus_address,
         tx_consensus_listener,
@@ -43,95 +49,40 @@ async fn test_start_stop_batch_subsystem() {
 
     // This should return immediately.
     join.await
-        .expect("Error stoping subsystem")
+        .expect("Error stopping subsystem")
         .expect("Subsystem crashed?");
 }
 
-// Some infra to feed the server messages and receive responses.
-
-use bytes::{Bytes, BytesMut};
-use futures::channel::mpsc::{channel, Receiver, Sender};
-use futures::sink::SinkMapErr;
-use futures::{Sink, SinkExt};
-
-type SinkSenderErr =
-    SinkMapErr<Sender<Bytes>, fn(<Sender<Bytes> as Sink<Bytes>>::Error) -> std::io::Error>;
-
-struct TestChannel {
-    reader: Receiver<Result<BytesMut, std::io::Error>>,
-    writer: SinkSenderErr,
-}
-
-#[allow(clippy::type_complexity)] // appease clippy, in the tests!
-impl TestChannel {
-    pub fn new() -> (
-        TestChannel,
-        (Sender<Result<BytesMut, std::io::Error>>, Receiver<Bytes>),
-    ) {
-        let (outer_tx, inner_rx) = channel(1000);
-        let (inner_tx, outer_rx) = channel(1000);
-
-        let test_channel = TestChannel {
-            reader: inner_rx,
-            writer: inner_tx
-                .sink_map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "SOme error!")),
-        };
-
-        (test_channel, (outer_tx, outer_rx))
-    }
-}
-
-impl<'a> RwChannel<'a> for TestChannel {
-    type R = Receiver<Result<BytesMut, std::io::Error>>;
-    type W = SinkSenderErr;
-
-    fn sink(&mut self) -> &mut Self::W {
-        &mut self.writer
-    }
-    fn stream(&mut self) -> &mut Self::R {
-        &mut self.reader
-    }
-}
-
 //This is the most basic example of how to test the server logic
-
 #[tokio::test]
-async fn test_channel_infra() {
+async fn test_simple_request() {
     let sender = dbg_addr(1);
     let object_id = dbg_object_id(1);
     let authority_state = init_state_with_object_id(sender, object_id).await;
 
     // The following two fields are only needed for shared objects (not by this bench).
-    let consensus_address = "127.0.0.1:0".parse().unwrap();
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
-    let server = Arc::new(AuthorityServer::new(
-        "127.0.0.1".to_string(),
-        999,
-        65000,
+    let server = AuthorityServer::new(
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
         Arc::new(authority_state),
         consensus_address,
         tx_consensus_listener,
-    ));
+    );
 
-    let (channel, (mut tx, mut rx)) = TestChannel::new();
+    let server_handle = server.spawn().await.unwrap();
 
-    let handle = tokio::spawn(async move {
-        server.handle_messages(channel).await;
-    });
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
 
     let req = ObjectInfoRequest::latest_object_info_request(
         object_id,
         Some(ObjectFormatOptions::default()),
     );
 
-    let bytes: BytesMut = BytesMut::from(&serialize_object_info_request(&req)[..]);
-    tx.send(Ok(bytes)).await.expect("Problem sending");
-    let resp = rx.next().await;
-    assert!(!resp.unwrap().is_empty());
-
-    drop(tx);
-    handle.await.expect("Problem closing task");
+    client.handle_object_info_request(req).await.unwrap();
 }
 
 #[tokio::test]
@@ -141,21 +92,204 @@ async fn test_subscription() {
     let authority_state = init_state_with_object_id(sender, object_id).await;
 
     // The following two fields are only needed for shared objects (not by this bench).
-    let consensus_address = "127.0.0.1:0".parse().unwrap();
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     // Start the batch server
-    let server = Arc::new(AuthorityServer::new(
-        "127.0.0.1".to_string(),
-        998,
-        65000,
+    let mut server = AuthorityServer::new(
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
         Arc::new(authority_state),
+        consensus_address,
+        tx_consensus_listener,
+    );
+    server.min_batch_size = 10;
+    server.max_delay = Duration::from_secs(500);
+
+    let db = server.state.db().clone();
+    let db2 = server.state.db().clone();
+    let db3 = server.state.db().clone();
+    let state = server.state.clone();
+
+    let server_handle = server.spawn().await.unwrap();
+
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
+
+    let tx_zero = TransactionDigest::new([0; 32]);
+    for _i in 0u64..105 {
+        let ticket = state.batch_notifier.ticket().expect("all good");
+        db.executed_sequence
+            .insert(&ticket.seq(), &tx_zero)
+            .expect("Failed to write.");
+    }
+    println!("Sent tickets.");
+
+    println!("Started messahe handling.");
+    // TEST 1: Get historical data
+
+    let req = BatchInfoRequest {
+        start: Some(12),
+        length: 22,
+    };
+
+    let mut resp = client.handle_batch_stream(req).await.unwrap();
+
+    println!("TEST1: Send request.");
+
+    let mut num_batches = 0;
+    let mut num_transactions = 0;
+
+    while let Some(data) = resp.next().await {
+        let item = data.unwrap();
+        match item {
+            BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                num_batches += 1;
+                if signed_batch.batch.next_sequence_number >= 34 {
+                    break;
+                }
+            }
+            BatchInfoResponseItem(UpdateItem::Transaction((_seq, _digest))) => {
+                num_transactions += 1;
+            }
+        }
+    }
+
+    assert_eq!(4, num_batches);
+    assert_eq!(30, num_transactions);
+
+    println!("TEST1: Finished.");
+
+    // Test 2: Get subscription data
+
+    // Add data in real time
+    let inner_server2 = state.clone();
+    let _handle2 = tokio::spawn(async move {
+        for i in 105..120 {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            let ticket = inner_server2.batch_notifier.ticket().expect("all good");
+            db2.executed_sequence
+                .insert(&ticket.seq(), &tx_zero)
+                .expect("Failed to write.");
+            println!("Send item {i}");
+        }
+    });
+
+    println!("TEST2: Sending realtime.");
+
+    let req = BatchInfoRequest {
+        start: Some(101),
+        length: 11,
+    };
+
+    let mut resp = client.handle_batch_stream(req).await.unwrap();
+
+    println!("TEST2: Send request.");
+
+    let mut num_batches = 0;
+    let mut num_transactions = 0;
+
+    while let Some(data) = resp.next().await {
+        let item = data.unwrap();
+        match item {
+            BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                num_batches += 1;
+                if signed_batch.batch.next_sequence_number >= 112 {
+                    break;
+                }
+            }
+            BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
+                println!("Received {seq}");
+                num_transactions += 1;
+            }
+        }
+    }
+
+    assert_eq!(3, num_batches);
+    assert_eq!(20, num_transactions);
+
+    _handle2.await.expect("Finished sending");
+    println!("TEST2: Finished.");
+
+    println!("TEST3: Sending from very latest.");
+
+    let req = BatchInfoRequest {
+        start: None,
+        length: 10,
+    };
+
+    let mut resp = client.handle_batch_stream(req).await.unwrap();
+
+    println!("TEST3: Send request.");
+
+    let mut num_batches = 0;
+    let mut num_transactions = 0;
+    let mut i = 120;
+    let inner_server2 = state.clone();
+
+    loop {
+        // Send a transaction
+        let ticket = inner_server2.batch_notifier.ticket().expect("all good");
+        db3.executed_sequence
+            .insert(&ticket.seq(), &tx_zero)
+            .expect("Failed to write.");
+        println!("Send item {i}");
+        i += 1;
+
+        // Then we wait to receive
+        if let Some(data) = resp.next().await {
+            match data.expect("No error expected here") {
+                BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                    num_batches += 1;
+                    if signed_batch.batch.next_sequence_number >= 129 {
+                        break;
+                    }
+                }
+                BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
+                    println!("Received {seq}");
+                    num_transactions += 1;
+                }
+            }
+        }
+    }
+
+    assert_eq!(2, num_batches);
+    assert_eq!(10, num_transactions);
+
+    state.batch_notifier.close();
+}
+
+#[tokio::test]
+async fn test_subscription_safe_client() {
+    let sender = dbg_addr(1);
+    let object_id = dbg_object_id(1);
+    let authority_state = init_state_with_object_id(sender, object_id).await;
+
+    // The following two fields are only needed for shared objects (not by this bench).
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+    let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
+
+    // Start the batch server
+    let state = Arc::new(authority_state);
+    let server = Arc::new(AuthorityServer::new(
+        "/ip4/127.0.0.1/tcp/998/http".parse().unwrap(),
+        state.clone(),
         consensus_address,
         tx_consensus_listener,
     ));
 
     let db = server.state.db().clone();
     let db2 = server.state.db().clone();
+    let db3 = server.state.db().clone();
+
+    let _master_safe_client = SafeClient::new(
+        LocalAuthorityClient {
+            state: state.clone(),
+            fault_config: LocalAuthorityClientFaultConfig::default(),
+        },
+        state.committee.clone(),
+        state.name,
+    );
 
     let _join = server
         .spawn_batch_subsystem(10, Duration::from_secs(500))
@@ -171,41 +305,39 @@ async fn test_subscription() {
     }
     println!("Sent tickets.");
 
-    let (channel, (mut tx, mut rx)) = TestChannel::new();
-
-    let inner_server1 = server.clone();
-    let handle1 = tokio::spawn(async move {
-        inner_server1.handle_messages(channel).await;
-    });
+    tokio::task::yield_now().await;
 
     println!("Started messahe handling.");
     // TEST 1: Get historical data
 
-    let req = BatchInfoRequest { start: 12, end: 34 };
+    let req = BatchInfoRequest {
+        start: Some(12),
+        length: 22,
+    };
 
-    let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);
-    tx.send(Ok(bytes)).await.expect("Problem sending");
+    let mut stream1 = _master_safe_client
+        .handle_batch_stream(req)
+        .await
+        .expect("Error following");
+
+    //let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);
+    //tx.send(Ok(bytes)).await.expect("Problem sending");
 
     println!("TEST1: Send request.");
 
     let mut num_batches = 0;
     let mut num_transactions = 0;
 
-    while let Some(data) = rx.next().await {
-        match deserialize_message(&data[..]).expect("Bad response") {
-            SerializedMessage::BatchInfoResp(resp) => match *resp {
-                BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
-                    num_batches += 1;
-                    if signed_batch.batch.next_sequence_number >= 34 {
-                        break;
-                    }
+    while let Some(data) = stream1.next().await {
+        match data.expect("Bad response") {
+            BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                num_batches += 1;
+                if signed_batch.batch.next_sequence_number >= 34 {
+                    break;
                 }
-                BatchInfoResponseItem(UpdateItem::Transaction((_seq, _digest))) => {
-                    num_transactions += 1;
-                }
-            },
-            _ => {
-                panic!("Bad response");
+            }
+            BatchInfoResponseItem(UpdateItem::Transaction((_seq, _digest))) => {
+                num_transactions += 1;
             }
         }
     }
@@ -220,7 +352,7 @@ async fn test_subscription() {
     // Add data in real time
     let inner_server2 = server.clone();
     let _handle2 = tokio::spawn(async move {
-        for i in 105..150 {
+        for i in 105..120 {
             tokio::time::sleep(Duration::from_millis(20)).await;
             let ticket = inner_server2
                 .state
@@ -237,34 +369,31 @@ async fn test_subscription() {
     println!("TEST2: Sending realtime.");
 
     let req = BatchInfoRequest {
-        start: 101,
-        end: 112,
+        start: Some(101),
+        length: 11,
     };
 
-    let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);
-    tx.send(Ok(bytes)).await.expect("Problem sending");
+    let mut stream1 = _master_safe_client
+        .handle_batch_stream(req)
+        .await
+        .expect("Error following");
 
     println!("TEST2: Send request.");
 
     let mut num_batches = 0;
     let mut num_transactions = 0;
 
-    while let Some(data) = rx.next().await {
-        match deserialize_message(&data[..]).expect("Bad response") {
-            SerializedMessage::BatchInfoResp(resp) => match *resp {
-                BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
-                    num_batches += 1;
-                    if signed_batch.batch.next_sequence_number >= 112 {
-                        break;
-                    }
+    while let Some(data) = stream1.next().await {
+        match &data.expect("No error") {
+            BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                num_batches += 1;
+                if signed_batch.batch.next_sequence_number >= 112 {
+                    break;
                 }
-                BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
-                    println!("Received {seq}");
-                    num_transactions += 1;
-                }
-            },
-            _ => {
-                panic!("Bad response");
+            }
+            BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
+                println!("Received {seq}");
+                num_transactions += 1;
             }
         }
     }
@@ -272,9 +401,60 @@ async fn test_subscription() {
     assert_eq!(3, num_batches);
     assert_eq!(20, num_transactions);
 
+    _handle2.await.expect("Finished sending");
     println!("TEST2: Finished.");
 
+    println!("TEST3: Sending from very latest.");
+
+    let req = BatchInfoRequest {
+        start: None,
+        length: 10,
+    };
+
+    let mut stream1 = _master_safe_client
+        .handle_batch_stream(req)
+        .await
+        .expect("Error following");
+
+    println!("TEST3: Send request.");
+
+    let mut num_batches = 0;
+    let mut num_transactions = 0;
+    let mut i = 120;
+    let inner_server2 = server.clone();
+
+    loop {
+        // Send a transaction
+        let ticket = inner_server2
+            .state
+            .batch_notifier
+            .ticket()
+            .expect("all good");
+        db3.executed_sequence
+            .insert(&ticket.seq(), &tx_zero)
+            .expect("Failed to write.");
+        println!("Send item {i}");
+        i += 1;
+
+        // Then we wait to receive
+        if let Some(data) = stream1.next().await {
+            match data.expect("Bad response") {
+                BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                    num_batches += 1;
+                    if signed_batch.batch.next_sequence_number >= 129 {
+                        break;
+                    }
+                }
+                BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
+                    println!("Received {seq}");
+                    num_transactions += 1;
+                }
+            }
+        }
+    }
+
+    assert_eq!(2, num_batches);
+    assert_eq!(10, num_transactions);
+
     server.state.batch_notifier.close();
-    drop(tx);
-    handle1.await.expect("Problem closing task");
 }

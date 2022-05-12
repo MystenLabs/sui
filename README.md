@@ -14,7 +14,7 @@
 * To learn what distinguishes Sui from other blockchain systems, see [How Sui Differs?](doc/src/learn/sui-compared.md).
 * To go deep on how Sui works, read the [Sui Smart Contract Platform](doc/paper/sui.pdf) white paper.
 * To help Sui grow, follow [Contributing to Sui](doc/src/contribute/index.md).
-* To connect with the Sui community, join our [Discord](https://discord.gg/mysten).
+* To connect with the Sui community, join our [Discord](https://discord.gg/sui).
 
 ### Highlights
 

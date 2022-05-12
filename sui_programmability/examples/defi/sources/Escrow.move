@@ -25,9 +25,9 @@ module DeFi::Escrow {
 
     // Error codes
     /// The `sender` and `recipient` of the two escrowed objects do not match
-    const EMISMATCHED_SENDER_RECIPIENT: u64 = 0;
+    const EMismatchedSenderRecipient: u64 = 0;
     /// The `exchange_for` fields of the two escrowed objects do not match
-    const EMISMATCHED_EXCHANGE_OBJECT: u64 = 1;
+    const EMismatchedExchangeObject: u64 = 1;
 
     /// Create an escrow for exchanging goods with
     /// `counterparty`, mediated by a `third_party`
@@ -73,11 +73,11 @@ module DeFi::Escrow {
         ID::delete(id1);
         ID::delete(id2);
         // check sender/recipient compatibility
-        assert!(&sender1 == &recipient2, EMISMATCHED_SENDER_RECIPIENT);
-        assert!(&sender2 == &recipient1, EMISMATCHED_SENDER_RECIPIENT);
+        assert!(&sender1 == &recipient2, EMismatchedSenderRecipient);
+        assert!(&sender2 == &recipient1, EMismatchedSenderRecipient);
         // check object ID compatibility
-        assert!(ID::id(&escrowed1) == &exchange_for2, EMISMATCHED_EXCHANGE_OBJECT);
-        assert!(ID::id(&escrowed2) == &exchange_for1, EMISMATCHED_EXCHANGE_OBJECT);
+        assert!(ID::id(&escrowed1) == &exchange_for2, EMismatchedExchangeObject);
+        assert!(ID::id(&escrowed2) == &exchange_for1, EMismatchedExchangeObject);
         // everything matches. do the swap!
         Transfer::transfer(escrowed1, sender2);
         Transfer::transfer(escrowed2, sender1)

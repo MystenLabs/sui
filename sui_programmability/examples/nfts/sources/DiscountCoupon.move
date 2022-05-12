@@ -9,10 +9,10 @@ module NFTs::DiscountCoupon {
     use Sui::TxContext::{Self, TxContext};
 
     /// Sending to wrong recipient.
-    const EWRONG_RECIPIENT: u64 = 0;
+    const EWrongRecipient: u64 = 0;
 
     /// Percentage discount out of range.
-    const EOUT_OF_RANGE_DISCOUNT: u64 = 1;
+    const EOutOfRangeDiscount: u64 = 1;
 
     /// Discount coupon NFT.
     struct DiscountCoupon has key, store {
@@ -38,7 +38,7 @@ module NFTs::DiscountCoupon {
         recipient: address,
         ctx: &mut TxContext,
     ) {
-        assert!(discount > 0 && discount <= 100, EOUT_OF_RANGE_DISCOUNT);
+        assert!(discount > 0 && discount <= 100, EOutOfRangeDiscount);
         let coupon = DiscountCoupon {
             id: TxContext::new_id(ctx),
             issuer: TxContext::sender(ctx),
@@ -59,7 +59,7 @@ module NFTs::DiscountCoupon {
     //  TODO: Consider adding more valid recipients.
     //      If we stick with issuer-as-receiver only, then `recipient` input won't be required).
     public(script) fun transfer(coupon: DiscountCoupon, recipient: address, _ctx: &mut TxContext) {
-        assert!(&coupon.issuer == &recipient, EWRONG_RECIPIENT);
+        assert!(&coupon.issuer == &recipient, EWrongRecipient);
         Transfer::transfer(coupon, recipient);
     }
 }

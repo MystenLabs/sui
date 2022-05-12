@@ -8,11 +8,12 @@ use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::adapter;
 use sui_types::{
-    base_types::{SuiAddress, TransactionDigest, TxContext},
+    base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
     error::SuiResult,
     gas::{self, SuiGasStatus},
     messages::{
-        ExecutionStatus, InputObjectKind, SingleTransactionKind, Transaction, TransactionEffects,
+        ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind, TransactionData,
+        TransactionEffects, TransferCoin,
     },
     object::Object,
     storage::{BackingPackageStore, Storage},
@@ -21,26 +22,22 @@ use tracing::{debug, instrument};
 
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
 pub fn execute_transaction_to_effects<S: BackingPackageStore>(
+    shared_object_refs: Vec<ObjectRef>,
     temporary_store: &mut AuthorityTemporaryStore<S>,
-    transaction: Transaction,
+    transaction_data: TransactionData,
     transaction_digest: TransactionDigest,
-    objects_by_kind: Vec<(InputObjectKind, Object)>,
+    mut transaction_dependencies: BTreeSet<TransactionDigest>,
     move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     gas_status: SuiGasStatus,
 ) -> SuiResult<TransactionEffects> {
-    let mut transaction_dependencies: BTreeSet<_> = objects_by_kind
-        .iter()
-        .map(|(_, object)| object.previous_transaction)
-        .collect();
+    let mut tx_ctx = TxContext::new(&transaction_data.signer(), &transaction_digest);
 
-    let mut tx_ctx = TxContext::new(&transaction.sender_address(), &transaction_digest);
-
-    let gas_object_id = transaction.gas_payment_object_ref().0;
+    let gas_object_id = transaction_data.gas_payment_object_ref().0;
     let status = execute_transaction(
         temporary_store,
-        transaction,
-        objects_by_kind,
+        transaction_data,
+        gas_object_id,
         &mut tx_ctx,
         move_vm,
         native_functions,
@@ -59,6 +56,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     transaction_dependencies.remove(&TransactionDigest::genesis());
 
     let effects = temporary_store.to_effects(
+        shared_object_refs,
         &transaction_digest,
         transaction_dependencies.into_iter().collect(),
         status,
@@ -70,76 +68,92 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
 #[instrument(name = "tx_execute", level = "debug", skip_all)]
 fn execute_transaction<S: BackingPackageStore>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
-    transaction: Transaction,
-    mut objects_by_kind: Vec<(InputObjectKind, Object)>,
+    transaction_data: TransactionData,
+    gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     mut gas_status: SuiGasStatus,
 ) -> ExecutionStatus {
-    // unwraps here are safe because we built `inputs`
-    let mut gas_object = objects_by_kind.pop().unwrap().1;
-    let mut object_input_iter = objects_by_kind.into_iter().map(|(_, object)| object);
-    let mut result = Ok(vec![]);
+    let mut gas_object = temporary_store
+        .objects()
+        .get(&gas_object_id)
+        .expect("We constructed the object map so it should always have the gas object id")
+        .clone();
+
+    let mut result = Ok(());
     // TODO: Since we require all mutable objects to not show up more than
     // once across single tx, we should be able to run them in parallel.
-    for single_tx in transaction.into_single_transactions() {
-        let input_size = single_tx.input_object_count();
-        match single_tx {
-            SingleTransactionKind::Transfer(t) => {
-                let inputs = object_input_iter.by_ref().take(input_size).collect();
-                if let Err(err) = transfer(temporary_store, inputs, t.recipient) {
-                    result = Err(err);
-                    break;
-                }
+    for single_tx in transaction_data.kind.into_single_transactions() {
+        result = match single_tx {
+            SingleTransactionKind::TransferCoin(TransferCoin {
+                recipient,
+                object_ref,
+            }) => {
+                // unwrap is is safe because we built the object map from the transactions
+                let object = temporary_store
+                    .objects()
+                    .get(&object_ref.0)
+                    .unwrap()
+                    .clone();
+                transfer(temporary_store, object, recipient)
             }
-            SingleTransactionKind::Call(c) => {
-                let mut inputs: Vec<_> = object_input_iter.by_ref().take(input_size).collect();
-                // unwraps here are safe because we built `inputs`
-                // TODO don't load and push the package object here in the first place
-                let _package = inputs.pop().unwrap();
-                let module_id = ModuleId::new(c.package.0.into(), c.module.clone());
-                result = adapter::execute(
+            SingleTransactionKind::Call(MoveCall {
+                package,
+                module,
+                function,
+                type_arguments,
+                arguments,
+            }) => {
+                let module_id = ModuleId::new(package.0.into(), module);
+                adapter::execute(
                     move_vm,
                     temporary_store,
-                    native_functions,
                     module_id,
-                    &c.function,
-                    c.type_arguments.clone(),
-                    inputs,
-                    c.pure_arguments.clone(),
+                    &function,
+                    type_arguments,
+                    arguments,
                     &mut gas_status,
                     tx_ctx,
-                );
-                if result.is_err() {
-                    break;
-                }
+                )
             }
-            SingleTransactionKind::Publish(m) => {
-                if let Err(err) = adapter::publish(
-                    temporary_store,
-                    native_functions.clone(),
-                    m.modules,
-                    tx_ctx,
-                    &mut gas_status,
-                ) {
-                    result = Err(err);
-                    break;
-                }
-            }
+            SingleTransactionKind::Publish(MoveModulePublish { modules }) => adapter::publish(
+                temporary_store,
+                native_functions.clone(),
+                modules,
+                tx_ctx,
+                &mut gas_status,
+            ),
         };
+        if result.is_err() {
+            break;
+        }
     }
     if result.is_err() {
         // Roll back the temporary store if execution failed.
         temporary_store.reset();
     }
+    // Make sure every mutable object's version number is incremented.
+    // This needs to happen before `charge_gas_for_storage_changes` so that it
+    // can charge gas for all mutated objects properly.
     temporary_store.ensure_active_inputs_mutated();
     if let Err(err) =
         temporary_store.charge_gas_for_storage_changes(&mut gas_status, &mut gas_object)
     {
-        result = Err(err);
-        // No need to roll back the temporary store here since `charge_gas_for_storage_changes`
-        // will not modify `temporary_store` if it failed.
+        // If `result` is already `Err`, we basically have two errors at the same time.
+        // Users should be generally more interested in the actual execution error, so we
+        // let that shadow the out of gas error. Also in this case, we don't need to reset
+        // the `temporary_store` because `charge_gas_for_storage_changes` won't mutate
+        // `temporary_store` if gas charge failed.
+        //
+        // If `result` is `Ok`, now we failed when charging gas, we have to reset
+        // the `temporary_store` to eliminate all effects caused by the execution,
+        // and re-ensure all mutable objects' versions are incremented.
+        if result.is_ok() {
+            temporary_store.reset();
+            temporary_store.ensure_active_inputs_mutated();
+            result = Err(err);
+        }
     }
 
     let cost_summary = gas_status.summary(result.is_ok());
@@ -151,9 +165,8 @@ fn execute_transaction<S: BackingPackageStore>(
     // TODO: Return cost_summary so that the detailed summary exists in TransactionEffects for
     // gas and rebate distribution.
     match result {
-        Ok(results) => ExecutionStatus::Success {
+        Ok(()) => ExecutionStatus::Success {
             gas_cost: cost_summary,
-            results,
         },
         Err(error) => ExecutionStatus::new_failure(cost_summary, error),
     }
@@ -161,12 +174,10 @@ fn execute_transaction<S: BackingPackageStore>(
 
 fn transfer<S>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
-    mut inputs: Vec<Object>,
+    mut object: Object,
     recipient: SuiAddress,
 ) -> SuiResult {
-    // Safe to unwrap since we constructed the inputs.
-    let mut output_object = inputs.pop().unwrap();
-    output_object.transfer(recipient)?;
-    temporary_store.write_object(output_object);
+    object.transfer(recipient)?;
+    temporary_store.write_object(object);
     Ok(())
 }

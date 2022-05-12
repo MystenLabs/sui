@@ -1,12 +1,20 @@
 [workspace]
 members = [
-        "sui_core",
-        "sui",
-        "sui_programmability/adapter",
-        "sui_programmability/framework",
-	"sui_types",
-        "sui_storage",
-        "test_utils"
+    "crates/sui-network",
+    "crates/x",
+    "faucet",
+    "sui",
+    "sui/open_rpc",
+    "sui/open_rpc/macros",
+    "sui_core",
+    "sui_programmability/adapter",
+    "sui_programmability/adapter/transactional-tests",
+    "sui_programmability/framework",
+    "sui_programmability/transactional-test-runner",
+    "sui_programmability/verifier",
+    "sui_storage",
+    "sui_types",
+    "test_utils",
 ]
 
 [profile.release]

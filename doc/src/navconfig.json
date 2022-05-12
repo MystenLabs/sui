@@ -2,8 +2,8 @@
   "sideMenu": {
     "title": "QUICK LINKS",
     "items": [{
-        "label": "Tutorial",
-        "link": "explore/tutorials"
+        "label": "DevNet",
+        "link": "explore/devnet"
       },
       {
         "label": "Examples",
@@ -67,8 +67,8 @@
         "fileName": "build/wallet"
       },
       {
-        "label": "Use Sui REST Server",
-        "fileName": "build/rest-api"
+        "label": "Use Sui RPC Server",
+        "fileName": "build/json-rpc"
       },
       {
         "label": "Employ SuiJSON Format",
@@ -88,6 +88,10 @@
       }
     ],
     "explore": [{
+        "label": "DevNet",
+        "fileName": "explore/devnet"
+      },
+      {
         "label": "Tutorial",
         "fileName": "explore/tutorials"
       },

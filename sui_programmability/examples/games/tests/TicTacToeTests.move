@@ -75,11 +75,11 @@ module Games::TicTacToeTests {
 
         // X has the trophy
         TestScenario::next_tx(scenario, &player_x);
-        assert!(TestScenario::can_take_object<Trophy>(scenario), 1);
+        assert!(TestScenario::can_take_owned<Trophy>(scenario), 1);
 
         TestScenario::next_tx(scenario, &player_o);
         // O has no Trophy
-        assert!(!TestScenario::can_take_object<Trophy>(scenario), 1);
+        assert!(!TestScenario::can_take_owned<Trophy>(scenario), 1);
     }
 
 
@@ -186,9 +186,9 @@ module Games::TicTacToeTests {
 
         // No one has the trophy
         TestScenario::next_tx(scenario, &player_x);
-        assert!(!TestScenario::can_take_object<Trophy>(scenario), 1);
+        assert!(!TestScenario::can_take_owned<Trophy>(scenario), 1);
         TestScenario::next_tx(scenario, &player_o);
-        assert!(!TestScenario::can_take_object<Trophy>(scenario), 1);
+        assert!(!TestScenario::can_take_owned<Trophy>(scenario), 1);
     }
 
     public(script) fun place_mark(
@@ -201,22 +201,22 @@ module Games::TicTacToeTests {
         // Step 1: player creates a mark and sends it to the game.
         TestScenario::next_tx(scenario, player);
         {
-            let cap = TestScenario::take_object<MarkMintCap>(scenario);
+            let cap = TestScenario::take_owned<MarkMintCap>(scenario);
             TicTacToe::send_mark_to_game(&mut cap, *admin, row, col, TestScenario::ctx(scenario));
-            TestScenario::return_object(scenario, cap);
+            TestScenario::return_owned(scenario, cap);
         };
         // Step 2: Admin places the received mark on the game board.
         TestScenario::next_tx(scenario, admin);
         let status;
         {
-            let game = TestScenario::take_object<TicTacToe>(scenario);
-            let mark = TestScenario::take_object<Mark>(scenario);
+            let game = TestScenario::take_owned<TicTacToe>(scenario);
+            let mark = TestScenario::take_owned<Mark>(scenario);
             assert!(TicTacToe::mark_player(&mark) == player, 0);
             assert!(TicTacToe::mark_row(&mark) == row, 1);
             assert!(TicTacToe::mark_col(&mark) == col, 2);
             TicTacToe::place_mark(&mut game, mark, TestScenario::ctx(scenario));
             status = TicTacToe::get_status(&game);
-            TestScenario::return_object(scenario, game);
+            TestScenario::return_owned(scenario, game);
         };
         // return the game status
         status

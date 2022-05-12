@@ -1,103 +1,63 @@
-# TSDX User Guide
+# Sui TypeScript SDK
 
-Congrats! You just saved yourself hours of work by bootstrapping this project with TSDX. Let’s get you oriented with what’s here and how to use it.
+This is the Sui TypeScript SDK built on the Sui [JSON RPC API](https://github.com/MystenLabs/sui/blob/main/doc/src/build/json-rpc.md). It provides utility classes and functions for applications to sign transactions and interact with the Sui network.
 
-> This TSDX setup is meant for developing libraries (not apps!) that can be published to NPM. If you’re looking to build a Node app, you could use `ts-node-dev`, plain `ts-node`, or simple `tsc`.
+Note that the SDK is still in development mode and some API functions are subject to change.
 
-> If you’re new to TypeScript, check out the handy [TypeScript cheatsheet](https://devhints.io/typescript).
-
-## Commands
-
-TSDX scaffolds your new library inside `/src`.
-
-To run TSDX, use:
+## Installation
 
 ```bash
-npm start # or yarn start
+$ yarn add @mysten/sui.js
 ```
 
-This builds to `/dist` and runs the project in watch mode, so any edit you save inside `src` causes a rebuild to `/dist`.
+## Local Development Environment Setup
 
-To do a one-off build, use `npm run build` or `yarn build`.
+Follow the [JSON RPC doc](https://github.com/MystenLabs/sui/blob/main/doc/src/build/json-rpc.md) to start a local network and local RPC server
 
-To run tests, use `npm test` or `yarn test`.
+## Usage
 
-## Configuration
+The `JsonRpcProvider` class provides a connection to the JSON-RPC Server and should be used for all read-only operations. For example:
 
-Code quality is set up for you with `prettier`, `husky`, and `lint-staged`. Adjust the respective fields in `package.json` accordingly.
+Fetch objects owned by the address `0xbff6ccc8707aa517b4f1b95750a2a8c666012df3`
 
-### Jest
-
-Jest tests are set up to run with `npm test` or `yarn test`.
-
-### Bundle analysis
-
-[`size-limit`](https://github.com/ai/size-limit) is set up to calculate the real cost of your library with `npm run size` and visualize the bundle with `npm run analyze`.
-
-#### Setup files
-
-This is the folder structure we set up for you:
-
-```txt
-/src
-  index.tsx       # EDIT THIS
-/test
-  blah.test.tsx   # EDIT THIS
-.gitignore
-package.json      # OPTIONALLY EDIT THIS
-README.md         # EDIT THIS
-tsconfig.json
+```typescript
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider('https://gateway.devnet.sui.io:9000/');
+const objects = await provider.getOwnedObjectRefs(
+  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
+);
 ```
 
-### Rollup
+Fetch transaction details from a transaction digest:
 
-TSDX uses [Rollup](https://rollupjs.org) as a bundler and generates multiple rollup configs for various module formats and build settings. See [Optimizations](#optimizations) for details.
-
-### TypeScript
-
-`tsconfig.json` is set up to interpret `dom` and `esnext` types, as well as `react` for `jsx`. Adjust according to your needs.
-
-## Continuous integration
-
-### GitHub actions
-
-Two actions are added by default:
-
-- `main` that installs dependencies w/ cache, lints, and tests, and also builds on all pushes against a Node and OS matrix.
-- `size` that comments cost comparison of your library on every pull request using [`size-limit`](https://github.com/ai/size-limit).
-
-## Optimizations
-
-See the main `tsdx` [optimizations docs](https://github.com/palmerhq/tsdx#optimizations). In particular, know that you can take advantage of development-only optimizations:
-
-```js
-// ./types/index.d.ts
-declare var __DEV__: boolean;
-
-// inside your code...
-if (__DEV__) {
-  console.log('foo');
-}
+```typescript
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider('https://gateway.devnet.sui.io:9000/');
+const txn = await provider.getTransaction(
+  '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME='
+);
 ```
 
-You can also choose to install and use [invariant](https://github.com/palmerhq/tsdx#invariant) and [warning](https://github.com/palmerhq/tsdx#warning) functions.
+For any operations that involves signing or submitting transactions, you should use the `Signer` API. For example:
 
-## Module formats
+To transfer a Coin<SUI>:
 
-CJS, ESModules, and UMD module formats are supported.
+```typescript
+import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
+// Generate a new Keypair
+const keypair = new Ed25519Keypair();
+const signer = new RawSigner(
+  keypair,
+  new JsonRpcProvider('https://gateway.devnet.sui.io:9000/')
+);
+const txn = await signer.transferCoin({
+  signer: keypair.getPublicKey().toSuiAddress(),
+  objectId: '0x5015b016ab570df14c87649eda918e09e5cc61e0',
+  gasPayment: '0x0a8c2a0fd59bf41678b2e22c3dd2b84425fb3673',
+  gasBudget: 10000,
+  recipient: '0xBFF6CCC8707AA517B4F1B95750A2A8C666012DF3',
+});
+```
 
-The appropriate paths are configured in `package.json` and `dist/index.js` accordingly. Please report if any issues are found.
-
-## Named exports
-
-Per Palmer Group guidelines, [always use named exports.](https://github.com/palmerhq/typescript#exports) Code split inside your React app instead of your React library.
-
-## Including styles
-
-There are many ways to ship styles, including with CSS-in-JS. TSDX has no opinion on this; configure how you like.
-
-For vanilla CSS, you can include the stylesheet at the root directory and add it to the `files` section in your `package.json` so that it can be imported separately by your users and run through their bundler's loader.
-
-## Publishing to NPM
-
-We recommend using [np](https://github.com/sindresorhus/np).
+To sign a raw message:
+TODO

@@ -6,14 +6,14 @@
 /// UrlCommitment: Sui type which wraps a Url but also includes an immutable commitment
 /// to the hash of the resource at the given URL
 module Sui::Url {
-    use Std::ASCII::String;
+    use Std::ASCII::{Self, String};
     use Std::Vector;
 
     /// Length of the vector<u8> representing a resource hash
     const HASH_VECTOR_LENGTH: u64 = 32;
 
     /// Error code when the length of the hash vector is not HASH_VECTOR_LENGTH
-    const EHASH_LENGTH_MISMATCH: u64 = 0;
+    const EHashLengthMismatch: u64 = 0;
 
     /// Represents an arbitrary URL. Clients rendering values of this type should fetch the resource at `url` and render it using a to-be-defined Sui standard.
     struct Url has store, drop {
@@ -36,10 +36,17 @@ module Sui::Url {
         Url { url }
     }
 
+    /// Create a `Url` with no validation from bytes
+    /// Note: this will abort if `bytes` is not valid ASCII
+    public fun new_unsafe_from_bytes(bytes: vector<u8>): Url {
+        let url = ASCII::string(bytes);
+        Url { url }
+    }
+
     /// Create a `UrlCommitment`, and set the immutable hash
     public fun new_unsafe_url_commitment(url: Url, resource_hash: vector<u8>): UrlCommitment {
         // Length must be exact
-        assert!(Vector::length(&resource_hash) == HASH_VECTOR_LENGTH, EHASH_LENGTH_MISMATCH);
+        assert!(Vector::length(&resource_hash) == HASH_VECTOR_LENGTH, EHashLengthMismatch);
 
         UrlCommitment { url, resource_hash }
     }

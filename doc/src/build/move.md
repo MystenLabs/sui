@@ -1,5 +1,5 @@
 ---
-title: Smart Contracts with Move
+title: Quickstart Smart Contracts with Move
 ---
 
 Welcome to the Sui tutorial for building smart contracts with
@@ -37,9 +37,7 @@ In Sui, Move is used to define, create and manage programmable Sui
 imposes additional restrictions on the code that can be written in
 Move, effectively using a subset of Move (a.k.a. *Sui Move*), which
 makes certain parts of the original Move documentation not applicable
-to smart contract development in Sui (e.g., there is no concept of a
-[script](https://github.com/diem/move/blob/main/language/documentation/book/src/modules-and-scripts.md#scripts)
-in Sui Move). Consequently, it's best to simply follow this tutorial
+to smart contract development in Sui. Consequently, it's best to simply follow this tutorial
 and relevant Move documentation links provided in the tutorial.
 
 Before we look at the Move code included with Sui, let's talk briefly
@@ -126,9 +124,6 @@ file:
 
 ```
 [addresses]
-Sui = "0x2"
-
-[dev-addresses]
 Sui = "0x2"
 ```
 
@@ -241,9 +236,9 @@ must satisfy a certain set of properties.
 One of the basic operations in Sui is transfer of gas objects between
 [addresses](https://github.com/diem/move/blob/main/language/documentation/book/src/address.md)
 representing individual users. And one of the
-simplest entry functions is defined in the SUI
-[module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/SUI.move) to
-implement gas object transfer:
+simplest entry functions is defined in the
+[SUI module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/SUI.move)
+to implement gas object transfer:
 
 ```rust
 public(script) fun transfer(c: Coin::Coin<SUI>, recipient: address, _ctx: &mut TxContext) {
@@ -257,13 +252,10 @@ that it will do what it is intended to do.)
 
 In general, an entry function, must satisfy the following properties:
 
-- be public
+- have `public(script)` visibility modifier
 - have no return value
-- have parameters ordered as follows:
-  - one or more Sui objects (or vectors of objects)
-  - one or more primitive types (or vectors of such types)
-  - a mutable reference to an instance of the `TxContext` struct
-  defined in the [TxContext module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/TxContext.move)
+- have a mutable reference to an instance of the `TxContext` struct
+  defined in the [TxContext module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/TxContext.move) as the last parameter
 
 More, concretely, the `transfer` function is public, has no return
 value, and has three parameters:
@@ -283,11 +275,9 @@ wallet in [Calling Move code](wallet.md#calling-move-code).
 ## Writing a package
 
 In order to build a Move package and run code defined in
-this package, first [install Sui binaries](install.md).
-
-Then clone the repository as described in
-[Contributing to Sui](../contribute/index.md#download-and-learn-sui)
-as this tutorial assumes you have a clone of Sui's repository in your current directory.
+this package, first [install Sui binaries](install.md#binaries) and
+[clone the repository](install.md#source-code) as this tutorial assumes
+you have the Sui repository source code in your current directory.
 
 Refer to the code example developed for this tutorial in the
 [M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/tutorial/sources/M1.move) file.
@@ -318,7 +308,7 @@ described earlier.
 So from the same directory containing the `sui` repository, run:
 
 ``` shell
-mkdir -p my_move_package/sources
+$ mkdir -p my_move_package/sources
 touch my_move_package/sources/M1.move
 touch my_move_package/Move.toml
 ```
@@ -409,15 +399,12 @@ Sui = { local = "../sui/sui_programmability/framework/" }
 
 [addresses]
 MyFirstPackage = "0x0"
-
-[dev-addresses]
-MyFirstPackage = "0x0"
 ```
 
 Ensure you are in the `my_move_package` directory containing your package and build it:
 
 ``` shell
-sui-move build
+$ sui-move build
 ```
 
 A successful build yields results resembling:
@@ -446,7 +433,7 @@ upon executing the following command (in the `my_move_package`
 directory as per our running example):
 
 ``` shell
-sui-move test
+$ sui-move test
 ```
 
 If you execute this command for the package created in the
@@ -497,7 +484,7 @@ read-only reference argument.
 Now that we have written a test, let's try to run the tests again:
 
 ``` shell
-sui-move test
+$ sui-move test
 ```
 
 After running the test command, however, instead of a test result we
@@ -576,15 +563,15 @@ Test result: OK. Total tests: 1; passed: 1; failed: 0
 ```
 
 ---
-**TIPS**
-If you only want to run a subset of the unit tests, you can filter by test name using the `--filter` option. Example:
+**Tip:**
+If you want to run only a subset of the unit tests, you can filter by test name using the `--filter` option. Example:
 ```
-sui-move test --filter sword
+$ sui-move test --filter sword
 ```
 The above command will run all tests whose name contains "sword".
 You can discover more testing options through:
 ```
-sui-move test -h
+$ sui-move test -h
 ```
 
 ---
@@ -667,11 +654,13 @@ struct available for function definitions:
 
 We can now build the module extended with the new functions but still
 have only one test defined. Let us change that by adding another test
-function:
+function. Note that this function needs to have `public(script)`
+visibility modifier to be able to call other functions with the same
+modifier, such as our entry function `sword_create`.
 
 ``` rust
     #[test]
-    public fun test_sword_transactions() {
+    public(script) fun test_sword_transactions() {
         use Sui::TestScenario;
 
         let admin = @0xABBA;
@@ -688,7 +677,7 @@ function:
         TestScenario::next_tx(scenario, &initial_owner);
         {
             // extract the sword owned by the initial owner
-            let sword = TestScenario::take_object<Sword>(scenario);
+            let sword = TestScenario::take_owned<Sword>(scenario);
             // transfer the sword to the final owner
             sword_transfer(sword, final_owner, TestScenario::ctx(scenario));
         };
@@ -696,11 +685,11 @@ function:
         TestScenario::next_tx(scenario, &final_owner);
         {
             // extract the sword owned by the final owner
-            let sword = TestScenario::take_object<Sword>(scenario);
+            let sword = TestScenario::take_owned<Sword>(scenario);
             // verify that the sword has expected properties
             assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
             // return the sword to the object pool (it cannot be simply "dropped")
-            TestScenario::return_object(scenario, sword)
+            TestScenario::return_owned(scenario, sword)
         }
     }
 ```
@@ -719,7 +708,7 @@ the sword it now owns to its final owner. Please note that in *pure
 Move* we do not have the notion of Sui storage and, consequently, no
 easy way for the emulated Sui transaction to retrieve it from
 storage. This is where the `TestScenario` module comes to help - its
-`take_object` function makes an object of a given type (in this case
+`take_owned` function makes an object of a given type (in this case
 of type `Sword`) owned by an address executing the current transaction
 available for manipulation by the Move code. (For now, we assume that
 there is only one such object.) In this case, the object retrieved
@@ -738,7 +727,7 @@ by transferring the sword object to the fake address. But the
 `TestScenario` package gives us a more elegant solution, which is
 closer to what happens when Move code is actually executed in the
 context of Sui - we can simply return the sword to the object pool
-using the `TestScenario::return_object` function.
+using the `TestScenario::return_owned` function.
 
 We can now run the test command again and see that we now have two
 successful tests for our module:
@@ -878,11 +867,11 @@ We can now create a function to test the module initialization:
         TestScenario::next_tx(scenario, &admin);
         {
             // extract the Forge object
-            let forge = TestScenario::take_object<Forge>(scenario);
+            let forge = TestScenario::take_owned<Forge>(scenario);
             // verify number of created swords
             assert!(swords_created(&forge) == 0, 1);
             // return the Forge object to the object pool
-            TestScenario::return_object(scenario, forge)
+            TestScenario::return_owned(scenario, forge)
         }
     }
 

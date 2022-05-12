@@ -19,7 +19,7 @@ module Sui::ID {
     const ID_SIZE: u64 = 20;
 
     /// Attempting to construct an object ID with the wrong number of bytes--expected 20.
-    const EBAD_ID_LENGTH: u64 = 0;
+    const EBadIDLength: u64 = 0;
 
     /// Globally unique identifier of an object. This is a privileged type
     /// that can only be derived from a `TxContext`.
@@ -63,10 +63,10 @@ module Sui::ID {
     }
 
     /// Create an `ID` from raw bytes.
-    /// Aborts with `EBAD_ID_LENGTH` if the length of `bytes` is not `ID_SIZE`
+    /// Aborts with `EBadIDLength` if the length of `bytes` is not `ID_SIZE`
     public fun new_from_bytes(bytes: vector<u8>): ID {
         if (Vector::length(&bytes) != ID_SIZE) {
-            abort(EBAD_ID_LENGTH)
+            abort(EBadIDLength)
         };
         ID { bytes: bytes_to_address(bytes) }
     }

@@ -29,7 +29,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
         init_state_with_ids([sender; TOTAL].into_iter().zip(all_ids.clone().into_iter())).await;
     let mut transactions = vec![];
     for obj_id in all_ids.iter().take(N) {
-        transactions.push(SingleTransactionKind::Transfer(Transfer {
+        transactions.push(SingleTransactionKind::TransferCoin(TransferCoin {
             recipient,
             object_ref: authority_state
                 .get_object(obj_id)
@@ -47,11 +47,9 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
             module: ident_str!("ObjectBasics").to_owned(),
             function: ident_str!("create").to_owned(),
             type_arguments: vec![],
-            object_arguments: vec![],
-            shared_object_arguments: vec![],
-            pure_arguments: vec![
-                16u64.to_le_bytes().to_vec(),
-                bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
+            arguments: vec![
+                CallArg::Pure(16u64.to_le_bytes().to_vec()),
+                CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
             ],
         }));
     }
@@ -101,7 +99,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
         init_state_with_ids([sender; TOTAL].into_iter().zip(all_ids.clone().into_iter())).await;
     let mut transactions = vec![];
     for obj_id in all_ids.iter().take(N) {
-        transactions.push(SingleTransactionKind::Transfer(Transfer {
+        transactions.push(SingleTransactionKind::TransferCoin(TransferCoin {
             recipient,
             object_ref: authority_state
                 .get_object(obj_id)
@@ -118,9 +116,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
         module: ident_str!("ObjectBasics").to_owned(),
         function: ident_str!("create").to_owned(),
         type_arguments: vec![],
-        object_arguments: vec![],
-        shared_object_arguments: vec![],
-        pure_arguments: vec![],
+        arguments: vec![],
     }));
     let data = TransactionData::new(
         TransactionKind::Batch(transactions),
@@ -203,11 +199,9 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
             module: ident_str!("ObjectBasics").to_owned(),
             function: ident_str!("create").to_owned(),
             type_arguments: vec![],
-            object_arguments: vec![],
-            shared_object_arguments: vec![],
-            pure_arguments: vec![
-                16u64.to_le_bytes().to_vec(),
-                bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
+            arguments: vec![
+                CallArg::Pure(16u64.to_le_bytes().to_vec()),
+                CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
             ],
         }));
     }

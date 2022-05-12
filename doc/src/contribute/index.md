@@ -13,7 +13,7 @@ overall status of Sui, including timelines for launching devnet, testnet, and ma
 
 ## Join the community
 
-To connect with the Sui community, join our [Discord](https://discord.gg/mysten).
+To connect with the Sui community, join our [Discord](https://discord.gg/sui).
 
 ## File issues
 
@@ -34,11 +34,16 @@ Simply edit the file in question and generate a pull request. We will get back t
 In order to obtain the Sui source code, follow the steps to download (`git clone`) the `sui` repository
 at [Install Sui](../build/install.md#source-code).
 
+And see the Rust [Crates](https://doc.rust-lang.org/rust-by-example/crates.html) in use at:
+* https://mystenlabs.github.io/sui/ - the Sui blockchain
+* https://mystenlabs.github.io/narwhal/ - the Narwhal and Tusk consensus engine
+* https://mystenlabs.github.io/mysten-infra/ - Mysten Labs infrastructure
+
 ## Send pull requests
 
 Start by creating your own fork of the repo:
 ```bash
-gh fork https://github.com/mystenlabs/sui.git # or alternatively, clone your fork
+$ gh repo fork https://github.com/mystenlabs/sui.git # or alternatively, clone your fork
 cargo install --path sui/sui # put Sui CLI's in your PATH
 cd sui
 cargo build --all --all-targets # check that build works

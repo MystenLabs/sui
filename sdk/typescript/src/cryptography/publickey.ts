@@ -3,6 +3,7 @@
 
 import BN from 'bn.js';
 import { Buffer } from 'buffer';
+import { sha3_256 } from 'js-sha3';
 
 /**
  * Value to be converted into public key
@@ -47,7 +48,9 @@ export class PublicKey {
       if (typeof value === 'string') {
         const buffer = Buffer.from(value, 'base64');
         if (buffer.length !== 32) {
-          throw new Error(`Invalid public key input`);
+          throw new Error(
+            `Invalid public key input. Expected 32 bytes, got ${buffer.length}`
+          );
         }
         this._bn = new BN(buffer);
       } else {
@@ -105,7 +108,18 @@ export class PublicKey {
    * Return the Sui address associated with this public key
    */
   toSuiAddress(): string {
-    // TODO: implement this by apply sha256 hashing and take the first 20 bytes
-    throw new Error('Not implemented');
+    const hexHash = sha3_256(this.toBytes());
+    const publicKeyBytes = new BN(hexHash, 16).toArray(undefined, 32);
+    // Only take the first 20 bytes
+    const addressBytes = publicKeyBytes.slice(0, 20);
+    return toHexString(addressBytes);
   }
+}
+
+// https://stackoverflow.com/questions/34309988/byte-array-to-hex-string-conversion-in-javascript
+function toHexString(byteArray: number[]) {
+  return byteArray.reduce(
+    (output, elem) => output + ('0' + elem.toString(16)).slice(-2),
+    ''
+  );
 }

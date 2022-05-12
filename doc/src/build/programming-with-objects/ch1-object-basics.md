@@ -114,30 +114,27 @@ let not_owner = @0x2;
 // Check that @not_owner does not own the just-created ColorObject.
 TestScenario::next_tx(scenario, &not_owner);
 {
-    assert!(!TestScenario::can_take_object<ColorObject>(scenario), 0);
+    assert!(!TestScenario::can_take_owned<ColorObject>(scenario), 0);
 };
 ```
 
 `TestScenario::next_tx` switches the transaction sender to `@0x2`, which is a new address than the previous one.
-`TestScenario::can_take_object` checks whether an object with the given type actually exists in the global storage owned by the current sender of the transaction. In this code, we assert that we should not be able to remove such an object, because `@0x2` does not own any object.
+`TestScenario::can_take_owned` checks whether an object with the given type actually exists in the global storage owned by the current sender of the transaction. In this code, we assert that we should not be able to remove such an object, because `@0x2` does not own any object.
 > :bulb: The second parameter of `assert!` is the error code. In non-test code, we usually define a list of dedicated error code constants for each type of error that could happen in production. For unit tests though, it's usually unnecessary because there will be way too many assetions and the stacktrace upon error is sufficient to tell where the error happened. Hence we recommend just putting `0` there in unit tests for assertions.
 
 Finally we check that `@0x1` owns the object and the object value is consistent:
 ```rust
 TestScenario::next_tx(scenario, &owner);
 {
-    let object = TestScenario::take_object<ColorObject>(scenario);
+    let object = TestScenario::take_owned<ColorObject>(scenario);
     let (red, green, blue) = ColorObject::get_color(&object);
     assert!(red == 255 && green == 0 && blue == 255, 0);
-    TestScenario::return_object(scenario, object);
+    TestScenario::return_owned(scenario, object);
 };
 ```
 
-`TestScenario::take_object` removes the object of given type from global storage that's owned by the current transaction sender (it also implicitly checks `can_take_object`). If this line of code succeeds, it means that `owner` indeed owns an object of type `ColorObject`.
-We also check that the field values of the object match with what we set in creation. At the end, we must return the object back to the global storage by calling `TestScenario::return_object` so that it's back to the global storage. This also ensures that if any mutations happened to the object during the test, the global storage is aware of the changes.
-You may have noticed that `take_object` picks the object only based on the type parameter. What if there are multiple objects of the same type owned by the account? How do we retrieve each of them? In fact, if you call `take_object` when there are more than one object of the same type in the same account, an assertion failure will be triggered. We are working on adding an API just for this. Update coming soon.
-
-You may have noticed that `take_object` picks the object based solely on the type parameter. What if there are multiple objects of the same type owned by the account? How do we retrieve each of them? In fact, if you call `take_object` when there are more than one object of the same type in the same account, an assertion failure will be triggered. We are working on adding an API just for this. Update coming soon.
+`TestScenario::take_owned` removes the object of given type from global storage that's owned by the current transaction sender (it also implicitly checks `can_take_owned`). If this line of code succeeds, it means that `owner` indeed owns an object of type `ColorObject`.
+We also check that the field values of the object match with what we set in creation. At the end, we must return the object back to the global storage by calling `TestScenario::return_owned` so that it's back to the global storage. This also ensures that if any mutations happened to the object during the test, the global storage is aware of the changes.
 
 Again, you can find the full code in [ColorObject.move](../../../../sui_programmability/examples/objects_tutorial/sources/ColorObject.move).
 
@@ -162,11 +159,11 @@ $ wallet publish --path $ROOT/sui_programmability/examples/objects_tutorial --ga
 You can find the published package object ID in the **Publish Results** output:
 ```
 ----- Publish Results ----
-The newly published package object: (57258F32746FD1443F2A077C0C6EC03282087C19, SequenceNumber(1), o#b3a8e284dea7482891768e166e4cd16f9749e0fa90eeb0834189016c42327401)
+The newly published package object: (0x57258f32746fd1443f2a077c0c6ec03282087c19, SequenceNumber(1), o#b3a8e284dea7482891768e166e4cd16f9749e0fa90eeb0834189016c42327401)
 ```
-Note that the exact data you see will be different. The first hex string in that triple is the package object ID (`57258F32746FD1443F2A077C0C6EC03282087C19` in this case). For convenience, let's save it to an environment variable:
+Note that the exact data you see will be different. The first hex string in that triple is the package object ID (`0x57258f32746fd1443f2a077c0c6ec03282087c19` in this case). For convenience, let's save it to an environment variable:
 ```
-$ export PACKAGE=57258F32746FD1443F2A077C0C6EC03282087C19
+$ export PACKAGE=0x57258f32746fd1443f2a077c0c6ec03282087c19
 ```
 Next we can call the function to create a color object:
 ```
@@ -176,11 +173,11 @@ In the **Transaction Effects** portion of the output, you will see an object sho
 
 ```
 Created Objects:
-5EB2C3E55693282FAA7F5B07CE1C4803E6FDC1BB SequenceNumber(1) o#691b417670979c6c192bdfd643630a125961c71c841a6c7d973cf9429c792efa
+0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb SequenceNumber(1) o#691b417670979c6c192bdfd643630a125961c71c841a6c7d973cf9429c792efa
 ```
 Again, for convenience, let's save the object ID:
 ```
-$ export OBJECT=5EB2C3E55693282FAA7F5B07CE1C4803E6FDC1BB
+$ export OBJECT=0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb
 ```
 We can inspect this object and see what kind of object it is:
 ```
@@ -190,7 +187,7 @@ This will show you the metadata of the object with its type:
 ```
 Owner: AddressOwner(k#5db53ebb05fd3ea5f1d163d9d487ee8cd7b591ee)
 Version: 1
-ID: 5EB2C3E55693282FAA7F5B07CE1C4803E6FDC1BB
+ID: 0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb
 Readonly: false
 Type: 0x57258f32746fd1443f2a077c0c6ec03282087c19::ColorObject
 ```

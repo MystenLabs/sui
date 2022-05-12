@@ -1,50 +1,71 @@
-# SuiExplorer Client
+# Sui Explorer Frontend
+
+[Sui Explorer](https://explorer.devnet.sui.io/) is a network explorer for the Sui network, similar in functionality to [Etherscan](https://etherscan.io/) or [Solana Explorer](https://explorer.solana.com/). Use Sui Explorer to see the latest transactions and objects.
 
 # Set Up
 
-**Requirements**: Node 14.0.0 or later version
+**Requirements**: Node 14.0.0 or later.
 
-In the project directory, run:
+Currently the Explorer depends on an unreleased version of `sui.js`, the TypeScript SDK for Sui. Therefore, you need to build the SDK first:
 
-### `yarn install`
+```bash
+$ cd <Your Sui Repository>/sdk/typescript
+$ yarn && yarn build
+```
 
-Before running any of the following scripts `yarn install` must run in order to install the necessary dependencies.
+Then, in the project directory, run:
+
+```bash
+$ yarn
+```
+
+> **Note:** If you are updating the SDK and Explorer at the same time, you need to run the following commands to make sure the Explorer depends on the updated SDK.
+
+```bash
+$ cd <Your Sui Repository>/sdk/typescript
+$ yarn build
+
+$ cd ../../explorer/client
+$ rm -rf node_modules/ && yarn
+```
+
+Before running any of the following scripts `yarn` must run in order to install the necessary dependencies.
 
 # How to Switch Environment
 
-The purpose of the SuiExplorer Client is to present data extracted from a real or theoretical Sui Network.
+## Connecting to Remote Gateway server(e.g., DevNet)
 
-What the 'Sui Network' is varies according to the environment variable `REACT_APP_DATA`.
-
-When running most of the below yarn commands, the SuiExplorer Client will extract and present data from the Sui Network connected to the URL https://demo-rpc.sui.io.
-
-If the environment variable `REACT_APP_DATA` is set to `static`, then the SuiExplorer will instead pull data from a local, static JSON dataset that can be found at `./src/utils/static/mock_data.json`.
-
-For example, suppose we wish to locally run the website using the static JSON dataset and not the API, then we would run the following:
+The Sui Explorer frontend will use the DevNet Gateway server by default: https://explorer.devnet.sui.io
 
 ```bash
-REACT_APP_DATA=static yarn start
+yarn start
+
 ```
 
-Note that the command `yarn test` is the exception. Here the SuiExplorer will instead use the static JSON dataset. The tests have been written to specifically check the UI and not the API connection.
+## Connecting to local RPC server
 
-## Yarn Commands and what they do
+Refer to [Local RPC Server & JSON-RPC API Quick Start](../../doc/src/build/json-rpc.md) on setting up a local RPC Server
 
-### `yarn start`
+```bash
+yarn start:local
 
-Runs the app in the development mode.
+```
 
-Open http://localhost:3000 to view it in the browser.
+## Connecting to static data
 
-The page will reload if you make edits. You will also see any lint errors in the console.
+The Sui Explorer can also connect to a local, static JSON dataset that can be found at `./src/utils/static/mock_data.json`.
 
-### `yarn start:dev`
+For example, suppose we wish to locally run the website using the static JSON dataset and not the API, then we could run the following:
 
-Same as `yarn start` but runs `prettier:fix:watch` to format the files.
+```bash
+yarn start:static
+```
+
+# Other Yarn commands
 
 ### `yarn test`
 
-Launches the test runner in the interactive watch mode.
+This runs a series of end-to-end browser tests using the website as connected to the static JSON dataset. This command is run by the GitHub checks. The tests must pass before merging a branch into main.
 
 ### `yarn build`
 
@@ -60,13 +81,14 @@ Run linting check (prettier/eslint/stylelint).
 
 Run linting check but also try to fix any issues.
 
-### `yarn prettier:fix:watch`
+# Features
 
-Run prettier in watch mode and format any file that changes. (Also runs prettier once in the beginning for all the files)\
-It can be useful during development to format automatically all the files that change.
+Currently the Explorer supports
 
-## Deployment
+-   Landing page with latest transactions
+-   Transaction details page
+-   Object details page
+-   Address page with owned objects
+-   Search for transactions, addresses, and Objects by ID
 
-For guidance on deployment, plese see here: https://create-react-app.dev/docs/deployment/
-
-Because of the addition of `react-router`, further changes will be needed that depend on the exact infrastructure used. Please consult section **Serving Apps with Client-Side Routing**.
+See [Experiment with Sui DevNet](https://docs.sui.io/explore/devnet) for use.

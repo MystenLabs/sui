@@ -17,8 +17,11 @@ function Search() {
     const handleSubmit = useCallback(
         (e: React.FormEvent<HTMLFormElement>) => {
             e.preventDefault();
+            // Prevent empty search
+            if (!input.length) return;
             setPleaseWaitMode(true);
-            navigateWithUnknown(input, navigate).then(() => {
+            // remove empty char from input
+            navigateWithUnknown(input.trim(), navigate).then(() => {
                 setInput('');
                 setPleaseWaitMode(false);
             });
@@ -40,7 +43,7 @@ function Search() {
         >
             <input
                 className={styles.searchtext}
-                id="search"
+                id="searchText"
                 placeholder="Search by ID"
                 value={input}
                 onChange={handleTextChange}
@@ -48,6 +51,7 @@ function Search() {
             />
             <input
                 type="submit"
+                id="searchBtn"
                 value={pleaseWaitMode ? 'Please Wait' : 'Search'}
                 disabled={pleaseWaitMode}
                 className={`${styles.searchbtn} ${

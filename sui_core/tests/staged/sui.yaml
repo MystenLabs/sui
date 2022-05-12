@@ -4,20 +4,6 @@ AccountAddress:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 20
-AccountInfoRequest:
-  STRUCT:
-    - account:
-        TYPENAME: SuiAddress
-AccountInfoResponse:
-  STRUCT:
-    - object_ids:
-        SEQ:
-          TUPLE:
-            - TYPENAME: ObjectID
-            - TYPENAME: SequenceNumber
-            - TYPENAME: ObjectDigest
-    - owner:
-        TYPENAME: SuiAddress
 AuthorityBatch:
   STRUCT:
     - next_sequence_number: U64
@@ -32,112 +18,28 @@ AuthorityBatch:
         TUPLEARRAY:
           CONTENT: U8
           SIZE: 32
-AuthoritySignInfo:
-  STRUCT:
-    - authority:
-        TYPENAME: PublicKeyBytes
-    - signature:
-        TYPENAME: AuthoritySignature
 AuthoritySignature:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 64
-BatchInfoRequest:
-  STRUCT:
-    - start: U64
-    - end: U64
-BatchInfoResponseItem:
-  NEWTYPESTRUCT:
-    TYPENAME: UpdateItem
-CallResult:
+CallArg:
   ENUM:
     0:
-      Bool:
-        NEWTYPE: BOOL
-    1:
-      U8:
-        NEWTYPE: U8
-    2:
-      U64:
-        NEWTYPE: U64
-    3:
-      U128:
-        NEWTYPE: U128
-    4:
-      Address:
-        NEWTYPE:
-          TYPENAME: AccountAddress
-    5:
-      BoolVec:
-        NEWTYPE:
-          SEQ: BOOL
-    6:
-      U8Vec:
+      Pure:
         NEWTYPE:
           SEQ: U8
-    7:
-      U64Vec:
+    1:
+      ImmOrOwnedObject:
         NEWTYPE:
-          SEQ: U64
-    8:
-      U128Vec:
-        NEWTYPE:
-          SEQ: U128
-    9:
-      AddrVec:
-        NEWTYPE:
-          SEQ:
-            TYPENAME: AccountAddress
-    10:
-      BoolVecVec:
-        NEWTYPE:
-          SEQ: BOOL
-    11:
-      U8VecVec:
-        NEWTYPE:
-          SEQ:
-            SEQ: U8
-    12:
-      U64VecVec:
-        NEWTYPE:
-          SEQ:
-            SEQ: U64
-    13:
-      U128VecVec:
-        NEWTYPE:
-          SEQ:
-            SEQ: U128
-    14:
-      AddrVecVec:
-        NEWTYPE:
-          SEQ:
-            SEQ:
-              TYPENAME: AccountAddress
-CertifiedTransaction:
-  STRUCT:
-    - transaction:
-        TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::EmptySignInfo>"
-    - signatures:
-        SEQ:
           TUPLE:
-            - TYPENAME: PublicKeyBytes
-            - TYPENAME: AuthoritySignature
-ConsensusOutput:
-  STRUCT:
-    - message: BYTES
-    - sequence_number:
-        TYPENAME: SequenceNumber
-ConsensusSync:
-  STRUCT:
-    - sequence_number:
-        TYPENAME: SequenceNumber
-ConsensusTransaction:
-  ENUM:
-    0:
-      UserTransaction:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    2:
+      SharedObject:
         NEWTYPE:
-          TYPENAME: CertifiedTransaction
+          TYPENAME: ObjectID
 Data:
   ENUM:
     0:
@@ -148,13 +50,6 @@ Data:
       Package:
         NEWTYPE:
           TYPENAME: MovePackage
-EmptySignInfo:
-  STRUCT: []
-Event:
-  STRUCT:
-    - type_:
-        TYPENAME: StructTag
-    - contents: BYTES
 ExecutionStatus:
   ENUM:
     0:
@@ -162,9 +57,6 @@ ExecutionStatus:
         STRUCT:
           - gas_cost:
               TYPENAME: GasCostSummary
-          - results:
-              SEQ:
-                TYPENAME: CallResult
     1:
       Failure:
         STRUCT:
@@ -193,18 +85,9 @@ MoveCall:
     - type_arguments:
         SEQ:
           TYPENAME: TypeTag
-    - object_arguments:
+    - arguments:
         SEQ:
-          TUPLE:
-            - TYPENAME: ObjectID
-            - TYPENAME: SequenceNumber
-            - TYPENAME: ObjectDigest
-    - shared_object_arguments:
-        SEQ:
-          TYPENAME: ObjectID
-    - pure_arguments:
-        SEQ:
-          SEQ: U8
+          TYPENAME: CallArg
 MoveFieldLayout:
   STRUCT:
     - name:
@@ -270,15 +153,6 @@ MoveTypeLayout:
           TYPENAME: MoveStructLayout
     7:
       signer: UNIT
-Object:
-  STRUCT:
-    - data:
-        TYPENAME: Data
-    - owner:
-        TYPENAME: Owner
-    - previous_transaction:
-        TYPENAME: TransactionDigest
-    - storage_rebate: U64
 ObjectDigest:
   NEWTYPESTRUCT: BYTES
 ObjectFormatOptions:
@@ -287,12 +161,6 @@ ObjectFormatOptions:
 ObjectID:
   NEWTYPESTRUCT:
     TYPENAME: AccountAddress
-ObjectInfoRequest:
-  STRUCT:
-    - object_id:
-        TYPENAME: ObjectID
-    - request_kind:
-        TYPENAME: ObjectInfoRequestKind
 ObjectInfoRequestKind:
   ENUM:
     0:
@@ -304,30 +172,6 @@ ObjectInfoRequestKind:
       PastObjectInfo:
         NEWTYPE:
           TYPENAME: SequenceNumber
-ObjectInfoResponse:
-  STRUCT:
-    - parent_certificate:
-        OPTION:
-          TYPENAME: CertifiedTransaction
-    - requested_object_reference:
-        OPTION:
-          TUPLE:
-            - TYPENAME: ObjectID
-            - TYPENAME: SequenceNumber
-            - TYPENAME: ObjectDigest
-    - object_and_lock:
-        OPTION:
-          TYPENAME: ObjectResponse
-ObjectResponse:
-  STRUCT:
-    - object:
-        TYPENAME: Object
-    - lock:
-        OPTION:
-          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthoritySignInfo>"
-    - layout:
-        OPTION:
-          TYPENAME: MoveStructLayout
 Owner:
   ENUM:
     0:
@@ -346,68 +190,6 @@ PublicKeyBytes:
   NEWTYPESTRUCT: BYTES
 SequenceNumber:
   NEWTYPESTRUCT: U64
-SerializedMessage:
-  ENUM:
-    0:
-      Transaction:
-        NEWTYPE:
-          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::EmptySignInfo>"
-    1:
-      Vote:
-        NEWTYPE:
-          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthoritySignInfo>"
-    2:
-      Cert:
-        NEWTYPE:
-          TYPENAME: CertifiedTransaction
-    3:
-      Error:
-        NEWTYPE:
-          TYPENAME: SuiError
-    4:
-      AccountInfoReq:
-        NEWTYPE:
-          TYPENAME: AccountInfoRequest
-    5:
-      AccountInfoResp:
-        NEWTYPE:
-          TYPENAME: AccountInfoResponse
-    6:
-      ObjectInfoReq:
-        NEWTYPE:
-          TYPENAME: ObjectInfoRequest
-    7:
-      ObjectInfoResp:
-        NEWTYPE:
-          TYPENAME: ObjectInfoResponse
-    8:
-      TransactionResp:
-        NEWTYPE:
-          TYPENAME: TransactionInfoResponse
-    9:
-      TransactionInfoReq:
-        NEWTYPE:
-          TYPENAME: TransactionInfoRequest
-    10:
-      BatchInfoReq:
-        NEWTYPE:
-          TYPENAME: BatchInfoRequest
-    11:
-      BatchInfoResp:
-        NEWTYPE:
-          TYPENAME: BatchInfoResponseItem
-    12:
-      ConsensusOutput:
-        NEWTYPE:
-          TYPENAME: ConsensusOutput
-    13:
-      ConsensusSync:
-        NEWTYPE:
-          TYPENAME: ConsensusSync
-    14:
-      ConsensusTransaction:
-        NEWTYPE:
-          TYPENAME: ConsensusTransaction
 Signature:
   NEWTYPESTRUCT: BYTES
 SignedBatch:
@@ -421,9 +203,9 @@ SignedBatch:
 SingleTransactionKind:
   ENUM:
     0:
-      Transfer:
+      TransferCoin:
         NEWTYPE:
-          TYPENAME: Transfer
+          TYPENAME: TransferCoin
     1:
       Publish:
         NEWTYPE:
@@ -495,8 +277,12 @@ SuiError:
     13:
       UnknownSigner: UNIT
     14:
-      CertificateRequiresQuorum: UNIT
+      WrongEpoch:
+        STRUCT:
+          - expected_epoch: U64
     15:
+      CertificateRequiresQuorum: UNIT
+    16:
       UnexpectedSequenceNumber:
         STRUCT:
           - object_id:
@@ -505,203 +291,213 @@ SuiError:
               TYPENAME: SequenceNumber
           - given_sequence:
               TYPENAME: SequenceNumber
-    16:
+    17:
       ConflictingTransaction:
         STRUCT:
           - pending_transaction:
               TYPENAME: TransactionDigest
-    17:
-      ErrorWhileProcessingTransaction: UNIT
     18:
+      ErrorWhileProcessingTransaction: UNIT
+    19:
       ErrorWhileProcessingTransactionTransaction:
         STRUCT:
           - err: STR
-    19:
+    20:
       ErrorWhileProcessingConfirmationTransaction:
         STRUCT:
           - err: STR
-    20:
-      ErrorWhileRequestingCertificate: UNIT
     21:
+      ErrorWhileRequestingCertificate: UNIT
+    22:
       ErrorWhileProcessingPublish:
         STRUCT:
           - err: STR
-    22:
+    23:
       ErrorWhileProcessingMoveCall:
         STRUCT:
           - err: STR
-    23:
-      ErrorWhileRequestingInformation: UNIT
     24:
+      ErrorWhileRequestingInformation: UNIT
+    25:
       ObjectFetchFailed:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - err: STR
-    25:
+    26:
       MissingEarlierConfirmations:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - current_sequence_number:
               TYPENAME: SequenceNumber
-    26:
-      UnexpectedTransactionIndex: UNIT
     27:
-      ConcurrentIteratorError: UNIT
+      UnexpectedTransactionIndex: UNIT
     28:
-      ClosedNotifierError: UNIT
+      ConcurrentIteratorError: UNIT
     29:
+      ClosedNotifierError: UNIT
+    30:
       CertificateNotfound:
         STRUCT:
           - certificate_digest:
               TYPENAME: TransactionDigest
-    30:
+    31:
       ParentNotfound:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - sequence:
               TYPENAME: SequenceNumber
-    31:
-      UnknownSenderAccount: UNIT
     32:
-      CertificateAuthorityReuse: UNIT
+      UnknownSenderAccount: UNIT
     33:
-      InvalidSequenceNumber: UNIT
+      CertificateAuthorityReuse: UNIT
     34:
-      SequenceOverflow: UNIT
+      InvalidSequenceNumber: UNIT
     35:
-      SequenceUnderflow: UNIT
+      SequenceOverflow: UNIT
     36:
-      WrongShard: UNIT
+      SequenceUnderflow: UNIT
     37:
-      InvalidCrossShardUpdate: UNIT
+      WrongShard: UNIT
     38:
-      InvalidAuthenticator: UNIT
+      InvalidCrossShardUpdate: UNIT
     39:
-      InvalidAddress: UNIT
+      InvalidAuthenticator: UNIT
     40:
-      InvalidTransactionDigest: UNIT
+      InvalidAddress: UNIT
     41:
+      InvalidTransactionDigest: UNIT
+    42:
       InvalidObjectDigest:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - expected_digest:
               TYPENAME: ObjectDigest
-    42:
-      InvalidDecoding: UNIT
     43:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     44:
-      DuplicateObjectRefInput: UNIT
+      UnexpectedMessage: UNIT
     45:
+      DuplicateObjectRefInput: UNIT
+    46:
       ClientIoError:
         STRUCT:
           - error: STR
-    46:
-      TransferImmutableError: UNIT
     47:
+      TransferImmutableError: UNIT
+    48:
       TooManyItemsError:
         NEWTYPE: U64
-    48:
-      InvalidSequenceRangeError: UNIT
     49:
-      NoBatchesFoundError: UNIT
+      InvalidSequenceRangeError: UNIT
     50:
-      CannotSendClientMessageError: UNIT
+      NoBatchesFoundError: UNIT
     51:
+      CannotSendClientMessageError: UNIT
+    52:
       SubscriptionItemsDroppedError:
         NEWTYPE: U64
-    52:
-      SubscriptionServiceClosed: UNIT
     53:
+      SubscriptionServiceClosed: UNIT
+    54:
       ModuleLoadFailure:
         STRUCT:
           - error: STR
-    54:
+    55:
       ModuleVerificationFailure:
         STRUCT:
           - error: STR
-    55:
+    56:
       ModuleDeserializationFailure:
         STRUCT:
           - error: STR
-    56:
+    57:
       ModulePublishFailure:
         STRUCT:
           - error: STR
-    57:
+    58:
       ModuleBuildFailure:
         STRUCT:
           - error: STR
-    58:
+    59:
       DependentPackageNotFound:
         STRUCT:
           - package_id:
               TYPENAME: ObjectID
-    59:
+    60:
       MoveUnitTestFailure:
         STRUCT:
           - error: STR
-    60:
+    61:
       FunctionNotFound:
         STRUCT:
           - error: STR
-    61:
+    62:
       ModuleNotFound:
         STRUCT:
           - module_name: STR
-    62:
+    63:
       InvalidFunctionSignature:
         STRUCT:
           - error: STR
-    63:
+    64:
       TypeError:
         STRUCT:
           - error: STR
-    64:
+    65:
       AbortedExecution:
         STRUCT:
           - error: STR
-    65:
+    66:
       InvalidMoveEvent:
         STRUCT:
           - error: STR
-    66:
-      CircularObjectOwnership: UNIT
     67:
+      CircularObjectOwnership: UNIT
+    68:
+      InvalidSharedChildUse:
+        STRUCT:
+          - child:
+              TYPENAME: ObjectID
+          - child_module: STR
+          - ancestor:
+              TYPENAME: ObjectID
+          - ancestor_module: STR
+          - current_module: STR
+    69:
       GasBudgetTooHigh:
         STRUCT:
           - error: STR
-    68:
+    70:
       InsufficientGas:
         STRUCT:
           - error: STR
-    69:
+    71:
       InvalidTxUpdate: UNIT
-    70:
+    72:
       TransactionLockExists:
         STRUCT:
           - refs:
             SEQ:
               TYPENAME: ObjectRef
-    71:
-      TransactionLockDoesNotExist: UNIT
-    72:
-      TransactionLockReset: UNIT
     73:
+      TransactionLockDoesNotExist: UNIT
+    74:
+      TransactionLockReset: UNIT
+    75:
       TransactionNotFound:
         STRUCT:
           - digest:
               TYPENAME: TransactionDigest
-    74:
+    76:
       ObjectNotFound:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
-    75:
+    77:
       ObjectDeleted:
         STRUCT:
           - object_ref:
@@ -709,26 +505,26 @@ SuiError:
                 - TYPENAME: ObjectID
                 - TYPENAME: SequenceNumber
                 - TYPENAME: ObjectDigest
-    76:
+    78:
       BadObjectType:
         STRUCT:
           - error: STR
-    77:
-      MoveExecutionFailure: UNIT
-    78:
-      ObjectInputArityViolation: UNIT
     79:
-      ExecutionInvariantViolation: UNIT
+      MoveExecutionFailure: UNIT
     80:
-      AuthorityInformationUnavailable: UNIT
+      ObjectInputArityViolation: UNIT
     81:
-      AuthorityUpdateFailure: UNIT
+      ExecutionInvariantViolation: UNIT
     82:
+      AuthorityInformationUnavailable: UNIT
+    83:
+      AuthorityUpdateFailure: UNIT
+    84:
       ByzantineAuthoritySuspicion:
         STRUCT:
           - authority:
               TYPENAME: PublicKeyBytes
-    83:
+    85:
       PairwiseSyncFailed:
         STRUCT:
           - xsource:
@@ -739,31 +535,31 @@ SuiError:
               TYPENAME: TransactionDigest
           - error:
               TYPENAME: SuiError
-    84:
+    86:
       StorageError:
         NEWTYPE:
           TYPENAME: TypedStoreError
-    85:
+    87:
       BatchErrorSender: UNIT
-    86:
+    88:
       GenericAuthorityError:
         STRUCT:
           - error: STR
-    87:
+    89:
       QuorumNotReached:
         STRUCT:
           - errors:
               SEQ:
                 TYPENAME: SuiError
-    88:
+    90:
       ObjectSerializationError:
         STRUCT:
           - error: STR
-    89:
-      ConcurrentTransactionError: UNIT
-    90:
-      IncorrectRecipientError: UNIT
     91:
+      ConcurrentTransactionError: UNIT
+    92:
+      IncorrectRecipientError: UNIT
+    93:
       TooManyIncorrectAuthorities:
         STRUCT:
           - errors:
@@ -771,112 +567,38 @@ SuiError:
                 TUPLE:
                   - TYPENAME: PublicKeyBytes
                   - TYPENAME: SuiError
-    92:
+    94:
       InconsistentGatewayResult:
         STRUCT:
           - error: STR
-    93:
+    95:
       GatewayInvalidTxRangeQuery:
         STRUCT:
           - error: STR
-    94:
+    96:
       OnlyOneConsensusClientPermitted: UNIT
-    95:
+    97:
       ConsensusConnectionBroken:
         NEWTYPE: STR
-    96:
+    98:
       SharedObjectLockingFailure:
         NEWTYPE: STR
-TransactionData:
-  STRUCT:
-    - kind:
-        TYPENAME: TransactionKind
-    - sender:
-        TYPENAME: SuiAddress
-    - gas_payment:
-        TUPLE:
-          - TYPENAME: ObjectID
-          - TYPENAME: SequenceNumber
-          - TYPENAME: ObjectDigest
-    - gas_budget: U64
+    99:
+      ListenerCapacityExceeded: UNIT
+    100:
+      SignatureSeedInvalidLength:
+        NEWTYPE: U64
+    101:
+      HkdfError:
+        NEWTYPE: STR
+    102:
+      SignatureKeyGenError:
+        NEWTYPE: STR
+    103:
+      RpcError:
+        NEWTYPE: STR
 TransactionDigest:
   NEWTYPESTRUCT: BYTES
-TransactionEffects:
-  STRUCT:
-    - status:
-        TYPENAME: ExecutionStatus
-    - transaction_digest:
-        TYPENAME: TransactionDigest
-    - created:
-        SEQ:
-          TUPLE:
-            - TUPLE:
-                - TYPENAME: ObjectID
-                - TYPENAME: SequenceNumber
-                - TYPENAME: ObjectDigest
-            - TYPENAME: Owner
-    - mutated:
-        SEQ:
-          TUPLE:
-            - TUPLE:
-                - TYPENAME: ObjectID
-                - TYPENAME: SequenceNumber
-                - TYPENAME: ObjectDigest
-            - TYPENAME: Owner
-    - unwrapped:
-        SEQ:
-          TUPLE:
-            - TUPLE:
-                - TYPENAME: ObjectID
-                - TYPENAME: SequenceNumber
-                - TYPENAME: ObjectDigest
-            - TYPENAME: Owner
-    - deleted:
-        SEQ:
-          TUPLE:
-            - TYPENAME: ObjectID
-            - TYPENAME: SequenceNumber
-            - TYPENAME: ObjectDigest
-    - wrapped:
-        SEQ:
-          TUPLE:
-            - TYPENAME: ObjectID
-            - TYPENAME: SequenceNumber
-            - TYPENAME: ObjectDigest
-    - gas_object:
-        TUPLE:
-          - TUPLE:
-              - TYPENAME: ObjectID
-              - TYPENAME: SequenceNumber
-              - TYPENAME: ObjectDigest
-          - TYPENAME: Owner
-    - events:
-        SEQ:
-          TYPENAME: Event
-    - dependencies:
-        SEQ:
-          TYPENAME: TransactionDigest
-TransactionEffectsEnvelope:
-  STRUCT:
-    - effects:
-        TYPENAME: TransactionEffects
-    - auth_signature:
-        TYPENAME: AuthoritySignInfo
-TransactionInfoRequest:
-  STRUCT:
-    - transaction_digest:
-        TYPENAME: TransactionDigest
-TransactionInfoResponse:
-  STRUCT:
-    - signed_transaction:
-        OPTION:
-          TYPENAME: "sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthoritySignInfo>"
-    - certified_transaction:
-        OPTION:
-          TYPENAME: CertifiedTransaction
-    - signed_effects:
-        OPTION:
-          TYPENAME: TransactionEffectsEnvelope
 TransactionKind:
   ENUM:
     0:
@@ -888,7 +610,7 @@ TransactionKind:
         NEWTYPE:
           SEQ:
             TYPENAME: SingleTransactionKind
-Transfer:
+TransferCoin:
   STRUCT:
     - recipient:
         TYPENAME: SuiAddress
@@ -944,20 +666,4 @@ UpdateItem:
       Batch:
         NEWTYPE:
           TYPENAME: SignedBatch
-"sui_types::messages::TransactionEnvelope<sui_types::crypto::AuthoritySignInfo>":
-  STRUCT:
-    - data:
-        TYPENAME: TransactionData
-    - tx_signature:
-        TYPENAME: Signature
-    - auth_signature:
-        TYPENAME: AuthoritySignInfo
-"sui_types::messages::TransactionEnvelope<sui_types::crypto::EmptySignInfo>":
-  STRUCT:
-    - data:
-        TYPENAME: TransactionData
-    - tx_signature:
-        TYPENAME: Signature
-    - auth_signature:
-        TYPENAME: EmptySignInfo
 
