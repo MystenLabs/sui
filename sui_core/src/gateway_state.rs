@@ -13,14 +13,9 @@ use async_trait::async_trait;
 use futures::future;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
-use once_cell::sync::Lazy;
-use prometheus_exporter::prometheus::{
-    register_histogram, register_int_counter, Histogram, IntCounter,
-};
+use sui_adapter::adapter::resolve_and_type_check;
 use tracing::{debug, error, Instrument};
 
-use sui_adapter::adapter::resolve_and_type_check;
-use sui_types::gas_coin::GasCoin;
 use sui_types::{
     base_types::*,
     coin,
@@ -57,116 +52,6 @@ const MAX_TX_RANGE_SIZE: u64 = 4096;
 /// Number of times to retry failed TX
 const MAX_NUM_TX_RETRIES: usize = 5;
 
-/// Prometheus metrics which can be displayed in Grafana, queried and alerted on
-pub struct GatewayMetrics {
-    total_tx_processed: IntCounter,
-    total_tx_errored: IntCounter,
-    num_tx_publish: IntCounter,
-    num_tx_movecall: IntCounter,
-    num_tx_splitcoin: IntCounter,
-    num_tx_mergecoin: IntCounter,
-    total_tx_retries: IntCounter,
-    shared_obj_tx: IntCounter,
-    pub total_tx_certificates: IntCounter,
-    pub num_signatures: Histogram,
-    pub num_good_stake: Histogram,
-    pub num_bad_stake: Histogram,
-    pub transaction_latency: Histogram,
-}
-
-// Override default Prom buckets for positive numbers in 0-50k range
-const POSITIVE_INT_BUCKETS: &[f64] = &[
-    1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
-];
-
-impl GatewayMetrics {
-    pub fn new() -> GatewayMetrics {
-        Self {
-            total_tx_processed: register_int_counter!(
-                "total_tx_processed",
-                "Total number of transaction certificates processed in Gateway"
-            )
-            .unwrap(),
-            total_tx_errored: register_int_counter!(
-                "total_tx_errored",
-                "Total number of transactions which errored out"
-            )
-            .unwrap(),
-            // total_effects == total transactions finished
-            num_tx_publish: register_int_counter!(
-                "num_tx_publish",
-                "Number of publish transactions",
-            )
-            .unwrap(),
-            num_tx_movecall: register_int_counter!(
-                "num_tx_movecall",
-                "Number of MOVE call transactions",
-            )
-            .unwrap(),
-            num_tx_splitcoin: register_int_counter!(
-                "num_tx_splitcoin",
-                "Number of split coin transactions",
-            )
-            .unwrap(),
-            num_tx_mergecoin: register_int_counter!(
-                "num_tx_mergecoin",
-                "Number of merge coin transactions",
-            )
-            .unwrap(),
-            total_tx_certificates: register_int_counter!(
-                "total_tx_certificates",
-                "Total number of certificates made from validators",
-            )
-            .unwrap(),
-            total_tx_retries: register_int_counter!(
-                "total_tx_retries",
-                "Total number of retries for transactions",
-            )
-            .unwrap(),
-            shared_obj_tx: register_int_counter!(
-                "gateway_shared_obj_tx",
-                "Number of transactions involving shared objects"
-            )
-            .unwrap(),
-            // It's really important to use the right histogram buckets for accurate histogram collection.
-            // Otherwise values get clipped
-            num_signatures: register_histogram!(
-                "num_signatures_per_tx",
-                "Number of signatures collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec()
-            )
-            .unwrap(),
-            num_good_stake: register_histogram!(
-                "num_good_stake_per_tx",
-                "Amount of good stake collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec()
-            )
-            .unwrap(),
-            num_bad_stake: register_histogram!(
-                "num_bad_stake_per_tx",
-                "Amount of bad stake collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec()
-            )
-            .unwrap(),
-            transaction_latency: register_histogram!(
-                "transaction_latency",
-                "Latency of execute_transaction_impl"
-            )
-            .unwrap(),
-        }
-    }
-}
-
-impl Default for GatewayMetrics {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-// One cannot register a metric multiple times.  We protect initialization with lazy_static
-// for cases such as local tests or "sui start" which starts multiple authorities in one process.
-pub static METRICS: Lazy<GatewayMetrics> = Lazy::new(GatewayMetrics::new);
-
 pub struct GatewayState<A> {
     authorities: AuthorityAggregator<A>,
     store: Arc<GatewayStore>,
@@ -176,7 +61,6 @@ pub struct GatewayState<A> {
     /// It's useful if we need some kind of ordering for transactions
     /// from a gateway.
     next_tx_seq_number: AtomicU64,
-    metrics: &'static GatewayMetrics,
 }
 
 impl<A> GatewayState<A> {
@@ -199,7 +83,6 @@ impl<A> GatewayState<A> {
             store,
             authorities,
             next_tx_seq_number,
-            metrics: &METRICS,
         })
     }
 
@@ -238,7 +121,7 @@ pub trait GatewayAPI {
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
-        gas: Option<ObjectID>,
+        gas_payment: ObjectID,
         gas_budget: u64,
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error>;
@@ -252,12 +135,12 @@ pub trait GatewayAPI {
     async fn move_call(
         &self,
         signer: SuiAddress,
-        package_object_id: ObjectID,
+        package_object_ref: ObjectRef,
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         arguments: Vec<SuiJsonValue>,
-        gas: Option<ObjectID>,
+        gas_object_ref: ObjectRef,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -266,7 +149,7 @@ pub trait GatewayAPI {
         &self,
         signer: SuiAddress,
         package_bytes: Vec<Vec<u8>>,
-        gas: Option<ObjectID>,
+        gas_object_ref: ObjectRef,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -281,7 +164,7 @@ pub trait GatewayAPI {
         signer: SuiAddress,
         coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
-        gas: Option<ObjectID>,
+        gas_payment: ObjectID,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -298,7 +181,7 @@ pub trait GatewayAPI {
         signer: SuiAddress,
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
-        gas: Option<ObjectID>,
+        gas_payment: ObjectID,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
@@ -350,20 +233,14 @@ where
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> SuiResult<Object> {
-        Ok(if let Some(object) = self.store.get_object(object_id)? {
-            debug!(?object_id, ?object, "Fetched object from local store");
-            object
-        } else {
-            let object = self
-                .get_object_info(*object_id)
-                .await
-                .map_err(|_| SuiError::ObjectNotFound {
-                    object_id: *object_id,
-                })?
-                .into_object()?;
-            debug!(?object_id, ?object, "Fetched object from validators");
-            object
-        })
+        let object = self
+            .store
+            .get_object(object_id)?
+            .ok_or(SuiError::ObjectNotFound {
+                object_id: *object_id,
+            })?;
+        debug!(?object_id, ?object, "Fetched object from local store");
+        Ok(object)
     }
 
     async fn set_transaction_lock(
@@ -413,12 +290,8 @@ where
         self.sync_input_objects_with_authorities(&transaction)
             .await?;
 
-        let (_gas_status, all_objects) = transaction_input_checker::check_transaction_input(
-            &self.store,
-            &transaction,
-            &self.metrics.shared_obj_tx,
-        )
-        .await?;
+        let (_gas_status, all_objects) =
+            transaction_input_checker::check_transaction_input(&self.store, &transaction).await?;
 
         let owned_objects = transaction_input_checker::filter_owned_objects(&all_objects);
         self.set_transaction_lock(&owned_objects, transaction.clone())
@@ -444,10 +317,7 @@ where
             .execute_transaction(&transaction)
             .instrument(span)
             .await;
-
-        self.metrics.total_tx_processed.inc();
         if exec_result.is_err() {
-            self.metrics.total_tx_errored.inc();
             error!("{:?}", exec_result);
         }
         let (new_certificate, effects) = exec_result?;
@@ -713,44 +583,6 @@ where
         }
     }
 
-    async fn choose_gas_for_address(
-        &self,
-        address: SuiAddress,
-        budget: u64,
-        gas: Option<ObjectID>,
-        used_coins: Vec<ObjectID>,
-    ) -> Result<ObjectRef, anyhow::Error> {
-        if let Some(id) = gas {
-            Ok(self.get_object(&id).await?.compute_object_reference())
-        } else {
-            let used_coins = used_coins.into_iter().collect::<BTreeSet<_>>();
-            for (id, balance) in self.get_owned_coins(address).await.unwrap() {
-                if balance >= budget && !used_coins.contains(&id.0) {
-                    return Ok(id);
-                }
-            }
-            return Err(anyhow!(
-                "No non-argument gas objects found with value >= budget {}",
-                budget
-            ));
-        }
-    }
-
-    async fn get_owned_coins(
-        &self,
-        address: SuiAddress,
-    ) -> Result<Vec<(ObjectRef, u64)>, anyhow::Error> {
-        let mut coins = Vec::new();
-        for (id, _, _) in self.store.get_account_objects(address)? {
-            let object = self.get_object(&id).await?;
-            if matches!(object.data.type_(), Some(ty)  if *ty == GasCoin::type_()) {
-                let gas_coin = GasCoin::try_from(object.data.try_as_move().unwrap())?;
-                coins.push((object.compute_object_reference(), gas_coin.value()));
-            }
-        }
-        Ok(coins)
-    }
-
     #[cfg(test)]
     pub fn highest_known_version(&self, object_id: &ObjectID) -> Result<SequenceNumber, SuiError> {
         self.latest_object_ref(object_id)
@@ -788,14 +620,10 @@ where
             tx_kind = tx.data.kind_as_str()
         );
 
-        // Use start_coarse_time() if the below turns out to have a perf impact
-        let timer = self.metrics.transaction_latency.start_timer();
         let mut res = self
             .execute_transaction_impl(tx.clone())
             .instrument(span.clone())
             .await;
-        // NOTE: below only records latency if this completes.
-        timer.stop_and_record();
 
         let mut remaining_retries = MAX_NUM_TX_RETRIES;
         while res.is_err() {
@@ -810,7 +638,6 @@ where
                 return Err(res.unwrap_err());
             }
             remaining_retries -= 1;
-            self.metrics.total_tx_retries.inc();
 
             debug!(
                 remaining_retries,
@@ -833,20 +660,16 @@ where
         if let TransactionKind::Single(tx_kind) = tx_kind {
             match tx_kind {
                 SingleTransactionKind::Publish(_) => {
-                    self.metrics.num_tx_publish.inc();
-                    return self.create_publish_response(certificate, effects).await;
+                    return self.create_publish_response(certificate, effects).await
                 }
                 // Work out if the transaction is split coin or merge coin transaction
                 SingleTransactionKind::Call(move_call) => {
-                    self.metrics.num_tx_movecall.inc();
                     if move_call.package == self.get_framework_object_ref().await?
                         && move_call.module.as_ref() == coin::COIN_MODULE_NAME
                     {
                         if move_call.function.as_ref() == coin::COIN_SPLIT_VEC_FUNC_NAME {
-                            self.metrics.num_tx_splitcoin.inc();
                             return self.create_split_coin_response(certificate, effects).await;
                         } else if move_call.function.as_ref() == coin::COIN_JOIN_FUNC_NAME {
-                            self.metrics.num_tx_mergecoin.inc();
                             return self.create_merge_coin_response(certificate, effects).await;
                         }
                     }
@@ -866,17 +689,24 @@ where
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
-        gas: Option<ObjectID>,
+        gas_payment: ObjectID,
         gas_budget: u64,
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error> {
-        let gas_payment = self
-            .choose_gas_for_address(signer, gas_budget, gas, vec![object_id])
-            .await?;
+        // TODO: We should be passing in object_ref directly instead of object_id.
         let object = self.get_object(&object_id).await?;
         let object_ref = object.compute_object_reference();
-        let data =
-            TransactionData::new_transfer(recipient, object_ref, signer, gas_payment, gas_budget);
+        let gas_payment = self.get_object(&gas_payment).await?;
+        let gas_payment_ref = gas_payment.compute_object_reference();
+
+        let data = TransactionData::new_transfer(
+            recipient,
+            object_ref,
+            signer,
+            gas_payment_ref,
+            gas_budget,
+        );
+
         Ok(data)
     }
 
@@ -906,16 +736,15 @@ where
     async fn move_call(
         &self,
         signer: SuiAddress,
-        package_object_id: ObjectID,
+        package_object_ref: ObjectRef,
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         arguments: Vec<SuiJsonValue>,
-        gas: Option<ObjectID>,
+        gas_object_ref: ObjectRef,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        let package_obj = self.get_object(&package_object_id).await?;
-        let package_obj_ref = package_obj.compute_object_reference();
+        let package_obj = self.get_object(&package_object_ref.0).await?;
         let json_args =
             resolve_move_function_args(&package_obj, module.clone(), function.clone(), arguments)?;
 
@@ -939,11 +768,6 @@ where
             })
         }
 
-        let forbidden_gas_objects = objects.keys().copied().collect();
-        let gas = self
-            .choose_gas_for_address(signer, gas_budget, gas, forbidden_gas_objects)
-            .await?;
-
         // Pass in the objects for a deeper check
         let compiled_module = package_obj
             .data
@@ -960,11 +784,11 @@ where
 
         let data = TransactionData::new_move_call(
             signer,
-            package_obj_ref,
+            package_object_ref,
             module,
             function,
             type_arguments,
-            gas,
+            gas_object_ref,
             args,
             gas_budget,
         );
@@ -977,13 +801,10 @@ where
         &self,
         signer: SuiAddress,
         package_bytes: Vec<Vec<u8>>,
-        gas: Option<ObjectID>,
+        gas_object_ref: ObjectRef,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        let gas = self
-            .choose_gas_for_address(signer, gas_budget, gas, vec![])
-            .await?;
-        let data = TransactionData::new_module(signer, gas, package_bytes, gas_budget);
+        let data = TransactionData::new_module(signer, gas_object_ref, package_bytes, gas_budget);
         Ok(data)
     }
 
@@ -992,22 +813,23 @@ where
         signer: SuiAddress,
         coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
-        gas: Option<ObjectID>,
+        gas_payment: ObjectID,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        let gas = self
-            .choose_gas_for_address(signer, gas_budget, gas, vec![coin_object_id])
-            .await?;
+        // TODO: We should be passing in object_refs directly instead of object_ids.
         let coin_object = self.get_object(&coin_object_id).await?;
         let coin_object_ref = coin_object.compute_object_reference();
+        let gas_payment = self.get_object(&gas_payment).await?;
+        let gas_payment_ref = gas_payment.compute_object_reference();
         let coin_type = coin_object.get_move_template_type()?;
+
         let data = TransactionData::new_move_call(
             signer,
             self.get_framework_object_ref().await?,
             coin::COIN_MODULE_NAME.to_owned(),
             coin::COIN_SPLIT_VEC_FUNC_NAME.to_owned(),
             vec![coin_type],
-            gas,
+            gas_payment_ref,
             vec![
                 CallArg::ImmOrOwnedObject(coin_object_ref),
                 CallArg::Pure(bcs::to_bytes(&split_amounts)?),
@@ -1023,25 +845,26 @@ where
         signer: SuiAddress,
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
-        gas: Option<ObjectID>,
+        gas_payment: ObjectID,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        let gas = self
-            .choose_gas_for_address(signer, gas_budget, gas, vec![coin_to_merge, primary_coin])
-            .await?;
+        // TODO: We should be passing in object_refs directly instead of object_ids.
         let primary_coin = self.get_object(&primary_coin).await?;
         let primary_coin_ref = primary_coin.compute_object_reference();
         let coin_to_merge = self.get_object(&coin_to_merge).await?;
         let coin_to_merge_ref = coin_to_merge.compute_object_reference();
+        let gas_payment = self.get_object(&gas_payment).await?;
+        let gas_payment_ref = gas_payment.compute_object_reference();
 
         let coin_type = coin_to_merge.get_move_template_type()?;
+
         let data = TransactionData::new_move_call(
             signer,
             self.get_framework_object_ref().await?,
             coin::COIN_MODULE_NAME.to_owned(),
             coin::COIN_JOIN_FUNC_NAME.to_owned(),
             vec![coin_type],
-            gas,
+            gas_payment_ref,
             vec![
                 CallArg::ImmOrOwnedObject(primary_coin_ref),
                 CallArg::ImmOrOwnedObject(coin_to_merge_ref),
