@@ -330,7 +330,7 @@ pub trait GatewayAPI {
         count: u64,
     ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error>;
 
-    // return transaction details by digest
+    /// return transaction details by digest
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
@@ -603,7 +603,7 @@ where
         );
 
         Ok(TransactionResponse::PublishResponse(PublishResponse {
-            certificate,
+            certificate: certificate.try_into()?,
             package,
             created_objects,
             updated_gas,
@@ -658,7 +658,7 @@ where
         );
 
         Ok(TransactionResponse::SplitCoinResponse(SplitCoinResponse {
-            certificate,
+            certificate: certificate.try_into()?,
             updated_coin,
             new_coins,
             updated_gas,
@@ -703,7 +703,7 @@ where
         );
 
         Ok(TransactionResponse::MergeCoinResponse(MergeCoinResponse {
-            certificate,
+            certificate: certificate.try_into()?,
             updated_coin,
             updated_gas,
         }))
@@ -865,8 +865,8 @@ where
         }
         return Ok(TransactionResponse::EffectResponse(
             TransactionEffectsResponse {
-                certificate,
-                effects,
+                certificate: certificate.try_into()?,
+                effects: effects.into(),
             },
         ));
     }
@@ -1141,8 +1141,8 @@ where
         let opt = self.store.get_certified_transaction(&digest)?;
         match opt {
             Some(certificate) => Ok(TransactionEffectsResponse {
-                certificate,
-                effects: self.store.get_effects(&digest)?,
+                certificate: certificate.try_into()?,
+                effects: self.store.get_effects(&digest)?.into(),
             }),
             None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
         }

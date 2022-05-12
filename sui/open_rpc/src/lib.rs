@@ -177,15 +177,15 @@ impl ProjectBuilder {
     pub fn create_content_descriptor<T: JsonSchema>(
         &mut self,
         name: &str,
-        summary: &str,
-        description: &str,
+        summary: Option<String>,
+        description: Option<String>,
         required: bool,
     ) -> ContentDescriptor {
         let schema = self.schema_generator.subschema_for::<T>().into_object();
         ContentDescriptor {
             name: name.to_string(),
-            summary: Some(summary.to_string()),
-            description: Some(description.to_string()),
+            summary,
+            description,
             required,
             schema,
             deprecated: false,

@@ -72,7 +72,7 @@ async fn test_transfer_coin() -> Result<(), anyhow::Error> {
         .execute_transaction(SignedTransaction::new(tx_data.tx_bytes, signature))
         .await?;
 
-    let (_cert, effect) = tx_response.to_effect_response()?;
+    let effect = tx_response.to_effect_response()?.effects;
     assert_eq!(2, effect.mutated.len());
 
     Ok(())
@@ -153,7 +153,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
         .execute_transaction(SignedTransaction::new(tx_data.tx_bytes, signature))
         .await?;
 
-    let (_cert, effect) = tx_response.to_effect_response()?;
+    let effect = tx_response.to_effect_response()?.effects;
     assert_eq!(1, effect.created.len());
     Ok(())
 }

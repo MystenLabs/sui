@@ -7,6 +7,7 @@ use crate::{
     base_types::ObjectID,
     error::{SuiError, SuiResult},
 };
+use move_binary_format::access::ModuleAccess;
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::CompiledModule;
 use move_core_types::identifier::Identifier;
@@ -64,25 +65,32 @@ impl MovePackage {
     }
 
     pub fn disassemble(&self) -> SuiResult<BTreeMap<String, Value>> {
-        let mut disassembled = BTreeMap::new();
-        for (name, bytecode) in self.serialized_module_map() {
-            let module = CompiledModule::deserialize(bytecode)
-                .expect("Adapter publish flow ensures that this bytecode deserializes");
-            let view = BinaryIndexedView::Module(&module);
-            let d = Disassembler::from_view(view, Spanned::unsafe_no_loc(()).loc).map_err(|e| {
-                SuiError::ObjectSerializationError {
-                    error: e.to_string(),
-                }
-            })?;
-            let bytecode_str = d
-                .disassemble()
-                .map_err(|e| SuiError::ObjectSerializationError {
-                    error: e.to_string(),
-                })?;
-            disassembled.insert(name.to_string(), Value::String(bytecode_str));
-        }
-        Ok(disassembled)
+        disassemble_modules(self.module_map.values())
     }
+}
+
+pub fn disassemble_modules<'a, I>(modules: I) -> SuiResult<BTreeMap<String, Value>>
+where
+    I: Iterator<Item = &'a Vec<u8>>,
+{
+    let mut disassembled = BTreeMap::new();
+    for bytecode in modules {
+        let module = CompiledModule::deserialize(bytecode)
+            .expect("Adapter publish flow ensures that this bytecode deserializes");
+        let view = BinaryIndexedView::Module(&module);
+        let d = Disassembler::from_view(view, Spanned::unsafe_no_loc(()).loc).map_err(|e| {
+            SuiError::ObjectSerializationError {
+                error: e.to_string(),
+            }
+        })?;
+        let bytecode_str = d
+            .disassemble()
+            .map_err(|e| SuiError::ObjectSerializationError {
+                error: e.to_string(),
+            })?;
+        disassembled.insert(module.name().to_string(), Value::String(bytecode_str));
+    }
+    Ok(disassembled)
 }
 
 impl FromIterator<CompiledModule> for MovePackage {

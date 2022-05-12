@@ -18,7 +18,9 @@ use serde::Serialize;
 use serde_json::json;
 use tracing::info;
 
-use sui_core::gateway_state::gateway_responses::{SuiObject, SuiObjectRead, SuiObjectRef};
+use sui_core::gateway_state::gateway_responses::{
+    SuiCertifiedTransaction, SuiObject, SuiObjectRead, SuiObjectRef, SuiTransactionEffects,
+};
 use sui_core::gateway_state::{
     gateway_responses::{MergeCoinResponse, PublishResponse, SplitCoinResponse, SwitchResponse},
     GatewayClient,
@@ -30,7 +32,7 @@ use sui_types::{
     error::SuiError,
     fp_ensure,
     gas_coin::GasCoin,
-    messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects},
+    messages::{ExecutionStatus, Transaction},
     SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -319,11 +321,13 @@ impl WalletCommands {
                     .read()
                     .unwrap()
                     .sign(&from, &data.to_bytes())?;
-                let (cert, effects) = context
+                let response = context
                     .gateway
                     .execute_transaction(Transaction::new(data, signature))
                     .await?
                     .to_effect_response()?;
+                let cert = response.certificate;
+                let effects = response.effects;
 
                 let time_total = time_start.elapsed().as_micros();
 
@@ -476,11 +480,13 @@ impl WalletCommands {
                     context,
                 )
                 .await?;
-                let ((nft_id, _, _), _) = effects
+                let nft_id = effects
                     .created
                     .first()
-                    .ok_or_else(|| anyhow!("Failed to create NFT"))?;
-                let object_read = context.gateway.get_object_info(*nft_id).await?;
+                    .ok_or_else(|| anyhow!("Failed to create NFT"))?
+                    .reference
+                    .object_id;
+                let object_read = context.gateway.get_object_info(nft_id).await?;
                 WalletCommandResult::CreateExampleNFT(object_read)
             }
         });
@@ -694,7 +700,7 @@ async fn call_move(
     gas_budget: &u64,
     args: &[SuiJsonValue],
     context: &mut WalletContext,
-) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+) -> Result<(SuiCertifiedTransaction, SuiTransactionEffects), anyhow::Error> {
     let gas_owner = context.try_get_object_owner(gas).await?;
     let sender = gas_owner.unwrap_or(context.active_address()?);
 
@@ -726,11 +732,13 @@ async fn call_move(
             SuiError::UnsupportedSharedObjectError.into()
         );
     }
-    let (cert, effects) = context
+    let response = context
         .gateway
         .execute_transaction(transaction)
         .await?
         .to_effect_response()?;
+    let cert = response.certificate;
+    let effects = response.effects;
 
     if matches!(effects.status, ExecutionStatus::Failure { .. }) {
         return Err(anyhow!("Error calling module: {:#?}", effects.status));
@@ -746,8 +754,8 @@ fn unwrap_or<'a>(val: &'a mut Option<String>, default: &'a str) -> &'a str {
 }
 
 fn write_cert_and_effects(
-    cert: &CertifiedTransaction,
-    effects: &TransactionEffects,
+    cert: &SuiCertifiedTransaction,
+    effects: &SuiTransactionEffects,
 ) -> Result<String, fmt::Error> {
     let mut writer = String::new();
     writeln!(writer, "{}", "----- Certificate ----".bold())?;
@@ -798,12 +806,12 @@ impl WalletCommandResult {
 pub enum WalletCommandResult {
     Publish(PublishResponse),
     Object(SuiObjectRead),
-    Call(CertifiedTransaction, TransactionEffects),
+    Call(SuiCertifiedTransaction, SuiTransactionEffects),
     Transfer(
         // Skipping serialisation for elapsed time.
         #[serde(skip)] u128,
-        CertifiedTransaction,
-        TransactionEffects,
+        SuiCertifiedTransaction,
+        SuiTransactionEffects,
     ),
     Addresses(Vec<SuiAddress>),
     Objects(Vec<SuiObjectRef>),

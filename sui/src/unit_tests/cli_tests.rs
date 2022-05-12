@@ -19,14 +19,15 @@ use sui::{
     wallet_commands::{WalletCommandResult, WalletCommands, WalletContext},
 };
 use sui_config::{AccountConfig, GenesisConfig, NetworkConfig, ObjectConfig};
-use sui_core::gateway_state::gateway_responses::{SuiObject, SuiObjectRead, SwitchResponse};
+use sui_core::gateway_state::gateway_responses::{
+    SuiObject, SuiObjectRead, SuiTransactionEffects, SwitchResponse,
+};
 use sui_core::sui_json::SuiJsonValue;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     crypto::get_key_pair,
     gas_coin::GasCoin,
-    messages::TransactionEffects,
-    object::{Object, GAS_VALUE_FOR_TESTING},
+    object::GAS_VALUE_FOR_TESTING,
 };
 
 use test_utils::network::start_test_network;
@@ -254,12 +255,12 @@ async fn airdrop_call_move_and_get_created_object(
     let minted_token_id = match resp {
         WalletCommandResult::Call(
             _,
-            TransactionEffects {
+            SuiTransactionEffects {
                 created: new_objs, ..
             },
         ) => {
             assert_eq!(new_objs.len(), 1);
-            new_objs[0].0 .0
+            new_objs[0].reference.object_id
         }
         _ => panic!("unexpected WalletCommandResult"),
     };
@@ -688,13 +689,12 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     // Get the created object
     let created_obj: ObjectID = if let WalletCommandResult::Call(
         _,
-        TransactionEffects {
+        SuiTransactionEffects {
             created: new_objs, ..
         },
     ) = resp
     {
-        let ((obj_id, _seq_num, _obj_digest), _owner) = new_objs.first().unwrap();
-        *obj_id
+        new_objs.first().unwrap().reference.object_id
     } else {
         // User assert since panic causes test issues
         assert!(false);
@@ -883,19 +883,22 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 
     // Get the mutated objects
     let (mut_obj1, mut_obj2) =
-        if let WalletCommandResult::Transfer(_, _, TransactionEffects { mutated, .. }) = resp {
-            (mutated.get(0).unwrap().0, mutated.get(1).unwrap().0)
+        if let WalletCommandResult::Transfer(_, _, SuiTransactionEffects { mutated, .. }) = resp {
+            (
+                mutated.get(0).unwrap().reference.object_id,
+                mutated.get(1).unwrap().reference.object_id,
+            )
         } else {
             assert!(false);
             panic!()
         };
 
     retry_assert!(
-        logs_contain(&format!("{}", mut_obj1.0)),
+        logs_contain(&format!("{}", mut_obj1)),
         Duration::from_millis(5000)
     );
     retry_assert!(
-        logs_contain(&format!("{}", mut_obj2.0)),
+        logs_contain(&format!("{}", mut_obj2)),
         Duration::from_millis(5000)
     );
 
@@ -914,7 +917,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     .print(true);
 
     // Check the objects
-    let resp = WalletCommands::Object { id: mut_obj1.0 }
+    let resp = WalletCommands::Object { id: mut_obj1 }
         .execute(&mut context)
         .await?;
     let mut_obj1 = if let WalletCommandResult::Object(SuiObjectRead::Exists(object)) = resp {
@@ -925,7 +928,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         panic!()
     };
 
-    let resp = WalletCommands::Object { id: mut_obj2.0 }
+    let resp = WalletCommands::Object { id: mut_obj2 }
         .execute(&mut context)
         .await?;
     let mut_obj2 = if let WalletCommandResult::Object(SuiObjectRead::Exists(object)) = resp {
@@ -970,26 +973,24 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     // Print it out to CLI/logs
     resp.print(true);
 
-    let dumy_obj = Object::with_id_owner_for_testing(ObjectID::random(), address);
-
     // Get the mutated objects
     let (mut_obj1, mut_obj2) =
-        if let WalletCommandResult::Transfer(_, _, TransactionEffects { mutated, .. }) = resp {
-            (mutated.get(0).unwrap().0, mutated.get(1).unwrap().0)
+        if let WalletCommandResult::Transfer(_, _, SuiTransactionEffects { mutated, .. }) = resp {
+            (
+                mutated.get(0).unwrap().reference.object_id,
+                mutated.get(1).unwrap().reference.object_id,
+            )
         } else {
             assert!(false);
-            (
-                dumy_obj.compute_object_reference(),
-                dumy_obj.compute_object_reference(),
-            )
+            panic!()
         };
 
     retry_assert!(
-        logs_contain(&format!("{}", mut_obj1.0)),
+        logs_contain(&format!("{}", mut_obj1)),
         Duration::from_millis(5000)
     );
     retry_assert!(
-        logs_contain(&format!("{}", mut_obj2.0)),
+        logs_contain(&format!("{}", mut_obj2)),
         Duration::from_millis(5000)
     );
 
