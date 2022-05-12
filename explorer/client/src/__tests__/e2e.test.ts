@@ -173,7 +173,7 @@ describe('End-to-end Tests', () => {
 
             //Go to Object
             const objectLink = await page.$(
-                'div#txview > div:nth-child(4) > div:nth-child(2)'
+                'div#txview > div:nth-child(5) > div:nth-child(2) > ul > li:first-child > a'
             );
             await objectLink.click();
             const el = await page.$('#objectID');
