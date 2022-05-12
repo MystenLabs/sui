@@ -5739,7 +5739,6 @@ dependencies = [
  "serde_with",
  "serde_yaml",
  "signature",
- "structopt",
  "sui-adapter",
  "sui-config",
  "sui-framework",
