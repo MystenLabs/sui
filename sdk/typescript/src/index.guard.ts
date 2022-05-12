@@ -279,8 +279,7 @@ export function isRawAuthoritySignInfo(obj: any, _argumentName?: string): obj is
 
 export function isTransactionKindName(obj: any, _argumentName?: string): obj is TransactionKindName {
     return (
-        (obj === "Transfer" ||
-            obj === "TransferCoin" ||
+        (obj === "TransferCoin" ||
             obj === "Publish" ||
             obj === "Call")
     )
@@ -292,10 +291,6 @@ export function isSingleTransactionKind(obj: any, _argumentName?: string): obj i
             typeof obj === "object" ||
             typeof obj === "function") &&
             isTransferCoin(obj.TransferCoin) as boolean ||
-            (obj !== null &&
-                typeof obj === "object" ||
-                typeof obj === "function") &&
-            isTransferCoin(obj.Transfer) as boolean ||
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&

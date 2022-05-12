@@ -10,10 +10,9 @@ export type TransferCoin = {
 };
 export type RawAuthoritySignInfo = [AuthorityName, AuthoritySignature];
 
-export type TransactionKindName = 'Transfer' | 'TransferCoin' | 'Publish' | 'Call';
+export type TransactionKindName = 'TransferCoin' | 'Publish' | 'Call';
 export type SingleTransactionKind =
   | { TransferCoin: TransferCoin }
-  | { Transfer: TransferCoin }
   | { Publish: MoveModulePublish }
   | { Call: MoveCall };
 export type TransactionKind =
@@ -150,7 +149,6 @@ export function getTransferTransaction(
 ): TransferCoin | undefined {
   const tx = getSingleTransactionKind(data);
   if (!tx) return undefined;
-  if ('Transfer' in tx) return tx.Transfer;
   if ('TransferCoin' in tx) return tx.TransferCoin;
   return undefined;
 }
