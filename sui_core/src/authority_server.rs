@@ -74,6 +74,7 @@ impl AuthorityServer {
             tx_consensus_listener,
             /* max_delay */ Duration::from_millis(2_000),
         );
+
         Self {
             address,
             state,

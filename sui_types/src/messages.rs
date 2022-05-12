@@ -217,6 +217,13 @@ impl TransactionKind {
             TransactionKind::Batch(b) => Either::Right(b.into_iter()),
         }
     }
+
+    pub fn batch_size(&self) -> usize {
+        match self {
+            TransactionKind::Single(_) => 1,
+            TransactionKind::Batch(batch) => batch.len(),
+        }
+    }
 }
 
 impl Display for TransactionKind {

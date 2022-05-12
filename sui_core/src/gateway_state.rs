@@ -13,6 +13,10 @@ use async_trait::async_trait;
 use futures::future;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
+use once_cell::sync::Lazy;
+use prometheus_exporter::prometheus::{
+    register_histogram, register_int_counter, Histogram, IntCounter,
+};
 use tracing::{debug, error, Instrument};
 
 use sui_adapter::adapter::resolve_and_type_check;
@@ -53,6 +57,116 @@ const MAX_TX_RANGE_SIZE: u64 = 4096;
 /// Number of times to retry failed TX
 const MAX_NUM_TX_RETRIES: usize = 5;
 
+/// Prometheus metrics which can be displayed in Grafana, queried and alerted on
+pub struct GatewayMetrics {
+    total_tx_processed: IntCounter,
+    total_tx_errored: IntCounter,
+    num_tx_publish: IntCounter,
+    num_tx_movecall: IntCounter,
+    num_tx_splitcoin: IntCounter,
+    num_tx_mergecoin: IntCounter,
+    total_tx_retries: IntCounter,
+    shared_obj_tx: IntCounter,
+    pub total_tx_certificates: IntCounter,
+    pub num_signatures: Histogram,
+    pub num_good_stake: Histogram,
+    pub num_bad_stake: Histogram,
+    pub transaction_latency: Histogram,
+}
+
+// Override default Prom buckets for positive numbers in 0-50k range
+const POSITIVE_INT_BUCKETS: &[f64] = &[
+    1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
+];
+
+impl GatewayMetrics {
+    pub fn new() -> GatewayMetrics {
+        Self {
+            total_tx_processed: register_int_counter!(
+                "total_tx_processed",
+                "Total number of transaction certificates processed in Gateway"
+            )
+            .unwrap(),
+            total_tx_errored: register_int_counter!(
+                "total_tx_errored",
+                "Total number of transactions which errored out"
+            )
+            .unwrap(),
+            // total_effects == total transactions finished
+            num_tx_publish: register_int_counter!(
+                "num_tx_publish",
+                "Number of publish transactions",
+            )
+            .unwrap(),
+            num_tx_movecall: register_int_counter!(
+                "num_tx_movecall",
+                "Number of MOVE call transactions",
+            )
+            .unwrap(),
+            num_tx_splitcoin: register_int_counter!(
+                "num_tx_splitcoin",
+                "Number of split coin transactions",
+            )
+            .unwrap(),
+            num_tx_mergecoin: register_int_counter!(
+                "num_tx_mergecoin",
+                "Number of merge coin transactions",
+            )
+            .unwrap(),
+            total_tx_certificates: register_int_counter!(
+                "total_tx_certificates",
+                "Total number of certificates made from validators",
+            )
+            .unwrap(),
+            total_tx_retries: register_int_counter!(
+                "total_tx_retries",
+                "Total number of retries for transactions",
+            )
+            .unwrap(),
+            shared_obj_tx: register_int_counter!(
+                "gateway_shared_obj_tx",
+                "Number of transactions involving shared objects"
+            )
+            .unwrap(),
+            // It's really important to use the right histogram buckets for accurate histogram collection.
+            // Otherwise values get clipped
+            num_signatures: register_histogram!(
+                "num_signatures_per_tx",
+                "Number of signatures collected per transaction",
+                POSITIVE_INT_BUCKETS.to_vec()
+            )
+            .unwrap(),
+            num_good_stake: register_histogram!(
+                "num_good_stake_per_tx",
+                "Amount of good stake collected per transaction",
+                POSITIVE_INT_BUCKETS.to_vec()
+            )
+            .unwrap(),
+            num_bad_stake: register_histogram!(
+                "num_bad_stake_per_tx",
+                "Amount of bad stake collected per transaction",
+                POSITIVE_INT_BUCKETS.to_vec()
+            )
+            .unwrap(),
+            transaction_latency: register_histogram!(
+                "transaction_latency",
+                "Latency of execute_transaction_impl"
+            )
+            .unwrap(),
+        }
+    }
+}
+
+impl Default for GatewayMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// One cannot register a metric multiple times.  We protect initialization with lazy_static
+// for cases such as local tests or "sui start" which starts multiple authorities in one process.
+pub static METRICS: Lazy<GatewayMetrics> = Lazy::new(GatewayMetrics::new);
+
 pub struct GatewayState<A> {
     authorities: AuthorityAggregator<A>,
     store: Arc<GatewayStore>,
@@ -62,6 +176,7 @@ pub struct GatewayState<A> {
     /// It's useful if we need some kind of ordering for transactions
     /// from a gateway.
     next_tx_seq_number: AtomicU64,
+    metrics: &'static GatewayMetrics,
 }
 
 impl<A> GatewayState<A> {
@@ -84,6 +199,7 @@ impl<A> GatewayState<A> {
             store,
             authorities,
             next_tx_seq_number,
+            metrics: &METRICS,
         })
     }
 
@@ -297,8 +413,12 @@ where
         self.sync_input_objects_with_authorities(&transaction)
             .await?;
 
-        let (_gas_status, all_objects) =
-            transaction_input_checker::check_transaction_input(&self.store, &transaction).await?;
+        let (_gas_status, all_objects) = transaction_input_checker::check_transaction_input(
+            &self.store,
+            &transaction,
+            &self.metrics.shared_obj_tx,
+        )
+        .await?;
 
         let owned_objects = transaction_input_checker::filter_owned_objects(&all_objects);
         self.set_transaction_lock(&owned_objects, transaction.clone())
@@ -324,7 +444,10 @@ where
             .execute_transaction(&transaction)
             .instrument(span)
             .await;
+
+        self.metrics.total_tx_processed.inc();
         if exec_result.is_err() {
+            self.metrics.total_tx_errored.inc();
             error!("{:?}", exec_result);
         }
         let (new_certificate, effects) = exec_result?;
@@ -665,10 +788,14 @@ where
             tx_kind = tx.data.kind_as_str()
         );
 
+        // Use start_coarse_time() if the below turns out to have a perf impact
+        let timer = self.metrics.transaction_latency.start_timer();
         let mut res = self
             .execute_transaction_impl(tx.clone())
             .instrument(span.clone())
             .await;
+        // NOTE: below only records latency if this completes.
+        timer.stop_and_record();
 
         let mut remaining_retries = MAX_NUM_TX_RETRIES;
         while res.is_err() {
@@ -683,6 +810,7 @@ where
                 return Err(res.unwrap_err());
             }
             remaining_retries -= 1;
+            self.metrics.total_tx_retries.inc();
 
             debug!(
                 remaining_retries,
@@ -705,16 +833,20 @@ where
         if let TransactionKind::Single(tx_kind) = tx_kind {
             match tx_kind {
                 SingleTransactionKind::Publish(_) => {
-                    return self.create_publish_response(certificate, effects).await
+                    self.metrics.num_tx_publish.inc();
+                    return self.create_publish_response(certificate, effects).await;
                 }
                 // Work out if the transaction is split coin or merge coin transaction
                 SingleTransactionKind::Call(move_call) => {
+                    self.metrics.num_tx_movecall.inc();
                     if move_call.package == self.get_framework_object_ref().await?
                         && move_call.module.as_ref() == coin::COIN_MODULE_NAME
                     {
                         if move_call.function.as_ref() == coin::COIN_SPLIT_VEC_FUNC_NAME {
+                            self.metrics.num_tx_splitcoin.inc();
                             return self.create_split_coin_response(certificate, effects).await;
                         } else if move_call.function.as_ref() == coin::COIN_JOIN_FUNC_NAME {
+                            self.metrics.num_tx_mergecoin.inc();
                             return self.create_merge_coin_response(certificate, effects).await;
                         }
                     }

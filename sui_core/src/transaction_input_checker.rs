@@ -3,6 +3,7 @@
 
 use std::collections::HashSet;
 
+use prometheus_exporter::prometheus::IntCounter;
 use serde::{Deserialize, Serialize};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
@@ -20,6 +21,7 @@ use crate::authority::SuiDataStore;
 pub async fn check_transaction_input<const A: bool, S, T>(
     store: &SuiDataStore<A, S>,
     transaction: &TransactionEnvelope<T>,
+    shared_obj_metric: &IntCounter,
 ) -> Result<(SuiGasStatus<'static>, Vec<(InputObjectKind, Object)>), SuiError>
 where
     S: Eq + Serialize + for<'de> Deserialize<'de>,
@@ -35,6 +37,8 @@ where
         check_locks(store, &transaction.data, gas_object, &mut gas_status).await?;
 
     if transaction.contains_shared_object() {
+        shared_obj_metric.inc();
+
         // It's important that we do this here to make sure there is enough
         // gas to cover shared objects, before we lock all objects.
         gas_status.charge_consensus()?;

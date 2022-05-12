@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::AuthorityAPI;
+use crate::gateway_state::{GatewayMetrics, METRICS};
 use crate::safe_client::SafeClient;
 
 use futures::{future, StreamExt};
@@ -40,6 +41,8 @@ pub struct AuthorityAggregator<A> {
     pub committee: Committee,
     /// How to talk to this committee.
     pub authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
+    // Metrics
+    pub metrics: &'static GatewayMetrics,
 }
 
 impl<A> AuthorityAggregator<A> {
@@ -50,6 +53,7 @@ impl<A> AuthorityAggregator<A> {
                 .into_iter()
                 .map(|(name, api)| (name, SafeClient::new(api, committee.clone(), name)))
                 .collect(),
+            metrics: &METRICS,
         }
     }
 }
@@ -843,6 +847,11 @@ where
                                 ));
                                 state.good_stake += weight;
                                 if state.good_stake >= threshold {
+                                    self.metrics
+                                        .num_signatures
+                                        .observe(state.signatures.len() as f64);
+                                    self.metrics.num_good_stake.observe(state.good_stake as f64);
+                                    self.metrics.num_bad_stake.observe(state.bad_stake as f64);
                                     state.certificate =
                                         Some(CertifiedTransaction::new_with_signatures(
                                             self.committee.epoch(),
@@ -877,6 +886,12 @@ where
                                 "Too many errors, validity threshold exceeded. Errors={:?}",
                                 state.errors
                             );
+                            self.metrics
+                                .num_signatures
+                                .observe(state.signatures.len() as f64);
+                            self.metrics.num_good_stake.observe(state.good_stake as f64);
+                            self.metrics.num_bad_stake.observe(state.bad_stake as f64);
+
                             let unique_errors: HashSet<_> = state.errors.into_iter().collect();
                             // If no authority succeeded and all authorities returned the same error,
                             // return that error.
@@ -1093,6 +1108,7 @@ where
             .process_transaction(transaction.clone(), Duration::from_secs(60))
             .instrument(tracing::debug_span!("process_tx"))
             .await?;
+        self.metrics.total_tx_certificates.inc();
         let response = self
             .process_certificate(new_certificate.clone(), Duration::from_secs(60))
             .instrument(tracing::debug_span!("process_cert"))
