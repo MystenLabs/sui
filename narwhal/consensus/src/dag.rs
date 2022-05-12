@@ -21,7 +21,7 @@ use crate::DEFAULT_CHANNEL_SIZE;
 #[path = "tests/dag_tests.rs"]
 pub mod dag_tests;
 
-/// Dag represents the dag that is constructed  by the certificate of each round without any
+/// Dag represents the Direct Acyclic Graph that is constructed by the certificate of each round without any
 /// consensus running on top of it. This is a [`VerifyingKey`], [`Certificate`] and [`Round`]-aware
 ///  variant of the Dag, with a secondary index to link a (pubkey, round) pair to the possible
 /// certified collection by that authority at that round.
@@ -55,13 +55,12 @@ pub enum ValidatorDagError<PublicKey: VerifyingKey> {
     OutOfCertificates(PublicKey),
     #[error("No known certificates for this authority: {0} at round {1}")]
     NoCertificateForCoordinates(PublicKey, Round),
-
-    // The generic Dag structure
+    // an invariant violation at the level of the generic DAG (unrelated to Certificate specifics)
     #[error("Dag invariant violation {0}")]
-    DagInvariantViolation(#[from] dag::node_dag::DagError),
+    DagInvariantViolation(#[from] dag::node_dag::NodeDagError),
 }
 
-pub enum DagCommand<PublicKey: VerifyingKey> {
+enum DagCommand<PublicKey: VerifyingKey> {
     Insert(
         Certificate<PublicKey>,
         oneshot::Sender<Result<(), ValidatorDagError<PublicKey>>>,
@@ -156,7 +155,7 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
         Ok(())
     }
 
-    /// Returns whether the node is still in the Dag as a strong reference, i.e. that it hasn't ben removed through compression.
+    /// Returns whether the node is still in the Dag as a strong reference, i.e. that it hasn't been removed through compression.
     /// For the purposes of this memory-conscious graph, this is just "contains" semantics.
     fn contains(&self, digest: CertificateDigest) -> bool {
         self.dag.contains_live(digest)
