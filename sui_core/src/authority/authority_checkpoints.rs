@@ -137,7 +137,7 @@ pub struct CheckpointLocals {
 }
 
 pub trait ConsensusSender: Send + Sync + 'static {
-    // Sned an item to the consensus
+    // Send an item to the consensus
     fn send_to_consensus(&self, fragment: CheckpointFragment) -> Result<(), SuiError>;
 }
 

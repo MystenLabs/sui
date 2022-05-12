@@ -935,10 +935,20 @@ async fn test_batch_to_checkpointing_init_crash() {
 #[test]
 fn set_fragment_external() {
     let mut test_objects = random_ckpoint_store();
-    let (_, cps1) = test_objects.pop().unwrap();
-    let (_, cps2) = test_objects.pop().unwrap();
-    let (_, cps3) = test_objects.pop().unwrap();
-    let (_, cps4) = test_objects.pop().unwrap();
+    let (test_tx, _rx) = TestConsensus::new();
+
+    let (_, mut cps1) = test_objects.pop().unwrap();
+    cps1.set_consensus(Box::new(test_tx.clone()))
+            .expect("No issues setting the consensus");
+    let (_, mut cps2) = test_objects.pop().unwrap();
+    cps2.set_consensus(Box::new(test_tx.clone()))
+            .expect("No issues setting the consensus");
+    let (_, mut cps3) = test_objects.pop().unwrap();
+    cps3.set_consensus(Box::new(test_tx.clone()))
+            .expect("No issues setting the consensus");
+    let (_, mut cps4) = test_objects.pop().unwrap();
+    cps4.set_consensus(Box::new(test_tx.clone()))
+            .expect("No issues setting the consensus");
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -1077,4 +1087,155 @@ fn set_fragment_reconstruct_two_components() {
 
     let reconstruction = attempt2.unwrap().unwrap();
     assert_eq!(reconstruction.global.authority_waypoints.len(), 5);
+}
+
+#[derive(Clone)]
+struct TestConsensus {
+    sender: Arc<std::sync::Mutex<std::sync::mpsc::Sender<CheckpointFragment>>>,
+}
+
+impl ConsensusSender for TestConsensus {
+    fn send_to_consensus(&self, fragment: CheckpointFragment) -> Result<(), SuiError> {
+        self.sender
+            .lock()
+            .expect("Locking failed")
+            .send(fragment)
+            .expect("Failed to send");
+        Ok(())
+    }
+}
+
+impl TestConsensus {
+    pub fn new() -> (TestConsensus, std::sync::mpsc::Receiver<CheckpointFragment>) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        (
+            TestConsensus {
+                sender: Arc::new(std::sync::Mutex::new(tx)),
+            },
+            rx,
+        )
+    }
+}
+
+#[test]
+fn test_fragment_full_flow() {
+    let mut test_objects = random_ckpoint_store_num(2 * 3 + 1);
+
+    let (test_tx, rx) = TestConsensus::new();
+
+    let t2 = TransactionDigest::random();
+    let t3 = TransactionDigest::random();
+    // let t6 = TransactionDigest::random();
+
+    for (_, cps) in &mut test_objects {
+        cps.set_consensus(Box::new(test_tx.clone()))
+            .expect("No issues setting the consensus");
+        cps.update_processed_transactions(&[(1, t2), (2, t3)])
+            .unwrap();
+    }
+
+    let mut proposals: Vec<_> = test_objects
+        .iter_mut()
+        .map(|(_, cps)| cps.set_proposal().unwrap())
+        .collect();
+
+    // Get out the last two
+    let p_x = proposals.pop().unwrap();
+    let p_y = proposals.pop().unwrap();
+
+    let fragment_xy = p_x.diff_with(&p_y);
+
+    // TEST 1 -- submitting a fragment not involving a validator gets rejected by the
+    //           validator.
+
+    // Validator 3 is not validator 5 or 6
+    assert!(test_objects[3]
+        .1
+        .handle_receive_fragment(&fragment_xy)
+        .is_err());
+    // Nothing is sent to consensus
+    assert!(rx.try_recv().is_err());
+
+    // But accept it on both the 5 and 6
+    assert!(test_objects[5]
+        .1
+        .handle_receive_fragment(&fragment_xy)
+        .is_ok());
+    assert!(test_objects[6]
+        .1
+        .handle_receive_fragment(&fragment_xy)
+        .is_ok());
+
+    // Check we registered one local fragment
+    assert_eq!(test_objects[5].1.local_fragments.iter().count(), 1);
+
+    // Make a daisy chain of the other proposals
+    let mut fragments = vec![fragment_xy];
+
+    while let Some(proposal) = proposals.pop() {
+        if !proposals.is_empty() {
+            let fragment_xy = proposal.diff_with(&proposals[proposals.len() - 1]);
+            assert!(test_objects[proposals.len() - 1]
+                .1
+                .handle_receive_fragment(&fragment_xy)
+                .is_ok());
+            fragments.push(fragment_xy);
+        }
+
+        if proposals.len() == 1 {
+            break;
+        }
+    }
+
+    // TEST 2 -- submit to all validators leads to reconstruction
+
+    let mut seq = 0;
+    let cps0 = &test_objects[0].1;
+    let mut all_fragments = Vec::new();
+    while let Ok(fragment) = rx.try_recv() {
+        all_fragments.push(fragment.clone());
+        assert!(cps0.handle_internal_fragment(seq, fragment).is_ok());
+        seq += 1;
+    }
+
+    // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
+    assert_eq!(seq, 6);
+    // Advanced to next checkpoint
+    assert_eq!(cps0.next_checkpoint(), 1);
+
+    let response = cps0
+        .handle_checkpoint_request(&CheckpointRequest::past(0, true))
+        .expect("No errors on response");
+    // Ensure the reconstruction worked
+    assert_eq!(response.detail.unwrap().transactions.len(), 2);
+
+    // TEST 3 -- feed the framents to the node 6 which cannot decode the
+    // sequence of fragments.
+
+    let mut seq = 0;
+    let cps6 = &test_objects[6].1;
+    for fragment in &all_fragments {
+        let _ = cps6.handle_internal_fragment(seq, fragment.clone());
+        seq += 1;
+    }
+
+    // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
+    assert_eq!(cps6.fragments.iter().count(), 6);
+    // Cannot advance to next checkpoint
+    assert_eq!(cps6.next_checkpoint(), 0);
+    // But recording of fragments is closed
+
+    // However recording has stopped
+    // and no more fragments are recorded.
+
+    for fragment in &all_fragments {
+        let _ = cps6.handle_internal_fragment(seq, fragment.clone());
+        seq += 1;
+    }
+
+    // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
+    assert_eq!(cps6.fragments.iter().count(), 6);
+    // Cannot advance to next checkpoint
+    assert_eq!(cps6.next_checkpoint(), 0);
+    // But recording of fragments is closed
 }
