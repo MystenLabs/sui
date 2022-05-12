@@ -52,11 +52,16 @@ async function getRecentTransactions(txNum: number): Promise<TxnData[]> {
             .then((res: GetTxnDigestsResponse) => res);
 
         const digests = transactions.map((tx) => tx[1]);
+
         const txLatest = await rpc
             .getTransactionWithEffectsBatch(digests)
             .then((txEffs: TransactionEffectsResponse[]) => {
                 return txEffs.map((txEff, i) => {
-                    const [seq, digest] = transactions[i];
+                    const [seq, digest] = transactions.filter(
+                        (transactionId) =>
+                            transactionId[1] ===
+                            txEff.effects.transaction_digest
+                    )[0];
                     const res: CertifiedTransaction = txEff.certificate;
                     const singleTransaction = getSingleTransactionKind(
                         res.data
