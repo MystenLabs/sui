@@ -15,20 +15,11 @@ use sui_network::{
     tonic,
 };
 
-
 use sui_types::{crypto::VerificationObligation, error::*, messages::*};
 use tokio::sync::mpsc::Sender;
 
-use sui_types::{messages_checkpoint::CheckpointRequest,};
-
-
-use sui_types::{
-    crypto::VerificationObligation,
-    error::*,
-    messages::*,
-    messages_checkpoint::{CheckpointRequest, CheckpointResponse},
-};
-use tokio::{net::TcpListener, sync::mpsc::Sender};
+use sui_types::messages_checkpoint::CheckpointRequest;
+use sui_types::messages_checkpoint::CheckpointResponse;
 
 use tracing::{info, Instrument};
 

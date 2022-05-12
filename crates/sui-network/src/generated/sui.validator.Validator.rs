@@ -215,7 +215,7 @@ pub mod validator_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = crate::codec::BincodeCodec::default();
+            let codec = mysten_network::codec::BincodeCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.validator.Validator/Checkpoint",
             );
@@ -642,7 +642,7 @@ pub mod validator_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CheckpointSvc(inner);
-                        let codec = crate::codec::BincodeCodec::default();
+                        let codec = mysten_network::codec::BincodeCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,

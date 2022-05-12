@@ -668,7 +668,7 @@ impl CheckpointStore {
             self.committee.clone(),
             &fragments,
         )
-        .map_err( FragmentInternalError::Error)?;
+        .map_err(FragmentInternalError::Error)?;
 
         if let Some(reconstructed) = _potential_checkpoint {
             if let Some(proposal) = &self.get_locals().current_proposal {

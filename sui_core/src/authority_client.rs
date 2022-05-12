@@ -8,7 +8,7 @@ use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
 use std::sync::Arc;
 
-use sui_network::{api::ValidatorClient, network::NetworkClient, tonic};
+use sui_network::{api::ValidatorClient, tonic};
 use sui_types::{error::SuiError, messages::*};
 
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
