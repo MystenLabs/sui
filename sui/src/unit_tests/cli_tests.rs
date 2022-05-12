@@ -12,33 +12,31 @@ use tracing_test::traced_test;
 
 use sui::{
     config::{
-        AccountConfig, Config, GatewayConfig, GatewayType, GenesisConfig, NetworkConfig,
-        ObjectConfig, PersistedConfig, WalletConfig, AUTHORITIES_DB_NAME, SUI_GATEWAY_CONFIG,
+        Config, GatewayConfig, GatewayType, PersistedConfig, WalletConfig, SUI_GATEWAY_CONFIG,
         SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
     },
     keystore::KeystoreType,
-    sui_commands::{SuiCommand, SuiNetwork, SUI_AUTHORITY_KEYS},
+    sui_commands::{SuiCommand, SuiNetwork},
     wallet_commands::{WalletCommandResult, WalletCommands, WalletContext},
 };
+use sui_config::{AccountConfig, GenesisConfig, NetworkConfig, ObjectConfig};
 use sui_core::gateway_state::gateway_responses::SwitchResponse;
 use sui_core::sui_json::SuiJsonValue;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
-    crypto::{get_key_pair, random_key_pairs},
+    crypto::get_key_pair,
     gas_coin::GasCoin,
     messages::TransactionEffects,
     object::{Object, ObjectRead, GAS_VALUE_FOR_TESTING},
 };
 
-use crate::cli_tests::sui_network::start_test_network;
+use test_utils::network::start_test_network;
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
 const AIRDROP_SOURCE_CONTRACT_ADDRESS: &str = "bc4ca0eda7647a8ab7c2061c2e118a18a936f13d";
 const AIRDROP_SOURCE_TOKEN_ID: u64 = 101u64;
 const AIRDROP_TOKEN_NAME: &str = "BoredApeYachtClub";
 const AIRDROP_TOKEN_URI: &str = "ipfs://QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/101";
-
-mod sui_network;
 
 macro_rules! retry_assert {
     ($test:expr, $timeout:expr) => {{
@@ -83,24 +81,22 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         .flat_map(|r| r.map(|file| file.file_name().to_str().unwrap().to_owned()))
         .collect::<Vec<_>>();
 
-    assert_eq!(6, files.len());
+    assert_eq!(4, files.len());
     assert!(files.contains(&SUI_WALLET_CONFIG.to_string()));
     assert!(files.contains(&SUI_GATEWAY_CONFIG.to_string()));
-    assert!(files.contains(&AUTHORITIES_DB_NAME.to_string()));
     assert!(files.contains(&SUI_NETWORK_CONFIG.to_string()));
     assert!(files.contains(&"wallet.key".to_string()));
-    assert!(files.contains(&SUI_AUTHORITY_KEYS.to_string()));
 
     // Check network config
     let network_conf =
         PersistedConfig::<NetworkConfig>::read(&working_dir.join(SUI_NETWORK_CONFIG))?;
-    assert_eq!(4, network_conf.authorities.len());
+    assert_eq!(4, network_conf.validator_configs().len());
 
     // Check wallet config
     let wallet_conf = PersistedConfig::<WalletConfig>::read(&working_dir.join(SUI_WALLET_CONFIG))?;
 
     if let GatewayType::Embedded(config) = &wallet_conf.gateway {
-        assert_eq!(4, config.authorities.len());
+        assert_eq!(4, config.validator_set.len());
         assert_eq!(working_dir.join("client_db"), config.db_folder_path);
     } else {
         panic!()
@@ -172,7 +168,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
 
-    let network = start_test_network(working_dir.path(), None, None).await?;
+    let network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context with the oracle account
     let wallet_conf_path = working_dir.path().join(SUI_WALLET_CONFIG);
@@ -338,18 +334,8 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
     // Create and save genesis config file
     // Create 4 authorities, 1 account with 1 gas object with custom id
-    let key_pairs = random_key_pairs(4);
 
-    let mut config = GenesisConfig::default_genesis(
-        working_dir.path(),
-        Some((
-            key_pairs
-                .iter()
-                .map(|kp| *kp.public_key_bytes())
-                .collect::<Vec<_>>(),
-            key_pairs[0].copy(),
-        )),
-    )?;
+    let mut config = GenesisConfig::for_local_testing()?;
     config.accounts.clear();
     let object_id = ObjectID::random();
     config.accounts.push(AccountConfig {
@@ -361,7 +347,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
         gas_object_ranges: None,
     });
 
-    let network = start_test_network(working_dir.path(), Some(config), Some(key_pairs)).await?;
+    let network = start_test_network(working_dir.path(), Some(config)).await?;
 
     // Wallet config
     let mut context = WalletContext::new(&working_dir.path().join(SUI_WALLET_CONFIG))?;
@@ -402,20 +388,7 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     // Create and save genesis config file
     // Create 4 authorities and 1 account
     let num_authorities = 4;
-    let key_pairs = random_key_pairs(num_authorities);
-    let mut config = GenesisConfig::custom_genesis(
-        working_dir,
-        num_authorities,
-        1,
-        1,
-        Some((
-            key_pairs
-                .iter()
-                .map(|kp| *kp.public_key_bytes())
-                .collect::<Vec<_>>(),
-            key_pairs[0].copy(),
-        )),
-    )?;
+    let mut config = GenesisConfig::custom_genesis(num_authorities, 1, 1)?;
     config
         .move_packages
         .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_1"));
@@ -424,16 +397,16 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
         .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_2"));
 
     // Start network
-    let network = start_test_network(working_dir, Some(config), Some(key_pairs)).await?;
+    let network = start_test_network(working_dir, Some(config)).await?;
 
     assert!(logs_contain("Loading 2 Move packages"));
     // Checks network config contains package ids
     let network_conf =
         PersistedConfig::<NetworkConfig>::read(&working_dir.join(SUI_NETWORK_CONFIG))?;
-    assert_eq!(2, network_conf.loaded_move_packages.len());
+    assert_eq!(2, network_conf.loaded_move_packages().len());
 
     // Make sure we log out package id
-    for (_, id) in &network_conf.loaded_move_packages {
+    for (_, id) in network_conf.loaded_move_packages() {
         assert!(logs_contain(&*format!("{id}")));
     }
 
@@ -1050,7 +1023,7 @@ fn test_bug_1078() {
 #[tokio::test]
 async fn test_switch_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
-    let network = start_test_network(working_dir.path(), None, None).await?;
+    let network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context.
     let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
@@ -1145,7 +1118,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn test_active_address_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
-    let network = start_test_network(working_dir.path(), None, None).await?;
+    let network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context.
     let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
@@ -1366,7 +1339,7 @@ async fn setup_network_and_wallet() -> Result<(SuiNetwork, WalletContext, SuiAdd
 {
     let working_dir = tempfile::tempdir()?;
 
-    let network = start_test_network(working_dir.path(), None, None).await?;
+    let network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context.
     let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);

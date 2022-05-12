@@ -72,7 +72,7 @@ impl AuthorityServer {
             consensus_address,
             state.committee.clone(),
             tx_consensus_listener,
-            /* max_delay */ Duration::from_millis(2_000),
+            /* max_delay */ Duration::from_millis(5_000),
         );
 
         Self {

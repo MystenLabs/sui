@@ -1325,6 +1325,9 @@ name = "debug-ignore"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e51694c5f8b91baf933e6429a3df4ff3e9f1160386d150790b97bef73337d1b"
+dependencies = [
+ "serde 1.0.137",
+]
 
 [[package]]
 name = "derivative"
@@ -5438,6 +5441,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "sui-adapter",
+ "sui-config",
  "sui-framework",
  "sui-network",
  "sui-open-rpc",
@@ -5487,6 +5491,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-config"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "config 0.1.0",
+ "crypto",
+ "debug-ignore",
+ "dirs",
+ "multiaddr",
+ "rand 0.7.3",
+ "serde 1.0.137",
+ "serde_json",
+ "sui-framework",
+ "sui-types",
+ "tracing",
+]
+
+[[package]]
 name = "sui-faucet"
 version = "0.1.0"
 dependencies = [
@@ -5500,6 +5522,7 @@ dependencies = [
  "sui",
  "sui-types",
  "tempfile",
+ "test_utils",
  "thiserror",
  "tokio",
  "tower",
@@ -5879,6 +5902,7 @@ dependencies = [
 name = "test_utils"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bcs",
  "bytes",
@@ -5890,6 +5914,7 @@ dependencies = [
  "rocksdb",
  "sui",
  "sui-adapter",
+ "sui-config",
  "sui-framework",
  "sui-network",
  "sui-types",

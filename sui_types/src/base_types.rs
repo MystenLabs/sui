@@ -137,6 +137,12 @@ impl TryFrom<Vec<u8>> for SuiAddress {
 
 impl From<&PublicKeyBytes> for SuiAddress {
     fn from(key: &PublicKeyBytes) -> SuiAddress {
+        Self::from(*key)
+    }
+}
+
+impl From<PublicKeyBytes> for SuiAddress {
+    fn from(key: PublicKeyBytes) -> SuiAddress {
         let mut hasher = Sha3_256::default();
         hasher.update(key.as_ref());
         let g_arr = hasher.finalize();

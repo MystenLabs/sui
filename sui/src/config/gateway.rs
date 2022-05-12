@@ -1,10 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    config::{AuthorityInfo, Config},
-    rpc_gateway_client::RpcGatewayClient,
-};
+use crate::{config::Config, rpc_gateway_client::RpcGatewayClient};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -12,6 +9,7 @@ use std::{
     path::PathBuf,
     time::Duration,
 };
+use sui_config::ValidatorInfo;
 use sui_core::{
     authority_client::NetworkAuthorityClient,
     gateway_state::{GatewayClient, GatewayState},
@@ -40,7 +38,10 @@ impl Display for GatewayType {
                     "Gateway state DB folder path : {:?}",
                     config.db_folder_path
                 )?;
-                let authorities = config.authorities.iter().map(|info| &info.network_address);
+                let authorities = config
+                    .validator_set
+                    .iter()
+                    .map(|info| info.network_address());
                 writeln!(
                     writer,
                     "Authorities : {:?}",
@@ -73,7 +74,7 @@ impl GatewayType {
 #[derive(Serialize, Deserialize)]
 pub struct GatewayConfig {
     pub epoch: EpochId,
-    pub authorities: Vec<AuthorityInfo>,
+    pub validator_set: Vec<ValidatorInfo>,
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
     pub buffer_size: usize,
@@ -85,9 +86,9 @@ impl Config for GatewayConfig {}
 impl GatewayConfig {
     pub fn make_committee(&self) -> Committee {
         let voting_rights = self
-            .authorities
+            .validator_set
             .iter()
-            .map(|authority| (authority.public_key, 1))
+            .map(|validator| (validator.public_key(), validator.stake()))
             .collect();
         Committee::new(self.epoch, voting_rights)
     }
@@ -97,10 +98,10 @@ impl GatewayConfig {
         let mut config = mysten_network::config::Config::new();
         config.connect_timeout = Some(self.send_timeout);
         config.request_timeout = Some(self.recv_timeout);
-        for authority in &self.authorities {
-            let channel = config.connect_lazy(&authority.network_address).unwrap();
+        for authority in &self.validator_set {
+            let channel = config.connect_lazy(authority.network_address()).unwrap();
             let client = NetworkAuthorityClient::new(channel);
-            authority_clients.insert(authority.public_key, client);
+            authority_clients.insert(authority.public_key(), client);
         }
         authority_clients
     }
@@ -110,7 +111,7 @@ impl Default for GatewayConfig {
     fn default() -> Self {
         Self {
             epoch: 0,
-            authorities: vec![],
+            validator_set: vec![],
             send_timeout: Duration::from_micros(4000000),
             recv_timeout: Duration::from_micros(4000000),
             buffer_size: 650000,

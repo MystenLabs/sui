@@ -10,7 +10,8 @@ use std::panic;
 use std::path::PathBuf;
 use sui::benchmark::transaction_creator::TransactionCreator;
 use sui::benchmark::validator_preparer::ValidatorPreparer;
-use sui::config::{NetworkConfig, PersistedConfig};
+use sui::config::PersistedConfig;
+use sui_config::NetworkConfig;
 use sui_types::base_types::ObjectID;
 use sui_types::crypto::KeyPair;
 use tokio::runtime::Builder;
@@ -61,8 +62,11 @@ pub fn main() {
 
     let network_config: NetworkConfig = remote_config.network_config;
 
-    let validator_preparer =
-        ValidatorPreparer::new_for_remote(&network_config, &remote_config.validator_keypairs);
+    let validator_preparer = ValidatorPreparer::new_for_remote(network_config);
+    let remote_config: RemoteLoadGenConfig =
+        PersistedConfig::read(&benchmark.remote_config).unwrap();
+
+    let network_config: NetworkConfig = remote_config.network_config;
     let connections = if benchmark.tcp_connections > 0 {
         benchmark.tcp_connections
     } else {
