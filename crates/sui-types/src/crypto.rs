@@ -287,40 +287,16 @@ impl Signature {
     where
         T: Signable<Vec<u8>>,
     {
-        // Is this signature emitted by the expected author?
-        let public_key_bytes: [u8; ed25519_dalek::PUBLIC_KEY_LENGTH] = self
-            .public_key_bytes()
-            .try_into()
-            .expect("byte lengths match");
-        let received_addr = SuiAddress::from(&PublicKeyBytes(public_key_bytes));
-        if received_addr != author {
-            return Err(SuiError::IncorrectSigner {
-                error: format!(
-                    "Signature check failure. Author is {}, received address is {}",
-                    author, received_addr
-                ),
-            });
-        }
+        let (message, signature, public_key_bytes) = self.get_verification_inputs(value, author)?;
 
         // is this a cryptographically correct public key?
         // TODO: perform stricter key validation, sp. small order points, see https://github.com/MystenLabs/sui/issues/101
-        let public_key = dalek::PublicKey::from_bytes(self.public_key_bytes()).map_err(|err| {
-            SuiError::InvalidSignature {
-                error: err.to_string(),
-            }
-        })?;
-
-        // deserialize the signature
-        let signature =
-            ed25519_dalek::Signature::from_bytes(self.signature_bytes()).map_err(|err| {
+        let public_key =
+            dalek::PublicKey::from_bytes(public_key_bytes.as_ref()).map_err(|err| {
                 SuiError::InvalidSignature {
                     error: err.to_string(),
                 }
             })?;
-
-        // serialize the message (see BCS serialization for determinism)
-        let mut message = Vec::new();
-        value.write(&mut message);
 
         // perform cryptographic signature check
         public_key
