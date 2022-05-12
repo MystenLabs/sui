@@ -103,7 +103,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 Self::ExtraInitArgs,
             )>,
         >,
-    ) -> Self {
+    ) -> (Self, Option<String>) {
         let mut rng = StdRng::from_seed(RNG_SEED);
         assert!(
             pre_compiled_deps.is_some(),
@@ -168,7 +168,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         for object_id in object_ids {
             test_adapter.enumerate_fake(object_id);
         }
-        test_adapter
+        (test_adapter, None)
     }
 
     fn publish_module(
