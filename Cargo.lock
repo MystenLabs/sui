@@ -925,7 +925,7 @@ dependencies = [
 [[package]]
 name = "config"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=a188b870eb1a4b601a58e5744290b7d56ccd4039#a188b870eb1a4b601a58e5744290b7d56ccd4039"
+source = "git+https://github.com/MystenLabs/narwhal?rev=23745f48103656eae4a4205d0b3edd53ad8894de#23745f48103656eae4a4205d0b3edd53ad8894de"
 dependencies = [
  "crypto",
  "multiaddr",
@@ -954,7 +954,7 @@ dependencies = [
 [[package]]
 name = "consensus"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=a188b870eb1a4b601a58e5744290b7d56ccd4039#a188b870eb1a4b601a58e5744290b7d56ccd4039"
+source = "git+https://github.com/MystenLabs/narwhal?rev=23745f48103656eae4a4205d0b3edd53ad8894de#23745f48103656eae4a4205d0b3edd53ad8894de"
 dependencies = [
  "bincode",
  "blake2",
@@ -1118,7 +1118,7 @@ dependencies = [
 [[package]]
 name = "crypto"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=a188b870eb1a4b601a58e5744290b7d56ccd4039#a188b870eb1a4b601a58e5744290b7d56ccd4039"
+source = "git+https://github.com/MystenLabs/narwhal?rev=23745f48103656eae4a4205d0b3edd53ad8894de#23745f48103656eae4a4205d0b3edd53ad8894de"
 dependencies = [
  "ark-bls12-377",
  "ark-ec",
@@ -1626,7 +1626,7 @@ checksum = "77f3309417938f28bf8228fcff79a4a37103981e3e186d2ccd19c74b38f4eb71"
 [[package]]
 name = "executor"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=a188b870eb1a4b601a58e5744290b7d56ccd4039#a188b870eb1a4b601a58e5744290b7d56ccd4039"
+source = "git+https://github.com/MystenLabs/narwhal?rev=23745f48103656eae4a4205d0b3edd53ad8894de#23745f48103656eae4a4205d0b3edd53ad8894de"
 dependencies = [
  "async-trait",
  "bincode",
@@ -3539,7 +3539,7 @@ checksum = "ca2b420f638f07fe83056b55ea190bb815f609ec5a35e7017884a10f78839c9e"
 [[package]]
 name = "network"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=a188b870eb1a4b601a58e5744290b7d56ccd4039#a188b870eb1a4b601a58e5744290b7d56ccd4039"
+source = "git+https://github.com/MystenLabs/narwhal?rev=23745f48103656eae4a4205d0b3edd53ad8894de#23745f48103656eae4a4205d0b3edd53ad8894de"
 dependencies = [
  "async-trait",
  "backoff",
@@ -3612,7 +3612,7 @@ dependencies = [
 [[package]]
 name = "node"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=a188b870eb1a4b601a58e5744290b7d56ccd4039#a188b870eb1a4b601a58e5744290b7d56ccd4039"
+source = "git+https://github.com/MystenLabs/narwhal?rev=23745f48103656eae4a4205d0b3edd53ad8894de#23745f48103656eae4a4205d0b3edd53ad8894de"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3636,6 +3636,7 @@ dependencies = [
  "tracing-subscriber 0.3.11",
  "typed-store",
  "types",
+ "url",
  "worker",
 ]
 
@@ -4217,7 +4218,7 @@ dependencies = [
 [[package]]
 name = "primary"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=a188b870eb1a4b601a58e5744290b7d56ccd4039#a188b870eb1a4b601a58e5744290b7d56ccd4039"
+source = "git+https://github.com/MystenLabs/narwhal?rev=23745f48103656eae4a4205d0b3edd53ad8894de#23745f48103656eae4a4205d0b3edd53ad8894de"
 dependencies = [
  "async-recursion",
  "async-trait",
@@ -6326,7 +6327,7 @@ checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 [[package]]
 name = "types"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=a188b870eb1a4b601a58e5744290b7d56ccd4039#a188b870eb1a4b601a58e5744290b7d56ccd4039"
+source = "git+https://github.com/MystenLabs/narwhal?rev=23745f48103656eae4a4205d0b3edd53ad8894de#23745f48103656eae4a4205d0b3edd53ad8894de"
 dependencies = [
  "base64",
  "bincode",
@@ -6796,7 +6797,7 @@ checksum = "c811ca4a8c853ef420abd8592ba53ddbbac90410fab6903b3e79972a631f7680"
 [[package]]
 name = "worker"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=a188b870eb1a4b601a58e5744290b7d56ccd4039#a188b870eb1a4b601a58e5744290b7d56ccd4039"
+source = "git+https://github.com/MystenLabs/narwhal?rev=23745f48103656eae4a4205d0b3edd53ad8894de#23745f48103656eae4a4205d0b3edd53ad8894de"
 dependencies = [
  "anyhow",
  "async-trait",
