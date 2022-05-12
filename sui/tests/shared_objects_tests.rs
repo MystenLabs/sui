@@ -1,7 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use std::sync::Arc;
+
 use sui::config::AuthorityInfo;
-use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
+use sui_core::{
+    authority_client::{AuthorityAPI, NetworkAuthorityClient},
+    gateway_state::{GatewayAPI, GatewayState},
+};
 use sui_types::{
     base_types::ObjectRef,
     error::{SuiError, SuiResult},
@@ -12,7 +18,7 @@ use sui_types::{
     object::Object,
 };
 use test_utils::{
-    authority::{spawn_test_authorities, test_authority_configs},
+    authority::{create_authority_aggregator, spawn_test_authorities, test_authority_configs},
     messages::{
         make_certificates, move_transaction, parse_package_ref, publish_move_package_transaction,
         test_shared_object_transactions,
@@ -418,4 +424,78 @@ async fn shared_object_sync() {
             Err(error) => panic!("{error}"),
         }
     }
+}
+
+#[tokio::test]
+async fn shared_object_on_gateway() {
+    let mut gas_objects = test_gas_objects();
+
+    // Get the authority configs and spawn them. Note that it is important to not drop
+    // the handles (or the authorities will stop).
+    let (configs, key_pairs) = test_authority_configs();
+    let _handles = spawn_test_authorities(gas_objects.clone(), &configs, &key_pairs).await;
+    let clients = create_authority_aggregator(&configs);
+    let path = tempfile::tempdir().unwrap().into_path();
+    let gateway = Arc::new(GatewayState::new_with_authorities(path, clients).unwrap());
+
+    // Publish the move package to all authorities and get the new package ref.
+    tokio::task::yield_now().await;
+    let package_ref = publish_counter_package(gas_objects.pop().unwrap(), &configs).await;
+
+    // Send a transaction to create a counter.
+    tokio::task::yield_now().await;
+    let create_counter_transaction = move_transaction(
+        gas_objects.pop().unwrap(),
+        "Counter",
+        "create",
+        package_ref,
+        /* arguments */ Vec::default(),
+    );
+    let resp = gateway
+        .execute_transaction(create_counter_transaction)
+        .await
+        .unwrap();
+    let effects = resp.to_effect_response().unwrap().1;
+    let (shared_object_id, _, _) = effects.created[0].0;
+    // We need to have one gas object left for the final value check.
+    let last_gas_object = gas_objects.pop().unwrap();
+    let increment_amount = gas_objects.len();
+    let futures: Vec<_> = gas_objects
+        .into_iter()
+        .map(|gas_object| {
+            let g = gateway.clone();
+            let increment_counter_transaction = move_transaction(
+                gas_object,
+                "Counter",
+                "increment",
+                package_ref,
+                /* arguments */ vec![CallArg::SharedObject(shared_object_id)],
+            );
+            async move { g.execute_transaction(increment_counter_transaction).await }
+        })
+        .collect();
+
+    let replies: Vec<_> = futures::future::join_all(futures)
+        .await
+        .into_iter()
+        .collect();
+    assert_eq!(replies.len(), increment_amount);
+    assert!(replies.iter().all(|result| result.is_ok()));
+
+    let assert_value_transaction = move_transaction(
+        last_gas_object,
+        "Counter",
+        "assert_value",
+        package_ref,
+        vec![
+            CallArg::SharedObject(shared_object_id),
+            CallArg::Pure((increment_amount as u64).to_le_bytes().to_vec()),
+        ],
+    );
+    let resp = gateway
+        .execute_transaction(assert_value_transaction)
+        .await
+        .unwrap();
+    let effects = resp.to_effect_response().unwrap().1;
+    assert!(effects.status.is_ok());
 }
