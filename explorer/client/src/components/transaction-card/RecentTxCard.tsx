@@ -46,17 +46,17 @@ type TxnData = {
 
 async function getRecentTransactions(txNum: number): Promise<TxnData[]> {
     try {
-        // Get the latest transactions
+        // Get the digests:
         const transactions = await rpc
             .getRecentTransactions(txNum)
             .then((res: GetTxnDigestsResponse) => res);
-
         const digests = transactions.map((tx) => tx[1]);
+
         const txLatest = await rpc
             .getTransactionWithEffectsBatch(digests)
             .then((txEffs: TransactionEffectsResponse[]) => {
                 return txEffs.map((txEff, i) => {
-                    const [seq, digest] = transactions[i];
+                    const digest = txEff.effects.transaction_digest;
                     const res: CertifiedTransaction = txEff.certificate;
                     const singleTransaction = getSingleTransactionKind(
                         res.data
@@ -72,7 +72,7 @@ async function getRecentTransactions(txNum: number): Promise<TxnData[]> {
                     )?.recipient;
 
                     return {
-                        seq,
+                        seq: i,
                         txId: digest,
                         status: getExecutionStatusType(txEff.effects.status),
                         txGas: getTotalGasUsed(txEff.effects.status),
