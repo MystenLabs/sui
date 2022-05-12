@@ -15,7 +15,8 @@
         "stylelint:fix": "npm run stylelint:check -- --fix",
         "lint": "npm run eslint:check && npm run prettier:check && npm run stylelint:check",
         "lint:fix": "npm run eslint:fix && npm run prettier:fix && npm run stylelint:fix",
-        "start": "concurrently --restart-tries 10 --raw \"npm:build:dev -- --watch\" \"npm:prettier:fix:watch\""
+        "start": "concurrently --restart-tries 10 --raw \"npm:build:dev -- --watch\" \"npm:prettier:fix:watch\"",
+        "test": "npx jest"
     },
     "repository": {
         "type": "git",
@@ -31,6 +32,7 @@
     "author": "Mysten Labs <build@mystenlabs.com>",
     "license": "Apache-2.0",
     "devDependencies": {
+        "@types/jest": "^27.5.0",
         "@types/node": "^17.0.31",
         "@types/react": "^18.0.8",
         "@types/react-dom": "^18.0.3",
@@ -45,6 +47,7 @@
         "eslint-config-react-app": "^7.0.1",
         "eslint-webpack-plugin": "^3.1.1",
         "html-webpack-plugin": "^5.5.0",
+        "jest": "^28.1.0",
         "mini-css-extract-plugin": "^2.6.0",
         "onchange": "^7.1.0",
         "postcss-loader": "^6.2.1",
@@ -56,6 +59,7 @@
         "stylelint-config-prettier-scss": "^0.0.1",
         "stylelint-config-standard-scss": "^3.0.0",
         "stylelint-webpack-plugin": "^3.2.0",
+        "ts-jest": "^28.0.2",
         "ts-loader": "^9.3.0",
         "ts-node": "^10.7.0",
         "tsconfig-paths": "^4.0.0",
@@ -64,8 +68,11 @@
         "webpack-merge": "^5.8.0"
     },
     "dependencies": {
+        "@mysten/sui.js": "file:../sdk/typescript",
+        "bip39-light": "^1.0.7",
         "react": "^18.1.0",
         "react-dom": "^18.1.0",
+        "tweetnacl": "^1.0.3",
         "webextension-polyfill": "^0.9.0"
     }
 }
