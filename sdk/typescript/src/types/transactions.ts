@@ -148,9 +148,7 @@ export function getTransferTransaction(
   data: TransactionData
 ): TransferCoin | undefined {
   const tx = getSingleTransactionKind(data);
-  if (!tx) return undefined;
-  if ('TransferCoin' in tx) return tx.TransferCoin;
-  return undefined;
+  return tx && 'TransferCoin' in tx ? tx.TransferCoin : undefined;
 }
 
 export function getPublishTransaction(
