@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     path::Path,
     sync::Arc,
 };
@@ -20,7 +20,7 @@ use sui_types::{
         CheckpointFragment, CheckpointRequest, CheckpointRequestType, CheckpointResponse,
         CheckpointSequenceNumber, CheckpointSummary, SignedCheckpoint, SignedCheckpointProposal,
     },
-    waypoint::{GlobalCheckpoint, WaypointDiff},
+    waypoint::{GlobalCheckpoint, WaypointDiff, WaypointError},
 };
 use typed_store::{
     reopen,
@@ -136,9 +136,17 @@ pub struct CheckpointLocals {
     pub current_proposal: Option<CheckpointProposal>,
 }
 
+/// A simple interface for sending a transaction to consensus for
+/// sequencing. The trait is useful to test this component away
+/// from real consensus.
 pub trait ConsensusSender: Send + Sync + 'static {
     // Send an item to the consensus
     fn send_to_consensus(&self, fragment: CheckpointFragment) -> Result<(), SuiError>;
+}
+
+pub enum FragmentInternalError {
+    Error(SuiError),
+    Retry(Box<CheckpointFragment>),
 }
 
 pub struct CheckpointStore {
@@ -493,7 +501,19 @@ impl CheckpointStore {
                 [(&checkpoint_sequence_number, &signed_checkpoint)],
             )?
             // Drop the fragments for the previous checkpoint
-            .delete_batch(&self.fragments, self.fragments.keys())?
+            .delete_batch(
+                &self.fragments,
+                self.fragments.iter().filter_map(|(k, v)| {
+                    // Delete all keys for checkpoints smaller than what we are committing now.
+                    if v.proposer.0.checkpoint.waypoint.sequence_number
+                        <= checkpoint_sequence_number
+                    {
+                        Some(k)
+                    } else {
+                        None
+                    }
+                }),
+            )?
             .delete_batch(&self.local_fragments, self.local_fragments.keys())?;
 
         // Update the transactions databases.
@@ -606,7 +626,7 @@ impl CheckpointStore {
         &self,
         _seq: u64,
         _fragment: CheckpointFragment,
-    ) -> Result<(), SuiError> {
+    ) -> Result<(), FragmentInternalError> {
         // Ensure we have not already processed this fragment.
         if let Some((last_seq, _)) = self.fragments.iter().skip_to_last().next() {
             if _seq <= last_seq {
@@ -616,22 +636,39 @@ impl CheckpointStore {
         }
 
         // Check structure is correct and signatures verify
-        _fragment.verify(&self.committee)?;
+        _fragment
+            .verify(&self.committee)
+            .map_err(FragmentInternalError::Error)?;
 
         // Save the new fragment in the DB
+        self.fragments.insert(&_seq, &_fragment).map_err(|_err| {
+            // There is a possibility this was not stored!
+            let fragment = _fragment.clone();
+            FragmentInternalError::Retry(Box::new(fragment))
+        })?;
+
+        // If we are waiting for more information from the environment to
+        // form a checkpoint we close the recording of more messages here
+        // until we form a checkpoint.
         let locals = self.get_locals();
-        if !locals.no_more_fragments {
-            self.fragments.insert(&_seq, &_fragment)?;
+        if locals.no_more_fragments {
+            return Err(FragmentInternalError::Retry(Box::new(_fragment)));
         }
 
-        let fragments: Vec<_> = self.fragments.values().collect();
+        let next_sequence_number = self.next_checkpoint();
+        let fragments: Vec<_> = self
+            .fragments
+            .values()
+            .filter(|frag| *frag.proposer.0.checkpoint.sequence_number() == next_sequence_number)
+            .collect();
 
         // Run the reconstruction logic to build a checkpoint.
         let _potential_checkpoint = FragmentReconstruction::construct(
             self.next_checkpoint(),
             self.committee.clone(),
             &fragments,
-        )?;
+        )
+        .map_err( FragmentInternalError::Error)?;
 
         if let Some(reconstructed) = _potential_checkpoint {
             if let Some(proposal) = &self.get_locals().current_proposal {
@@ -657,8 +694,10 @@ impl CheckpointStore {
                     //       have not executed, to make sure they are available.
 
                     // Now create the new checkpoint and move all locals forward.
-                    let summary = CheckpointSummary::new(self.next_checkpoint(), &contents);
-                    return self.handle_internal_set_checkpoint(summary, &contents);
+                    let summary = CheckpointSummary::new(next_sequence_number, &contents);
+                    return self
+                        .handle_internal_set_checkpoint(summary, &contents)
+                        .map_err(FragmentInternalError::Error);
                 }
 
                 // NOTE:
@@ -672,7 +711,8 @@ impl CheckpointStore {
             //       and activelly wait for someone else to give us the data?
             let mut new_locals = locals.as_ref().clone();
             new_locals.no_more_fragments = true;
-            self.set_locals(locals, new_locals)?;
+            self.set_locals(locals, new_locals)
+                .map_err(FragmentInternalError::Error)?;
 
             // A little argument about how the fragment -> checkpoint process is live
             //
@@ -683,9 +723,11 @@ impl CheckpointStore {
             // checkpoint. And all other authorities by asking all authorities will be
             // able to get f+1 signatures and construct a checkpoint certificate.
 
-            Err(SuiError::GenericAuthorityError {
-                error: "Missing info to construct known checkpoint.".to_string(),
-            })
+            Err(FragmentInternalError::Error(
+                SuiError::GenericAuthorityError {
+                    error: "Missing info to construct known checkpoint.".to_string(),
+                },
+            ))
         } else {
             Ok(())
         }
@@ -1062,104 +1104,126 @@ pub struct FragmentReconstruction {
 }
 
 impl FragmentReconstruction {
+    /// Take an ordered list of fragments and attempts to construct a connected
+    /// component checkpoint with weight over 2/3 of stake. Note that the minimum
+    /// prefix of links is used in this process.
     pub fn construct(
         seq: u64,
         committee: Committee,
         fragments: &[CheckpointFragment],
     ) -> Result<Option<FragmentReconstruction>, SuiError> {
-        // First extract the greatest connected component
-        let mut links: HashMap<AuthorityName, HashSet<AuthorityName>> = HashMap::new();
-        let mut link_fragment: HashMap<(AuthorityName, AuthorityName), _> = HashMap::new();
+        let mut span = SpanGraph::new(&committee);
+        let mut fragments_used = Vec::new();
+        let mut proposals: HashMap<AuthorityName, CheckpointSummary> = HashMap::new();
 
-        // TODO Here: Check that any subsequence proposal from the same authority
-        // is the same as any previous proposal seen to avoid equivocation. If a
-        // contradiction is found exclude the authority from the checkpoint -- it
-        // is faulty for sure.
-        //
-        // let _entities: HashMap<AuthorityName, SignedCheckpointProposal> = HashMap::new();
+        for frag in fragments {
+            // Double check we have only been given waypoints for the correct sequence number
+            debug_assert!(frag.diff.first.waypoint.sequence_number == seq);
 
-        // Insert each link both ways, to construct the graph.
-        for fragment in fragments {
-            let proposer = fragment.proposer.0.authority;
-            let other = fragment.other.0.authority;
-            links
-                .entry(proposer)
-                .or_insert_with(HashSet::new)
-                .insert(other);
-            links
-                .entry(other)
-                .or_insert_with(HashSet::new)
-                .insert(proposer);
-
-            // Make an index of the fragments
-            link_fragment.entry((proposer, other)).or_insert(fragment);
-            link_fragment.entry((other, proposer)).or_insert(fragment);
-        }
-
-        let mut candidates: HashSet<_> = links.keys().collect();
-
-        // Loop back here!
-        loop {
-            let mut current_component = Vec::new();
-            let mut add_set = HashSet::new();
-
-            // This list is getting smaller with each pop, and when empty we
-            // exit, therefore this loop will terminate with an error in case
-            // we do not find a checkpoint-size component.
-            if let Some(add_item) = candidates.iter().next() {
-                // Take the next available node to create the next connected
-                // component.
-                add_set.insert(*add_item);
-            } else {
-                // If we run out of candidates with no checkpoint, there is no
-                // checkpoint yet.
-                return Ok(None);
-            }
-
-            // Extract the connected component starting at "add_item".
-            while !add_set.is_empty() {
-                let start_entity = *add_set.iter().next().unwrap();
-                add_set.remove(start_entity);
-                candidates.remove(start_entity);
-                // Note this lists nodes in causal order of connection.
-                current_component.push(start_entity);
-                add_set.extend(
-                    links[start_entity]
-                        .iter()
-                        .filter(|item| candidates.contains(*item)),
-                );
-            }
-
-            // Measure the amount of stake in this component
-            let total_weight: usize = current_component
-                .iter()
-                .map(|item| committee.weight(item))
-                .sum();
-
-            // The weight is too small for this component to be a checkpoint so we
-            // skip and try to go make another component. (Or exit.)
-            if total_weight < committee.quorum_threshold() {
+            // Check the checkpoint summary of the proposal is the same as the previous one.
+            // Otherwise ignore the link.
+            let n1 = &frag.proposer.0.authority;
+            if *proposals
+                .entry(*n1)
+                .or_insert_with(|| frag.proposer.0.checkpoint.clone())
+                != frag.proposer.0.checkpoint
+            {
                 continue;
             }
 
-            // Here we are dealing with a global checkpoint!
-            // NOTE: Since a global checkpoint has 2f+1 stake there can only be one of them.
-            let mut global = GlobalCheckpoint::new(seq);
-            for first_item in current_component {
-                for second_item in &links[first_item] {
-                    // Rearrange so that the first item connects with the existing graph.
-                    let mut fragment_diff =
-                        link_fragment[&(*first_item, *second_item)].diff.clone();
-                    if fragment_diff.first.key != *first_item {
-                        fragment_diff = fragment_diff.swap();
-                    }
-                    // Insert into the graph.
-                    let _ = global.insert(fragment_diff);
-                }
+            let n2 = &frag.other.0.authority;
+            if *proposals
+                .entry(*n2)
+                .or_insert_with(|| frag.other.0.checkpoint.clone())
+                != frag.other.0.checkpoint
+            {
+                continue;
             }
 
-            // We have found a large enough component, so we now return it!
-            return Ok(Some(FragmentReconstruction { global, committee }));
+            // Add to the links we will consider.
+            fragments_used.push(frag);
+
+            // Merge the link.
+            let (top, weight) = span.merge(n1, n2);
+
+            // We have found a connected component larger than the 2/3 threshold
+            if weight >= committee.quorum_threshold() {
+                // Get all links that are part of this component
+                let mut active_links: VecDeque<_> = fragments_used
+                    .into_iter()
+                    .filter(|frag| span.top_node(&frag.proposer.0.authority).0 == top)
+                    .collect();
+
+                let mut global = GlobalCheckpoint::new(seq);
+                while let Some(link) = active_links.pop_front() {
+                    match global.insert(link.diff.clone()) {
+                        Ok(_) | Err(WaypointError::NothingToDo) => {} // Do nothing
+                        Err(WaypointError::CannotConnect) => {
+                            // Reinsert the fragment at the end
+                            active_links.push_back(link);
+                        }
+                        other => {
+                            // This is bad news, we did not intend to fail here.
+                            // We should have checked all conditions to avoid being
+                            // in this situation. TODO: audit this.
+                            println!("Unexpected result: {:?}", other);
+                            unreachable!();
+                        }
+                    }
+                }
+
+                return Ok(Some(FragmentReconstruction { global, committee }));
+            }
         }
+
+        // If we run out of candidates with no checkpoint, there is no
+        // checkpoint yet.
+        Ok(None)
+    }
+}
+
+// A structure that stores a set of spanning trees, and that supports addition
+// of links to merge them, and construct ever growing components.
+struct SpanGraph {
+    nodes: HashMap<AuthorityName, (AuthorityName, usize)>,
+}
+
+impl SpanGraph {
+    /// Initialize the graph with each authority just pointing to itself.
+    pub fn new(committee: &Committee) -> SpanGraph {
+        let mut nodes: HashMap<AuthorityName, (AuthorityName, usize)> = HashMap::new();
+        for (n, w) in &committee.voting_rights {
+            nodes.insert(*n, (*n, *w));
+        }
+        SpanGraph { nodes }
+    }
+
+    /// Follow pointer until you get to a node that only point to itself
+    /// and return the node name, and the weight of the tree that points
+    /// indirectly to it.
+    pub fn top_node(&self, name: &AuthorityName) -> (AuthorityName, usize) {
+        let mut next_name = name;
+        while self.nodes[next_name].0 != *next_name {
+            next_name = &self.nodes[next_name].0
+        }
+        self.nodes[next_name]
+    }
+
+    /// Add a link effectivelly merging two authorities into the same
+    /// connected components. This is done by take the top node of the
+    /// first and making it point to the top node of the second, and
+    /// updating the total weight of the second.
+    pub fn merge(
+        &mut self,
+        name1: &AuthorityName,
+        name2: &AuthorityName,
+    ) -> (AuthorityName, usize) {
+        let top1 = self.top_node(name1).0;
+        let top2 = self.top_node(name2).0;
+        let new_weight = self.nodes[&top1].1 + self.nodes[&top2].1;
+        self.nodes.get_mut(&top1).unwrap().0 = top2;
+        self.nodes.get_mut(&top2).unwrap().1 = new_weight;
+        debug_assert!(self.top_node(name1) == self.top_node(name2));
+        (top2, new_weight)
     }
 }

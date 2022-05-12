@@ -413,11 +413,41 @@ pub struct CheckpointFragment {
 
 impl CheckpointFragment {
     pub fn verify(&self, _committee: &Committee) -> Result<(), SuiError> {
+        // Check the signatures of proposer and other
+        self.proposer.0.check_digest()?;
+        self.other.0.check_digest()?;
+
+        // Check the proposers are authorities
+        fp_ensure!(
+            _committee.weight(&self.proposer.0.authority) > 0
+                && _committee.weight(&self.other.0.authority) > 0,
+            SuiError::GenericAuthorityError {
+                error: "Authorities not in the committee".to_string()
+            }
+        );
+
+        // Check consistency between checkpoint summary and waypoints.
+        fp_ensure!(
+            self.diff.first.waypoint == *self.proposer.0.checkpoint.waypoint
+                && self.diff.second.waypoint == *self.other.0.checkpoint.waypoint
+                && self.diff.first.key == self.proposer.0.authority
+                && self.diff.second.key == self.other.0.authority,
+            SuiError::GenericAuthorityError {
+                error: "Waypoint diff and checkpoint summary inconsistent".to_string()
+            }
+        );
+
+        // Check consistency of waypoint diff
+        fp_ensure!(
+            self.diff.check(),
+            SuiError::GenericAuthorityError {
+                error: "Waypoint diff is not valid".to_string()
+            }
+        );
+
         // TODO:
-        // - check the signatures on the proposed checkpoints.
-        // - check that the waypoint is between the checkpoints.
-        // - check the waypoint is valid.
         // - check that the certs includes all missing certs on either side.
+
         Ok(())
     }
 }

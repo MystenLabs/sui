@@ -24,6 +24,8 @@ pub enum WaypointError {
     Generic { msg: String },
     #[error("Nothing to do, all parts are already in the checkpoint.")]
     NothingToDo,
+    #[error("Fragment cannot connect with global checkpoint.")]
+    CannotConnect,
 }
 
 impl WaypointError {
@@ -290,7 +292,15 @@ where
             if !(self.authority_waypoints.contains_key(&diff.first.key)
                 && self.authority_waypoints[&diff.first.key].waypoint == diff.first.waypoint)
             {
-                return Err(WaypointError::generic("Diff does not connect.".to_string()));
+                // If the other side connects use that
+                if self.authority_waypoints.contains_key(&diff.second.key)
+                    && self.authority_waypoints[&diff.second.key].waypoint == diff.second.waypoint
+                {
+                    let diff = diff.swap();
+                    return self.insert(diff);
+                }
+
+                return Err(WaypointError::CannotConnect);
             }
 
             if self.authority_waypoints.contains_key(&diff.second.key) {

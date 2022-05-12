@@ -939,16 +939,16 @@ fn set_fragment_external() {
 
     let (_, mut cps1) = test_objects.pop().unwrap();
     cps1.set_consensus(Box::new(test_tx.clone()))
-            .expect("No issues setting the consensus");
+        .expect("No issues setting the consensus");
     let (_, mut cps2) = test_objects.pop().unwrap();
     cps2.set_consensus(Box::new(test_tx.clone()))
-            .expect("No issues setting the consensus");
+        .expect("No issues setting the consensus");
     let (_, mut cps3) = test_objects.pop().unwrap();
     cps3.set_consensus(Box::new(test_tx.clone()))
-            .expect("No issues setting the consensus");
+        .expect("No issues setting the consensus");
     let (_, mut cps4) = test_objects.pop().unwrap();
-    cps4.set_consensus(Box::new(test_tx.clone()))
-            .expect("No issues setting the consensus");
+    cps4.set_consensus(Box::new(test_tx))
+        .expect("No issues setting the consensus");
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -1234,7 +1234,7 @@ fn test_fragment_full_flow() {
     }
 
     // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
-    assert_eq!(cps6.fragments.iter().count(), 6);
+    assert_eq!(cps6.fragments.iter().count(), 12);
     // Cannot advance to next checkpoint
     assert_eq!(cps6.next_checkpoint(), 0);
     // But recording of fragments is closed
