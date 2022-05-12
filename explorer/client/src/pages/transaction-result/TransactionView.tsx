@@ -112,7 +112,7 @@ function formatByTransactionKind(
     data: TransactionData
 ) {
     switch (kind) {
-        case 'Transfer':
+        case 'TransferCoin':
             const transfer = getTransferTransaction(data)!;
             return [
                 {

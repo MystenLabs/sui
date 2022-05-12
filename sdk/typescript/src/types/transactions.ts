@@ -4,15 +4,15 @@
 import { ObjectOwner, SuiAddress, TransactionDigest } from './common';
 import { ObjectId, RawObjectRef } from './objects';
 
-export type Transfer = {
+export type TransferCoin = {
   recipient: string;
   object_ref: RawObjectRef;
 };
 export type RawAuthoritySignInfo = [AuthorityName, AuthoritySignature];
 
-export type TransactionKindName = 'Transfer' | 'Publish' | 'Call';
+export type TransactionKindName = 'TransferCoin' | 'Publish' | 'Call';
 export type SingleTransactionKind =
-  | { Transfer: Transfer }
+  | { TransferCoin: TransferCoin }
   | { Publish: MoveModulePublish }
   | { Call: MoveCall };
 export type TransactionKind =
@@ -146,9 +146,9 @@ export function getSingleTransactionKind(
 
 export function getTransferTransaction(
   data: TransactionData
-): Transfer | undefined {
+): TransferCoin | undefined {
   const tx = getSingleTransactionKind(data);
-  return tx && 'Transfer' in tx ? tx.Transfer : undefined;
+  return tx && 'TransferCoin' in tx ? tx.TransferCoin : undefined;
 }
 
 export function getPublishTransaction(

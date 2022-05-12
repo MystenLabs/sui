@@ -45,7 +45,7 @@ const initState: TxnState = {
     data: {
         kind: {
             Single: {
-                Transfer: {
+                TransferCoin: {
                     recipient: '',
                     object_ref: ['', 0, ''],
                 },
