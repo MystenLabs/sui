@@ -10,7 +10,7 @@ struct Color {
 }
 ```
 The above `struct` defines a data structure that can represent RGB color. `struct`s like this can be used to organize data with complicated semantics. However, instances of `struct`s like `Color` are not Sui objects yet.
-To define a struct that represents a Sui object type, we must add a `key` capability to the definition, and the first field of the struct must be the `id` of the object with type `VersionedID` from the [ID library](../../../../sui_programmability/framework/sources/ID.move):
+To define a struct that represents a Sui object type, we must add a `key` capability to the definition, and the first field of the struct must be the `id` of the object with type `VersionedID` from the [ID library](https://github.com/MystenLabs/sui/blob/main/sui_programmability/framework/sources/ID.move):
 ```rust
 use Sui::ID::VersionedID;
 
@@ -48,7 +48,7 @@ fun new(red: u8, green: u8, blue: u8, ctx: &mut TxContext): ColorObject {
 ### Store Sui object
 We have defined a constructor for the `ColorObject`. Calling this constructor will put the value in a local variable where it can be returned from the current function, passed to other functions, or stored inside another struct. And of course, the object can be placed in persistent global storage so it can be read by the outside world and accessed in subsequent transactions.
 
-All of the APIs for adding objects to persistent storage live in the [`Transfer`](../../../../sui_programmability//framework/sources/Transfer.move) module. One key API is:
+All of the APIs for adding objects to persistent storage live in the [`Transfer`](https://github.com/MystenLabs/sui/blob/main/sui_programmability/framework/sources/Transfer.move) module. One key API is:
 ```rust
 public fun transfer<T: key>(obj: T, recipient: address)
 ```
@@ -78,9 +78,9 @@ public fun get_color(self: &ColorObject): (u8, u8, u8) {
 }
 ```
 
-Find the full code online in [ColorObject.move](../../../../sui_programmability/examples/objects_tutorial/sources/ColorObject.move).
+Find the full code online in [ColorObject.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/ColorObject.move).
 
-To compile the code, make sure you have [installed Sui](../install.md) so that `sui-move` is in `PATH`. In the code [root directory](../../../move_code/objects_tutorial/) (where `Move.toml` is), run:
+To compile the code, make sure you have [installed Sui](../install.md) so that `sui-move` is in `PATH`. In the code root directory (where `Move.toml` is), run:
 ```
 sui-move build
 ```
@@ -88,7 +88,7 @@ sui-move build
 ### Writing unit tests
 After defining the `create` function, we want to test this function in Move using unit tests, without having to go all the way through sending Sui transactions. Since [Sui manages global storage separately outside of Move](../../learn/sui-move-diffs.md#object-centric-global-storage), there is no direct way to retrieve objects from global storage within Move. This poses a question: after calling the `create` function, how do we check that the object is properly transferred?
 
-To assist easy testing in Move, we provide a comprehensive testing framework in the [TestScenario](../../../../sui_programmability/framework/sources/TestScenario.move) module that allows us to interact with objects put into the global storage. This allows us to test the behavior of any function directly in Move unit tests. A lot of this is also covered in our [Move testing doc](../move.md#sui-specific-testing).
+To assist easy testing in Move, we provide a comprehensive testing framework in the [TestScenario](https://github.com/MystenLabs/sui/blob/main/sui_programmability/framework/sources/TestScenario.move) module that allows us to interact with objects put into the global storage. This allows us to test the behavior of any function directly in Move unit tests. A lot of this is also covered in our [Move testing doc](../move.md#sui-specific-testing).
 
 The idea of `TestScenario` is to emulate a series of Sui transactions, each sent from a particular address. A developer writing a test starts the first transaction using the `TestScenario::begin` function that takes the address of the user sending this transaction as an argument and returns an instance of the `Scenario` struct representing a test scenario.
 
@@ -136,7 +136,7 @@ TestScenario::next_tx(scenario, &owner);
 `TestScenario::take_owned` removes the object of given type from global storage that's owned by the current transaction sender (it also implicitly checks `can_take_owned`). If this line of code succeeds, it means that `owner` indeed owns an object of type `ColorObject`.
 We also check that the field values of the object match with what we set in creation. At the end, we must return the object back to the global storage by calling `TestScenario::return_owned` so that it's back to the global storage. This also ensures that if any mutations happened to the object during the test, the global storage is aware of the changes.
 
-Again, you can find the full code in [ColorObject.move](../../../../sui_programmability/examples/objects_tutorial/sources/ColorObject.move).
+Again, you can find the full code in [ColorObject.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/ColorObject.move).
 
 To run the test, simply run the following in the code root directory:
 ```
