@@ -143,7 +143,7 @@ impl<T: Affiliated> NodeDag<T> {
     /// Note: the dag currently does not do any causal completion. It is an error to insert a node which parents
     /// are unknown by the DAG it's inserted into.
     ///
-    /// This insertion procedure only verifies the invariant that
+    /// This insertion procedure only maintains the invariant that
     /// - insertion should be idempotent
     /// - an unseen node is a head (not pointed) to by any other node.
     ///

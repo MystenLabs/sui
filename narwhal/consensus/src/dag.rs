@@ -42,7 +42,7 @@ pub struct InnerDag<PublicKey: VerifyingKey> {
     vertices: RwLock<BTreeMap<(PublicKey, Round), CertificateDigest>>,
 }
 
-/// The publicly exposed Dag handle, to which one can expose commands
+/// The publicly exposed Dag handle, to which one can send commands
 pub struct Dag<PublicKey: VerifyingKey> {
     tx_commands: Sender<DagCommand<PublicKey>>,
 }
@@ -51,7 +51,7 @@ pub struct Dag<PublicKey: VerifyingKey> {
 /// [`Certificate`] and [`Round`]-aware variant of the Dag.
 #[derive(Debug, Error)]
 pub enum ValidatorDagError<PublicKey: VerifyingKey> {
-    #[error("No remaining certificates for this authority: {0}")]
+    #[error("No remaining certificates in Dag for this authority: {0}")]
     OutOfCertificates(PublicKey),
     #[error("No known certificates for this authority: {0} at round {1}")]
     NoCertificateForCoordinates(PublicKey, Round),
