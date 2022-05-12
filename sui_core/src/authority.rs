@@ -16,6 +16,10 @@ use move_core_types::{
 };
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use narwhal_executor::{ExecutionIndices, ExecutionState};
+use once_cell::sync::Lazy;
+use prometheus_exporter::prometheus::{
+    register_histogram, register_int_counter, Histogram, IntCounter,
+};
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     pin::Pin,
@@ -67,6 +71,93 @@ pub mod authority_notifier;
 const MAX_ITEMS_LIMIT: u64 = 100_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
+/// Prometheus metrics which can be displayed in Grafana, queried and alerted on
+pub struct AuthorityMetrics {
+    tx_orders: IntCounter,
+    total_certs: IntCounter,
+    total_effects: IntCounter,
+    total_events: IntCounter,
+    signature_errors: IntCounter,
+    pub shared_obj_tx: IntCounter,
+    tx_already_processed: IntCounter,
+    num_input_objs: Histogram,
+    num_shared_objects: Histogram,
+    batch_size: Histogram,
+}
+
+// Override default Prom buckets for positive numbers in 0-50k range
+const POSITIVE_INT_BUCKETS: &[f64] = &[
+    1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
+];
+
+impl AuthorityMetrics {
+    pub fn new() -> AuthorityMetrics {
+        Self {
+            tx_orders: register_int_counter!(
+                "total_transaction_orders",
+                "Total number of transaction orders"
+            )
+            .unwrap(),
+            total_certs: register_int_counter!(
+                "total_transaction_certificates",
+                "Total number of transaction certificates handled"
+            )
+            .unwrap(),
+            // total_effects == total transactions finished
+            total_effects: register_int_counter!(
+                "total_transaction_effects",
+                "Total number of transaction effects produced"
+            )
+            .unwrap(),
+            total_events: register_int_counter!("total_events", "Total number of events produced")
+                .unwrap(),
+            signature_errors: register_int_counter!(
+                "total_signature_errors",
+                "Number of transaction signature errors"
+            )
+            .unwrap(),
+            shared_obj_tx: register_int_counter!(
+                "num_shared_obj_tx",
+                "Number of transactions involving shared objects"
+            )
+            .unwrap(),
+            tx_already_processed: register_int_counter!(
+                "num_tx_already_processed",
+                "Number of transaction orders already processed previously"
+            )
+            .unwrap(),
+            num_input_objs: register_histogram!(
+                "num_input_objects",
+                "Distribution of number of input TX objects per TX",
+                POSITIVE_INT_BUCKETS.to_vec()
+            )
+            .unwrap(),
+            num_shared_objects: register_histogram!(
+                "num_shared_objects",
+                "Number of shared input objects per TX",
+                POSITIVE_INT_BUCKETS.to_vec()
+            )
+            .unwrap(),
+            batch_size: register_histogram!(
+                "batch_size",
+                "Distribution of size of transaction batch",
+                POSITIVE_INT_BUCKETS.to_vec()
+            )
+            .unwrap(),
+        }
+    }
+}
+
+impl Default for AuthorityMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// One cannot register a metric multiple times.  We protect initialization with lazy_static
+// for cases such as local tests or "sui start" which starts multiple authorities in one process.
+pub static METRICS: Lazy<AuthorityMetrics> = Lazy::new(AuthorityMetrics::new);
+
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
 /// - Sync, i.e. can be safely shared between threads.
@@ -103,6 +194,8 @@ pub struct AuthorityState {
 
     /// Ensures there can only be a single consensus client is updating the state.
     pub consensus_guardrail: AtomicUsize,
+
+    pub metrics: &'static AuthorityMetrics,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -124,13 +217,17 @@ impl AuthorityState {
         let transaction_digest = *transaction.digest();
         // Ensure an idempotent answer.
         if self._database.transaction_exists(&transaction_digest)? {
+            self.metrics.tx_already_processed.inc();
             let transaction_info = self.make_transaction_info(&transaction_digest).await?;
             return Ok(transaction_info);
         }
 
-        let (_gas_status, all_objects) =
-            transaction_input_checker::check_transaction_input(&self._database, &transaction)
-                .await?;
+        let (_gas_status, all_objects) = transaction_input_checker::check_transaction_input(
+            &self._database,
+            &transaction,
+            &self.metrics.shared_obj_tx,
+        )
+        .await?;
 
         let owned_objects = transaction_input_checker::filter_owned_objects(&all_objects);
 
@@ -153,8 +250,12 @@ impl AuthorityState {
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
+        self.metrics.tx_orders.inc();
         // Check the sender's signature.
-        transaction.verify_signature()?;
+        transaction.verify_signature().map_err(|e| {
+            self.metrics.signature_errors.inc();
+            e
+        })?;
         let transaction_digest = *transaction.digest();
 
         let response = self.handle_transaction_impl(transaction).await;
@@ -164,6 +265,7 @@ impl AuthorityState {
             // In that case, we could still return Ok to avoid showing confusing errors.
             Err(err) => {
                 if self._database.effects_exists(&transaction_digest)? {
+                    self.metrics.tx_already_processed.inc();
                     Ok(self.make_transaction_info(&transaction_digest).await?)
                 } else {
                     Err(err)
@@ -177,6 +279,7 @@ impl AuthorityState {
         &self,
         confirmation_transaction: ConfirmationTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
+        self.metrics.total_certs.inc();
         let transaction_digest = *confirmation_transaction.certificate.digest();
 
         // Ensure an idempotent answer.
@@ -188,7 +291,11 @@ impl AuthorityState {
 
         // Check the certificate and retrieve the transfer data.
         tracing::trace_span!("cert_check_signature")
-            .in_scope(|| confirmation_transaction.certificate.verify(&self.committee))?;
+            .in_scope(|| confirmation_transaction.certificate.verify(&self.committee))
+            .map_err(|e| {
+                self.metrics.signature_errors.inc();
+                e
+            })?;
 
         self.process_certificate(confirmation_transaction).await
     }
@@ -258,9 +365,12 @@ impl AuthorityState {
         let certificate = confirmation_transaction.certificate;
         let transaction_digest = *certificate.digest();
 
-        let (gas_status, objects_by_kind) =
-            transaction_input_checker::check_transaction_input(&self._database, &certificate)
-                .await?;
+        let (gas_status, objects_by_kind) = transaction_input_checker::check_transaction_input(
+            &self._database,
+            &certificate,
+            &self.metrics.shared_obj_tx,
+        )
+        .await?;
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
@@ -277,6 +387,15 @@ impl AuthorityState {
                 .await?;
         }
 
+        self.metrics
+            .num_input_objs
+            .observe(objects_by_kind.len() as f64);
+        self.metrics
+            .num_shared_objects
+            .observe(shared_object_refs.len() as f64);
+        self.metrics
+            .batch_size
+            .observe(certificate.data.kind.batch_size() as f64);
         debug!(
             num_inputs = objects_by_kind.len(),
             "Read inputs for transaction from DB"
@@ -301,6 +420,12 @@ impl AuthorityState {
             &self._native_functions,
             gas_status,
         )?;
+
+        self.metrics.total_effects.inc();
+        self.metrics
+            .total_events
+            .inc_by(effects.events.len() as u64);
+
         // TODO: Distribute gas charge and rebate, which can be retrieved from effects.
         let signed_effects =
             effects.to_sign_effects(self.committee.epoch, &self.name, &*self.secret);
@@ -575,6 +700,7 @@ impl AuthorityState {
                     .expect("Notifier cannot start."),
             ),
             consensus_guardrail: AtomicUsize::new(0),
+            metrics: &METRICS,
         };
 
         state

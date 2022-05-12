@@ -85,6 +85,10 @@ async fn test_handle_transfer_transaction_bad_signature() {
         object.compute_object_reference(),
         gas_object.compute_object_reference(),
     );
+
+    let num_orders = authority_state.metrics.tx_orders.get();
+    let num_errors = authority_state.metrics.signature_errors.get();
+
     let (_unknown_address, unknown_key) = get_key_pair();
     let mut bad_signature_transfer_transaction = transfer_transaction.clone();
     bad_signature_transfer_transaction.tx_signature =
@@ -93,6 +97,15 @@ async fn test_handle_transfer_transaction_bad_signature() {
         .handle_transaction(bad_signature_transfer_transaction)
         .await
         .is_err());
+
+    // Check that metrics were increased
+    let num_orders = authority_state.metrics.tx_orders.get() - num_orders;
+    // For some reason this is sometimes more than 1, maybe tests running in parallel
+    assert!(num_orders > 0);
+    assert_eq!(
+        authority_state.metrics.signature_errors.get() - num_errors,
+        1
+    );
 
     let object = authority_state
         .get_object(&object_id)

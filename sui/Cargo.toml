@@ -33,6 +33,7 @@ serde-name = "0.2.0"
 dirs = "4.0.0"
 clap = { version = "3.1.17", features = ["derive"] }
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "3b7daedf91fd8937dde26e905b8114cac459b866" }
+prometheus_exporter = "0.8.4"
 multiaddr = "0.14.0"
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "3b7daedf91fd8937dde26e905b8114cac459b866" }
 
@@ -66,6 +67,7 @@ once_cell = "1.10.0"
 
 jsonrpsee = { version = "0.12.0", features = ["full"] }
 jsonrpsee-proc-macros = "0.12.0"
+jsonrpsee-core = "0.12.0"
 schemars = "0.8.8"
 shell-words = "1.1.0"
 
