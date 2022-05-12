@@ -1,38 +1,46 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::StructTag;
-use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 
-use serde::ser::Error;
-use serde::Serialize;
-
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::StructTag;
+use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use schemars::JsonSchema;
+use serde::ser::Error;
 use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::Bytes;
-use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
+
+use sui_types::base_types::{
+    ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
+};
 use sui_types::coin::Coin;
+use sui_types::crypto::{AuthorityQuorumSignInfo, Signature};
 use sui_types::error::SuiError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::id::{UniqueID, VersionedID, ID};
 use sui_types::json_schema;
-use sui_types::messages::{CertifiedTransaction, TransactionEffects};
-use sui_types::move_package::MovePackage;
+use sui_types::messages::{
+    CertifiedTransaction, ExecutionStatus, MoveModulePublish, SingleTransactionKind,
+    TransactionData, TransactionEffects, TransactionKind,
+};
+use sui_types::move_package::{disassemble_modules, MovePackage};
 use sui_types::object::{Data, Object, ObjectRead, Owner};
 use sui_types::readable_serde::encoding::{Base64, Encoding};
 use sui_types::readable_serde::Readable;
 
+use crate::sui_json::SuiJsonValue;
+
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub struct TransactionEffectsResponse {
-    pub certificate: CertifiedTransaction,
-    pub effects: TransactionEffects,
+    pub certificate: SuiCertifiedTransaction,
+    pub effects: SuiTransactionEffects,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
@@ -65,23 +73,19 @@ impl TransactionResponse {
         }
     }
 
-    pub fn to_effect_response(
-        self,
-    ) -> Result<(CertifiedTransaction, TransactionEffects), SuiError> {
+    pub fn to_effect_response(self) -> Result<TransactionEffectsResponse, SuiError> {
         match self {
-            TransactionResponse::EffectResponse(TransactionEffectsResponse {
-                certificate,
-                effects,
-            }) => Ok((certificate, effects)),
+            TransactionResponse::EffectResponse(resp) => Ok(resp),
             _ => Err(SuiError::UnexpectedMessage),
         }
     }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SplitCoinResponse {
     /// Certificate of the transaction
-    pub certificate: CertifiedTransaction,
+    pub certificate: SuiCertifiedTransaction,
     /// The updated original coin object after split
     pub updated_coin: SuiObject,
     /// All the newly created coin objects generated from the split
@@ -116,9 +120,10 @@ impl Display for SplitCoinResponse {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct MergeCoinResponse {
     /// Certificate of the transaction
-    pub certificate: CertifiedTransaction,
+    pub certificate: SuiCertifiedTransaction,
     /// The updated original coin object after merge
     pub updated_coin: SuiObject,
     /// The updated gas payment object after deducting payment
@@ -141,6 +146,7 @@ impl Display for MergeCoinResponse {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
+#[serde(rename_all = "camelCase", rename = "Object")]
 pub struct SuiObject {
     /// The meat of the object
     pub data: SuiData,
@@ -156,14 +162,20 @@ pub struct SuiObject {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq, Ord, PartialOrd)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", rename = "ObjectRef")]
 pub struct SuiObjectRef {
     /// Hex code as string representing the object id
     pub object_id: ObjectID,
     /// Object version.
     pub version: SequenceNumber,
     /// Base64 string representing the object digest
-    pub digest: String,
+    pub digest: ObjectDigest,
+}
+
+impl SuiObjectRef {
+    pub fn to_object_ref(&self) -> ObjectRef {
+        (self.object_id, self.version, self.digest)
+    }
 }
 
 impl From<ObjectRef> for SuiObjectRef {
@@ -171,7 +183,7 @@ impl From<ObjectRef> for SuiObjectRef {
         Self {
             object_id: oref.0,
             version: oref.1,
-            digest: Base64::encode(oref.2),
+            digest: oref.2,
         }
     }
 }
@@ -228,13 +240,14 @@ impl SuiObject {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
-#[serde(tag = "dataType", rename_all = "camelCase")]
+#[serde(tag = "dataType", rename_all = "camelCase", rename = "Data")]
 pub enum SuiData {
     MoveObject(SuiMoveObject),
     Package(MovePackage),
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
+#[serde(rename = "MoveObject")]
 pub struct SuiMoveObject {
     #[serde(rename = "type")]
     pub type_: String,
@@ -280,7 +293,7 @@ impl SuiData {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PublishResponse {
     /// Certificate of the transaction
-    pub certificate: CertifiedTransaction,
+    pub certificate: SuiCertifiedTransaction,
     /// The newly published package object reference.
     pub package: ObjectRef,
     /// List of Move objects created as part of running the module initializers in the package
@@ -336,7 +349,7 @@ impl Display for SwitchResponse {
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "status", content = "details")]
+#[serde(tag = "status", content = "details", rename = "ObjectRead")]
 pub enum SuiObjectRead {
     Exists(SuiObject),
     NotExists(ObjectID),
@@ -391,7 +404,7 @@ impl TryFrom<ObjectRead> for SuiObjectRead {
 
 #[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
-#[serde(untagged)]
+#[serde(untagged, rename = "MoveValue")]
 pub enum SuiMoveValue {
     // Move base types
     U8(u8),
@@ -458,7 +471,7 @@ impl From<MoveValue> for SuiMoveValue {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
-#[serde(untagged)]
+#[serde(untagged, rename = "MoveStruct")]
 pub enum SuiMoveStruct {
     Runtime(Vec<SuiMoveValue>),
     WithFields(Vec<(String, SuiMoveValue)>),
@@ -548,6 +561,338 @@ impl From<MoveStruct> for SuiMoveStruct {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
+#[serde(rename = "MovePackage")]
 pub struct SuiMovePackage {
     disassembled: BTreeMap<String, Value>,
+}
+
+impl TryFrom<MoveModulePublish> for SuiMovePackage {
+    type Error = anyhow::Error;
+
+    fn try_from(m: MoveModulePublish) -> Result<Self, Self::Error> {
+        Ok(Self {
+            disassembled: disassemble_modules(m.modules.iter())?,
+        })
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
+#[serde(rename = "TransactionData")]
+pub struct SuiTransactionData {
+    pub transactions: Vec<SuiTransactionKind>,
+    sender: SuiAddress,
+    gas_payment: SuiObjectRef,
+    pub gas_budget: u64,
+}
+
+impl Display for SuiTransactionData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+        if self.transactions.len() == 1 {
+            writeln!(writer, "{}", self.transactions.first().unwrap())?;
+        } else {
+            writeln!(writer, "Transaction Kind : Batch")?;
+            writeln!(writer, "List of transactions in the batch:")?;
+            for kind in &self.transactions {
+                writeln!(writer, "{}", kind)?;
+            }
+        }
+        write!(f, "{}", writer)
+    }
+}
+
+impl TryFrom<TransactionData> for SuiTransactionData {
+    type Error = anyhow::Error;
+
+    fn try_from(data: TransactionData) -> Result<Self, Self::Error> {
+        let transactions = match data.kind.clone() {
+            TransactionKind::Single(tx) => {
+                vec![tx.try_into()?]
+            }
+            TransactionKind::Batch(txs) => txs
+                .into_iter()
+                .map(SuiTransactionKind::try_from)
+                .collect::<Result<Vec<_>, _>>()?,
+        };
+        Ok(Self {
+            transactions,
+            sender: data.signer(),
+            gas_payment: data.gas().into(),
+            gas_budget: data.gas_budget,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "TransactionKind")]
+pub enum SuiTransactionKind {
+    /// Initiate a coin transfer between addresses
+    TransferCoin(SuiTransferCoin),
+    /// Publish a new Move module
+    Publish(SuiMovePackage),
+    /// Call a function in a published Move module
+    Call(SuiMoveCall),
+    // .. more transaction types go here
+}
+
+impl Display for SuiTransactionKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+        match &self {
+            Self::TransferCoin(t) => {
+                writeln!(writer, "Transaction Kind : Transfer")?;
+                writeln!(writer, "Recipient : {}", t.recipient)?;
+                writeln!(writer, "Object ID : {}", t.object_ref.object_id)?;
+                writeln!(writer, "Version : {:?}", t.object_ref.version)?;
+                writeln!(
+                    writer,
+                    "Object Digest : {}",
+                    Base64::encode(t.object_ref.digest)
+                )?;
+            }
+            Self::Publish(_p) => {
+                writeln!(writer, "Transaction Kind : Publish")?;
+            }
+            Self::Call(c) => {
+                writeln!(writer, "Transaction Kind : Call")?;
+                writeln!(
+                    writer,
+                    "Package ID : {}",
+                    c.package.object_id.to_hex_literal()
+                )?;
+                writeln!(writer, "Module : {}", c.module)?;
+                writeln!(writer, "Function : {}", c.function)?;
+                writeln!(writer, "Arguments : {:?}", c.arguments)?;
+                writeln!(writer, "Type Arguments : {:?}", c.type_arguments)?;
+            }
+        }
+        write!(f, "{}", writer)
+    }
+}
+
+impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
+    type Error = anyhow::Error;
+
+    fn try_from(tx: SingleTransactionKind) -> Result<Self, Self::Error> {
+        Ok(match tx {
+            SingleTransactionKind::TransferCoin(t) => Self::TransferCoin(SuiTransferCoin {
+                recipient: t.recipient,
+                object_ref: t.object_ref.into(),
+            }),
+            SingleTransactionKind::Publish(p) => Self::Publish(p.try_into()?),
+            SingleTransactionKind::Call(c) => Self::Call(SuiMoveCall {
+                package: c.package.into(),
+                module: c.module.to_string(),
+                function: c.function.to_string(),
+                type_arguments: c.type_arguments.iter().map(|ty| ty.to_string()).collect(),
+                arguments: vec![],
+            }),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "MoveCall")]
+pub struct SuiMoveCall {
+    pub package: SuiObjectRef,
+    pub module: String,
+    pub function: String,
+    pub type_arguments: Vec<String>,
+    pub arguments: Vec<SuiJsonValue>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "CertifiedTransaction")]
+pub struct SuiCertifiedTransaction {
+    // This is a cache of an otherwise expensive to compute value.
+    // DO NOT serialize or deserialize from the network or disk.
+    pub transaction_digest: TransactionDigest,
+    pub data: SuiTransactionData,
+    /// tx_signature is signed by the transaction sender, applied on `data`.
+    pub tx_signature: Signature,
+    /// authority signature information, if available, is signed by an authority, applied on `data`.
+    pub auth_sign_info: AuthorityQuorumSignInfo,
+}
+
+impl Display for SuiCertifiedTransaction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+        writeln!(writer, "Transaction Hash: {:?}", self.transaction_digest)?;
+        writeln!(writer, "Transaction Signature: {:?}", self.tx_signature)?;
+        writeln!(
+            writer,
+            "Signed Authorities : {:?}",
+            self.auth_sign_info
+                .signatures
+                .iter()
+                .map(|(name, _)| name)
+                .collect::<Vec<_>>()
+        )?;
+        write!(writer, "{}", &self.data)?;
+        write!(f, "{}", writer)
+    }
+}
+
+impl TryFrom<CertifiedTransaction> for SuiCertifiedTransaction {
+    type Error = anyhow::Error;
+
+    fn try_from(cert: CertifiedTransaction) -> Result<Self, Self::Error> {
+        Ok(Self {
+            transaction_digest: *cert.digest(),
+            data: cert.data.try_into()?,
+            tx_signature: cert.tx_signature,
+            auth_sign_info: cert.auth_sign_info,
+        })
+    }
+}
+
+/// The response from processing a transaction or a certified transaction
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "TransactionEffects")]
+pub struct SuiTransactionEffects {
+    // The status of the execution
+    pub status: ExecutionStatus,
+    // The object references of the shared objects used in this transaction. Empty if no shared objects were used.
+    pub shared_objects: Vec<SuiObjectRef>,
+    // The transaction digest
+    pub transaction_digest: TransactionDigest,
+    // ObjectRef and owner of new objects created.
+    pub created: Vec<OwnedObjectRef>,
+    // ObjectRef and owner of mutated objects, including gas object.
+    pub mutated: Vec<OwnedObjectRef>,
+    // ObjectRef and owner of objects that are unwrapped in this transaction.
+    // Unwrapped objects are objects that were wrapped into other objects in the past,
+    // and just got extracted out.
+    pub unwrapped: Vec<OwnedObjectRef>,
+    // Object Refs of objects now deleted (the old refs).
+    pub deleted: Vec<SuiObjectRef>,
+    // Object refs of objects now wrapped in other objects.
+    pub wrapped: Vec<SuiObjectRef>,
+    // The updated gas object reference. Have a dedicated field for convenient access.
+    // It's also included in mutated.
+    pub gas_object: OwnedObjectRef,
+    /// The events emitted during execution. Note that only successful transactions emit events
+    pub events: Vec<SuiEvent>,
+    /// The set of transaction digests this transaction depends on.
+    pub dependencies: Vec<String>,
+}
+
+impl SuiTransactionEffects {
+    /// Return an iterator of mutated objects, but excluding the gas object.
+    pub fn mutated_excluding_gas(&self) -> impl Iterator<Item = &OwnedObjectRef> {
+        self.mutated.iter().filter(|o| *o != &self.gas_object)
+    }
+}
+
+impl Display for SuiTransactionEffects {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+        writeln!(writer, "Status : {:?}", self.status)?;
+        if !self.created.is_empty() {
+            writeln!(writer, "Created Objects:")?;
+            for oref in &self.created {
+                writeln!(
+                    writer,
+                    "  - ID: {} , Owner: {}",
+                    oref.reference.object_id, oref.owner
+                )?;
+            }
+        }
+        if !self.mutated.is_empty() {
+            writeln!(writer, "Mutated Objects:")?;
+            for oref in &self.mutated {
+                writeln!(
+                    writer,
+                    "  - ID: {} , Owner: {}",
+                    oref.reference.object_id, oref.owner
+                )?;
+            }
+        }
+        if !self.deleted.is_empty() {
+            writeln!(writer, "Deleted Objects:")?;
+            for oref in &self.deleted {
+                writeln!(writer, "  - ID: {}", oref.object_id)?;
+            }
+        }
+        if !self.wrapped.is_empty() {
+            writeln!(writer, "Wrapped Objects:")?;
+            for oref in &self.wrapped {
+                writeln!(writer, "  - ID: {}", oref.object_id)?;
+            }
+        }
+        if !self.unwrapped.is_empty() {
+            writeln!(writer, "Unwrapped Objects:")?;
+            for oref in &self.unwrapped {
+                writeln!(
+                    writer,
+                    "  - ID: {} , Owner: {}",
+                    oref.reference.object_id, oref.owner
+                )?;
+            }
+        }
+        write!(f, "{}", writer)
+    }
+}
+
+impl From<TransactionEffects> for SuiTransactionEffects {
+    fn from(effect: TransactionEffects) -> Self {
+        Self {
+            status: effect.status,
+            shared_objects: to_sui_object_ref(effect.shared_objects),
+            transaction_digest: effect.transaction_digest,
+            created: to_owned_ref(effect.created),
+            mutated: to_owned_ref(effect.mutated),
+            unwrapped: to_owned_ref(effect.unwrapped),
+            deleted: to_sui_object_ref(effect.deleted),
+            wrapped: to_sui_object_ref(effect.wrapped),
+            gas_object: OwnedObjectRef {
+                owner: effect.gas_object.1,
+                reference: effect.gas_object.0.into(),
+            },
+            events: effect
+                .events
+                .iter()
+                .map(|event| SuiEvent {
+                    type_: event.type_.to_string(),
+                    contents: event.contents.clone(),
+                })
+                .collect(),
+            dependencies: effect.dependencies.iter().map(Base64::encode).collect(),
+        }
+    }
+}
+
+fn to_sui_object_ref(refs: Vec<ObjectRef>) -> Vec<SuiObjectRef> {
+    refs.into_iter().map(SuiObjectRef::from).collect()
+}
+
+fn to_owned_ref(owned_refs: Vec<(ObjectRef, Owner)>) -> Vec<OwnedObjectRef> {
+    owned_refs
+        .into_iter()
+        .map(|(oref, owner)| OwnedObjectRef {
+            owner,
+            reference: oref.into(),
+        })
+        .collect()
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "ObjectRef")]
+pub struct OwnedObjectRef {
+    pub owner: Owner,
+    pub reference: SuiObjectRef,
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "Event")]
+pub struct SuiEvent {
+    pub type_: String,
+    pub contents: Vec<u8>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "TransferCoin")]
+pub struct SuiTransferCoin {
+    pub recipient: SuiAddress,
+    pub object_ref: SuiObjectRef,
 }

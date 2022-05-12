@@ -153,11 +153,12 @@ impl SimpleFaucet {
             .read()
             .unwrap()
             .sign(&signer, &data.to_bytes())?;
-        let (_cert, effects) = context
+        let effects = context
             .gateway
             .execute_transaction(Transaction::new(data, signature))
             .await?
-            .to_effect_response()?;
+            .to_effect_response()?
+            .effects;
 
         if matches!(effects.status, ExecutionStatus::Failure { .. }) {
             return Err(anyhow!("Error transferring object: {:#?}", effects.status));

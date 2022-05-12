@@ -34,7 +34,7 @@ pub struct ObjectNotExistsResponse {
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "TypeTagString")]
+#[serde(rename = "TypeTag")]
 pub struct SuiTypeTag(String);
 
 impl TryInto<TypeTag> for SuiTypeTag {
