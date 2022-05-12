@@ -23,7 +23,7 @@ def parse_args():
     )
     subparser.add_parser("local")
     upgrade = subparser.add_parser("upgrade")
-    upgrade.add_argument("--repo", required=False, default="move-language")
+    upgrade.add_argument("--repo", required=False)
     upgrade_group = upgrade.add_mutually_exclusive_group(required=True)
     upgrade_group.add_argument("--rev")
     upgrade_group.add_argument("--branch")
@@ -130,4 +130,10 @@ if args.command == "local":
     switch_to_local(args.project)
 else:
     assert args.command == "upgrade"
-    upgrade_revision(args.project, args.repo, args.rev, args.branch)
+    repo = args.repo
+    if not repo:
+        if args.project == "move":
+            repo = "move-language"
+        else:
+            repo = "MystenLabs"
+    upgrade_revision(args.project, repo, args.rev, args.branch)
