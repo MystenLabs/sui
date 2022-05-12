@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::CompiledModule;
+use move_compiler::compiled_unit::{CompiledUnit, NamedCompiledModule};
 use move_core_types::{account_address::AccountAddress, ident_str, language_storage::ModuleId};
 use move_package::BuildConfig;
 use move_unit_test::UnitTestingConfig;
@@ -115,7 +116,7 @@ pub fn build_move_package(
             error: error.to_string(),
         }),
         Ok(package) => {
-            let compiled_modules = package.compiled_modules();
+            let compiled_modules = package.root_modules_map();
             if !is_framework {
                 if let Some(m) = compiled_modules
                     .iter_modules()
@@ -143,19 +144,24 @@ pub fn build_move_package(
                 .iter()
                 .map(|m| m.self_id())
                 .collect();
-            if let Some(m) = package
-                .transitive_compiled_modules()
-                .iter_modules()
-                .iter()
-                .find(|m| {
-                    !self_modules.contains(&m.self_id())
-                        && m.self_id().address() == &AccountAddress::ZERO
-                })
+            if let Some(m) =
+                package
+                    .deps_compiled_units
+                    .iter()
+                    .find_map(|(_, unit)| match &unit.unit {
+                        CompiledUnit::Module(NamedCompiledModule { module: m, .. })
+                            if !self_modules.contains(&m.self_id())
+                                && m.self_id().address() == &AccountAddress::ZERO =>
+                        {
+                            Some(m)
+                        }
+                        _ => None,
+                    })
             {
                 return Err(SuiError::ModulePublishFailure { error: format!("Dependent modules must have been published on-chain with non-0 addresses, unlike module {:?}", m.self_id()) });
             }
             Ok(package
-                .transitive_compiled_modules()
+                .all_modules_map()
                 .compute_dependency_graph()
                 .compute_topological_order()
                 .unwrap()

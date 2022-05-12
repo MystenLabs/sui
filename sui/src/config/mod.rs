@@ -4,6 +4,7 @@
 
 use crate::keystore::KeystoreType;
 use anyhow::bail;
+use multiaddr::{Multiaddr, Protocol};
 use narwhal_config::{
     Authority, Committee as ConsensusCommittee, PrimaryAddresses, Stake, WorkerAddresses,
 };
@@ -15,7 +16,6 @@ use std::{
     fmt::{Display, Formatter, Write},
     fs::{self, create_dir_all, File},
     io::BufReader,
-    net::{SocketAddr, ToSocketAddrs},
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
 };
@@ -61,52 +61,20 @@ pub const AUTHORITIES_DB_NAME: &str = "authorities_db";
 pub const DEFAULT_STARTING_PORT: u16 = 10000;
 pub const CONSENSUS_DB_NAME: &str = "consensus_db";
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct AuthorityInfo {
-    #[serde(serialize_with = "bytes_as_hex", deserialize_with = "bytes_from_hex")]
-    pub name: AuthorityName,
-    pub host: String,
-    pub base_port: u16,
-}
-
 #[derive(Serialize, Debug, Clone)]
-pub struct AuthorityPrivateInfo {
+pub struct AuthorityInfo {
     pub address: SuiAddress,
     pub public_key: PublicKeyBytes,
-    pub host: String,
-    pub port: u16,
+    pub network_address: Multiaddr,
     pub db_path: PathBuf,
     pub stake: usize,
-    pub consensus_address: SocketAddr,
+    pub consensus_address: Multiaddr,
 }
 
-impl AuthorityPrivateInfo {
-    pub fn copy(&self) -> Self {
-        Self {
-            address: self.address,
-            host: self.host.clone(),
-            port: self.port,
-            db_path: self.db_path.clone(),
-            stake: self.stake,
-            consensus_address: self.consensus_address,
-            public_key: self.public_key,
-        }
-    }
-}
 type AuthorityKeys = (Vec<PublicKeyBytes>, KeyPair);
 
-// Warning: to_socket_addrs() is blocking and can fail.  Be careful where you use it.
-fn socket_addr_from_hostport(host: &str, port: u16) -> SocketAddr {
-    let mut addresses = format!("{host}:{port}")
-        .to_socket_addrs()
-        .unwrap_or_else(|e| panic!("Cannot parse or resolve hostnames for {host}:{port}: {e}"));
-    addresses
-        .next()
-        .unwrap_or_else(|| panic!("Hostname/IP resolution failed for {host}"))
-}
-
 // Custom deserializer with optional default fields
-impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
+impl<'de> Deserialize<'de> for AuthorityInfo {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::de::Deserializer<'de>,
@@ -119,15 +87,12 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
         } else {
             *new_key_pair.public_key_bytes()
         };
-        let host = if let Some(val) = json.get("host") {
-            String::deserialize(val).map_err(serde::de::Error::custom)?
+        let network_address = if let Some(val) = json.get("network_address") {
+            Multiaddr::deserialize(val).map_err(serde::de::Error::custom)?
         } else {
-            "127.0.0.1".to_string()
-        };
-        let port = if let Some(val) = json.get("port") {
-            u16::deserialize(val).map_err(serde::de::Error::custom)?
-        } else {
-            utils::get_available_port()
+            format!("/ip4/127.0.0.1/tcp/{}/http", utils::get_available_port())
+                .parse()
+                .unwrap()
         };
         let db_path = if let Some(val) = json.get("db_path") {
             PathBuf::deserialize(val).map_err(serde::de::Error::custom)?
@@ -142,17 +107,17 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
             DEFAULT_WEIGHT
         };
         let consensus_address = if let Some(val) = json.get("consensus_address") {
-            SocketAddr::deserialize(val).map_err(serde::de::Error::custom)?
+            Multiaddr::deserialize(val).map_err(serde::de::Error::custom)?
         } else {
-            let port = utils::get_available_port();
-            socket_addr_from_hostport("127.0.0.1", port)
+            format!("/ip4/127.0.0.1/tcp/{}/http", utils::get_available_port())
+                .parse()
+                .unwrap()
         };
 
-        Ok(AuthorityPrivateInfo {
+        Ok(AuthorityInfo {
             address: SuiAddress::from(&public_key_bytes),
             public_key: public_key_bytes,
-            host,
-            port,
+            network_address,
             db_path,
             stake,
             consensus_address,
@@ -192,7 +157,7 @@ impl Display for WalletConfig {
 #[derive(Serialize, Deserialize)]
 pub struct NetworkConfig {
     pub epoch: EpochId,
-    pub authorities: Vec<AuthorityPrivateInfo>,
+    pub authorities: Vec<AuthorityInfo>,
     pub buffer_size: usize,
     pub loaded_move_packages: Vec<(PathBuf, ObjectID)>,
     pub key_pair: KeyPair,
@@ -202,14 +167,7 @@ impl Config for NetworkConfig {}
 
 impl NetworkConfig {
     pub fn get_authority_infos(&self) -> Vec<AuthorityInfo> {
-        self.authorities
-            .iter()
-            .map(|info| AuthorityInfo {
-                name: info.public_key,
-                host: info.host.clone(),
-                base_port: info.port,
-            })
-            .collect()
+        self.authorities.clone()
     }
 
     pub fn make_narwhal_committee(&self) -> ConsensusCommittee<Ed25519PublicKey> {
@@ -223,15 +181,18 @@ impl NetworkConfig {
                         .make_narwhal_public_key()
                         .expect("Can't get narwhal public key");
                     let primary = PrimaryAddresses {
-                        primary_to_primary: socket_addr_from_hostport(&x.host, x.port + 100),
-                        worker_to_primary: socket_addr_from_hostport(&x.host, x.port + 200),
+                        primary_to_primary: update_tcp_port_in_multiaddr(&x.network_address, 100),
+                        worker_to_primary: update_tcp_port_in_multiaddr(&x.network_address, 200),
                     };
                     let workers = [(
                         /* worker_id */ 0,
                         WorkerAddresses {
-                            primary_to_worker: socket_addr_from_hostport(&x.host, x.port + 300),
-                            transactions: x.consensus_address,
-                            worker_to_worker: socket_addr_from_hostport(&x.host, x.port + 400),
+                            primary_to_worker: update_tcp_port_in_multiaddr(
+                                &x.network_address,
+                                300,
+                            ),
+                            transactions: x.consensus_address.clone(),
+                            worker_to_worker: update_tcp_port_in_multiaddr(&x.network_address, 400),
                         },
                     )]
                     .iter()
@@ -263,7 +224,7 @@ impl From<&NetworkConfig> for Committee {
 #[derive(Serialize, Deserialize)]
 #[serde(default)]
 pub struct GenesisConfig {
-    pub authorities: Vec<AuthorityPrivateInfo>,
+    pub authorities: Vec<AuthorityInfo>,
     pub accounts: Vec<AccountConfig>,
     pub move_packages: Vec<PathBuf>,
     pub sui_framework_lib_path: PathBuf,
@@ -345,7 +306,7 @@ impl GenesisConfig {
         let mut authorities = Vec::with_capacity(num_authorities);
         for _ in 0..num_authorities {
             // Get default authority config from deserialization logic.
-            let mut authority = AuthorityPrivateInfo::deserialize(Value::String(String::new()))?;
+            let mut authority = AuthorityInfo::deserialize(Value::String(String::new()))?;
             authority.db_path = working_dir
                 .join(AUTHORITIES_DB_NAME)
                 .join(encode_bytes_hex(&authority.public_key));
@@ -468,7 +429,7 @@ impl<C> DerefMut for PersistedConfig<C> {
 
 /// Make a default Narwhal-compatible committee.
 pub fn make_default_narwhal_committee(
-    authorities: &[AuthorityPrivateInfo],
+    authorities: &[AuthorityInfo],
 ) -> Result<ConsensusCommittee<Ed25519PublicKey>, anyhow::Error> {
     let mut ports = Vec::new();
     for _ in authorities {
@@ -492,15 +453,23 @@ pub fn make_default_narwhal_committee(
                     .expect("Can't get narwhal public key");
 
                 let primary = PrimaryAddresses {
-                    primary_to_primary: socket_addr_from_hostport("127.0.0.1", ports[i][0]),
-                    worker_to_primary: socket_addr_from_hostport("127.0.0.1", ports[i][1]),
+                    primary_to_primary: format!("/ip4/127.0.0.1/tcp/{}/http", ports[i][0])
+                        .parse()
+                        .unwrap(),
+                    worker_to_primary: format!("/ip4/127.0.0.1/tcp/{}/http", ports[i][1])
+                        .parse()
+                        .unwrap(),
                 };
                 let workers = [(
                     /* worker_id */ 0,
                     WorkerAddresses {
-                        primary_to_worker: socket_addr_from_hostport("127.0.0.1", ports[i][2]),
-                        transactions: x.consensus_address,
-                        worker_to_worker: socket_addr_from_hostport("127.0.0.1", ports[i][3]),
+                        primary_to_worker: format!("/ip4/127.0.0.1/tcp/{}/http", ports[i][2])
+                            .parse()
+                            .unwrap(),
+                        transactions: x.consensus_address.clone(),
+                        worker_to_worker: format!("/ip4/127.0.0.1/tcp/{}/http", ports[i][3])
+                            .parse()
+                            .unwrap(),
                     },
                 )]
                 .iter()
@@ -516,4 +485,15 @@ pub fn make_default_narwhal_committee(
             })
             .collect(),
     })
+}
+
+fn update_tcp_port_in_multiaddr(addr: &Multiaddr, offset: u16) -> Multiaddr {
+    addr.replace(1, |protocol| {
+        if let Protocol::Tcp(port) = protocol {
+            Some(Protocol::Tcp(port + offset))
+        } else {
+            panic!("expected tcp protocol at index 1");
+        }
+    })
+    .expect("tcp protocol at index 1")
 }

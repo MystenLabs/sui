@@ -1,14 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Buffer } from 'buffer';
-import cl from 'classnames';
 import {
     getMoveCallTransaction,
     getPublishTransaction,
     getTransactionKind,
     getTransferTransaction,
-} from 'sui.js';
+} from '@mysten/sui.js';
+import { Buffer } from 'buffer';
+import cl from 'classnames';
 
 import Longtext from '../../components/longtext/Longtext';
 
@@ -17,7 +17,8 @@ import type {
     TransactionData,
     TransactionKindName,
     ExecutionStatusType,
-} from 'sui.js';
+    RawObjectRef,
+} from '@mysten/sui.js';
 
 import styles from './TransactionCard.module.css';
 
@@ -25,6 +26,8 @@ type TxDataProps = CertifiedTransaction & {
     status: ExecutionStatusType;
     gasFee: number;
     txError: string;
+    mutated: RawObjectRef[];
+    created: RawObjectRef[];
 };
 
 // Generate an Arr of Obj with Label and Value
@@ -54,10 +57,31 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
         // txKind Transfer or Call
         ...(formatByTransactionKind(txKindName, tx.data) ?? []),
         {
-            label: 'Transactions Signature',
+            label: 'Transaction Signature',
             value: tx.tx_signature,
         },
-
+        ...(tx.mutated.length
+            ? [
+                  {
+                      label: 'Mutated',
+                      category: 'objects',
+                      value: tx.mutated.map((obj) => obj[0]),
+                      list: true,
+                      link: true,
+                  },
+              ]
+            : []),
+        ...(tx.created.length
+            ? [
+                  {
+                      label: 'Created',
+                      value: tx.created.map((obj) => obj[0]),
+                      category: 'objects',
+                      list: true,
+                      link: true,
+                  },
+              ]
+            : []),
         {
             label: 'Gas Payment',
             value: tx.data.gas_payment[0],
@@ -121,8 +145,9 @@ function formatByTransactionKind(
                 },
                 {
                     label: 'Package',
-                    value: moveCall.package,
-                    list: true,
+                    category: 'objects',
+                    value: moveCall.package[0],
+                    link: true,
                 },
                 {
                     label: 'Module',
@@ -150,6 +175,16 @@ function formatByTransactionKind(
                     value: publish.modules,
                     list: true,
                 },
+                ...(data.sender
+                    ? [
+                          {
+                              label: 'Sender ',
+                              value: data.sender,
+                              link: true,
+                              category: 'addresses',
+                          },
+                      ]
+                    : []),
             ];
         default:
             return [];
@@ -163,6 +198,8 @@ type Props = {
         status: ExecutionStatusType;
         gasFee: number;
         txError: string;
+        mutated: RawObjectRef[];
+        created: RawObjectRef[];
     };
 };
 
@@ -245,9 +282,23 @@ function TransactionCard({ txdata }: Props) {
                                                                                             styles.sublistvalue
                                                                                         }
                                                                                     >
-                                                                                        {
+                                                                                        {itm.link ? (
+                                                                                            <Longtext
+                                                                                                text={
+                                                                                                    sublist
+                                                                                                }
+                                                                                                category={
+                                                                                                    itm.category
+                                                                                                        ? itm.category
+                                                                                                        : 'unknown'
+                                                                                                }
+                                                                                                isLink={
+                                                                                                    true
+                                                                                                }
+                                                                                            />
+                                                                                        ) : (
                                                                                             sublist
-                                                                                        }
+                                                                                        )}
                                                                                     </div>
                                                                                 </div>
                                                                             </div>
@@ -262,7 +313,23 @@ function TransactionCard({ txdata }: Props) {
                                                                 }
                                                                 key={n}
                                                             >
-                                                                {list}
+                                                                {itm.link ? (
+                                                                    <Longtext
+                                                                        text={
+                                                                            list
+                                                                        }
+                                                                        category={
+                                                                            itm.category
+                                                                                ? itm.category
+                                                                                : 'unknown'
+                                                                        }
+                                                                        isLink={
+                                                                            true
+                                                                        }
+                                                                    />
+                                                                ) : (
+                                                                    list
+                                                                )}
                                                             </li>
                                                         )
                                                 )}

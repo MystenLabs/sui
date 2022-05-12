@@ -6,17 +6,8 @@ Note that the SDK is still in development mode and some API functions are subjec
 
 ## Installation
 
-We haven't published the npm package yet, so right now you may use [npm link](https://docs.npmjs.com/cli/v8/commands/npm-link) to install it locally.
-
 ```bash
-cd sui/sdk/typescript
-yarn && yarn build && npm link
-```
-
-Then:
-```bash
-cd your/project
-npm link sui.js
+$ yarn add @mysten/sui.js
 ```
 
 ## Local Development Environment Setup
@@ -27,21 +18,21 @@ Follow the [JSON RPC doc](https://github.com/MystenLabs/sui/blob/main/doc/src/bu
 
 The `JsonRpcProvider` class provides a connection to the JSON-RPC Server and should be used for all read-only operations. For example:
 
-Fetch objects owned by the address `C5206DD02C86A510C4848516229B02ADDFACBE55`
+Fetch objects owned by the address `0xbff6ccc8707aa517b4f1b95750a2a8c666012df3`
 
 ```typescript
-import { JsonRpcProvider } from 'sui.js';
-const provider = new JsonRpcProvider('http://127.0.0.1:5001/');
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider('https://gateway.devnet.sui.io:9000/');
 const objects = await provider.getOwnedObjectRefs(
-  'C5206DD02C86A510C4848516229B02ADDFACBE55'
+  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
 );
 ```
 
 Fetch transaction details from a transaction digest:
 
 ```typescript
-import { JsonRpcProvider } from 'sui.js';
-const provider = new JsonRpcProvider('http://127.0.0.1:5001/');
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider('https://gateway.devnet.sui.io:9000/');
 const txn = await provider.getTransaction(
   '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME='
 );
@@ -49,8 +40,24 @@ const txn = await provider.getTransaction(
 
 For any operations that involves signing or submitting transactions, you should use the `Signer` API. For example:
 
-To sign a raw message:
-TODO
-
 To transfer a Coin<SUI>:
+
+```typescript
+import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
+// Generate a new Keypair
+const keypair = new Ed25519Keypair();
+const signer = new RawSigner(
+  keypair,
+  new JsonRpcProvider('https://gateway.devnet.sui.io:9000/')
+);
+const txn = await signer.transferCoin({
+  signer: keypair.getPublicKey().toSuiAddress(),
+  objectId: '0x5015b016ab570df14c87649eda918e09e5cc61e0',
+  gasPayment: '0x0a8c2a0fd59bf41678b2e22c3dd2b84425fb3673',
+  gasBudget: 10000,
+  recipient: '0xBFF6CCC8707AA517B4F1B95750A2A8C666012DF3',
+});
+```
+
+To sign a raw message:
 TODO

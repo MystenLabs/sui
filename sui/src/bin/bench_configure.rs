@@ -1,19 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![deny(warnings)]
-
 use clap::*;
 use std::collections::BTreeMap;
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    path::Path,
-};
+use std::path::Path;
 use sui::{
     benchmark::bench_types::RemoteLoadGenConfig,
     config::{
-        AccountConfig, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig,
-        ObjectConfigRange,
+        AccountConfig, AuthorityInfo, Config, GenesisConfig, NetworkConfig, ObjectConfigRange,
     },
 };
 
@@ -50,28 +44,14 @@ fn main() {
         let db_path = format!("DB_{}", validator_address);
         let path = Path::new(&db_path);
 
-        let host_bytes: Vec<u8> = host
-            .split('.')
-            .into_iter()
-            .map(|q| q.parse::<u8>().unwrap())
-            .collect();
-        let consensus_address = SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::new(
-                host_bytes[0],
-                host_bytes[1],
-                host_bytes[2],
-                host_bytes[3],
-            )),
-            port + 1,
-        );
-
-        let auth = AuthorityPrivateInfo {
+        let auth = AuthorityInfo {
             address: validator_address,
-            host,
-            port,
+            network_address: format!("/dns/{host}/tcp/{port}/http").parse().unwrap(),
             db_path: path.to_path_buf(),
             stake,
-            consensus_address,
+            consensus_address: format!("/dns/{host}/tcp/{}/http", port + 1)
+                .parse()
+                .unwrap(),
             public_key: *validator_keypair.public_key_bytes(),
         };
 
@@ -110,7 +90,7 @@ fn main() {
         accounts.push(account);
     }
 
-    // For each validator, fill in the account info inot genesis
+    // For each validator, fill in the account info into genesis
     for (i, (_, (_, kp))) in authorities.iter().zip(authority_keys.iter()).enumerate() {
         // Create and save the genesis configs for the validators
         let genesis_config = GenesisConfig {

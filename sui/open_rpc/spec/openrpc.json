@@ -1487,14 +1487,14 @@
       "SingleTransactionKind": {
         "oneOf": [
           {
-            "description": "Initiate an object transfer between addresses",
+            "description": "Initiate a coin transfer between addresses",
             "type": "object",
             "required": [
-              "Transfer"
+              "TransferCoin"
             ],
             "properties": {
-              "Transfer": {
-                "$ref": "#/components/schemas/Transfer"
+              "TransferCoin": {
+                "$ref": "#/components/schemas/TransferCoin"
               }
             },
             "additionalProperties": false
@@ -1995,7 +1995,7 @@
           }
         ]
       },
-      "Transfer": {
+      "TransferCoin": {
         "type": "object",
         "required": [
           "object_ref",

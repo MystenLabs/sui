@@ -680,6 +680,10 @@ pub fn resolve_and_type_check(
     let mut mutable_ref_objects = BTreeMap::new();
     let mut by_value_objects = BTreeSet::new();
 
+    // Track the mapping from each input object to its Move type.
+    // This will be needed latter in `check_child_object_of_shared_object`.
+    let mut object_type_map = BTreeMap::new();
+
     let bcs_args = args
         .into_iter()
         .enumerate()
@@ -787,9 +791,12 @@ pub fn resolve_and_type_check(
                 }
             };
             type_check_struct(module, type_args, &move_object.type_, inner_param_type)?;
+            object_type_map.insert(id, move_object.type_.module_id());
             Ok(object_arg)
         })
         .collect::<SuiResult<Vec<_>>>()?;
+
+    check_child_object_of_shared_object(objects, &object_type_map, module.self_id())?;
 
     Ok(TypeCheckSuccess {
         module_id,
@@ -798,6 +805,73 @@ pub fn resolve_and_type_check(
         mutable_ref_objects,
         args: bcs_args,
     })
+}
+
+/// Check that for each pair of a shared object and a descendant of it (through object ownership),
+/// at least one of the types of the shared object and the descendant must be defined in the
+/// same module as the function being called (somewhat similar to Rust's orphan rule).
+fn check_child_object_of_shared_object(
+    objects: &BTreeMap<ObjectID, impl Borrow<Object>>,
+    object_type_map: &BTreeMap<ObjectID, ModuleId>,
+    current_module: ModuleId,
+) -> SuiResult {
+    // ancestor_map is a cache that remembers the top ancestor of each object.
+    // Top ancestor is the root object at the top in the object ownership chain whose
+    // parent is no longer an object.
+    let mut ancestor_map: BTreeMap<ObjectID, ObjectID> = BTreeMap::new();
+    for (object_id, obj) in objects {
+        // We only need to look at objects that are owned by other objects.
+        if !matches!(obj.borrow().owner, Owner::ObjectOwner(_)) {
+            continue;
+        }
+        // We trace the object up through the ownership chain, until we either hit
+        // the top (no more parent object), or we hit an object that's already
+        // in the `ancestor_map` (because we visited this object previously).
+        // We then have a pair between this object and its top ancestor. If the top
+        // ancestor is a shared object, we check on their types.
+        let mut ancestor_stack = vec![];
+        let mut cur_id = *object_id;
+        let ancestor_id = loop {
+            if let Some(ancestor) = ancestor_map.get(&cur_id) {
+                break *ancestor;
+            }
+            ancestor_stack.push(cur_id);
+            let owner = objects.get(&cur_id).unwrap().borrow().owner;
+            match owner {
+                Owner::ObjectOwner(parent_id) => {
+                    cur_id = parent_id.into();
+                    fp_ensure!(
+                        cur_id != ancestor_stack[0],
+                        SuiError::CircularObjectOwnership
+                    );
+                }
+                Owner::AddressOwner(_) | Owner::Immutable | Owner::Shared => {
+                    break cur_id;
+                }
+            }
+        };
+        // For each ancestor we have visited, cache their top ancestor so that if we
+        // ever visit them in the future, we know the answer.
+        while let Some(id) = ancestor_stack.pop() {
+            ancestor_map.insert(id, ancestor_id);
+        }
+        // Check the orphan rule.
+        if objects.get(&ancestor_id).unwrap().borrow().is_shared() {
+            let child_module = object_type_map.get(object_id).unwrap();
+            let ancestor_module = object_type_map.get(&ancestor_id).unwrap();
+            fp_ensure!(
+                child_module == &current_module || ancestor_module == &current_module,
+                SuiError::InvalidSharedChildUse {
+                    child: *object_id,
+                    child_module: current_module.to_string(),
+                    ancestor: ancestor_id,
+                    ancestor_module: ancestor_module.to_string(),
+                    current_module: current_module.to_string(),
+                }
+            );
+        }
+    }
+    Ok(())
 }
 
 fn is_primitive(

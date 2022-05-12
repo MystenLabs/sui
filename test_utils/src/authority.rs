@@ -4,7 +4,7 @@ use crate::{test_committee, test_keys};
 use narwhal_config::Parameters as ConsensusParameters;
 use std::{path::PathBuf, sync::Arc};
 use sui::{
-    config::{make_default_narwhal_committee, utils::get_available_port, AuthorityPrivateInfo},
+    config::{make_default_narwhal_committee, utils::get_available_port, AuthorityInfo},
     sui_commands::make_authority,
 };
 use sui_adapter::genesis;
@@ -24,7 +24,7 @@ pub fn test_authority_store() -> AuthorityStore {
 }
 
 /// Make an authority config for each of the `TEST_COMMITTEE_SIZE` authorities in the test committee.
-pub fn test_authority_configs() -> (Vec<AuthorityPrivateInfo>, Vec<KeyPair>) {
+pub fn test_authority_configs() -> (Vec<AuthorityInfo>, Vec<KeyPair>) {
     let test_keys = test_keys();
     let key_pair = test_keys
         .iter()
@@ -36,14 +36,17 @@ pub fn test_authority_configs() -> (Vec<AuthorityPrivateInfo>, Vec<KeyPair>) {
             let authority_port = get_available_port();
             let consensus_port = get_available_port();
 
-            AuthorityPrivateInfo {
+            AuthorityInfo {
                 address,
                 public_key: *key.public_key_bytes(),
-                host: "127.0.0.1".to_string(),
-                port: authority_port,
+                network_address: format!("/ip4/127.0.0.1/tcp/{authority_port}/http")
+                    .parse()
+                    .unwrap(),
                 db_path: PathBuf::new(),
                 stake: 1,
-                consensus_address: format!("127.0.0.1:{consensus_port}").parse().unwrap(),
+                consensus_address: format!("/ip4/127.0.0.1/tcp/{consensus_port}/http")
+                    .parse()
+                    .unwrap(),
             }
         })
         .collect();
@@ -80,7 +83,7 @@ where
 /// Spawn all authorities in the test committee into a separate tokio task.
 pub async fn spawn_test_authorities<I>(
     objects: I,
-    authorities: &[AuthorityPrivateInfo],
+    authorities: &[AuthorityInfo],
     key_pairs: &[KeyPair],
 ) -> Vec<AuthorityServerHandle>
 where
@@ -102,7 +105,6 @@ where
         let handle = make_authority(
             /* authority */ config,
             key_pair,
-            NETWORK_BUFFER_SIZE,
             state,
             &consensus_committee,
             /* consensus_store_path */ tempfile::tempdir().unwrap().path(),

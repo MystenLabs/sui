@@ -1,13 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Provider, TransactionResponse } from '../providers/provider';
+import { JsonRpcProvider } from '../providers/json-rpc-provider';
+import { Provider } from '../providers/provider';
 import { VoidProvider } from '../providers/void-provider';
 import { Base64DataBuffer } from '../serialization/base64';
+import { TransactionResponse } from '../types';
 import { SignaturePubkeyPair, Signer } from './signer';
 import { RpcTxnDataSerializer } from './txn-data-serializers/rpc-txn-data-serializer';
 import {
-  TransferTransaction,
+  TransferCoinTransaction,
   TxnDataSerializer,
 } from './txn-data-serializers/txn-data-serializer';
 
@@ -37,7 +39,11 @@ export abstract class SignerWithProvider implements Signer {
 
   constructor(provider?: Provider, serializer?: TxnDataSerializer) {
     this.provider = provider || new VoidProvider();
-    this.serializer = serializer || new RpcTxnDataSerializer('');
+    let endpoint = '';
+    if (this.provider instanceof JsonRpcProvider) {
+      endpoint = this.provider.endpoint;
+    }
+    this.serializer = serializer || new RpcTxnDataSerializer(endpoint);
   }
 
   /**
@@ -50,19 +56,19 @@ export abstract class SignerWithProvider implements Signer {
   ): Promise<TransactionResponse> {
     const sig = await this.signData(txBytes);
     return await this.provider.executeTransaction({
-      txBytes: txBytes.toString(),
+      tx_bytes: txBytes.toString(),
       signature: sig.signature.toString(),
-      pubKey: sig.pubKey.toString(),
+      pub_key: sig.pubKey.toString(),
     });
   }
 
   /**
-   * Serialize and Sign a `Transfer` transaction and submit to the Gateway for execution
+   * Serialize and Sign a `TransferCoin` transaction and submit to the Gateway for execution
    */
-  async transfer(
-    transaction: TransferTransaction
+  async transferCoin(
+    transaction: TransferCoinTransaction
   ): Promise<TransactionResponse> {
-    const txBytes = await this.serializer.new_transfer(transaction);
+    const txBytes = await this.serializer.newTransferCoin(transaction);
     return await this.signAndExecuteTransaction(txBytes);
   }
 }

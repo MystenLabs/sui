@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     config::{
-        make_default_narwhal_committee, sui_config_dir, AuthorityInfo, AuthorityPrivateInfo,
-        Config, GatewayConfig, GatewayType, GenesisConfig, NetworkConfig, PersistedConfig,
-        WalletConfig, CONSENSUS_DB_NAME, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
+        make_default_narwhal_committee, sui_config_dir, AuthorityInfo, Config, GatewayConfig,
+        GatewayType, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
+        CONSENSUS_DB_NAME, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
     },
     keystore::{Keystore, KeystoreType, SuiKeystore},
 };
@@ -33,7 +33,6 @@ use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::authority_server::AuthorityServer;
 use sui_core::authority_server::AuthorityServerHandle;
 use sui_core::consensus_adapter::ConsensusListener;
-use sui_network::network::NetworkClient;
 use sui_types::base_types::encode_bytes_hex;
 use sui_types::base_types::{decode_bytes_hex, ObjectID};
 use sui_types::base_types::{SequenceNumber, SuiAddress, TxContext};
@@ -137,7 +136,7 @@ impl SuiCommand {
                 if *dump_addresses {
                     for auth in config.authorities.iter() {
                         let addr = SuiAddress::from(&auth.public_key);
-                        println!("{}:{} - {}", auth.host, auth.port, addr);
+                        println!("{} - {}", auth.network_address, addr);
                     }
                 }
                 Ok(())
@@ -343,7 +342,6 @@ impl SuiNetwork {
                 authority,
                 key_pair,
                 &committee,
-                config.buffer_size,
                 &consensus_committee,
                 &consensus_store_path,
                 &consensus_parameters,
@@ -514,7 +512,6 @@ pub async fn genesis(
             &committee,
             preload_modules.clone(),
             &preload_objects,
-            network_config.buffer_size,
             &mut genesis_ctx.clone(),
         )
         .await?;
@@ -524,10 +521,9 @@ pub async fn genesis(
 }
 
 pub async fn make_server(
-    authority: &AuthorityPrivateInfo,
+    authority: &AuthorityInfo,
     key_pair: &KeyPair,
     committee: &Committee,
-    buffer_size: usize,
     consensus_committee: &ConsensusCommittee<Ed25519PublicKey>,
     consensus_store_path: &Path,
     consensus_parameters: &ConsensusParameters,
@@ -546,7 +542,6 @@ pub async fn make_server(
     make_authority(
         authority,
         key_pair,
-        buffer_size,
         state,
         consensus_committee,
         consensus_store_path,
@@ -557,12 +552,11 @@ pub async fn make_server(
 }
 
 async fn make_server_with_genesis_ctx(
-    authority: &AuthorityPrivateInfo,
+    authority: &AuthorityInfo,
     key_pair: &KeyPair,
     committee: &Committee,
     preload_modules: Vec<Vec<CompiledModule>>,
     preload_objects: &[Object],
-    buffer_size: usize,
     genesis_ctx: &mut TxContext,
 ) -> SuiResult<AuthorityServer> {
     let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
@@ -585,11 +579,9 @@ async fn make_server_with_genesis_ctx(
 
     let (tx_sui_to_consensus, _rx_sui_to_consensus) = channel(1);
     Ok(AuthorityServer::new(
-        authority.host.clone(),
-        authority.port,
-        buffer_size,
+        authority.network_address.clone(),
         Arc::new(state),
-        authority.consensus_address,
+        authority.consensus_address.clone(),
         /* tx_consensus_listener */ tx_sui_to_consensus,
     ))
 }
@@ -597,9 +589,8 @@ async fn make_server_with_genesis_ctx(
 /// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,
 /// and a consensus listener bridging the consensus node and the sui authority.
 pub async fn make_authority(
-    authority: &AuthorityPrivateInfo,
+    authority: &AuthorityInfo,
     key_pair: &KeyPair,
-    buffer_size: usize,
     state: AuthorityState,
     consensus_committee: &ConsensusCommittee<Ed25519PublicKey>,
     consensus_store_path: &Path,
@@ -645,15 +636,13 @@ pub async fn make_authority(
     // to all authorities in the system.
     let _active_authority: Option<()> = if let Some(network) = net_parameters {
         let mut authority_clients = BTreeMap::new();
+        let mut config = mysten_network::config::Config::new();
+        config.connect_timeout = Some(Duration::from_secs(5));
+        config.request_timeout = Some(Duration::from_secs(5));
         for info in &network {
-            let client = NetworkAuthorityClient::new(NetworkClient::new(
-                info.host.clone(),
-                info.base_port,
-                buffer_size,
-                Duration::from_secs(5),
-                Duration::from_secs(5),
-            ));
-            authority_clients.insert(info.name, client);
+            let channel = config.connect_lazy(&info.network_address).unwrap();
+            let client = NetworkAuthorityClient::new(channel);
+            authority_clients.insert(info.public_key, client);
         }
 
         let _active_authority = ActiveAuthority::new(authority_state.clone(), authority_clients)?;
@@ -669,11 +658,9 @@ pub async fn make_authority(
 
     // Return new authority server. It listen to users transactions and send back replies.
     Ok(AuthorityServer::new(
-        authority.host.clone(),
-        authority.port,
-        buffer_size,
+        authority.network_address.clone(),
         authority_state,
-        authority.consensus_address,
+        authority.consensus_address.clone(),
         /* tx_consensus_listener */ tx_sui_to_consensus,
     ))
 }

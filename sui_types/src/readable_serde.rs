@@ -1,10 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::account_address::AccountAddress;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use move_core_types::account_address::AccountAddress;
 use serde;
 use serde::de::{Deserialize, Deserializer, Error};
 use serde::ser::Serializer;
@@ -127,8 +127,12 @@ where
     {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            let value = E::decode(s).map_err(to_custom_error::<'de, D, _>)?;
-            AccountAddress::from_bytes(&value).map_err(to_custom_error::<'de, D, _>)
+            if s.starts_with("0x") {
+                AccountAddress::from_hex_literal(&s)
+            } else {
+                AccountAddress::from_hex(&s)
+            }
+            .map_err(to_custom_error::<'de, D, _>)
         } else {
             R::deserialize_as(deserializer)
         }
@@ -139,6 +143,8 @@ pub mod encoding {
     use anyhow::anyhow;
     use base64ct::Encoding as _;
 
+    use crate::base_types::{decode_bytes_hex, encode_bytes_hex};
+
     pub trait Encoding {
         fn decode(s: String) -> Result<Vec<u8>, anyhow::Error>;
         fn encode<T: AsRef<[u8]>>(data: T) -> String;
@@ -148,11 +154,11 @@ pub mod encoding {
 
     impl Encoding for Hex {
         fn decode(s: String) -> Result<Vec<u8>, anyhow::Error> {
-            Ok(hex::decode(s)?)
+            decode_bytes_hex(&s)
         }
 
         fn encode<T: AsRef<[u8]>>(data: T) -> String {
-            hex::encode(data)
+            format!("0x{}", encode_bytes_hex(&data).to_lowercase())
         }
     }
     impl Encoding for Base64 {

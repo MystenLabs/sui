@@ -596,7 +596,7 @@ impl Object {
 }
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Debug)]
 #[serde(tag = "status", content = "details")]
 pub enum ObjectRead {
     NotExists(ObjectID),

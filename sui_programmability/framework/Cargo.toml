@@ -16,15 +16,16 @@ num_enum = "0.5.7"
 sui-types = { path = "../../sui_types" }
 sui-verifier = { path = "../verifier" }
 
-move-binary-format = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
-move-cli = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc", features = ["address20"] }
-move-package = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
-move-stdlib = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
-move-unit-test = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "4e025186af502c931318884df53c11bf34a664bc" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
+move-cli = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
+move-compiler = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5", features = ["address20"] }
+move-package = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
+move-stdlib = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
+move-unit-test = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
+move-vm-runtime = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
+move-vm-types = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
 
 
 [package.metadata.cargo-udeps.ignore]

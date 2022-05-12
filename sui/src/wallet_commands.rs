@@ -25,7 +25,9 @@ use sui_core::gateway_state::{
 use sui_core::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_framework::build_move_package_to_bytes;
 use sui_types::{
-    base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress},
+    base_types::{ObjectID, ObjectRef, SuiAddress},
+    error::SuiError,
+    fp_ensure,
     gas_coin::GasCoin,
     messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects},
     object::{Object, ObjectRead, ObjectRead::Exists},
@@ -59,7 +61,7 @@ pub enum WalletCommands {
     Switch {
         /// An Sui address to be used as the active address for subsequent
         /// commands.
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         address: Option<SuiAddress>,
         /// The gateway URL (e.g., local rpc server, devnet rpc server, etc) to be
         /// used for subsequent commands.
@@ -130,16 +132,16 @@ pub enum WalletCommands {
         gas_budget: u64,
     },
 
-    /// Transfer an object
-    #[clap(name = "transfer")]
+    /// Transfer coin object
+    #[clap(name = "transfer-coin")]
     Transfer {
         /// Recipient address
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         to: SuiAddress,
 
-        /// Object to transfer, in 20 bytes Hex string
+        /// Coin to transfer, in 20 bytes Hex string
         #[clap(long)]
-        object_id: ObjectID,
+        coin_object_id: ObjectID,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
@@ -153,7 +155,7 @@ pub enum WalletCommands {
     /// Synchronize client state with authorities.
     #[clap(name = "sync")]
     SyncClientState {
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         address: Option<SuiAddress>,
     },
 
@@ -169,7 +171,7 @@ pub enum WalletCommands {
     #[clap(name = "objects")]
     Objects {
         /// Address owning the objects
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         address: Option<SuiAddress>,
     },
 
@@ -177,7 +179,7 @@ pub enum WalletCommands {
     #[clap(name = "gas")]
     Gas {
         /// Address owning the objects
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long)]
         address: Option<SuiAddress>,
     },
 
@@ -304,7 +306,7 @@ impl WalletCommands {
 
             WalletCommands::Transfer {
                 to,
-                object_id,
+                coin_object_id: object_id,
                 gas,
                 gas_budget,
             } => {
@@ -678,10 +680,22 @@ impl Display for WalletCommandResult {
                 }
             }
             WalletCommandResult::Objects(object_refs) => {
-                writeln!(writer, "Showing {} results.", object_refs.len())?;
-                for object_ref in object_refs {
-                    writeln!(writer, "{:?}", object_ref)?;
+                writeln!(
+                    writer,
+                    " {0: ^42} | {1: ^10} | {2: ^68}",
+                    "Object ID", "Version", "Digest"
+                )?;
+                writeln!(writer, "{}", ["-"; 126].join(""))?;
+                for (id, version, digest) in object_refs {
+                    writeln!(
+                        writer,
+                        " {0: ^42} | {1: ^10} | {2: ^34?}",
+                        id,
+                        version.value(),
+                        digest
+                    )?;
                 }
+                writeln!(writer, "Showing {} results.", object_refs.len())?;
             }
             WalletCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
@@ -693,7 +707,7 @@ impl Display for WalletCommandResult {
                 // TODO: generalize formatting of CLI
                 writeln!(
                     writer,
-                    " {0: ^40} | {1: ^10} | {2: ^11}",
+                    " {0: ^42} | {1: ^10} | {2: ^11}",
                     "Object ID", "Version", "Gas Value"
                 )?;
                 writeln!(
@@ -703,7 +717,7 @@ impl Display for WalletCommandResult {
                 for gas in gases {
                     writeln!(
                         writer,
-                        " {0: ^40} | {1: ^10} | {2: ^11}",
+                        " {0: ^42} | {1: ^10} | {2: ^11}",
                         gas.id(),
                         u64::from(gas.version()),
                         gas.value()
@@ -787,9 +801,19 @@ async fn call_move(
         .read()
         .unwrap()
         .sign(&sender, &data.to_bytes())?;
+    let transaction = Transaction::new(data, signature);
+    // Shared objects are not yet supported end-to-end.
+    // Disabling it by default at the moment. However we could still use it
+    // if we pass environment variable SHARED to the wallet.
+    if std::env::var("SHARED").is_err() {
+        fp_ensure!(
+            !transaction.contains_shared_object(),
+            SuiError::UnsupportedSharedObjectError.into()
+        );
+    }
     let (cert, effects) = context
         .gateway
-        .execute_transaction(Transaction::new(data, signature))
+        .execute_transaction(transaction)
         .await?
         .to_effect_response()?;
 
@@ -824,9 +848,9 @@ impl Debug for WalletCommandResult {
             WalletCommandResult::Object(object_read) => {
                 let object = object_read.object()?;
                 let layout = object_read.layout()?;
-                Ok(object.to_json(layout)?.to_string())
+                Ok(serde_json::to_string_pretty(&object.to_json(layout)?)?)
             }
-            _ => Ok(serde_json::to_string(self)?),
+            _ => Ok(serde_json::to_string_pretty(self)?),
         });
         write!(f, "{}", s)
     }

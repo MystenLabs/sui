@@ -1,12 +1,17 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! This module contains the transactional test runner instantiation for the Sui adapter
+
 use crate::{args::*, in_memory_storage::InMemoryStorage};
 use anyhow::{anyhow, bail};
 use bimap::btree::BiBTreeMap;
 use itertools::Itertools;
 use move_binary_format::{file_format::CompiledScript, CompiledModule};
-use move_command_line_common::files::verify_and_create_named_address_mapping;
+use move_bytecode_utils::module_cache::GetModule;
+use move_command_line_common::{
+    address::ParsedAddress, files::verify_and_create_named_address_mapping,
+};
 use move_compiler::{
     shared::{NumberFormat, NumericalAddress, PackagePaths},
     Flags, FullyCompiledProgram,
@@ -15,16 +20,17 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
-    transaction_argument::TransactionArgument,
+    value::MoveStruct,
 };
 use move_transactional_test_runner::{
     framework::{CompiledState, MoveTestAdapter},
-    tasks::{EmptyCommand, InitCommand, SyntaxChoice},
+    tasks::{InitCommand, SyntaxChoice, TaskInput},
 };
 use move_vm_runtime::{
     move_vm::MoveVM, native_functions::NativeFunctionTable, session::SerializedReturnValues,
 };
 use once_cell::sync::Lazy;
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
@@ -35,20 +41,25 @@ use sui_core::{authority::AuthorityTemporaryStore, execution_engine};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
-    crypto::{get_key_pair, KeyPair, Signature},
+    crypto::{get_key_pair_from_rng, KeyPair, Signature},
     error::SuiError,
     gas,
     messages::{
         ExecutionStatus, InputObjectKind, Transaction, TransactionData, TransactionEffects,
     },
-    object::{Object, GAS_VALUE_FOR_TESTING},
+    object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
-/// This module contains the transactional test runner instantiation for the Sui adapter
+pub(crate) type FakeID = u64;
 
 // initial value for fake object ID mapping
-const INIT_NEXT_OBJECT: usize = 100;
+const INIT_NEXT_FAKE: FakeID = 100;
+// TODO use the file name as a seed
+const RNG_SEED: [u8; 32] = [
+    21, 23, 199, 200, 234, 250, 252, 178, 94, 15, 202, 178, 62, 186, 88, 137, 233, 192, 130, 157,
+    179, 179, 65, 9, 31, 249, 221, 123, 225, 112, 199, 247,
+];
 
 pub struct SuiTestAdapter<'a> {
     vm: Arc<MoveVM>,
@@ -57,15 +68,23 @@ pub struct SuiTestAdapter<'a> {
     pub(crate) compiled_state: CompiledState<'a>,
     accounts: BTreeMap<String, (SuiAddress, KeyPair)>,
     default_syntax: SyntaxChoice,
-    object_enumeration: BiBTreeMap<ObjectID, [u8; SUI_ADDRESS_LENGTH]>,
-    next_object: usize,
+    object_enumeration: BiBTreeMap<ObjectID, FakeID>,
+    next_fake: FakeID,
+    rng: StdRng,
+}
+
+struct TxnSummary {
+    created: Vec<ObjectID>,
+    written: Vec<ObjectID>,
+    deleted: Vec<ObjectID>,
 }
 
 impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
     type ExtraPublishArgs = SuiPublishArgs;
     type ExtraRunArgs = SuiRunArgs;
-    type Subcommand = EmptyCommand;
+    type Subcommand = SuiSubcommand;
     type ExtraInitArgs = SuiInitArgs;
+    type ExtraValueArgs = SuiExtraValueArgs;
 
     fn compiled_state(&mut self) -> &mut CompiledState<'a> {
         &mut self.compiled_state
@@ -85,6 +104,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             )>,
         >,
     ) -> Self {
+        let mut rng = StdRng::from_seed(RNG_SEED);
         assert!(
             pre_compiled_deps.is_some(),
             "Must populate 'pre_compiled_deps' with Sui framework"
@@ -101,7 +121,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         };
         let accounts = account_names
             .into_iter()
-            .map(|n| (n, get_key_pair()))
+            .map(|n| (n, get_key_pair_from_rng(&mut rng)))
             .collect::<BTreeMap<_, _>>();
 
         let mut named_address_mapping = NAMED_ADDRESSES.clone();
@@ -121,16 +141,34 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
 
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-        Self {
+        let mut test_adapter = Self {
             vm: Arc::new(new_move_vm(native_functions.clone()).unwrap()),
             storage: Arc::new(InMemoryStorage::new(genesis::clone_genesis_packages())),
             native_functions,
-            compiled_state: CompiledState::new(named_address_mapping, pre_compiled_deps),
+            compiled_state: CompiledState::new(
+                named_address_mapping,
+                pre_compiled_deps,
+                Some(NumericalAddress::new(
+                    AccountAddress::ZERO.into_bytes(),
+                    NumberFormat::Hex,
+                )),
+            ),
             accounts,
             default_syntax,
             object_enumeration: BiBTreeMap::new(),
-            next_object: INIT_NEXT_OBJECT,
+            next_fake: INIT_NEXT_FAKE,
+            rng,
+        };
+        let object_ids = test_adapter
+            .storage
+            .objects()
+            .keys()
+            .copied()
+            .collect::<Vec<_>>();
+        for object_id in object_ids {
+            test_adapter.enumerate_fake(object_id);
         }
+        test_adapter
     }
 
     fn publish_module(
@@ -139,7 +177,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         named_addr_opt: Option<Identifier>,
         gas_budget: Option<u64>,
         extra: Self::ExtraPublishArgs,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<(Option<String>, CompiledModule)> {
         let SuiPublishArgs { sender } = extra;
         let named_addr = named_addr_opt.expect(
             "Cannot publish without a named address. \
@@ -156,8 +194,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             TransactionData::new_module(sender, gas_payment, vec![module_bytes], gas_budget)
         };
         let transaction = self.sign_txn(sender, data);
-        let (written, _deleted) = self.execute_txn(transaction, gas_budget)?;
-        let created_package = written
+        let summary = self.execute_txn(transaction, gas_budget)?;
+        let created_package = summary
+            .created
             .iter()
             .find_map(|id| {
                 let package = self.storage.get_object(id).unwrap().data.try_as_package()?;
@@ -171,7 +210,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let package_addr = NumericalAddress::new(created_package.into_bytes(), NumberFormat::Hex);
         let prev_package = self
             .compiled_state
-            .insert_named_address(named_addr.to_string(), package_addr);
+            .named_address_mapping
+            .insert(named_addr.to_string(), package_addr);
         match prev_package.map(|a| a.into_inner()) {
             Some(addr) if addr != AccountAddress::ZERO => panic!(
                 "Cannot reuse named address '{}' for multiple packages. \
@@ -180,7 +220,20 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             ),
             _ => (),
         }
-        Ok(())
+        let output = self.object_summary_output(&summary);
+        let published_module_bytes = self
+            .storage
+            .get_object(&created_package)
+            .unwrap()
+            .data
+            .try_as_package()
+            .unwrap()
+            .serialized_module_map()
+            .get(&module_name)
+            .unwrap()
+            .clone();
+        let published_module = CompiledModule::deserialize(&published_module_bytes).unwrap();
+        Ok((output, published_module))
     }
 
     fn call_function(
@@ -188,14 +241,13 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         module_id: &ModuleId,
         function: &IdentStr,
         type_args: Vec<TypeTag>,
-        signers: Vec<move_transactional_test_runner::tasks::RawAddress>,
-        empty_args: Vec<TransactionArgument>,
+        signers: Vec<ParsedAddress>,
+        args: Vec<SuiValue>,
         gas_budget: Option<u64>,
         extra: Self::ExtraRunArgs,
     ) -> anyhow::Result<(Option<String>, SerializedReturnValues)> {
         assert!(signers.is_empty(), "signers are not used");
-        assert!(empty_args.is_empty(), "Use '--{}' instead", SUI_ARGS_LONG);
-        let SuiRunArgs { args, sender } = extra;
+        let SuiRunArgs { sender } = extra;
         let arguments = args
             .into_iter()
             .map(|arg| arg.into_call_args(self))
@@ -220,20 +272,21 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             )
         };
         let transaction = self.sign_txn(sender, data);
-        self.execute_txn(transaction, gas_budget)?;
+        let summary = self.execute_txn(transaction, gas_budget)?;
+        let output = self.object_summary_output(&summary);
         let empty = SerializedReturnValues {
             mutable_reference_outputs: vec![],
             return_values: vec![],
         };
-        Ok((None, empty))
+        Ok((output, empty))
     }
 
     fn execute_script(
         &mut self,
         _script: CompiledScript,
         _type_args: Vec<TypeTag>,
-        _signers: Vec<move_transactional_test_runner::tasks::RawAddress>,
-        _args: Vec<TransactionArgument>,
+        _signers: Vec<ParsedAddress>,
+        _args: Vec<SuiValue>,
         _gas_budget: Option<u64>,
         _extra: Self::ExtraRunArgs,
     ) -> anyhow::Result<(Option<String>, SerializedReturnValues)> {
@@ -252,9 +305,60 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
 
     fn handle_subcommand(
         &mut self,
-        _subcommand: move_transactional_test_runner::tasks::TaskInput<Self::Subcommand>,
+        task: TaskInput<Self::Subcommand>,
     ) -> anyhow::Result<Option<String>> {
-        unimplemented!()
+        let TaskInput {
+            command,
+            name: _,
+            number,
+            start_line,
+            command_lines_stop,
+            stop_line: _,
+            data: _,
+        } = task;
+        match command {
+            SuiSubcommand::ViewObject(ViewObjectCommand { id: fake_id }) => {
+                let id = match self.fake_to_real_object_id(fake_id) {
+                    None => panic!(
+                        "task {}, lines {}-{}. Unbound fake id {}",
+                        number, start_line, command_lines_stop, fake_id
+                    ),
+                    Some(res) => res,
+                };
+                let obj = match self.storage.get_object(&id) {
+                    None => return Ok(Some(format!("No object at id {}", fake_id))),
+                    Some(obj) => obj,
+                };
+                Ok(Some(match &obj.data {
+                    object::Data::Move(move_obj) => {
+                        let layout = move_obj
+                            .get_layout(ObjectFormatOptions::default(), &&*self)
+                            .unwrap();
+                        let move_struct =
+                            MoveStruct::simple_deserialize(move_obj.contents(), &layout).unwrap();
+                        self.stabilize_str(format!(
+                            "Owner: {}\nContents: {}",
+                            &obj.owner, move_struct
+                        ))
+                    }
+                    object::Data::Package(package) => {
+                        let num_modules = package.serialized_module_map().len();
+                        let modules = package
+                            .serialized_module_map()
+                            .keys()
+                            .cloned()
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        assert!(!modules.is_empty());
+                        if num_modules > 1 {
+                            format!("{}::{{{}}}", fake_id, modules)
+                        } else {
+                            format!("{}::{}", fake_id, modules)
+                        }
+                    }
+                }))
+            }
+        }
     }
 }
 
@@ -264,6 +368,8 @@ impl<'a> SuiTestAdapter<'a> {
         sender: Option<String>,
         txn_data: impl FnOnce(/* sender */ SuiAddress, /* gas */ ObjectRef) -> TransactionData,
     ) -> Transaction {
+        let gas_object_id = ObjectID::new(self.rng.gen());
+        self.enumerate_fake(gas_object_id);
         let new_key_pair;
         let (sender, sender_key) = match sender {
             Some(n) => match self.accounts.get(&n) {
@@ -271,12 +377,12 @@ impl<'a> SuiTestAdapter<'a> {
                 None => panic!("Unbound account {}", n),
             },
             None => {
-                let (sender, sender_key) = get_key_pair();
+                let (sender, sender_key) = get_key_pair_from_rng(&mut self.rng);
                 new_key_pair = sender_key;
                 (sender, &new_key_pair)
             }
         };
-        let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+        let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
         let gas_payment = gas_object.compute_object_reference();
         let storage_mut = Arc::get_mut(&mut self.storage).unwrap();
         storage_mut.insert_object(gas_object);
@@ -289,12 +395,9 @@ impl<'a> SuiTestAdapter<'a> {
         &mut self,
         transaction: Transaction,
         gas_budget: u64,
-    ) -> anyhow::Result<(
-        /* written */ BTreeSet<ObjectID>,
-        /* deleted */ BTreeSet<ObjectID>,
-    )> {
+    ) -> anyhow::Result<TxnSummary> {
         let gas_status = gas::start_gas_metering(gas_budget, 1, 1).unwrap();
-        let transaction_digest = TransactionDigest::random();
+        let transaction_digest = TransactionDigest::new(self.rng.gen());
         let objects_by_kind = transaction
             .data
             .input_objects()
@@ -303,10 +406,6 @@ impl<'a> SuiTestAdapter<'a> {
             .map(|kind| {
                 let id = kind.object_id();
                 let obj_opt = self.storage.get_object(&id);
-                if obj_opt.is_none() {
-                    dbg!(id);
-                    println!("no object? {}", id);
-                }
                 let obj = obj_opt.unwrap().clone();
                 (kind, obj)
             })
@@ -345,83 +444,191 @@ impl<'a> SuiTestAdapter<'a> {
             &self.native_functions,
             gas_status,
         )?;
-        for ((id, _, _), _) in created {
-            self.enumerate_object(id);
-        }
         let (_objects, _active_inputs, written, deleted, _events) = temporary_store.into_inner();
-        let written_ids = written.keys().copied().collect();
-        let deleted_ids = deleted.keys().copied().collect();
+        let created_set: BTreeSet<_> = created.iter().map(|((id, _, _), _)| *id).collect();
+        let mut created_ids: Vec<_> = created_set.iter().copied().collect();
+        let mut written_ids: Vec<_> = written
+            .keys()
+            .copied()
+            .filter(|id| !created_set.contains(id))
+            .collect();
+        let mut deleted_ids: Vec<_> = deleted.keys().copied().collect();
+        // update storage
         Arc::get_mut(&mut self.storage)
             .unwrap()
             .finish(written, deleted);
+        // enumerate objects after written to storage, sort by a "stable" sorting as the
+        // object ID is not stable
+        let mut created_ids_vec = created
+            .iter()
+            .map(|((id, _, _), _)| *id)
+            .collect::<Vec<_>>();
+        created_ids_vec.sort_by_key(|id| self.get_object_sorting_key(id));
+        for id in &created_ids_vec {
+            self.enumerate_fake(*id);
+        }
+        // sort by fake id
+        created_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        written_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         match status {
-            ExecutionStatus::Success { .. } => Ok((written_ids, deleted_ids)),
+            ExecutionStatus::Success { .. } => Ok(TxnSummary {
+                created: created_ids,
+                written: written_ids,
+                deleted: deleted_ids,
+            }),
             ExecutionStatus::Failure { error, .. } => Err(self.render_sui_error(*error)),
         }
     }
 
-    pub(crate) fn fake_to_real_object_id(&self, id: [u8; SUI_ADDRESS_LENGTH]) -> Option<ObjectID> {
-        self.object_enumeration.get_by_right(&id).copied()
+    // stable way of sorting objects by type. Does not however, produce a stable sorting
+    // between objects of the same type
+    fn get_object_sorting_key(&self, id: &ObjectID) -> String {
+        match &self.storage.get_object(id).unwrap().data {
+            sui_types::object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_)),
+            sui_types::object::Data::Package(pkg) => pkg
+                .serialized_module_map()
+                .keys()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(","),
+        }
     }
 
-    pub(crate) fn real_to_fake_object_id(&self, id: &ObjectID) -> Option<[u8; SUI_ADDRESS_LENGTH]> {
+    pub(crate) fn fake_to_real_object_id(&self, fake_id: FakeID) -> Option<ObjectID> {
+        self.object_enumeration.get_by_right(&fake_id).copied()
+    }
+
+    pub(crate) fn real_to_fake_object_id(&self, id: &ObjectID) -> Option<FakeID> {
         self.object_enumeration.get_by_left(id).copied()
     }
 
-    fn enumerate_object(&mut self, id: ObjectID) -> [u8; SUI_ADDRESS_LENGTH] {
-        const USIZE_LENGTH: usize = std::mem::size_of::<usize>();
-        let mut fake_id = [0; SUI_ADDRESS_LENGTH];
-        let next_id_bytes: [u8; USIZE_LENGTH] = self.next_object.to_be_bytes();
-        fake_id[(SUI_ADDRESS_LENGTH - USIZE_LENGTH)..].clone_from_slice(&next_id_bytes);
-        let prev = self.object_enumeration.insert(id, fake_id);
-        assert!(!prev.did_overwrite());
-        self.next_object += 1;
+    fn enumerate_fake(&mut self, id: ObjectID) -> FakeID {
+        let fake_id = self.next_fake;
+        self.object_enumeration.insert(id, fake_id);
+        self.next_fake += 1;
         fake_id
     }
 
+    fn object_summary_output(
+        &self,
+        TxnSummary {
+            created,
+            written,
+            deleted,
+        }: &TxnSummary,
+    ) -> Option<String> {
+        let mut out = String::new();
+        if !created.is_empty() {
+            out += &format!("created: {}", self.list_objs(created));
+        }
+        if !written.is_empty() {
+            if !out.is_empty() {
+                out.push('\n')
+            }
+            out += &format!("written: {}", self.list_objs(written));
+        }
+        if !deleted.is_empty() {
+            if !out.is_empty() {
+                out.push('\n')
+            }
+            out += &format!("deleted: {}", self.list_objs(deleted));
+        }
+
+        if out.is_empty() {
+            None
+        } else {
+            Some(out)
+        }
+    }
+
+    fn list_objs(&self, objs: &[ObjectID]) -> String {
+        objs.iter()
+            .map(|id| format!("object({})", self.real_to_fake_object_id(id).unwrap()))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
     fn render_sui_error(&self, sui_error: SuiError) -> anyhow::Error {
-        const HEX_STR_LENGTH: usize = SUI_ADDRESS_LENGTH * 2;
         let error_string: String = format!("{}", sui_error);
+        anyhow!(self.stabilize_str(&error_string))
+    }
+
+    fn stabilize_str(&self, input: impl AsRef<str>) -> String {
+        fn candidate_is_hex(s: &str) -> bool {
+            const HEX_STR_LENGTH: usize = SUI_ADDRESS_LENGTH * 2;
+            let n = s.len();
+            (s.starts_with("0x") && n >= 3) || n == HEX_STR_LENGTH
+        }
         let mut hex_candidate = String::new();
         let mut result = String::new();
-        for c in error_string.chars() {
+        let mut chars = input.as_ref().chars().peekable();
+        let mut cur = chars.next();
+        while let Some(c) = cur {
             match c {
+                '0' if hex_candidate.is_empty() && matches!(chars.peek(), Some('x')) => {
+                    let c = chars.next().unwrap();
+                    assert!(c == 'x');
+                    hex_candidate.push_str("0x");
+                }
                 '0'..='9' | 'a'..='f' | 'A'..='F' => hex_candidate.push(c),
                 _ => {
-                    match hex_candidate.len() {
-                        0 => (),
-                        HEX_STR_LENGTH => {
-                            result.push_str(&self.remap_hex_str(hex_candidate));
-                            hex_candidate = String::new();
-                        }
-                        _ => {
-                            result.push_str(&hex_candidate);
+                    if candidate_is_hex(&hex_candidate) {
+                        result.push_str(&self.remap_hex_str(hex_candidate));
+                        hex_candidate = String::new();
+                    } else {
+                        result.push_str(&hex_candidate);
+                        if !hex_candidate.is_empty() {
                             hex_candidate = String::new();
                         }
                     }
                     result.push(c);
                 }
             }
+            cur = chars.next();
         }
-        match hex_candidate.len() {
-            0 => (),
-            HEX_STR_LENGTH => {
-                result.push_str(&self.remap_hex_str(hex_candidate));
-            }
-            _ => {
-                result.push_str(&hex_candidate);
-            }
+        if candidate_is_hex(&hex_candidate) {
+            result.push_str(&self.remap_hex_str(hex_candidate));
+        } else {
+            result.push_str(&hex_candidate);
         }
-        anyhow!(result)
+        result
     }
 
-    fn remap_hex_str(&self, mut hex_str: String) -> String {
-        hex_str.make_ascii_lowercase();
-        let bytes: [u8; SUI_ADDRESS_LENGTH] = hex::decode(&hex_str).unwrap().try_into().unwrap();
-        match self.real_to_fake_object_id(&ObjectID::new(bytes)) {
-            None => "_".to_string(),
-            Some(addr) => format!("{}", ObjectID::new(addr)),
+    fn remap_hex_str(&self, hex_str: String) -> String {
+        let hex_str = if hex_str.starts_with("0x") {
+            hex_str
+        } else {
+            format!("0x{}", hex_str)
+        };
+        let parsed = AccountAddress::from_hex_literal(&hex_str).unwrap();
+        if let Some((known, _)) = self
+            .compiled_state
+            .named_address_mapping
+            .iter()
+            .find(|(_name, addr)| addr.into_inner() == parsed)
+        {
+            return known.clone();
         }
+        match self.real_to_fake_object_id(&parsed.into()) {
+            None => "_".to_string(),
+            Some(fake) => format!("fake({})", fake),
+        }
+    }
+}
+
+impl<'a> GetModule for &'a SuiTestAdapter<'_> {
+    type Error = anyhow::Error;
+
+    type Item = &'a CompiledModule;
+
+    fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
+        Ok(Some(
+            self.compiled_state
+                .dep_modules()
+                .find(|m| &m.self_id() == id)
+                .unwrap_or_else(|| panic!("Internal error: Unbound module {}", id)),
+        ))
     }
 }
 
