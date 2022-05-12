@@ -5,13 +5,13 @@ Objects in Sui can have different types of [ownership](../objects.md#object-owne
 
 ### Create immutable object
 
-Regardless of whether an object was just created or already owned by an account, to turn this object into an immutable object, we need to call the following API in the [Transfer Library](../../../../sui_programmability/framework/sources/Transfer.move):
+Regardless of whether an object was just created or already owned by an account, to turn this object into an immutable object, we need to call the following API in the [Transfer Library](https://github.com/MystenLabs/sui/blob/main/sui_programmability/framework/sources/Transfer.move):
 ```rust
 public native fun freeze_object<T: key>(obj: T);
 ```
 After this call, the specified object will become permanently immutable. This is a non-reversible operation; hence, freeze an object only when you are certain that it will never need to be mutated.
 
-Let's add an entry function to the [ColorObject](../../../../sui_programmability/examples/objects_tutorial/sources/ColorObject.move) module to turn an existing (owned) `ColorObject` into an immutable object:
+Let's add an entry function to the [ColorObject](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/ColorObject.move) module to turn an existing (owned) `ColorObject` into an immutable object:
 ```rust
 public(script) fun freeze_object(object: ColorObject, _ctx: &mut TxContext) {
     Transfer::freeze_object(object)
