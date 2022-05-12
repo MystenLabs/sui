@@ -250,7 +250,14 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
         (handle, dag)
     }
 
-    /// Inserts a Certificate in the Dag. The certificate must have been validated and so must all its parents, recursively
+    /// Inserts a Certificate in the Dag.
+    ///
+    /// Note: the caller is responsible for validation of the certificate, including, but not limited to:
+    /// - the certificate's signatures are valid,
+    /// - the certificate has a valid number of parents by stake,
+    /// - the certificate is well-formed (e.g. hashes match),
+    /// - all the parents' certificates are recursively valid and have been inserted in the Dag.
+    ///
     pub async fn insert(
         &mut self,
         certificate: Certificate<PublicKey>,
