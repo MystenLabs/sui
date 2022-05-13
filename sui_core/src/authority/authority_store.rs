@@ -12,7 +12,7 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use sui_types::object::OBJECT_START_VERSION;
-use tracing::warn;
+use tracing::{info, warn};
 use typed_store::rocks::{DBBatch, DBMap};
 
 use typed_store::{reopen, traits::Map};
@@ -409,15 +409,20 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     /// TODO: We need this today because we don't have another way to sync an account.
     pub fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
         // Insert object
+        info!(?object, ?object_ref, "insert object direct");
         self.objects.insert(&object_ref.0, object)?;
 
+        info!(?object, ?object_ref, "insert txn lock");
         self.transaction_lock.get_or_insert(&object_ref, || None)?;
 
+        info!(?object, ?object_ref, "update index");
         // Update the index
         if let Some(address) = object.get_single_owner() {
+            info!(?object, ?object_ref, "single owner");
             self.owner_index
                 .insert(&(address, object_ref.0), &object_ref)?;
         }
+        info!(?object, ?object_ref, "update parent");
         // Update the parent
         self.parent_sync
             .insert(&object_ref, &object.previous_transaction)?;

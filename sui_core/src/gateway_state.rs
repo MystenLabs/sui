@@ -2,17 +2,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::path::PathBuf;
-use std::sync::atomic::AtomicU64;
-use std::sync::Arc;
-use std::time::Duration;
-
 use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::future;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::path::PathBuf;
+use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
+use std::time::Duration;
 use sui_adapter::adapter::resolve_and_type_check;
 use tracing::{debug, error, Instrument};
 
@@ -726,8 +725,21 @@ where
         );
 
         for (object, _option_layout, _option_cert) in active_object_certs {
-            self.store
-                .insert_object_direct(object.compute_object_reference(), &object)?;
+            let res = self
+                .store
+                .insert_object_direct(object.compute_object_reference(), &object);
+            match res {
+                Ok(_) => {}
+                Err(e) => {
+                    error!(
+                        "failed to insert obj {:?}. ref: {:?}. Error: {:?}",
+                        &object,
+                        object.compute_object_reference(),
+                        e,
+                    );
+                    return Err(anyhow!(e));
+                }
+            }
         }
 
         Ok(())
