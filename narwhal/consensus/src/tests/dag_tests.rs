@@ -63,7 +63,7 @@ async fn dag_mutation_failures() {
     // Removing unknown certificates should fail
     while let Some(certificate) = certs_to_remove_before_insert.pop_back() {
         assert!(matches!(
-            dag.remove(certificate.digest()).await,
+            dag.remove(vec![certificate.digest()]).await,
             Err(ValidatorDagError::DagInvariantViolation(
                 NodeDagError::UnknownDigests(_)
             ))
@@ -187,7 +187,7 @@ async fn dag_insert_and_remove_reads() {
 
     // we remove round 0
     while let Some(genesis_cert) = genesis_certs.pop() {
-        dag.remove(genesis_cert.digest()).await.unwrap();
+        dag.remove(vec![genesis_cert.digest()]).await.unwrap();
     }
 
     // on optimal certificates (we ack all of the prior round), we BFT 1 + 3 * 4 vertices

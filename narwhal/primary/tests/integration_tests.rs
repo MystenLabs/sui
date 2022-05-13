@@ -1,8 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use config::Parameters;
-use config::WorkerId;
+use config::{Parameters, WorkerId};
 use consensus::dag::Dag;
 use crypto::{
     ed25519::{Ed25519KeyPair, Ed25519PublicKey},
@@ -12,8 +11,7 @@ use crypto::{
 use futures::future::join_all;
 use node::NodeStorage;
 use primary::{PayloadToken, Primary, CHANNEL_CAPACITY};
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use store::Store;
 use test_utils::{
     certificate, committee, fixture_batch_with_transactions, fixture_header_builder, keys, temp_dir,

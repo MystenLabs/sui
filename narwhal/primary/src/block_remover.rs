@@ -359,10 +359,7 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
         let certificate_ids: Vec<CertificateDigest> =
             certificates.as_slice().iter().map(|c| c.digest()).collect();
         if let Some(dag) = &self.dag {
-            // TODO: change the Dag to accept a multi-delete
-            for cert_id in certificate_ids.iter() {
-                dag.remove(*cert_id).await.map_err(Either::Right)?
-            }
+            dag.remove(&certificate_ids).await.map_err(Either::Right)?
         }
         self.certificate_store
             .remove_all(certificate_ids)
