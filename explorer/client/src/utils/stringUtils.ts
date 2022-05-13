@@ -22,7 +22,7 @@ export const trimStdLibPrefix = (str: string): string =>
 export const handleCoinType = (str: string): string =>
     str === '0x2::Coin::Coin<0x2::SUI::SUI>'
         ? 'SUI'
-        : str.match(/(?<=<)[a-zA-Z0-9:]+(?=>)/)?.[0] || str;
+        : str.match(/^([a-zA-Z0-9:]*)<([a-zA-Z0-9:]*)>$/)?.[2] || str;
 
 export const processDisplayValue = (display: { bytes: number[] } | string) => {
     const url =
