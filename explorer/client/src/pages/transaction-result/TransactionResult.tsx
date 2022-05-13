@@ -92,6 +92,17 @@ const getCreatedOrMutatedData = (
         : [];
 };
 
+const FailedToGetTxResults = ({ id }: { id: string }) => (
+    <ErrorResult
+        id={id}
+        errorMsg={
+            !id
+                ? "Can't search for a transaction without a digest"
+                : 'Data could not be extracted for the following specified transaction ID'
+        }
+    />
+);
+
 const transformTransactionResponse = (
     txObj: TransactionEffectsResponse,
     id: string
@@ -151,26 +162,21 @@ const TransactionResultAPI = ({ id }: { id: string }) => {
     // For Batch transactions show error
     // TODO update Error screen and account for Batch transactions
 
-    return (
-        <ErrorResult
-            id={id}
-            errorMsg={
-                !id
-                    ? "Can't search for a transaction without a digest"
-                    : 'There was an issue with the data on the following transaction'
-            }
-        />
-    );
+    return <FailedToGetTxResults id={id} />;
 };
 
 const TransactionResultStatic = ({ id }: { id: string }) => {
     const entry = findDataFromID(id, undefined);
-
-    return (
-        <TransactionResultLoaded
-            txData={transformTransactionResponse(entry, id)}
-        />
-    );
+    try {
+        return (
+            <TransactionResultLoaded
+                txData={transformTransactionResponse(entry, id)}
+            />
+        );
+    } catch (error) {
+        console.error(error);
+        return <FailedToGetTxResults id={id} />;
+    }
 };
 
 const TransactionResultLoaded = ({ txData }: { txData: DataType }) => {

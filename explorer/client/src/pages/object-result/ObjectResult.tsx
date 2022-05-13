@@ -33,7 +33,7 @@ const Fail = ({ objID }: { objID: string | undefined }): JSX.Element => {
     return (
         <ErrorResult
             id={objID}
-            errorMsg="There was an issue with the data on the following object"
+            errorMsg="Data could not be extracted on the following specified object ID"
         />
     );
 };
