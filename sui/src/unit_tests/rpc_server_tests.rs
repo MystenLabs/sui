@@ -31,9 +31,7 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::rpc_server_tests::sui_network::start_test_network;
-
-mod sui_network;
+use test_utils::network::start_test_network;
 
 #[tokio::test]
 async fn test_get_objects() -> Result<(), anyhow::Error> {
@@ -267,7 +265,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
 
 async fn setup_test_network() -> Result<TestNetwork, anyhow::Error> {
     let working_dir = tempfile::tempdir()?.path().to_path_buf();
-    let _network = start_test_network(&working_dir, None, None).await?;
+    let _network = start_test_network(&working_dir, None).await?;
     let (server_addr, rpc_server_handle) =
         start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;
     let wallet_conf: WalletConfig = PersistedConfig::read(&working_dir.join(SUI_WALLET_CONFIG))?;
