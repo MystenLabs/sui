@@ -2120,6 +2120,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "home"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2456aef2e6b6a9784192ae780c0f15bc57df0e918585282325e8c8ac27737654"
+dependencies = [
+ "winapi",
+]
+
+[[package]]
 name = "http"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2239,6 +2248,12 @@ dependencies = [
  "unicode-bidi",
  "unicode-normalization",
 ]
+
+[[package]]
+name = "if_chain"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb56e1aa765b4b4f3aadfab769793b7087bb03a4ea4920644a6d238e2df5b9ed"
 
 [[package]]
 name = "ignore"
@@ -5076,6 +5091,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha-1"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "028f48d513f9678cda28f6e4064755b3fbb2af6acd672f2c209b62323f7aea0f"
+dependencies = [
+ "cfg-if 1.0.0",
+ "cpufeatures",
+ "digest 0.10.3",
+]
+
+[[package]]
 name = "sha2"
 version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5328,6 +5354,16 @@ dependencies = [
  "quote",
  "rustversion",
  "syn",
+]
+
+[[package]]
+name = "subprocess"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "055cf3ebc2981ad8f0a5a17ef6652f652d87831f79fddcba2ac57bcb9a0aa407"
+dependencies = [
+ "libc",
+ "winapi",
 ]
 
 [[package]]
@@ -5642,6 +5678,7 @@ dependencies = [
  "sui-types",
  "temp_testdir",
  "tempfile",
+ "test-fuzz",
  "test_utils",
  "tokio",
  "tokio-stream",
@@ -5761,6 +5798,63 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bab24d30b911b2376f3a13cc2cd443142f0c81dda04c118693e35b3835757755"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "test-fuzz"
+version = "3.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f03298404c433dd9e5bb84e2d6e587e80aa98a01a818c45150327d06c3ae1c72"
+dependencies = [
+ "serde 1.0.137",
+ "test-fuzz-internal",
+ "test-fuzz-macro",
+ "test-fuzz-runtime",
+]
+
+[[package]]
+name = "test-fuzz-internal"
+version = "3.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bf82068d044bda291ae8cad09018bfa8df3e303825a724839dc2d21283fafeb"
+dependencies = [
+ "cargo_metadata",
+ "proc-macro2",
+ "quote",
+ "serde 1.0.137",
+ "strum_macros",
+]
+
+[[package]]
+name = "test-fuzz-macro"
+version = "3.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a295a42f7ad46ec073a086fa99b774e1993aa4bfd0ebf43a5258aefa824d26c"
+dependencies = [
+ "darling 0.14.1",
+ "if_chain",
+ "lazy_static 1.4.0",
+ "proc-macro2",
+ "quote",
+ "subprocess",
+ "syn",
+ "test-fuzz-internal",
+ "toolchain_find",
+ "unzip-n",
+]
+
+[[package]]
+name = "test-fuzz-runtime"
+version = "3.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad79f2c8fcea9c962059d3591c8bbaf316f366d034ede848e207310d553ac234"
+dependencies = [
+ "bincode",
+ "hex",
+ "num-traits 0.2.15",
+ "serde 1.0.137",
+ "sha-1 0.10.0",
+ "test-fuzz-internal",
 ]
 
 [[package]]
@@ -6095,6 +6189,19 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "toolchain_find"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e85654a10e7a07a47c6f19d93818f3f343e22927f2fa280c84f7c8042743413"
+dependencies = [
+ "home",
+ "lazy_static 1.4.0",
+ "regex",
+ "semver 0.11.0",
+ "walkdir",
 ]
 
 [[package]]
@@ -6471,6 +6578,17 @@ name = "untrusted"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
+
+[[package]]
+name = "unzip-n"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2e7e85a0596447f0f2ac090e16bc4c516c6fe91771fb0c0ccf7fa3dae896b9c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "url"
