@@ -307,9 +307,16 @@ impl AuthorityAPI for LocalAuthorityClient {
 
     async fn handle_checkpoint(
         &self,
-        _request: CheckpointRequest,
+        request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        unimplemented!();
+        let state = self.state.clone();
+
+        let result = state
+            ._checkpoints
+            .as_ref()
+            .unwrap()
+            .handle_checkpoint_request(&request);
+        result
     }
 }
 
@@ -371,5 +378,13 @@ impl LocalAuthorityClient {
         }
 
         client
+    }
+
+    #[cfg(test)]
+    pub fn new_from_authority(state: Arc<AuthorityState>) -> Self {
+        Self {
+            state,
+            fault_config: LocalAuthorityClientFaultConfig::default(),
+        }
     }
 }

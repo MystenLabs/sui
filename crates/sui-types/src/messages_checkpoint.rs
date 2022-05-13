@@ -105,6 +105,13 @@ impl CheckpointRequest {
             detail: false,
         }
     }
+
+    pub fn set_fragment(fragment: CheckpointFragment) -> CheckpointRequest {
+        CheckpointRequest {
+            request_type: CheckpointRequestType::SetFragment(Box::new(fragment)),
+            detail: false,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -371,9 +371,11 @@ where
 
     async fn handle_checkpoint(
         &self,
-        _request: CheckpointRequest,
+        request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        unimplemented!();
+        // SECURITY TODO: Implement all checks!
+
+        self.authority_client.handle_checkpoint(request).await
     }
 
     /// Handle Batch information requests for this authority.

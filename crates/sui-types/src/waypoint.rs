@@ -39,7 +39,7 @@ impl WaypointError {
    point on an eliptic curve on which the DL problem is
    hard. The accumulator is the sum of all points.
 */
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Accumulator {
     accumulator: RistrettoPoint,
 }
@@ -63,6 +63,12 @@ impl Accumulator {
         for i in items {
             self.insert(i);
         }
+    }
+}
+
+impl std::fmt::Debug for Accumulator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Accumulator").finish()
     }
 }
 

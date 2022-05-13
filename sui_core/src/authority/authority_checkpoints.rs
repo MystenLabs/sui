@@ -85,7 +85,7 @@ impl CheckpointProposal {
     /// TODO: down the line we can include other methods to get diffs
     /// line MerkleTrees or IBLT filters that do not require O(n) download
     /// of both proposals.
-    pub fn diff_with(&self, other_proposal: &CheckpointProposal) -> CheckpointFragment {
+    pub fn fragment_with(&self, other_proposal: &CheckpointProposal) -> CheckpointFragment {
         let all_elements = self
             .transactions()
             .chain(other_proposal.transactions.transactions.iter())
@@ -144,6 +144,7 @@ pub trait ConsensusSender: Send + Sync + 'static {
     fn send_to_consensus(&self, fragment: CheckpointFragment) -> Result<(), SuiError>;
 }
 
+#[derive(Debug)]
 pub enum FragmentInternalError {
     Error(SuiError),
     Retry(Box<CheckpointFragment>),
@@ -382,6 +383,11 @@ impl CheckpointStore {
         &self,
         request: &CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
+        // Set a proposal if there is not one, and one could be set
+        // TODO: check some minimum time passed since the last one
+        //       and only set after that time.
+        let _ = self.set_proposal();
+
         // Try to load any latest proposal
         let locals = self.get_locals();
         let latest_checkpoint_proposal = &locals.current_proposal;
@@ -827,10 +833,8 @@ impl CheckpointStore {
 
         let locals = self.get_locals();
 
-        if locals.current_proposal.is_some() {
-            return Err(SuiError::GenericAuthorityError {
-                error: "Proposal already set.".to_string(),
-            });
+        if let Some(proposal) = &locals.current_proposal {
+            return Ok(proposal.clone());
         }
 
         if self.unprocessed_transactions.iter().count() > 0 {

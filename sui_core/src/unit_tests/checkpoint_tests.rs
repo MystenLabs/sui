@@ -4,7 +4,11 @@
 use super::*;
 use crate::{
     authority::{authority_tests::max_files_authority_tests, AuthorityState, AuthorityStore},
+    authority_aggregator::{
+        authority_aggregator_tests::transfer_coin_transaction, AuthorityAggregator,
+    },
     authority_batch::batch_tests::init_state_parameters_from_rng,
+    authority_client::LocalAuthorityClient,
 };
 use rand::prelude::StdRng;
 use rand::SeedableRng;
@@ -13,6 +17,9 @@ use sui_adapter::genesis;
 use sui_types::{
     base_types::{AuthorityName, ObjectID},
     batch::UpdateItem,
+    crypto::get_key_pair,
+    messages::ExecutionStatus,
+    object::Object,
     utils::{make_committee_key, make_committee_key_num},
     waypoint::GlobalCheckpoint,
 };
@@ -264,15 +271,15 @@ fn make_diffs() {
     let p3 = cps3.set_proposal().unwrap();
     let p4 = cps4.set_proposal().unwrap();
 
-    let diff12 = p1.diff_with(&p2);
-    let diff23 = p2.diff_with(&p3);
+    let diff12 = p1.fragment_with(&p2);
+    let diff23 = p2.fragment_with(&p3);
 
     let mut global = GlobalCheckpoint::<AuthorityName, TransactionDigest>::new(0);
     global.insert(diff12.diff.clone()).unwrap();
     global.insert(diff23.diff).unwrap();
 
     // P4 proposal not selected
-    let diff41 = p4.diff_with(&p1);
+    let diff41 = p4.fragment_with(&p1);
     let all_items4 = global
         .checkpoint_items(&diff41.diff, p4.transactions().cloned().collect())
         .unwrap();
@@ -325,7 +332,7 @@ fn latest_proposal() {
         AuthorityCheckpointInfo::Proposal { .. }
     ));
     if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
-        assert!(current.is_none());
+        assert!(current.is_some()); // Asking for a proposal creates one
         assert!(matches!(previous, AuthenticatedCheckpoint::None));
     }
 
@@ -973,7 +980,7 @@ fn set_fragment_external() {
     let p2 = cps2.set_proposal().unwrap();
     let _p3 = cps3.set_proposal().unwrap();
 
-    let fragment12 = p1.diff_with(&p2);
+    let fragment12 = p1.fragment_with(&p2);
     // let fragment13 = p1.diff_with(&p3);
 
     // When the fragment concern the authority it processes it
@@ -1016,8 +1023,8 @@ fn set_fragment_reconstruct() {
     let p3 = cps3.set_proposal().unwrap();
     let p4 = cps4.set_proposal().unwrap();
 
-    let fragment12 = p1.diff_with(&p2);
-    let fragment34 = p3.diff_with(&p4);
+    let fragment12 = p1.fragment_with(&p2);
+    let fragment34 = p3.fragment_with(&p4);
 
     let attempt1 = FragmentReconstruction::construct(
         0,
@@ -1026,7 +1033,7 @@ fn set_fragment_reconstruct() {
     );
     assert!(matches!(attempt1, Ok(None)));
 
-    let fragment41 = p4.diff_with(&p1);
+    let fragment41 = p4.fragment_with(&p1);
     let attempt2 =
         FragmentReconstruction::construct(0, cps1.committee, &[fragment12, fragment34, fragment41]);
     assert!(attempt2.is_ok());
@@ -1059,7 +1066,7 @@ fn set_fragment_reconstruct_two_components() {
     let p_x = proposals.pop().unwrap();
     let p_y = proposals.pop().unwrap();
 
-    let fragment_xy = p_x.diff_with(&p_y);
+    let fragment_xy = p_x.fragment_with(&p_y);
 
     let attempt1 = FragmentReconstruction::construct(0, committee.clone(), &[fragment_xy.clone()]);
     assert!(matches!(attempt1, Ok(None)));
@@ -1069,7 +1076,7 @@ fn set_fragment_reconstruct_two_components() {
 
     while let Some(proposal) = proposals.pop() {
         if !proposals.is_empty() {
-            let fragment_xy = proposal.diff_with(&proposals[0]);
+            let fragment_xy = proposal.fragment_with(&proposals[0]);
             fragments.push(fragment_xy);
         }
 
@@ -1143,7 +1150,7 @@ fn test_fragment_full_flow() {
     let p_x = proposals.pop().unwrap();
     let p_y = proposals.pop().unwrap();
 
-    let fragment_xy = p_x.diff_with(&p_y);
+    let fragment_xy = p_x.fragment_with(&p_y);
 
     // TEST 1 -- submitting a fragment not involving a validator gets rejected by the
     //           validator.
@@ -1174,7 +1181,7 @@ fn test_fragment_full_flow() {
 
     while let Some(proposal) = proposals.pop() {
         if !proposals.is_empty() {
-            let fragment_xy = proposal.diff_with(&proposals[proposals.len() - 1]);
+            let fragment_xy = proposal.fragment_with(&proposals[proposals.len() - 1]);
             assert!(test_objects[proposals.len() - 1]
                 .1
                 .handle_receive_fragment(&fragment_xy)
@@ -1238,4 +1245,305 @@ fn test_fragment_full_flow() {
     // Cannot advance to next checkpoint
     assert_eq!(cps6.next_checkpoint(), 0);
     // But recording of fragments is closed
+}
+
+#[derive(Clone)]
+struct AsyncTestConsensus {
+    sender: Arc<std::sync::Mutex<tokio::sync::mpsc::UnboundedSender<CheckpointFragment>>>,
+}
+
+impl ConsensusSender for AsyncTestConsensus {
+    fn send_to_consensus(&self, fragment: CheckpointFragment) -> Result<(), SuiError> {
+        self.sender
+            .lock()
+            .expect("Locking failed")
+            .send(fragment)
+            .expect("Failed to send");
+        Ok(())
+    }
+}
+
+#[allow(clippy::disallowed_methods)]
+impl AsyncTestConsensus {
+    pub fn new() -> (
+        AsyncTestConsensus,
+        tokio::sync::mpsc::UnboundedReceiver<CheckpointFragment>,
+    ) {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        (
+            AsyncTestConsensus {
+                sender: Arc::new(std::sync::Mutex::new(tx)),
+            },
+            rx,
+        )
+    }
+}
+
+#[allow(dead_code)]
+struct TestAuthority {
+    store: Arc<AuthorityStore>,
+    authority: Arc<AuthorityState>,
+    checkpoint: Arc<CheckpointStore>,
+}
+
+#[allow(dead_code)]
+struct TestSetup {
+    committee: Committee,
+    authorities: Vec<TestAuthority>,
+    transactions: Vec<sui_types::messages::Transaction>,
+    aggregator: AuthorityAggregator<LocalAuthorityClient>,
+}
+
+async fn checkpoint_tests_setup() -> TestSetup {
+    let (keys, committee) = make_committee_key();
+
+    let mut genesis_objects = Vec::new();
+    let mut transactions = Vec::new();
+
+    // Generate a large number of objects for testing
+    for _i in 0..10 {
+        let (addr1, key1) = get_key_pair();
+        let (addr2, _) = get_key_pair();
+        let gas_object1 = Object::with_owner_for_testing(addr1);
+        let gas_object2 = Object::with_owner_for_testing(addr1);
+
+        let tx = transfer_coin_transaction(
+            addr1,
+            &key1,
+            addr2,
+            gas_object1.compute_object_reference(),
+            gas_object2.compute_object_reference(),
+        );
+
+        genesis_objects.push(gas_object1);
+        genesis_objects.push(gas_object2);
+        transactions.push(tx);
+    }
+
+    let genesis_objects_ref: Vec<_> = genesis_objects.iter().collect();
+
+    // Set the fake consensus channel
+    let (sender, mut _rx) = AsyncTestConsensus::new();
+
+    let mut authorities = Vec::new();
+
+    // Make all authorities and their services.
+    for k in &keys {
+        let dir = env::temp_dir();
+        let path = dir.join(format!("SC_{:?}", ObjectID::random()));
+        fs::create_dir(&path).unwrap();
+
+        let mut store_path = path.clone();
+        store_path.push("store");
+
+        let mut checkpoints_path = path.clone();
+        checkpoints_path.push("checkpoints");
+
+        let secret = Arc::pin(k.copy());
+
+        // Create an authority
+        let mut opts = rocksdb::Options::default();
+        opts.set_max_open_files(max_files_authority_tests());
+
+        // Make a checkpoint store:
+
+        let store = Arc::new(AuthorityStore::open(&store_path, Some(opts.clone())));
+
+        let mut checkpoint = CheckpointStore::open(
+            &checkpoints_path,
+            Some(opts.clone()),
+            *secret.public_key_bytes(),
+            committee.clone(),
+            secret.clone(),
+        )
+        .unwrap();
+
+        checkpoint
+            .set_consensus(Box::new(sender.clone()))
+            .expect("No issues");
+        let checkpoint = Arc::new(checkpoint);
+
+        let authority = AuthorityState::new(
+            committee.clone(),
+            *secret.public_key_bytes(),
+            secret,
+            store.clone(),
+            Some(checkpoint.clone()),
+            genesis::clone_genesis_compiled_modules(),
+            &mut genesis::get_genesis_context(),
+        )
+        .await;
+
+        // Add objects for testing
+        authority
+            .insert_genesis_objects_bulk_unsafe(&genesis_objects_ref[..])
+            .await;
+
+        let authority = Arc::new(authority);
+
+        let inner_state = authority.clone();
+        let _join = tokio::task::spawn(async move {
+            inner_state
+                .run_batch_service(1000, Duration::from_millis(500))
+                .await
+        });
+
+        authorities.push(TestAuthority {
+            store,
+            authority,
+            checkpoint,
+        });
+    }
+
+    // The fake consensus channel for testing
+    let checkpoint_stores: Vec<_> = authorities.iter().map(|a| a.checkpoint.clone()).collect();
+    let _join = tokio::task::spawn(async move {
+        let mut seq = 0;
+        while let Some(msg) = _rx.recv().await {
+            println!("Deliver fragment seq={}", seq);
+            for cps in &checkpoint_stores {
+                if let Err(err) = cps.handle_internal_fragment(seq, msg.clone()) {
+                    println!("Error: {:?}", err);
+                }
+            }
+            seq += 1;
+        }
+    });
+
+    // Now make an authority aggregator
+    let aggregator = AuthorityAggregator::new(
+        committee.clone(),
+        authorities
+            .iter()
+            .map(|a| {
+                (
+                    a.authority.name,
+                    LocalAuthorityClient::new_from_authority(a.authority.clone()),
+                )
+            })
+            .collect(),
+    );
+
+    TestSetup {
+        committee,
+        authorities,
+        transactions,
+        aggregator,
+    }
+}
+
+use crate::authority_client::AuthorityAPI;
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn checkpoint_messaging_flow() {
+    let mut setup = checkpoint_tests_setup().await;
+
+    // Check that the system is running.
+    let t = setup.transactions.pop().unwrap();
+    let (_cert, effects) = setup
+        .aggregator
+        .execute_transaction(&t)
+        .await
+        .expect("All ok.");
+
+    // Check whether this is a success?
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+
+    // Wait for a batch to go through
+    // (We do not really wait, we jump there since real-time is not running).
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    // Happy path checkpoint flow
+
+    // Step 1 -- get a bunch of proposals
+    let mut proposals = Vec::new();
+    for (auth, client) in &setup.aggregator.authority_clients {
+        let response = client
+            .handle_checkpoint(CheckpointRequest::latest(true))
+            .await
+            .expect("No issues");
+
+        assert!(matches!(
+            response.info,
+            AuthorityCheckpointInfo::Proposal { .. }
+        ));
+
+        if let AuthorityCheckpointInfo::Proposal { current, .. } = &response.info {
+            assert!(current.is_some());
+
+            proposals.push((
+                *auth,
+                CheckpointProposal::new(
+                    current.as_ref().unwrap().clone(),
+                    response.detail.unwrap(),
+                ),
+            ));
+        }
+    }
+
+    // Step 2 -- make fragments using the proposals.
+    let proposal_len = proposals.len();
+    for (i, (auth, proposal)) in proposals.iter().enumerate() {
+        let p0 = proposal.fragment_with(&proposals[(i + 1) % proposal_len].1);
+        let p1 = proposal.fragment_with(&proposals[(i + 3) % proposal_len].1);
+
+        let client = &setup.aggregator.authority_clients[auth];
+        client
+            .handle_checkpoint(CheckpointRequest::set_fragment(p0))
+            .await
+            .expect("ok");
+        client
+            .handle_checkpoint(CheckpointRequest::set_fragment(p1))
+            .await
+            .expect("ok");
+    }
+
+    // Give time to the receiving task to process
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // Note that some will be having a signed checkpoint and some will node
+    // because they were not inlcuded in the first two links that make a checkpoint.
+
+    // Step 3 - get the signed checkpoint
+    let mut signed_checkpoint = Vec::new();
+    let mut contents = None;
+    let mut failed_authorities = HashSet::new();
+    for (auth, client) in &setup.aggregator.authority_clients {
+        let response = client
+            .handle_checkpoint(CheckpointRequest::past(0, true))
+            .await
+            .expect("No issues");
+
+        match &response.info {
+            AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Signed(checkpoint)) => {
+                signed_checkpoint.push(checkpoint.clone());
+                contents = response.detail.clone();
+            }
+            _ => {
+                failed_authorities.insert(*auth);
+            }
+        }
+    }
+
+    assert!(contents.as_ref().unwrap().transactions.len() == 1);
+
+    // Construct a certificate
+    // We need at least f+1 signatures
+    assert!(signed_checkpoint.len() > 1);
+    let checkpoint_cert =
+        CertifiedCheckpoint::aggregate(signed_checkpoint, &setup.committee.clone())
+            .expect("all ok");
+
+    // Step 4 -- Upload the certificate back up.
+    for (auth, client) in &setup.aggregator.authority_clients {
+        let request = if failed_authorities.contains(auth) {
+            CheckpointRequest::set_checkpoint(checkpoint_cert.clone(), contents.clone())
+        } else {
+            // These validators already have the checkpoint
+            CheckpointRequest::set_checkpoint(checkpoint_cert.clone(), None)
+        };
+
+        let response = client.handle_checkpoint(request).await.expect("No issues");
+        assert!(matches!(response.info, AuthorityCheckpointInfo::Success));
+    }
 }
