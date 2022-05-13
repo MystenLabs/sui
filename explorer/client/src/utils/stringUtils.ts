@@ -24,7 +24,6 @@ export const handleCoinType = (str: string): string =>
         ? 'SUI'
         : str.match(/^([a-zA-Z0-9:]*)<([a-zA-Z0-9:]*)>$/)?.[2] || str;
 
-
 export const processDisplayValue = (display: { bytes: number[] } | string) => {
     const url =
         typeof display === 'object' && 'bytes' in display
