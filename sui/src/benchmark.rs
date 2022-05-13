@@ -8,7 +8,7 @@ use crate::benchmark::{
         calculate_throughput, check_transaction_response, send_tx_chunks, FixedRateLoadGenerator,
     },
     transaction_creator::TransactionCreator,
-    validator_preparer::ValidatorPreparer,
+    validator_preparer::{ValidatorPreparer, get_multithread_runtime},
 };
 use futures::{join, StreamExt};
 use multiaddr::Multiaddr;
@@ -19,7 +19,6 @@ use sui_types::{
     batch::UpdateItem,
     messages::{BatchInfoRequest, BatchInfoResponseItem},
 };
-use tokio::runtime::{Builder, Runtime};
 use tracing::{error, info};
 
 pub mod bench_types;
@@ -32,10 +31,10 @@ const FOLLOWER_BATCH_SIZE: u64 = 10_000;
 pub fn run_benchmark(benchmark: Benchmark) -> BenchmarkResult {
     // Only microbenchmark is supported
     info!(?benchmark, "benchmark");
-    BenchmarkResult::MicroBenchmark(run_microbenchmark(benchmark).await)
+    BenchmarkResult::MicroBenchmark(run_microbenchmark(benchmark))
 }
 
-async fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
+fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
     let (host, port, type_) = match benchmark.bench_type {
         BenchmarkType::MicroBenchmark { host, port, type_ } => (host, port, type_),
     };
@@ -61,7 +60,7 @@ async fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
             !benchmark.use_native,
             num_transactions,
             validator_preparer,
-        ).await,
+        ),
         MicroBenchmarkType::Latency {
             num_chunks,
             chunk_size,
@@ -74,7 +73,7 @@ async fn run_microbenchmark(benchmark: Benchmark) -> MicroBenchmarkResult {
             chunk_size,
             period_us,
             validator_preparer,
-        ).await,
+        ),
     }
 }
 
@@ -144,7 +143,7 @@ fn run_throughout_microbench(
     }
 }
 
-async fn run_latency_microbench(
+fn run_latency_microbench(
     address: Multiaddr,
     connections: usize,
     use_move: bool,

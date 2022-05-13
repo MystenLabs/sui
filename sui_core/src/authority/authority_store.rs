@@ -12,7 +12,6 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use sui_types::object::OBJECT_START_VERSION;
-use tracing::warn;
 use typed_store::rocks::{DBBatch, DBMap};
 use typed_store::{reopen, traits::Map};
 
@@ -48,7 +47,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     lock_service: LockService,
 
     /// Internal vector of locks to manage concurrent writes to the database
-    lock_table: Vec<parking_lot::Mutex<()>>,
+    lock_table: Vec<tokio::sync::Mutex<()>>,
 
     /// This is a an index of object references to currently existing objects, indexed by the
     /// composite key of the SuiAddress of their owner and the object ID of the object.
@@ -191,7 +190,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             lock_service,
             lock_table: (0..NUM_SHARDS)
                 .into_iter()
-                .map(|_| parking_lot::Mutex::new(()))
+                .map(|_| tokio::sync::Mutex::new(()))
                 .collect(),
             owner_index,
             transactions,
@@ -259,10 +258,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
-    fn acquire_locks(&self, _input_objects: &[ObjectRef]) -> Vec<parking_lot::MutexGuard<'_, ()>> {
+    async fn acquire_locks(&self, _input_objects: &[ObjectRef]) -> Vec<tokio::sync::MutexGuard<'_, ()>> {
         let num_locks = self.lock_table.len();
         // TODO: randomize the lock mapping based on a secret to avoid DoS attacks.
-        let lock_number: BTreeSet<usize> = _input_objects
+        let lock_numbers: BTreeSet<usize> = _input_objects
             .iter()
             .map(|(_, _, digest)| {
                 usize::from_le_bytes(digest.0[0..8].try_into().unwrap()) % num_locks
@@ -270,10 +269,11 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             .collect();
         // Note: we need to iterate over the sorted unique elements, hence the use of a Set
         //       in order to prevent deadlocks when trying to acquire many locks.
-        lock_number
-            .into_iter()
-            .map(|lock_seq| self.lock_table[lock_seq].lock())
-            .collect()
+        let mut locks = Vec::new();
+        for lock_seq in lock_numbers {
+            locks.push(self.lock_table[lock_seq].lock().await);
+        }
+        locks
     }
 
     // Methods to read the store
@@ -692,7 +692,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         // old writes would be OK.
         {
             // Acquire the lock to ensure no one else writes when we are in here.
-            let _mutexes = self.acquire_locks(&active_inputs[..]);
+            let _mutexes = self.acquire_locks(&active_inputs[..]).await;
 
             // NOTE: We just check here that locks exist, not that they are locked to a specific TX.  Why?
             // 1. Lock existence prevents re-execution of old certs when objects have been upgraded

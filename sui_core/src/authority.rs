@@ -722,13 +722,14 @@ impl AuthorityState {
         self._database
             .insert_genesis_object(object)
             .await
-            .expect("TODO: propagate the error")
+            .expect("Cannot insert genesis object")
     }
 
     pub async fn insert_genesis_objects_bulk_unsafe(&self, objects: &[&Object]) {
         self._database
             .bulk_object_insert(objects)
-            .expect("TODO: propagate the error")
+            .await
+            .expect("Cannot bulk insert genesis objects")
     }
 
     /// Persist the Genesis package to DB along with the side effects for module initialization
@@ -918,14 +919,14 @@ impl ExecutionState for AuthorityState {
         let digest = certificate.digest();
         if self._database.effects_exists(digest)? {
             let info = self.make_transaction_info(digest).await?;
-            debug!("Shared-object transaction {digest:?} already executed");
+            debug!(tx_digest =? digest, "Shared-object transaction already executed");
             return Ok(bincode::serialize(&info).unwrap());
         }
 
         // Assign locks to shared objects.
         self.handle_consensus_certificate(certificate.clone(), execution_indices)
             .await?;
-        debug!("Shared objects locks successfully attributed to transaction {digest:?}");
+        debug!(tx_digest =? digest, "Shared objects locks successfully attributed");
 
         // Attempt to execute the transaction. This will only succeed if the authority
         // already executed all its dependencies.
@@ -935,7 +936,7 @@ impl ExecutionState for AuthorityState {
         let info = self
             .handle_confirmation_transaction(confirmation_transaction.clone())
             .await?;
-        debug!("Executed transaction {digest:?}");
+        debug!(tx_digest =? digest, "Executed consensus transaction");
 
         // Return a serialized transaction info response. This will be sent back to the client.
         Ok(bincode::serialize(&info).unwrap())
