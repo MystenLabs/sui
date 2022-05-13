@@ -542,6 +542,19 @@
           }
         ]
       },
+      "Balance": {
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
       "Base64": {
         "type": "string"
       },
@@ -581,17 +594,15 @@
       "Coin": {
         "type": "object",
         "required": [
-          "id",
-          "value"
+          "balance",
+          "id"
         ],
         "properties": {
+          "balance": {
+            "$ref": "#/components/schemas/Balance"
+          },
           "id": {
             "$ref": "#/components/schemas/VersionedID"
-          },
-          "value": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
           }
         }
       },

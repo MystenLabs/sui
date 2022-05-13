@@ -38,6 +38,10 @@ use sui_types::sui_serde::{Base64, Encoding};
 
 use crate::sui_json::SuiJsonValue;
 
+#[cfg(test)]
+#[path = "unit_tests/gateway_types_tests.rs"]
+mod gateway_types_tests;
+
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub struct TransactionEffectsResponse {
     pub certificate: SuiCertifiedTransaction,
@@ -515,7 +519,7 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
         "0x2::Coin::Coin" => {
             if let SuiMoveValue::Balance(value) = fields["balance"].clone() {
                 if let SuiMoveValue::VersionedID(id) = fields["id"].clone() {
-                    return Some(SuiMoveValue::Coin(Coin { id, value }));
+                    return Some(SuiMoveValue::Coin(Coin::new(id, value)));
                 }
             }
         }

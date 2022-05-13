@@ -12,6 +12,7 @@ use move_core_types::account_address::AccountAddress;
 #[macro_use]
 pub mod error;
 
+pub mod balance;
 pub mod base_types;
 pub mod batch;
 pub mod coin;

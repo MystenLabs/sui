@@ -121,7 +121,7 @@ impl ID {
             type_: Self::type_(),
             fields: vec![MoveFieldLayout::new(
                 ident_str!("bytes").to_owned(),
-                MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+                MoveTypeLayout::Address,
             )],
         }
     }

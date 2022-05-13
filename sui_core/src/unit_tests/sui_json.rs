@@ -473,3 +473,37 @@ fn test_basic_args_linter_top_level() {
         SuiJsonCallArg::Pure(bcs::to_bytes(&AccountAddress::from(address)).unwrap())
     );
 }
+
+#[test]
+fn test_convert_address_from_bcs() {
+    let bcs_bytes = [160u8, 134, 1, 0, 0, 0, 0, 0];
+
+    let value = SuiJsonValue::from_bcs_bytes(&bcs_bytes).unwrap();
+    assert_eq!(
+        "0x6cd65bff0ee3c5c7d268d1bbd2db1848f8f3b406",
+        value.0.as_str().unwrap()
+    );
+}
+
+#[test]
+fn test_convert_number_from_bcs() {
+    let bcs_bytes = [160u8, 134, 1, 0, 0, 0, 0, 0];
+    let value = SuiJsonValue::from_bcs_bytes(&bcs_bytes).unwrap();
+    assert_eq!(100000, value.0.as_u64().unwrap());
+}
+
+#[test]
+fn test_convert_number_array_from_bcs() {
+    let bcs_bytes = [
+        5, 80, 195, 0, 0, 0, 0, 0, 0, 80, 195, 0, 0, 0, 0, 0, 0, 80, 195, 0, 0, 0, 0, 0, 0, 80,
+        195, 0, 0, 0, 0, 0, 0, 80, 195, 0, 0, 0, 0, 0, 0,
+    ];
+
+    let value = SuiJsonValue::from_bcs_bytes(&bcs_bytes).unwrap();
+
+    println!("{:?}", value);
+
+    for value in value.0.as_array().unwrap() {
+        assert_eq!(50000, value.as_u64().unwrap())
+    }
+}
