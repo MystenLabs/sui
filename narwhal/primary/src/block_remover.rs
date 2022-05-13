@@ -85,12 +85,14 @@ pub struct DeleteBatchMessage {
 /// # use crypto::Digest;
 /// # use crypto::ed25519::Ed25519PublicKey;
 /// # use config::Committee;
+/// # use consensus::dag::Dag;
+/// # use futures::future::join_all;
 /// # use std::collections::BTreeMap;
-/// # use types::Certificate;
+/// # use std::sync::Arc;
 /// # use config::WorkerId;
 /// # use tempfile::tempdir;
 /// # use primary::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage, PayloadToken};
-/// # use types::{BatchDigest, CertificateDigest, HeaderDigest, Header};
+/// # use types::{BatchDigest, Certificate, CertificateDigest, HeaderDigest, Header};
 ///
 /// #[tokio::main(flavor = "current_thread")]
 /// # async fn main() {
@@ -118,6 +120,16 @@ pub struct DeleteBatchMessage {
 ///
 ///     let name = Ed25519PublicKey::default();
 ///     let committee = Committee{ authorities: BTreeMap::new() };
+///     // A dag with genesis for the committee
+///     let (tx_new_certificates, rx_new_certificates) = channel(1);
+///     let dag = Arc::new(Dag::new(rx_new_certificates).1);
+///     // Populate genesis in the Dag
+///     join_all(
+///       Certificate::genesis(&committee)
+///       .iter()
+///       .map(|cert| dag.insert(cert.clone())),
+///     )
+///     .await;
 ///
 ///     BlockRemover::spawn(
 ///         name,
@@ -125,6 +137,7 @@ pub struct DeleteBatchMessage {
 ///         certificate_store.clone(),
 ///         headers_store.clone(),
 ///         payload_store.clone(),
+///         Some(dag),
 ///         PrimaryToWorkerNetwork::default(),
 ///         rx_commands,
 ///         rx_delete_batches,
