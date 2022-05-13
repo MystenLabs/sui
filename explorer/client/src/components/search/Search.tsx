@@ -8,9 +8,22 @@ import { navigateWithUnknown } from '../../utils/searchUtil';
 
 import styles from './Search.module.css';
 
+type SearchCategory = 'all' | 'transactions' | 'addresses' | 'objects';
+function getPlaceholderText(category: SearchCategory) {
+    switch (category) {
+        case 'addresses':
+            return `Search by address`;
+        case 'transactions':
+            return `Search by digest`;
+        case 'objects':
+        case 'all':
+            return 'Search by ID';
+    }
+}
+
 function Search() {
     const [input, setInput] = useState('');
-    const [category, setCategory] = useState('all');
+    const [category, setCategory] = useState('all' as SearchCategory);
     const navigate = useNavigate();
 
     const [pleaseWaitMode, setPleaseWaitMode] = useState(false);
@@ -45,7 +58,7 @@ function Search() {
     );
     const handleCategoryChange = useCallback(
         (e: React.ChangeEvent<HTMLSelectElement>) =>
-            setCategory(e.currentTarget.value),
+            setCategory(e.currentTarget.value as SearchCategory),
         [setCategory]
     );
 
@@ -58,7 +71,7 @@ function Search() {
             <input
                 className={styles.searchtext}
                 id="searchText"
-                placeholder="Search by ID"
+                placeholder={getPlaceholderText(category)}
                 value={input}
                 onChange={handleTextChange}
                 type="text"
