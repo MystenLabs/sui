@@ -559,6 +559,19 @@ impl<
         Ok(())
     }
 
+    /// This function should only be used by the gateway.
+    /// It's called when we could not get a transaction to successfully execute,
+    /// and have to roll back.
+    pub fn reset_transaction_lock(&self, owned_input_objects: &[ObjectRef]) -> SuiResult {
+        let lock_batch = self.transaction_lock.batch().insert_batch(
+            &self.transaction_lock,
+            owned_input_objects.iter().map(|obj_ref| (obj_ref, None)),
+        )?;
+
+        lock_batch.write()?;
+        Ok(())
+    }
+
     /// Updates the state resulting from the execution of a certificate.
     ///
     /// Internally it checks that all locks for active inputs are at the correct
