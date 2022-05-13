@@ -214,14 +214,13 @@ fn resolve_primtive_arg(
     let move_type_layout = make_prim_move_type_layout(param)?;
     // Check that the args are what we expect or can be converted
     // Then return the serialized bcs value
-    match arg.to_bcs_bytes(&move_type_layout) {
-        Ok(a) => Ok(a),
-        Err(e) => Err(anyhow!(
+    arg.to_bcs_bytes(&move_type_layout).map_err(|e| {
+        anyhow!(
             "Unable to parse arg at type {}. Got error: {:?}",
             move_type_layout,
             e
-        )),
-    }
+        )
+    })
 }
 
 fn make_prim_move_type_layout(param: &SignatureToken) -> Result<MoveTypeLayout, anyhow::Error> {
