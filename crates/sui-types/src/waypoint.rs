@@ -363,7 +363,7 @@ where
     }
 
     /// Provides the set of element that need to be added to the first party
-    /// to catch up with the checkpoint (and maybe surpass it).
+    /// to catch up with the checkpoint.
     pub fn catch_up_items(&self, diff: WaypointDiff<K, I>) -> Result<BTreeSet<I>, WaypointError> {
         // If the authority is one of the participants in the checkpoint
         // just read the different.
@@ -398,20 +398,26 @@ where
         Ok(item_sum)
     }
 
-    /// Provides the set of element that need to be added to the first party
-    /// to catch up with the checkpoint (and maybe surpass it).
+    /// Given our proposal, a waypoint us-other, and a global checkpoint
+    /// that either contains us, or the other, what is the actual set of
+    /// items in the checkpoint?
     pub fn checkpoint_items(
         &self,
         diff: &WaypointDiff<K, I>,
         mut own_proposal: BTreeSet<I>,
     ) -> Result<BTreeSet<I>, WaypointError> {
+        // Case 1 -- we are in the checkpoint (easy)
+
         // If the authority is one of the participants in the checkpoint
-        // just read the different.
+        // just add our proposal to the diff with the global waypoint, and
+        // this is the checkpoint.
         if self.authority_waypoints.contains_key(&diff.first.key) {
             let mut all_elements = self.authority_waypoints[&diff.first.key].items.clone();
             all_elements.extend(own_proposal);
             return Ok(all_elements);
         }
+
+        // Case 2 -- the other side of our diff is in the checkpoint (harder)
 
         // If not then we need to compute the difference.
         if !self.authority_waypoints.contains_key(&diff.second.key) {

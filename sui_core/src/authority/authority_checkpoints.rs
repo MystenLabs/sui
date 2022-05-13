@@ -613,6 +613,18 @@ impl CheckpointStore {
                     error: "No consensus sender configured".to_string(),
                 });
             }
+        } else {
+            // Maybe the fragment we received allows us to complete the current checkpoint?
+            // Since we seem to be missing information to complete it (ie there is a checkpoint
+            // but we are not inlcuded in it.)
+            loop {
+                let construct = self.attempt_to_construct_checkpoint();
+                // Exit if checkpoint construction leads to an error or returns false
+                // (ie no new checkpoint is created.)
+                if construct.is_err() || !construct.unwrap() {
+                    break;
+                }
+            }
         }
 
         // NOTE: we should charge the node that sends this into consensus
@@ -653,14 +665,37 @@ impl CheckpointStore {
             FragmentInternalError::Retry(Box::new(fragment))
         })?;
 
-        // If we are waiting for more information from the environment to
-        // form a checkpoint we close the recording of more messages here
-        // until we form a checkpoint.
-        let locals = self.get_locals();
-        if locals.no_more_fragments {
-            return Err(FragmentInternalError::Retry(Box::new(_fragment)));
+        // If the fragment contains us also save it in the list of local fragments
+        let next_sequence_number = self.next_checkpoint();
+        if *_fragment.proposer.0.checkpoint.sequence_number() == next_sequence_number {
+            if _fragment.proposer.0.authority == self.name {
+                self.local_fragments
+                    .insert(&_fragment.other.0.authority, &_fragment)
+                    .map_err(|_err| {
+                        // There is a possibility this was not stored!
+                        let fragment = _fragment.clone();
+                        FragmentInternalError::Retry(Box::new(fragment))
+                    })?;
+            }
+            if _fragment.other.0.authority == self.name {
+                self.local_fragments
+                    .insert(&_fragment.proposer.0.authority, &_fragment)
+                    .map_err(|_err| {
+                        // There is a possibility this was not stored!
+                        let fragment = _fragment.clone();
+                        FragmentInternalError::Retry(Box::new(fragment))
+                    })?;
+            }
         }
 
+        // Attempt to move forward, as many times as we can
+        while self.attempt_to_construct_checkpoint()? {}
+        Ok(())
+    }
+
+    /// Attempt to construct the next expected checkpoint, and return true if a new
+    /// checkpoint is created or false if it is not.
+    fn attempt_to_construct_checkpoint(&self) -> Result<bool, FragmentInternalError> {
         let next_sequence_number = self.next_checkpoint();
         let fragments: Vec<_> = self
             .fragments
@@ -680,6 +715,9 @@ impl CheckpointStore {
             if let Some(proposal) = &self.get_locals().current_proposal {
                 // By definition the proposal and the new checkpoint must be in the
                 // same sequence number of checkpoint.
+
+                // Strategy 1 to reconstruct checkpoint -- we are included in it!
+
                 if reconstructed
                     .global
                     .authority_waypoints
@@ -701,20 +739,53 @@ impl CheckpointStore {
 
                     // Now create the new checkpoint and move all locals forward.
                     let summary = CheckpointSummary::new(next_sequence_number, &contents);
-                    return self
-                        .handle_internal_set_checkpoint(summary, &contents)
-                        .map_err(FragmentInternalError::Error);
+                    self.handle_internal_set_checkpoint(summary, &contents)
+                        .map_err(FragmentInternalError::Error)?;
+                    return Ok(true);
                 }
 
-                // NOTE:
-                // We can also try to reconstruct on the basis of not just being in the
-                // checkpoint but having a local fragment connecting to someone else in
-                // the checkpoint. However this may be a rare thing.
+                // Strategy 2 to reconstruct checkpoint -- There is a link between us and the checkpoint set
+
+                let local_links: HashSet<_> = self.local_fragments.keys().collect();
+                let checkpoint_keys: HashSet<_> = reconstructed
+                    .global
+                    .authority_waypoints
+                    .keys()
+                    .cloned()
+                    .collect();
+
+                if let Some(auth) = local_links.intersection(&checkpoint_keys).next() {
+                    let fragment = self
+                        .local_fragments
+                        .get(auth)
+                        .map_err(|err| FragmentInternalError::Error(err.into()))?
+                        .unwrap();
+
+                    // Extract the diff
+                    let diff = if fragment.proposer.0.authority == self.name {
+                        fragment.diff
+                    } else {
+                        fragment.diff.swap()
+                    };
+
+                    if let Ok(contents) = reconstructed
+                        .global
+                        .checkpoint_items(&diff, proposal.transactions.transactions.clone())
+                    {
+                        let contents = CheckpointContents::new(contents.into_iter());
+                        let summary = CheckpointSummary::new(next_sequence_number, &contents);
+                        self.handle_internal_set_checkpoint(summary, &contents)
+                            .map_err(FragmentInternalError::Error)?;
+                        return Ok(true);
+                    }
+                }
             }
 
             // TODO: here define what we do if we do not have enough info
             //       to reconstruct the checkpoint. We can stroe the global waypoints
             //       and activelly wait for someone else to give us the data?
+
+            let locals = self.get_locals();
             let mut new_locals = locals.as_ref().clone();
             new_locals.no_more_fragments = true;
             self.set_locals(locals, new_locals)
@@ -735,7 +806,7 @@ impl CheckpointStore {
                 },
             ))
         } else {
-            Ok(())
+            Ok(false)
         }
     }
 
@@ -772,6 +843,17 @@ impl CheckpointStore {
                         &checkpoint.checkpoint.waypoint.sequence_number,
                         &AuthenticatedCheckpoint::Certified(checkpoint.clone()),
                     )?;
+
+                    // Now that we have the new checkpoint we try to move forward the checkpoint creation
+                    // process
+                    loop {
+                        let construct = self.attempt_to_construct_checkpoint();
+                        // Exit if checkpoint construction leads to an error or returns false
+                        // (ie no new checkpoint is created.)
+                        if construct.is_err() || !construct.unwrap() {
+                            break;
+                        }
+                    }
                 } else {
                     return Err(SuiError::GenericAuthorityError {
                         error: "No checkpoint set at this sequence.".to_string(),
@@ -1111,6 +1193,16 @@ impl FragmentReconstruction {
     /// Take an ordered list of fragments and attempts to construct a connected
     /// component checkpoint with weight over 2/3 of stake. Note that the minimum
     /// prefix of links is used in this process.
+    ///
+    /// It is important to always use the minumum prefix since additional fragments
+    /// may be added by the consensus, but only the prexif that constructs the
+    /// checkpoint is safe to use. After that prefix different authorities will have
+    /// different information to finalize the process:
+    ///  - f+1 to 2f+1 honest authorities will be included in the prefix and can
+    ///    immediately compute and sign the checkpoint.
+    ///  - the remaining honest authorities will instead have to use other strategies
+    ///    such as downloading the checkpoint, or using other links (off the consensus)
+    ///    to compute it.
     pub fn construct(
         seq: u64,
         committee: Committee,
