@@ -365,6 +365,14 @@ impl From<tonic::Status> for SuiError {
     }
 }
 
+impl std::convert::From<&str> for SuiError {
+    fn from(error: &str) -> Self {
+        SuiError::GenericAuthorityError {
+            error: error.to_string(),
+        }
+    }
+}
+
 impl ExecutionStateError for SuiError {
     fn node_error(&self) -> bool {
         matches!(

@@ -264,9 +264,7 @@ impl SignedCheckpoint {
 
         fp_ensure!(
             recomputed == self.checkpoint,
-            SuiError::GenericAuthorityError {
-                error: "Transaction digest mismatch".to_string()
-            }
+            SuiError::from("Transaction digest mismatch")
         );
         Ok(())
     }
@@ -294,9 +292,7 @@ impl CertifiedCheckpoint {
     ) -> Result<CertifiedCheckpoint, SuiError> {
         fp_ensure!(
             !signed_checkpoints.is_empty(),
-            SuiError::GenericAuthorityError {
-                error: "Need at least one signed checkpoint to aggregate".to_string()
-            }
+            SuiError::from("Need at least one signed checkpoint to aggregate")
         );
 
         let certified_checkpoint = CertifiedCheckpoint {
@@ -381,9 +377,7 @@ impl CertifiedCheckpoint {
         self.check_digest(committee)?;
         fp_ensure!(
             contents.digest() == self.checkpoint.digest,
-            SuiError::GenericAuthorityError {
-                error: "Transaction digest mismatch".to_string()
-            }
+            SuiError::from("Transaction digest mismatch")
         );
         Ok(())
     }
@@ -430,9 +424,7 @@ impl CheckpointFragment {
         fp_ensure!(
             _committee.weight(&self.proposer.0.authority) > 0
                 && _committee.weight(&self.other.0.authority) > 0,
-            SuiError::GenericAuthorityError {
-                error: "Authorities not in the committee".to_string()
-            }
+            SuiError::from("Authorities not in the committee")
         );
 
         // Check consistency between checkpoint summary and waypoints.
@@ -441,17 +433,13 @@ impl CheckpointFragment {
                 && self.diff.second.waypoint == *self.other.0.checkpoint.waypoint
                 && self.diff.first.key == self.proposer.0.authority
                 && self.diff.second.key == self.other.0.authority,
-            SuiError::GenericAuthorityError {
-                error: "Waypoint diff and checkpoint summary inconsistent".to_string()
-            }
+            SuiError::from("Waypoint diff and checkpoint summary inconsistent")
         );
 
         // Check consistency of waypoint diff
         fp_ensure!(
             self.diff.check(),
-            SuiError::GenericAuthorityError {
-                error: "Waypoint diff is not valid".to_string()
-            }
+            SuiError::from("Waypoint diff is not valid")
         );
 
         // TODO:

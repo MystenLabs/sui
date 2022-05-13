@@ -225,9 +225,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         if self.fault_config.fail_before_handle_transaction {
-            return Err(SuiError::GenericAuthorityError {
-                error: "Mock error before handle_transaction".to_owned(),
-            });
+            return Err(SuiError::from("Mock error before handle_transaction"));
         }
         let state = self.state.clone();
         let result = state.handle_transaction(transaction).await;

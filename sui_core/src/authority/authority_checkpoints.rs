@@ -577,9 +577,7 @@ impl CheckpointStore {
         // this node.
         fp_ensure!(
             _fragment.proposer.0.authority == self.name || _fragment.other.0.authority == self.name,
-            SuiError::GenericAuthorityError {
-                error: "Fragment does not involve this node".to_string(),
-            }
+            SuiError::from("Fragment does not involve this node")
         );
 
         // Save in the list of local fragments for this sequence.
@@ -607,9 +605,7 @@ impl CheckpointStore {
             if let Some(sender) = &self.sender {
                 sender.send_to_consensus(_fragment.clone())?;
             } else {
-                return Err(SuiError::GenericAuthorityError {
-                    error: "No consensus sender configured".to_string(),
-                });
+                return Err(SuiError::from("No consensus sender configured"));
             }
         } else {
             // Maybe the fragment we received allows us to complete the current checkpoint?
@@ -798,11 +794,9 @@ impl CheckpointStore {
             // checkpoint. And all other authorities by asking all authorities will be
             // able to get f+1 signatures and construct a checkpoint certificate.
 
-            Err(FragmentInternalError::Error(
-                SuiError::GenericAuthorityError {
-                    error: "Missing info to construct known checkpoint.".to_string(),
-                },
-            ))
+            Err(FragmentInternalError::Error(SuiError::from(
+                "Missing info to construct known checkpoint.",
+            )))
         } else {
             Ok(false)
         }
@@ -853,9 +847,7 @@ impl CheckpointStore {
                         }
                     }
                 } else {
-                    return Err(SuiError::GenericAuthorityError {
-                        error: "No checkpoint set at this sequence.".to_string(),
-                    });
+                    return Err(SuiError::from("No checkpoint set at this sequence."));
                 }
             }
             // In this case we have an internal signed checkpoint so we propote it to a
@@ -918,16 +910,13 @@ impl CheckpointStore {
         }
 
         if self.unprocessed_transactions.iter().count() > 0 {
-            return Err(SuiError::GenericAuthorityError {
-                error: "Cannot propose with unprocessed transactions from the previous checkpoint."
-                    .to_string(),
-            });
+            return Err(SuiError::from(
+                "Cannot propose with unprocessed transactions from the previous checkpoint.",
+            ));
         }
 
         if self.extra_transactions.iter().count() == 0 {
-            return Err(SuiError::GenericAuthorityError {
-                error: "Cannot propose an empty set.".to_string(),
-            });
+            return Err(SuiError::from("Cannot propose an empty set."));
         }
 
         // Include the sequence number of all extra transactions not already in a
