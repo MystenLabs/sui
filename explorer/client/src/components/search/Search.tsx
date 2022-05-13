@@ -32,6 +32,7 @@ function Search() {
                 navigate(`../${category}/${input.trim()}`);
                 setInput('');
                 setPleaseWaitMode(false);
+                setCategory('all');
             }
         },
         [input, navigate, category, setInput]
@@ -65,6 +66,7 @@ function Search() {
             <select
                 className={styles.categorydropdown}
                 onChange={handleCategoryChange}
+                value={category}
             >
                 <option value="all">All</option>
                 <option value="transactions">Transactions</option>
