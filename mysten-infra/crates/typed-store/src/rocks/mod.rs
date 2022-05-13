@@ -11,6 +11,7 @@ use collectable::TryExtend;
 use rocksdb::{ColumnFamilyDescriptor, DBWithThreadMode, MultiThreaded, WriteBatch};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{borrow::Borrow, marker::PhantomData, path::Path, sync::Arc};
+use tracing::instrument;
 
 use self::{iter::Iter, keys::Keys, values::Values};
 pub use errors::TypedStoreError;
@@ -78,6 +79,7 @@ impl<K, V> DBMap<K, V> {
     ///
     /// This database is used to perform operations on single column family, and parametrizes
     /// all operations in `DBBatch` when writting across column families.
+    #[instrument(level="debug", skip_all, fields(path = ?path.as_ref(), cf = ?opt_cf), err)]
     pub fn open<P: AsRef<Path>>(
         path: P,
         db_options: Option<rocksdb::Options>,
@@ -106,6 +108,7 @@ impl<K, V> DBMap<K, V> {
     ///    let db_cf_1 = DBMap::<u32,u32>::reopen(&rocks, Some("First_CF")).expect("Failed to open storage");
     ///    let db_cf_2 = DBMap::<u32,u32>::reopen(&rocks, Some("Second_CF")).expect("Failed to open storage");
     /// ```
+    #[instrument(level = "debug", skip(db), err)]
     pub fn reopen(
         db: &Arc<rocksdb::DBWithThreadMode<MultiThreaded>>,
         opt_cf: Option<&str>,
@@ -194,6 +197,7 @@ impl DBBatch {
     }
 
     /// Consume the batch and write its operations to the database
+    #[instrument(level = "debug", skip_all, err)]
     pub fn write(self) -> Result<(), TypedStoreError> {
         self.rocksdb.write(self.batch)?;
         Ok(())
@@ -272,6 +276,7 @@ where
     type Keys = Keys<'a, K>;
     type Values = Values<'a, V>;
 
+    #[instrument(level = "debug", skip_all, err)]
     fn contains_key(&self, key: &K) -> Result<bool, TypedStoreError> {
         let key_buf = be_fix_int_ser(key)?;
         // [`rocksdb::DBWithThreadMode::key_may_exist_cf`] can have false positives,
@@ -280,6 +285,7 @@ where
             && self.rocksdb.get_pinned_cf(&self.cf(), &key_buf)?.is_some())
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     fn get(&self, key: &K) -> Result<Option<V>, TypedStoreError> {
         let key_buf = be_fix_int_ser(key)?;
         let res = self.rocksdb.get_pinned_cf(&self.cf(), &key_buf)?;
@@ -289,6 +295,7 @@ where
         }
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     fn insert(&self, key: &K, value: &V) -> Result<(), TypedStoreError> {
         let key_buf = be_fix_int_ser(key)?;
         let value_buf = bincode::serialize(value)?;
@@ -297,6 +304,7 @@ where
         Ok(())
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     fn remove(&self, key: &K) -> Result<(), TypedStoreError> {
         let key_buf = be_fix_int_ser(key)?;
 
@@ -304,6 +312,7 @@ where
         Ok(())
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     fn clear(&self) -> Result<(), TypedStoreError> {
         let _ = self.rocksdb.drop_cf(&self.cf);
         self.rocksdb
@@ -337,6 +346,7 @@ where
     }
 
     /// Returns a vector of values corresponding to the keys provided.
+    #[instrument(level = "debug", skip_all, err)]
     fn multi_get<J>(
         &self,
         keys: impl IntoIterator<Item = J>,
@@ -363,6 +373,9 @@ where
 
         values_parsed
     }
+
+    /// Convenience method for batch insertion
+    #[instrument(level = "debug", skip_all, err)]
     fn multi_insert<J, U>(
         &self,
         key_val_pairs: impl IntoIterator<Item = (J, U)>,
@@ -373,6 +386,9 @@ where
     {
         self.batch().insert_batch(self, key_val_pairs)?.write()
     }
+
+    /// Convenience method for batch removal
+    #[instrument(level = "debug", skip_all, err)]
     fn multi_remove<J>(&self, keys: impl IntoIterator<Item = J>) -> Result<(), Self::Error>
     where
         J: Borrow<K>,
@@ -406,6 +422,7 @@ where
 }
 
 /// Opens a database with options, and a number of column families that are created if they do not exist.
+#[instrument(level="debug", skip_all, fields(path = ?path.as_ref(), cf = ?opt_cfs), err)]
 pub fn open_cf<P: AsRef<Path>>(
     path: P,
     db_options: Option<rocksdb::Options>,
@@ -417,6 +434,7 @@ pub fn open_cf<P: AsRef<Path>>(
 }
 
 /// Opens a database with options, and a number of column families with individual options that are created if they do not exist.
+#[instrument(level="debug", skip_all, fields(path = ?path.as_ref()), err)]
 pub fn open_cf_opts<P: AsRef<Path>>(
     path: P,
     db_options: Option<rocksdb::Options>,
