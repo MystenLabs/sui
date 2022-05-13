@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     config::{
-        make_default_narwhal_committee, sui_config_dir, AuthorityInfo, Config, GatewayConfig,
-        GatewayType, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
-        CONSENSUS_DB_NAME, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
+        sui_config_dir, Config, GatewayConfig, GatewayType, PersistedConfig, WalletConfig,
+        SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
     },
     keystore::{Keystore, KeystoreType, SuiKeystore},
 };
@@ -14,33 +13,26 @@ use clap::*;
 use futures::future::join_all;
 use move_binary_format::CompiledModule;
 use move_package::BuildConfig;
-use narwhal_config::{Committee as ConsensusCommittee, Parameters as ConsensusParameters};
-use narwhal_crypto::ed25519::Ed25519PublicKey;
-
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_adapter::adapter::generate_package_id;
 use sui_adapter::genesis;
+use sui_config::NetworkConfig;
+use sui_config::{GenesisConfig, ValidatorConfig};
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_active::ActiveAuthority;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::authority_server::AuthorityServer;
 use sui_core::authority_server::AuthorityServerHandle;
 use sui_core::consensus_adapter::ConsensusListener;
-use sui_types::base_types::encode_bytes_hex;
 use sui_types::base_types::{decode_bytes_hex, ObjectID};
 use sui_types::base_types::{SequenceNumber, SuiAddress, TxContext};
-use sui_types::committee::Committee;
-use sui_types::crypto::{random_key_pairs, KeyPair};
 use sui_types::error::SuiResult;
 use sui_types::object::Object;
-
 use tokio::sync::mpsc::channel;
 use tracing::{error, info};
 
@@ -103,18 +95,8 @@ impl SuiCommand {
                         ))
                     })?;
 
-                let authority_key_path = config
-                    .clone()
-                    .unwrap_or(sui_config_dir()?.join(SUI_AUTHORITY_KEYS));
-                assert!(
-                    authority_key_path.exists(),
-                    "{:?} does not exist, you may want to re-genesis from scratch",
-                    authority_key_path
-                );
-                let authority_keys = SuiKeystore::load_or_create(&authority_key_path)?;
-
                 // Start a sui validator (including its consensus node).
-                SuiNetwork::start(&network_config, authority_keys.key_pairs())
+                SuiNetwork::start(&network_config)
                     .await?
                     .wait_for_completion()
                     .await
@@ -134,9 +116,12 @@ impl SuiCommand {
                 })?;
 
                 if *dump_addresses {
-                    for auth in config.authorities.iter() {
-                        let addr = SuiAddress::from(&auth.public_key);
-                        println!("{} - {}", auth.network_address, addr);
+                    for validator in config.validator_configs() {
+                        println!(
+                            "{} - {}",
+                            validator.network_address(),
+                            validator.sui_address()
+                        );
                     }
                 }
                 Ok(())
@@ -201,7 +186,7 @@ impl SuiCommand {
 
                 let genesis_conf = match from_config {
                     Some(q) => PersistedConfig::read(q)?,
-                    None => create_genesis_config_from_scratch(sui_config_dir)?,
+                    None => GenesisConfig::for_local_testing()?,
                 };
 
                 if let Some(path) = write_config {
@@ -210,7 +195,7 @@ impl SuiCommand {
                     return Ok(());
                 }
 
-                let (network_config, accounts, mut keystore) = genesis(genesis_conf, None).await?;
+                let (network_config, accounts, mut keystore) = genesis(genesis_conf).await?;
                 info!("Network genesis completed.");
                 let network_config = network_config.persisted(&network_path);
                 network_config.save()?;
@@ -222,9 +207,13 @@ impl SuiCommand {
                 // Use the first address if any
                 let active_address = accounts.get(0).copied();
 
+                let validator_set = network_config.validator_configs()[0]
+                    .committee_config()
+                    .validator_set();
+
                 GatewayConfig {
                     db_folder_path: gateway_db_folder_path,
-                    authorities: network_config.get_authority_infos(),
+                    validator_set: validator_set.to_owned(),
                     ..Default::default()
                 }
                 .persisted(&gateway_path)
@@ -233,7 +222,7 @@ impl SuiCommand {
 
                 let wallet_gateway_config = GatewayConfig {
                     db_folder_path,
-                    authorities: network_config.get_authority_infos(),
+                    validator_set: validator_set.to_owned(),
                     ..Default::default()
                 };
 
@@ -285,69 +274,21 @@ pub struct SuiNetwork {
 }
 
 impl SuiNetwork {
-    pub async fn start(
-        config: &NetworkConfig,
-        key_pairs: Vec<&KeyPair>,
-    ) -> Result<Self, anyhow::Error> {
-        if config.authorities.is_empty() {
+    pub async fn start(config: &NetworkConfig) -> Result<Self, anyhow::Error> {
+        if config.validator_configs().is_empty() {
             return Err(anyhow!(
                 "No authority configured for the network, please run genesis."
             ));
         }
-        if config.authorities.len() != key_pairs.len() {
-            return Err(anyhow!(
-                "Num of authorities does not match num of key_pairs."
-            ));
-        }
-
-        let key_pairs = key_pairs
-            .iter()
-            .map(|kp| (kp.public_key_bytes(), kp))
-            .collect::<HashMap<_, _>>();
 
         info!(
             "Starting network with {} authorities",
-            config.authorities.len()
+            config.validator_configs().len()
         );
-
-        let committee = Committee::new(
-            config.epoch,
-            config
-                .authorities
-                .iter()
-                .map(|info| (info.public_key, info.stake))
-                .collect(),
-        );
-
-        let consensus_committee = make_default_narwhal_committee(&config.authorities)?;
-
-        // Pass in the newtwork parameters of all authorities
-        let net = config.get_authority_infos();
 
         let mut spawned_authorities = Vec::new();
-
-        for authority in &config.authorities {
-            let consensus_parameters = ConsensusParameters::default();
-            let key_pair = key_pairs.get(&authority.public_key).unwrap_or_else(|| {
-                panic!(
-                    "Can't find key pair for authority {:?}",
-                    &authority.public_key
-                )
-            });
-            let consensus_store_path = sui_config_dir()?
-                .join(CONSENSUS_DB_NAME)
-                .join(encode_bytes_hex(&authority.public_key));
-
-            let server = make_server(
-                authority,
-                key_pair,
-                &committee,
-                &consensus_committee,
-                &consensus_store_path,
-                &consensus_parameters,
-                Some(net.clone()),
-            )
-            .await?;
+        for validator in config.validator_configs() {
+            let server = make_server(validator).await?;
             spawned_authorities.push(server.spawn().await?);
         }
         info!("Started {} authorities", spawned_authorities.len());
@@ -381,28 +322,13 @@ impl SuiNetwork {
 
 pub async fn genesis(
     genesis_conf: GenesisConfig,
-    single_address: Option<SuiAddress>,
 ) -> Result<(NetworkConfig, Vec<SuiAddress>, SuiKeystore), anyhow::Error> {
-    let num_to_provision = if single_address.is_none() {
-        genesis_conf.authorities.len()
-    } else {
-        1
-    };
+    let num_to_provision = genesis_conf.committee_size;
 
     info!("Creating {} new authorities...", num_to_provision);
 
-    let mut network_config = NetworkConfig {
-        epoch: 0,
-        authorities: vec![],
-        buffer_size: 650000,
-        loaded_move_packages: vec![],
-        key_pair: genesis_conf.key_pair,
-    };
-    let mut voting_right = BTreeMap::new();
-    for authority in genesis_conf.authorities {
-        voting_right.insert(authority.public_key, authority.stake);
-        network_config.authorities.push(authority);
-    }
+    let config_dir = sui_config_dir().unwrap();
+    let mut network_config = NetworkConfig::generate(&config_dir, num_to_provision);
 
     let mut addresses = Vec::new();
     let mut preload_modules: Vec<Vec<CompiledModule>> = Vec::new();
@@ -493,23 +419,14 @@ pub async fn genesis(
 
             info!("Loaded package [{}] from {:?}.", package_id, path);
             // Writing package id to network config for user to retrieve later.
-            network_config.loaded_move_packages.push((path, package_id));
+            network_config.add_move_package(path, package_id);
             preload_modules.push(modules)
         }
     }
 
-    let committee = Committee::new(network_config.epoch, voting_right);
-    for authority in &network_config.authorities {
-        if let Some(addr) = single_address {
-            if addr != authority.address {
-                continue;
-            }
-        }
-
+    for validator in network_config.validator_configs() {
         make_server_with_genesis_ctx(
-            authority,
-            &network_config.key_pair,
-            &committee,
+            validator,
             preload_modules.clone(),
             &preload_objects,
             &mut genesis_ctx.clone(),
@@ -520,52 +437,33 @@ pub async fn genesis(
     Ok((network_config, addresses, keystore))
 }
 
-pub async fn make_server(
-    authority: &AuthorityInfo,
-    key_pair: &KeyPair,
-    committee: &Committee,
-    consensus_committee: &ConsensusCommittee<Ed25519PublicKey>,
-    consensus_store_path: &Path,
-    consensus_parameters: &ConsensusParameters,
-    net_parameters: Option<Vec<AuthorityInfo>>,
-) -> SuiResult<AuthorityServer> {
-    let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
-    let name = authority.public_key;
+pub async fn make_server(validator_config: &ValidatorConfig) -> SuiResult<AuthorityServer> {
+    let store = Arc::new(AuthorityStore::open(validator_config.db_path(), None));
+    let name = validator_config.public_key();
     let state = AuthorityState::new_without_genesis(
-        committee.clone(),
+        validator_config.committee_config().committee(),
         name,
-        Arc::pin(key_pair.copy()),
+        Arc::pin(validator_config.key_pair().copy()),
         store,
     )
     .await;
 
-    make_authority(
-        authority,
-        key_pair,
-        state,
-        consensus_committee,
-        consensus_store_path,
-        consensus_parameters,
-        net_parameters,
-    )
-    .await
+    make_authority(validator_config, state).await
 }
 
 async fn make_server_with_genesis_ctx(
-    authority: &AuthorityInfo,
-    key_pair: &KeyPair,
-    committee: &Committee,
+    validator_config: &ValidatorConfig,
     preload_modules: Vec<Vec<CompiledModule>>,
     preload_objects: &[Object],
     genesis_ctx: &mut TxContext,
 ) -> SuiResult<AuthorityServer> {
-    let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
-    let name = authority.public_key;
+    let store = Arc::new(AuthorityStore::open(validator_config.db_path(), None));
+    let name = *validator_config.key_pair().public_key_bytes();
 
     let state = AuthorityState::new(
-        committee.clone(),
+        validator_config.committee_config().committee(),
         name,
-        Arc::pin(key_pair.copy()),
+        Arc::pin(validator_config.key_pair().copy()),
         store,
         preload_modules,
         genesis_ctx,
@@ -579,9 +477,9 @@ async fn make_server_with_genesis_ctx(
 
     let (tx_sui_to_consensus, _rx_sui_to_consensus) = channel(1);
     Ok(AuthorityServer::new(
-        authority.network_address.clone(),
+        validator_config.network_address().clone(),
         Arc::new(state),
-        authority.consensus_address.clone(),
+        validator_config.consensus_config().address().clone(),
         /* tx_consensus_listener */ tx_sui_to_consensus,
     ))
 }
@@ -589,13 +487,8 @@ async fn make_server_with_genesis_ctx(
 /// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,
 /// and a consensus listener bridging the consensus node and the sui authority.
 pub async fn make_authority(
-    authority: &AuthorityInfo,
-    key_pair: &KeyPair,
+    validator_config: &ValidatorConfig,
     state: AuthorityState,
-    consensus_committee: &ConsensusCommittee<Ed25519PublicKey>,
-    consensus_store_path: &Path,
-    consensus_parameters: &ConsensusParameters,
-    net_parameters: Option<Vec<AuthorityInfo>>,
 ) -> SuiResult<AuthorityServer> {
     let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1_000);
     let (tx_sui_to_consensus, rx_sui_to_consensus) = channel(1_000);
@@ -603,14 +496,21 @@ pub async fn make_authority(
     let authority_state = Arc::new(state);
 
     // Spawn the consensus node of this authority.
-    let consensus_keypair = key_pair.make_narwhal_keypair();
+    let consensus_keypair = validator_config.key_pair().make_narwhal_keypair();
     let consensus_name = consensus_keypair.name.clone();
-    let consensus_store = narwhal_node::NodeStorage::reopen(consensus_store_path);
+    let consensus_store =
+        narwhal_node::NodeStorage::reopen(validator_config.consensus_config().db_path());
     narwhal_node::Node::spawn_primary(
         consensus_keypair,
-        consensus_committee.clone(),
+        validator_config
+            .committee_config()
+            .narwhal_committee()
+            .to_owned(),
         &consensus_store,
-        consensus_parameters.clone(),
+        validator_config
+            .consensus_config()
+            .narwhal_config()
+            .to_owned(),
         /* consensus */ true, // Indicate that we want to run consensus.
         /* execution_state */ authority_state.clone(),
         /* tx_confirmation */ tx_consensus_to_sui,
@@ -619,9 +519,15 @@ pub async fn make_authority(
     narwhal_node::Node::spawn_workers(
         consensus_name,
         /* ids */ vec![0], // We run a single worker with id '0'.
-        consensus_committee.clone(),
+        validator_config
+            .committee_config()
+            .narwhal_committee()
+            .to_owned(),
         &consensus_store,
-        consensus_parameters.clone(),
+        validator_config
+            .consensus_config()
+            .narwhal_config()
+            .to_owned(),
     );
 
     // Spawn a consensus listener. It listen for consensus outputs and notifies the
@@ -634,15 +540,15 @@ pub async fn make_authority(
 
     // If we have network information make authority clients
     // to all authorities in the system.
-    let _active_authority: Option<()> = if let Some(network) = net_parameters {
+    let _active_authority: Option<()> = {
         let mut authority_clients = BTreeMap::new();
         let mut config = mysten_network::config::Config::new();
         config.connect_timeout = Some(Duration::from_secs(5));
         config.request_timeout = Some(Duration::from_secs(5));
-        for info in &network {
-            let channel = config.connect_lazy(&info.network_address).unwrap();
+        for validator in validator_config.committee_config().validator_set() {
+            let channel = config.connect_lazy(validator.network_address()).unwrap();
             let client = NetworkAuthorityClient::new(channel);
-            authority_clients.insert(info.public_key, client);
+            authority_clients.insert(validator.public_key(), client);
         }
 
         let _active_authority = ActiveAuthority::new(authority_state.clone(), authority_clients)?;
@@ -652,42 +558,13 @@ pub async fn make_authority(
         // let join_handle = active_authority.spawn_all_active_processes().await;
         // Some(join_handle)
         None
-    } else {
-        None
     };
 
     // Return new authority server. It listen to users transactions and send back replies.
     Ok(AuthorityServer::new(
-        authority.network_address.clone(),
+        validator_config.network_address().to_owned(),
         authority_state,
-        authority.consensus_address.clone(),
+        validator_config.consensus_config().address().to_owned(),
         /* tx_consensus_listener */ tx_sui_to_consensus,
     ))
-}
-
-/// Generate a genesis config
-/// Side effect: create an authorities.key file that contains all authority key pairs.
-///              the file is only for local testing's convenience, and not supposed to
-///              exist in testnet/mainnet.
-fn create_genesis_config_from_scratch(
-    sui_config_dir: &Path,
-) -> Result<GenesisConfig, anyhow::Error> {
-    let authority_key_pairs_path = sui_config_dir.join(SUI_AUTHORITY_KEYS);
-    let key_pairs = random_key_pairs(4);
-    let mut authority_key_store = SuiKeystore::default();
-    authority_key_store.set_path(&authority_key_pairs_path);
-    let key_pair = key_pairs[0].copy();
-    let public_keys = key_pairs
-        .iter()
-        .map(|kp| *kp.public_key_bytes())
-        .collect::<Vec<_>>();
-    for key_pair in key_pairs {
-        authority_key_store.add_key(SuiAddress::from(key_pair.public_key_bytes()), key_pair)?;
-    }
-    authority_key_store.save()?;
-    info!(
-        "Authority keystore is stored in {:?}.",
-        authority_key_pairs_path
-    );
-    GenesisConfig::default_genesis(sui_config_dir, Some((public_keys, key_pair)))
 }

@@ -19,11 +19,11 @@ use sui_core::{
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     authority_server::{AuthorityServer, AuthorityServerHandle},
 };
-use sui_types::{committee::Committee, messages::*};
+use sui_types::messages::*;
 use tokio::{sync::Notify, time};
 use tracing::{error, info};
 
-use crate::config::NetworkConfig;
+use sui_config::NetworkConfig;
 
 pub fn check_transaction_response(reply_message: Result<TransactionInfoResponse, io::Error>) {
     match reply_message {
@@ -452,11 +452,11 @@ impl MultiFixedRateLoadGenerator {
         network_cfg: &NetworkConfig,
     ) -> Self {
         let network_clients_stake: Vec<(Multiaddr, usize)> = network_cfg
-            .authorities
+            .validator_set()
             .iter()
-            .map(|q| (q.network_address.clone(), q.stake))
+            .map(|q| (q.network_address().to_owned(), q.stake()))
             .collect();
-        let committee_quorum_threshold = Committee::from(network_cfg).quorum_threshold();
+        let committee_quorum_threshold = network_cfg.committee().quorum_threshold();
         let mut handles = vec![];
         let tick_notifier = Arc::new(Notify::new());
 
