@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{test_committee, test_keys};
 use narwhal_config::Parameters as ConsensusParameters;
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 use sui::{
     config::{make_default_narwhal_committee, utils::get_available_port, AuthorityInfo},
     sui_commands::make_authority,
@@ -10,9 +10,12 @@ use sui::{
 use sui_adapter::genesis;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
+    authority_aggregator::AuthorityAggregator,
+    authority_client::NetworkAuthorityClient,
     authority_server::AuthorityServerHandle,
+    safe_client::SafeClient,
 };
-use sui_types::{crypto::KeyPair, object::Object};
+use sui_types::{committee::Committee, crypto::KeyPair, object::Object};
 
 /// The default network buffer size of a test authority.
 pub const NETWORK_BUFFER_SIZE: usize = 65_000;
@@ -119,4 +122,28 @@ where
         handles.push(handle);
     }
     handles
+}
+
+pub fn create_authority_aggregator(
+    authority_configs: &[AuthorityInfo],
+) -> AuthorityAggregator<SafeClient<NetworkAuthorityClient>> {
+    let voting_rights: BTreeMap<_, _> = authority_configs
+        .iter()
+        .map(|config| (config.public_key, config.stake))
+        .collect();
+    let committee = Committee::new(0, voting_rights);
+    let clients: BTreeMap<_, _> = authority_configs
+        .iter()
+        .map(|config| {
+            (
+                config.public_key,
+                SafeClient::new(
+                    NetworkAuthorityClient::connect_lazy(&config.network_address).unwrap(),
+                    committee.clone(),
+                    config.public_key,
+                ),
+            )
+        })
+        .collect();
+    AuthorityAggregator::new(committee, clients)
 }

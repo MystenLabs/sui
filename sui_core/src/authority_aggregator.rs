@@ -1221,8 +1221,10 @@ where
         // When we get an object back, it also might not match the digest we want
         for resp in results.into_iter().flatten().flatten() {
             match resp.object_and_lock {
-                // did the response match the digest?
-                Some(o) if o.object.digest() == object_ref.2 => {
+                // Either the object is a shared object, in which case we don't care about its content
+                // because we can never keep shared objects up-to-date.
+                // Or if it's not shared object, we check if the digest matches.
+                Some(o) if o.object.is_shared() || o.object.digest() == object_ref.2 => {
                     ret_val = Ok(o.object);
                     break;
                 }
