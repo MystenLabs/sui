@@ -27,7 +27,7 @@ pub mod dag_tests;
 /// certified collection by that authority at that round.
 ///
 #[derive(Debug)]
-pub struct InnerDag<PublicKey: VerifyingKey> {
+struct InnerDag<PublicKey: VerifyingKey> {
     /// Receives new certificates from the primary. The primary should send us new certificates only
     /// if it already sent us its whole history.
     rx_primary: Receiver<Certificate<PublicKey>>,
@@ -259,7 +259,7 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
     /// - all the parents' certificates are recursively valid and have been inserted in the Dag.
     ///
     pub async fn insert(
-        &mut self,
+        &self,
         certificate: Certificate<PublicKey>,
     ) -> Result<(), ValidatorDagError<PublicKey>> {
         let (sender, receiver) = oneshot::channel();
@@ -350,7 +350,7 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
 
     /// Removes a certificate from the Dag, reclaiming memory in the process.
     pub async fn remove(
-        &mut self,
+        &self,
         digest: CertificateDigest,
     ) -> Result<(), ValidatorDagError<PublicKey>> {
         let (sender, receiver) = oneshot::channel();

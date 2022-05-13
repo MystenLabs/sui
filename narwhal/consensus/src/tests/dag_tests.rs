@@ -174,7 +174,7 @@ async fn dag_insert_and_remove_reads() {
 
     // set up a Dag
     let (_tx_cert, rx_cert) = channel(1);
-    let (_handle, mut dag) = Dag::new(rx_cert);
+    let (_handle, dag) = Dag::new(rx_cert);
     let mut genesis_certs_to_insert = genesis_certs.clone();
 
     // Feed the certificates to the Dag

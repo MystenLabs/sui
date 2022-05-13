@@ -9,15 +9,19 @@ use crate::{
     PrimaryWorkerMessage,
 };
 use bincode::deserialize;
-use config::WorkerId;
+use config::{Committee, WorkerId};
+use consensus::dag::Dag;
 use crypto::{
     ed25519::Ed25519PublicKey,
     traits::{Signer, VerifyingKey},
     Hash,
 };
-use futures::{future::try_join_all, stream::FuturesUnordered};
+use futures::{
+    future::{join_all, try_join_all},
+    stream::FuturesUnordered,
+};
 use network::PrimaryToWorkerNetwork;
-use std::{collections::HashMap, time::Duration};
+use std::{borrow::Borrow, collections::HashMap, sync::Arc, time::Duration};
 use test_utils::{
     certificate, fixture_batch_with_transactions, fixture_header_builder, keys,
     resolve_name_and_committee, PrimaryToWorkerMockServer,
@@ -27,18 +31,36 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, timeout},
 };
-use types::BatchDigest;
+use types::{BatchDigest, Certificate};
+
+async fn populate_genesis<K: Borrow<Dag<Ed25519PublicKey>>>(
+    dag: &K,
+    committee: &Committee<Ed25519PublicKey>,
+) {
+    assert!(join_all(
+        Certificate::genesis(committee)
+            .iter()
+            .map(|cert| dag.borrow().insert(cert.clone())),
+    )
+    .await
+    .iter()
+    .all(|r| r.is_ok()));
+}
 
 #[tokio::test]
 async fn test_successful_blocks_delete() {
     // GIVEN
     let (header_store, certificate_store, payload_store) = create_db_stores();
+    let (_tx_consensus, rx_consensus) = channel(1);
     let (tx_commands, rx_commands) = channel(10);
     let (tx_remove_block, mut rx_remove_block) = channel(1);
     let (tx_delete_batches, rx_delete_batches) = channel(10);
 
     // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
+    // AND a Dag with genesis populated
+    let dag = Arc::new(Dag::new(rx_consensus).1);
+    populate_genesis(&dag, &committee).await;
 
     BlockRemover::spawn(
         name.clone(),
@@ -46,6 +68,7 @@ async fn test_successful_blocks_delete() {
         certificate_store.clone(),
         header_store.clone(),
         payload_store.clone(),
+        Some(dag.clone()),
         PrimaryToWorkerNetwork::default(),
         rx_commands,
         rx_delete_batches,
@@ -79,6 +102,7 @@ async fn test_successful_blocks_delete() {
         certificate_store
             .write(certificate.digest(), certificate.clone())
             .await;
+        dag.insert(certificate).await.unwrap();
 
         // write the header
         header_store.write(header.clone().id, header.clone()).await;
@@ -178,10 +202,14 @@ async fn test_timeout() {
     let (header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_commands, rx_commands) = channel(10);
     let (tx_remove_block, mut rx_remove_block) = channel(1);
+    let (_tx_consensus, rx_consensus) = channel(1);
     let (tx_delete_batches, rx_delete_batches) = channel(10);
 
     // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
+    // AND a Dag with genesis populated
+    let dag = Arc::new(Dag::new(rx_consensus).1);
+    populate_genesis(&dag, &committee).await;
 
     BlockRemover::spawn(
         name.clone(),
@@ -189,6 +217,7 @@ async fn test_timeout() {
         certificate_store.clone(),
         header_store.clone(),
         payload_store.clone(),
+        Some(dag.clone()),
         PrimaryToWorkerNetwork::default(),
         rx_commands,
         rx_delete_batches,
@@ -221,6 +250,7 @@ async fn test_timeout() {
         certificate_store
             .write(certificate.digest(), certificate.clone())
             .await;
+        dag.insert(certificate).await.unwrap();
 
         // write the header
         header_store.write(header.clone().id, header.clone()).await;
@@ -302,10 +332,14 @@ async fn test_unlocking_pending_requests() {
     // GIVEN
     let (header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_commands, rx_commands) = channel(10);
+    let (_tx_consensus, rx_consensus) = channel(1);
     let (tx_delete_batches, rx_delete_batches) = channel(10);
 
     // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
+    // AND a Dag with genesis populated
+    let dag = Arc::new(Dag::new(rx_consensus).1);
+    populate_genesis(&dag, &committee).await;
 
     let mut remover = BlockRemover {
         name,
@@ -313,6 +347,7 @@ async fn test_unlocking_pending_requests() {
         certificate_store: certificate_store.clone(),
         header_store: header_store.clone(),
         payload_store: payload_store.clone(),
+        dag: Some(dag.clone()),
         worker_network: PrimaryToWorkerNetwork::default(),
         rx_commands,
         pending_removal_requests: HashMap::new(),
@@ -340,6 +375,7 @@ async fn test_unlocking_pending_requests() {
     certificate_store
         .write(certificate.digest(), certificate.clone())
         .await;
+    dag.insert(certificate).await.unwrap();
 
     // write the header
     header_store.write(header.clone().id, header.clone()).await;

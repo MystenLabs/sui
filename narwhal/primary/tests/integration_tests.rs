@@ -9,6 +9,7 @@ use crypto::{
     traits::{KeyPair, Signer},
     Hash,
 };
+use futures::future::join_all;
 use node::NodeStorage;
 use primary::{PayloadToken, Primary, CHANNEL_CAPACITY};
 use std::sync::Arc;
@@ -207,6 +208,19 @@ async fn test_remove_collections() {
     let mut collection_ids = Vec::new();
     let key = keys().pop().unwrap();
 
+    // Make the Dag
+    let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
+    let dag = Arc::new(Dag::new(rx_new_certificates).1);
+    // Populate genesis in the Dag
+    assert!(join_all(
+        Certificate::genesis(&committee)
+            .iter()
+            .map(|cert| dag.insert(cert.clone())),
+    )
+    .await
+    .iter()
+    .all(|r| r.is_ok()));
+
     // Generate headers
     for n in 0..5 {
         let batch = fixture_batch_with_transactions(10);
@@ -224,6 +238,7 @@ async fn test_remove_collections() {
             .certificate_store
             .write(certificate.digest(), certificate.clone())
             .await;
+        dag.insert(certificate.clone()).await.unwrap();
 
         // Write the header
         store
@@ -250,7 +265,6 @@ async fn test_remove_collections() {
         }
     }
 
-    let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
     let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
 
     Primary::spawn(
@@ -263,7 +277,7 @@ async fn test_remove_collections() {
         store.payload_store.clone(),
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
-        /* dag */ Some(Arc::new(Dag::new(rx_new_certificates).1)),
+        /* dag */ Some(dag.clone()),
     );
 
     // Wait for tasks to start

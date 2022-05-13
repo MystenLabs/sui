@@ -540,6 +540,7 @@ pub struct BlockRemoverError {
 pub enum BlockRemoverErrorKind {
     Timeout,
     Failed,
+    StorageFailure,
 }
 
 #[derive(Debug, Clone, PartialEq)]

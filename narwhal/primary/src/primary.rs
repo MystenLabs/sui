@@ -218,6 +218,9 @@ impl Primary {
             ),
         );
 
+        // Indicator variable for the gRPC server
+        let internal_consensus = dag.is_none();
+
         // Orchestrates the removal of blocks across the primary and worker nodes.
         BlockRemover::spawn(
             name.clone(),
@@ -225,6 +228,7 @@ impl Primary {
             certificate_store.clone(),
             header_store,
             payload_store.clone(),
+            dag,
             PrimaryToWorkerNetwork::default(),
             rx_block_removal_commands,
             rx_batch_removal,
@@ -293,7 +297,7 @@ impl Primary {
             rx_helper_requests,
         );
 
-        if dag.is_some() {
+        if !internal_consensus {
             // Spawn a grpc server to accept requests from external consensus layer.
             ConsensusAPIGrpc::spawn(
                 parameters.consensus_api_grpc.socket_addr,
