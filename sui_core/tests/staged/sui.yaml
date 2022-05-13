@@ -582,15 +582,18 @@ SuiError:
     99:
       ListenerCapacityExceeded: UNIT
     100:
+      ConsensusNarwhalSerializationError:
+        NEWTYPE: STR
+    101:
       SignatureSeedInvalidLength:
         NEWTYPE: U64
-    101:
+    102:
       HkdfError:
         NEWTYPE: STR
-    102:
+    103:
       SignatureKeyGenError:
         NEWTYPE: STR
-    103:
+    104:
       RpcError:
         NEWTYPE: STR
 TransactionDigest:
