@@ -62,7 +62,10 @@ function Search() {
                 onChange={handleTextChange}
                 type="text"
             />
-            <select onChange={handleCategoryChange}>
+            <select
+                className={styles.categorydropdown}
+                onChange={handleCategoryChange}
+            >
                 <option value="all">All</option>
                 <option value="transactions">Transactions</option>
                 <option value="objects">Objects</option>

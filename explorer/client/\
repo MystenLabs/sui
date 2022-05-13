@@ -1,0 +1,24 @@
+.form {
+    @apply flex;
+}
+
+.searchbtn {
+    @apply bg-sui hover:bg-suidark hover:text-white
+  border-none text-black rounded-r-md
+  cursor-pointer font-sans
+  leading-8 flex-initial mr-[1vw] sm:mr-[5vw] ml-0;
+}
+
+.disabled {
+    @apply bg-offblack hover:bg-offblack text-white cursor-text;
+}
+
+.searchtext {
+    @apply border-none rounded-l-md font-mono leading-8 ml-0 
+    flex-1 ml-[1vw] sm:ml-[5vw] w-[5rem]
+    text-xs mr-0 bg-offwhite;
+}
+
+.categoryDropdown, .categoryDropdown > option {
+  @apply flex-initial font-sans cursor-pointer rounded-none border-none border-l-2 border-black;
+}
