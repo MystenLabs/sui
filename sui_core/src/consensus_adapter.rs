@@ -144,7 +144,8 @@ impl ConsensusAdapter {
         };
 
         resp.and_then(|r| {
-            bincode::deserialize(&r).map_err(|e| SuiError::ConsensusConnectionBroken(e.to_string()))
+            bincode::deserialize(&r)
+                .map_err(|e| SuiError::ConsensusNarwhalSerializationError(e.to_string()))
         })
     }
 }

@@ -318,6 +318,8 @@ pub enum SuiError {
     SharedObjectLockingFailure(String),
     #[error("Consensus listener is out of capacity")]
     ListenerCapacityExceeded,
+    #[error("Failed to  serialize/deserialize Narwhal message: {0}")]
+    ConsensusNarwhalSerializationError(String),
 
     // Cryptography errors.
     #[error("Signature seed invalid length, input byte size was: {0}")]
