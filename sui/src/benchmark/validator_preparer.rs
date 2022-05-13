@@ -223,7 +223,11 @@ impl ValidatorPreparer {
         sleep(Duration::from_secs(3));
     }
 
-    pub async fn update_objects_for_validator(&mut self, objects: Vec<Object>, address: SuiAddress) {
+    pub async fn update_objects_for_validator(
+        &mut self,
+        objects: Vec<Object>,
+        address: SuiAddress,
+    ) {
         match self.running_mode {
             RunningMode::SingleValidatorProcess => {
                 let all_objects: Vec<ObjectConfig> = objects
@@ -260,7 +264,8 @@ impl ValidatorPreparer {
                 {
                     authority_store
                         .bulk_object_insert(&objects[..].iter().collect::<Vec<&Object>>())
-                        .await.unwrap();
+                        .await
+                        .unwrap();
                 } else {
                     panic!("invalid validator config in local-single-validator-thread mode");
                 }

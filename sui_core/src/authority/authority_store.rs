@@ -258,7 +258,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
-    async fn acquire_locks(&self, _input_objects: &[ObjectRef]) -> Vec<tokio::sync::MutexGuard<'_, ()>> {
+    async fn acquire_locks(
+        &self,
+        _input_objects: &[ObjectRef],
+    ) -> Vec<tokio::sync::MutexGuard<'_, ()>> {
         let num_locks = self.lock_table.len();
         // TODO: randomize the lock mapping based on a secret to avoid DoS attacks.
         let lock_numbers: BTreeSet<usize> = _input_objects

@@ -8,7 +8,7 @@ use crate::benchmark::{
         calculate_throughput, check_transaction_response, send_tx_chunks, FixedRateLoadGenerator,
     },
     transaction_creator::TransactionCreator,
-    validator_preparer::{ValidatorPreparer, get_multithread_runtime},
+    validator_preparer::{get_multithread_runtime, ValidatorPreparer},
 };
 use futures::{join, StreamExt};
 use multiaddr::Multiaddr;
