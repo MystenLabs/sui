@@ -293,10 +293,24 @@
       "description": "Execute the transaction using the transaction data, signature and public key.",
       "params": [
         {
-          "name": "signed_transaction",
+          "name": "tx_bytes",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/SignedTransaction"
+            "$ref": "#/components/schemas/Base64"
+          }
+        },
+        {
+          "name": "signature",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Base64"
+          }
+        },
+        {
+          "name": "pub_key",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Base64"
           }
         }
       ],
@@ -466,8 +480,8 @@
       }
     },
     {
-      "name": "sui_getObjectInfoRaw",
-      "description": "Low level API to get object info. Client Applications should prefer to use `get_object_typed_info` instead.",
+      "name": "sui_getObjectInfo",
+      "description": "Return the object information for a specified object",
       "params": [
         {
           "name": "object_id",
@@ -1202,25 +1216,6 @@
       },
       "Signature": {
         "$ref": "#/components/schemas/Base64"
-      },
-      "SignedTransaction": {
-        "type": "object",
-        "required": [
-          "pub_key",
-          "signature",
-          "tx_bytes"
-        ],
-        "properties": {
-          "pub_key": {
-            "$ref": "#/components/schemas/Base64"
-          },
-          "signature": {
-            "$ref": "#/components/schemas/Base64"
-          },
-          "tx_bytes": {
-            "$ref": "#/components/schemas/Base64"
-          }
-        }
       },
       "SplitCoinResponse": {
         "type": "object",

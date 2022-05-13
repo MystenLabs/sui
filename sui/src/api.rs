@@ -6,16 +6,15 @@ use jsonrpsee_proc_macros::rpc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_core::gateway_types::{SuiInputObjectKind, SuiObjectRead, SuiObjectRef};
 use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
 use sui_core::sui_json::SuiJsonValue;
 use sui_open_rpc_macros::open_rpc;
-
 use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
-    crypto,
     crypto::SignableBytes,
     messages::TransactionData,
 };
@@ -94,7 +93,9 @@ pub trait RpcGateway {
     #[method(name = "executeTransaction")]
     async fn execute_transaction(
         &self,
-        signed_transaction: SignedTransaction,
+        tx_bytes: Base64,
+        signature: Base64,
+        pub_key: Base64,
     ) -> RpcResult<TransactionResponse>;
 
     /// Synchronize client state with validators.
@@ -127,28 +128,9 @@ pub trait RpcGateway {
         digest: TransactionDigest,
     ) -> RpcResult<TransactionEffectsResponse>;
 
-    /// Low level API to get object info. Client Applications should prefer to use
-    /// `get_object_typed_info` instead.
-    #[method(name = "getObjectInfoRaw")]
+    /// Return the object information for a specified object
+    #[method(name = "getObjectInfo")]
     async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<SuiObjectRead>;
-}
-
-#[serde_as]
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub struct SignedTransaction {
-    pub tx_bytes: Base64,
-    pub signature: Base64,
-    pub pub_key: Base64,
-}
-
-impl SignedTransaction {
-    pub fn new(tx_bytes: Vec<u8>, signature: crypto::Signature) -> Self {
-        Self {
-            tx_bytes: Base64::from_bytes(&tx_bytes),
-            signature: Base64::from_bytes(signature.signature_bytes()),
-            pub_key: Base64::from_bytes(signature.public_key_bytes()),
-        }
-    }
 }
 
 #[serde_as]
