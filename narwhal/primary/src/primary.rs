@@ -43,6 +43,7 @@ use types::{
 /// The default channel capacity for each channel of the primary.
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
+use crate::block_synchronizer::handler::BlockSynchronizerHandler;
 pub use types::{PrimaryMessage, PrimaryWorkerMessage};
 
 /// The messages sent by the workers to their primary.
@@ -104,7 +105,7 @@ impl Primary {
         let (tx_batches, rx_batches) = channel(CHANNEL_CAPACITY);
         let (tx_block_removal_commands, rx_block_removal_commands) = channel(CHANNEL_CAPACITY);
         let (tx_batch_removal, rx_batch_removal) = channel(CHANNEL_CAPACITY);
-        let (_tx_block_synchronizer_commands, rx_block_synchronizer_commands) =
+        let (tx_block_synchronizer_commands, rx_block_synchronizer_commands) =
             channel(CHANNEL_CAPACITY);
         let (tx_certificate_responses, rx_certificate_responses) = channel(CHANNEL_CAPACITY);
         let (tx_payload_availability_responses, rx_payload_availability_responses) =
@@ -126,7 +127,7 @@ impl Primary {
             .replace(0, |_protocol| Some(Protocol::Ip4(Primary::INADDR_ANY)))
             .unwrap();
         PrimaryReceiverHandler {
-            tx_primary_messages,
+            tx_primary_messages: tx_primary_messages.clone(),
             tx_helper_requests,
             tx_payload_availability_responses,
             tx_certificate_responses,
@@ -204,9 +205,16 @@ impl Primary {
         BlockWaiter::spawn(
             name.clone(),
             committee.clone(),
-            certificate_store.clone(),
             rx_get_block_commands,
             rx_batches,
+            BlockSynchronizerHandler::new(
+                tx_block_synchronizer_commands,
+                tx_primary_messages,
+                certificate_store.clone(),
+                parameters
+                    .block_synchronizer
+                    .handler_certificate_deliver_timeout,
+            ),
         );
 
         // Orchestrates the removal of blocks across the primary and worker nodes.

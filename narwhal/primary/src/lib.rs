@@ -12,7 +12,7 @@ mod aggregators;
 mod block_remover;
 // TODO [#175][#127]: re-plug the blocksynchronzier
 #[allow(dead_code)]
-mod block_synchronizer;
+pub mod block_synchronizer;
 mod block_waiter;
 mod certificate_waiter;
 mod core;
@@ -32,7 +32,11 @@ mod common;
 
 pub use crate::{
     block_remover::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage},
-    block_synchronizer::responses::{CertificatesResponse, PayloadAvailabilityResponse},
+    block_synchronizer::{
+        mock::MockBlockSynchronizer,
+        responses::{CertificatesResponse, PayloadAvailabilityResponse},
+        BlockHeader,
+    },
     block_waiter::{BlockCommand, BlockWaiter},
     primary::{
         PayloadToken, Primary, PrimaryWorkerMessage, WorkerPrimaryError, WorkerPrimaryMessage,

@@ -150,6 +150,14 @@ pub struct BlockSynchronizerParameters {
     /// discover who has the payload available for the dictated certificates.
     #[serde(with = "duration_format")]
     pub payload_availability_timeout: Duration,
+    /// When a certificate is fetched on the fly from peers, it is submitted
+    /// from the block synchronizer handler for further processing to core
+    /// to validate and ensure parents are available and history is causal
+    /// complete. This property is the timeout while we wait for core to
+    /// perform this processes and the certificate to become available to
+    /// the handler to consume.
+    #[serde(with = "duration_format")]
+    pub handler_certificate_deliver_timeout: Duration,
 }
 
 impl Default for BlockSynchronizerParameters {
@@ -158,6 +166,7 @@ impl Default for BlockSynchronizerParameters {
             certificates_synchronize_timeout: Duration::from_millis(2_000),
             payload_synchronize_timeout: Duration::from_millis(2_000),
             payload_availability_timeout: Duration::from_millis(2_000),
+            handler_certificate_deliver_timeout: Duration::from_millis(2_000),
         }
     }
 }
@@ -227,6 +236,12 @@ impl Parameters {
             "Remove collections timeout set to {} ms",
             self.consensus_api_grpc
                 .remove_collections_timeout
+                .as_millis()
+        );
+        info!(
+            "Handler certificate deliver timeout set to {} ms",
+            self.block_synchronizer
+                .handler_certificate_deliver_timeout
                 .as_millis()
         );
         info!(
@@ -399,7 +414,8 @@ mod tests {
              "block_synchronizer": {
                  "certificates_synchronize_timeout": "2s",
                  "payload_synchronize_timeout": "3_000ms",
-                 "payload_availability_timeout": "4_000ms"
+                 "payload_availability_timeout": "4_000ms",
+                 "handler_certificate_deliver_timeout": "1_000ms"
              },
              "consensus_api_grpc": {
                  "socket_addr": "/ip4/127.0.0.1/tcp/0/http",
@@ -489,6 +505,9 @@ mod tests {
         ));
         assert!(logs_contain(
             "Synchronize payload (batches) timeout set to 2000 ms"
+        ));
+        assert!(logs_contain(
+            "Handler certificate deliver timeout set to 2000 ms"
         ));
         assert!(logs_contain(
             "Consensus API gRPC Server listening on /ip4/127.0.0.1"

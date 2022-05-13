@@ -1,16 +1,16 @@
-use crate::{BlockCommand, BlockWaiter};
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
+    block_synchronizer::{handler, handler::MockHandler},
     block_waiter::{
         BatchResult, BlockError, BlockErrorKind, BlockResult, GetBlockResponse, GetBlocksResponse,
     },
-    common::create_db_stores,
-    PrimaryWorkerMessage,
+    BlockCommand, BlockWaiter, PrimaryWorkerMessage,
 };
 use bincode::deserialize;
 use crypto::{ed25519::Ed25519PublicKey, traits::VerifyingKey, Hash};
 use ed25519_dalek::Signer;
+use mockall::*;
 use network::PrimaryToWorkerNetwork;
 use std::collections::HashMap;
 use test_utils::{
@@ -30,32 +30,17 @@ use types::{Batch, BatchDigest, BatchMessage, Certificate, CertificateDigest};
 #[tokio::test]
 async fn test_successfully_retrieve_block() {
     // GIVEN
-    let (_, certificate_store, _) = create_db_stores();
-
-    // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
 
     // AND store certificate
     let header = fixture_header_with_payload(2);
     let certificate = certificate(&header);
-    certificate_store
-        .write(certificate.digest(), certificate.clone())
-        .await;
-
     let block_id = certificate.digest();
 
     // AND spawn a new blocks waiter
     let (tx_commands, rx_commands) = channel(1);
     let (tx_get_block, rx_get_block) = oneshot::channel();
     let (tx_batch_messages, rx_batch_messages) = channel(10);
-
-    BlockWaiter::spawn(
-        name.clone(),
-        committee.clone(),
-        certificate_store.clone(),
-        rx_commands,
-        rx_batch_messages,
-    );
 
     // AND "mock" the batch responses
     let mut expected_batch_messages = HashMap::new();
@@ -80,6 +65,22 @@ async fn test_successfully_retrieve_block() {
         worker_address,
         expected_batch_messages.clone(),
         tx_batch_messages,
+    );
+
+    // AND mock the response from the block synchronizer
+    let mut mock_handler = MockHandler::<Ed25519PublicKey>::new();
+    mock_handler
+        .expect_get_and_synchronize_block_headers()
+        .with(predicate::eq(vec![block_id]))
+        .times(1)
+        .return_const(vec![Ok(certificate)]);
+
+    BlockWaiter::spawn(
+        name.clone(),
+        committee.clone(),
+        rx_commands,
+        rx_batch_messages,
+        mock_handler,
     );
 
     // WHEN we send a request to get a block
@@ -124,9 +125,6 @@ async fn test_successfully_retrieve_block() {
 #[tokio::test]
 async fn test_successfully_retrieve_multiple_blocks() {
     // GIVEN
-    let (_, certificate_store, _) = create_db_stores();
-
-    // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
 
     let key = keys().pop().unwrap();
@@ -134,6 +132,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let mut expected_batch_messages = HashMap::new();
     let worker_id = 0;
     let mut expected_get_block_responses = Vec::new();
+    let mut certificates = Vec::new();
 
     for _ in 0..2 {
         let batch_1 = fixture_batch_with_transactions(10);
@@ -145,9 +144,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
             .build(|payload| key.sign(payload));
 
         let certificate = certificate(&header);
-        certificate_store
-            .write(certificate.digest(), certificate.clone())
-            .await;
+        certificates.push(certificate.clone());
 
         block_ids.push(certificate.digest());
 
@@ -206,14 +203,6 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let (tx_get_blocks, rx_get_blocks) = oneshot::channel();
     let (tx_batch_messages, rx_batch_messages) = channel(10);
 
-    BlockWaiter::spawn(
-        name.clone(),
-        committee.clone(),
-        certificate_store.clone(),
-        rx_commands,
-        rx_batch_messages,
-    );
-
     // AND spin up a worker node
     let worker_address = committee
         .worker(&name, &worker_id)
@@ -226,10 +215,33 @@ async fn test_successfully_retrieve_multiple_blocks() {
         tx_batch_messages,
     );
 
+    // AND mock the responses from the BlockSynchronizer
+    let mut expected_result: Vec<Result<Certificate<Ed25519PublicKey>, handler::Error>> =
+        certificates.into_iter().map(Ok).collect();
+
+    expected_result.push(Err(handler::Error::BlockNotFound {
+        block_id: missing_block_id,
+    }));
+
+    let mut mock_handler = MockHandler::<Ed25519PublicKey>::new();
+    mock_handler
+        .expect_get_and_synchronize_block_headers()
+        .with(predicate::eq(block_ids.clone()))
+        .times(1)
+        .return_const(expected_result);
+
+    BlockWaiter::spawn(
+        name.clone(),
+        committee.clone(),
+        rx_commands,
+        rx_batch_messages,
+        mock_handler,
+    );
+
     // WHEN we send a request to get a block
     tx_commands
         .send(BlockCommand::GetBlocks {
-            ids: block_ids,
+            ids: block_ids.clone(),
             sender: tx_get_blocks,
         })
         .await
@@ -260,28 +272,33 @@ async fn test_successfully_retrieve_multiple_blocks() {
 #[tokio::test]
 async fn test_one_pending_request_for_block_at_time() {
     // GIVEN
-    let (_, certificate_store, _) = create_db_stores();
-
-    // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
 
     // AND store certificate
     let header = fixture_header_with_payload(2);
     let certificate = certificate(&header);
-    certificate_store
-        .write(certificate.digest(), certificate.clone())
-        .await;
-
     let block_id = certificate.digest();
 
-    // AND spawn a new blocks waiter
+    // AND
     let (_, rx_commands) = channel(1);
     let (_, rx_batch_messages) = channel(1);
+
+    let get_mock_sender = || {
+        let (tx, _) = oneshot::channel();
+        tx
+    };
+
+    // AND mock the responses from the BlockSynchronizer
+    let mut mock_handler = MockHandler::<Ed25519PublicKey>::new();
+    mock_handler
+        .expect_get_and_synchronize_block_headers()
+        .with(predicate::eq(vec![block_id]))
+        .times(4)
+        .return_const(vec![Ok(certificate)]);
 
     let mut waiter = BlockWaiter {
         name: name.clone(),
         committee: committee.clone(),
-        certificate_store: certificate_store.clone(),
         rx_commands,
         pending_get_block: HashMap::new(),
         worker_network: PrimaryToWorkerNetwork::default(),
@@ -289,11 +306,7 @@ async fn test_one_pending_request_for_block_at_time() {
         tx_pending_batch: HashMap::new(),
         tx_get_block_map: HashMap::new(),
         tx_get_blocks_map: HashMap::new(),
-    };
-
-    let get_mock_sender = || {
-        let (tx, _) = oneshot::channel();
-        tx
+        block_synchronizer_handler: mock_handler,
     };
 
     // WHEN we send GetBlock command
@@ -328,28 +341,28 @@ async fn test_one_pending_request_for_block_at_time() {
 #[tokio::test]
 async fn test_unlocking_pending_get_block_request_after_response() {
     // GIVEN
-    let (_, certificate_store, _) = create_db_stores();
-
-    // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
 
     // AND store certificate
     let header = fixture_header_with_payload(2);
     let certificate = certificate(&header);
-    certificate_store
-        .write(certificate.digest(), certificate.clone())
-        .await;
-
     let block_id = certificate.digest();
 
     // AND spawn a new blocks waiter
     let (_, rx_commands) = channel(1);
     let (_, rx_batch_messages) = channel(1);
 
+    // AND mock the responses of the BlockSynchronizer
+    let mut mock_handler = MockHandler::<Ed25519PublicKey>::new();
+    mock_handler
+        .expect_get_and_synchronize_block_headers()
+        .with(predicate::eq(vec![block_id]))
+        .times(3)
+        .return_const(vec![Ok(certificate)]);
+
     let mut waiter = BlockWaiter {
         name: name.clone(),
         committee: committee.clone(),
-        certificate_store: certificate_store.clone(),
         rx_commands,
         pending_get_block: HashMap::new(),
         worker_network: PrimaryToWorkerNetwork::default(),
@@ -357,6 +370,7 @@ async fn test_unlocking_pending_get_block_request_after_response() {
         tx_pending_batch: HashMap::new(),
         tx_get_block_map: HashMap::new(),
         tx_get_blocks_map: HashMap::new(),
+        block_synchronizer_handler: mock_handler,
     };
 
     let get_mock_sender = || {
@@ -387,18 +401,11 @@ async fn test_unlocking_pending_get_block_request_after_response() {
 #[tokio::test]
 async fn test_batch_timeout() {
     // GIVEN
-    let (_, certificate_store, _) = create_db_stores();
-
-    // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
 
     // AND store certificate
     let header = fixture_header_with_payload(2);
     let certificate = certificate(&header);
-    certificate_store
-        .write(certificate.digest(), certificate.clone())
-        .await;
-
     let block_id = certificate.digest();
 
     // AND spawn a new blocks waiter
@@ -406,12 +413,20 @@ async fn test_batch_timeout() {
     let (tx_get_block, rx_get_block) = oneshot::channel();
     let (_, rx_batch_messages) = channel(10);
 
+    // AND mock the responses of the BlockSynchronizer
+    let mut mock_handler = MockHandler::<Ed25519PublicKey>::new();
+    mock_handler
+        .expect_get_and_synchronize_block_headers()
+        .with(predicate::eq(vec![block_id]))
+        .times(1)
+        .return_const(vec![Ok(certificate)]);
+
     BlockWaiter::spawn(
         name.clone(),
         committee.clone(),
-        certificate_store.clone(),
         rx_commands,
         rx_batch_messages,
+        mock_handler,
     );
 
     // WHEN we send a request to get a block
@@ -445,7 +460,6 @@ async fn test_batch_timeout() {
 #[tokio::test]
 async fn test_return_error_when_certificate_is_missing() {
     // GIVEN
-    let (_, certificate_store, _) = create_db_stores();
     let (name, committee) = resolve_name_and_committee();
 
     // AND create a certificate but don't store it
@@ -457,12 +471,20 @@ async fn test_return_error_when_certificate_is_missing() {
     let (tx_get_block, rx_get_block) = oneshot::channel();
     let (_, rx_batch_messages) = channel(10);
 
+    // AND mock the responses of the BlockSynchronizer
+    let mut mock_handler = MockHandler::<Ed25519PublicKey>::new();
+    mock_handler
+        .expect_get_and_synchronize_block_headers()
+        .with(predicate::eq(vec![block_id]))
+        .times(1)
+        .return_const(vec![Err(handler::Error::BlockDeliveryTimeout { block_id })]);
+
     BlockWaiter::spawn(
         name.clone(),
         committee.clone(),
-        certificate_store.clone(),
         rx_commands,
         rx_batch_messages,
+        mock_handler,
     );
 
     // WHEN we send a request to get a block

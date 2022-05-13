@@ -4,7 +4,10 @@ use std::time::Duration;
 
 use crate::{block_waiter::GetBlockResponse, BlockCommand, BlockRemoverCommand};
 use tokio::{
-    sync::{mpsc::channel, mpsc::Sender, oneshot},
+    sync::{
+        mpsc::{channel, Sender},
+        oneshot,
+    },
     time::timeout,
 };
 use tonic::{Request, Response, Status};

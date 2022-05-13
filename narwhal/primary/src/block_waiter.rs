@@ -1,8 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::PrimaryWorkerMessage;
+use crate::{block_synchronizer::handler::Handler, PrimaryWorkerMessage};
 use config::Committee;
-use crypto::{traits::VerifyingKey, Digest};
+use crypto::{traits::VerifyingKey, Digest, Hash};
 use futures::{
     future::{try_join_all, BoxFuture},
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
@@ -15,12 +15,11 @@ use std::{
     fmt::Formatter,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use store::Store;
 use tokio::{
     sync::{mpsc::Receiver, oneshot},
     time::timeout,
 };
-use tracing::{error, log::debug};
+use tracing::{error, instrument, log::debug, warn};
 use types::{
     BatchDigest, BatchMessage, BlockError, BlockErrorKind, BlockResult, Certificate,
     CertificateDigest, Header,
@@ -112,7 +111,6 @@ type RequestKey = Vec<u8>;
 /// the result of it.
 ///
 /// ```rust
-/// # use store::{reopen, rocks, rocks::DBMap, Store};
 /// # use tokio::sync::mpsc::{channel};
 /// # use tokio::sync::oneshot;
 /// # use crypto::Hash;
@@ -121,24 +119,30 @@ type RequestKey = Vec<u8>;
 /// # use config::Committee;
 /// # use std::collections::BTreeMap;
 /// # use types::Certificate;
-/// # use tempfile::tempdir;
-/// # use primary::{BlockWaiter, BlockCommand};
+/// # use primary::{BlockWaiter, BlockHeader, BlockCommand, block_synchronizer::{BlockSynchronizeResult, handler::{Error, Handler}}};
 /// # use types::{BatchMessage, BatchDigest, CertificateDigest, Batch};
+/// # use mockall::*;
+/// # use crypto::traits::VerifyingKey;
+/// # use async_trait::async_trait;
+///
+/// # // A mock implementation of the BlockSynchronizerHandler
+/// struct BlockSynchronizerHandler;
+///
+/// #[async_trait]
+/// impl<PublicKey: VerifyingKey> Handler<PublicKey> for BlockSynchronizerHandler {
+///
+///     async fn get_and_synchronize_block_headers(&self, block_ids: Vec<CertificateDigest>) -> Vec<Result<Certificate<PublicKey>, Error>> {
+///         vec![]
+///     }
+///
+///     async fn get_block_headers(&self, block_ids: Vec<CertificateDigest>) -> Vec<BlockSynchronizeResult<BlockHeader<PublicKey>>> {
+///         vec![]
+///     }
+///
+/// }
 ///
 /// #[tokio::main(flavor = "current_thread")]
 /// # async fn main() {
-///     const CERTIFICATES_CF: &str = "certificates";
-///
-///     let temp_dir = tempdir().expect("Failed to open temporary directory").into_path();
-///
-///     // Basic setup: datastore, channels & BlockWaiter
-///     let rocksdb = rocks::open_cf(temp_dir, None, &[CERTIFICATES_CF])
-///         .expect("Failed creating database");
-///
-///     let (certificate_map) = reopen!(&rocksdb,
-///             CERTIFICATES_CF;<CertificateDigest, Certificate<Ed25519PublicKey>>);
-///     let certificate_store = Store::new(certificate_map);
-///
 ///     let (tx_commands, rx_commands) = channel(1);
 ///     let (tx_batches, rx_batches) = channel(1);
 ///     let (tx_get_block, mut rx_get_block) = oneshot::channel();
@@ -146,16 +150,18 @@ type RequestKey = Vec<u8>;
 ///     let name = Ed25519PublicKey::default();
 ///     let committee = Committee{ authorities: BTreeMap::new() };
 ///
+///     // A dummy certificate
+///     let certificate = Certificate::<Ed25519PublicKey>::default();
+///
+///     // Dummy - we expect the BlockSynchronizer to actually respond, here
+///     // we are using a mock
 ///     BlockWaiter::spawn(
 ///         name,
 ///         committee,
-///         certificate_store.clone(),
 ///         rx_commands,
 ///         rx_batches,
+///         BlockSynchronizerHandler{},
 ///     );
-///
-///     // A dummy certificate
-///     let certificate = Certificate::<Ed25519PublicKey>::default();
 ///
 ///     // Send a command to receive a block
 ///     tx_commands
@@ -180,15 +186,15 @@ type RequestKey = Vec<u8>;
 ///     }
 /// # }
 /// ```
-pub struct BlockWaiter<PublicKey: VerifyingKey> {
+pub struct BlockWaiter<
+    PublicKey: VerifyingKey,
+    SynchronizerHandler: Handler<PublicKey> + Send + Sync + 'static,
+> {
     /// The public key of this primary.
     name: PublicKey,
 
     /// The committee information.
     committee: Committee<PublicKey>,
-
-    /// Storage that keeps the Certificates by their digest id.
-    certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
 
     /// Receive all the requests to get a block
     rx_commands: Receiver<BlockCommand>,
@@ -221,23 +227,28 @@ pub struct BlockWaiter<PublicKey: VerifyingKey> {
     /// A map that holds the channels we should notify with the
     /// GetBlocks responses.
     tx_get_blocks_map: HashMap<RequestKey, Vec<oneshot::Sender<BlocksResult>>>,
+
+    /// We use the handler of the block synchronizer to interact with the
+    /// block synchronizer in a synchronous way.
+    block_synchronizer_handler: SynchronizerHandler,
 }
 
-impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
+impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + Sync + 'static>
+    BlockWaiter<PublicKey, SynchronizerHandler>
+{
     // Create a new waiter and start listening on incoming
     // commands to fetch a block
     pub fn spawn(
         name: PublicKey,
         committee: Committee<PublicKey>,
-        certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
         rx_commands: Receiver<BlockCommand>,
         batch_receiver: Receiver<BatchResult>,
+        block_synchronizer_handler: SynchronizerHandler,
     ) {
         tokio::spawn(async move {
             Self {
                 name,
                 committee,
-                certificate_store,
                 rx_commands,
                 pending_get_block: HashMap::new(),
                 worker_network: PrimaryToWorkerNetwork::default(),
@@ -245,6 +256,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
                 tx_pending_batch: HashMap::new(),
                 tx_get_block_map: HashMap::new(),
                 tx_get_blocks_map: HashMap::new(),
+                block_synchronizer_handler,
             }
             .run()
             .await;
@@ -325,6 +337,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
         }
     }
 
+    #[instrument(level="debug", skip_all, fields(block_ids = ?ids))]
     async fn handle_get_blocks_command<'a>(
         &mut self,
         ids: Vec<CertificateDigest>,
@@ -350,45 +363,80 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
             return None;
         }
 
-        match self.certificate_store.read_all(ids.clone()).await {
-            Ok(certificates) => {
-                let (get_block_futures, get_blocks_future) =
-                    self.get_blocks(ids, certificates).await;
+        // fetch the certificates
+        let certificates = self.get_certificates(ids.clone()).await;
 
-                // mark the request as pending
-                self.tx_get_blocks_map
-                    .entry(key)
-                    .or_insert_with(Vec::new)
-                    .push(sender);
+        let (get_block_futures, get_blocks_future) = self.get_blocks(certificates).await;
 
-                return Some((get_block_futures, get_blocks_future));
-            }
-            Err(err) => {
-                error!("{err}");
-            }
+        // mark the request as pending
+        self.tx_get_blocks_map
+            .entry(key)
+            .or_insert_with(Vec::new)
+            .push(sender);
+
+        Some((get_block_futures, get_blocks_future))
+    }
+
+    /// Helper method to retrieve a single certificate.
+    #[instrument(level = "debug", skip_all, fields(certificate_id = ?id))]
+    async fn get_certificate(&mut self, id: CertificateDigest) -> Option<Certificate<PublicKey>> {
+        if let Some((_, c)) = self.get_certificates(vec![id]).await.first() {
+            return c.to_owned();
         }
-
         None
     }
 
-    async fn get_blocks<'a>(
+    /// Will fetch the certificates via the block_synchronizer. If the
+    /// certificate is missing then we expect the synchronizer to
+    /// fetch it via the peers. Otherwise if available on the storage
+    /// should return the result immediately. The method is blocking to
+    /// retrieve all the results.
+    #[instrument(level = "debug", skip_all, fields(certificate_ids = ?ids))]
+    async fn get_certificates(
         &mut self,
         ids: Vec<CertificateDigest>,
-        certificates: Vec<Option<Certificate<PublicKey>>>,
+    ) -> Vec<(CertificateDigest, Option<Certificate<PublicKey>>)> {
+        let mut results = Vec::new();
+
+        let block_header_results = self
+            .block_synchronizer_handler
+            .get_and_synchronize_block_headers(ids)
+            .await;
+
+        for result in block_header_results {
+            if let Ok(certificate) = result {
+                results.push((certificate.digest(), Some(certificate)));
+            } else {
+                results.push((result.err().unwrap().block_id(), None));
+            }
+        }
+
+        results
+    }
+
+    /// It triggers fetching the blocks for each provided certificate. The
+    /// method receives the `certificates` vector which is a tuple of the
+    /// certificate id and an Optional with the certificate. If the certificate
+    /// doesn't exist then the Optional will be empty (None) which means that
+    /// we haven't managed to retrieve/find the certificate an error result
+    /// will immediately be sent to the consumer.
+    async fn get_blocks<'a>(
+        &mut self,
+        certificates: Vec<(CertificateDigest, Option<Certificate<PublicKey>>)>,
     ) -> (
         Vec<BoxFuture<'a, BlockResult<GetBlockResponse>>>,
         BoxFuture<'a, BlocksResult>,
     ) {
         let mut get_block_receivers = Vec::new();
         let mut futures = Vec::new();
+        let mut ids = Vec::new();
 
-        for (i, c) in certificates.into_iter().enumerate() {
+        for (id, c) in certificates {
             let (get_block_sender, get_block_receiver) = oneshot::channel();
-            let id = *ids.get(i).unwrap();
+            ids.push(id);
 
             // certificate has been found
-            if c.is_some() {
-                let certificate = c.unwrap();
+            if let Some(certificate) = c {
                 let fut = self.get_block(id, certificate, get_block_sender).await;
 
                 if fut.is_some() {
@@ -401,7 +449,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
                         id,
                         error: BlockErrorKind::BlockNotFound,
                     }))
-                    .expect("Couldn't send BlockNotFound error for a GetBlock request");
+                    .expect("Couldn't send BlockNotFound error for a GetBlocks request");
             }
 
             get_block_receivers.push(get_block_receiver);
@@ -416,14 +464,15 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
     // handles received commands and returns back a future if needs to
     // wait for further results. Otherwise, an empty option is returned
     // if no further waiting on processing is needed.
+    #[instrument(level="debug", skip_all, fields(block_ids = ?id))]
     async fn handle_get_block_command<'a>(
         &mut self,
         id: CertificateDigest,
         sender: oneshot::Sender<BlockResult<GetBlockResponse>>,
     ) -> Option<BoxFuture<'a, BlockResult<GetBlockResponse>>> {
-        return match self.certificate_store.read(id).await {
-            Ok(Some(certificate)) => self.get_block(id, certificate, sender).await,
-            _ => {
+        match self.get_certificate(id).await {
+            Some(certificate) => self.get_block(id, certificate, sender).await,
+            None => {
                 sender
                     .send(Err(BlockError {
                         id,
@@ -433,7 +482,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
 
                 None
             }
-        };
+        }
     }
 
     async fn get_block<'a>(
@@ -589,7 +638,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
                     .expect("Couldn't send BatchResult for pending batch");
             }
             None => {
-                println!("Couldn't find pending batch with id {}", &batch_id);
+                warn!("Couldn't find pending batch with id {}", &batch_id);
             }
         }
     }

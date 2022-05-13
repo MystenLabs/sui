@@ -31,7 +31,8 @@ def local(ctx, debug=True):
         'block_synchronizer': {
             'certificates_synchronize_timeout': '2_000ms',
             'payload_synchronize_timeout': '2_000ms',
-            'payload_availability_timeout': '2_000ms'
+            'payload_availability_timeout': '2_000ms',
+            'handler_certificate_deliver_timeout': '2_000ms'
         },
         "consensus_api_grpc": {
             "socket_addr": "/ip4/127.0.0.1/tcp/0/http",
@@ -124,7 +125,8 @@ def remote(ctx, debug=False):
         'block_synchronizer': {
             'certificates_synchronize_timeout': '2_000ms',
             'payload_synchronize_timeout': '2_000ms',
-            'payload_availability_timeout': '2_000ms'
+            'payload_availability_timeout': '2_000ms',
+            'handler_certificate_deliver_timeout': '2_000ms'
         },
         "consensus_api_grpc": {
             "socket_addr": "/ip4/127.0.0.1/tcp/0/http",

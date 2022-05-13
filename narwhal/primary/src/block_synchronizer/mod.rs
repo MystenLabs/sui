@@ -34,6 +34,8 @@ use types::{BatchDigest, Certificate, CertificateDigest};
 #[cfg(test)]
 #[path = "tests/block_synchronizer_tests.rs"]
 mod block_synchronizer_tests;
+pub mod handler;
+pub mod mock;
 mod peers;
 pub mod responses;
 
@@ -45,17 +47,18 @@ const CERTIFICATE_RESPONSES_RATIO_THRESHOLD: f32 = 0.5;
 
 #[derive(Debug, Clone)]
 pub struct BlockHeader<PublicKey: VerifyingKey> {
-    certificate: Certificate<PublicKey>,
+    pub certificate: Certificate<PublicKey>,
     /// It designates whether the requested quantity (either the certificate
     /// or the payload) has been retrieved via the local storage. If true,
     /// the it used the storage. If false, then it has been fetched via
     /// the peers.
-    fetched_from_storage: bool,
+    pub fetched_from_storage: bool,
 }
 
 type ResultSender<T> = Sender<BlockSynchronizeResult<BlockHeader<T>>>;
-type BlockSynchronizeResult<T> = Result<T, SyncError>;
+pub type BlockSynchronizeResult<T> = Result<T, SyncError>;
 
+#[derive(Debug)]
 pub enum Command<PublicKey: VerifyingKey> {
     #[allow(dead_code)]
     /// A request to synchronize and output the block headers
@@ -107,8 +110,8 @@ enum State<PublicKey: VerifyingKey> {
 
 #[derive(Debug, Error, Copy, Clone)]
 pub enum SyncError {
-    #[error("Block with id {block_id} could not be retrieved")]
-    Error { block_id: CertificateDigest },
+    #[error("Block with id {block_id} was not returned in any peer response")]
+    NoResponse { block_id: CertificateDigest },
 
     #[error("Block with id {block_id} could not be retrieved, timeout while retrieving result")]
     Timeout { block_id: CertificateDigest },
@@ -118,7 +121,7 @@ impl SyncError {
     #[allow(dead_code)]
     pub fn block_id(&self) -> CertificateDigest {
         match *self {
-            SyncError::Error { block_id } | SyncError::Timeout { block_id } => block_id,
+            SyncError::NoResponse { block_id } | SyncError::Timeout { block_id } => block_id,
         }
     }
 }
@@ -429,7 +432,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         let key = RequestID::from_iter(to_sync.iter());
 
         let message = PrimaryMessage::<PublicKey>::CertificatesBatchRequest {
-            certificate_ids: block_ids,
+            certificate_ids: to_sync.clone(),
             requestor: self.name.clone(),
         };
 
@@ -732,6 +735,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                     // responses we get are filtered by the request id, but still
                     // worth double checking
                     if !primaries_sent_requests_to.iter().any(|p|p.eq(&response.from)) {
+                        warn!("Not expected reply from this peer, will skip response");
                         continue;
                     }
 
@@ -743,6 +747,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                             // Even if we have found one certificate that doesn't match
                             // we reject the payload - it shouldn't happen.
                             if certificates.iter().any(|c|!block_ids.contains(&c.digest())) {
+                                warn!("Will not process certificates, found at least one that we haven't asked for");
                                 continue;
                             }
 
@@ -906,7 +911,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
             } else if timeout {
                 result.insert(block_id, Err(SyncError::Timeout { block_id }));
             } else {
-                result.insert(block_id, Err(SyncError::Error { block_id }));
+                result.insert(block_id, Err(SyncError::NoResponse { block_id }));
             }
         }
 
