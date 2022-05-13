@@ -77,29 +77,7 @@ impl std::fmt::Debug for Accumulator {
     all elements so far. Waypoints with increasing sequence numbers should
     contain all element in previous waypoints and expand them.
 */
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct Waypoint {
-    pub sequence_number: u64,
-    pub accumulator: Accumulator,
-}
-
-impl Waypoint {
-    /// Make a new waypoint.
-    pub fn new(sequence_number: u64) -> Waypoint {
-        Waypoint {
-            sequence_number,
-            accumulator: Accumulator::default(),
-        }
-    }
-
-    /// Inserts an element into the accumulator
-    pub fn insert<I>(&mut self, item: &I)
-    where
-        I: Borrow<[u8]>,
-    {
-        self.accumulator.insert(item);
-    }
-}
+pub type Waypoint = Accumulator;
 
 /*
     A structure to hold a waypoint, associated items,
@@ -124,23 +102,23 @@ where
     K: Clone,
     I: Borrow<[u8]> + Ord,
 {
-    pub fn new(key: K, sequence_number: u64) -> WaypointWithItems<K, I> {
+    pub fn new(key: K) -> WaypointWithItems<K, I> {
         WaypointWithItems {
             key,
-            waypoint: Waypoint::new(sequence_number),
+            waypoint: Waypoint::default(),
             items: BTreeSet::new(),
         }
     }
 
     /// Insert an element in the accumulator and list of items
     pub fn insert_full(&mut self, item: I) {
-        self.waypoint.accumulator.insert(&item);
+        self.waypoint.insert(&item);
         self.items.insert(item);
     }
 
     /// Insert an element in the accumulator only
     pub fn insert_accumulator(&mut self, item: &I) {
-        self.waypoint.accumulator.insert(item);
+        self.waypoint.insert(item);
     }
 
     /// Insert an element in the items only
@@ -209,10 +187,10 @@ where
     /// waypoints the missing elements makes them point to the
     /// accumulated same set.
     pub fn check(&self) -> bool {
-        let mut first_plus = self.first.waypoint.accumulator.clone();
+        let mut first_plus = self.first.waypoint.clone();
         first_plus.insert_all(self.first.items.iter());
 
-        let mut second_plus = self.second.waypoint.accumulator.clone();
+        let mut second_plus = self.second.waypoint.clone();
         second_plus.insert_all(self.second.items.iter());
 
         first_plus == second_plus
@@ -234,6 +212,16 @@ where
     pub authority_waypoints: BTreeMap<K, WaypointWithItems<K, I>>,
 }
 
+impl<K, I> Default for GlobalCheckpoint<K, I>
+where
+    K: Eq + Ord + Clone,
+    I: Borrow<[u8]> + Ord + Clone,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<K, I> GlobalCheckpoint<K, I>
 where
     K: Eq + Ord + Clone,
@@ -241,9 +229,9 @@ where
 {
     /// Initializes an empty global checkpoint at a specific
     /// sequence number.
-    pub fn new(sequence_number: u64) -> GlobalCheckpoint<K, I> {
+    pub fn new() -> GlobalCheckpoint<K, I> {
         GlobalCheckpoint {
-            reference_waypoint: Waypoint::new(sequence_number),
+            reference_waypoint: Waypoint::default(),
             authority_waypoints: BTreeMap::new(),
         }
     }
@@ -259,31 +247,13 @@ where
             return Err(WaypointError::generic("Bad waypoint diff".to_string()));
         }
 
-        // Check the waypoints are for the same sequence numbers.
-        if diff.first.waypoint.sequence_number != diff.second.waypoint.sequence_number {
-            return Err(WaypointError::generic(
-                "Different sequence numbers (diff)".to_string(),
-            ));
-        }
-
-        // Check the waypoints are for the same sequence numbers.
-        if diff.first.waypoint.sequence_number != self.reference_waypoint.sequence_number {
-            return Err(WaypointError::generic(
-                "Different sequence numbers (checkpoint)".to_string(),
-            ));
-        }
-
         // The first link we add to the checkpoint does not need to be
         // connected to the graph since there is nothing to connect to.
         if self.authority_waypoints.is_empty() {
             // Add both waypoints into the checkpoint and compute root.
-            let mut root = diff.first.waypoint.accumulator.clone();
+            let mut root = diff.first.waypoint.clone();
             root.insert_all(diff.first.items.iter());
-
-            self.reference_waypoint = Waypoint {
-                sequence_number: diff.first.waypoint.sequence_number,
-                accumulator: root,
-            };
+            self.reference_waypoint = root;
 
             let WaypointDiff { first, second } = diff;
 
@@ -325,7 +295,6 @@ where
 
             // Update the root
             self.reference_waypoint
-                .accumulator
                 .insert_all(additional_first_items.iter());
 
             // Update existing keys
@@ -350,9 +319,9 @@ where
     /// all the contained waypoints + the associated items lead to the
     /// reference waypoint.
     pub fn check(&self) -> bool {
-        let root = self.reference_waypoint.accumulator.clone();
+        let root = self.reference_waypoint.clone();
         for v in self.authority_waypoints.values() {
-            let mut inner_root = v.waypoint.accumulator.clone();
+            let mut inner_root = v.waypoint.clone();
             inner_root.insert_all(v.items.iter());
 
             if inner_root != root {
@@ -388,11 +357,11 @@ where
         // The root after we add the extra items should be the same as if we constructed
         // a checkpoint including the first waypoint.
         debug_assert!({
-            let mut first_root = diff.first.waypoint.accumulator.clone();
+            let mut first_root = diff.first.waypoint.clone();
             first_root.insert_all(item_sum.iter());
 
             let mut ck2 = self.clone();
-            ck2.insert(diff.swap()).is_ok() && first_root == ck2.reference_waypoint.accumulator
+            ck2.insert(diff.swap()).is_ok() && first_root == ck2.reference_waypoint
         });
 
         Ok(item_sum)

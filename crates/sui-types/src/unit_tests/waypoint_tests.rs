@@ -27,8 +27,8 @@ fn make_item() -> Item {
 
 #[test]
 fn test_diff() {
-    let mut first = Waypoint::new(10);
-    let mut second = Waypoint::new(10);
+    let mut first = Waypoint::default();
+    let mut second = Waypoint::default();
 
     let v1 = make_item();
     let v2 = make_item();
@@ -56,9 +56,9 @@ fn test_diff() {
 
 #[test]
 fn test_checkpoint() {
-    let mut w1 = Waypoint::new(10);
-    let mut w2 = Waypoint::new(10);
-    let mut w3 = Waypoint::new(10);
+    let mut w1 = Waypoint::default();
+    let mut w2 = Waypoint::default();
+    let mut w3 = Waypoint::default();
 
     let v1 = make_item();
     let v2 = make_item();
@@ -95,14 +95,14 @@ fn test_checkpoint() {
     );
     assert!(diff2.check());
 
-    let mut ck = GlobalCheckpoint::new(10);
+    let mut ck = GlobalCheckpoint::default();
     assert!(ck.insert(diff1).is_ok());
     assert!(ck.check());
     assert!(ck.insert(diff2).is_ok());
     assert!(ck.check());
 
     // Now test catch_up_items
-    let mut w4 = Waypoint::new(10);
+    let mut w4 = Waypoint::default();
     let v5 = make_item();
 
     w4.insert(&v5);

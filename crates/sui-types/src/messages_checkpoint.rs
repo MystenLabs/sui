@@ -181,6 +181,7 @@ pub type CheckpointDigest = [u8; 32];
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CheckpointSummary {
+    pub sequence_number: CheckpointSequenceNumber,
     pub waypoint: Box<Waypoint>, // Bigger strucure, can live on heap.
     digest: CheckpointDigest,
 }
@@ -190,7 +191,7 @@ impl CheckpointSummary {
         sequence_number: CheckpointSequenceNumber,
         transactions: &CheckpointContents,
     ) -> CheckpointSummary {
-        let mut waypoint = Box::new(Waypoint::new(sequence_number));
+        let mut waypoint = Box::new(Waypoint::default());
         transactions.transactions.iter().for_each(|tx| {
             waypoint.insert(tx);
         });
@@ -198,13 +199,14 @@ impl CheckpointSummary {
         let proposal_digest = transactions.digest();
 
         CheckpointSummary {
+            sequence_number,
             waypoint,
             digest: proposal_digest,
         }
     }
 
     pub fn sequence_number(&self) -> &CheckpointSequenceNumber {
-        &self.waypoint.sequence_number
+        &self.sequence_number
     }
 }
 
@@ -258,7 +260,7 @@ impl SignedCheckpoint {
     // Check that the digest and transactions are correctly signed
     pub fn check_transactions(&self, contents: &CheckpointContents) -> Result<(), SuiError> {
         self.check_digest()?;
-        let recomputed = CheckpointSummary::new(self.checkpoint.waypoint.sequence_number, contents);
+        let recomputed = CheckpointSummary::new(*self.checkpoint.sequence_number(), contents);
 
         fp_ensure!(
             recomputed == self.checkpoint,
@@ -485,7 +487,7 @@ mod tests {
         assert!(proposal.check_transactions(&contents).is_err());
 
         // Modify the proposal, and observe the signature fail
-        proposal.checkpoint.waypoint.sequence_number = 2;
+        proposal.checkpoint.sequence_number = 2;
         assert!(proposal.check_digest().is_err());
     }
 

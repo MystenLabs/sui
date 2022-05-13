@@ -59,7 +59,7 @@ impl CheckpointProposal {
 
     /// Returns the sequence number of this proposal
     pub fn sequence_number(&self) -> &CheckpointSequenceNumber {
-        &self.proposal.0.checkpoint.waypoint.sequence_number
+        self.proposal.0.checkpoint.sequence_number()
     }
 
     // Iterate over all transactions
@@ -474,7 +474,7 @@ impl CheckpointStore {
         checkpoint: CheckpointSummary,
         contents: &CheckpointContents,
     ) -> Result<(), SuiError> {
-        let checkpoint_sequence_number = checkpoint.waypoint.sequence_number;
+        let checkpoint_sequence_number = *checkpoint.sequence_number();
 
         // Process checkpoints once but allow idempotent processing
         if self.checkpoints.get(&checkpoint_sequence_number)?.is_some() {
@@ -511,9 +511,7 @@ impl CheckpointStore {
                 &self.fragments,
                 self.fragments.iter().filter_map(|(k, v)| {
                     // Delete all keys for checkpoints smaller than what we are committing now.
-                    if v.proposer.0.checkpoint.waypoint.sequence_number
-                        <= checkpoint_sequence_number
-                    {
+                    if *v.proposer.0.checkpoint.sequence_number() <= checkpoint_sequence_number {
                         Some(k)
                     } else {
                         None
@@ -825,7 +823,7 @@ impl CheckpointStore {
         // Get the record in our checkpoint database for this sequence number.
         let current = self
             .checkpoints
-            .get(&checkpoint.checkpoint.waypoint.sequence_number)?;
+            .get(checkpoint.checkpoint.sequence_number())?;
 
         match &current {
             // If cert exists, do nothing (idempotent)
@@ -840,7 +838,7 @@ impl CheckpointStore {
                     self.handle_internal_set_checkpoint(checkpoint.checkpoint.clone(), contents)?;
                     // Then insert it
                     self.checkpoints.insert(
-                        &checkpoint.checkpoint.waypoint.sequence_number,
+                        checkpoint.checkpoint.sequence_number(),
                         &AuthenticatedCheckpoint::Certified(checkpoint.clone()),
                     )?;
 
@@ -865,7 +863,7 @@ impl CheckpointStore {
             Some(AuthenticatedCheckpoint::Signed(_)) => {
                 checkpoint.check_digest(&self.committee)?;
                 self.checkpoints.insert(
-                    &checkpoint.checkpoint.waypoint.sequence_number,
+                    checkpoint.checkpoint.sequence_number(),
                     &AuthenticatedCheckpoint::Certified(checkpoint.clone()),
                 )?;
             }
@@ -1214,7 +1212,7 @@ impl FragmentReconstruction {
 
         for frag in fragments {
             // Double check we have only been given waypoints for the correct sequence number
-            debug_assert!(frag.diff.first.waypoint.sequence_number == seq);
+            debug_assert!(*frag.proposer.0.checkpoint.sequence_number() == seq);
 
             // Check the checkpoint summary of the proposal is the same as the previous one.
             // Otherwise ignore the link.
@@ -1250,7 +1248,7 @@ impl FragmentReconstruction {
                     .filter(|frag| span.top_node(&frag.proposer.0.authority).0 == top)
                     .collect();
 
-                let mut global = GlobalCheckpoint::new(seq);
+                let mut global = GlobalCheckpoint::new();
                 while let Some(link) = active_links.pop_front() {
                     match global.insert(link.diff.clone()) {
                         Ok(_) | Err(WaypointError::NothingToDo) => {} // Do nothing

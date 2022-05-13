@@ -274,7 +274,7 @@ fn make_diffs() {
     let diff12 = p1.fragment_with(&p2);
     let diff23 = p2.fragment_with(&p3);
 
-    let mut global = GlobalCheckpoint::<AuthorityName, TransactionDigest>::new(0);
+    let mut global = GlobalCheckpoint::<AuthorityName, TransactionDigest>::new();
     global.insert(diff12.diff.clone()).unwrap();
     global.insert(diff23.diff).unwrap();
 
