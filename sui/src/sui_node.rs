@@ -10,17 +10,13 @@ use crate::{
 use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
+use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
 
-use sui_core::gateway_state::gateway_responses::SuiObjectRead;
-use sui_core::gateway_state::{
-    gateway_responses::{TransactionEffectsResponse, TransactionResponse},
-    GatewayTxSeqNumber,
-};
+use sui_core::gateway_state::GatewayTxSeqNumber;
+use sui_core::gateway_types::SuiObjectRead;
 use sui_core::sui_json::SuiJsonValue;
-use sui_types::{
-    base_types::{ObjectID, SuiAddress, TransactionDigest},
-    json_schema::Base64,
-};
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::sui_serde::Base64;
 
 pub struct SuiNode {}
 

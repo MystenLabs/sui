@@ -1,6 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/// This file contain response types used by the GatewayAPI, most of the types mirrors it's internal type counterparts.
+/// These mirrored types allow us to optimise the JSON serde without impacting the internal types, which are optimise for storage.
+///
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Write;
@@ -15,7 +18,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
-use serde_with::Bytes;
 
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -23,17 +25,16 @@ use sui_types::base_types::{
 use sui_types::coin::Coin;
 use sui_types::crypto::{AuthorityQuorumSignInfo, Signature};
 use sui_types::error::SuiError;
+use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::id::{UniqueID, VersionedID, ID};
-use sui_types::json_schema;
 use sui_types::messages::{
-    CertifiedTransaction, ExecutionStatus, MoveModulePublish, SingleTransactionKind,
-    TransactionData, TransactionEffects, TransactionKind,
+    CallArg, CertifiedTransaction, ExecutionStatus, InputObjectKind, MoveModulePublish,
+    SingleTransactionKind, TransactionData, TransactionEffects, TransactionKind,
 };
-use sui_types::move_package::{disassemble_modules, MovePackage};
+use sui_types::move_package::disassemble_modules;
 use sui_types::object::{Data, Object, ObjectRead, Owner};
-use sui_types::readable_serde::encoding::{Base64, Encoding};
-use sui_types::readable_serde::Readable;
+use sui_types::sui_serde::{Base64, Encoding};
 
 use crate::sui_json::SuiJsonValue;
 
@@ -227,7 +228,9 @@ impl SuiObject {
                     contents: move_struct.into(),
                 })
             }
-            Data::Package(p) => SuiData::Package(p),
+            Data::Package(p) => SuiData::Package(SuiMovePackage {
+                disassembled: p.disassemble()?,
+            }),
         };
         Ok(Self {
             data,
@@ -243,7 +246,7 @@ impl SuiObject {
 #[serde(tag = "dataType", rename_all = "camelCase", rename = "Data")]
 pub enum SuiData {
     MoveObject(SuiMoveObject),
-    Package(MovePackage),
+    Package(SuiMovePackage),
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
@@ -276,7 +279,7 @@ impl TryFrom<&SuiObject> for GasCoin {
 }
 
 impl SuiData {
-    pub fn try_as_package(&self) -> Option<&MovePackage> {
+    pub fn try_as_package(&self) -> Option<&SuiMovePackage> {
         match self {
             SuiData::MoveObject(_) => None,
             SuiData::Package(p) => Some(p),
@@ -295,11 +298,11 @@ pub struct PublishResponse {
     /// Certificate of the transaction
     pub certificate: SuiCertifiedTransaction,
     /// The newly published package object reference.
-    pub package: ObjectRef,
+    pub package: SuiObjectRef,
     /// List of Move objects created as part of running the module initializers in the package
-    pub created_objects: Vec<Object>,
+    pub created_objects: Vec<SuiObject>,
     /// The updated gas payment object after deducting payment
-    pub updated_gas: Object,
+    pub updated_gas: SuiObject,
 }
 
 impl Display for PublishResponse {
@@ -311,7 +314,7 @@ impl Display for PublishResponse {
         writeln!(
             writer,
             "The newly published package object ID: {:?}",
-            self.package.0
+            self.package.object_id
         )?;
         if !self.created_objects.is_empty() {
             writeln!(
@@ -324,26 +327,6 @@ impl Display for PublishResponse {
         }
         let gas_coin = GasCoin::try_from(&self.updated_gas).map_err(fmt::Error::custom)?;
         writeln!(writer, "Updated Gas : {}", gas_coin)?;
-        write!(f, "{}", writer)
-    }
-}
-
-#[derive(Serialize, Clone, Debug)]
-pub struct SwitchResponse {
-    /// Active address
-    pub address: Option<SuiAddress>,
-    pub gateway: Option<String>,
-}
-
-impl Display for SwitchResponse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut writer = String::new();
-        if let Some(addr) = self.address {
-            writeln!(writer, "Active address switched to {}", addr)?;
-        }
-        if let Some(gateway) = &self.gateway {
-            writeln!(writer, "Active gateway switched to {}", gateway)?;
-        }
         write!(f, "{}", writer)
     }
 }
@@ -374,16 +357,6 @@ impl SuiObjectRead {
             Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: oref }),
             Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: id }),
             Self::Exists(o) => Ok(o),
-        }
-    }
-
-    /// Returns the object ref if there is an object, otherwise an Err if
-    /// the object does not exist or is deleted.
-    pub fn reference(&self) -> Result<SuiObjectRef, SuiError> {
-        match &self {
-            Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: *oref }),
-            Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
-            Self::Exists(o) => Ok(o.reference.clone()),
         }
     }
 }
@@ -422,11 +395,7 @@ pub enum SuiMoveValue {
     UniqueID(UniqueID),
     VersionedID(VersionedID),
     Balance(u64),
-    ByteArray(
-        #[schemars(with = "json_schema::Base64")]
-        #[serde_as(as = "Readable<Base64, Bytes>")]
-        Vec<u8>,
-    ),
+    ByteArray(Base64),
     Coin(Coin),
 }
 
@@ -450,7 +419,7 @@ impl From<MoveValue> for SuiMoveValue {
                             }
                         })
                         .collect::<Vec<_>>();
-                    return SuiMoveValue::ByteArray(bytearray);
+                    return SuiMoveValue::ByteArray(Base64::from_bytes(&bytearray));
                 }
                 SuiMoveValue::Vector(value.into_iter().map(|value| value.into()).collect())
             }
@@ -496,8 +465,10 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
     match struct_name.as_str() {
         "0x2::UTF8::String" | "0x1::ASCII::String" => {
             if let SuiMoveValue::ByteArray(bytes) = fields["bytes"].clone() {
-                if let Ok(s) = String::from_utf8(bytes) {
-                    return Some(SuiMoveValue::String(s));
+                if let Ok(bytes) = bytes.to_vec() {
+                    if let Ok(s) = String::from_utf8(bytes) {
+                        return Some(SuiMoveValue::String(s));
+                    }
                 }
             }
         }
@@ -560,7 +531,7 @@ impl From<MoveStruct> for SuiMoveStruct {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
 #[serde(rename = "MovePackage")]
 pub struct SuiMovePackage {
     disassembled: BTreeMap<String, Value>,
@@ -685,7 +656,19 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                 module: c.module.to_string(),
                 function: c.function.to_string(),
                 type_arguments: c.type_arguments.iter().map(|ty| ty.to_string()).collect(),
-                arguments: vec![],
+                arguments: c
+                    .arguments
+                    .into_iter()
+                    .map(|arg| match arg {
+                        CallArg::Pure(p) => SuiJsonValue::from_bcs_bytes(&p),
+                        CallArg::ImmOrOwnedObject((id, _, _)) => {
+                            SuiJsonValue::new(Value::String(id.to_hex_literal()))
+                        }
+                        CallArg::SharedObject(id) => {
+                            SuiJsonValue::new(Value::String(id.to_hex_literal()))
+                        }
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
             }),
         })
     }
@@ -697,7 +680,9 @@ pub struct SuiMoveCall {
     pub package: SuiObjectRef,
     pub module: String,
     pub function: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub type_arguments: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub arguments: Vec<SuiJsonValue>,
 }
 
@@ -751,29 +736,37 @@ impl TryFrom<CertifiedTransaction> for SuiCertifiedTransaction {
 #[serde(rename = "TransactionEffects")]
 pub struct SuiTransactionEffects {
     // The status of the execution
-    pub status: ExecutionStatus,
+    pub status: SuiExecutionStatus,
     // The object references of the shared objects used in this transaction. Empty if no shared objects were used.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub shared_objects: Vec<SuiObjectRef>,
     // The transaction digest
     pub transaction_digest: TransactionDigest,
     // ObjectRef and owner of new objects created.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub created: Vec<OwnedObjectRef>,
     // ObjectRef and owner of mutated objects, including gas object.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mutated: Vec<OwnedObjectRef>,
     // ObjectRef and owner of objects that are unwrapped in this transaction.
     // Unwrapped objects are objects that were wrapped into other objects in the past,
     // and just got extracted out.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unwrapped: Vec<OwnedObjectRef>,
     // Object Refs of objects now deleted (the old refs).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deleted: Vec<SuiObjectRef>,
     // Object refs of objects now wrapped in other objects.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub wrapped: Vec<SuiObjectRef>,
     // The updated gas object reference. Have a dedicated field for convenient access.
     // It's also included in mutated.
     pub gas_object: OwnedObjectRef,
     /// The events emitted during execution. Note that only successful transactions emit events
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub events: Vec<SuiEvent>,
     /// The set of transaction digests this transaction depends on.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dependencies: Vec<String>,
 }
 
@@ -837,7 +830,7 @@ impl Display for SuiTransactionEffects {
 impl From<TransactionEffects> for SuiTransactionEffects {
     fn from(effect: TransactionEffects) -> Self {
         Self {
-            status: effect.status,
+            status: effect.status.into(),
             shared_objects: to_sui_object_ref(effect.shared_objects),
             transaction_digest: effect.transaction_digest,
             created: to_owned_ref(effect.created),
@@ -858,6 +851,41 @@ impl From<TransactionEffects> for SuiTransactionEffects {
                 })
                 .collect(),
             dependencies: effect.dependencies.iter().map(Base64::encode).collect(),
+        }
+    }
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "ExecutionStatus")]
+pub enum SuiExecutionStatus {
+    // Gas used in the success case.
+    Success {
+        gas_cost: GasCostSummary,
+    },
+    // Gas used in the failed case, and the error.
+    Failure {
+        gas_cost: GasCostSummary,
+        error: String,
+    },
+}
+
+impl SuiExecutionStatus {
+    pub fn is_ok(&self) -> bool {
+        matches!(self, SuiExecutionStatus::Success { .. })
+    }
+    pub fn is_err(&self) -> bool {
+        matches!(self, SuiExecutionStatus::Failure { .. })
+    }
+}
+
+impl From<ExecutionStatus> for SuiExecutionStatus {
+    fn from(status: ExecutionStatus) -> Self {
+        match status {
+            ExecutionStatus::Success { gas_cost } => Self::Success { gas_cost },
+            ExecutionStatus::Failure { gas_cost, error } => Self::Failure {
+                gas_cost,
+                error: error.to_string(),
+            },
         }
     }
 }
@@ -895,4 +923,25 @@ pub struct SuiEvent {
 pub struct SuiTransferCoin {
     pub recipient: SuiAddress,
     pub object_ref: SuiObjectRef,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "InputObjectKind")]
+pub enum SuiInputObjectKind {
+    // A Move package, must be immutable.
+    MovePackage(ObjectID),
+    // A Move object, either immutable, or owned mutable.
+    ImmOrOwnedMoveObject(SuiObjectRef),
+    // A Move object that's shared and mutable.
+    SharedMoveObject(ObjectID),
+}
+
+impl From<InputObjectKind> for SuiInputObjectKind {
+    fn from(input: InputObjectKind) -> Self {
+        match input {
+            InputObjectKind::MovePackage(id) => Self::MovePackage(id),
+            InputObjectKind::ImmOrOwnedMoveObject(oref) => Self::ImmOrOwnedMoveObject(oref.into()),
+            InputObjectKind::SharedMoveObject(id) => Self::SharedMoveObject(id),
+        }
+    }
 }

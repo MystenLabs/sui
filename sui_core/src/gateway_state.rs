@@ -41,13 +41,11 @@ use crate::{
     authority_client::AuthorityAPI,
 };
 
-use self::gateway_responses::*;
+use crate::gateway_types::*;
 
 #[cfg(test)]
 #[path = "unit_tests/gateway_state_tests.rs"]
 mod gateway_state_tests;
-
-pub mod gateway_responses;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
@@ -364,6 +362,10 @@ where
 
     async fn get_sui_object(&self, object_id: &ObjectID) -> Result<SuiObject, anyhow::Error> {
         let object = self.get_object(object_id).await?;
+        self.to_sui_object(object)
+    }
+
+    fn to_sui_object(&self, object: Object) -> Result<SuiObject, anyhow::Error> {
         let cache = ModuleCache::new(&*self.store);
         let layout = object.get_layout(ObjectFormatOptions::default(), &cache)?;
         SuiObject::try_from(object, layout)
@@ -582,14 +584,17 @@ where
                     }
                     .into()
                 );
-                updated_gas = Some(object);
+                updated_gas = Some(self.to_sui_object(object)?);
             } else {
-                created_objects.push(object);
+                created_objects.push(self.to_sui_object(object)?);
             }
         }
-        let package = package.ok_or(SuiError::InconsistentGatewayResult {
-            error: "No package created".to_owned(),
-        })?;
+        let package = package
+            .ok_or(SuiError::InconsistentGatewayResult {
+                error: "No package created".to_owned(),
+            })?
+            .into();
+
         let updated_gas = updated_gas.ok_or(SuiError::InconsistentGatewayResult {
             error: "No gas updated".to_owned(),
         })?;

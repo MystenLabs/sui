@@ -16,21 +16,20 @@ use colored::Colorize;
 use move_core_types::{language_storage::TypeTag, parser::parse_type_tag};
 use serde::Serialize;
 use serde_json::json;
+use sui_core::gateway_types::{MergeCoinResponse, PublishResponse, SplitCoinResponse};
 use tracing::info;
 
-use sui_core::gateway_state::gateway_responses::{
-    SuiCertifiedTransaction, SuiObject, SuiObjectRead, SuiObjectRef, SuiTransactionEffects,
-};
-use sui_core::gateway_state::{
-    gateway_responses::{MergeCoinResponse, PublishResponse, SplitCoinResponse, SwitchResponse},
-    GatewayClient,
+use sui_core::gateway_state::GatewayClient;
+use sui_core::gateway_types::{
+    SuiCertifiedTransaction, SuiExecutionStatus, SuiObject, SuiObjectRead, SuiObjectRef,
+    SuiTransactionEffects,
 };
 use sui_core::sui_json::SuiJsonValue;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
-    messages::{ExecutionStatus, Transaction},
+    messages::Transaction,
     SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -328,8 +327,7 @@ impl WalletCommands {
                 let effects = response.effects;
 
                 let time_total = time_start.elapsed().as_micros();
-
-                if matches!(effects.status, ExecutionStatus::Failure { .. }) {
+                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!("Error transferring object: {:#?}", effects.status));
                 }
                 WalletCommandResult::Transfer(time_total, cert, effects)
@@ -729,7 +727,7 @@ async fn call_move(
     let cert = response.certificate;
     let effects = response.effects;
 
-    if matches!(effects.status, ExecutionStatus::Failure { .. }) {
+    if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
         return Err(anyhow!("Error calling module: {:#?}", effects.status));
     }
     Ok((cert, effects))
@@ -812,4 +810,24 @@ pub enum WalletCommandResult {
     Switch(SwitchResponse),
     ActiveAddress(Option<SuiAddress>),
     CreateExampleNFT(SuiObjectRead),
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct SwitchResponse {
+    /// Active address
+    pub address: Option<SuiAddress>,
+    pub gateway: Option<String>,
+}
+
+impl Display for SwitchResponse {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+        if let Some(addr) = self.address {
+            writeln!(writer, "Active address switched to {}", addr)?;
+        }
+        if let Some(gateway) = &self.gateway {
+            writeln!(writer, "Active gateway switched to {}", gateway)?;
+        }
+        write!(f, "{}", writer)
+    }
 }

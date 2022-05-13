@@ -7,7 +7,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::serde_as;
-use sui_core::gateway_state::gateway_responses::{SuiData, SuiObjectRef};
+use sui_core::gateway_types::{SuiData, SuiObjectRef};
 
 use sui_types::base_types::TransactionDigest;
 use sui_types::object::Owner;

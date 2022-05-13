@@ -19,10 +19,7 @@ use serde_with::Bytes;
 use crate::coin::Coin;
 use crate::crypto::{sha3_hash, BcsSignable};
 use crate::error::{SuiError, SuiResult};
-use crate::json_schema;
 use crate::move_package::MovePackage;
-use crate::readable_serde::encoding::Base64;
-use crate::readable_serde::Readable;
 use crate::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -34,12 +31,10 @@ pub const GAS_VALUE_FOR_TESTING: u64 = 100000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 
 #[serde_as]
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema)]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MoveObject {
-    #[schemars(with = "json_schema::StructTag")]
     pub type_: StructTag,
-    #[schemars(with = "json_schema::Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
+    #[serde_as(as = "Bytes")]
     contents: Vec<u8>,
 }
 
@@ -183,7 +178,7 @@ impl MoveObject {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema)]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 #[allow(clippy::large_enum_variant)]
 pub enum Data {
     /// An object whose governing logic lives in a published Move module
@@ -302,7 +297,7 @@ impl Display for Owner {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema)]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct Object {
     /// The meat of the object
     pub data: Data,
@@ -531,29 +526,15 @@ impl Object {
 }
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Serialize, Deserialize, JsonSchema, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "status", content = "details")]
 pub enum ObjectRead {
     NotExists(ObjectID),
-    Exists(
-        ObjectRef,
-        Object,
-        #[schemars(with = "Option<json_schema::MoveStructLayout>")] Option<MoveStructLayout>,
-    ),
+    Exists(ObjectRef, Object, Option<MoveStructLayout>),
     Deleted(ObjectRef),
 }
 
 impl ObjectRead {
-    /// Returns a reference to the object if there is any, otherwise an Err if
-    /// the object does not exist or is deleted.
-    pub fn object(&self) -> Result<&Object, SuiError> {
-        match &self {
-            Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: *oref }),
-            Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
-            Self::Exists(_, o, _) => Ok(o),
-        }
-    }
-
     /// Returns the object value if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
     pub fn into_object(self) -> Result<Object, SuiError> {
@@ -562,44 +543,6 @@ impl ObjectRead {
             Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: id }),
             Self::Exists(_, o, _) => Ok(o),
         }
-    }
-
-    /// Returns the layout of the object if it was requested in the read, None if it was not requested or does not have a layout
-    /// Returns an Err if the object does not exist or is deleted.
-    pub fn layout(&self) -> Result<&Option<MoveStructLayout>, SuiError> {
-        match &self {
-            Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: *oref }),
-            Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
-            Self::Exists(_, _, layout) => Ok(layout),
-        }
-    }
-
-    /// Returns the object ref if there is an object, otherwise an Err if
-    /// the object does not exist or is deleted.
-    pub fn reference(&self) -> Result<ObjectRef, SuiError> {
-        match &self {
-            Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: *oref }),
-            Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
-            Self::Exists(oref, _, _) => Ok(*oref),
-        }
-    }
-}
-
-impl Display for Object {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let type_string = self
-            .data
-            .type_()
-            .map_or("Move Package".to_owned(), |type_| format!("{type_}"));
-
-        write!(
-            f,
-            "ID: {:?}\nVersion: {:?}\nOwner: {}\nType: {}",
-            self.id(),
-            self.version().value(),
-            self.owner,
-            type_string
-        )
     }
 }
 

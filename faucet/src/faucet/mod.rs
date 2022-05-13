@@ -3,7 +3,7 @@
 use crate::FaucetError;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use sui_core::gateway_state::gateway_responses::SuiObject;
+use sui_core::gateway_types::SuiObject;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,

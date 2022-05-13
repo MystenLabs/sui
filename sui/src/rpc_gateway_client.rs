@@ -7,14 +7,14 @@ use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use move_core_types::language_storage::TypeTag;
 use tokio::runtime::Handle;
 
-use sui_core::gateway_state::gateway_responses::{
+use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
+use sui_core::gateway_types::{
     SuiObjectRead, SuiObjectRef, TransactionEffectsResponse, TransactionResponse,
 };
-use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
 use sui_core::sui_json::SuiJsonValue;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
-use sui_types::json_schema::Base64;
 use sui_types::messages::{Transaction, TransactionData};
+use sui_types::sui_serde::Base64;
 
 use crate::api::{RpcGatewayClient as RpcGateway, SignedTransaction, TransactionBytes};
 use crate::rpc_gateway::responses::ObjectResponse;
@@ -35,9 +35,9 @@ impl GatewayAPI for RpcGatewayClient {
     async fn execute_transaction(&self, tx: Transaction) -> Result<TransactionResponse, Error> {
         let signature = tx.tx_signature;
         let signed_tx = SignedTransaction {
-            tx_bytes: tx.data.to_bytes(),
-            signature: signature.signature_bytes().to_vec(),
-            pub_key: signature.public_key_bytes().to_vec(),
+            tx_bytes: Base64::from_bytes(&tx.data.to_bytes()),
+            signature: Base64::from_bytes(signature.signature_bytes()),
+            pub_key: Base64::from_bytes(signature.public_key_bytes()),
         };
 
         Ok(self.client.execute_transaction(signed_tx).await?)
@@ -100,7 +100,10 @@ impl GatewayAPI for RpcGatewayClient {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, Error> {
-        let package_bytes = package_bytes.into_iter().map(Base64).collect();
+        let package_bytes = package_bytes
+            .iter()
+            .map(|bytes| Base64::from_bytes(bytes))
+            .collect();
         let bytes: TransactionBytes = self
             .client
             .publish(signer, package_bytes, gas, gas_budget)

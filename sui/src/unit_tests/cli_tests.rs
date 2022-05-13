@@ -9,6 +9,7 @@ use anyhow::anyhow;
 use serde_json::{json, Value};
 use tracing_test::traced_test;
 
+use sui::wallet_commands::SwitchResponse;
 use sui::{
     config::{
         Config, GatewayConfig, GatewayType, PersistedConfig, WalletConfig, SUI_GATEWAY_CONFIG,
@@ -19,9 +20,7 @@ use sui::{
     wallet_commands::{WalletCommandResult, WalletCommands, WalletContext},
 };
 use sui_config::{AccountConfig, GenesisConfig, NetworkConfig, ObjectConfig};
-use sui_core::gateway_state::gateway_responses::{
-    SuiObject, SuiObjectRead, SuiTransactionEffects, SwitchResponse,
-};
+use sui_core::gateway_types::{SuiObject, SuiObjectRead, SuiTransactionEffects};
 use sui_core::sui_json::SuiJsonValue;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -816,10 +815,10 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     // Print it out to CLI/logs
     resp.print(true);
 
-    let (package, created_obj) = if let WalletCommandResult::Publish(resppnse) = resp {
+    let (package, created_obj) = if let WalletCommandResult::Publish(response) = resp {
         (
-            resppnse.package,
-            resppnse.created_objects[0].compute_object_reference(),
+            response.package,
+            response.created_objects[0].reference.clone(),
         )
     } else {
         unreachable!("Invalid response");
@@ -827,26 +826,30 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
 
     // One is the actual module, while the other is the object created at init
     retry_assert!(
-        logs_contain(&format!("{}", package.0)),
+        logs_contain(&format!("{}", package.object_id)),
         Duration::from_millis(5000)
     );
     retry_assert!(
-        logs_contain(&format!("{}", created_obj.0)),
+        logs_contain(&format!("{}", created_obj.object_id)),
         Duration::from_millis(5000)
     );
 
     // Check the objects
-    let resp = WalletCommands::Object { id: package.0 }
-        .execute(&mut context)
-        .await?;
+    let resp = WalletCommands::Object {
+        id: package.object_id,
+    }
+    .execute(&mut context)
+    .await?;
     assert!(matches!(
         resp,
         WalletCommandResult::Object(SuiObjectRead::Exists(..))
     ));
 
-    let resp = WalletCommands::Object { id: created_obj.0 }
-        .execute(&mut context)
-        .await?;
+    let resp = WalletCommands::Object {
+        id: created_obj.object_id,
+    }
+    .execute(&mut context)
+    .await?;
     assert!(matches!(
         resp,
         WalletCommandResult::Object(SuiObjectRead::Exists(..))
