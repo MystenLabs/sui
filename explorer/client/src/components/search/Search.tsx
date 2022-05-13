@@ -12,9 +12,9 @@ type SearchCategory = 'all' | 'transactions' | 'addresses' | 'objects';
 function getPlaceholderText(category: SearchCategory) {
     switch (category) {
         case 'addresses':
-            return `Search by address`;
+            return 'Search by address';
         case 'transactions':
-            return `Search by digest`;
+            return 'Search by digest';
         case 'objects':
         case 'all':
             return 'Search by ID';
