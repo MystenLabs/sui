@@ -10,6 +10,7 @@ import styles from './Search.module.css';
 
 function Search() {
     const [input, setInput] = useState('');
+    const [category, setCategory] = useState('all');
     const navigate = useNavigate();
 
     const [pleaseWaitMode, setPleaseWaitMode] = useState(false);
@@ -20,19 +21,31 @@ function Search() {
             // Prevent empty search
             if (!input.length) return;
             setPleaseWaitMode(true);
-            // remove empty char from input
-            navigateWithUnknown(input.trim(), navigate).then(() => {
+
+            if (category === 'all') {
+                // remove empty char from input
+                navigateWithUnknown(input.trim(), navigate).then(() => {
+                    setInput('');
+                    setPleaseWaitMode(false);
+                });
+            } else {
+                navigate(`../${category}/${input.trim()}`);
                 setInput('');
                 setPleaseWaitMode(false);
-            });
+            }
         },
-        [input, navigate, setInput]
+        [input, navigate, category, setInput]
     );
 
     const handleTextChange = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) =>
             setInput(e.currentTarget.value),
         [setInput]
+    );
+    const handleCategoryChange = useCallback(
+        (e: React.ChangeEvent<HTMLSelectElement>) =>
+            setCategory(e.currentTarget.value),
+        [setCategory]
     );
 
     return (
@@ -49,6 +62,12 @@ function Search() {
                 onChange={handleTextChange}
                 type="text"
             />
+            <select onChange={handleCategoryChange}>
+                <option value="all">All</option>
+                <option value="transactions">Transactions</option>
+                <option value="objects">Objects</option>
+                <option value="addresses">Addresses</option>
+            </select>
             <input
                 type="submit"
                 id="searchBtn"
