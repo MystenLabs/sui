@@ -31,8 +31,9 @@ tower = "0.4.12"
 crypto = { path = "../crypto" }
 network = { path = "../network" }
 types = { path = "../types" }
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "3b7daedf91fd8937dde26e905b8114cac459b866" }
-mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "3b7daedf91fd8937dde26e905b8114cac459b866" }
+
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
+mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
 
 [dev-dependencies]
 itertools = "0.10.3"
