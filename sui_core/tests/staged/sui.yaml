@@ -582,7 +582,7 @@ SuiError:
     99:
       ListenerCapacityExceeded: UNIT
     100:
-    ConsensusNarwhalSerializationError:
+      ConsensusNarwhalSerializationError:
         NEWTYPE: STR
     101:
       SignatureSeedInvalidLength:
