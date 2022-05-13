@@ -261,11 +261,13 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
-    fn acquire_locks(&self, _input_objects: &[ObjectRef]) -> Vec<parking_lot::MutexGuard<'_, ()>> {
+    fn acquire_locks<'a>(
+        &self,
+        input_objects: impl Iterator<Item = &'a ObjectRef>,
+    ) -> Vec<parking_lot::MutexGuard<'_, ()>> {
         let num_locks = self.lock_table.len();
         // TODO: randomize the lock mapping based on a secret to avoid DoS attacks.
-        let lock_number: BTreeSet<usize> = _input_objects
-            .iter()
+        let lock_number: BTreeSet<usize> = input_objects
             .map(|(_, _, digest)| {
                 usize::from_le_bytes(digest.0[0..8].try_into().unwrap()) % num_locks
             })
@@ -494,7 +496,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         {
             // Acquire the lock to ensure no one else writes when we are in here.
             // MutexGuards are unlocked on drop (ie end of this block)
-            let _mutexes = self.acquire_locks(owned_input_objects);
+            let _mutexes = self.acquire_locks(owned_input_objects.iter());
 
             let locks = self.transaction_lock.multi_get(owned_input_objects)?;
 
@@ -639,8 +641,12 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     ) -> Result<(), SuiError> {
         let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
 
+        let owned_inputs = active_inputs
+            .iter()
+            .filter(|(id, _, _)| objects.get(id).unwrap().is_owned());
+
         // Archive the old lock.
-        write_batch = write_batch.delete_batch(&self.transaction_lock, active_inputs.iter())?;
+        write_batch = write_batch.delete_batch(&self.transaction_lock, owned_inputs.clone())?;
 
         // Delete objects.
         // Wrapped objects need to be deleted as well because we can no longer track their
@@ -699,11 +705,11 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             }),
         )?;
 
-        // Create locks for new objects, if they are not immutable
+        // Create locks for new objects, if they are owned.
         write_batch = write_batch.insert_batch(
             &self.transaction_lock,
             written.iter().filter_map(|(_, (object_ref, new_object))| {
-                if !new_object.is_immutable() {
+                if new_object.is_owned() {
                     Some((object_ref, None))
                 } else {
                     None
@@ -747,11 +753,11 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         // new locks must be atomic, and no writes should happen in between.
         {
             // Acquire the lock to ensure no one else writes when we are in here.
-            let _mutexes = self.acquire_locks(&active_inputs[..]);
+            let _mutexes = self.acquire_locks(owned_inputs.clone());
 
             // Check the locks are still active
             // TODO: maybe we could just check if the certificate is there instead?
-            let locks = self.transaction_lock.multi_get(&active_inputs[..])?;
+            let locks = self.transaction_lock.multi_get(owned_inputs)?;
             for object_lock in locks {
                 object_lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
             }
