@@ -14,7 +14,7 @@ function getPlaceholderText(category: SearchCategory) {
         case 'addresses':
             return 'Search by address';
         case 'transactions':
-            return 'Search by digest';
+            return 'Search by tx ID';
         case 'objects':
         case 'all':
             return 'Search by ID';
