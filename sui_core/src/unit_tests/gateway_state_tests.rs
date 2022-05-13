@@ -232,7 +232,7 @@ async fn test_coin_split_insufficient_gas() {
             coin_object.id(),
             split_amounts.clone(),
             Some(gas_object.id()),
-            20, /* Insufficient gas */
+            9, /* Insufficient gas */
         )
         .await
         .unwrap();
