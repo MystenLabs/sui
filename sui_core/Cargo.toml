@@ -46,7 +46,7 @@ move-package = { git = "https://github.com/move-language/move", rev = "3d8093656
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
 
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "3b7daedf91fd8937dde26e905b8114cac459b866"}
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe"}
 
 narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "a188b870eb1a4b601a58e5744290b7d56ccd4039", package = "executor" }
 narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "a188b870eb1a4b601a58e5744290b7d56ccd4039", package = "types" }
