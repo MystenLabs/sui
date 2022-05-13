@@ -85,23 +85,6 @@ enum DagCommand<PublicKey: VerifyingKey> {
 }
 
 impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
-    pub fn spawn(rx_primary: Receiver<Certificate<PublicKey>>) -> (JoinHandle<()>, Dag<PublicKey>) {
-        let (tx_commands, rx_commands) = tokio::sync::mpsc::channel(DEFAULT_CHANNEL_SIZE);
-
-        let handle = tokio::spawn(async move {
-            Self {
-                rx_primary,
-                rx_commands,
-                dag: NodeDag::new(),
-                vertices: RwLock::new(BTreeMap::new()),
-            }
-            .run()
-            .await
-        });
-        let dag = Dag { tx_commands };
-        (handle, dag)
-    }
-
     async fn run(&mut self) {
         loop {
             tokio::select! {
@@ -293,7 +276,7 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
 
     /// Returns the oldest and newest rounds for which a validator has (live) certificates in the DAG
     pub async fn rounds(
-        &mut self,
+        &self,
         origin: PublicKey,
     ) -> Result<std::ops::RangeInclusive<Round>, ValidatorDagError<PublicKey>> {
         let (sender, receiver) = oneshot::channel();

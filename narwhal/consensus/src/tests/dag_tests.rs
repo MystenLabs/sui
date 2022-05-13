@@ -10,7 +10,7 @@ use types::Certificate;
 
 use crate::tusk::consensus_tests::{make_optimal_certificates, mock_committee};
 
-use super::{Dag, InnerDag, ValidatorDagError};
+use super::{Dag, ValidatorDagError};
 
 #[tokio::test]
 async fn inner_dag_insert_one() {
@@ -28,7 +28,7 @@ async fn inner_dag_insert_one() {
 
     // set up a Dag
     let (tx_cert, rx_cert) = channel(1);
-    InnerDag::spawn(rx_cert);
+    Dag::new(rx_cert);
 
     // Feed the certificates to the Dag
     while let Some(certificate) = genesis_certs.pop() {
@@ -55,7 +55,7 @@ async fn dag_mutation_failures() {
 
     // set up a Dag
     let (_tx_cert, rx_cert) = channel(1);
-    let (_handle, mut dag) = Dag::new(rx_cert);
+    let (_handle, dag) = Dag::new(rx_cert);
     let mut certs_to_insert = certificates.clone();
     let mut certs_to_insert_in_reverse = certs_to_insert.clone();
     let mut certs_to_remove_before_insert = certs_to_insert.clone();
@@ -126,7 +126,7 @@ async fn dag_insert_one_and_rounds_node_read() {
 
     // set up a Dag
     let (_tx_cert, rx_cert) = channel(1);
-    let (_handle, mut dag) = Dag::new(rx_cert);
+    let (_handle, dag) = Dag::new(rx_cert);
     let mut certs_to_insert = certificates.clone();
 
     // Feed the certificates to the Dag
