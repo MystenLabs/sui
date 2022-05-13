@@ -10,8 +10,6 @@
 
 mod aggregators;
 mod block_remover;
-// TODO [#175][#127]: re-plug the blocksynchronzier
-#[allow(dead_code)]
 pub mod block_synchronizer;
 mod block_waiter;
 mod certificate_waiter;
