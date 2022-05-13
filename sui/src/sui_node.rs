@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use crate::{
-    api::{RpcGatewayServer, SignedTransaction, TransactionBytes},
+    api::{RpcGatewayServer, TransactionBytes},
     rpc_gateway::responses::{ObjectResponse, SuiTypeTag},
 };
 use anyhow::anyhow;
@@ -81,7 +81,9 @@ impl RpcGatewayServer for SuiNode {
 
     async fn execute_transaction(
         &self,
-        _signed_tx: SignedTransaction,
+        _tx_bytes: Base64,
+        _signature: Base64,
+        _pub_key: Base64,
     ) -> RpcResult<TransactionResponse> {
         Err(anyhow!("Sui Node only supports read-only methods").into())
     }

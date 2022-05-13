@@ -16,7 +16,7 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::sui_serde::Base64;
 
-use crate::api::{RpcGatewayClient as RpcGateway, SignedTransaction, TransactionBytes};
+use crate::api::{RpcGatewayClient as RpcGateway, TransactionBytes};
 use crate::rpc_gateway::responses::ObjectResponse;
 
 pub struct RpcGatewayClient {
@@ -34,13 +34,14 @@ impl RpcGatewayClient {
 impl GatewayAPI for RpcGatewayClient {
     async fn execute_transaction(&self, tx: Transaction) -> Result<TransactionResponse, Error> {
         let signature = tx.tx_signature;
-        let signed_tx = SignedTransaction {
-            tx_bytes: Base64::from_bytes(&tx.data.to_bytes()),
-            signature: Base64::from_bytes(signature.signature_bytes()),
-            pub_key: Base64::from_bytes(signature.public_key_bytes()),
-        };
+        let tx_bytes = Base64::from_bytes(&tx.data.to_bytes());
+        let signature_bytes = Base64::from_bytes(signature.signature_bytes());
+        let pub_key = Base64::from_bytes(signature.public_key_bytes());
 
-        Ok(self.client.execute_transaction(signed_tx).await?)
+        Ok(self
+            .client
+            .execute_transaction(tx_bytes, signature_bytes, pub_key)
+            .await?)
     }
 
     async fn transfer_coin(

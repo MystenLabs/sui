@@ -23,7 +23,7 @@ use sui_types::{
 
 use crate::rpc_gateway::responses::SuiTypeTag;
 use crate::{
-    api::{RpcGatewayServer, SignedTransaction, TransactionBytes},
+    api::{RpcGatewayServer, TransactionBytes},
     config::{GatewayConfig, PersistedConfig},
     rpc_gateway::responses::ObjectResponse,
 };
@@ -132,17 +132,14 @@ impl RpcGatewayServer for RpcGatewayImpl {
 
     async fn execute_transaction(
         &self,
-        signed_tx: SignedTransaction,
+        tx_bytes: Base64,
+        signature: Base64,
+        pub_key: Base64,
     ) -> RpcResult<TransactionResponse> {
-        let data = TransactionData::from_signable_bytes(&signed_tx.tx_bytes.to_vec()?)?;
-        let signature = crypto::Signature::from_bytes(
-            &[
-                &*signed_tx.signature.to_vec()?,
-                &*signed_tx.pub_key.to_vec()?,
-            ]
-            .concat(),
-        )
-        .map_err(|e| anyhow!(e))?;
+        let data = TransactionData::from_signable_bytes(&tx_bytes.to_vec()?)?;
+        let signature =
+            crypto::Signature::from_bytes(&[&*signature.to_vec()?, &*pub_key.to_vec()?].concat())
+                .map_err(|e| anyhow!(e))?;
         let result = self
             .gateway
             .execute_transaction(Transaction::new(data, signature))
