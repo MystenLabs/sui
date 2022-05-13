@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       id: cache-id
       with:
         path: ${{ runner.temp }}/benchmark-cache-directory
