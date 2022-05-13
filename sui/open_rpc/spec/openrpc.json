@@ -548,13 +548,13 @@
       "CertifiedTransaction": {
         "type": "object",
         "required": [
-          "auth_sign_info",
+          "authSignInfo",
           "data",
-          "transaction_digest",
-          "tx_signature"
+          "transactionDigest",
+          "txSignature"
         ],
         "properties": {
-          "auth_sign_info": {
+          "authSignInfo": {
             "description": "authority signature information, if available, is signed by an authority, applied on `data`.",
             "allOf": [
               {
@@ -565,10 +565,10 @@
           "data": {
             "$ref": "#/components/schemas/TransactionData"
           },
-          "transaction_digest": {
+          "transactionDigest": {
             "$ref": "#/components/schemas/TransactionDigest"
           },
-          "tx_signature": {
+          "txSignature": {
             "description": "tx_signature is signed by the transaction sender, applied on `data`.",
             "allOf": [
               {
@@ -665,46 +665,42 @@
           {
             "type": "object",
             "required": [
-              "Success"
+              "gas_cost",
+              "status"
             ],
             "properties": {
-              "Success": {
-                "type": "object",
-                "required": [
-                  "gas_cost"
-                ],
-                "properties": {
-                  "gas_cost": {
-                    "$ref": "#/components/schemas/GasCostSummary"
-                  }
-                }
+              "gas_cost": {
+                "$ref": "#/components/schemas/GasCostSummary"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "success"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "type": "object",
             "required": [
-              "Failure"
+              "error",
+              "gas_cost",
+              "status"
             ],
             "properties": {
-              "Failure": {
-                "type": "object",
-                "required": [
-                  "error",
-                  "gas_cost"
-                ],
-                "properties": {
-                  "error": {
-                    "type": "string"
-                  },
-                  "gas_cost": {
-                    "$ref": "#/components/schemas/GasCostSummary"
-                  }
-                }
+              "error": {
+                "type": "string"
+              },
+              "gas_cost": {
+                "$ref": "#/components/schemas/GasCostSummary"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "failure"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           }
         ]
       },
@@ -833,7 +829,7 @@
           "package": {
             "$ref": "#/components/schemas/ObjectRef"
           },
-          "type_arguments": {
+          "typeArguments": {
             "type": "array",
             "items": {
               "type": "string"
@@ -1288,18 +1284,18 @@
       "TransactionData": {
         "type": "object",
         "required": [
-          "gas_budget",
-          "gas_payment",
+          "gasBudget",
+          "gasPayment",
           "sender",
           "transactions"
         ],
         "properties": {
-          "gas_budget": {
+          "gasBudget": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "gas_payment": {
+          "gasPayment": {
             "$ref": "#/components/schemas/ObjectRef"
           },
           "sender": {
@@ -1325,9 +1321,9 @@
         "description": "The response from processing a transaction or a certified transaction",
         "type": "object",
         "required": [
-          "gas_object",
+          "gasObject",
           "status",
-          "transaction_digest"
+          "transactionDigest"
         ],
         "properties": {
           "created": {
@@ -1356,7 +1352,7 @@
               "$ref": "#/components/schemas/Event"
             }
           },
-          "gas_object": {
+          "gasObject": {
             "$ref": "#/components/schemas/ObjectRef"
           },
           "mutated": {
@@ -1365,7 +1361,7 @@
               "$ref": "#/components/schemas/ObjectRef"
             }
           },
-          "shared_objects": {
+          "sharedObjects": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ObjectRef"
@@ -1374,7 +1370,7 @@
           "status": {
             "$ref": "#/components/schemas/ExecutionStatus"
           },
-          "transaction_digest": {
+          "transactionDigest": {
             "$ref": "#/components/schemas/TransactionDigest"
           },
           "unwrapped": {
@@ -1504,11 +1500,11 @@
       "TransferCoin": {
         "type": "object",
         "required": [
-          "object_ref",
+          "objectRef",
           "recipient"
         ],
         "properties": {
-          "object_ref": {
+          "objectRef": {
             "$ref": "#/components/schemas/ObjectRef"
           },
           "recipient": {
