@@ -1,7 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use config::{Parameters, WorkerId};
+use config::Parameters;
+use config::WorkerId;
+use consensus::dag::Dag;
 use crypto::{
     ed25519::{Ed25519KeyPair, Ed25519PublicKey},
     traits::{KeyPair, Signer},
@@ -9,6 +11,7 @@ use crypto::{
 };
 use node::NodeStorage;
 use primary::{PayloadToken, Primary, CHANNEL_CAPACITY};
+use std::sync::Arc;
 use std::time::Duration;
 use store::Store;
 use test_utils::{
@@ -89,7 +92,7 @@ async fn test_get_collections() {
         }
     }
 
-    let (tx_new_certificates, _rx_new_certificates) = channel(CHANNEL_CAPACITY);
+    let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
     let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
 
     Primary::spawn(
@@ -102,7 +105,7 @@ async fn test_get_collections() {
         store.payload_store.clone(),
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
-        /* internal_consensus */ false,
+        /* dag */ Some(Arc::new(Dag::new(rx_new_certificates).1)),
     );
 
     // Spawn a `Worker` instance.
@@ -247,7 +250,7 @@ async fn test_remove_collections() {
         }
     }
 
-    let (tx_new_certificates, _rx_new_certificates) = channel(CHANNEL_CAPACITY);
+    let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
     let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
 
     Primary::spawn(
@@ -260,7 +263,7 @@ async fn test_remove_collections() {
         store.payload_store.clone(),
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
-        /* internal_consensus */ false,
+        /* dag */ Some(Arc::new(Dag::new(rx_new_certificates).1)),
     );
 
     // Wait for tasks to start
@@ -428,7 +431,7 @@ async fn test_get_collections_with_missing_certificates() {
     let block_ids = vec![certificate_1.digest(), certificate_2.digest()];
 
     // Spawn the primary 1 (which will be the one that we'll interact with)
-    let (tx_new_certificates_1, _rx_new_certificates_1) = channel(CHANNEL_CAPACITY);
+    let (tx_new_certificates_1, rx_new_certificates_1) = channel(CHANNEL_CAPACITY);
     let (_tx_feedback_1, rx_feedback_1) = channel(CHANNEL_CAPACITY);
 
     Primary::spawn(
@@ -441,7 +444,7 @@ async fn test_get_collections_with_missing_certificates() {
         store_primary_1.payload_store,
         /* tx_consensus */ tx_new_certificates_1,
         /* rx_consensus */ rx_feedback_1,
-        /* external_consensus */ false,
+        /* external_consensus */ Some(Arc::new(Dag::new(rx_new_certificates_1).1)),
     );
 
     // Spawn a `Worker` instance for primary 1.
@@ -454,7 +457,7 @@ async fn test_get_collections_with_missing_certificates() {
     );
 
     // Spawn the primary 2 - a peer to fetch missing certificates from
-    let (tx_new_certificates_2, _rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
+    let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
     let (_tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
 
     Primary::spawn(
@@ -467,7 +470,7 @@ async fn test_get_collections_with_missing_certificates() {
         store_primary_2.payload_store,
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
-        /* external_consensus */ true,
+        /* external_consensus */ Some(Arc::new(Dag::new(rx_new_certificates_2).1)),
     );
 
     // Spawn a `Worker` instance for primary 2.

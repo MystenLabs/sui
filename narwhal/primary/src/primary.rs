@@ -18,6 +18,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use config::{Committee, Parameters, WorkerId};
+use consensus::dag::Dag;
 use crypto::{
     traits::{EncodeDecodeBase64, Signer, VerifyingKey},
     SignatureService,
@@ -89,7 +90,7 @@ impl Primary {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         tx_consensus: Sender<Certificate<PublicKey>>,
         rx_consensus: Receiver<Certificate<PublicKey>>,
-        internal_consensus: bool,
+        dag: Option<Arc<Dag<PublicKey>>>,
     ) {
         let (tx_others_digests, rx_others_digests) = channel(CHANNEL_CAPACITY);
         let (tx_our_digests, rx_our_digests) = channel(CHANNEL_CAPACITY);
@@ -292,7 +293,7 @@ impl Primary {
             rx_helper_requests,
         );
 
-        if !internal_consensus {
+        if dag.is_some() {
             // Spawn a grpc server to accept requests from external consensus layer.
             ConsensusAPIGrpc::spawn(
                 parameters.consensus_api_grpc.socket_addr,

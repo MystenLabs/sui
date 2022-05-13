@@ -28,6 +28,7 @@ rand = { version = "0.7.3", features = ["small_rng"] }
 multiaddr = "0.14.0"
 tower = "0.4.12"
 
+consensus = { path = "../consensus" }
 crypto = { path = "../crypto" }
 network = { path = "../network" }
 types = { path = "../types" }

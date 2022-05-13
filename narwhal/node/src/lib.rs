@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{Committee, Parameters, WorkerId};
-use consensus::{dag::InnerDag, Consensus, ConsensusStore, SequenceNumber, SubscriberHandler};
+use consensus::{dag::Dag, Consensus, ConsensusStore, SequenceNumber, SubscriberHandler};
 use crypto::traits::{KeyPair, Signer, VerifyingKey};
 use executor::{ExecutionState, Executor, SerializedTransaction, SubscriberResult};
 use primary::{PayloadToken, Primary};
@@ -114,6 +114,25 @@ impl Node {
         // Compute the public key of this authority.
         let name = keypair.public().clone();
 
+        let dag = if !internal_consensus {
+            debug!("Consensus is disabled: the primary will run w/o Tusk");
+            let (_handle, dag) = Dag::new(rx_new_certificates);
+            Some(Arc::new(dag))
+        } else {
+            Self::spawn_consensus(
+                name.clone(),
+                committee.clone(),
+                store,
+                parameters.clone(),
+                execution_state,
+                rx_new_certificates,
+                tx_feedback,
+                tx_confirmation,
+            )
+            .await?;
+            None
+        };
+
         // Spawn the primary.
         Primary::spawn(
             name.clone(),
@@ -125,30 +144,9 @@ impl Node {
             store.payload_store.clone(),
             /* tx_consensus */ tx_new_certificates,
             /* rx_consensus */ rx_feedback,
-            internal_consensus,
+            /* dag */ dag,
         );
 
-        // Check whether to run internal consensus.
-        match internal_consensus {
-            true => {
-                Self::spawn_consensus(
-                    name,
-                    committee,
-                    store,
-                    parameters,
-                    execution_state,
-                    rx_new_certificates,
-                    tx_feedback,
-                    tx_confirmation,
-                )
-                .await?
-            }
-            false => {
-                debug!("Consensus is disabled: the primary will run on its own");
-                // TODO: this should instantiate a Dag::new and store the reference to it.
-                InnerDag::spawn(rx_new_certificates);
-            }
-        }
         Ok(())
     }
 
