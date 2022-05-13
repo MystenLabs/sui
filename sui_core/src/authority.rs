@@ -535,8 +535,8 @@ impl AuthorityState {
             ObjectInfoRequestKind::LatestObjectInfo(request_layout) => {
                 match self.get_object(&request.object_id).await {
                     Ok(Some(object)) => {
-                        let lock = if object.is_immutable() {
-                            // Read only objects have no locks.
+                        let lock = if !object.is_owned() {
+                            // Unowned obejcts have no locks.
                             None
                         } else {
                             self.get_transaction_lock(&object.compute_object_reference())
