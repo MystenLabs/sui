@@ -65,6 +65,21 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     Ok(effects)
 }
 
+fn charge_gas_for_object_read<S>(
+    temporary_store: &AuthorityTemporaryStore<S>,
+    gas_status: &mut SuiGasStatus,
+) -> SuiResult {
+    // Charge gas for reading all objects from the DB.
+    // TODO: Some of the objects may be duplicate (for batch tx). We could save gas by
+    // fetching only unique objects.
+    let total_size = temporary_store
+        .objects()
+        .values()
+        .map(|obj| obj.object_size_for_gas_metering())
+        .sum();
+    gas_status.charge_storage_read(total_size)
+}
+
 #[instrument(name = "tx_execute", level = "debug", skip_all)]
 fn execute_transaction<S: BackingPackageStore>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
@@ -81,58 +96,63 @@ fn execute_transaction<S: BackingPackageStore>(
         .expect("We constructed the object map so it should always have the gas object id")
         .clone();
 
-    let mut result = Ok(());
-    // TODO: Since we require all mutable objects to not show up more than
-    // once across single tx, we should be able to run them in parallel.
-    for single_tx in transaction_data.kind.into_single_transactions() {
-        result = match single_tx {
-            SingleTransactionKind::TransferCoin(TransferCoin {
-                recipient,
-                object_ref,
-            }) => {
-                // unwrap is is safe because we built the object map from the transactions
-                let object = temporary_store
-                    .objects()
-                    .get(&object_ref.0)
-                    .unwrap()
-                    .clone();
-                transfer(temporary_store, object, recipient)
-            }
-            SingleTransactionKind::Call(MoveCall {
-                package,
-                module,
-                function,
-                type_arguments,
-                arguments,
-            }) => {
-                let module_id = ModuleId::new(package.0.into(), module);
-                adapter::execute(
-                    move_vm,
-                    temporary_store,
-                    module_id,
-                    &function,
+    // We must charge object read gas inside here during transaction execution, because if this fails
+    // we must still ensure an effect is committed and all objects versions incremented.
+    let mut result = charge_gas_for_object_read(temporary_store, &mut gas_status);
+    if result.is_ok() {
+        // TODO: Since we require all mutable objects to not show up more than
+        // once across single tx, we should be able to run them in parallel.
+        for single_tx in transaction_data.kind.into_single_transactions() {
+            result = match single_tx {
+                SingleTransactionKind::TransferCoin(TransferCoin {
+                    recipient,
+                    object_ref,
+                }) => {
+                    // unwrap is is safe because we built the object map from the transactions
+                    let object = temporary_store
+                        .objects()
+                        .get(&object_ref.0)
+                        .unwrap()
+                        .clone();
+                    transfer(temporary_store, object, recipient)
+                }
+                SingleTransactionKind::Call(MoveCall {
+                    package,
+                    module,
+                    function,
                     type_arguments,
                     arguments,
-                    &mut gas_status,
+                }) => {
+                    let module_id = ModuleId::new(package.0.into(), module);
+                    adapter::execute(
+                        move_vm,
+                        temporary_store,
+                        module_id,
+                        &function,
+                        type_arguments,
+                        arguments,
+                        &mut gas_status,
+                        tx_ctx,
+                    )
+                }
+                SingleTransactionKind::Publish(MoveModulePublish { modules }) => adapter::publish(
+                    temporary_store,
+                    native_functions.clone(),
+                    modules,
                     tx_ctx,
-                )
+                    &mut gas_status,
+                ),
+            };
+            if result.is_err() {
+                break;
             }
-            SingleTransactionKind::Publish(MoveModulePublish { modules }) => adapter::publish(
-                temporary_store,
-                native_functions.clone(),
-                modules,
-                tx_ctx,
-                &mut gas_status,
-            ),
-        };
+        }
         if result.is_err() {
-            break;
+            // Roll back the temporary store if execution failed.
+            temporary_store.reset();
         }
     }
-    if result.is_err() {
-        // Roll back the temporary store if execution failed.
-        temporary_store.reset();
-    }
+
     // Make sure every mutable object's version number is incremented.
     // This needs to happen before `charge_gas_for_storage_changes` so that it
     // can charge gas for all mutated objects properly.

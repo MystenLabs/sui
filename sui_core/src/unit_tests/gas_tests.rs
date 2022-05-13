@@ -122,10 +122,11 @@ async fn test_native_transfer_insufficient_gas_reading_objects() {
     // the minimum budget requirement, but not enough to even read the objects from db.
     // This will lead to failure in lock check step during handle transaction phase.
     let balance = *MIN_GAS_BUDGET + 1;
-    let result = execute_transfer(balance, balance, false).await;
-    let err = result.response.unwrap_err();
+    let result = execute_transfer(balance, balance, true).await;
+    // The transaction should still execute to effects, but with execution status as failure.
+    let effects = result.response.unwrap().signed_effects.unwrap().effects;
     assert_eq!(
-        err,
+        effects.status.unwrap_err().1,
         SuiError::InsufficientGas {
             error: "Ran out of gas while deducting computation cost".to_owned()
         }
