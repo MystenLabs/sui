@@ -8,8 +8,22 @@ import { navigateWithUnknown } from '../../utils/searchUtil';
 
 import styles from './Search.module.css';
 
+type SearchCategory = 'all' | 'transactions' | 'addresses' | 'objects';
+function getPlaceholderText(category: SearchCategory) {
+    switch (category) {
+        case 'addresses':
+            return 'Search by address';
+        case 'transactions':
+            return 'Search by digest';
+        case 'objects':
+        case 'all':
+            return 'Search by ID';
+    }
+}
+
 function Search() {
     const [input, setInput] = useState('');
+    const [category, setCategory] = useState('all' as SearchCategory);
     const navigate = useNavigate();
 
     const [pleaseWaitMode, setPleaseWaitMode] = useState(false);
@@ -20,19 +34,32 @@ function Search() {
             // Prevent empty search
             if (!input.length) return;
             setPleaseWaitMode(true);
-            // remove empty char from input
-            navigateWithUnknown(input.trim(), navigate).then(() => {
+
+            if (category === 'all') {
+                // remove empty char from input
+                navigateWithUnknown(input.trim(), navigate).then(() => {
+                    setInput('');
+                    setPleaseWaitMode(false);
+                });
+            } else {
+                navigate(`../${category}/${input.trim()}`);
                 setInput('');
                 setPleaseWaitMode(false);
-            });
+                setCategory('all');
+            }
         },
-        [input, navigate, setInput]
+        [input, navigate, category, setInput]
     );
 
     const handleTextChange = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) =>
             setInput(e.currentTarget.value),
         [setInput]
+    );
+    const handleCategoryChange = useCallback(
+        (e: React.ChangeEvent<HTMLSelectElement>) =>
+            setCategory(e.currentTarget.value as SearchCategory),
+        [setCategory]
     );
 
     return (
@@ -44,11 +71,21 @@ function Search() {
             <input
                 className={styles.searchtext}
                 id="searchText"
-                placeholder="Search by ID"
+                placeholder={getPlaceholderText(category)}
                 value={input}
                 onChange={handleTextChange}
                 type="text"
             />
+            <select
+                className={styles.categorydropdown}
+                onChange={handleCategoryChange}
+                value={category}
+            >
+                <option value="all">All</option>
+                <option value="transactions">Transactions</option>
+                <option value="objects">Objects</option>
+                <option value="addresses">Addresses</option>
+            </select>
             <input
                 type="submit"
                 id="searchBtn"
