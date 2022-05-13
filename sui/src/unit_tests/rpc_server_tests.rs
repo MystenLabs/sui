@@ -19,15 +19,13 @@ use sui::{
     rpc_gateway::{responses::ObjectResponse, RpcGatewayImpl},
     sui_commands::SuiNetwork,
 };
-use sui_core::gateway_state::gateway_responses::{
-    SuiObjectRead, TransactionEffectsResponse, TransactionResponse,
-};
 use sui_core::gateway_state::GatewayTxSeqNumber;
+use sui_core::gateway_types::{SuiObjectRead, TransactionEffectsResponse, TransactionResponse};
 use sui_core::sui_json::SuiJsonValue;
 use sui_framework::build_move_package_to_bytes;
+use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
-    json_schema::Base64,
     SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -66,10 +64,11 @@ async fn test_transfer_coin() -> Result<(), anyhow::Error> {
         .await?;
 
     let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;
-    let signature = keystore.sign(address, &tx_data.tx_bytes)?;
+    let tx_bytes = tx_data.tx_bytes.to_vec()?;
+    let signature = keystore.sign(address, &tx_bytes)?;
 
     let tx_response: TransactionResponse = http_client
-        .execute_transaction(SignedTransaction::new(tx_data.tx_bytes, signature))
+        .execute_transaction(SignedTransaction::new(tx_bytes, signature))
         .await?;
 
     let effect = tx_response.to_effect_response()?.effects;
@@ -93,8 +92,8 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         Path::new("../sui_programmability/examples/fungible_tokens"),
         false,
     )?
-    .into_iter()
-    .map(Base64)
+    .iter()
+    .map(|bytes| Base64::from_bytes(bytes))
     .collect::<Vec<_>>();
 
     let tx_data: TransactionBytes = http_client
@@ -102,10 +101,10 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         .await?;
 
     let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;
-    let signature = keystore.sign(address, &tx_data.tx_bytes)?;
-
+    let tx_bytes = tx_data.tx_bytes.to_vec()?;
+    let signature = keystore.sign(address, &tx_bytes)?;
     let tx_response: TransactionResponse = http_client
-        .execute_transaction(SignedTransaction::new(tx_data.tx_bytes, signature))
+        .execute_transaction(SignedTransaction::new(tx_bytes, signature))
         .await?;
 
     let response = tx_response.to_publish_response()?;
@@ -147,10 +146,11 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
         .await?;
 
     let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;
-    let signature = keystore.sign(address, &tx_data.tx_bytes)?;
+    let tx_bytes = tx_data.tx_bytes.to_vec()?;
+    let signature = keystore.sign(address, &tx_bytes)?;
 
     let tx_response: TransactionResponse = http_client
-        .execute_transaction(SignedTransaction::new(tx_data.tx_bytes, signature))
+        .execute_transaction(SignedTransaction::new(tx_bytes, signature))
         .await?;
 
     let effect = tx_response.to_effect_response()?.effects;
@@ -197,10 +197,11 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
             .await?;
 
         let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;
-        let signature = keystore.sign(address, &tx_data.tx_bytes)?;
+        let tx_bytes = tx_data.tx_bytes.to_vec()?;
+        let signature = keystore.sign(address, &tx_bytes)?;
 
         let response: TransactionResponse = http_client
-            .execute_transaction(SignedTransaction::new(tx_data.tx_bytes, signature))
+            .execute_transaction(SignedTransaction::new(tx_bytes, signature))
             .await?;
 
         if let TransactionResponse::EffectResponse(effects) = response {

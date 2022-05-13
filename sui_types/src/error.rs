@@ -5,7 +5,6 @@
 use crate::{base_types::*, committee::EpochId};
 use move_binary_format::errors::{PartialVMError, VMError};
 use narwhal_executor::{ExecutionStateError, SubscriberError};
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use thiserror::Error;
@@ -42,7 +41,7 @@ macro_rules! exit_main {
 }
 
 /// Custom error type for Sui.
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, JsonSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 #[allow(clippy::large_enum_variant)]
 pub enum SuiError {
     // Object misuse issues
@@ -275,11 +274,7 @@ pub enum SuiError {
         error: Box<SuiError>,
     },
     #[error("Storage error")]
-    StorageError(
-        #[from]
-        #[schemars(with = "String")]
-        TypedStoreError,
-    ),
+    StorageError(#[from] TypedStoreError),
     #[error("Batch error: cannot send transaction to batch.")]
     BatchErrorSender,
     #[error("Authority Error: {error:?}")]

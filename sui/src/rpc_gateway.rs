@@ -7,19 +7,17 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use ed25519_dalek::ed25519::signature::Signature;
 use jsonrpsee::core::RpcResult;
+use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
 use tracing::debug;
 
-use sui_core::gateway_state::gateway_responses::SuiObjectRead;
-use sui_core::gateway_state::{
-    gateway_responses::{TransactionEffectsResponse, TransactionResponse},
-    GatewayClient, GatewayState, GatewayTxSeqNumber,
-};
+use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
+use sui_core::gateway_types::SuiObjectRead;
 use sui_core::sui_json::SuiJsonValue;
+use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     crypto,
     crypto::SignableBytes,
-    json_schema::Base64,
     messages::{Transaction, TransactionData},
 };
 
@@ -83,7 +81,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
         let compiled_modules = compiled_modules
             .into_iter()
             .map(|data| data.to_vec())
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, _>>()?;
         let data = self
             .gateway
             .publish(sender, compiled_modules, gas, gas_budget)
@@ -136,14 +134,20 @@ impl RpcGatewayServer for RpcGatewayImpl {
         &self,
         signed_tx: SignedTransaction,
     ) -> RpcResult<TransactionResponse> {
-        let data = TransactionData::from_signable_bytes(&signed_tx.tx_bytes)?;
-        let signature =
-            crypto::Signature::from_bytes(&[&*signed_tx.signature, &*signed_tx.pub_key].concat())
-                .map_err(|e| anyhow!(e))?;
-        Ok(self
+        let data = TransactionData::from_signable_bytes(&signed_tx.tx_bytes.to_vec()?)?;
+        let signature = crypto::Signature::from_bytes(
+            &[
+                &*signed_tx.signature.to_vec()?,
+                &*signed_tx.pub_key.to_vec()?,
+            ]
+            .concat(),
+        )
+        .map_err(|e| anyhow!(e))?;
+        let result = self
             .gateway
             .execute_transaction(Transaction::new(data, signature))
-            .await?)
+            .await;
+        Ok(result?)
     }
 
     async fn move_call(

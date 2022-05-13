@@ -21,13 +21,12 @@ pub mod event;
 pub mod gas;
 pub mod gas_coin;
 pub mod id;
-pub mod json_schema;
 pub mod messages;
 pub mod move_package;
 pub mod object;
-pub mod readable_serde;
 pub mod signature_seed;
 pub mod storage;
+pub mod sui_serde;
 
 /// 0x1-- account address where Move stdlib modules are stored
 /// Same as the ObjectID

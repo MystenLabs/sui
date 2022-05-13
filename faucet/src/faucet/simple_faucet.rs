@@ -4,11 +4,11 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
 use sui::wallet_commands::WalletContext;
-use sui_core::gateway_state::gateway_responses::SuiObject;
+use sui_core::gateway_types::{SuiExecutionStatus, SuiObject};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
-    messages::{ExecutionStatus, Transaction},
+    messages::Transaction,
 };
 use tracing::info;
 
@@ -159,8 +159,7 @@ impl SimpleFaucet {
             .await?
             .to_effect_response()?
             .effects;
-
-        if matches!(effects.status, ExecutionStatus::Failure { .. }) {
+        if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
             return Err(anyhow!("Error transferring object: {:#?}", effects.status));
         }
         Ok(())

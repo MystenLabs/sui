@@ -24,7 +24,6 @@ use sui::{
     },
     wallet_commands::*,
 };
-use sui_core::gateway_state::gateway_responses::SwitchResponse;
 use sui_types::exit_main;
 
 const SUI: &str = "   _____       _    _       __      ____     __

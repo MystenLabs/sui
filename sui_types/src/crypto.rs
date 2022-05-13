@@ -3,9 +3,8 @@
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::EpochId;
 use crate::error::{SuiError, SuiResult};
-use crate::json_schema;
-use crate::readable_serde::encoding::Base64;
-use crate::readable_serde::Readable;
+use crate::sui_serde::Base64;
+use crate::sui_serde::Readable;
 use anyhow::anyhow;
 use anyhow::Error;
 use base64ct::Encoding;
@@ -134,7 +133,7 @@ impl signature::Signer<AuthoritySignature> for KeyPair {
     Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema,
 )]
 pub struct PublicKeyBytes(
-    #[schemars(with = "json_schema::Base64")]
+    #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
     [u8; dalek::PUBLIC_KEY_LENGTH],
 );
@@ -236,7 +235,7 @@ pub const SUI_SIGNATURE_LENGTH: usize =
 #[serde_as]
 #[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Signature(
-    #[schemars(with = "json_schema::Base64")]
+    #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
     [u8; SUI_SIGNATURE_LENGTH],
 );
@@ -372,7 +371,7 @@ impl Signature {
 #[serde_as]
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AuthoritySignature(
-    #[schemars(with = "json_schema::Base64")]
+    #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, _>")]
     pub dalek::Signature,
 );
@@ -475,7 +474,7 @@ impl AuthoritySignature {
 ///       This will make CertifiedTransaction also an instance of the same struct.
 pub trait AuthoritySignInfoTrait: private::SealedAuthoritySignInfoTrait {}
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EmptySignInfo {}
 impl AuthoritySignInfoTrait for EmptySignInfo {}
 

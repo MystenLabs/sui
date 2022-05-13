@@ -5055,7 +5055,6 @@ version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b827f2113224f3f19a665136f006709194bdfdcb1fdc1e4b2b5cbac8e0cced54"
 dependencies = [
- "base64",
  "hex",
  "rustversion",
  "serde 1.0.137",

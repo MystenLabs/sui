@@ -5,23 +5,18 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_with::{base64, serde_as};
-use sui_core::gateway_state::gateway_responses::SuiObjectRead;
-use sui_core::gateway_state::{
-    gateway_responses::{TransactionEffectsResponse, TransactionResponse},
-    GatewayTxSeqNumber,
-};
+use serde_with::serde_as;
+use sui_core::gateway_state::GatewayTxSeqNumber;
+use sui_core::gateway_types::{SuiInputObjectKind, SuiObjectRead, SuiObjectRef};
+use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
 use sui_core::sui_json::SuiJsonValue;
 use sui_open_rpc_macros::open_rpc;
-use sui_types::base_types::ObjectRef;
-use sui_types::messages::InputObjectKind;
 
+use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     crypto,
     crypto::SignableBytes,
-    json_schema,
-    json_schema::Base64,
     messages::TransactionData,
 };
 
@@ -141,23 +136,17 @@ pub trait RpcGateway {
 #[serde_as]
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct SignedTransaction {
-    #[schemars(with = "json_schema::Base64")]
-    #[serde_as(as = "base64::Base64")]
-    pub tx_bytes: Vec<u8>,
-    #[schemars(with = "json_schema::Base64")]
-    #[serde_as(as = "base64::Base64")]
-    pub signature: Vec<u8>,
-    #[schemars(with = "json_schema::Base64")]
-    #[serde_as(as = "base64::Base64")]
-    pub pub_key: Vec<u8>,
+    pub tx_bytes: Base64,
+    pub signature: Base64,
+    pub pub_key: Base64,
 }
 
 impl SignedTransaction {
     pub fn new(tx_bytes: Vec<u8>, signature: crypto::Signature) -> Self {
         Self {
-            tx_bytes,
-            signature: signature.signature_bytes().to_vec(),
-            pub_key: signature.public_key_bytes().to_vec(),
+            tx_bytes: Base64::from_bytes(&tx_bytes),
+            signature: Base64::from_bytes(signature.signature_bytes()),
+            pub_key: Base64::from_bytes(signature.public_key_bytes()),
         }
     }
 }
@@ -165,23 +154,25 @@ impl SignedTransaction {
 #[serde_as]
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct TransactionBytes {
-    #[schemars(with = "json_schema::Base64")]
-    #[serde_as(as = "base64::Base64")]
-    pub tx_bytes: Vec<u8>,
-    pub gas: ObjectRef,
-    pub input_objects: Vec<InputObjectKind>,
+    pub tx_bytes: Base64,
+    pub gas: SuiObjectRef,
+    pub input_objects: Vec<SuiInputObjectKind>,
 }
 
 impl TransactionBytes {
     pub fn from_data(data: TransactionData) -> Result<Self, anyhow::Error> {
         Ok(Self {
-            tx_bytes: data.to_bytes(),
-            gas: data.gas(),
-            input_objects: data.input_objects()?,
+            tx_bytes: Base64::from_bytes(&data.to_bytes()),
+            gas: data.gas().into(),
+            input_objects: data
+                .input_objects()?
+                .into_iter()
+                .map(SuiInputObjectKind::from)
+                .collect(),
         })
     }
 
     pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
-        TransactionData::from_signable_bytes(&self.tx_bytes)
+        TransactionData::from_signable_bytes(&self.tx_bytes.to_vec()?)
     }
 }

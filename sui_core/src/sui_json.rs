@@ -9,13 +9,14 @@ use move_binary_format::{
     access::ModuleAccess,
     file_format::{SignatureToken, Visibility},
 };
+use move_core_types::account_address::AccountAddress;
 use move_core_types::{
     identifier::Identifier,
     value::{MoveTypeLayout, MoveValue},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value as JsonValue;
+use serde_json::{Number, Value as JsonValue};
 
 use sui_types::base_types::{decode_bytes_hex, ObjectID, SuiAddress};
 use sui_types::move_package::MovePackage;
@@ -63,6 +64,10 @@ impl SuiJsonValue {
         let move_value = Self::to_move_value(&self.0, ty)?;
         MoveValue::simple_serialize(&move_value)
             .ok_or_else(|| anyhow!("Unable to serialize {:?}. Expected {}", move_value, ty))
+    }
+
+    pub fn from_bcs_bytes(bytes: &[u8]) -> Result<Self, anyhow::Error> {
+        SuiJsonValue::new(try_from_bcs_bytes(bytes)?)
     }
 
     pub fn to_json_value(&self) -> JsonValue {
@@ -133,6 +138,37 @@ impl SuiJsonValue {
             }
             _ => return Err(anyhow!("Unexpected arg {val} for expected type {ty}")),
         })
+    }
+}
+
+fn try_from_bcs_bytes(bytes: &[u8]) -> Result<JsonValue, anyhow::Error> {
+    // Try to deserialize data
+    if let Ok(v) = bcs::from_bytes::<String>(bytes) {
+        Ok(JsonValue::String(v))
+    } else if let Ok(v) = bcs::from_bytes::<AccountAddress>(bytes) {
+        Ok(JsonValue::String(v.to_hex_literal()))
+    } else if let Ok(v) = bcs::from_bytes::<u8>(bytes) {
+        Ok(JsonValue::Number(Number::from(v)))
+    } else if let Ok(v) = bcs::from_bytes::<u64>(bytes) {
+        Ok(JsonValue::Number(Number::from(v)))
+    } else if let Ok(v) = bcs::from_bytes::<bool>(bytes) {
+        Ok(JsonValue::Bool(v))
+    } else if let Ok(v) = bcs::from_bytes::<Vec<u64>>(bytes) {
+        let v = v
+            .into_iter()
+            .map(|v| JsonValue::Number(Number::from(v)))
+            .collect();
+        Ok(JsonValue::Array(v))
+    } else if let Ok(v) = bcs::from_bytes::<Vec<String>>(bytes) {
+        let v = v.into_iter().map(JsonValue::String).collect();
+        Ok(JsonValue::Array(v))
+    } else {
+        // Fallback to bytearray if fail to deserialize data
+        let v = bytes
+            .iter()
+            .map(|v| JsonValue::Number(Number::from(*v)))
+            .collect();
+        Ok(JsonValue::Array(v))
     }
 }
 
