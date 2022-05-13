@@ -548,7 +548,7 @@ impl TryFrom<MoveModulePublish> for SuiMovePackage {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
-#[serde(rename = "TransactionData")]
+#[serde(rename = "TransactionData", rename_all = "camelCase")]
 pub struct SuiTransactionData {
     pub transactions: Vec<SuiTransactionKind>,
     sender: SuiAddress,
@@ -675,7 +675,7 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "MoveCall")]
+#[serde(rename = "MoveCall", rename_all = "camelCase")]
 pub struct SuiMoveCall {
     pub package: SuiObjectRef,
     pub module: String,
@@ -687,7 +687,7 @@ pub struct SuiMoveCall {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "CertifiedTransaction")]
+#[serde(rename = "CertifiedTransaction", rename_all = "camelCase")]
 pub struct SuiCertifiedTransaction {
     // This is a cache of an otherwise expensive to compute value.
     // DO NOT serialize or deserialize from the network or disk.
@@ -733,7 +733,7 @@ impl TryFrom<CertifiedTransaction> for SuiCertifiedTransaction {
 
 /// The response from processing a transaction or a certified transaction
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "TransactionEffects")]
+#[serde(rename = "TransactionEffects", rename_all = "camelCase")]
 pub struct SuiTransactionEffects {
     // The status of the execution
     pub status: SuiExecutionStatus,
@@ -856,7 +856,7 @@ impl From<TransactionEffects> for SuiTransactionEffects {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "ExecutionStatus")]
+#[serde(rename = "ExecutionStatus", rename_all = "camelCase", tag = "status")]
 pub enum SuiExecutionStatus {
     // Gas used in the success case.
     Success {
@@ -919,7 +919,7 @@ pub struct SuiEvent {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "TransferCoin")]
+#[serde(rename = "TransferCoin", rename_all = "camelCase")]
 pub struct SuiTransferCoin {
     pub recipient: SuiAddress,
     pub object_ref: SuiObjectRef,
