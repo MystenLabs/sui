@@ -4,7 +4,8 @@
 
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
-    execution_engine, transaction_input_checker, checkpoints::CheckpointStore,
+    checkpoints::CheckpointStore,
+    execution_engine, transaction_input_checker,
 };
 use async_trait::async_trait;
 use itertools::Itertools;

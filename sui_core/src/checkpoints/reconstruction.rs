@@ -1,36 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, HashMap, HashSet, VecDeque},
-    path::Path,
-    sync::Arc,
-};
+use std::collections::{HashMap, VecDeque};
 
-use rocksdb::Options;
-use serde::{Deserialize, Serialize};
 use sui_types::{
     base_types::{AuthorityName, TransactionDigest},
-    batch::TxSequenceNumber,
     committee::Committee,
     error::SuiError,
-    fp_ensure,
-    messages_checkpoint::{
-        AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpoint, CheckpointContents,
-        CheckpointFragment, CheckpointRequest, CheckpointRequestType, CheckpointResponse,
-        CheckpointSequenceNumber, CheckpointSummary, SignedCheckpoint, SignedCheckpointProposal,
-    },
-    waypoint::{GlobalCheckpoint, WaypointDiff, WaypointError},
+    messages_checkpoint::{CheckpointFragment, CheckpointSummary},
+    waypoint::{GlobalCheckpoint, WaypointError},
 };
-use typed_store::{
-    reopen,
-    rocks::{open_cf_opts, DBBatch, DBMap},
-    Map,
-};
-
-use arc_swap::ArcSwapOption;
-
-use crate::authority::StableSyncAuthoritySigner;
 
 pub struct FragmentReconstruction {
     pub committee: Committee,
