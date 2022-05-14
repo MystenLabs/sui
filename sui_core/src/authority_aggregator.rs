@@ -569,6 +569,7 @@ where
                         // as keys and append the authority that holds them in the values.
                         match result {
                             Ok(AccountInfoResponse { object_ids, .. }) => {
+                                trace!(?object_ids, ?name, "Got response");
                                 // Also keep a record of all authorities that responded.
                                 state.responded_authorities.push(name);
                                 // Update the map.

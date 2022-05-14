@@ -12,6 +12,7 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use sui_types::object::OBJECT_START_VERSION;
+use tracing::trace;
 use typed_store::rocks::{DBBatch, DBMap};
 use typed_store::{reopen, traits::Map};
 
@@ -282,6 +283,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     // Methods to read the store
 
     pub fn get_account_objects(&self, account: SuiAddress) -> Result<Vec<ObjectRef>, SuiError> {
+        debug!(?account, "get_account_objects");
         Ok(self
             .owner_index
             .iter()
@@ -601,6 +603,8 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         seq_opt: Option<TxSequenceNumber>,
     ) -> Result<(), SuiError> {
         let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
+        trace!(written =? written.values().map(|((obj_id, ver, _), _)| (obj_id, ver)).collect::<Vec<_>>(),
+               "batch_update_objects: temp store written");
 
         // Delete objects.
         // Wrapped objects need to be deleted as well because we can no longer track their
@@ -675,6 +679,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             written
                 .iter()
                 .filter_map(|(_id, (object_ref, new_object))| {
+                    trace!(?object_ref, owner =? new_object.owner, "Updating owner_index");
                     new_object
                         .get_single_owner_and_id()
                         .map(|owner_id| (owner_id, object_ref))
@@ -720,6 +725,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
 
             // Atomic write of all data other than locks
             write_batch.write()?;
+            trace!("Finished writing batch");
 
             // Initialize object locks for new objects.  After this point, transactions on new objects
             // can run.  So it is critical this is done AFTER objects are done writing.

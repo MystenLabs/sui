@@ -19,7 +19,7 @@ use futures::channel::oneshot;
 use rocksdb::Options;
 use std::path::Path;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tracing::{debug, info};
+use tracing::{debug, info, trace};
 use typed_store::rocks::DBMap;
 use typed_store::{reopen, traits::Map};
 
@@ -126,8 +126,10 @@ impl LockServiceImpl {
         let locks = self.transaction_lock.multi_get(objects)?;
         let all_exists = locks.iter().all(|l| matches!(*l, Some(_x)));
         if all_exists {
+            debug!(?objects, "locks_exist: all locks do exist");
             Ok(())
         } else {
+            debug!(?locks, "locks_exist: not all locks exist");
             Err(SuiError::TransactionLockDoesNotExist)
         }
     }
@@ -141,6 +143,7 @@ impl LockServiceImpl {
         owned_input_objects: &[ObjectRef],
         tx_digest: TransactionDigest,
     ) -> SuiResult {
+        debug!(?tx_digest, ?owned_input_objects, "acquire_locks");
         let mut locks_to_write = Vec::new();
         let locks = self.transaction_lock.multi_get(owned_input_objects)?;
 
@@ -167,6 +170,7 @@ impl LockServiceImpl {
         }
 
         if !locks_to_write.is_empty() {
+            trace!(?locks_to_write, "Writing locks");
             self.transaction_lock
                 .batch()
                 .insert_batch(&self.transaction_lock, locks_to_write)?
@@ -179,6 +183,7 @@ impl LockServiceImpl {
     /// Initialize a lock to None (but exists) for a given list of ObjectRefs.
     /// If the lock already exists and is locked to a transaction, then return TransactionLockExists
     fn initialize_locks(&self, objects: &[ObjectRef]) -> SuiResult {
+        debug!(?objects, "initialize_locks");
         // Use a multiget for efficiency
         let locks = self.transaction_lock.multi_get(objects)?;
 
@@ -195,6 +200,10 @@ impl LockServiceImpl {
             })
             .collect();
         if !existing_locks.is_empty() {
+            info!(
+                ?existing_locks,
+                "Cannot initialize locks because some exist already"
+            );
             return Err(SuiError::TransactionLockExists {
                 refs: existing_locks,
             });
@@ -215,6 +224,7 @@ impl LockServiceImpl {
 
     /// Removes locks for a given list of ObjectRefs.
     fn delete_locks(&self, objects: &[ObjectRef]) -> SuiResult {
+        debug!(?objects, "delete_locks");
         self.transaction_lock.multi_remove(objects)?;
         Ok(())
     }
