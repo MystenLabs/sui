@@ -1,30 +1,15 @@
+use std::collections::{BTreeMap, HashSet};
 
-use std::{
-    collections::{BTreeMap, HashSet},
-    path::Path,
-    sync::Arc,
-};
-
-use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use sui_types::{
     base_types::{AuthorityName, TransactionDigest},
-    batch::TxSequenceNumber,
-    committee::Committee,
-    error::SuiError,
-    fp_ensure,
     messages_checkpoint::{
-        AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpoint, CheckpointContents,
-        CheckpointFragment, CheckpointRequest, CheckpointRequestType, CheckpointResponse,
-        CheckpointSequenceNumber, CheckpointSummary, SignedCheckpoint, SignedCheckpointProposal,
+        CheckpointContents, CheckpointFragment, CheckpointSequenceNumber, CheckpointSummary,
+        SignedCheckpointProposal,
     },
     waypoint::WaypointDiff,
 };
-use typed_store::{
-    reopen,
-    rocks::{open_cf_opts, DBBatch, DBMap},
-    Map,
-};
+use typed_store::Map;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CheckpointProposal {

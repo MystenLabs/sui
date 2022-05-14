@@ -1,18 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod reconstruction;
 pub mod proposal;
+pub mod reconstruction;
 
 #[cfg(test)]
 #[path = "./tests/checkpoint_tests.rs"]
 mod checkpoint_tests;
 
-use std::{
-    collections::{BTreeMap, HashSet},
-    path::Path,
-    sync::Arc,
-};
+use std::{collections::HashSet, path::Path, sync::Arc};
 
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -27,7 +23,6 @@ use sui_types::{
         CheckpointFragment, CheckpointRequest, CheckpointRequestType, CheckpointResponse,
         CheckpointSequenceNumber, CheckpointSummary, SignedCheckpoint, SignedCheckpointProposal,
     },
-    waypoint::WaypointDiff,
 };
 use typed_store::{
     reopen,
@@ -39,11 +34,8 @@ use arc_swap::ArcSwapOption;
 
 use crate::authority::StableSyncAuthoritySigner;
 
-use self::reconstruction::FragmentReconstruction;
 use self::proposal::CheckpointProposal;
-
-
-
+use self::reconstruction::FragmentReconstruction;
 
 pub type DBLabel = usize;
 const LOCALS: DBLabel = 0;
