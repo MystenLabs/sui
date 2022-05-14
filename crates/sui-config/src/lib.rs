@@ -12,6 +12,7 @@ use rand::rngs::OsRng;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::base_types::{encode_bytes_hex, ObjectID, SuiAddress};
@@ -19,6 +20,7 @@ use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::{get_key_pair_from_rng, KeyPair, PublicKeyBytes};
 use tracing::trace;
 
+pub mod builder;
 pub mod genesis;
 pub mod utils;
 
@@ -190,128 +192,18 @@ impl NetworkConfig {
     pub fn generate_with_rng<R: rand::CryptoRng + rand::RngCore>(
         config_dir: &Path,
         quorum_size: usize,
-        mut rng: R,
+        rng: R,
     ) -> Self {
-        let epoch = 0;
-
-        let keys = (0..quorum_size)
-            .map(|_| get_key_pair_from_rng(&mut rng).1)
-            .collect::<Vec<_>>();
-
-        let validator_set = keys
-            .iter()
-            .map(|key| {
-                let public_key = *key.public_key_bytes();
-                let stake = DEFAULT_STAKE;
-                let network_address = new_network_address();
-
-                ValidatorInfo {
-                    public_key,
-                    stake,
-                    network_address,
-                }
-            })
-            .collect::<Vec<_>>();
-
-        let narwhal_committee = validator_set
-            .iter()
-            .map(|validator| {
-                let name = validator
-                    .public_key
-                    .make_narwhal_public_key()
-                    .expect("Can't get narwhal public key");
-                let primary = PrimaryAddresses {
-                    primary_to_primary: new_network_address(),
-                    worker_to_primary: new_network_address(),
-                };
-                let workers = [(
-                    0, // worker_id
-                    WorkerAddresses {
-                        primary_to_worker: new_network_address(),
-                        transactions: new_network_address(),
-                        worker_to_worker: new_network_address(),
-                    },
-                )]
-                .into_iter()
-                .collect();
-                let authority = Authority {
-                    stake: validator.stake() as Stake, //TODO this should at least be the same size integer
-                    primary,
-                    workers,
-                };
-
-                (name, authority)
-            })
-            .collect();
-        let consensus_committee = ConsensusCommittee {
-            authorities: narwhal_committee,
-        };
-
-        let committe_config = CommitteeConfig {
-            epoch,
-            validator_set,
-            consensus_committee: DebugIgnore(consensus_committee),
-        };
-
-        let validator_configs = keys
-            .into_iter()
-            .map(|key| {
-                let db_path = config_dir
-                    .join(AUTHORITIES_DB_NAME)
-                    .join(encode_bytes_hex(key.public_key_bytes()));
-                let network_address = committe_config
-                    .validator_set()
-                    .iter()
-                    .find(|validator| validator.public_key() == *key.public_key_bytes())
-                    .map(|validator| validator.network_address().clone())
-                    .unwrap();
-                let consensus_address = committe_config
-                    .narwhal_committee()
-                    .authorities
-                    .get(&key.public_key_bytes().make_narwhal_public_key().unwrap())
-                    .unwrap()
-                    .workers
-                    .get(&0)
-                    .unwrap()
-                    .transactions
-                    .clone();
-                let consensus_db_path = config_dir
-                    .join(CONSENSUS_DB_NAME)
-                    .join(encode_bytes_hex(key.public_key_bytes()));
-                let consensus_config = ConsensuseConfig {
-                    consensus_address,
-                    consensus_db_path,
-                    narwhal_config: Default::default(),
-                };
-
-                let metrics_address = new_network_address();
-
-                ValidatorConfig {
-                    key_pair: key,
-                    db_path,
-                    network_address,
-                    metrics_address,
-                    consensus_config,
-                    committee_config: committe_config.clone(),
-                }
-            })
-            .collect();
-
-        Self {
-            validator_configs,
-            loaded_move_packages: vec![],
-        }
+        builder::ConfigBuilder::new(config_dir)
+            .committee_size(NonZeroUsize::new(quorum_size).unwrap())
+            .rng(rng)
+            .build()
     }
 
     pub fn generate(config_dir: &Path, quorum_size: usize) -> Self {
         Self::generate_with_rng(config_dir, quorum_size, OsRng)
     }
 }
-
-// pub struct ConfigBuilder<R> {
-//     rng: R,
-
-// }
 
 fn new_network_address() -> Multiaddr {
     format!("/dns/localhost/tcp/{}/http", utils::get_available_port())
