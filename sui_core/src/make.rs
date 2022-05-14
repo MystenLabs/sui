@@ -1,12 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_checkpoints::CheckpointStore;
+
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::authority_active::ActiveAuthority;
 use crate::authority_client::NetworkAuthorityClient;
 use crate::authority_server::AuthorityServer;
 use crate::authority_server::AuthorityServerHandle;
+use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusListener;
 use anyhow::{anyhow, Result};
 use futures::future::join_all;

@@ -4,7 +4,7 @@
 
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
-    execution_engine, transaction_input_checker,
+    execution_engine, transaction_input_checker, checkpoints::CheckpointStore,
 };
 use async_trait::async_trait;
 use itertools::Itertools;
@@ -68,9 +68,6 @@ pub use temporary_store::AuthorityTemporaryStore;
 mod authority_store;
 pub use authority_store::{AuthorityStore, GatewayStore, ReplicaStore, SuiDataStore};
 
-use self::authority_checkpoints::CheckpointStore;
-
-pub mod authority_checkpoints;
 pub mod authority_notifier;
 
 pub const MAX_ITEMS_LIMIT: u64 = 100_000;

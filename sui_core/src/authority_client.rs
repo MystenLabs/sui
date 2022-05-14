@@ -321,7 +321,8 @@ impl AuthorityAPI for LocalAuthorityClient {
 impl LocalAuthorityClient {
     #[cfg(test)]
     pub async fn new(committee: Committee, address: PublicKeyBytes, secret: KeyPair) -> Self {
-        use crate::authority::{authority_checkpoints::CheckpointStore, AuthorityStore};
+        use crate::authority::AuthorityStore;
+        use crate::checkpoints::CheckpointStore;
         use std::{env, fs};
         use sui_adapter::genesis;
 
