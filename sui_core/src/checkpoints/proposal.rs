@@ -9,7 +9,6 @@ use sui_types::{
     },
     waypoint::WaypointDiff,
 };
-use typed_store::Map;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CheckpointProposal {
