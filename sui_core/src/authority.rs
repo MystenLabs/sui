@@ -18,6 +18,7 @@ use move_core_types::{
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use once_cell::sync::Lazy;
+use parking_lot::Mutex;
 use prometheus_exporter::prometheus::{
     register_histogram, register_int_counter, Histogram, IntCounter,
 };
@@ -187,7 +188,7 @@ pub struct AuthorityState {
     pub(crate) _database: Arc<AuthorityStore>, // TODO: remove pub
 
     /// The checkpoint store
-    pub(crate) _checkpoints: Option<Arc<CheckpointStore>>,
+    pub(crate) _checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
 
     // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
@@ -697,7 +698,7 @@ impl AuthorityState {
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
-        checkpoints: Option<Arc<CheckpointStore>>,
+        checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
         genesis_packages: Vec<Vec<CompiledModule>>,
         genesis_ctx: &mut TxContext,
     ) -> Self {
@@ -726,7 +727,7 @@ impl AuthorityState {
         // If a checkpoint store is present, ensure it is up-to-date with the latest
         // batches.
         if let Some(checkpoint) = &state._checkpoints {
-            let next_expected_tx = checkpoint.next_transaction_sequence_expected();
+            let next_expected_tx = checkpoint.lock().next_transaction_sequence_expected();
 
             // Get all unprocessed checkpoints
             for (_seq, batch) in state
@@ -748,6 +749,7 @@ impl AuthorityState {
                 if batch.batch.next_sequence_number > next_expected_tx {
                     // Update the checkpointing mechanism
                     checkpoint
+                        .lock()
                         .handle_internal_batch(batch.batch.next_sequence_number, &transactions)
                         .expect("Should see no errors updating the checkpointing mechanism.");
                 }
@@ -763,7 +765,7 @@ impl AuthorityState {
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
         genesis: &Genesis,
-        checkpoints: Option<Arc<CheckpointStore>>,
+        checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
     ) -> Self {
         let state = AuthorityState::new_without_genesis(
             committee,
@@ -802,7 +804,7 @@ impl AuthorityState {
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
-        checkpoints: Option<Arc<CheckpointStore>>,
+        checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -835,7 +837,7 @@ impl AuthorityState {
         state
     }
 
-    pub(crate) fn checkpoints(&self) -> Option<Arc<CheckpointStore>> {
+    pub(crate) fn checkpoints(&self) -> Option<Arc<Mutex<CheckpointStore>>> {
         self._checkpoints.clone()
     }
 

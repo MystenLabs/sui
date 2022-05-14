@@ -313,6 +313,7 @@ impl AuthorityAPI for LocalAuthorityClient {
             ._checkpoints
             .as_ref()
             .unwrap()
+            .lock()
             .handle_checkpoint_request(&request);
         result
     }
@@ -323,6 +324,7 @@ impl LocalAuthorityClient {
     pub async fn new(committee: Committee, address: PublicKeyBytes, secret: KeyPair) -> Self {
         use crate::authority::AuthorityStore;
         use crate::checkpoints::CheckpointStore;
+        use parking_lot::Mutex;
         use std::{env, fs};
         use sui_adapter::genesis;
 
@@ -352,7 +354,7 @@ impl LocalAuthorityClient {
             address,
             secret.clone(),
             store,
-            Some(Arc::new(checkpoints)),
+            Some(Arc::new(Mutex::new(checkpoints))),
             genesis::clone_genesis_compiled_modules(),
             &mut genesis::get_genesis_context(),
         )

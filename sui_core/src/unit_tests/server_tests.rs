@@ -39,7 +39,7 @@ async fn test_start_stop_batch_subsystem() {
         tx_consensus_listener,
     ));
     let join = server
-        .spawn_batch_subsystem(1000, Duration::from_secs(5))
+        .spawn_batch_subsystem(1000, Duration::from_secs(50))
         .await
         .expect("Problem launching subsystem.");
 
@@ -134,6 +134,7 @@ async fn test_subscription() {
         start: Some(12),
         length: 22,
     };
+    tokio::time::sleep(Duration::from_millis(10)).await;
 
     let mut resp = client.handle_batch_stream(req).await.unwrap();
 
@@ -184,6 +185,7 @@ async fn test_subscription() {
         length: 11,
     };
 
+    tokio::time::sleep(Duration::from_millis(10)).await;
     let mut resp = client.handle_batch_stream(req).await.unwrap();
 
     println!("TEST2: Send request.");
@@ -221,6 +223,9 @@ async fn test_subscription() {
         length: 10,
     };
 
+    // Use 17 since it is prime and unlikely to collide with the exact timing
+    // of the tick interval (set to 5 seconds.)
+    tokio::time::sleep(Duration::from_millis(17)).await;
     let mut resp = client.handle_batch_stream(req).await.unwrap();
 
     println!("TEST3: Send request.");
@@ -238,7 +243,7 @@ async fn test_subscription() {
             .expect("Failed to write.");
         println!("Send item {i}");
         i += 1;
-        tokio::time::sleep(Duration::from_millis(20)).await;
+        tokio::time::sleep(Duration::from_millis(17)).await;
 
         // Then we wait to receive
         if let Some(data) = resp.next().await {

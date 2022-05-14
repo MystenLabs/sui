@@ -287,7 +287,7 @@ impl CheckpointStore {
     // Define handlers for request
 
     pub fn handle_checkpoint_request(
-        &self,
+        &mut self,
         request: &CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
         match &request.request_type {

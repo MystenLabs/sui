@@ -310,6 +310,7 @@ impl Validator for AuthorityServer {
             let request = request.into_inner();
 
             let response = checkpoint
+                .lock()
                 .handle_checkpoint_request(&request)
                 .map_err(|e| tonic::Status::internal(e.to_string()))?;
 

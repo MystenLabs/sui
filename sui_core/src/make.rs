@@ -19,6 +19,7 @@ use sui_config::NetworkConfig;
 use sui_config::ValidatorConfig;
 use tokio::sync::mpsc::channel;
 use tracing::{error, info};
+use parking_lot::Mutex;
 
 pub struct SuiNetwork {
     pub spawned_authorities: Vec<AuthorityServerHandle>,
@@ -93,7 +94,7 @@ pub async fn make_server(validator_config: &ValidatorConfig) -> Result<Authority
         name,
         secret.clone(),
         store,
-        Some(Arc::new(checkpoints)),
+        Some(Arc::new(Mutex::new(checkpoints))),
     )
     .await;
 
@@ -125,7 +126,7 @@ pub async fn make_server_with_genesis(
         secret.clone(),
         store,
         validator_config.genesis(),
-        Some(Arc::new(checkpoints)),
+        Some(Arc::new(Mutex::new(checkpoints))),
     )
     .await;
 

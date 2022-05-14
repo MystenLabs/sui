@@ -24,6 +24,8 @@ use sui_types::{
     waypoint::GlobalCheckpoint,
 };
 
+use parking_lot::Mutex;
+
 fn random_ckpoint_store() -> Vec<(PathBuf, CheckpointStore)> {
     random_ckpoint_store_num(4)
 }
@@ -485,10 +487,10 @@ fn latest_proposal() {
 #[test]
 fn set_get_checkpoint() {
     let mut test_objects = random_ckpoint_store();
-    let (_, cps1) = test_objects.pop().unwrap();
-    let (_, cps2) = test_objects.pop().unwrap();
-    let (_, cps3) = test_objects.pop().unwrap();
-    let (_, cps4) = test_objects.pop().unwrap();
+    let (_, mut cps1) = test_objects.pop().unwrap();
+    let (_, mut cps2) = test_objects.pop().unwrap();
+    let (_, mut cps3) = test_objects.pop().unwrap();
+    let (_, mut cps4) = test_objects.pop().unwrap();
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -570,7 +572,7 @@ fn set_get_checkpoint() {
 
     // Make a certificate
     let mut signed_checkpoint: Vec<SignedCheckpoint> = Vec::new();
-    for x in [&cps1, &cps2, &cps3] {
+    for x in [&mut cps1, &mut cps2, &mut cps3] {
         match x.handle_checkpoint_request(&request).unwrap().info {
             AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Signed(signed)) => {
                 signed_checkpoint.push(signed)
@@ -735,7 +737,7 @@ async fn test_batch_to_checkpointing() {
     checkpoints_path.push("checkpoints");
 
     let secret = Arc::pin(authority_key);
-    let checkpoints = Arc::new(
+    let checkpoints = Arc::new(Mutex::new(
         CheckpointStore::open(
             &checkpoints_path,
             None,
@@ -744,7 +746,7 @@ async fn test_batch_to_checkpointing() {
             secret.clone(),
         )
         .unwrap(),
-    );
+    ));
 
     let state = AuthorityState::new(
         committee,
@@ -802,7 +804,7 @@ async fn test_batch_to_checkpointing() {
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
 
     // Now once we have a batch we should also have stuff in the checkpoint
-    assert_eq!(checkpoints.next_transaction_sequence_expected(), 4);
+    assert_eq!(checkpoints.lock().next_transaction_sequence_expected(), 4);
 
     // When we close the sending channel we also also end the service task
     authority_state.batch_notifier.close();
@@ -905,7 +907,7 @@ async fn test_batch_to_checkpointing_init_crash() {
     {
         let store = Arc::new(AuthorityStore::open(&store_path, Some(opts)));
 
-        let checkpoints = Arc::new(
+        let checkpoints = Arc::new(Mutex::new(
             CheckpointStore::open(
                 &checkpoints_path,
                 None,
@@ -914,10 +916,10 @@ async fn test_batch_to_checkpointing_init_crash() {
                 secret.clone(),
             )
             .unwrap(),
-        );
+        ));
 
         // Start with no transactions
-        assert_eq!(checkpoints.next_transaction_sequence_expected(), 0);
+        assert_eq!(checkpoints.lock().next_transaction_sequence_expected(), 0);
 
         let state = AuthorityState::new(
             committee,
@@ -932,7 +934,7 @@ async fn test_batch_to_checkpointing_init_crash() {
         let authority_state = Arc::new(state);
 
         // But init feeds the transactions in
-        assert_eq!(checkpoints.next_transaction_sequence_expected(), 4);
+        assert_eq!(checkpoints.lock().next_transaction_sequence_expected(), 4);
 
         // When we close the sending channel we also also end the service task
         authority_state.batch_notifier.close();
@@ -1197,7 +1199,7 @@ fn test_fragment_full_flow() {
     // TEST 2 -- submit to all validators leads to reconstruction
 
     let mut seq = 0;
-    let cps0 = &test_objects[0].1;
+    let cps0 = &mut test_objects[0].1;
     let mut all_fragments = Vec::new();
     while let Ok(fragment) = rx.try_recv() {
         all_fragments.push(fragment.clone());
@@ -1283,7 +1285,7 @@ impl AsyncTestConsensus {
 struct TestAuthority {
     store: Arc<AuthorityStore>,
     authority: Arc<AuthorityState>,
-    checkpoint: Arc<CheckpointStore>,
+    checkpoint: Arc<Mutex<CheckpointStore>>,
 }
 
 #[allow(dead_code)]
@@ -1361,7 +1363,7 @@ async fn checkpoint_tests_setup() -> TestSetup {
         checkpoint
             .set_consensus(Box::new(sender.clone()))
             .expect("No issues");
-        let checkpoint = Arc::new(checkpoint);
+        let checkpoint = Arc::new(Mutex::new(checkpoint));
 
         let authority = AuthorityState::new(
             committee.clone(),
@@ -1402,7 +1404,7 @@ async fn checkpoint_tests_setup() -> TestSetup {
         while let Some(msg) = _rx.recv().await {
             println!("Deliver fragment seq={}", seq);
             for cps in &checkpoint_stores {
-                if let Err(err) = cps.handle_internal_fragment(seq, msg.clone()) {
+                if let Err(err) = cps.lock().handle_internal_fragment(seq, msg.clone()) {
                     println!("Error: {:?}", err);
                 }
             }
