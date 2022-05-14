@@ -5496,14 +5496,17 @@ name = "sui-config"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "base64ct",
  "config 0.1.0",
  "crypto",
  "debug-ignore",
  "dirs",
+ "move-binary-format",
  "multiaddr",
  "rand 0.7.3",
  "serde 1.0.137",
  "serde_json",
+ "serde_with",
  "sui-framework",
  "sui-types",
  "tracing",

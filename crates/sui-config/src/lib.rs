@@ -19,6 +19,7 @@ use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::{get_key_pair_from_rng, KeyPair, PublicKeyBytes};
 use tracing::trace;
 
+pub mod genesis;
 pub mod utils;
 
 const DEFAULT_STAKE: usize = 1;
