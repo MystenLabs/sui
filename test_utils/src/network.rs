@@ -1,16 +1,17 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
+use std::{num::NonZeroUsize, path::Path};
 use sui::{
     config::{
         Config, GatewayConfig, GatewayType, WalletConfig, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG,
         SUI_WALLET_CONFIG,
     },
-    keystore::KeystoreType,
+    keystore::{Keystore, KeystoreType, SuiKeystore},
     sui_commands::{genesis, SuiNetwork},
 };
-use sui_config::GenesisConfig;
+use sui_config::{builder::ConfigBuilder, GenesisConfig, NetworkConfig};
+use sui_types::base_types::SuiAddress;
 
 const NUM_VALIDAOTR: usize = 4;
 
@@ -25,19 +26,27 @@ pub async fn start_test_network(
     let keystore_path = working_dir.join("wallet.key");
     let db_folder_path = working_dir.join("client_db");
 
-    let genesis_config = match genesis_config {
-        Some(genesis_config) => genesis_config,
-        None => {
-            let mut config = GenesisConfig::for_local_testing()?;
-            config.committee_size = NUM_VALIDAOTR;
-            config
-        }
-    };
-    let (network_config, accounts, mut keystore) = genesis(genesis_config).await?;
+    let mut builder =
+        ConfigBuilder::new(&working_dir).committee_size(NonZeroUsize::new(NUM_VALIDAOTR).unwrap());
+
+    if let Some(genesis_config) = genesis_config {
+        builder = builder.initial_accounts_config(genesis_config);
+    }
+
+    let network_config = builder.build();
+    let accounts = network_config
+        .account_keys
+        .iter()
+        .map(|key| SuiAddress::from(key.public_key_bytes()))
+        .collect::<Vec<_>>();
     let network = SuiNetwork::start(&network_config).await?;
 
     let network_config = network_config.persisted(&network_path);
     network_config.save()?;
+    let mut keystore = SuiKeystore::default();
+    for key in &network_config.account_keys {
+        keystore.add_key(SuiAddress::from(key.public_key_bytes()), key.copy())?;
+    }
     keystore.set_path(&keystore_path);
     keystore.save()?;
 

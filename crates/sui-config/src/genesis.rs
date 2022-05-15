@@ -7,24 +7,33 @@ use base64ct::Encoding;
 use move_binary_format::CompiledModule;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::{serde_as, DeserializeAs, SerializeAs};
-use sui_types::{base_types::TransactionDigest, crypto::PublicKeyBytes, object::Object};
+use sui_types::{
+    base_types::{TransactionDigest, TxContext},
+    crypto::PublicKeyBytes,
+    object::Object,
+};
 use tracing::info;
 
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Genesis {
-    #[serde_as(as = "Vec<SerdeCompiledModule>")]
-    modules: Vec<CompiledModule>,
+    #[serde_as(as = "Vec<Vec<SerdeCompiledModule>>")]
+    modules: Vec<Vec<CompiledModule>>,
     objects: Vec<Object>,
+    genesis_ctx: TxContext,
 }
 
 impl Genesis {
-    pub fn modules(&self) -> &[CompiledModule] {
+    pub fn modules(&self) -> &[Vec<CompiledModule>] {
         &self.modules
     }
 
     pub fn objects(&self) -> &[Object] {
         &self.objects
+    }
+
+    pub fn genesis_ctx(&self) -> &TxContext {
+        &self.genesis_ctx
     }
 }
 
@@ -74,7 +83,9 @@ impl<'de> DeserializeAs<'de, CompiledModule> for SerdeCompiledModule {
 pub struct Builder {
     sui_framework: Option<PathBuf>,
     move_framework: Option<PathBuf>,
-    move_modules: Vec<PathBuf>,
+    move_modules: Vec<Vec<CompiledModule>>,
+    objects: Vec<Object>,
+    genesis_ctx: Option<TxContext>,
     validators: Vec<(PublicKeyBytes, usize)>,
 }
 
@@ -93,8 +104,23 @@ impl Builder {
         self
     }
 
-    pub fn add_move_module(mut self, path: PathBuf) -> Self {
-        self.move_modules.push(path);
+    pub fn add_move_modules(mut self, modules: Vec<Vec<CompiledModule>>) -> Self {
+        self.move_modules = modules;
+        self
+    }
+
+    pub fn add_object(mut self, object: Object) -> Self {
+        self.objects.push(object);
+        self
+    }
+
+    pub fn add_objects(mut self, objects: Vec<Object>) -> Self {
+        self.objects.extend(objects);
+        self
+    }
+
+    pub fn genesis_ctx(mut self, genesis_ctx: TxContext) -> Self {
+        self.genesis_ctx = Some(genesis_ctx);
         self
     }
 
@@ -110,19 +136,7 @@ impl Builder {
 
     pub fn build(self) -> Genesis {
         let mut modules = Vec::new();
-        let mut objects = Vec::new();
-
-        // Load Sui Framework
-        let sui_framework_lib_path = self.sui_framework.unwrap();
-        info!(
-            "Loading Sui framework lib from {:?}",
-            sui_framework_lib_path
-        );
-        let sui_modules =
-            sui_framework::get_sui_framework_modules(&sui_framework_lib_path).unwrap();
-        // let sui_framework = Object::new_package(sui_modules.clone(), TransactionDigest::genesis());
-        modules.extend(sui_modules);
-        // objects.push(sui_framework);
+        let objects = self.objects;
 
         // Load Move Framework
         let move_framework_lib_path = self.move_framework.unwrap();
@@ -134,10 +148,32 @@ impl Builder {
             sui_framework::get_move_stdlib_modules(&move_framework_lib_path).unwrap();
         // let move_framework =
         //     Object::new_package(move_modules.clone(), TransactionDigest::genesis());
-        modules.extend(move_modules);
+        modules.push(move_modules);
         // objects.push(move_framework);
 
-        Genesis { modules, objects }
+        // Load Sui Framework
+        let sui_framework_lib_path = self.sui_framework.unwrap();
+        info!(
+            "Loading Sui framework lib from {:?}",
+            sui_framework_lib_path
+        );
+        let sui_modules =
+            sui_framework::get_sui_framework_modules(&sui_framework_lib_path).unwrap();
+        // let sui_framework = Object::new_package(sui_modules.clone(), TransactionDigest::genesis());
+        modules.push(sui_modules);
+        // objects.push(sui_framework);
+
+        // add custom modules
+        modules.extend(self.move_modules);
+
+        let genesis_ctx = self
+            .genesis_ctx
+            .unwrap_or_else(sui_adapter::genesis::get_genesis_context);
+        Genesis {
+            modules,
+            objects,
+            genesis_ctx,
+        }
     }
 }
 
@@ -153,8 +189,9 @@ mod test {
             sui_framework::get_sui_framework_modules(DEFAULT_FRAMEWORK_PATH.as_ref()).unwrap();
 
         let genesis = Genesis {
-            modules: sui_lib,
+            modules: vec![sui_lib],
             objects: vec![],
+            genesis_ctx: sui_adapter::genesis::get_genesis_context(),
         };
 
         let s = serde_json::to_string_pretty(&genesis).unwrap();

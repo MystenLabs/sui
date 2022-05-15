@@ -288,7 +288,7 @@ impl SuiNetwork {
 
         let mut spawned_authorities = Vec::new();
         for validator in config.validator_configs() {
-            let server = make_server(validator).await?;
+            let server = make_server_with_genesis(validator).await?;
             spawned_authorities.push(server.spawn().await?);
         }
         info!("Started {} authorities", spawned_authorities.len());

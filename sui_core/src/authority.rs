@@ -729,14 +729,16 @@ impl AuthorityState {
             .database_is_empty()
             .expect("Database read should not fail.")
         {
-            let mut genesis_ctx = get_genesis_context();
-            state
-                .store_package_and_init_modules_for_genesis(
-                    &mut genesis_ctx,
-                    genesis.modules().to_owned(),
-                )
-                .await
-                .expect("We expect publishing the Genesis packages to not fail");
+            let mut genesis_ctx = genesis.genesis_ctx().to_owned();
+            for genesis_modules in genesis.modules() {
+                state
+                    .store_package_and_init_modules_for_genesis(
+                        &mut genesis_ctx,
+                        genesis_modules.to_owned(),
+                    )
+                    .await
+                    .expect("We expect publishing the Genesis packages to not fail");
+            }
             state
                 .insert_genesis_objects_bulk_unsafe(&genesis.objects().iter().collect::<Vec<_>>())
                 .await;
