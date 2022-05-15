@@ -35,6 +35,8 @@ pub struct ValidatorConfig {
 
     consensus_config: ConsensuseConfig,
     committee_config: CommitteeConfig,
+
+    genesis: genesis::Genesis,
 }
 
 impl Config for ValidatorConfig {}
@@ -66,6 +68,10 @@ impl ValidatorConfig {
 
     pub fn committee_config(&self) -> &CommitteeConfig {
         &self.committee_config
+    }
+
+    pub fn genesis(&self) -> &genesis::Genesis {
+        &self.genesis
     }
 }
 
@@ -158,6 +164,7 @@ impl ValidatorInfo {
 pub struct NetworkConfig {
     validator_configs: Vec<ValidatorConfig>,
     loaded_move_packages: Vec<(PathBuf, ObjectID)>,
+    genesis: genesis::Genesis,
 }
 
 impl Config for NetworkConfig {}
