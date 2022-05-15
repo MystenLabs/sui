@@ -81,7 +81,6 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             })
             .collect::<Vec<_>>();
 
-        // TODO add genesis to validator config
         let genesis = {
             let mut builder = genesis::Builder::new()
                 .sui_framework(PathBuf::from(DEFAULT_FRAMEWORK_PATH))
@@ -180,6 +179,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     metrics_address,
                     consensus_config,
                     committee_config: committe_config.clone(),
+                    genesis: genesis.clone(),
                 }
             })
             .collect();
@@ -187,6 +187,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         NetworkConfig {
             validator_configs,
             loaded_move_packages: vec![],
+            genesis,
         }
     }
 }
