@@ -600,19 +600,19 @@
           {
             "type": "object",
             "required": [
-              "contents",
               "dataType",
+              "fields",
               "type"
             ],
             "properties": {
-              "contents": {
-                "$ref": "#/components/schemas/MoveValue"
-              },
               "dataType": {
                 "type": "string",
                 "enum": [
                   "moveObject"
                 ]
+              },
+              "fields": {
+                "$ref": "#/components/schemas/MoveValue"
               },
               "type": {
                 "type": "string"
