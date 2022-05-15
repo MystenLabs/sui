@@ -129,7 +129,7 @@ impl LockServiceImpl {
             debug!(?objects, "locks_exist: all locks do exist");
             Ok(())
         } else {
-            debug!(?locks, "locks_exist: not all locks exist");
+            debug!(?locks, ?objects, "locks_exist: not all locks exist");
             Err(SuiError::TransactionLockDoesNotExist)
         }
     }

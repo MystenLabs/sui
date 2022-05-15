@@ -39,7 +39,7 @@ pub async fn init_local_authorities(
     Vec<Arc<AuthorityState>>,
 ) {
     #[allow(clippy::no_effect)]
-    *LOGGING_INIT;  // Initialize logging if needed
+    *LOGGING_INIT; // Initialize logging if needed
     let mut key_pairs = Vec::new();
     let mut voting_rights = BTreeMap::new();
     for _ in 0..genesis_objects.len() {
