@@ -5717,6 +5717,7 @@ dependencies = [
  "serde_yaml",
  "signature",
  "sui-adapter",
+ "sui-config",
  "sui-framework",
  "sui-network",
  "sui-types",

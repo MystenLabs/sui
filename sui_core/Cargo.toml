@@ -40,6 +40,7 @@ sui-adapter = { path = "../sui_programmability/adapter" }
 sui-framework = { path = "../sui_programmability/framework" }
 sui-network = { path = "../crates/sui-network" }
 sui-types = { path = "../sui_types" }
+sui-config = { path = "../crates/sui-config" }
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "8958b40e97a4f94a588e5365fdb90ec18f00d888" }
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "8958b40e97a4f94a588e5365fdb90ec18f00d888" }
