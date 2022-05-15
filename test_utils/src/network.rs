@@ -1,14 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use std::path::Path;
+use sui::config::FULL_NODE_DB_PATH;
+use sui::sui_commands::validator_and_full_node_genesis;
 use sui::{
     config::{
         Config, GatewayConfig, GatewayType, WalletConfig, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG,
         SUI_WALLET_CONFIG,
     },
     keystore::KeystoreType,
-    sui_commands::{genesis, SuiNetwork},
+    sui_commands::SuiNetwork,
 };
 use sui_config::GenesisConfig;
 
@@ -24,7 +25,7 @@ pub async fn start_test_network(
     let wallet_path = working_dir.join(SUI_WALLET_CONFIG);
     let keystore_path = working_dir.join("wallet.key");
     let db_folder_path = working_dir.join("client_db");
-
+    let full_node_db_path = working_dir.join(FULL_NODE_DB_PATH);
     let genesis_config = match genesis_config {
         Some(genesis_config) => genesis_config,
         None => {
@@ -33,7 +34,8 @@ pub async fn start_test_network(
             config
         }
     };
-    let (network_config, accounts, mut keystore) = genesis(genesis_config).await?;
+    let (network_config, accounts, mut keystore) =
+        validator_and_full_node_genesis(genesis_config, full_node_db_path).await?;
     let network = SuiNetwork::start(&network_config).await?;
 
     let network_config = network_config.persisted(&network_path);

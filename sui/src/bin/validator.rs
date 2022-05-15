@@ -6,7 +6,8 @@ use multiaddr::Multiaddr;
 use std::path::PathBuf;
 use sui::{
     config::{sui_config_dir, SUI_NETWORK_CONFIG},
-    sui_commands::{genesis, make_server},
+    sui_commands::make_server,
+    sui_genesis::GenesisState,
 };
 use sui_config::PersistedConfig;
 use sui_config::{GenesisConfig, ValidatorConfig};
@@ -57,8 +58,13 @@ async fn main() -> Result<(), anyhow::Error> {
         _ => {
             let mut genesis_conf: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
             genesis_conf.committee_size = 1;
-            let (network_config, _, _) = genesis(genesis_conf).await?;
-            network_config.into_validator_configs().remove(0)
+
+            let genesis_state = GenesisState::new_from_config(genesis_conf).await?;
+            genesis_state.populate_authority_with_genesis_ctx(0).await?;
+            genesis_state
+                .network_config
+                .into_validator_configs()
+                .remove(0)
         }
     };
     let listen_address = cfg

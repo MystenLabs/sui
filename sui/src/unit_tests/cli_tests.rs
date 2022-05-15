@@ -12,8 +12,8 @@ use tracing_test::traced_test;
 
 use sui::{
     config::{
-        Config, GatewayConfig, GatewayType, PersistedConfig, WalletConfig, SUI_GATEWAY_CONFIG,
-        SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
+        Config, GatewayConfig, GatewayType, PersistedConfig, WalletConfig, FULL_NODE_DB_PATH,
+        SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
     },
     keystore::KeystoreType,
     sui_commands::{SuiCommand, SuiNetwork},
@@ -81,10 +81,12 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         .flat_map(|r| r.map(|file| file.file_name().to_str().unwrap().to_owned()))
         .collect::<Vec<_>>();
 
-    assert_eq!(4, files.len());
+    assert_eq!(5, files.len());
     assert!(files.contains(&SUI_WALLET_CONFIG.to_string()));
     assert!(files.contains(&SUI_GATEWAY_CONFIG.to_string()));
     assert!(files.contains(&SUI_NETWORK_CONFIG.to_string()));
+    assert!(files.contains(&FULL_NODE_DB_PATH.to_string()));
+
     assert!(files.contains(&"wallet.key".to_string()));
 
     // Check network config

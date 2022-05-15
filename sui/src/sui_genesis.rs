@@ -12,7 +12,7 @@ use tokio::sync::mpsc::channel;
 use move_binary_format::CompiledModule;
 use move_package::BuildConfig;
 use sui_adapter::{adapter::generate_package_id, genesis};
-use sui_config::{sui_config_dir, GenesisConfig, NetworkConfig, ValidatorConfig};
+use sui_config::{sui_config_dir, GenesisConfig, NetworkConfig};
 use sui_core::{
     authority::{AuthorityState, AuthorityStore, ReplicaStore},
     authority_server::AuthorityServer,
@@ -174,10 +174,16 @@ impl GenesisState {
         Ok(state)
     }
 
-    pub async fn make_authority_server_with_genesis_ctx(
+    pub async fn populate_authority_with_genesis_ctx(
         &self,
-        validator_config: &ValidatorConfig,
+        validator_config_index: usize,
     ) -> SuiResult<AuthorityServer> {
+        let validator_config = self
+            .network_config
+            .validator_configs()
+            .get(validator_config_index)
+            .expect("No validator config found at index {validator_config_index}");
+
         let store = Arc::new(AuthorityStore::open(validator_config.db_path(), None));
         let name = *validator_config.key_pair().public_key_bytes();
 

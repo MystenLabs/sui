@@ -3,7 +3,7 @@
 use crate::{
     config::{
         sui_config_dir, Config, GatewayConfig, GatewayType, PersistedConfig, WalletConfig,
-        SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
+        FULL_NODE_DB_PATH, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
     },
     keystore::{Keystore, KeystoreType, SuiKeystore},
     sui_genesis::GenesisState,
@@ -34,7 +34,6 @@ use tokio::sync::mpsc::channel;
 use tracing::{error, info};
 
 pub const SUI_AUTHORITY_KEYS: &str = "authorities.key";
-pub const FULL_NODE_DB_PATH: &str = "full_node_db";
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -181,6 +180,7 @@ impl SuiCommand {
                 let keystore_path = sui_config_dir.join("wallet.key");
                 let db_folder_path = sui_config_dir.join("client_db");
                 let gateway_db_folder_path = sui_config_dir.join("gateway_client_db");
+                let full_node_db_path = sui_config_dir.join(FULL_NODE_DB_PATH);
 
                 let genesis_conf = match from_config {
                     Some(q) => PersistedConfig::read(q)?,
@@ -193,7 +193,8 @@ impl SuiCommand {
                     return Ok(());
                 }
 
-                let (network_config, accounts, mut keystore) = genesis(genesis_conf).await?;
+                let (network_config, accounts, mut keystore) =
+                    validator_and_full_node_genesis(genesis_conf, full_node_db_path).await?;
                 info!("Network genesis completed.");
                 let network_config = network_config.persisted(&network_path);
                 network_config.save()?;
@@ -319,25 +320,27 @@ impl SuiNetwork {
 }
 
 // TODO: Move this out to sui_genesis.rs
-pub async fn genesis(
+pub async fn validator_and_full_node_genesis(
     genesis_conf: GenesisConfig,
+    full_node_db_path: PathBuf,
 ) -> Result<(NetworkConfig, Vec<SuiAddress>, SuiKeystore), anyhow::Error> {
     let num_to_provision = genesis_conf.committee_size;
     info!("Creating {} new authorities...", num_to_provision);
     let mut gen_state = GenesisState::new_from_config(genesis_conf).await?;
 
-    for validator in gen_state.network_config.validator_configs() {
-        gen_state
-            .make_authority_server_with_genesis_ctx(validator)
-            .await?;
+    for (i, _) in gen_state
+        .network_config
+        .validator_configs()
+        .iter()
+        .enumerate()
+    {
+        gen_state.populate_authority_with_genesis_ctx(i).await?;
     }
 
     info!("Provisioning full node...");
 
-    let mut base = sui_config_dir()?;
-    base.push(FULL_NODE_DB_PATH);
     gen_state
-        .make_full_node_state_with_genesis_ctx(base)
+        .make_full_node_state_with_genesis_ctx(full_node_db_path)
         .await?;
 
     Ok((

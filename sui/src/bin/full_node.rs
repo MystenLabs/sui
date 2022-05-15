@@ -13,14 +13,13 @@ use std::{
 };
 use sui::{
     api::{RpcGatewayOpenRpc, RpcGatewayServer},
-    config::sui_config_dir,
+    config::{sui_config_dir, FULL_NODE_DB_PATH},
     sui_full_node::SuiNode,
 };
 use tracing::info;
 
 const DEFAULT_NODE_SERVER_PORT: &str = "5002";
 const DEFAULT_NODE_SERVER_ADDR_IPV4: &str = "127.0.0.1";
-use sui::sui_commands::FULL_NODE_DB_PATH;
 
 #[derive(Parser)]
 #[clap(name = "Sui Full Node", about = "TODO", rename_all = "kebab-case")]
