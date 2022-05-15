@@ -28,7 +28,7 @@ use std::{
         Arc,
     },
 };
-use sui_adapter::{adapter, genesis::get_genesis_context};
+use sui_adapter::adapter;
 use sui_config::genesis::Genesis;
 use sui_types::{
     base_types::*,

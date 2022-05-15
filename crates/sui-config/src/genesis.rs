@@ -1,17 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
-
 use base64ct::Encoding;
 use move_binary_format::CompiledModule;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::{serde_as, DeserializeAs, SerializeAs};
-use sui_types::{
-    base_types::{TransactionDigest, TxContext},
-    crypto::PublicKeyBytes,
-    object::Object,
-};
+use std::path::PathBuf;
+use sui_types::{base_types::TxContext, crypto::PublicKeyBytes, object::Object};
 use tracing::info;
 
 #[serde_as]
@@ -129,6 +124,7 @@ impl Builder {
     //     self
     // }
 
+    //TODO actually use the validators added to genesis
     pub fn add_validator(mut self, public_key: PublicKeyBytes, stake: usize) -> Self {
         self.validators.push((public_key, stake));
         self

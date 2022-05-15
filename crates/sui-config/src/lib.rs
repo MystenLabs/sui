@@ -5,10 +5,8 @@ use anyhow::Result;
 use debug_ignore::DebugIgnore;
 use move_binary_format::CompiledModule;
 use multiaddr::Multiaddr;
+use narwhal_config::Committee as ConsensusCommittee;
 use narwhal_config::Parameters as ConsensusParameters;
-use narwhal_config::{
-    Authority, Committee as ConsensusCommittee, PrimaryAddresses, Stake, WorkerAddresses,
-};
 use narwhal_crypto::ed25519::Ed25519PublicKey;
 use rand::rngs::OsRng;
 use serde::de::DeserializeOwned;
@@ -18,9 +16,9 @@ use std::fs;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_types::base_types::{encode_bytes_hex, ObjectID, SuiAddress, TxContext};
+use sui_types::base_types::{ObjectID, SuiAddress, TxContext};
 use sui_types::committee::{Committee, EpochId};
-use sui_types::crypto::{get_key_pair, KeyPair, PublicKeyBytes};
+use sui_types::crypto::{get_key_pair_from_rng, KeyPair, PublicKeyBytes};
 use sui_types::object::Object;
 use tracing::{info, trace};
 
@@ -262,7 +260,10 @@ pub struct GenesisConfig {
 impl Config for GenesisConfig {}
 
 impl GenesisConfig {
-    pub fn generate_accounts(&self) -> Result<(Vec<KeyPair>, Vec<Object>)> {
+    pub fn generate_accounts<R: ::rand::RngCore + ::rand::CryptoRng>(
+        &self,
+        mut rng: R,
+    ) -> Result<(Vec<KeyPair>, Vec<Object>)> {
         let mut addresses = Vec::new();
         let mut preload_objects = Vec::new();
         let mut all_preload_objects_set = BTreeSet::new();
@@ -274,7 +275,7 @@ impl GenesisConfig {
             let address = if let Some(address) = account.address {
                 address
             } else {
-                let (address, keypair) = get_key_pair();
+                let (address, keypair) = get_key_pair_from_rng(&mut rng);
                 keys.push(keypair);
                 address
             };
