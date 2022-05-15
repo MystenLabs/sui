@@ -20,7 +20,9 @@ use sui::{
     sui_commands::SuiNetwork,
 };
 use sui_core::gateway_state::GatewayTxSeqNumber;
-use sui_core::gateway_types::{SuiObjectRead, TransactionEffectsResponse, TransactionResponse};
+use sui_core::gateway_types::{
+    GetObjectInfoResponse, TransactionEffectsResponse, TransactionResponse,
+};
 use sui_core::sui_json::SuiJsonValue;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::sui_serde::Base64;
@@ -181,9 +183,9 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
     let result = result.objects;
 
     for oref in result {
-        let result: SuiObjectRead = http_client.get_object_info(oref.object_id).await?;
+        let result: GetObjectInfoResponse = http_client.get_object_info(oref.object_id).await?;
         assert!(
-            matches!(result, SuiObjectRead::Exists(object) if oref.object_id == object.id() && &object.owner.get_owner_address()? == address)
+            matches!(result, GetObjectInfoResponse::Exists(object) if oref.object_id == object.id() && &object.owner.get_owner_address()? == address)
         );
     }
     Ok(())

@@ -21,7 +21,7 @@ use tracing::info;
 
 use sui_core::gateway_state::GatewayClient;
 use sui_core::gateway_types::{
-    SuiCertifiedTransaction, SuiExecutionStatus, SuiObject, SuiObjectRead, SuiObjectRef,
+    GetObjectInfoResponse, SuiCertifiedTransaction, SuiExecutionStatus, SuiObject, SuiObjectRef,
     SuiTransactionEffects,
 };
 use sui_core::sui_json::SuiJsonValue;
@@ -543,7 +543,7 @@ impl WalletContext {
         let mut values_objects = Vec::new();
         for oref in object_refs {
             match self.gateway.get_object_info(oref.object_id).await? {
-                SuiObjectRead::Exists(o) => {
+                GetObjectInfoResponse::Exists(o) => {
                     if matches!( o.data.type_(), Some(v)  if *v == GasCoin::type_().to_string()) {
                         // Okay to unwrap() since we already checked type
                         let gas_coin = GasCoin::try_from(&o)?;
@@ -792,7 +792,7 @@ impl WalletCommandResult {
 #[serde(untagged)]
 pub enum WalletCommandResult {
     Publish(PublishResponse),
-    Object(SuiObjectRead),
+    Object(GetObjectInfoResponse),
     Call(SuiCertifiedTransaction, SuiTransactionEffects),
     Transfer(
         // Skipping serialisation for elapsed time.
@@ -809,7 +809,7 @@ pub enum WalletCommandResult {
     MergeCoin(MergeCoinResponse),
     Switch(SwitchResponse),
     ActiveAddress(Option<SuiAddress>),
-    CreateExampleNFT(SuiObjectRead),
+    CreateExampleNFT(GetObjectInfoResponse),
 }
 
 #[derive(Serialize, Clone, Debug)]

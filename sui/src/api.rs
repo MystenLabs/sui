@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 use sui_core::gateway_state::GatewayTxSeqNumber;
-use sui_core::gateway_types::{SuiInputObjectKind, SuiObjectRead, SuiObjectRef};
+use sui_core::gateway_types::{GetObjectInfoResponse, SuiInputObjectKind, SuiObjectRef};
 use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
 use sui_core::sui_json::SuiJsonValue;
 use sui_open_rpc_macros::open_rpc;
@@ -130,11 +130,12 @@ pub trait RpcGateway {
 
     /// Return the object information for a specified object
     #[method(name = "getObjectInfo")]
-    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<SuiObjectRead>;
+    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse>;
 }
 
 #[serde_as]
 #[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct TransactionBytes {
     pub tx_bytes: Base64,
     pub gas: SuiObjectRef,
