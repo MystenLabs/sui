@@ -1,7 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Result;
 use debug_ignore::DebugIgnore;
+use move_binary_format::CompiledModule;
 use multiaddr::Multiaddr;
 use narwhal_config::Parameters as ConsensusParameters;
 use narwhal_config::{
@@ -11,14 +13,16 @@ use narwhal_crypto::ed25519::Ed25519PublicKey;
 use rand::rngs::OsRng;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_types::base_types::{encode_bytes_hex, ObjectID, SuiAddress};
+use sui_types::base_types::{encode_bytes_hex, ObjectID, SuiAddress, TxContext};
 use sui_types::committee::{Committee, EpochId};
-use sui_types::crypto::{get_key_pair_from_rng, KeyPair, PublicKeyBytes};
-use tracing::trace;
+use sui_types::crypto::{get_key_pair, KeyPair, PublicKeyBytes};
+use sui_types::object::Object;
+use tracing::{info, trace};
 
 pub mod builder;
 pub mod genesis;
@@ -165,6 +169,7 @@ pub struct NetworkConfig {
     validator_configs: Vec<ValidatorConfig>,
     loaded_move_packages: Vec<(PathBuf, ObjectID)>,
     genesis: genesis::Genesis,
+    pub account_keys: Vec<KeyPair>,
 }
 
 impl Config for NetworkConfig {}
@@ -255,6 +260,97 @@ pub struct GenesisConfig {
 }
 
 impl Config for GenesisConfig {}
+
+impl GenesisConfig {
+    pub fn generate_accounts(&self) -> Result<(Vec<KeyPair>, Vec<Object>)> {
+        let mut addresses = Vec::new();
+        let mut preload_objects = Vec::new();
+        let mut all_preload_objects_set = BTreeSet::new();
+
+        info!("Creating accounts and gas objects...");
+
+        let mut keys = Vec::new();
+        for account in &self.accounts {
+            let address = if let Some(address) = account.address {
+                address
+            } else {
+                let (address, keypair) = get_key_pair();
+                keys.push(keypair);
+                address
+            };
+
+            addresses.push(address);
+            let mut preload_objects_map = BTreeMap::new();
+
+            // Populate gas itemized objects
+            account.gas_objects.iter().for_each(|q| {
+                if !all_preload_objects_set.contains(&q.object_id) {
+                    preload_objects_map.insert(q.object_id, q.gas_value);
+                }
+            });
+
+            // Populate ranged gas objects
+            if let Some(ranges) = &account.gas_object_ranges {
+                for rg in ranges {
+                    let ids = ObjectID::in_range(rg.offset, rg.count)?;
+
+                    for obj_id in ids {
+                        if !preload_objects_map.contains_key(&obj_id)
+                            && !all_preload_objects_set.contains(&obj_id)
+                        {
+                            preload_objects_map.insert(obj_id, rg.gas_value);
+                            all_preload_objects_set.insert(obj_id);
+                        }
+                    }
+                }
+            }
+
+            for (object_id, value) in preload_objects_map {
+                let new_object = Object::with_id_owner_gas_coin_object_for_testing(
+                    object_id,
+                    sui_types::base_types::SequenceNumber::new(),
+                    address,
+                    value,
+                );
+                preload_objects.push(new_object);
+            }
+        }
+
+        Ok((keys, preload_objects))
+    }
+
+    pub fn generate_custom_move_modules(
+        &self,
+        address: SuiAddress,
+    ) -> Result<(Vec<Vec<CompiledModule>>, TxContext)> {
+        let mut custom_modules = Vec::new();
+        let mut genesis_ctx =
+            sui_adapter::genesis::get_genesis_context_with_custom_address(&address);
+        // Build custom move packages
+        if !self.move_packages.is_empty() {
+            info!(
+                "Loading {} Move packages from {:?}",
+                self.move_packages.len(),
+                self.move_packages,
+            );
+
+            for path in &self.move_packages {
+                let mut modules = sui_framework::build_move_package(
+                    path,
+                    move_package::BuildConfig::default(),
+                    false,
+                )?;
+
+                let package_id =
+                    sui_adapter::adapter::generate_package_id(&mut modules, &mut genesis_ctx)?;
+
+                info!("Loaded package [{}] from {:?}.", package_id, path);
+                custom_modules.push(modules)
+            }
+        }
+        Ok((custom_modules, genesis_ctx))
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AccountConfig {

@@ -21,6 +21,8 @@ tracing = "0.1.34"
 narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "23745f48103656eae4a4205d0b3edd53ad8894de", package = "config" }
 narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "23745f48103656eae4a4205d0b3edd53ad8894de", package = "crypto" }
 move-binary-format = { git = "https://github.com/move-language/move", rev = "8958b40e97a4f94a588e5365fdb90ec18f00d888" }
+move-package = { git = "https://github.com/move-language/move", rev = "8958b40e97a4f94a588e5365fdb90ec18f00d888" }
 
 sui-framework = { path = "../../sui_programmability/framework" }
+sui-adapter = { path = "../../sui_programmability/adapter" }
 sui-types = { path = "../../sui_types" }
