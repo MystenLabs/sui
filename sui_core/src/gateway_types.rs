@@ -219,14 +219,25 @@ impl SuiObject {
         let oref = o.compute_object_reference();
         let data = match o.data {
             Data::Move(m) => {
-                let move_struct =
-                    m.to_move_value(&layout.ok_or(SuiError::ObjectSerializationError {
+                let move_struct = m
+                    .to_move_value(&layout.ok_or(SuiError::ObjectSerializationError {
                         error: "Layout is required to convert Move object to json".to_owned(),
-                    })?)?;
-                SuiData::MoveObject(SuiMoveObject {
-                    type_: m.type_.to_string(),
-                    contents: move_struct.into(),
-                })
+                    })?)?
+                    .into();
+
+                if let SuiMoveValue::Struct(SuiMoveStruct::WithTypes { type_, fields }) =
+                    move_struct
+                {
+                    SuiData::MoveObject(SuiMoveObject {
+                        type_,
+                        contents: SuiMoveValue::Struct(SuiMoveStruct::WithFields(fields)),
+                    })
+                } else {
+                    SuiData::MoveObject(SuiMoveObject {
+                        type_: m.type_.to_string(),
+                        contents: move_struct,
+                    })
+                }
             }
             Data::Package(p) => SuiData::Package(SuiMovePackage {
                 disassembled: p.disassemble()?,
@@ -294,6 +305,7 @@ impl SuiData {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct PublishResponse {
     /// Certificate of the transaction
     pub certificate: SuiCertifiedTransaction,
@@ -333,18 +345,20 @@ impl Display for PublishResponse {
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "status", content = "details", rename = "ObjectRead")]
-pub enum SuiObjectRead {
+pub enum GetObjectInfoResponse {
     Exists(SuiObject),
     NotExists(ObjectID),
-    Deleted(ObjectRef),
+    Deleted(SuiObjectRef),
 }
 
-impl SuiObjectRead {
+impl GetObjectInfoResponse {
     /// Returns a reference to the object if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
     pub fn object(&self) -> Result<&SuiObject, SuiError> {
         match &self {
-            Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: *oref }),
+            Self::Deleted(oref) => Err(SuiError::ObjectDeleted {
+                object_ref: oref.to_object_ref(),
+            }),
             Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
             Self::Exists(o) => Ok(o),
         }
@@ -354,23 +368,25 @@ impl SuiObjectRead {
     /// the object does not exist or is deleted.
     pub fn into_object(self) -> Result<SuiObject, SuiError> {
         match self {
-            Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: oref }),
+            Self::Deleted(oref) => Err(SuiError::ObjectDeleted {
+                object_ref: oref.to_object_ref(),
+            }),
             Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: id }),
             Self::Exists(o) => Ok(o),
         }
     }
 }
 
-impl TryFrom<ObjectRead> for SuiObjectRead {
+impl TryFrom<ObjectRead> for GetObjectInfoResponse {
     type Error = anyhow::Error;
 
     fn try_from(value: ObjectRead) -> Result<Self, Self::Error> {
         match value {
-            ObjectRead::NotExists(id) => Ok(SuiObjectRead::NotExists(id)),
-            ObjectRead::Exists(_, o, layout) => {
-                Ok(SuiObjectRead::Exists(SuiObject::try_from(o, layout)?))
-            }
-            ObjectRead::Deleted(oref) => Ok(SuiObjectRead::Deleted(oref)),
+            ObjectRead::NotExists(id) => Ok(GetObjectInfoResponse::NotExists(id)),
+            ObjectRead::Exists(_, o, layout) => Ok(GetObjectInfoResponse::Exists(
+                SuiObject::try_from(o, layout)?,
+            )),
+            ObjectRead::Deleted(oref) => Ok(GetObjectInfoResponse::Deleted(oref.into())),
         }
     }
 }
@@ -408,6 +424,7 @@ impl From<MoveValue> for SuiMoveValue {
             MoveValue::Bool(value) => SuiMoveValue::Bool(value),
             MoveValue::Address(value) => SuiMoveValue::Address(ObjectID::from(value)),
             MoveValue::Vector(value) => {
+                // Try convert bytearray
                 if value.iter().all(|value| matches!(value, MoveValue::U8(_))) {
                     let bytearray = value
                         .iter()
@@ -443,7 +460,7 @@ impl From<MoveValue> for SuiMoveValue {
 #[serde(untagged, rename = "MoveStruct")]
 pub enum SuiMoveStruct {
     Runtime(Vec<SuiMoveValue>),
-    WithFields(Vec<(String, SuiMoveValue)>),
+    WithFields(BTreeMap<String, SuiMoveValue>),
     WithTypes {
         #[serde(rename = "type")]
         type_: String,
@@ -767,7 +784,7 @@ pub struct SuiTransactionEffects {
     pub events: Vec<SuiEvent>,
     /// The set of transaction digests this transaction depends on.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub dependencies: Vec<String>,
+    pub dependencies: Vec<TransactionDigest>,
 }
 
 impl SuiTransactionEffects {
@@ -850,7 +867,7 @@ impl From<TransactionEffects> for SuiTransactionEffects {
                     contents: event.contents.clone(),
                 })
                 .collect(),
-            dependencies: effect.dependencies.iter().map(Base64::encode).collect(),
+            dependencies: effect.dependencies,
         }
     }
 }
@@ -860,11 +877,11 @@ impl From<TransactionEffects> for SuiTransactionEffects {
 pub enum SuiExecutionStatus {
     // Gas used in the success case.
     Success {
-        gas_cost: GasCostSummary,
+        gas_cost: SuiGasCostSummary,
     },
     // Gas used in the failed case, and the error.
     Failure {
-        gas_cost: GasCostSummary,
+        gas_cost: SuiGasCostSummary,
         error: String,
     },
 }
@@ -881,9 +898,11 @@ impl SuiExecutionStatus {
 impl From<ExecutionStatus> for SuiExecutionStatus {
     fn from(status: ExecutionStatus) -> Self {
         match status {
-            ExecutionStatus::Success { gas_cost } => Self::Success { gas_cost },
+            ExecutionStatus::Success { gas_cost } => Self::Success {
+                gas_cost: gas_cost.into(),
+            },
             ExecutionStatus::Failure { gas_cost, error } => Self::Failure {
-                gas_cost,
+                gas_cost: gas_cost.into(),
                 error: error.to_string(),
             },
         }
@@ -902,6 +921,24 @@ fn to_owned_ref(owned_refs: Vec<(ObjectRef, Owner)>) -> Vec<OwnedObjectRef> {
             reference: oref.into(),
         })
         .collect()
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "GasCostSummary", rename_all = "camelCase")]
+pub struct SuiGasCostSummary {
+    pub computation_cost: u64,
+    pub storage_cost: u64,
+    pub storage_rebate: u64,
+}
+
+impl From<GasCostSummary> for SuiGasCostSummary {
+    fn from(s: GasCostSummary) -> Self {
+        Self {
+            computation_cost: s.computation_cost,
+            storage_cost: s.storage_cost,
+            storage_rebate: s.storage_rebate,
+        }
+    }
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]

@@ -20,7 +20,7 @@ use sui::{
     wallet_commands::{WalletCommandResult, WalletCommands, WalletContext},
 };
 use sui_config::{AccountConfig, GenesisConfig, NetworkConfig, ObjectConfig};
-use sui_core::gateway_types::{SuiObject, SuiObjectRead, SuiTransactionEffects};
+use sui_core::gateway_types::{GetObjectInfoResponse, SuiObject, SuiTransactionEffects};
 use sui_core::sui_json::SuiJsonValue;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -207,7 +207,7 @@ async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
 
     // Verify the airdrop token
     assert_eq!(token["data"]["type"], ("0x2::CrossChainAirdrop::ERC721"));
-    let erc721_metadata = &token["data"]["contents"]["fields"]["metadata"];
+    let erc721_metadata = &token["data"]["contents"]["metadata"];
     assert_eq!(
         erc721_metadata["fields"]["token_id"]["fields"]["id"],
         AIRDROP_SOURCE_TOKEN_ID
@@ -307,7 +307,7 @@ async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
     .await?;
 
     match result {
-        WalletCommandResult::CreateExampleNFT(SuiObjectRead::Exists(obj)) => {
+        WalletCommandResult::CreateExampleNFT(GetObjectInfoResponse::Exists(obj)) => {
             assert_eq!(obj.owner, address);
             assert_eq!(obj.data.type_().unwrap(), "0x2::DevNetNFT::DevNetNFT");
             Ok(obj)
@@ -611,7 +611,7 @@ async fn get_move_object(
 
     match obj {
         WalletCommandResult::Object(obj) => match obj {
-            SuiObjectRead::Exists(obj) => Ok(serde_json::to_value(obj)?),
+            GetObjectInfoResponse::Exists(obj) => Ok(serde_json::to_value(obj)?),
             _ => panic!("WalletCommands::Object returns wrong type"),
         },
         _ => panic!("WalletCommands::Object returns wrong type {obj}"),
@@ -842,7 +842,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     .await?;
     assert!(matches!(
         resp,
-        WalletCommandResult::Object(SuiObjectRead::Exists(..))
+        WalletCommandResult::Object(GetObjectInfoResponse::Exists(..))
     ));
 
     let resp = WalletCommands::Object {
@@ -852,7 +852,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     .await?;
     assert!(matches!(
         resp,
-        WalletCommandResult::Object(SuiObjectRead::Exists(..))
+        WalletCommandResult::Object(GetObjectInfoResponse::Exists(..))
     ));
 
     network.kill().await?;
@@ -923,7 +923,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let resp = WalletCommands::Object { id: mut_obj1 }
         .execute(&mut context)
         .await?;
-    let mut_obj1 = if let WalletCommandResult::Object(SuiObjectRead::Exists(object)) = resp {
+    let mut_obj1 = if let WalletCommandResult::Object(GetObjectInfoResponse::Exists(object)) = resp
+    {
         object
     } else {
         // Fail this way because Panic! causes test issues
@@ -934,7 +935,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let resp = WalletCommands::Object { id: mut_obj2 }
         .execute(&mut context)
         .await?;
-    let mut_obj2 = if let WalletCommandResult::Object(SuiObjectRead::Exists(object)) = resp {
+    let mut_obj2 = if let WalletCommandResult::Object(GetObjectInfoResponse::Exists(object)) = resp
+    {
         object
     } else {
         // Fail this way because Panic! causes test issues
@@ -1004,7 +1006,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 #[test]
 // Test for issue https://github.com/MystenLabs/sui/issues/1078
 fn test_bug_1078() {
-    let read = WalletCommandResult::Object(SuiObjectRead::NotExists(ObjectID::random()));
+    let read = WalletCommandResult::Object(GetObjectInfoResponse::NotExists(ObjectID::random()));
     let mut writer = String::new();
     // fmt ObjectRead should not fail.
     write!(writer, "{}", read).unwrap();
@@ -1166,7 +1168,7 @@ fn get_gas_value(o: &SuiObject) -> u64 {
 }
 
 async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<SuiObject> {
-    if let SuiObjectRead::Exists(o) = context.gateway.get_object_info(id).await.unwrap() {
+    if let GetObjectInfoResponse::Exists(o) = context.gateway.get_object_info(id).await.unwrap() {
         Some(o)
     } else {
         None

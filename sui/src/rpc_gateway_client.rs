@@ -9,7 +9,7 @@ use tokio::runtime::Handle;
 
 use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
 use sui_core::gateway_types::{
-    SuiObjectRead, SuiObjectRef, TransactionEffectsResponse, TransactionResponse,
+    GetObjectInfoResponse, SuiObjectRef, TransactionEffectsResponse, TransactionResponse,
 };
 use sui_core::sui_json::SuiJsonValue;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
@@ -142,7 +142,7 @@ impl GatewayAPI for RpcGatewayClient {
         bytes.to_data()
     }
 
-    async fn get_object_info(&self, object_id: ObjectID) -> Result<SuiObjectRead, Error> {
+    async fn get_object_info(&self, object_id: ObjectID) -> Result<GetObjectInfoResponse, Error> {
         Ok(self.client.get_object_info(object_id).await?)
     }
 

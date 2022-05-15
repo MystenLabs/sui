@@ -492,7 +492,7 @@
         }
       ],
       "result": {
-        "name": "SuiObjectRead",
+        "name": "GetObjectInfoResponse",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/ObjectRead"
@@ -707,22 +707,22 @@
       "GasCostSummary": {
         "type": "object",
         "required": [
-          "computation_cost",
-          "storage_cost",
-          "storage_rebate"
+          "computationCost",
+          "storageCost",
+          "storageRebate"
         ],
         "properties": {
-          "computation_cost": {
+          "computationCost": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "storage_cost": {
+          "storageCost": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "storage_rebate": {
+          "storageRebate": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -858,19 +858,9 @@
             }
           },
           {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": [
-                {
-                  "type": "string"
-                },
-                {
-                  "$ref": "#/components/schemas/MoveValue"
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MoveValue"
             }
           },
           {
@@ -1050,20 +1040,7 @@
             ],
             "properties": {
               "details": {
-                "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SequenceNumber"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ObjectDigest"
-                  }
-                ],
-                "maxItems": 3,
-                "minItems": 3
+                "$ref": "#/components/schemas/ObjectRef"
               },
               "status": {
                 "type": "string",
@@ -1167,9 +1144,9 @@
         "type": "object",
         "required": [
           "certificate",
-          "created_objects",
+          "createdObjects",
           "package",
-          "updated_gas"
+          "updatedGas"
         ],
         "properties": {
           "certificate": {
@@ -1180,7 +1157,7 @@
               }
             ]
           },
-          "created_objects": {
+          "createdObjects": {
             "description": "List of Move objects created as part of running the module initializers in the package",
             "type": "array",
             "items": {
@@ -1195,7 +1172,7 @@
               }
             ]
           },
-          "updated_gas": {
+          "updatedGas": {
             "description": "The updated gas payment object after deducting payment",
             "allOf": [
               {
@@ -1263,20 +1240,20 @@
         "type": "object",
         "required": [
           "gas",
-          "input_objects",
-          "tx_bytes"
+          "inputObjects",
+          "txBytes"
         ],
         "properties": {
           "gas": {
             "$ref": "#/components/schemas/ObjectRef"
           },
-          "input_objects": {
+          "inputObjects": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/InputObjectKind"
             }
           },
-          "tx_bytes": {
+          "txBytes": {
             "$ref": "#/components/schemas/Base64"
           }
         }
@@ -1342,7 +1319,7 @@
             "description": "The set of transaction digests this transaction depends on.",
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/TransactionDigest"
             }
           },
           "events": {

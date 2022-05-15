@@ -11,7 +11,7 @@ use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
 use tracing::debug;
 
 use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
-use sui_core::gateway_types::SuiObjectRead;
+use sui_core::gateway_types::GetObjectInfoResponse;
 use sui_core::sui_json::SuiJsonValue;
 use sui_types::sui_serde::Base64;
 use sui_types::{
@@ -126,7 +126,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
         Ok(ObjectResponse { objects })
     }
 
-    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<SuiObjectRead> {
+    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse> {
         Ok(self.gateway.get_object_info(object_id).await?)
     }
 

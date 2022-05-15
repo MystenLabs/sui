@@ -13,7 +13,7 @@ use jsonrpsee::core::RpcResult;
 use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
 
 use sui_core::gateway_state::GatewayTxSeqNumber;
-use sui_core::gateway_types::SuiObjectRead;
+use sui_core::gateway_types::GetObjectInfoResponse;
 use sui_core::sui_json::SuiJsonValue;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::sui_serde::Base64;
@@ -75,7 +75,7 @@ impl RpcGatewayServer for SuiNode {
         todo!()
     }
 
-    async fn get_object_info(&self, _object_id: ObjectID) -> RpcResult<SuiObjectRead> {
+    async fn get_object_info(&self, _object_id: ObjectID) -> RpcResult<GetObjectInfoResponse> {
         todo!()
     }
 

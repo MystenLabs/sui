@@ -303,7 +303,10 @@ pub trait GatewayAPI {
     ) -> Result<TransactionData, anyhow::Error>;
 
     /// Get the object information
-    async fn get_object_info(&self, object_id: ObjectID) -> Result<SuiObjectRead, anyhow::Error>;
+    async fn get_object_info(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<GetObjectInfoResponse, anyhow::Error>;
 
     /// Get refs of all objects we own from local cache.
     async fn get_owned_objects(
@@ -1071,7 +1074,10 @@ where
         Ok(data)
     }
 
-    async fn get_object_info(&self, object_id: ObjectID) -> Result<SuiObjectRead, anyhow::Error> {
+    async fn get_object_info(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<GetObjectInfoResponse, anyhow::Error> {
         let result = self.download_object_from_authorities(object_id).await?;
         Ok(result.try_into()?)
     }
