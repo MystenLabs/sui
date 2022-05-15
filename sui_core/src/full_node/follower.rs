@@ -28,6 +28,7 @@ use sui_types::{
 
 use tracing::{debug, error, info};
 
+/// Follows one authority
 struct Follower<A> {
     // Authority being followed
     name: AuthorityName,
@@ -41,6 +42,7 @@ struct Follower<A> {
 
 use super::{FullNode, FullNodeState};
 
+/// Spawns tasks to follow a quorum of minumum stake min_stake_target
 pub async fn follow_multiple<A>(
     full_node: &FullNode<A>,
     min_stake_target: usize,
