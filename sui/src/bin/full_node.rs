@@ -14,20 +14,20 @@ use std::{
 use sui::{
     api::{RpcGatewayOpenRpc, RpcGatewayServer},
     config::sui_config_dir,
-    sui_node::SuiNode,
+    sui_full_node::SuiNode,
 };
 use tracing::info;
 
 const DEFAULT_NODE_SERVER_PORT: &str = "5002";
 const DEFAULT_NODE_SERVER_ADDR_IPV4: &str = "127.0.0.1";
+use sui::sui_commands::FULL_NODE_DB_PATH;
 
 #[derive(Parser)]
-#[clap(
-    name = "Sui Node",
-    about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
-    rename_all = "kebab-case"
-)]
+#[clap(name = "Sui Full Node", about = "TODO", rename_all = "kebab-case")]
 struct SuiNodeOpt {
+    #[clap(long, default_value = FULL_NODE_DB_PATH)]
+    db_path: String,
+
     #[clap(long)]
     config: Option<PathBuf>,
 
@@ -50,6 +50,8 @@ async fn main() -> anyhow::Result<()> {
     let guard = telemetry_subscribers::init(config);
 
     let options: SuiNodeOpt = SuiNodeOpt::parse();
+    let db_path = options.db_path;
+
     let config_path = options
         .config
         .unwrap_or(sui_config_dir()?.join("node.conf"));
@@ -75,7 +77,11 @@ async fn main() -> anyhow::Result<()> {
     let mut module = RpcModule::new(());
     let open_rpc = RpcGatewayOpenRpc::open_rpc();
     module.register_method("rpc.discover", move |_, _| Ok(open_rpc.clone()))?;
-    module.merge(SuiNode::new(&config_path)?.into_rpc())?;
+    module.merge(
+        SuiNode::start_without_genesis(&config_path, &PathBuf::from(db_path))
+            .await?
+            .into_rpc(),
+    )?;
 
     info!(
         "Available JSON-RPC methods : {:?}",

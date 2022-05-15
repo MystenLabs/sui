@@ -10,5 +10,6 @@ pub mod rpc_gateway;
 pub mod rpc_gateway_client;
 pub mod shell;
 pub mod sui_commands;
-pub mod sui_node;
+pub mod sui_full_node;
+pub mod sui_genesis;
 pub mod wallet_commands;
