@@ -7,10 +7,10 @@ use sui::{
         Config, GatewayConfig, GatewayType, WalletConfig, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG,
         SUI_WALLET_CONFIG,
     },
-    keystore::{Keystore, KeystoreType, SuiKeystore},
-    sui_commands::{genesis, SuiNetwork},
+    keystore::{KeystoreType, SuiKeystore},
+    sui_commands::SuiNetwork,
 };
-use sui_config::{builder::ConfigBuilder, GenesisConfig, NetworkConfig};
+use sui_config::{builder::ConfigBuilder, GenesisConfig};
 use sui_types::base_types::SuiAddress;
 
 const NUM_VALIDAOTR: usize = 4;
