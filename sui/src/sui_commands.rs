@@ -451,6 +451,23 @@ pub async fn make_server(validator_config: &ValidatorConfig) -> SuiResult<Author
     make_authority(validator_config, state).await
 }
 
+pub async fn make_server_with_genesis(
+    validator_config: &ValidatorConfig,
+) -> SuiResult<AuthorityServer> {
+    let store = Arc::new(AuthorityStore::open(validator_config.db_path(), None));
+    let name = validator_config.public_key();
+    let state = AuthorityState::new_with_genesis(
+        validator_config.committee_config().committee(),
+        name,
+        Arc::pin(validator_config.key_pair().copy()),
+        store,
+        validator_config.genesis(),
+    )
+    .await;
+
+    make_authority(validator_config, state).await
+}
+
 async fn make_server_with_genesis_ctx(
     validator_config: &ValidatorConfig,
     preload_modules: Vec<Vec<CompiledModule>>,
