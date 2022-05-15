@@ -28,7 +28,8 @@ use std::{
         Arc,
     },
 };
-use sui_adapter::adapter;
+use sui_adapter::{adapter, genesis::get_genesis_context};
+use sui_config::genesis::Genesis;
 use sui_types::{
     base_types::*,
     batch::{TxSequenceNumber, UpdateItem},
@@ -708,6 +709,37 @@ impl AuthorityState {
                     .await
                     .expect("We expect publishing the Genesis packages to not fail");
             }
+        }
+
+        state
+    }
+
+    pub async fn new_with_genesis(
+        committee: Committee,
+        name: AuthorityName,
+        secret: StableSyncAuthoritySigner,
+        store: Arc<AuthorityStore>,
+        genesis: &Genesis,
+    ) -> Self {
+        let state =
+            AuthorityState::new_without_genesis(committee, name, secret, store.clone()).await;
+
+        // Only initialize an empty database.
+        if store
+            .database_is_empty()
+            .expect("Database read should not fail.")
+        {
+            let mut genesis_ctx = get_genesis_context();
+            state
+                .store_package_and_init_modules_for_genesis(
+                    &mut genesis_ctx,
+                    genesis.modules().to_owned(),
+                )
+                .await
+                .expect("We expect publishing the Genesis packages to not fail");
+            state
+                .insert_genesis_objects_bulk_unsafe(&genesis.objects().iter().collect::<Vec<_>>())
+                .await;
         }
 
         state
