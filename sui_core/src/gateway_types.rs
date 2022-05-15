@@ -230,12 +230,12 @@ impl SuiObject {
                 {
                     SuiData::MoveObject(SuiMoveObject {
                         type_,
-                        contents: SuiMoveValue::Struct(SuiMoveStruct::WithFields(fields)),
+                        fields: SuiMoveValue::Struct(SuiMoveStruct::WithFields(fields)),
                     })
                 } else {
                     SuiData::MoveObject(SuiMoveObject {
                         type_: m.type_.to_string(),
-                        contents: move_struct,
+                        fields: move_struct,
                     })
                 }
             }
@@ -265,7 +265,7 @@ pub enum SuiData {
 pub struct SuiMoveObject {
     #[serde(rename = "type")]
     pub type_: String,
-    pub contents: SuiMoveValue,
+    pub fields: SuiMoveValue,
 }
 
 impl TryFrom<&SuiObject> for GasCoin {
@@ -273,7 +273,7 @@ impl TryFrom<&SuiObject> for GasCoin {
     fn try_from(object: &SuiObject) -> Result<Self, Self::Error> {
         match &object.data {
             SuiData::MoveObject(o) => {
-                if let SuiMoveValue::Coin(coin) = &o.contents {
+                if let SuiMoveValue::Coin(coin) = &o.fields {
                     return Ok(GasCoin(coin.clone()));
                 }
             }
