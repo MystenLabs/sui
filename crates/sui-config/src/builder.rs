@@ -11,10 +11,13 @@ use std::{
     path::{Path, PathBuf},
 };
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_types::{base_types::encode_bytes_hex, crypto::get_key_pair_from_rng};
+use sui_types::{
+    base_types::{encode_bytes_hex, SuiAddress},
+    crypto::get_key_pair_from_rng,
+};
 
 use crate::{
-    genesis, new_network_address, CommitteeConfig, ConsensuseConfig, NetworkConfig,
+    genesis, new_network_address, CommitteeConfig, ConsensuseConfig, GenesisConfig, NetworkConfig,
     ValidatorConfig, ValidatorInfo, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME, DEFAULT_STAKE,
 };
 
@@ -23,6 +26,7 @@ pub struct ConfigBuilder<R = OsRng> {
     config_directory: PathBuf,
     randomize_ports: bool,
     committee_size: NonZeroUsize,
+    initial_accounts_config: Option<GenesisConfig>,
 }
 
 impl ConfigBuilder {
@@ -32,6 +36,7 @@ impl ConfigBuilder {
             config_directory: config_directory.as_ref().into(),
             randomize_ports: true,
             committee_size: NonZeroUsize::new(1).unwrap(),
+            initial_accounts_config: None,
         }
     }
 }
@@ -47,12 +52,18 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn initial_accounts_config(mut self, initial_accounts_config: GenesisConfig) -> Self {
+        self.initial_accounts_config = Some(initial_accounts_config);
+        self
+    }
+
     pub fn rng<N: ::rand::RngCore + ::rand::CryptoRng>(self, rng: N) -> ConfigBuilder<N> {
         ConfigBuilder {
             rng,
             config_directory: self.config_directory,
             randomize_ports: self.randomize_ports,
             committee_size: self.committee_size,
+            initial_accounts_config: self.initial_accounts_config,
         }
     }
 }
@@ -81,6 +92,22 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             })
             .collect::<Vec<_>>();
 
+        let initial_accounts_config = self
+            .initial_accounts_config
+            .unwrap_or_else(|| GenesisConfig::for_local_testing().unwrap());
+        let (account_keys, objects) = initial_accounts_config.generate_accounts().unwrap();
+        // TODO: allow custom address to be used after the Gateway refactoring
+        // Default to use the last address in the wallet config for initializing modules.
+        // If there's no address in wallet config, then use 0x0
+        let (custom_modules, genesis_ctx) = initial_accounts_config
+            .generate_custom_move_modules(
+                account_keys
+                    .last()
+                    .map(|key| SuiAddress::from(key.public_key_bytes()))
+                    .unwrap_or_else(SuiAddress::default),
+            )
+            .unwrap();
+
         let genesis = {
             let mut builder = genesis::Builder::new()
                 .sui_framework(PathBuf::from(DEFAULT_FRAMEWORK_PATH))
@@ -88,7 +115,10 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     PathBuf::from(DEFAULT_FRAMEWORK_PATH)
                         .join("deps")
                         .join("move-stdlib"),
-                );
+                )
+                .add_move_modules(custom_modules)
+                .genesis_ctx(genesis_ctx)
+                .add_objects(objects);
 
             for validator in &validator_set {
                 builder = builder.add_validator(validator.public_key(), validator.stake());
@@ -188,6 +218,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             validator_configs,
             loaded_move_packages: vec![],
             genesis,
+            account_keys,
         }
     }
 }

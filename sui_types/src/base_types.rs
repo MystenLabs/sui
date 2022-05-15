@@ -194,7 +194,7 @@ pub struct ObjectDigest(
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct TxContext {
     /// Signer/sender of the transaction
     sender: AccountAddress,
