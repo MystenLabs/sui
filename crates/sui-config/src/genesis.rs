@@ -11,7 +11,7 @@ use sui_types::{base_types::TransactionDigest, crypto::PublicKeyBytes, object::O
 use tracing::info;
 
 #[serde_as]
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Genesis {
     #[serde_as(as = "Vec<SerdeCompiledModule>")]
     modules: Vec<CompiledModule>,
