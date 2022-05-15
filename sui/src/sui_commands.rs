@@ -11,17 +11,12 @@ use anyhow::{anyhow, bail};
 use base64ct::{Base64, Encoding};
 use clap::*;
 use futures::future::join_all;
-use move_binary_format::CompiledModule;
-use move_package::BuildConfig;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_adapter::adapter::generate_package_id;
-use sui_adapter::genesis;
-use sui_config::NetworkConfig;
+use std::{collections::BTreeMap, num::NonZeroUsize};
+use sui_config::{builder::ConfigBuilder, NetworkConfig};
 use sui_config::{GenesisConfig, ValidatorConfig};
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_active::ActiveAuthority;
@@ -29,14 +24,11 @@ use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::authority_server::AuthorityServer;
 use sui_core::authority_server::AuthorityServerHandle;
 use sui_core::consensus_adapter::ConsensusListener;
-use sui_types::base_types::{decode_bytes_hex, ObjectID};
-use sui_types::base_types::{SequenceNumber, SuiAddress, TxContext};
+use sui_types::base_types::decode_bytes_hex;
+use sui_types::base_types::SuiAddress;
 use sui_types::error::SuiResult;
-use sui_types::object::Object;
 use tokio::sync::mpsc::channel;
 use tracing::{error, info};
-
-pub const SUI_AUTHORITY_KEYS: &str = "authorities.key";
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -195,7 +187,20 @@ impl SuiCommand {
                     return Ok(());
                 }
 
-                let (network_config, accounts, mut keystore) = genesis(genesis_conf).await?;
+                let network_config = ConfigBuilder::new(sui_config_dir)
+                    .committee_size(NonZeroUsize::new(genesis_conf.committee_size).unwrap())
+                    .initial_accounts_config(genesis_conf)
+                    .build();
+
+                let mut accounts = Vec::new();
+                let mut keystore = SuiKeystore::default();
+
+                for key in &network_config.account_keys {
+                    let address = SuiAddress::from(key.public_key_bytes());
+                    accounts.push(address);
+                    keystore.add_key(address, key.copy())?;
+                }
+
                 info!("Network genesis completed.");
                 let network_config = network_config.persisted(&network_path);
                 network_config.save()?;
@@ -320,123 +325,6 @@ impl SuiNetwork {
     }
 }
 
-pub async fn genesis(
-    genesis_conf: GenesisConfig,
-) -> Result<(NetworkConfig, Vec<SuiAddress>, SuiKeystore), anyhow::Error> {
-    let num_to_provision = genesis_conf.committee_size;
-
-    info!("Creating {} new authorities...", num_to_provision);
-
-    let config_dir = sui_config_dir().unwrap();
-    let mut network_config = NetworkConfig::generate(&config_dir, num_to_provision);
-
-    let mut addresses = Vec::new();
-    let mut preload_modules: Vec<Vec<CompiledModule>> = Vec::new();
-    let mut preload_objects = Vec::new();
-    let mut all_preload_objects_set = BTreeSet::new();
-
-    info!("Creating accounts and gas objects...",);
-
-    let mut keystore = SuiKeystore::default();
-    for account in genesis_conf.accounts {
-        let address = if let Some(address) = account.address {
-            address
-        } else {
-            keystore.add_random_key()?
-        };
-
-        addresses.push(address);
-        let mut preload_objects_map = BTreeMap::new();
-
-        // Populate gas itemized objects
-        account.gas_objects.iter().for_each(|q| {
-            if !all_preload_objects_set.contains(&q.object_id) {
-                preload_objects_map.insert(q.object_id, q.gas_value);
-            }
-        });
-
-        // Populate ranged gas objects
-        if let Some(ranges) = account.gas_object_ranges {
-            for rg in ranges {
-                let ids = ObjectID::in_range(rg.offset, rg.count)?;
-
-                for obj_id in ids {
-                    if !preload_objects_map.contains_key(&obj_id)
-                        && !all_preload_objects_set.contains(&obj_id)
-                    {
-                        preload_objects_map.insert(obj_id, rg.gas_value);
-                        all_preload_objects_set.insert(obj_id);
-                    }
-                }
-            }
-        }
-
-        for (object_id, value) in preload_objects_map {
-            let new_object = Object::with_id_owner_gas_coin_object_for_testing(
-                object_id,
-                SequenceNumber::new(),
-                address,
-                value,
-            );
-            preload_objects.push(new_object);
-        }
-    }
-
-    info!(
-        "Loading Move framework lib from {:?}",
-        genesis_conf.move_framework_lib_path
-    );
-    let move_lib = sui_framework::get_move_stdlib_modules(&genesis_conf.move_framework_lib_path)?;
-    preload_modules.push(move_lib);
-
-    // Load Sui and Move framework lib
-    info!(
-        "Loading Sui framework lib from {:?}",
-        genesis_conf.sui_framework_lib_path
-    );
-    let sui_lib = sui_framework::get_sui_framework_modules(&genesis_conf.sui_framework_lib_path)?;
-    preload_modules.push(sui_lib);
-
-    // TODO: allow custom address to be used after the Gateway refactoring
-    // Default to use the last address in the wallet config for initializing modules.
-    // If there's no address in wallet config, then use 0x0
-    let null_address = SuiAddress::default();
-    let module_init_address = addresses.last().unwrap_or(&null_address);
-    let mut genesis_ctx = genesis::get_genesis_context_with_custom_address(module_init_address);
-    // Build custom move packages
-    if !genesis_conf.move_packages.is_empty() {
-        info!(
-            "Loading {} Move packages from {:?}",
-            &genesis_conf.move_packages.len(),
-            &genesis_conf.move_packages
-        );
-
-        for path in genesis_conf.move_packages {
-            let mut modules =
-                sui_framework::build_move_package(&path, BuildConfig::default(), false)?;
-
-            let package_id = generate_package_id(&mut modules, &mut genesis_ctx)?;
-
-            info!("Loaded package [{}] from {:?}.", package_id, path);
-            // Writing package id to network config for user to retrieve later.
-            network_config.add_move_package(path, package_id);
-            preload_modules.push(modules)
-        }
-    }
-
-    for validator in network_config.validator_configs() {
-        make_server_with_genesis_ctx(
-            validator,
-            preload_modules.clone(),
-            &preload_objects,
-            &mut genesis_ctx.clone(),
-        )
-        .await?;
-    }
-
-    Ok((network_config, addresses, keystore))
-}
-
 pub async fn make_server(validator_config: &ValidatorConfig) -> SuiResult<AuthorityServer> {
     let store = Arc::new(AuthorityStore::open(validator_config.db_path(), None));
     let name = validator_config.public_key();
@@ -466,39 +354,6 @@ pub async fn make_server_with_genesis(
     .await;
 
     make_authority(validator_config, state).await
-}
-
-async fn make_server_with_genesis_ctx(
-    validator_config: &ValidatorConfig,
-    preload_modules: Vec<Vec<CompiledModule>>,
-    preload_objects: &[Object],
-    genesis_ctx: &mut TxContext,
-) -> SuiResult<AuthorityServer> {
-    let store = Arc::new(AuthorityStore::open(validator_config.db_path(), None));
-    let name = *validator_config.key_pair().public_key_bytes();
-
-    let state = AuthorityState::new(
-        validator_config.committee_config().committee(),
-        name,
-        Arc::pin(validator_config.key_pair().copy()),
-        store,
-        preload_modules,
-        genesis_ctx,
-    )
-    .await;
-
-    // Okay to do this since we're at genesis
-    state
-        .insert_genesis_objects_bulk_unsafe(&preload_objects.iter().collect::<Vec<_>>())
-        .await;
-
-    let (tx_sui_to_consensus, _rx_sui_to_consensus) = channel(1);
-    Ok(AuthorityServer::new(
-        validator_config.network_address().clone(),
-        Arc::new(state),
-        validator_config.consensus_config().address().clone(),
-        /* tx_consensus_listener */ tx_sui_to_consensus,
-    ))
 }
 
 /// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,

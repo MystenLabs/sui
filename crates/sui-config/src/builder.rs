@@ -95,7 +95,9 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         let initial_accounts_config = self
             .initial_accounts_config
             .unwrap_or_else(|| GenesisConfig::for_local_testing().unwrap());
-        let (account_keys, objects) = initial_accounts_config.generate_accounts().unwrap();
+        let (account_keys, objects) = initial_accounts_config
+            .generate_accounts(&mut self.rng)
+            .unwrap();
         // TODO: allow custom address to be used after the Gateway refactoring
         // Default to use the last address in the wallet config for initializing modules.
         // If there's no address in wallet config, then use 0x0
