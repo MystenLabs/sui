@@ -1,13 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use std::sync::Arc;
-
 use sui_config::ValidatorInfo;
 use sui_core::{
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     gateway_state::{GatewayAPI, GatewayState},
 };
+use sui_types::object::OBJECT_START_VERSION;
 use sui_types::{
     base_types::ObjectRef,
     error::{SuiError, SuiResult},
@@ -439,6 +438,46 @@ async fn shared_object_sync() {
             }
             Err(error) => panic!("{error}"),
         }
+    }
+}
+
+/// Send a simple shared object transaction to Sui and ensures the client gets back a response.
+#[tokio::test]
+async fn replay_shared_object_transaction() {
+    let mut gas_objects = test_gas_objects();
+
+    // Get the authority configs and spawn them. Note that it is important to not drop
+    // the handles (or the authorities will stop).
+    let configs = test_authority_configs();
+    let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
+
+    // Publish the move package to all authorities and get the new package ref.
+    tokio::task::yield_now().await;
+    let package_ref =
+        publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
+
+    // Send a transaction to create a counter (only to one authority) -- twice.
+    tokio::task::yield_now().await;
+    let create_counter_transaction = move_transaction(
+        gas_objects.pop().unwrap(),
+        "Counter",
+        "create",
+        package_ref,
+        /* arguments */ Vec::default(),
+    );
+    for _ in 0..2 {
+        let mut replies = submit_single_owner_transaction(
+            create_counter_transaction.clone(),
+            &configs.validator_set()[0..1],
+        )
+        .await;
+        let reply = replies.pop().unwrap();
+        let effects = reply.signed_effects.unwrap().effects;
+        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+
+        // Ensure the sequence number of the shared object did not change.
+        let ((_, seq, _), _) = effects.created[0];
+        assert_eq!(seq, OBJECT_START_VERSION);
     }
 }
 

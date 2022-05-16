@@ -481,6 +481,45 @@ impl AuthorityState {
             .persist_certificate_and_lock_shared_objects(certificate, last_consensus_index)
     }
 
+    /// Check if we need to submit this transaction to consensus. We usually do, unless (i) we already
+    /// processed the transaction and we can immediately return the effects, or (ii) we already locked
+    /// all shared-objects of the transaction and can (re-)attempt execution.
+    pub async fn try_skip_consensus(
+        &self,
+        certificate: CertifiedTransaction,
+    ) -> Result<Option<TransactionInfoResponse>, SuiError> {
+        // Ensure it is a shared object certificate
+        fp_ensure!(
+            certificate.contains_shared_object(),
+            SuiError::NotASharedObjectTransaction
+        );
+
+        // If we already executed this transaction, return the sign effects.
+        let digest = certificate.digest();
+        if self._database.effects_exists(digest)? {
+            debug!("Shared-object transaction {digest:?} already executed");
+            return self.make_transaction_info(digest).await.map(Some);
+        }
+
+        // If we already assigned locks to this transaction, we can try to execute it immediately.
+        // This can happen to transaction previously submitted to consensus that failed execution
+        // due to missing dependencies.
+        match self
+            ._database
+            .sequenced(digest, certificate.shared_input_objects())?[0]
+        {
+            Some(_) => {
+                // Attempt to execute the transaction. This will only succeed if the authority
+                // already executed all its dependencies.
+                let confirmation_transaction = ConfirmationTransaction { certificate };
+                self.handle_confirmation_transaction(confirmation_transaction.clone())
+                    .await
+                    .map(Some)
+            }
+            None => Ok(None),
+        }
+    }
+
     pub async fn handle_transaction_info_request(
         &self,
         request: TransactionInfoRequest,
