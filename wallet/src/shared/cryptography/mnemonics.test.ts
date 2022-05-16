@@ -7,7 +7,7 @@ import {
     generateMnemonicsAndKeypair,
     getKeypairFromMnemonics,
     normalizeMnemonics,
-} from '../../../src/utils/cryptography/mnemonics';
+} from './mnemonics';
 
 describe('mnemonics', () => {
     it('generate mnemonics', () => {

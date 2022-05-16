@@ -17,6 +17,10 @@ export function generateMnemonicsAndKeypair(): [string, Ed25519KeypairData] {
     return [mnemonics, getKeypairFromMnemonics(mnemonics)];
 }
 
+export function generateMnemonic(): string {
+    return bip39.generateMnemonic();
+}
+
 /**
  * Derive public key and private key from the Mnemonics
  * @param mnemonics a 12-word seed phrase
