@@ -15,6 +15,7 @@ use rand::rngs::OsRng;
 use std::{
     num::NonZeroUsize,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use sui_types::{base_types::encode_bytes_hex, crypto::get_key_pair_from_rng};
 
@@ -183,7 +184,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 };
 
                 NodeConfig {
-                    key_pair: validator.key_pair,
+                    key_pair: Arc::new(validator.key_pair),
                     db_path,
                     network_address,
                     metrics_address: utils::available_local_socket_address(),
