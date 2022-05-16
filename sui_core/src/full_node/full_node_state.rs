@@ -81,6 +81,11 @@ impl FullNodeState {
                     )
                     .await
                     .expect("We expect publishing the Genesis packages to not fail");
+                state
+                    .insert_genesis_objects_bulk_unsafe(
+                        &genesis.objects().iter().collect::<Vec<_>>(),
+                    )
+                    .await;
             }
         }
 
