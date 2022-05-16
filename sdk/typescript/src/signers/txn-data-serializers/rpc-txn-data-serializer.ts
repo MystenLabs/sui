@@ -35,7 +35,7 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
         [t.signer, t.objectId, t.gasPayment, t.gasBudget, t.recipient],
         isTransactionBytes
       );
-      return new Base64DataBuffer(resp.tx_bytes);
+      return new Base64DataBuffer(resp.txBytes);
     } catch (err) {
       throw new Error(`Error transferring coin: ${err}`);
     }

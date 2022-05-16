@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    getSingleTransactionKind,
-    getTransactionKind,
-    getTransferTransaction,
     getExecutionStatusType,
     getTotalGasUsed,
+    getTransactions,
+    getTransactionDigest,
+    getTransactionKindName,
+    getTransferCoinTransaction,
 } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useEffect, useState } from 'react';
@@ -60,27 +61,26 @@ async function getRecentTransactions(txNum: number): Promise<TxnData[]> {
                     const [seq, digest] = transactions.filter(
                         (transactionId) =>
                             transactionId[1] ===
-                            txEff.effects.transaction_digest
+                            getTransactionDigest(txEff.certificate)
                     )[0];
                     const res: CertifiedTransaction = txEff.certificate;
-                    const singleTransaction = getSingleTransactionKind(
-                        res.data
-                    );
-                    if (!singleTransaction) {
+                    // TODO: handle multiple transactions
+                    const txns = getTransactions(res);
+                    if (txns.length > 1) {
                         throw new Error(
-                            `Transaction kind not supported yet ${res.data.kind}`
+                            `Handling multiple transactions is not yet supported`
                         );
                     }
-                    const txKind = getTransactionKind(res.data);
-                    const recipient = getTransferTransaction(
-                        res.data
-                    )?.recipient;
+                    const txn = txns[0];
+                    const txKind = getTransactionKindName(txn);
+                    const recipient =
+                        getTransferCoinTransaction(txn)?.recipient;
 
                     return {
                         seq,
                         txId: digest,
-                        status: getExecutionStatusType(txEff.effects.status),
-                        txGas: getTotalGasUsed(txEff.effects.status),
+                        status: getExecutionStatusType(txEff),
+                        txGas: getTotalGasUsed(txEff),
                         kind: txKind,
                         From: res.data.sender,
                         ...(recipient
@@ -165,7 +165,7 @@ function LatestTxView({
                                     styles.txstatus
                                 )}
                             >
-                                {tx.status === 'Success' ? '✔' : '✖'}
+                                {tx.status === 'success' ? '✔' : '✖'}
                             </div>
                             <div className={styles.txgas}>{tx.txGas}</div>
                             <div className={styles.txadd}>

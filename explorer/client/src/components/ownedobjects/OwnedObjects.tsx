@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getObjectContent, getObjectExistsResponse } from '@mysten/sui.js';
+import { Coin, getObjectFields, getObjectId } from '@mysten/sui.js';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -25,6 +25,7 @@ import styles from './OwnedObjects.module.css';
 type resultType = {
     id: string;
     Type: string;
+    _isCoin: boolean;
     Version?: string;
     display?: string;
     balance?: number;
@@ -34,10 +35,9 @@ const DATATYPE_DEFAULT: resultType = [
     {
         id: '',
         Type: '',
+        _isCoin: false,
     },
 ];
-
-const IS_COIN_TYPE = (typeDesc: string): boolean => /::Coin::/.test(typeDesc);
 
 const lastRowHas2Elements = (itemList: any[]): boolean =>
     itemList.length % 3 === 2;
@@ -61,6 +61,7 @@ function OwnedObjectStatic({ id }: { id: string }) {
                 Version: entry?.version,
                 display: entry?.data?.contents?.display,
                 balance: entry?.data?.contents?.balance,
+                _isCoin: entry?.data?.contents?.balance !== undefined,
             };
         });
 
@@ -75,10 +76,6 @@ function OwnedObjectAPI({ id }: { id: string }) {
     const [isLoaded, setIsLoaded] = useState(false);
     const [isFail, setIsFail] = useState(false);
 
-    // TODO - The below will fail for a large number of owned objects
-    // due to the number of calls to the API
-    // Backend changes will be required to enable a scalable solution
-    // getOwnedObjectRefs will need to return id, type and balance for each owned object
     useEffect(() => {
         setIsFail(false);
         setIsLoaded(false);
@@ -91,25 +88,25 @@ function OwnedObjectAPI({ id }: { id: string }) {
                             .filter(({ status }) => status === 'Exists')
                             .map(
                                 (resp) => {
-                                    const info = getObjectExistsResponse(resp)!;
-                                    const contents = getObjectContent(resp);
-                                    const url = parseImageURL(info.object);
-                                    const balanceValue = (
-                                        typeof contents?.fields.balance ===
-                                        'number'
-                                            ? contents.fields.balance
-                                            : undefined
-                                    ) as number;
+                                    const contents = getObjectFields(resp);
+                                    const url = parseImageURL(contents);
+                                    const objType = parseObjectType(resp);
+                                    // TODO: handle big number
+                                    const rawBalance = Coin.getBalance(resp);
+                                    const balanceValue = rawBalance
+                                        ? parseInt(rawBalance)
+                                        : undefined;
                                     return {
-                                        id: info.objectRef.objectId,
-                                        Type: parseObjectType(info),
+                                        id: getObjectId(resp),
+                                        Type: objType,
+                                        _isCoin: Coin.isCoin(resp),
                                         display: url
                                             ? processDisplayValue(url)
                                             : undefined,
                                         balance: balanceValue,
                                     };
                                 }
-                                //TO DO - add back version
+                                // TODO - add back version
                             )
                     );
                     setIsLoaded(true);
@@ -126,9 +123,9 @@ function OwnedObjectAPI({ id }: { id: string }) {
 }
 
 function OwnedObjectLayout({ results }: { results: resultType }) {
-    const coin_results = results.filter(({ Type }) => IS_COIN_TYPE(Type));
+    const coin_results = results.filter(({ _isCoin }) => _isCoin);
     const other_results = results
-        .filter(({ Type }) => !IS_COIN_TYPE(Type))
+        .filter(({ _isCoin }) => !_isCoin)
         .sort((a, b) => {
             if (a.Type > b.Type) return 1;
             if (a.Type < b.Type) return -1;
@@ -194,12 +191,13 @@ function GroupView({ results }: { results: resultType }) {
                                 <div>
                                     <span>Balance</span>
                                     <span>
-                                        {IS_COIN_TYPE(typeV) &&
+                                        {subObjList[0]._isCoin &&
                                         subObjList.every(
                                             (el) => el.balance !== undefined
                                         )
                                             ? `${subObjList.reduce(
                                                   (prev, current) =>
+                                                      // TODO: handle number overflow
                                                       prev + current.balance!,
                                                   0
                                               )}`
@@ -369,7 +367,7 @@ function OwnedObjectView({ results }: { results: resultType }) {
                                     case 'display':
                                         break;
                                     case 'Type':
-                                        if (IS_COIN_TYPE(entryObj.Type)) {
+                                        if (entryObj._isCoin) {
                                             break;
                                         } else {
                                             return (
@@ -386,9 +384,12 @@ function OwnedObjectView({ results }: { results: resultType }) {
                                     default:
                                         if (
                                             key === 'balance' &&
-                                            !IS_COIN_TYPE(entryObj.Type)
+                                            !entryObj._isCoin
                                         )
                                             break;
+                                        if (key.startsWith('_')) {
+                                            break;
+                                        }
                                         return (
                                             <div>
                                                 <span>{key}</span>

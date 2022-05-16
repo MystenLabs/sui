@@ -1,8 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isObjectNotExistsInfo, isObjectRef } from '@mysten/sui.js';
-
 import { DefaultRpcClient as rpc } from './DefaultRpcClient';
 
 export const navigateWithUnknown = async (
@@ -18,8 +16,7 @@ export const navigateWithUnknown = async (
         };
     });
     const objInfoPromise = rpc.getObjectInfo(input).then((data) => {
-        const deets = data.details;
-        if (isObjectNotExistsInfo(deets) && !isObjectRef(deets)) {
+        if (data.status !== 'Exists') {
             throw new Error('no object found');
         }
 

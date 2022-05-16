@@ -4,10 +4,13 @@
 import {
     getMoveCallTransaction,
     getPublishTransaction,
-    getTransactionKind,
-    getTransferTransaction,
+    getTransactionKindName,
+    getTransactions,
+    getTransactionSender,
+    getTransferCoinTransaction,
+    getMovePackageContent,
+    getObjectId,
 } from '@mysten/sui.js';
-import { Buffer } from 'buffer';
 import cl from 'classnames';
 
 import Longtext from '../../components/longtext/Longtext';
@@ -15,10 +18,10 @@ import { type DataType } from './TransactionResultType';
 
 import type {
     CertifiedTransaction,
-    TransactionData,
     TransactionKindName,
     ExecutionStatusType,
-    RawObjectRef,
+    SuiTransactionKind,
+    SuiObjectRef,
 } from '@mysten/sui.js';
 
 import styles from './TransactionResult.module.css';
@@ -27,15 +30,16 @@ type TxDataProps = CertifiedTransaction & {
     status: ExecutionStatusType;
     gasFee: number;
     txError: string;
-    mutated: RawObjectRef[];
-    created: RawObjectRef[];
+    mutated: SuiObjectRef[];
+    created: SuiObjectRef[];
 };
 
 // Generate an Arr of Obj with Label and Value
 // TODO rewrite to use sui.js, verify tx types and dynamically generate list
 function formatTxResponse(tx: TxDataProps, txId: string) {
-    // Todo add batch kind
-    const txKindName = getTransactionKind(tx.data);
+    // TODO: handle multiple transactions
+    const txData = getTransactions(tx)[0];
+    const txKindName = getTransactionKindName(txData);
 
     return [
         {
@@ -47,36 +51,40 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
             // May change later
             label: 'Status',
             value:
-                tx.status === 'Success' ? 'Success' : `Failed - ${tx.txError}`,
+                tx.status === 'success' ? 'Success' : `Failed - ${tx.txError}`,
             classAttr:
-                tx.status === 'Success' ? 'status-success' : 'status-fail',
+                tx.status === 'success' ? 'status-success' : 'status-fail',
         },
         {
             label: 'Transaction Type',
             value: txKindName,
         },
         // txKind Transfer or Call
-        ...(formatByTransactionKind(txKindName, tx.data) ?? []),
+        ...(formatByTransactionKind(
+            txKindName,
+            txData,
+            getTransactionSender(tx)
+        ) ?? []),
         {
             label: 'Transaction Signature',
-            value: tx.tx_signature,
+            value: tx.txSignature,
         },
-        ...(tx.mutated.length
+        ...(tx.mutated?.length
             ? [
                   {
                       label: 'Mutated',
                       category: 'objects',
-                      value: tx.mutated.map((obj) => obj[0]),
+                      value: tx.mutated.map((obj) => getObjectId(obj)),
                       list: true,
                       link: true,
                   },
               ]
             : []),
-        ...(tx.created.length
+        ...(tx.created?.length
             ? [
                   {
                       label: 'Created',
-                      value: tx.created.map((obj) => obj[0]),
+                      value: tx.created.map((obj) => getObjectId(obj)),
                       category: 'objects',
                       list: true,
                       link: true,
@@ -85,7 +93,7 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
             : []),
         {
             label: 'Gas Payment',
-            value: tx.data.gas_payment[0],
+            value: tx.data.gasPayment.objectId,
             link: true,
         },
         {
@@ -94,11 +102,11 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
         },
         {
             label: 'Gas Budget',
-            value: tx.data.gas_budget,
+            value: tx.data.gasBudget,
         },
         {
             label: 'Validator Signatures',
-            value: tx.auth_sign_info.signatures,
+            value: tx.authSignInfo.signatures,
             list: true,
             sublist: true,
             // Todo - assumes only two itmes in list ['A', 'B']
@@ -109,21 +117,22 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
 
 function formatByTransactionKind(
     kind: TransactionKindName | undefined,
-    data: TransactionData
+    data: SuiTransactionKind,
+    sender: string
 ) {
     switch (kind) {
         case 'TransferCoin':
-            const transfer = getTransferTransaction(data)!;
+            const transfer = getTransferCoinTransaction(data)!;
             return [
                 {
                     label: 'Object',
-                    value: transfer.object_ref[0],
+                    value: transfer.objectRef.objectId,
                     link: true,
                     category: 'objects',
                 },
                 {
                     label: 'Sender',
-                    value: data.sender,
+                    value: sender,
                     link: true,
                     category: 'addresses',
                     className: 'Receiver',
@@ -140,14 +149,14 @@ function formatByTransactionKind(
             return [
                 {
                     label: 'From',
-                    value: data.sender,
+                    value: sender,
                     link: true,
                     category: 'addresses',
                 },
                 {
                     label: 'Package',
                     category: 'objects',
-                    value: moveCall.package[0],
+                    value: getObjectId(moveCall.package),
                     link: true,
                 },
                 {
@@ -160,12 +169,7 @@ function formatByTransactionKind(
                 },
                 {
                     label: 'Arguments',
-                    // convert pure type
-                    value: moveCall.arguments
-                        .filter((itm: any) => itm['Pure'])
-                        .map((data: any) =>
-                            Buffer.from(data['Pure']).toString('base64')
-                        ),
+                    value: JSON.stringify(moveCall.arguments),
                 },
             ];
         case 'Publish':
@@ -173,14 +177,15 @@ function formatByTransactionKind(
             return [
                 {
                     label: 'Modules',
-                    value: publish.modules,
+                    // TODO: render modules correctly
+                    value: Object.entries(getMovePackageContent(publish)!),
                     list: true,
                 },
-                ...(data.sender
+                ...(sender
                     ? [
                           {
                               label: 'Sender ',
-                              value: data.sender,
+                              value: sender,
                               link: true,
                               category: 'addresses',
                           },

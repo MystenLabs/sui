@@ -3,11 +3,10 @@
 
 import {
   GetObjectInfoResponse,
-  ObjectRef,
+  SuiObjectRef,
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
   TransactionResponse,
-  SignedTransaction,
 } from '../types';
 
 ///////////////////////////////
@@ -17,7 +16,7 @@ export abstract class Provider {
   /**
    * Get all objects owned by an address
    */
-  abstract getOwnedObjectRefs(address: string): Promise<ObjectRef[]>;
+  abstract getOwnedObjectRefs(address: string): Promise<SuiObjectRef[]>;
 
   /**
    * Get information about an object
@@ -49,7 +48,9 @@ export abstract class Provider {
   abstract getTotalTransactionNumber(): Promise<number>;
 
   abstract executeTransaction(
-    txn: SignedTransaction
+    txnBytes: string,
+    signature: string,
+    pubkey: string
   ): Promise<TransactionResponse>;
 
   // TODO: add more interface methods
