@@ -261,11 +261,12 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
     async fn acquire_locks(
         &self,
-        _input_objects: &[ObjectRef],
+        input_objects: &[ObjectRef],
+        // input_objects: impl Iterator<Item = &'a ObjectRef>,
     ) -> Vec<tokio::sync::MutexGuard<'_, ()>> {
         let num_locks = self.lock_table.len();
         // TODO: randomize the lock mapping based on a secret to avoid DoS attacks.
-        let lock_numbers: BTreeSet<usize> = _input_objects
+        let lock_numbers: BTreeSet<usize> = input_objects
             .iter()
             .map(|(_, _, digest)| {
                 usize::from_le_bytes(digest.0[0..8].try_into().unwrap()) % num_locks
@@ -608,6 +609,11 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         trace!(written =? written.values().map(|((obj_id, ver, _), _)| (obj_id, ver)).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");
 
+        let owned_inputs: Vec<_> = active_inputs
+            .iter()
+            .filter(|(id, _, _)| objects.get(id).unwrap().is_owned())
+            .cloned().collect();
+
         // Delete objects.
         // Wrapped objects need to be deleted as well because we can no longer track their
         // content nor use them directly.
@@ -702,14 +708,14 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         // old writes would be OK.
         {
             // Acquire the lock to ensure no one else writes when we are in here.
-            let _mutexes = self.acquire_locks(&active_inputs[..]).await;
+            let _mutexes = self.acquire_locks(&owned_inputs[..]).await;
 
             // NOTE: We just check here that locks exist, not that they are locked to a specific TX.  Why?
             // 1. Lock existence prevents re-execution of old certs when objects have been upgraded
             // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
             //    (But the lock should exist which means previous transactions finished)
             // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its fine
-            self.lock_service.locks_exist(active_inputs.clone()).await?;
+            self.lock_service.locks_exist(owned_inputs.clone()).await?;
 
             if let Some(next_seq) = seq_opt {
                 // Now we are sure we are going to execute, add to the sequence
@@ -735,7 +741,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             let new_locks_to_init: Vec<_> = written
                 .iter()
                 .filter_map(|(_, (object_ref, new_object))| {
-                    if !new_object.is_immutable() {
+                    if new_object.is_owned() {
                         Some(*object_ref)
                     } else {
                         None
@@ -747,7 +753,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                 .await?;
 
             // Remove the old lock - timing of this matters less
-            let locks_to_remove = active_inputs;
+            let locks_to_remove = owned_inputs;
             self.lock_service.remove_locks(locks_to_remove).await?;
 
             // implicit: drop(_mutexes);

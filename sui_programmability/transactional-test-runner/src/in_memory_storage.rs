@@ -55,7 +55,7 @@ impl InMemoryStorage {
         }
         for (id, _) in deleted {
             let obj_opt = self.persistent.remove(&id);
-            assert!(obj_opt.is_none())
+            assert!(obj_opt.is_some())
         }
     }
 }

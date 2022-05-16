@@ -137,6 +137,12 @@ impl TryFrom<Vec<u8>> for SuiAddress {
 
 impl From<&PublicKeyBytes> for SuiAddress {
     fn from(key: &PublicKeyBytes) -> SuiAddress {
+        Self::from(*key)
+    }
+}
+
+impl From<PublicKeyBytes> for SuiAddress {
+    fn from(key: PublicKeyBytes) -> SuiAddress {
         let mut hasher = Sha3_256::default();
         hasher.update(key.as_ref());
         let g_arr = hasher.finalize();
@@ -188,7 +194,7 @@ pub struct ObjectDigest(
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct TxContext {
     /// Signer/sender of the transaction
     sender: AccountAddress,

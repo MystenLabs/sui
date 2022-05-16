@@ -29,6 +29,7 @@ use std::{
     },
 };
 use sui_adapter::adapter;
+use sui_config::genesis::Genesis;
 use sui_types::{
     base_types::*,
     batch::{TxSequenceNumber, UpdateItem},
@@ -481,6 +482,45 @@ impl AuthorityState {
             .persist_certificate_and_lock_shared_objects(certificate, last_consensus_index)
     }
 
+    /// Check if we need to submit this transaction to consensus. We usually do, unless (i) we already
+    /// processed the transaction and we can immediately return the effects, or (ii) we already locked
+    /// all shared-objects of the transaction and can (re-)attempt execution.
+    pub async fn try_skip_consensus(
+        &self,
+        certificate: CertifiedTransaction,
+    ) -> Result<Option<TransactionInfoResponse>, SuiError> {
+        // Ensure it is a shared object certificate
+        fp_ensure!(
+            certificate.contains_shared_object(),
+            SuiError::NotASharedObjectTransaction
+        );
+
+        // If we already executed this transaction, return the sign effects.
+        let digest = certificate.digest();
+        if self._database.effects_exists(digest)? {
+            debug!("Shared-object transaction {digest:?} already executed");
+            return self.make_transaction_info(digest).await.map(Some);
+        }
+
+        // If we already assigned locks to this transaction, we can try to execute it immediately.
+        // This can happen to transaction previously submitted to consensus that failed execution
+        // due to missing dependencies.
+        match self
+            ._database
+            .sequenced(digest, certificate.shared_input_objects())?[0]
+        {
+            Some(_) => {
+                // Attempt to execute the transaction. This will only succeed if the authority
+                // already executed all its dependencies.
+                let confirmation_transaction = ConfirmationTransaction { certificate };
+                self.handle_confirmation_transaction(confirmation_transaction.clone())
+                    .await
+                    .map(Some)
+            }
+            None => Ok(None),
+        }
+    }
+
     pub async fn handle_transaction_info_request(
         &self,
         request: TransactionInfoRequest,
@@ -535,8 +575,8 @@ impl AuthorityState {
             ObjectInfoRequestKind::LatestObjectInfo(request_layout) => {
                 match self.get_object(&request.object_id).await {
                     Ok(Some(object)) => {
-                        let lock = if object.is_immutable() {
-                            // Read only objects have no locks.
+                        let lock = if !object.is_owned() {
+                            // Unowned obejcts have no locks.
                             None
                         } else {
                             self.get_transaction_lock(&object.compute_object_reference())
@@ -669,6 +709,39 @@ impl AuthorityState {
                     .await
                     .expect("We expect publishing the Genesis packages to not fail");
             }
+        }
+
+        state
+    }
+
+    pub async fn new_with_genesis(
+        committee: Committee,
+        name: AuthorityName,
+        secret: StableSyncAuthoritySigner,
+        store: Arc<AuthorityStore>,
+        genesis: &Genesis,
+    ) -> Self {
+        let state =
+            AuthorityState::new_without_genesis(committee, name, secret, store.clone()).await;
+
+        // Only initialize an empty database.
+        if store
+            .database_is_empty()
+            .expect("Database read should not fail.")
+        {
+            let mut genesis_ctx = genesis.genesis_ctx().to_owned();
+            for genesis_modules in genesis.modules() {
+                state
+                    .store_package_and_init_modules_for_genesis(
+                        &mut genesis_ctx,
+                        genesis_modules.to_owned(),
+                    )
+                    .await
+                    .expect("We expect publishing the Genesis packages to not fail");
+            }
+            state
+                .insert_genesis_objects_bulk_unsafe(&genesis.objects().iter().collect::<Vec<_>>())
+                .await;
         }
 
         state

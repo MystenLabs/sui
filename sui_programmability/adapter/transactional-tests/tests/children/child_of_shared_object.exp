@@ -1,0 +1,30 @@
+processed 9 tasks
+
+task 1 'publish'. lines 6-21:
+created: object(103)
+written: object(102)
+
+task 2 'publish'. lines 23-51:
+created: object(105)
+written: object(104)
+
+task 3 'publish'. lines 54-80:
+created: object(107)
+written: object(106)
+
+task 4 'run'. lines 82-82:
+created: object(109)
+written: object(108)
+
+task 5 'run'. lines 84-84:
+created: object(111)
+written: object(109), object(110)
+
+task 6 'run'. lines 86-88:
+written: object(109), object(111), object(112)
+
+task 7 'run'. lines 89-89:
+Error: When an (either direct or indirect) child object of a shared object is passed as a Move argument,either the child object's type or the shared object's type must be defined in the same module as the called function. This is violated by object fake(109) (defined in module 'T1::O1'), whose ancestor fake(111) is a shared object (defined in module 'T2::O2'), and neither are defined in this module 'T1::O1'
+
+task 8 'run'. lines 91-91:
+written: object(109), object(111), object(114)

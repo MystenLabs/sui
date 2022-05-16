@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/sui-config",
     "crates/sui-network",
     "crates/x",
     "faucet",

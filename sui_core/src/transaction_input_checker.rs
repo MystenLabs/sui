@@ -33,8 +33,7 @@ where
     )
     .await?;
 
-    let objects_by_kind =
-        check_locks(store, &transaction.data, gas_object, &mut gas_status).await?;
+    let objects_by_kind = check_locks(store, &transaction.data, gas_object).await?;
 
     if transaction.contains_shared_object() {
         shared_obj_metric.inc();
@@ -99,7 +98,6 @@ async fn check_locks<const A: bool, S>(
     store: &SuiDataStore<A, S>,
     transaction: &TransactionData,
     gas_object: Object,
-    gas_status: &mut SuiGasStatus<'_>,
 ) -> Result<Vec<(InputObjectKind, Object)>, SuiError>
 where
     S: Eq + Serialize + for<'de> Deserialize<'de>,
@@ -178,15 +176,6 @@ where
         return Err(SuiError::LockErrors { errors });
     }
     fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
-
-    // Charge gas for reading all objects from the DB.
-    // TODO: Some of the objects may be duplicate (for batch tx). We could save gas by
-    // fetching only unique objects.
-    let total_size = all_objects
-        .iter()
-        .map(|(_, obj)| obj.object_size_for_gas_metering())
-        .sum();
-    gas_status.charge_storage_read(total_size)?;
 
     Ok(all_objects)
 }

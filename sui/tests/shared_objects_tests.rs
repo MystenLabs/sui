@@ -1,7 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use sui::config::AuthorityInfo;
-use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
+use std::sync::Arc;
+use sui_config::ValidatorInfo;
+use sui_core::{
+    authority_client::{AuthorityAPI, NetworkAuthorityClient},
+    gateway_state::{GatewayAPI, GatewayState},
+};
+use sui_types::object::OBJECT_START_VERSION;
 use sui_types::{
     base_types::ObjectRef,
     error::{SuiError, SuiResult},
@@ -12,7 +17,7 @@ use sui_types::{
     object::Object,
 };
 use test_utils::{
-    authority::{spawn_test_authorities, test_authority_configs},
+    authority::{create_authority_aggregator, spawn_test_authorities, test_authority_configs},
     messages::{
         make_certificates, move_transaction, parse_package_ref, publish_move_package_transaction,
         test_shared_object_transactions,
@@ -23,7 +28,7 @@ use test_utils::{
 /// Submit a certificate containing only owned-objects to all authorities.
 async fn submit_single_owner_transaction(
     transaction: Transaction,
-    configs: &[AuthorityInfo],
+    configs: &[ValidatorInfo],
 ) -> Vec<TransactionInfoResponse> {
     let certificate = make_certificates(vec![transaction]).pop().unwrap();
     let txn = ConfirmationTransaction { certificate };
@@ -40,8 +45,8 @@ async fn submit_single_owner_transaction(
     responses
 }
 
-fn get_client(config: &AuthorityInfo) -> NetworkAuthorityClient {
-    NetworkAuthorityClient::connect_lazy(&config.network_address).unwrap()
+fn get_client(config: &ValidatorInfo) -> NetworkAuthorityClient {
+    NetworkAuthorityClient::connect_lazy(config.network_address()).unwrap()
 }
 
 /// Keep submitting the certificates of a shared-object transaction until it is sequenced by
@@ -49,7 +54,7 @@ fn get_client(config: &AuthorityInfo) -> NetworkAuthorityClient {
 /// may drop transactions. The certificate is submitted to every Sui authority.
 async fn submit_shared_object_transaction(
     transaction: Transaction,
-    configs: &[AuthorityInfo],
+    configs: &[ValidatorInfo],
 ) -> Vec<SuiResult<TransactionInfoResponse>> {
     let certificate = make_certificates(vec![transaction]).pop().unwrap();
     let message = ConsensusTransaction::UserTransaction(certificate);
@@ -78,7 +83,7 @@ async fn submit_shared_object_transaction(
 }
 
 /// Helper function to publish the move package of a simple shared counter.
-async fn publish_counter_package(gas_object: Object, configs: &[AuthorityInfo]) -> ObjectRef {
+async fn publish_counter_package(gas_object: Object, configs: &[ValidatorInfo]) -> ObjectRef {
     let transaction = publish_move_package_transaction(gas_object);
     let replies = submit_single_owner_transaction(transaction, configs).await;
     let mut package_refs = Vec::new();
@@ -98,8 +103,8 @@ async fn shared_object_transaction() {
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let (configs, key_pairs) = test_authority_configs();
-    let _handles = spawn_test_authorities(objects, &configs, &key_pairs).await;
+    let configs = test_authority_configs();
+    let _handles = spawn_test_authorities(objects, &configs).await;
 
     // Make a test shared object certificate.
     let transaction = test_shared_object_transactions().pop().unwrap();
@@ -107,7 +112,7 @@ async fn shared_object_transaction() {
     // Submit the transaction. Note that this transaction is random and we do not expect
     // it to be successfully executed by the Move execution engine.
     tokio::task::yield_now().await;
-    let reply = submit_shared_object_transaction(transaction, &configs[0..1])
+    let reply = submit_shared_object_transaction(transaction, &configs.validator_set()[0..1])
         .await
         .pop()
         .unwrap();
@@ -123,16 +128,17 @@ async fn many_shared_object_transactions() {
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let (configs, key_pairs) = test_authority_configs();
-    let _handles = spawn_test_authorities(objects, &configs, &key_pairs).await;
+    let configs = test_authority_configs();
+    let _handles = spawn_test_authorities(objects, &configs).await;
 
     // Make a test shared object certificate.
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     let transaction = test_shared_object_transactions().pop().unwrap();
 
     // Submit the transaction. Note that this transaction is random and we do not expect
     // it to be successfully executed by the Move execution engine.
     tokio::task::yield_now().await;
-    let replies = submit_shared_object_transaction(transaction, &configs).await;
+    let replies = submit_shared_object_transaction(transaction, configs.validator_set()).await;
     for reply in replies {
         match reply {
             Ok(_) => (),
@@ -149,12 +155,14 @@ async fn call_shared_object_contract() {
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let (configs, key_pairs) = test_authority_configs();
-    let _handles = spawn_test_authorities(gas_objects.clone(), &configs, &key_pairs).await;
+    let configs = test_authority_configs();
+    let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
 
     // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;
-    let package_ref = publish_counter_package(gas_objects.pop().unwrap(), &configs).await;
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    let package_ref =
+        publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
 
     // Make a transaction to create a counter.
     tokio::task::yield_now().await;
@@ -165,7 +173,7 @@ async fn call_shared_object_contract() {
         package_ref,
         /* arguments */ Vec::default(),
     );
-    let replies = submit_single_owner_transaction(transaction, &configs).await;
+    let replies = submit_single_owner_transaction(transaction, configs.validator_set()).await;
     let mut counter_ids = Vec::new();
     for reply in replies {
         let effects = reply.signed_effects.unwrap().effects;
@@ -187,7 +195,7 @@ async fn call_shared_object_contract() {
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
-    let reply = submit_shared_object_transaction(transaction, &configs[0..1])
+    let reply = submit_shared_object_transaction(transaction, &configs.validator_set()[0..1])
         .await
         .pop()
         .unwrap();
@@ -204,7 +212,7 @@ async fn call_shared_object_contract() {
         package_ref,
         vec![CallArg::SharedObject(counter_id)],
     );
-    let reply = submit_shared_object_transaction(transaction, &configs[0..1])
+    let reply = submit_shared_object_transaction(transaction, &configs.validator_set()[0..1])
         .await
         .pop()
         .unwrap();
@@ -224,7 +232,7 @@ async fn call_shared_object_contract() {
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
-    let reply = submit_shared_object_transaction(transaction, &configs[0..1])
+    let reply = submit_shared_object_transaction(transaction, &configs.validator_set()[0..1])
         .await
         .pop()
         .unwrap();
@@ -241,12 +249,13 @@ async fn shared_object_flood() {
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let (configs, key_pairs) = test_authority_configs();
-    let _handles = spawn_test_authorities(gas_objects.clone(), &configs, &key_pairs).await;
+    let configs = test_authority_configs();
+    let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
 
     // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;
-    let package_ref = publish_counter_package(gas_objects.pop().unwrap(), &configs).await;
+    let package_ref =
+        publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
 
     // Make a transaction to create a counter.
     tokio::task::yield_now().await;
@@ -257,7 +266,7 @@ async fn shared_object_flood() {
         package_ref,
         /* arguments */ Vec::default(),
     );
-    let replies = submit_single_owner_transaction(transaction, &configs).await;
+    let replies = submit_single_owner_transaction(transaction, configs.validator_set()).await;
     let mut counter_ids = Vec::new();
     for reply in replies {
         let effects = reply.signed_effects.unwrap().effects;
@@ -279,7 +288,7 @@ async fn shared_object_flood() {
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
-    let replies = submit_shared_object_transaction(transaction, &configs).await;
+    let replies = submit_shared_object_transaction(transaction, configs.validator_set()).await;
     for reply in replies {
         match reply {
             Ok(info) => {
@@ -299,7 +308,7 @@ async fn shared_object_flood() {
         package_ref,
         vec![CallArg::SharedObject(counter_id)],
     );
-    let replies = submit_shared_object_transaction(transaction, &configs).await;
+    let replies = submit_shared_object_transaction(transaction, configs.validator_set()).await;
     for reply in replies {
         match reply {
             Ok(info) => {
@@ -322,7 +331,7 @@ async fn shared_object_flood() {
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
-    let replies = submit_shared_object_transaction(transaction, &configs).await;
+    let replies = submit_shared_object_transaction(transaction, configs.validator_set()).await;
     for reply in replies {
         match reply {
             Ok(info) => {
@@ -340,12 +349,13 @@ async fn shared_object_sync() {
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
-    let (configs, key_pairs) = test_authority_configs();
-    let _handles = spawn_test_authorities(gas_objects.clone(), &configs, &key_pairs).await;
+    let configs = test_authority_configs();
+    let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
 
     // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;
-    let package_ref = publish_counter_package(gas_objects.pop().unwrap(), &configs).await;
+    let package_ref =
+        publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
 
     // Send a transaction to create a counter, but only to one authority.
     tokio::task::yield_now().await;
@@ -356,8 +366,11 @@ async fn shared_object_sync() {
         package_ref,
         /* arguments */ Vec::default(),
     );
-    let mut replies =
-        submit_single_owner_transaction(create_counter_transaction.clone(), &configs[0..1]).await;
+    let mut replies = submit_single_owner_transaction(
+        create_counter_transaction.clone(),
+        &configs.validator_set()[0..1],
+    )
+    .await;
     let reply = replies.pop().unwrap();
     let effects = reply.signed_effects.unwrap().effects;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
@@ -374,19 +387,23 @@ async fn shared_object_sync() {
     );
 
     // Let's submit the transaction to the first authority (the only one up-to-date).
-    let reply =
-        submit_shared_object_transaction(increment_counter_transaction.clone(), &configs[0..1])
-            .await
-            .pop()
-            .unwrap();
+    let reply = submit_shared_object_transaction(
+        increment_counter_transaction.clone(),
+        &configs.validator_set()[0..1],
+    )
+    .await
+    .pop()
+    .unwrap();
     let info = reply.unwrap();
     let effects = info.signed_effects.unwrap().effects;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
     // Let's submit the transaction to the out-of-date authorities.
-    let replies =
-        submit_shared_object_transaction(increment_counter_transaction.clone(), &configs[1..])
-            .await;
+    let replies = submit_shared_object_transaction(
+        increment_counter_transaction.clone(),
+        &configs.validator_set()[1..],
+    )
+    .await;
     for reply in replies {
         match reply {
             // Right now grpc doesn't send back the error message in a recoverable way
@@ -399,7 +416,8 @@ async fn shared_object_sync() {
     // Now send the missing certificates to the outdated authorities. We also re-send
     // the transaction to the first authority who should simply ignore it.
     tokio::task::yield_now().await;
-    let replies = submit_single_owner_transaction(create_counter_transaction, &configs).await;
+    let replies =
+        submit_single_owner_transaction(create_counter_transaction, configs.validator_set()).await;
     for reply in replies {
         let effects = reply.signed_effects.unwrap().effects;
         assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
@@ -407,8 +425,11 @@ async fn shared_object_sync() {
 
     // Now we can try again with the shared-object transaction who failed before.
     tokio::task::yield_now().await;
-    let replies =
-        submit_shared_object_transaction(increment_counter_transaction, &configs[1..]).await;
+    let replies = submit_shared_object_transaction(
+        increment_counter_transaction,
+        &configs.validator_set()[1..],
+    )
+    .await;
     for reply in replies {
         match reply {
             Ok(info) => {
@@ -418,4 +439,119 @@ async fn shared_object_sync() {
             Err(error) => panic!("{error}"),
         }
     }
+}
+
+/// Send a simple shared object transaction to Sui and ensures the client gets back a response.
+#[tokio::test]
+async fn replay_shared_object_transaction() {
+    let mut gas_objects = test_gas_objects();
+
+    // Get the authority configs and spawn them. Note that it is important to not drop
+    // the handles (or the authorities will stop).
+    let configs = test_authority_configs();
+    let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
+
+    // Publish the move package to all authorities and get the new package ref.
+    tokio::task::yield_now().await;
+    let package_ref =
+        publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
+
+    // Send a transaction to create a counter (only to one authority) -- twice.
+    tokio::task::yield_now().await;
+    let create_counter_transaction = move_transaction(
+        gas_objects.pop().unwrap(),
+        "Counter",
+        "create",
+        package_ref,
+        /* arguments */ Vec::default(),
+    );
+    for _ in 0..2 {
+        let mut replies = submit_single_owner_transaction(
+            create_counter_transaction.clone(),
+            &configs.validator_set()[0..1],
+        )
+        .await;
+        let reply = replies.pop().unwrap();
+        let effects = reply.signed_effects.unwrap().effects;
+        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+
+        // Ensure the sequence number of the shared object did not change.
+        let ((_, seq, _), _) = effects.created[0];
+        assert_eq!(seq, OBJECT_START_VERSION);
+    }
+}
+
+#[tokio::test]
+async fn shared_object_on_gateway() {
+    let mut gas_objects = test_gas_objects();
+
+    // Get the authority configs and spawn them. Note that it is important to not drop
+    // the handles (or the authorities will stop).
+    let configs = test_authority_configs();
+    let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
+    let clients = create_authority_aggregator(configs.validator_set());
+    let path = tempfile::tempdir().unwrap().into_path();
+    let gateway = Arc::new(GatewayState::new_with_authorities(path, clients).unwrap());
+
+    // Publish the move package to all authorities and get the new package ref.
+    tokio::task::yield_now().await;
+    let package_ref =
+        publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
+
+    // Send a transaction to create a counter.
+    tokio::task::yield_now().await;
+    let create_counter_transaction = move_transaction(
+        gas_objects.pop().unwrap(),
+        "Counter",
+        "create",
+        package_ref,
+        /* arguments */ Vec::default(),
+    );
+    let resp = gateway
+        .execute_transaction(create_counter_transaction)
+        .await
+        .unwrap();
+    let effects = resp.to_effect_response().unwrap().1;
+    let (shared_object_id, _, _) = effects.created[0].0;
+    // We need to have one gas object left for the final value check.
+    let last_gas_object = gas_objects.pop().unwrap();
+    let increment_amount = gas_objects.len();
+    let futures: Vec<_> = gas_objects
+        .into_iter()
+        .map(|gas_object| {
+            let g = gateway.clone();
+            let increment_counter_transaction = move_transaction(
+                gas_object,
+                "Counter",
+                "increment",
+                package_ref,
+                /* arguments */ vec![CallArg::SharedObject(shared_object_id)],
+            );
+            async move { g.execute_transaction(increment_counter_transaction).await }
+        })
+        .collect();
+
+    let replies: Vec<_> = futures::future::join_all(futures)
+        .await
+        .into_iter()
+        .collect();
+    assert_eq!(replies.len(), increment_amount);
+    assert!(replies.iter().all(|result| result.is_ok()));
+
+    let assert_value_transaction = move_transaction(
+        last_gas_object,
+        "Counter",
+        "assert_value",
+        package_ref,
+        vec![
+            CallArg::SharedObject(shared_object_id),
+            CallArg::Pure((increment_amount as u64).to_le_bytes().to_vec()),
+        ],
+    );
+    let resp = gateway
+        .execute_transaction(assert_value_transaction)
+        .await
+        .unwrap();
+    let effects = resp.to_effect_response().unwrap().1;
+    assert!(effects.status.is_ok());
 }
