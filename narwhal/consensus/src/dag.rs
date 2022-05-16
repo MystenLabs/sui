@@ -208,6 +208,7 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
     }
 
     /// Removes certificates from the Dag, reclaiming memory in the process.
+    #[instrument(level = "debug", err)]
     fn remove(
         &mut self,
         digests: Vec<CertificateDigest>,
@@ -232,10 +233,9 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
                 .filter(|e| !matches!(e, Err(NodeDagError::DroppedDigest(_))))
                 .collect::<Vec<_>>();
 
-            if failures.is_empty() {
-                vertices.retain(|_k, v| !digests.contains(v));
-            } else {
-                // They're all unknown digest failures at this point,
+            // They're all unknown digest failures at this point,
+            vertices.retain(|_k, v| !digests.contains(v));
+            if !failures.is_empty() {
                 let failure_digests = failures
                     .into_iter()
                     .filter_map(
@@ -366,7 +366,11 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
             .expect("Failed to receive reply to NodeReadCausal command from store")
     }
 
-    /// Removes a certificate from the Dag, reclaiming memory in the process.
+    /// Removes certificates from the Dag, reclaiming memory in the process.
+    ///
+    /// Note: If some digests are unkown to the Dag, this will return an error, but will nonetheless delete
+    /// the certificates for known digests which are removable.
+    ///
     pub async fn remove<J: Borrow<CertificateDigest>>(
         &self,
         digest: impl IntoIterator<Item = J>,

@@ -33,20 +33,6 @@ use tokio::{
 };
 use types::{BatchDigest, Certificate};
 
-async fn populate_genesis<K: Borrow<Dag<Ed25519PublicKey>>>(
-    dag: &K,
-    committee: &Committee<Ed25519PublicKey>,
-) {
-    assert!(join_all(
-        Certificate::genesis(committee)
-            .iter()
-            .map(|cert| dag.borrow().insert(cert.clone())),
-    )
-    .await
-    .iter()
-    .all(|r| r.is_ok()));
-}
-
 #[tokio::test]
 async fn test_successful_blocks_delete() {
     // GIVEN
@@ -463,4 +449,18 @@ pub fn worker_listener<PublicKey: VerifyingKey>(
             _ => panic!("Unexpected request received"),
         };
     })
+}
+
+async fn populate_genesis<K: Borrow<Dag<Ed25519PublicKey>>>(
+    dag: &K,
+    committee: &Committee<Ed25519PublicKey>,
+) {
+    assert!(join_all(
+        Certificate::genesis(committee)
+            .iter()
+            .map(|cert| dag.borrow().insert(cert.clone())),
+    )
+    .await
+    .iter()
+    .all(|r| r.is_ok()));
 }
