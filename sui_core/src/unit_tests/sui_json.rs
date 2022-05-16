@@ -476,7 +476,10 @@ fn test_basic_args_linter_top_level() {
 
 #[test]
 fn test_convert_address_from_bcs() {
-    let bcs_bytes = [160u8, 134, 1, 0, 0, 0, 0, 0];
+    let bcs_bytes = [
+        108u8, 214, 91, 255, 14, 227, 197, 199, 210, 104, 209, 187, 210, 219, 24, 72, 248, 243,
+        180, 6,
+    ];
 
     let value = SuiJsonValue::from_bcs_bytes(&bcs_bytes).unwrap();
     assert_eq!(
