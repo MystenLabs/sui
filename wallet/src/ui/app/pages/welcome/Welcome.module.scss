@@ -1,0 +1,12 @@
+.container {
+    display: flex;
+    flex-flow: column nowrap;
+    align-items: center;
+    margin: 0 auto;
+    max-width: 800px;
+    padding-top: 25px;
+}
+
+.title {
+    margin: 35px 0;
+}

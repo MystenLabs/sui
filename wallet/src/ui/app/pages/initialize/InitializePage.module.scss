@@ -1,0 +1,17 @@
+.container {
+    display: flex;
+    flex-flow: column nowrap;
+    align-items: center;
+    margin: 0 auto;
+    max-width: 800px;
+    padding: 16px 8px 8px;
+}
+
+.header {
+    align-self: stretch;
+    margin-bottom: 16px;
+}
+
+.content {
+    padding: 8px;
+}

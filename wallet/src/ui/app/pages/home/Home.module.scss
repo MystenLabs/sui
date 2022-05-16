@@ -1,10 +1,11 @@
+.logo {
+    width: 60px;
+}
+
 .container {
     display: flex;
     flex-flow: column nowrap;
     align-items: center;
-    padding: 12px;
-}
-
-.logo {
-    width: 60px;
+    min-width: 300px;
+    padding: 8px;
 }
