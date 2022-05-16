@@ -520,10 +520,12 @@ Type: 0x2::Coin::Coin<0x2::SUI::SUI>
 
 The result shows some basic information about the object, the owner,
 version, ID, if the object is immutable and the type of the object.
-If you need a deeper look into the object, you can use the `--json`
-flag to view the raw JSON representation of the object.
 
-Here is an example:
+> **Important:** To gain a deeper view into the object, include the
+> `--json` flag in the `wallet` command to see the raw JSON representation
+> of the object.
+
+Here is example `json` output:
 
 ```json
 {
