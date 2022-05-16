@@ -14,7 +14,7 @@ use std::{
 use sui::{
     api::{RpcGatewayOpenRpc, RpcGatewayServer},
     config::{sui_config_dir, FULL_NODE_DB_PATH},
-    sui_full_node::SuiNode,
+    sui_full_node::SuiFullNode,
 };
 use tracing::info;
 
@@ -80,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
     let open_rpc = RpcGatewayOpenRpc::open_rpc();
     module.register_method("rpc.discover", move |_, _| Ok(open_rpc.clone()))?;
     module.merge(
-        SuiNode::start_with_genesis(&config_path, &db_path)
+        SuiFullNode::start_with_genesis(&config_path, &db_path)
             .await?
             .into_rpc(),
     )?;

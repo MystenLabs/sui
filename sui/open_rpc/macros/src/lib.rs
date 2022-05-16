@@ -38,14 +38,14 @@ pub fn open_rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
         for (name, ty) in method.params {
             let (ty, required) = extract_type_from_option(ty);
             inputs.push(quote! {
-                let des = builder.create_content_descriptor::<#ty>(#name, "", "", #required);
+                let des = builder.create_content_descriptor::<#ty>(#name, None, None, #required);
                 inputs.push(des);
             })
         }
         let returns_ty = if let Some(ty) = method.returns {
             let (ty, required) = extract_type_from_option(ty);
             let name = quote! {#ty}.to_string();
-            quote! {Some(builder.create_content_descriptor::<#ty>(#name, "", "", #required));}
+            quote! {Some(builder.create_content_descriptor::<#ty>(#name, None, None, #required));}
         } else {
             quote! {None;}
         };

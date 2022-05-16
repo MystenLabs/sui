@@ -1,18 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{
+    base_types::{ObjectID, SequenceNumber},
+    SUI_FRAMEWORK_ADDRESS,
+};
 use move_core_types::{
     ident_str,
     identifier::IdentStr,
     language_storage::StructTag,
     value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
 };
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-
-use crate::{
-    base_types::{ObjectID, SequenceNumber},
-    SUI_FRAMEWORK_ADDRESS,
-};
 
 pub const ID_MODULE_NAME: &IdentStr = ident_str!("ID");
 pub const VERSIONED_ID_STRUCT_NAME: &IdentStr = ident_str!("VersionedID");
@@ -20,22 +20,24 @@ pub const UNIQUE_ID_STRUCT_NAME: &IdentStr = ident_str!("UniqueID");
 pub const ID_STRUCT_NAME: &IdentStr = ID_MODULE_NAME;
 
 /// Rust version of the Move Sui::ID::VersionedID type
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Clone, Eq, PartialEq)]
 pub struct VersionedID {
-    id: UniqueID,
-    version: u64,
+    pub id: UniqueID,
+    pub version: u64,
 }
 
 /// Rust version of the Move Sui::ID::UniqueID type
-#[derive(Debug, Serialize, Deserialize)]
-struct UniqueID {
-    id: ID,
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Clone, Eq, PartialEq)]
+#[serde(transparent)]
+pub struct UniqueID {
+    pub id: ID,
 }
 
 /// Rust version of the Move Sui::ID::ID type
-#[derive(Debug, Serialize, Deserialize)]
-struct ID {
-    bytes: ObjectID,
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Clone, Eq, PartialEq)]
+#[serde(transparent)]
+pub struct ID {
+    pub bytes: ObjectID,
 }
 
 impl VersionedID {
@@ -119,7 +121,7 @@ impl ID {
             type_: Self::type_(),
             fields: vec![MoveFieldLayout::new(
                 ident_str!("bytes").to_owned(),
-                MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+                MoveTypeLayout::Address,
             )],
         }
     }

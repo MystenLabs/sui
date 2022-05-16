@@ -41,7 +41,7 @@ impl GAS {
 
 /// Rust version of the Move Sui::Coin::Coin<Sui::SUI::SUI> type
 #[derive(Debug, Serialize, Deserialize)]
-pub struct GasCoin(Coin);
+pub struct GasCoin(pub Coin);
 
 impl GasCoin {
     pub fn new(id: ObjectID, version: SequenceNumber, value: u64) -> Self {

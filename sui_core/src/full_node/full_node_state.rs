@@ -10,7 +10,8 @@ use sui_config::genesis::Genesis;
 
 use crate::{
     authority::{AuthorityTemporaryStore, ReplicaStore},
-    gateway_state::{gateway_responses::TransactionEffectsResponse, GatewayTxSeqNumber},
+    gateway_state::GatewayTxSeqNumber,
+    gateway_types::TransactionEffectsResponse,
 };
 use move_binary_format::CompiledModule;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
@@ -26,6 +27,23 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 use tracing::debug;
+
+// use std::path::Path;
+
+// use crate::{
+//     api::{RpcGatewayServer, TransactionBytes},
+//     rpc_gateway::responses::{ObjectResponse, SuiTypeTag},
+// };
+// use anyhow::anyhow;
+// use async_trait::async_trait;
+// use jsonrpsee::core::RpcResult;
+// use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
+
+// use sui_core::gateway_state::GatewayTxSeqNumber;
+// use sui_core::gateway_types::GetObjectInfoResponse;
+// use sui_core::sui_json::SuiJsonValue;
+// use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+// use sui_types::sui_serde::Base64;
 
 const MAX_TX_RANGE_SIZE: u64 = 4096;
 
@@ -224,8 +242,8 @@ impl FullNodeState {
         let opt = self.store.get_certified_transaction(&digest)?;
         match opt {
             Some(certificate) => Ok(TransactionEffectsResponse {
-                certificate,
-                effects: self.store.get_effects(&digest)?,
+                certificate: certificate.try_into()?,
+                effects: self.store.get_effects(&digest)?.into(),
             }),
             None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
         }

@@ -5,44 +5,36 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt::{Debug, Display, Formatter};
 use std::mem::size_of;
 
-use crate::coin::Coin;
-use crate::crypto::{sha3_hash, BcsSignable};
-use crate::error::{SuiError, SuiResult};
-use crate::json_schema;
-use crate::move_package::MovePackage;
-use crate::readable_serde::encoding::Base64;
-use crate::readable_serde::Readable;
-use crate::{
-    base_types::{
-        ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
-    },
-    gas_coin::GasCoin,
-};
-use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout};
-use move_disassembler::disassembler::Disassembler;
-use move_ir_types::location::Spanned;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
 use serde_with::serde_as;
 use serde_with::Bytes;
+
+use crate::coin::Coin;
+use crate::crypto::{sha3_hash, BcsSignable};
+use crate::error::{SuiError, SuiResult};
+use crate::move_package::MovePackage;
+use crate::{
+    base_types::{
+        ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
+    },
+    gas_coin::GasCoin,
+};
 
 pub const GAS_VALUE_FOR_TESTING: u64 = 100000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 
 #[serde_as]
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema)]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MoveObject {
-    #[schemars(with = "json_schema::StructTag")]
     pub type_: StructTag,
-    #[schemars(with = "json_schema::Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
+    #[serde_as(as = "Bytes")]
     contents: Vec<u8>,
 }
 
@@ -158,15 +150,21 @@ impl MoveObject {
     }
 
     /// Convert `self` to the JSON representation dictated by `layout`.
-    pub fn to_json(&self, layout: &MoveStructLayout) -> Result<Value, SuiError> {
-        let move_value = MoveStruct::simple_deserialize(&self.contents, layout).map_err(|e| {
+    pub fn to_move_struct(&self, layout: &MoveStructLayout) -> Result<MoveStruct, SuiError> {
+        MoveStruct::simple_deserialize(&self.contents, layout).map_err(|e| {
             SuiError::ObjectSerializationError {
                 error: e.to_string(),
             }
-        })?;
-        serde_json::to_value(&move_value).map_err(|e| SuiError::ObjectSerializationError {
-            error: e.to_string(),
         })
+    }
+
+    /// Convert `self` to the JSON representation dictated by `layout`.
+    pub fn to_move_struct_with_resolver(
+        &self,
+        format: ObjectFormatOptions,
+        resolver: &impl GetModule,
+    ) -> Result<MoveStruct, SuiError> {
+        self.to_move_struct(&self.get_layout(format, resolver)?)
     }
 
     /// Approximate size of the object in bytes. This is used for gas metering.
@@ -180,7 +178,7 @@ impl MoveObject {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema)]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 #[allow(clippy::large_enum_variant)]
 pub enum Data {
     /// An object whose governing logic lives in a published Move module
@@ -222,56 +220,6 @@ impl Data {
             Package(_) => None,
         }
     }
-
-    /// Convert `self` to the JSON representation dictated by `format`.
-    /// If `self` is a Move value, the `resolver` value must contain the module that declares `self.type_` and the (transitive)
-    /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
-    pub fn to_json_with_resolver(
-        &self,
-        format: ObjectFormatOptions,
-        resolver: &impl GetModule,
-    ) -> Result<Value, SuiError> {
-        let layout = match self {
-            Data::Move(m) => Some(m.get_layout(format, resolver)?),
-            Data::Package(_) => None,
-        };
-        self.to_json(&layout)
-    }
-
-    /// Convert `self` to the JSON representation dictated by `format`.
-    /// If `self` is a Move value, the `resolver` value must contain the module that declares `self.type_` and the (transitive)
-    /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
-    pub fn to_json(&self, layout: &Option<MoveStructLayout>) -> Result<Value, SuiError> {
-        use Data::*;
-        match self {
-            Move(m) => match layout {
-                Some(l) => m.to_json(l),
-                None => Err(SuiError::ObjectSerializationError {
-                    error: "Layout is required to convert Move object to json".to_owned(),
-                }),
-            },
-            Package(p) => {
-                let mut disassembled = serde_json::Map::new();
-                for (name, bytecode) in p.serialized_module_map() {
-                    let module = CompiledModule::deserialize(bytecode)
-                        .expect("Adapter publish flow ensures that this bytecode deserializes");
-                    let view = BinaryIndexedView::Module(&module);
-                    let d = Disassembler::from_view(view, Spanned::unsafe_no_loc(()).loc).map_err(
-                        |e| SuiError::ObjectSerializationError {
-                            error: e.to_string(),
-                        },
-                    )?;
-                    let bytecode_str =
-                        d.disassemble()
-                            .map_err(|e| SuiError::ObjectSerializationError {
-                                error: e.to_string(),
-                            })?;
-                    disassembled.insert(name.to_string(), Value::String(bytecode_str));
-                }
-                Ok(Value::Object(disassembled))
-            }
-        }
-    }
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema)]
@@ -311,7 +259,7 @@ impl Owner {
     }
 }
 
-impl std::cmp::PartialEq<SuiAddress> for Owner {
+impl PartialEq<SuiAddress> for Owner {
     fn eq(&self, other: &SuiAddress) -> bool {
         match self {
             Self::AddressOwner(address) => address == other,
@@ -320,7 +268,7 @@ impl std::cmp::PartialEq<SuiAddress> for Owner {
     }
 }
 
-impl std::cmp::PartialEq<ObjectID> for Owner {
+impl PartialEq<ObjectID> for Owner {
     fn eq(&self, other: &ObjectID) -> bool {
         let other_id: SuiAddress = (*other).into();
         match self {
@@ -349,7 +297,7 @@ impl Display for Owner {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema)]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct Object {
     /// The meat of the object
     pub data: Data,
@@ -548,24 +496,6 @@ impl Object {
         }
     }
 
-    /// Convert `self` to the JSON representation dictated by `format`.
-    /// If `self` is a Move value, the `resolver` value must contain the module that declares `self.type_` and the (transitive)
-    /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
-    pub fn to_json(&self, layout: &Option<MoveStructLayout>) -> Result<Value, SuiError> {
-        let contents = self.data.to_json(layout)?;
-        let owner =
-            serde_json::to_value(&self.owner).map_err(|e| SuiError::ObjectSerializationError {
-                error: e.to_string(),
-            })?;
-        let previous_transaction =
-            serde_json::to_value(&self.previous_transaction).map_err(|e| {
-                SuiError::ObjectSerializationError {
-                    error: e.to_string(),
-                }
-            })?;
-        Ok(json!({ "contents": contents, "owner": owner, "tx_digest": previous_transaction }))
-    }
-
     /// Treat the object type as a Move struct with one type parameter,
     /// like this: `S<T>`.
     /// Returns the inner parameter type `T`.
@@ -596,29 +526,15 @@ impl Object {
 }
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Serialize, Deserialize, JsonSchema, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "status", content = "details")]
 pub enum ObjectRead {
     NotExists(ObjectID),
-    Exists(
-        ObjectRef,
-        Object,
-        #[schemars(with = "Option<json_schema::MoveStructLayout>")] Option<MoveStructLayout>,
-    ),
+    Exists(ObjectRef, Object, Option<MoveStructLayout>),
     Deleted(ObjectRef),
 }
 
 impl ObjectRead {
-    /// Returns a reference to the object if there is any, otherwise an Err if
-    /// the object does not exist or is deleted.
-    pub fn object(&self) -> Result<&Object, SuiError> {
-        match &self {
-            Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: *oref }),
-            Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
-            Self::Exists(_, o, _) => Ok(o),
-        }
-    }
-
     /// Returns the object value if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
     pub fn into_object(self) -> Result<Object, SuiError> {
@@ -627,44 +543,6 @@ impl ObjectRead {
             Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: id }),
             Self::Exists(_, o, _) => Ok(o),
         }
-    }
-
-    /// Returns the layout of the object if it was requested in the read, None if it was not requested or does not have a layout
-    /// Returns an Err if the object does not exist or is deleted.
-    pub fn layout(&self) -> Result<&Option<MoveStructLayout>, SuiError> {
-        match &self {
-            Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: *oref }),
-            Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
-            Self::Exists(_, _, layout) => Ok(layout),
-        }
-    }
-
-    /// Returns the object ref if there is an object, otherwise an Err if
-    /// the object does not exist or is deleted.
-    pub fn reference(&self) -> Result<ObjectRef, SuiError> {
-        match &self {
-            Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: *oref }),
-            Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
-            Self::Exists(oref, _, _) => Ok(*oref),
-        }
-    }
-}
-
-impl Display for Object {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let type_string = self
-            .data
-            .type_()
-            .map_or("Move Package".to_owned(), |type_| format!("{type_}"));
-
-        write!(
-            f,
-            "ID: {:?}\nVersion: {:?}\nOwner: {}\nType: {}",
-            self.id(),
-            self.version().value(),
-            self.owner,
-            type_string
-        )
     }
 }
 

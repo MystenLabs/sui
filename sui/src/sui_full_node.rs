@@ -7,39 +7,39 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use sui_types::sui_serde::Base64;
 
 use crate::{
-    api::{RpcGatewayServer, SignedTransaction, TransactionBytes},
-    rpc_gateway::responses::{GetObjectInfoResponse, NamedObjectRef, ObjectResponse, SuiTypeTag},
+    api::{RpcGatewayServer, TransactionBytes},
+    rpc_gateway::responses::{ObjectResponse, SuiTypeTag},
 };
 use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
-use move_core_types::identifier::Identifier;
-
 use sui_config::{NetworkConfig, PersistedConfig};
-use sui_core::{authority::ReplicaStore, full_node::FullNodeState, sui_json::SuiJsonValue};
 use sui_core::{
-    authority_client::NetworkAuthorityClient,
-    full_node::FullNode,
-    gateway_state::{
-        gateway_responses::{TransactionEffectsResponse, TransactionResponse},
-        GatewayTxSeqNumber,
+    authority::ReplicaStore,
+    full_node::FullNodeState,
+    gateway_types::{
+        GetObjectInfoResponse, SuiObjectRef, TransactionEffectsResponse, TransactionResponse,
     },
+    sui_json::SuiJsonValue,
+};
+use sui_core::{
+    authority_client::NetworkAuthorityClient, full_node::FullNode,
+    gateway_state::GatewayTxSeqNumber,
 };
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     error::SuiError,
-    json_schema::Base64,
-    object::ObjectRead,
 };
 use tracing::info;
 
-pub struct SuiNode {
+pub struct SuiFullNode {
     client: FullNode<NetworkAuthorityClient>,
 }
 
-impl SuiNode {
+impl SuiFullNode {
     pub async fn start_with_genesis(
         network_config_path: &Path,
         db_path: &Path,
@@ -57,7 +57,7 @@ impl SuiNode {
 }
 
 #[async_trait]
-impl RpcGatewayServer for SuiNode {
+impl RpcGatewayServer for SuiFullNode {
     async fn transfer_coin(
         &self,
         _signer: SuiAddress,
@@ -103,7 +103,9 @@ impl RpcGatewayServer for SuiNode {
 
     async fn execute_transaction(
         &self,
-        _signed_tx: SignedTransaction,
+        _tx_bytes: Base64,
+        _signature: Base64,
+        _pub_key: Base64,
     ) -> RpcResult<TransactionResponse> {
         Err(anyhow!("Sui Node only supports read-only methods").into())
     }
@@ -112,8 +114,8 @@ impl RpcGatewayServer for SuiNode {
         &self,
         _signer: SuiAddress,
         _package_object_id: ObjectID,
-        _module: Identifier,
-        _function: Identifier,
+        _module: String,
+        _function: String,
         _type_arguments: Vec<SuiTypeTag>,
         _rpc_arguments: Vec<SuiJsonValue>,
         _gas: Option<ObjectID>,
@@ -137,17 +139,13 @@ impl RpcGatewayServer for SuiNode {
                 .get_owned_objects(owner)
                 .await?
                 .iter()
-                .map(|w| NamedObjectRef::from(*w))
+                .map(|w| SuiObjectRef::from(*w))
                 .collect(),
         };
         Ok(resp)
     }
 
-    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<ObjectRead> {
-        Ok(self.client.get_object_info(object_id).await?)
-    }
-
-    async fn get_object_typed_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse> {
+    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse> {
         Ok(self
             .client
             .get_object_info(object_id)
