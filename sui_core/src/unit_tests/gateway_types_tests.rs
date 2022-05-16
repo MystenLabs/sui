@@ -1,12 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use move_core_types::ident_str;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveValue};
 
-use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use sui_types::coin::Coin;
 use sui_types::gas_coin::GasCoin;
+use sui_types::id::VersionedID;
 use sui_types::object::MoveObject;
 use sui_types::sui_serde::Base64;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
@@ -101,4 +104,37 @@ fn test_move_value_to_url() {
     let sui_value = SuiMoveValue::from(url_move_value);
 
     assert!(matches!(sui_value, SuiMoveValue::String(s) if s == test_url));
+}
+
+#[test]
+fn test_serde() {
+    let test_values = [
+        SuiMoveValue::Coin(Coin::new(
+            VersionedID::new(ObjectID::random(), SequenceNumber::new()),
+            10,
+        )),
+        SuiMoveValue::U8(u8::MAX),
+        SuiMoveValue::U64(u64::MAX),
+        SuiMoveValue::U128(u128::MAX),
+        SuiMoveValue::VersionedID(VersionedID::new(ObjectID::random(), SequenceNumber::MAX)),
+        SuiMoveValue::String("some test string".to_string()),
+        SuiMoveValue::Address(ObjectID::random()),
+        SuiMoveValue::ByteArray(Base64::from_bytes(&[0u8; 20])),
+        SuiMoveValue::Bool(true),
+        SuiMoveValue::Signer(SuiAddress::random_for_testing_only()),
+        SuiMoveValue::Option(Box::new(None)),
+        SuiMoveValue::Option(Box::new(Some(SuiMoveValue::U8(u8::MAX)))),
+    ];
+
+    for value in test_values {
+        let json = serde_json::to_string(&value).unwrap();
+        let serde_value: SuiMoveValue = serde_json::from_str(&json)
+            .map_err(|e| anyhow!("Serde failed for [{:?}], Error msg : {}", value, e))
+            .unwrap();
+        assert_eq!(
+            value, serde_value,
+            "Error converting {:?} [{json}], got {:?}",
+            value, serde_value
+        )
+    }
 }

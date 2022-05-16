@@ -17,7 +17,6 @@ use serde::ser::Error;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
-use serde_with::serde_as;
 
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -27,7 +26,7 @@ use sui_types::crypto::{AuthorityQuorumSignInfo, Signature};
 use sui_types::error::SuiError;
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
-use sui_types::id::{UniqueID, VersionedID, ID};
+use sui_types::id::VersionedID;
 use sui_types::messages::{
     CallArg, CertifiedTransaction, ExecutionStatus, InputObjectKind, MoveModulePublish,
     SingleTransactionKind, TransactionData, TransactionEffects, TransactionKind,
@@ -234,7 +233,7 @@ impl SuiObject {
                 {
                     SuiData::MoveObject(SuiMoveObject {
                         type_,
-                        fields: SuiMoveValue::Struct(SuiMoveStruct::WithFields(fields)),
+                        fields: SuiMoveValue::Fields(fields),
                     })
                 } else {
                     SuiData::MoveObject(SuiMoveObject {
@@ -269,6 +268,7 @@ pub enum SuiData {
 pub struct SuiMoveObject {
     #[serde(rename = "type")]
     pub type_: String,
+    #[serde(flatten)]
     pub fields: SuiMoveValue,
 }
 
@@ -395,9 +395,8 @@ impl TryFrom<ObjectRead> for GetObjectInfoResponse {
     }
 }
 
-#[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
-#[serde(untagged, rename = "MoveValue")]
+#[serde(rename = "MoveValue", rename_all = "camelCase")]
 pub enum SuiMoveValue {
     // Move base types
     U8(u8),
@@ -408,15 +407,15 @@ pub enum SuiMoveValue {
     Vector(Vec<SuiMoveValue>),
     Struct(SuiMoveStruct),
     Signer(SuiAddress),
+    Fields(BTreeMap<String, SuiMoveValue>),
 
     // Sui base types
     String(String),
-    ID(ID),
-    UniqueID(UniqueID),
     VersionedID(VersionedID),
     Balance(u64),
     ByteArray(Base64),
     Coin(Coin),
+    Option(Box<Option<SuiMoveValue>>),
 }
 
 impl From<MoveValue> for SuiMoveValue {
@@ -496,18 +495,21 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
         "0x2::Url::Url" => return Some(fields["url"].clone()),
         "0x2::ID::ID" => {
             if let SuiMoveValue::Address(id) = fields["bytes"] {
-                return Some(SuiMoveValue::ID(ID { bytes: id }));
+                return Some(SuiMoveValue::Address(id));
             }
         }
         "0x2::ID::UniqueID" => {
-            if let SuiMoveValue::ID(id) = fields["id"].clone() {
-                return Some(SuiMoveValue::UniqueID(UniqueID { id }));
+            if let SuiMoveValue::Address(id) = fields["id"].clone() {
+                return Some(SuiMoveValue::Address(id));
             }
         }
         "0x2::ID::VersionedID" => {
-            if let SuiMoveValue::UniqueID(id) = fields["id"].clone() {
+            if let SuiMoveValue::Address(id) = fields["id"].clone() {
                 if let SuiMoveValue::U64(version) = fields["version"].clone() {
-                    return Some(SuiMoveValue::VersionedID(VersionedID { id, version }));
+                    return Some(SuiMoveValue::VersionedID(VersionedID::new(
+                        id,
+                        SequenceNumber::from(version),
+                    )));
                 }
             }
         }
@@ -517,10 +519,15 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
             }
         }
         "0x2::Coin::Coin" => {
-            if let SuiMoveValue::Balance(value) = fields["balance"].clone() {
+            if let SuiMoveValue::Balance(balance) = fields["balance"].clone() {
                 if let SuiMoveValue::VersionedID(id) = fields["id"].clone() {
-                    return Some(SuiMoveValue::Coin(Coin::new(id, value)));
+                    return Some(SuiMoveValue::Coin(Coin::new(id, balance)));
                 }
+            }
+        }
+        "0x1::Option::Option" => {
+            if let SuiMoveValue::Vector(values) = fields["vec"].clone() {
+                return Some(SuiMoveValue::Option(Box::new(values.first().cloned())));
             }
         }
         _ => {}
