@@ -806,7 +806,6 @@ where
                 error!(
                     num_retries = MAX_NUM_TX_RETRIES,
                     ?tx_digest,
-                    ?tx,
                     "All transaction retries failed"
                 );
                 // Okay to unwrap since we checked that this is an error
@@ -818,7 +817,7 @@ where
             debug!(
                 remaining_retries,
                 ?tx_digest,
-                ?tx,
+                ?res,
                 "Retrying failed transaction"
             );
 

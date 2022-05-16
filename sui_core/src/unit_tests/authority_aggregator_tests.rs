@@ -647,7 +647,7 @@ async fn test_sync_all_owned_objects() {
 }
 
 #[tokio::test]
-async fn test_process_transaction() {
+async fn test_process_transaction1() {
     let (addr1, key1) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
@@ -687,9 +687,10 @@ async fn test_process_transaction() {
         .await
         .unwrap();
 
-    // The transaction still only has 3 votes, as only these are needed.
+    // Check which authorities has successfully processed the cert.  Should be all of them.
+    // (NOTE: this method gets the TxInfoResponse from each authority, then reconstructs the cert)
     let cert2 = extract_cert(&authority_clients, &authorities.committee, create2.digest()).await;
-    assert_eq!(3, cert2.auth_sign_info.signatures.len());
+    assert_eq!(4, cert2.auth_sign_info.signatures.len());
 }
 
 async fn get_owned_objects(
