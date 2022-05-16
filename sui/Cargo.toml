@@ -44,7 +44,7 @@ sui-framework = { path = "../sui_programmability/framework" }
 sui-network = { path = "../crates/sui-network" }
 sui-config = { path = "../crates/sui-config" }
 sui-types = { path = "../crates/sui-types" }
-sui-verifier = { path = "../sui_programmability/verifier" }
+sui-verifier = { path = "../crates/sui-verifier" }
 sui-open-rpc = { path = "open_rpc" }
 sui-open-rpc-macros = { path = "open_rpc/macros" }
 
