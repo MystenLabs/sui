@@ -12,10 +12,11 @@ type SearchCategory = 'all' | 'transactions' | 'addresses' | 'objects';
 function getPlaceholderText(category: SearchCategory) {
     switch (category) {
         case 'addresses':
-            return 'Search by address';
+            return 'Search by Address';
         case 'transactions':
-            return 'Search by tx ID';
+            return 'Search by TxId';
         case 'objects':
+            return 'Search by Object ID';
         case 'all':
             return 'Search by ID';
     }
