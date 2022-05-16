@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-rayon = "1.5.2"
+rayon = "1.5.3"
 anyhow = { version = "1.0.57", features = ["backtrace"] }
 bytes = "1.1.0"
 futures = "0.3.21"
