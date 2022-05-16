@@ -10,10 +10,11 @@ import {
     getTransferCoinTransaction,
 } from '@mysten/sui.js';
 import cl from 'classnames';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useContext } from 'react';
 import { Link } from 'react-router-dom';
 
 import Longtext from '../../components/longtext/Longtext';
+import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
@@ -123,10 +124,11 @@ function LatestTxView({
 }: {
     results: { loadState: string; latestTx: TxnData[] };
 }) {
+    const [network] = useContext(NetworkContext);
     return (
         <div className={styles.txlatestesults}>
             <div className={styles.txcardgrid}>
-                <h3>Latest Transactions</h3>
+                <h3>Latest Transactions on {network}</h3>
             </div>
             <div className={styles.transactioncard}>
                 <div>

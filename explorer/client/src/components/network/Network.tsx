@@ -1,9 +1,9 @@
-import { useCallback } from 'react';
+import { useCallback, useContext } from 'react';
 
-import { useNetwork } from '../../app/App';
+import { NetworkContext } from '../../context';
 
 export default function Network() {
-    const [network, setNetwork] = useNetwork();
+    const [network, setNetwork] = useContext(NetworkContext);
     const handleClick = useCallback(
         () => setNetwork(network === 'Devnet' ? 'Testnet' : 'Devnet'),
         [setNetwork, network]
