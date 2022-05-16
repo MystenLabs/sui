@@ -9,7 +9,7 @@ edition = "2021"
 
 [dev-dependencies]
 datatest-stable = "0.1.1"
-sui-transactional-test-runner = { path = "../../transactional-test-runner" }
+sui-transactional-test-runner = { path = "../../../crates/sui-transactional-test-runner" }
 
 [[test]]
 name = "tests"
