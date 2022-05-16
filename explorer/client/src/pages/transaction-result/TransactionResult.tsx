@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    getSingleTransactionKind,
     getExecutionStatusType,
     getTotalGasUsed,
-    getExecutionDetails,
+    getExecutionStatusError,
 } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useEffect, useState } from 'react';
@@ -24,7 +23,7 @@ import type {
     TransactionEffectsResponse,
     ExecutionStatusType,
     TransactionEffects,
-    RawObjectRef,
+    SuiObjectRef,
 } from '@mysten/sui.js';
 
 import styles from './TransactionResult.module.css';
@@ -35,32 +34,27 @@ type TxnState = CertifiedTransaction & {
     status: ExecutionStatusType;
     gasFee: number;
     txError: string;
-    mutated: RawObjectRef[];
-    created: RawObjectRef[];
+    mutated: SuiObjectRef[];
+    created: SuiObjectRef[];
 };
-// Todo update state to include Call types
+// TODO: update state to include Call types
+// TODO: clean up duplicate fields
 const initState: TxnState = {
     loadState: 'pending',
     txId: '',
     data: {
-        kind: {
-            Single: {
-                TransferCoin: {
-                    recipient: '',
-                    object_ref: ['', 0, ''],
-                },
-            },
-        },
+        transactions: [],
         sender: '',
-        gas_payment: ['', 0, ''],
-        gas_budget: 0,
+        gasPayment: { digest: '', objectId: '', version: 0 },
+        gasBudget: 0,
     },
-    tx_signature: '',
-    auth_sign_info: {
+    transactionDigest: '',
+    txSignature: '',
+    authSignInfo: {
         epoch: 0,
         signatures: [],
     },
-    status: 'Success',
+    status: 'success',
     gasFee: 0,
     txError: '',
     mutated: [],
@@ -85,10 +79,9 @@ function fetchTransactionData(
 const getCreatedOrMutatedData = (
     txEffects: TransactionEffects,
     contentType: 'created' | 'mutated'
-) => {
-    // Get the first item in the 'created' | 'mutated' array
-    return contentType in txEffects
-        ? txEffects[contentType].map((itm) => itm[0])
+): SuiObjectRef[] => {
+    return contentType in txEffects && txEffects[contentType] != null
+        ? txEffects[contentType]!.map((item) => item.reference)
         : [];
 };
 
@@ -106,18 +99,12 @@ const FailedToGetTxResults = ({ id }: { id: string }) => (
 const transformTransactionResponse = (
     txObj: TransactionEffectsResponse,
     id: string
-) => {
-    const executionStatus = txObj.effects.status;
-    const status = getExecutionStatusType(executionStatus);
-    const details = getExecutionDetails(executionStatus);
+): TxnState => {
     return {
         ...txObj.certificate,
-        status,
-        gasFee: getTotalGasUsed(executionStatus),
-        txError:
-            'error' in details
-                ? details.error[Object.keys(details.error)[0]].error
-                : '',
+        status: getExecutionStatusType(txObj),
+        gasFee: getTotalGasUsed(txObj),
+        txError: getExecutionStatusError(txObj) ?? '',
         txId: id,
         loadState: 'loaded',
         mutated: getCreatedOrMutatedData(txObj.effects, 'mutated'),
@@ -152,11 +139,7 @@ const TransactionResultAPI = ({ id }: { id: string }) => {
             </div>
         );
     }
-    if (
-        id &&
-        showTxState.loadState === 'loaded' &&
-        getSingleTransactionKind(showTxState.data) !== null
-    ) {
+    if (id && showTxState.loadState === 'loaded') {
         return <TransactionResultLoaded txData={showTxState} />;
     }
     // For Batch transactions show error
