@@ -18,6 +18,8 @@ pub const SUI_ARGS_LONG: &str = "sui-args";
 pub struct SuiRunArgs {
     #[clap(long = "sender")]
     pub sender: Option<String>,
+    #[clap(long = "view-events")]
+    pub view_events: bool,
 }
 
 #[derive(Debug, clap::Parser)]

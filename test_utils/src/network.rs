@@ -12,7 +12,6 @@ use sui::{
 };
 use sui_config::{builder::ConfigBuilder, GenesisConfig};
 use sui_types::base_types::SuiAddress;
-use sui::config::FULL_NODE_DB_PATH;
 
 const NUM_VALIDAOTR: usize = 4;
 
@@ -26,7 +25,6 @@ pub async fn start_test_network(
     let wallet_path = working_dir.join(SUI_WALLET_CONFIG);
     let keystore_path = working_dir.join("wallet.key");
     let db_folder_path = working_dir.join("client_db");
-    let full_node_db_path = working_dir.join(FULL_NODE_DB_PATH);
 
     let mut builder =
         ConfigBuilder::new(&working_dir).committee_size(NonZeroUsize::new(NUM_VALIDAOTR).unwrap());

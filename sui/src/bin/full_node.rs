@@ -80,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
     let open_rpc = RpcGatewayOpenRpc::open_rpc();
     module.register_method("rpc.discover", move |_, _| Ok(open_rpc.clone()))?;
     module.merge(
-        SuiNode::start_without_genesis(&config_path, &db_path)
+        SuiNode::start_with_genesis(&config_path, &db_path)
             .await?
             .into_rpc(),
     )?;

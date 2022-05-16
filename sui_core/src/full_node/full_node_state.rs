@@ -6,6 +6,7 @@ use std::{
     collections::HashSet,
     sync::{atomic::AtomicU64, Arc},
 };
+use sui_config::genesis::Genesis;
 
 use crate::{
     authority::{AuthorityTemporaryStore, ReplicaStore},
@@ -59,11 +60,10 @@ impl FullNodeState {
         })
     }
 
-    pub async fn new(
+    pub async fn new_with_genesis(
         committee: SuiCommittee,
         store: Arc<ReplicaStore>,
-        genesis_packages: Vec<Vec<CompiledModule>>,
-        genesis_ctx: &mut TxContext,
+        genesis: &Genesis,
     ) -> Result<Self, SuiError> {
         let state = Self::new_without_genesis(committee, store.clone()).await?;
 
@@ -72,9 +72,13 @@ impl FullNodeState {
             .database_is_empty()
             .expect("Database read should not fail.")
         {
-            for genesis_modules in genesis_packages {
+            let mut genesis_ctx = genesis.genesis_ctx().to_owned();
+            for genesis_modules in genesis.modules() {
                 state
-                    .store_package_and_init_modules_for_genesis(genesis_ctx, genesis_modules)
+                    .store_package_and_init_modules_for_genesis(
+                        &mut genesis_ctx,
+                        genesis_modules.to_owned(),
+                    )
                     .await
                     .expect("We expect publishing the Genesis packages to not fail");
             }

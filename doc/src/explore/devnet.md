@@ -56,7 +56,7 @@ Now [set up your wallet and connect to DevNet](../build/wallet.md#connect-to-dev
 
 ### Request gas tokens
 
-Request gas tokens by posting your wallet address in the [#request-devnet-test-coins](https://discordapp.com/channels/916379725201563759/971488439931392130) Discord channel if you haven't already and wait for them to be issued.
+Request gas tokens by posting your wallet address in the [#devnet-faucet](https://discordapp.com/channels/916379725201563759/971488439931392130) Discord channel if you haven't already and wait for them to be issued.
 
 You can find your wallet address by running:
 ```shell

@@ -40,7 +40,7 @@ pub struct SuiNode {
 }
 
 impl SuiNode {
-    pub async fn start_without_genesis(
+    pub async fn start_with_genesis(
         network_config_path: &Path,
         db_path: &Path,
     ) -> anyhow::Result<Self> {
@@ -189,8 +189,15 @@ pub async fn make_full_node(
 ) -> Result<FullNode<NetworkAuthorityClient>, SuiError> {
     let store = Arc::new(ReplicaStore::open(db_store_path, None));
 
+    let val_config = net_config
+        .validator_configs()
+        .iter()
+        .next()
+        .expect("Validtor set must be non empty");
+
     let follower_node_state =
-        FullNodeState::new_without_genesis(net_config.committee(), store).await?;
+        FullNodeState::new_with_genesis(net_config.committee(), store, val_config.genesis())
+            .await?;
 
     let mut authority_clients = BTreeMap::new();
     let mut config = mysten_network::config::Config::new();

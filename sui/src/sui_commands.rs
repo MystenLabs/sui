@@ -3,23 +3,22 @@
 use crate::{
     config::{
         sui_config_dir, Config, GatewayConfig, GatewayType, PersistedConfig, WalletConfig,
-        FULL_NODE_DB_PATH, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
+        SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
     },
     keystore::{Keystore, KeystoreType, SuiKeystore},
-    sui_genesis::GenesisState,
 };
 use anyhow::{anyhow, bail};
 use base64ct::{Base64, Encoding};
 use clap::*;
 use futures::future::join_all;
-
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use sui_config::NetworkConfig;
+use std::num::NonZeroUsize;
+use sui_config::{builder::ConfigBuilder, NetworkConfig};
 use sui_config::{GenesisConfig, ValidatorConfig};
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_active::ActiveAuthority;
@@ -32,8 +31,6 @@ use sui_types::base_types::SuiAddress;
 use sui_types::error::SuiResult;
 use tokio::sync::mpsc::channel;
 use tracing::{error, info};
-
-pub const SUI_AUTHORITY_KEYS: &str = "authorities.key";
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -180,7 +177,6 @@ impl SuiCommand {
                 let keystore_path = sui_config_dir.join("wallet.key");
                 let db_folder_path = sui_config_dir.join("client_db");
                 let gateway_db_folder_path = sui_config_dir.join("gateway_client_db");
-                let full_node_db_path = sui_config_dir.join(FULL_NODE_DB_PATH);
 
                 let genesis_conf = match from_config {
                     Some(q) => PersistedConfig::read(q)?,
@@ -193,8 +189,20 @@ impl SuiCommand {
                     return Ok(());
                 }
 
-                let (network_config, accounts, mut keystore) =
-                    validator_and_full_node_genesis(genesis_conf, full_node_db_path).await?;
+                let network_config = ConfigBuilder::new(sui_config_dir)
+                    .committee_size(NonZeroUsize::new(genesis_conf.committee_size).unwrap())
+                    .initial_accounts_config(genesis_conf)
+                    .build();
+
+                let mut accounts = Vec::new();
+                let mut keystore = SuiKeystore::default();
+
+                for key in &network_config.account_keys {
+                    let address = SuiAddress::from(key.public_key_bytes());
+                    accounts.push(address);
+                    keystore.add_key(address, key.copy())?;
+                }
+
                 info!("Network genesis completed.");
                 let network_config = network_config.persisted(&network_path);
                 network_config.save()?;
@@ -287,7 +295,7 @@ impl SuiNetwork {
 
         let mut spawned_authorities = Vec::new();
         for validator in config.validator_configs() {
-            let server = make_server(validator).await?;
+            let server = make_server_with_genesis(validator).await?;
             spawned_authorities.push(server.spawn().await?);
         }
         info!("Started {} authorities", spawned_authorities.len());
@@ -319,37 +327,6 @@ impl SuiNetwork {
     }
 }
 
-// TODO: Move this out to sui_genesis.rs
-pub async fn validator_and_full_node_genesis(
-    genesis_conf: GenesisConfig,
-    full_node_db_path: PathBuf,
-) -> Result<(NetworkConfig, Vec<SuiAddress>, SuiKeystore), anyhow::Error> {
-    let num_to_provision = genesis_conf.committee_size;
-    info!("Creating {} new authorities...", num_to_provision);
-    let mut gen_state = GenesisState::new_from_config(genesis_conf).await?;
-
-    for (i, _) in gen_state
-        .network_config
-        .validator_configs()
-        .iter()
-        .enumerate()
-    {
-        gen_state.populate_authority_with_genesis_ctx(i).await?;
-    }
-
-    info!("Provisioning full node...");
-
-    gen_state
-        .make_full_node_state_with_genesis_ctx(full_node_db_path)
-        .await?;
-
-    Ok((
-        gen_state.network_config,
-        gen_state.addresses,
-        gen_state.keystore,
-    ))
-}
-
 pub async fn make_server(validator_config: &ValidatorConfig) -> SuiResult<AuthorityServer> {
     let store = Arc::new(AuthorityStore::open(validator_config.db_path(), None));
     let name = validator_config.public_key();
@@ -358,6 +335,23 @@ pub async fn make_server(validator_config: &ValidatorConfig) -> SuiResult<Author
         name,
         Arc::pin(validator_config.key_pair().copy()),
         store,
+    )
+    .await;
+
+    make_authority(validator_config, state).await
+}
+
+pub async fn make_server_with_genesis(
+    validator_config: &ValidatorConfig,
+) -> SuiResult<AuthorityServer> {
+    let store = Arc::new(AuthorityStore::open(validator_config.db_path(), None));
+    let name = validator_config.public_key();
+    let state = AuthorityState::new_with_genesis(
+        validator_config.committee_config().committee(),
+        name,
+        Arc::pin(validator_config.key_pair().copy()),
+        store,
+        validator_config.genesis(),
     )
     .await;
 

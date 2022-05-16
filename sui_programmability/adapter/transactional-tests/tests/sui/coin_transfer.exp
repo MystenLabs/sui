@@ -1,0 +1,20 @@
+processed 5 tasks
+
+init:
+A: object(100), B: object(101)
+
+task 1 'view-object'. lines 8-8:
+Owner: Account Address ( A )
+Contents: Sui::Coin::Coin<Sui::SUI::SUI> {id: Sui::ID::VersionedID {id: Sui::ID::UniqueID {id: Sui::ID::ID {bytes: fake(100)}}, version: 0u64}, balance: Sui::Balance::Balance<Sui::SUI::SUI> {value: 100000u64}}
+
+task 2 'run'. lines 10-10:
+created: object(105)
+written: object(100), object(104)
+
+task 3 'view-object'. lines 12-12:
+Owner: Account Address ( A )
+Contents: Sui::Coin::Coin<Sui::SUI::SUI> {id: Sui::ID::VersionedID {id: Sui::ID::UniqueID {id: Sui::ID::ID {bytes: fake(100)}}, version: 1u64}, balance: Sui::Balance::Balance<Sui::SUI::SUI> {value: 99990u64}}
+
+task 4 'view-object'. lines 14-14:
+Owner: Account Address ( B )
+Contents: Sui::Coin::Coin<Sui::SUI::SUI> {id: Sui::ID::VersionedID {id: Sui::ID::UniqueID {id: Sui::ID::ID {bytes: fake(105)}}, version: 1u64}, balance: Sui::Balance::Balance<Sui::SUI::SUI> {value: 10u64}}
