@@ -1,18 +1,19 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getMovePackageContent, getObjectContent } from '@mysten/sui.js';
+import {
+    getMovePackageContent,
+    getObjectId,
+    getObjectVersion,
+    getObjectOwner,
+    getObjectFields,
+    getObjectPreviousTransactionDigest,
+} from '@mysten/sui.js';
 
 import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
 import { parseObjectType } from '../../utils/objectUtils';
 
-import type {
-    GetObjectInfoResponse,
-    ObjectExistsInfo,
-    ObjectNotExistsInfo,
-    ObjectOwner,
-    ObjectRef,
-} from '@mysten/sui.js';
+import type { GetObjectInfoResponse, ObjectOwner } from '@mysten/sui.js';
 
 export type DataType = {
     id: string;
@@ -45,41 +46,33 @@ export function instanceOfDataType(object: any): object is DataType {
  * to make this more extensible and customizable for different Move types
  */
 export function translate(o: GetObjectInfoResponse): DataType {
-    const { status, details } = o;
-    switch (status) {
+    switch (o.status) {
         case 'Exists': {
-            const {
-                objectRef: { objectId, version },
-                object: { owner, tx_digest },
-            } = details as ObjectExistsInfo;
-
             return {
-                id: objectId,
-                version: version.toString(),
-                objType: parseObjectType(details as ObjectExistsInfo)!,
-                owner: parseOwner(owner),
+                id: getObjectId(o),
+                version: getObjectVersion(o)!.toString(),
+                objType: parseObjectType(o),
+                owner: parseOwner(getObjectOwner(o)!),
                 data: {
-                    contents:
-                        getObjectContent(o)?.fields ??
-                        getMovePackageContent(o)!,
-                    tx_digest,
+                    contents: getObjectFields(o) ?? getMovePackageContent(o)!,
+                    tx_digest: getObjectPreviousTransactionDigest(o),
                 },
             };
         }
         case 'NotExists': {
-            const { objectId } = details as ObjectNotExistsInfo;
-            // TODO: implement this
-            throw new Error(`Implement me: Object ${objectId} does not exist`);
-        }
-        case 'Deleted': {
-            const { objectId } = details as ObjectRef;
             // TODO: implement this
             throw new Error(
-                `Implement me: Object ${objectId} has been deleted`
+                `Implement me: Object ${getObjectId(o)} does not exist`
+            );
+        }
+        case 'Deleted': {
+            // TODO: implement this
+            throw new Error(
+                `Implement me: Object ${getObjectId(o)} has been deleted`
             );
         }
         default: {
-            throw new Error(`Unexpected status ${status} for object ${o}`);
+            throw new Error(`Unexpected status ${o.status} for object ${o}`);
         }
     }
 }
