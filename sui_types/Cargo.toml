@@ -21,7 +21,7 @@ thiserror = "1.0.31"
 hex = "0.4.3"
 serde_bytes = "0.11.6"
 serde_json = "1.0.80"
-serde_with = { version = "1.13.0", features = ["base64", "hex"] }
+serde_with = "1.13.0"
 signature = "1.5.0"
 static_assertions = "1.1.0"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }

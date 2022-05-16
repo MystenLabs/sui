@@ -46,7 +46,7 @@ async fn transfer_coin(
     coin_object_id: ObjectID,
     gas_object_id: ObjectID,
     recipient: SuiAddress,
-) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+) -> Result<TransactionEffectsResponse, anyhow::Error> {
     let data = gateway
         .transfer_coin(
             signer,
@@ -77,7 +77,7 @@ async fn test_transfer_coin() {
         authority_genesis_objects(4, vec![coin_object.clone(), gas_object.clone()]);
     let gateway = create_gateway_state(genesis_objects).await;
 
-    let (_cert, effects) = transfer_coin(
+    let effects = transfer_coin(
         &gateway,
         addr1,
         &key1,
@@ -86,10 +86,11 @@ async fn test_transfer_coin() {
         addr2,
     )
     .await
-    .unwrap();
+    .unwrap()
+    .effects;
     assert_eq!(effects.mutated.len(), 2);
     assert_eq!(
-        effects.mutated_excluding_gas().next().unwrap().1,
+        effects.mutated_excluding_gas().next().unwrap().owner,
         Owner::AddressOwner(addr2)
     );
     assert_eq!(gateway.get_total_transaction_number().unwrap(), 1);
@@ -112,16 +113,17 @@ async fn test_move_call() {
         gas_object.compute_object_reference(),
     );
 
-    let (_cert, effects) = gateway
+    let effects = gateway
         .execute_transaction(tx)
         .await
         .unwrap()
         .to_effect_response()
-        .unwrap();
+        .unwrap()
+        .effects;
     assert!(effects.status.is_ok());
     assert_eq!(effects.mutated.len(), 1);
     assert_eq!(effects.created.len(), 1);
-    assert_eq!(effects.created[0].1, Owner::AddressOwner(addr1));
+    assert_eq!(effects.created[0].owner, Owner::AddressOwner(addr1));
 }
 
 #[tokio::test]
@@ -196,16 +198,12 @@ async fn test_coin_split() {
         (gas_object.id(), gas_object.version().increment()),
         (response.updated_gas.id(), response.updated_gas.version())
     );
-    let update_coin = GasCoin::try_from(response.updated_coin.data.try_as_move().unwrap()).unwrap();
+    let update_coin = GasCoin::try_from(&response.updated_coin).unwrap();
     assert_eq!(update_coin.value(), GAS_VALUE_FOR_TESTING - total_amount);
     let split_coin_values = response
         .new_coins
         .iter()
-        .map(|o| {
-            GasCoin::try_from(o.data.try_as_move().unwrap())
-                .unwrap()
-                .value()
-        })
+        .map(|o| GasCoin::try_from(o).unwrap().value())
         .collect::<BTreeSet<_>>();
     assert_eq!(
         split_amounts,
@@ -298,7 +296,7 @@ async fn test_coin_merge() {
         (gas_object.id(), gas_object.version().increment()),
         (response.updated_gas.id(), response.updated_gas.version())
     );
-    let update_coin = GasCoin::try_from(response.updated_coin.data.try_as_move().unwrap()).unwrap();
+    let update_coin = GasCoin::try_from(&response.updated_coin).unwrap();
     assert_eq!(update_coin.value(), GAS_VALUE_FOR_TESTING * 2);
 }
 
@@ -334,7 +332,13 @@ async fn test_recent_transactions() -> Result<(), anyhow::Error> {
         let response = gateway
             .execute_transaction(Transaction::new(data, signature))
             .await?;
-        digests.push((cnt, *response.to_effect_response()?.0.digest()));
+        digests.push((
+            cnt,
+            response
+                .to_effect_response()?
+                .certificate
+                .transaction_digest,
+        ));
         cnt += 1;
         assert_eq!(gateway.get_total_transaction_number()?, cnt);
     }
@@ -452,7 +456,7 @@ async fn test_transfer_coin_with_retry() {
         .fail_after_handle_confirmation = false;
 
     // Retry transaction, and this time it should succeed.
-    let (_cert, effects) = transfer_coin(
+    let effects = transfer_coin(
         &gateway,
         addr1,
         &key1,
@@ -461,8 +465,11 @@ async fn test_transfer_coin_with_retry() {
         addr2,
     )
     .await
-    .unwrap();
-    let (updated_obj_ref, new_owner) = effects.mutated_excluding_gas().next().unwrap();
+    .unwrap()
+    .effects;
+    let oref = effects.mutated_excluding_gas().next().unwrap();
+    let updated_obj_ref = &oref.reference;
+    let new_owner = &oref.owner;
     assert_eq!(new_owner, &Owner::AddressOwner(addr2));
 
     // The tx is no longer stuck after the retry.
@@ -487,7 +494,11 @@ async fn test_transfer_coin_with_retry() {
         &tx_digest
     );
     assert_eq!(
-        gateway.store().parent(updated_obj_ref).unwrap().unwrap(),
+        gateway
+            .store()
+            .parent(&updated_obj_ref.to_object_ref())
+            .unwrap()
+            .unwrap(),
         tx_digest
     );
 }
