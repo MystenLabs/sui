@@ -6,6 +6,7 @@ import CopyPlugin from 'copy-webpack-plugin';
 import HtmlWebpackPlugin from 'html-webpack-plugin';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
 import { resolve } from 'path';
+import { DefinePlugin, ProvidePlugin } from 'webpack';
 
 import packageJson from '../../package.json';
 
@@ -90,6 +91,11 @@ const commonConfig: () => Promise<Configuration> = async () => {
         resolve: {
             extensions: ['.ts', '.tsx', '.js'],
             alias,
+            fallback: {
+                crypto: false,
+                stream: require.resolve('stream-browserify'),
+                buffer: require.resolve('buffer/'),
+            },
         },
         module: {
             rules: [
@@ -143,6 +149,12 @@ const commonConfig: () => Promise<Configuration> = async () => {
                         },
                     },
                 ],
+            }),
+            new DefinePlugin({
+                'typeof window': JSON.stringify(typeof {}),
+            }),
+            new ProvidePlugin({
+                Buffer: ['buffer', 'Buffer'],
             }),
         ],
     };
