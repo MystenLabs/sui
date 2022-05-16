@@ -731,7 +731,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
 
             // Initialize object locks for new objects.  After this point, transactions on new objects
             // can run.  So it is critical this is done AFTER objects are done writing.
-            // TODO: what if we fail to initialize the locks?  That should NOT happen, but try rolling back
+            // TODO: add retries https://github.com/MystenLabs/sui/issues/1993
             let new_locks_to_init: Vec<_> = written
                 .iter()
                 .filter_map(|(_, (object_ref, new_object))| {

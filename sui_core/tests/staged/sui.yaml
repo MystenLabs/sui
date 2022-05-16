@@ -481,11 +481,11 @@ SuiError:
       TransactionLockExists:
         STRUCT:
           - refs:
-            SEQ:
-              TUPLE:
-                - TYPENAME: ObjectID
-                - TYPENAME: SequenceNumber
-                - TYPENAME: ObjectDigest
+              SEQ:
+                TUPLE:
+                  - TYPENAME: ObjectID
+                  - TYPENAME: SequenceNumber
+                  - TYPENAME: ObjectDigest
     73:
       TransactionLockDoesNotExist: UNIT
     74:

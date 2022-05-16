@@ -19,7 +19,7 @@ use futures::channel::oneshot;
 use rocksdb::Options;
 use std::path::Path;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tracing::{debug, info, trace};
+use tracing::{debug, info, trace, warn};
 use typed_store::rocks::DBMap;
 use typed_store::{reopen, traits::Map};
 
@@ -121,17 +121,19 @@ impl LockServiceImpl {
     }
 
     /// Checks multiple object locks exist.
-    /// Returns Err(TransactionLockDoesNotExist) if at least one object lock is not initialized at least.
+    /// Returns Err(TransactionLockDoesNotExist) if at least one object lock is not initialized.
     fn locks_exist(&self, objects: &[ObjectRef]) -> SuiResult {
         let locks = self.transaction_lock.multi_get(objects)?;
-        let all_exists = locks.iter().all(|l| matches!(*l, Some(_x)));
-        if all_exists {
-            debug!(?objects, "locks_exist: all locks do exist");
-            Ok(())
-        } else {
-            debug!(?locks, ?objects, "locks_exist: not all locks exist");
-            Err(SuiError::TransactionLockDoesNotExist)
-        }
+        locks
+            .iter()
+            .all(Option::is_some)
+            .then(|| {
+                debug!(?objects, "locks_exist: all locks do exist");
+            })
+            .ok_or_else(|| {
+                debug!(?locks, ?objects, "locks_exist: not all locks exist");
+                SuiError::TransactionLockDoesNotExist
+            })
     }
 
     /// Acquires a lock for a transaction on the given objects if they have all been initialized previously
@@ -210,13 +212,10 @@ impl LockServiceImpl {
         }
 
         // Insert where locks don't exist already
-        let refs_to_insert = locks.iter().zip(objects).filter_map(|(lock_opt, objref)| {
-            if lock_opt.is_none() {
-                Some((objref, None))
-            } else {
-                None
-            }
-        });
+        let refs_to_insert = locks
+            .iter()
+            .zip(objects)
+            .filter_map(|(lock_opt, objref)| lock_opt.is_none().then(|| (objref, None)));
         self.transaction_lock.multi_insert(refs_to_insert)?;
 
         Ok(())
@@ -231,7 +230,7 @@ impl LockServiceImpl {
 
     /// Loop to continuously process mutating commands in a single thread from async senders.
     /// It terminates when the sender drops, which usually is when the containing data store is dropped.
-    fn command_loop(&self, mut receiver: Receiver<LockServiceCommands>) {
+    fn run_command_loop(&self, mut receiver: Receiver<LockServiceCommands>) {
         info!("LockService command processing loop started");
         // NOTE: we use blocking_recv() as its faster than using regular async recv() with awaits in a loop
         while let Some(msg) = receiver.blocking_recv() {
@@ -243,17 +242,17 @@ impl LockServiceImpl {
                 } => {
                     let res = self.acquire_locks(&refs, tx_digest);
                     if let Err(_e) = resp.send(res) {
-                        info!("Could not respond to sender, sender dropped!");
+                        warn!("Could not respond to sender, sender dropped!");
                     }
                 }
                 LockServiceCommands::Initialize { refs, resp } => {
                     if let Err(_e) = resp.send(self.initialize_locks(&refs)) {
-                        info!("Could not respond to sender, sender dropped!");
+                        warn!("Could not respond to sender, sender dropped!");
                     }
                 }
                 LockServiceCommands::RemoveLocks { refs, resp } => {
                     if let Err(_e) = resp.send(self.delete_locks(&refs)) {
-                        info!("Could not respond to sender, sender dropped!");
+                        warn!("Could not respond to sender, sender dropped!");
                     }
                 }
             }
@@ -262,18 +261,18 @@ impl LockServiceImpl {
     }
 
     /// Loop to continuously process queries in a single thread
-    fn queries_loop(&self, mut receiver: Receiver<LockServiceQueries>) {
+    fn run_queries_loop(&self, mut receiver: Receiver<LockServiceQueries>) {
         info!("LockService queries processing loop started");
         while let Some(msg) = receiver.blocking_recv() {
             match msg {
                 LockServiceQueries::GetLock { object, resp } => {
                     if let Err(_e) = resp.send(self.get_lock(object)) {
-                        info!("Could not respond to sender!");
+                        warn!("Could not respond to sender!");
                     }
                 }
                 LockServiceQueries::CheckLocksExist { objects, resp } => {
                     if let Err(_e) = resp.send(self.locks_exist(&objects)) {
-                        info!("Could not respond to sender, sender dropped!");
+                        warn!("Could not respond to sender, sender dropped!");
                     }
                 }
             }
@@ -303,12 +302,12 @@ impl LockService {
         let (sender, receiver) = channel(LOCKSERVICE_QUEUE_LEN);
         let inner2 = inner_service.clone();
         std::thread::spawn(move || {
-            inner2.command_loop(receiver);
+            inner2.run_command_loop(receiver);
         });
 
         let (q_sender, q_receiver) = channel(LOCKSERVICE_QUEUE_LEN);
         std::thread::spawn(move || {
-            inner_service.queries_loop(q_receiver);
+            inner_service.run_queries_loop(q_receiver);
         });
 
         Ok(Self {
