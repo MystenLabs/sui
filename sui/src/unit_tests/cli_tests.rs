@@ -209,7 +209,7 @@ async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
     assert_eq!(token["data"]["type"], ("0x2::CrossChainAirdrop::ERC721"));
     let erc721_metadata = &token["data"]["fields"]["metadata"];
     assert_eq!(
-        erc721_metadata["struct"]["fields"]["token_id"]["struct"]["fields"]["id"]["u64"],
+        erc721_metadata["fields"]["token_id"]["fields"]["id"],
         AIRDROP_SOURCE_TOKEN_ID
     );
 

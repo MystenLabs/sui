@@ -6,15 +6,15 @@ use move_core_types::ident_str;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveValue};
 
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
-use sui_types::coin::Coin;
+use sui_types::base_types::SequenceNumber;
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::gas_coin::GasCoin;
-use sui_types::id::VersionedID;
 use sui_types::object::MoveObject;
 use sui_types::sui_serde::Base64;
+use sui_types::sui_serde::Encoding;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
-use crate::gateway_types::SuiMoveValue;
+use crate::gateway_types::{SuiMoveStruct, SuiMoveValue};
 
 #[test]
 fn test_move_value_to_sui_bytearray() {
@@ -26,14 +26,13 @@ fn test_move_value_to_sui_bytearray() {
         MoveValue::U8(4),
     ]);
     let sui_value = SuiMoveValue::from(move_value);
-    let bytes_base64 = Base64::from_bytes(&[0, 1, 2, 3, 4]);
-    assert!(matches!(sui_value, SuiMoveValue::ByteArray(bytes) if bytes == bytes_base64))
+    let bytes_base64 = Base64::encode(&[0, 1, 2, 3, 4]);
+    assert!(matches!(sui_value, SuiMoveValue::String(bytes) if bytes == bytes_base64))
 }
 
 #[test]
 fn test_move_value_to_sui_coin() {
     let id = ObjectID::random();
-    let version = SequenceNumber::new();
     let value = 10000;
     let coin = GasCoin::new(id, SequenceNumber::new(), value);
     let bcs = coin.to_bcs_bytes();
@@ -41,11 +40,11 @@ fn test_move_value_to_sui_coin() {
     let move_object = MoveObject::new(GasCoin::type_(), bcs);
     let layout = GasCoin::layout();
 
-    let move_value = move_object.to_move_value(&layout).unwrap();
-    let sui_value = SuiMoveValue::from(move_value);
-    assert!(
-        matches!(sui_value, SuiMoveValue::Coin(coin) if coin.id.version == version.value() && coin.id.id.id.bytes == id && coin.value() == value)
-    )
+    let move_struct = move_object.to_move_struct(&layout).unwrap();
+    let sui_struct = SuiMoveStruct::from(move_struct);
+    let gas_coin = GasCoin::try_from(&sui_struct).unwrap();
+    assert_eq!(coin.value(), gas_coin.value());
+    assert_eq!(coin.id(), gas_coin.id());
 }
 
 #[test]
@@ -109,21 +108,15 @@ fn test_move_value_to_url() {
 #[test]
 fn test_serde() {
     let test_values = [
-        SuiMoveValue::Coin(Coin::new(
-            VersionedID::new(ObjectID::random(), SequenceNumber::new()),
-            10,
-        )),
-        SuiMoveValue::U8(u8::MAX),
-        SuiMoveValue::U64(u64::MAX),
-        SuiMoveValue::U128(u128::MAX),
-        SuiMoveValue::VersionedID(VersionedID::new(ObjectID::random(), SequenceNumber::MAX)),
+        SuiMoveValue::Number(u64::MAX),
+        SuiMoveValue::VersionedID {
+            id: ObjectID::random(),
+            version: u64::MAX,
+        },
         SuiMoveValue::String("some test string".to_string()),
-        SuiMoveValue::Address(ObjectID::random()),
-        SuiMoveValue::ByteArray(Base64::from_bytes(&[0u8; 20])),
+        SuiMoveValue::Address(SuiAddress::random_for_testing_only()),
         SuiMoveValue::Bool(true),
-        SuiMoveValue::Signer(SuiAddress::random_for_testing_only()),
         SuiMoveValue::Option(Box::new(None)),
-        SuiMoveValue::Option(Box::new(Some(SuiMoveValue::U8(u8::MAX)))),
     ];
 
     for value in test_values {

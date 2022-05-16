@@ -21,12 +21,10 @@ use serde_json::Value;
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
-use sui_types::coin::Coin;
 use sui_types::crypto::{AuthorityQuorumSignInfo, Signature};
 use sui_types::error::SuiError;
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
-use sui_types::id::VersionedID;
 use sui_types::messages::{
     CallArg, CertifiedTransaction, ExecutionStatus, InputObjectKind, MoveModulePublish,
     SingleTransactionKind, TransactionData, TransactionEffects, TransactionKind,
@@ -223,17 +221,15 @@ impl SuiObject {
         let data = match o.data {
             Data::Move(m) => {
                 let move_struct = m
-                    .to_move_value(&layout.ok_or(SuiError::ObjectSerializationError {
+                    .to_move_struct(&layout.ok_or(SuiError::ObjectSerializationError {
                         error: "Layout is required to convert Move object to json".to_owned(),
                     })?)?
                     .into();
 
-                if let SuiMoveValue::Struct(SuiMoveStruct::WithTypes { type_, fields }) =
-                    move_struct
-                {
+                if let SuiMoveStruct::WithTypes { type_, fields } = move_struct {
                     SuiData::MoveObject(SuiMoveObject {
                         type_,
-                        fields: SuiMoveValue::Fields(fields),
+                        fields: SuiMoveStruct::WithFields(fields),
                     })
                 } else {
                     SuiData::MoveObject(SuiMoveObject {
@@ -268,8 +264,7 @@ pub enum SuiData {
 pub struct SuiMoveObject {
     #[serde(rename = "type")]
     pub type_: String,
-    #[serde(flatten)]
-    pub fields: SuiMoveValue,
+    pub fields: SuiMoveStruct,
 }
 
 impl TryFrom<&SuiObject> for GasCoin {
@@ -277,8 +272,8 @@ impl TryFrom<&SuiObject> for GasCoin {
     fn try_from(object: &SuiObject) -> Result<Self, Self::Error> {
         match &object.data {
             SuiData::MoveObject(o) => {
-                if let SuiMoveValue::Coin(coin) = &o.fields {
-                    return Ok(GasCoin(coin.clone()));
+                if GasCoin::type_().to_string() == o.type_ {
+                    return GasCoin::try_from(&o.fields);
                 }
             }
             SuiData::Package(_) => {}
@@ -289,6 +284,25 @@ impl TryFrom<&SuiObject> for GasCoin {
                 "Gas object type is not a gas coin: {:?}",
                 object.data.type_()
             ),
+        });
+    }
+}
+
+impl TryFrom<&SuiMoveStruct> for GasCoin {
+    type Error = SuiError;
+    fn try_from(move_struct: &SuiMoveStruct) -> Result<Self, Self::Error> {
+        match move_struct {
+            SuiMoveStruct::WithFields(fields) | SuiMoveStruct::WithTypes { type_: _, fields } => {
+                if let SuiMoveValue::Number(balance) = fields["balance"].clone() {
+                    if let SuiMoveValue::VersionedID { id, version } = fields["id"].clone() {
+                        return Ok(GasCoin::new(id, SequenceNumber::from(version), balance));
+                    }
+                }
+            }
+            _ => {}
+        }
+        return Err(SuiError::TypeError {
+            error: format!("Struct is not a gas coin: {move_struct:?}"),
         });
     }
 }
@@ -396,36 +410,25 @@ impl TryFrom<ObjectRead> for GetObjectInfoResponse {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
-#[serde(rename = "MoveValue", rename_all = "camelCase")]
+#[serde(untagged, rename = "MoveValue")]
 pub enum SuiMoveValue {
-    // Move base types
-    U8(u8),
-    U64(u64),
-    U128(u128),
+    Number(u64),
     Bool(bool),
-    Address(ObjectID),
+    Address(SuiAddress),
     Vector(Vec<SuiMoveValue>),
-    Struct(SuiMoveStruct),
-    Signer(SuiAddress),
-    Fields(BTreeMap<String, SuiMoveValue>),
-
-    // Sui base types
     String(String),
-    VersionedID(VersionedID),
-    Balance(u64),
-    ByteArray(Base64),
-    Coin(Coin),
+    VersionedID { id: ObjectID, version: u64 },
+    Struct(SuiMoveStruct),
     Option(Box<Option<SuiMoveValue>>),
 }
 
 impl From<MoveValue> for SuiMoveValue {
     fn from(value: MoveValue) -> Self {
         match value {
-            MoveValue::U8(value) => SuiMoveValue::U8(value),
-            MoveValue::U64(value) => SuiMoveValue::U64(value),
-            MoveValue::U128(value) => SuiMoveValue::U128(value),
+            MoveValue::U8(value) => SuiMoveValue::Number(value.into()),
+            MoveValue::U64(value) => SuiMoveValue::Number(value),
+            MoveValue::U128(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::Bool(value) => SuiMoveValue::Bool(value),
-            MoveValue::Address(value) => SuiMoveValue::Address(ObjectID::from(value)),
             MoveValue::Vector(value) => {
                 // Try convert bytearray
                 if value.iter().all(|value| matches!(value, MoveValue::U8(_))) {
@@ -439,7 +442,7 @@ impl From<MoveValue> for SuiMoveValue {
                             }
                         })
                         .collect::<Vec<_>>();
-                    return SuiMoveValue::ByteArray(Base64::from_bytes(&bytearray));
+                    return SuiMoveValue::String(Base64::encode(&bytearray));
                 }
                 SuiMoveValue::Vector(value.into_iter().map(|value| value.into()).collect())
             }
@@ -452,8 +455,8 @@ impl From<MoveValue> for SuiMoveValue {
                 };
                 SuiMoveValue::Struct(value.into())
             }
-            MoveValue::Signer(value) => {
-                SuiMoveValue::Signer(SuiAddress::from(ObjectID::from(value)))
+            MoveValue::Signer(value) | MoveValue::Address(value) => {
+                SuiMoveValue::Address(SuiAddress::from(ObjectID::from(value)))
             }
         }
     }
@@ -484,8 +487,8 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
         .collect::<BTreeMap<_, SuiMoveValue>>();
     match struct_name.as_str() {
         "0x2::UTF8::String" | "0x1::ASCII::String" => {
-            if let SuiMoveValue::ByteArray(bytes) = fields["bytes"].clone() {
-                if let Ok(bytes) = bytes.to_vec() {
+            if let SuiMoveValue::String(bytes_string) = fields["bytes"].clone() {
+                if let Ok(bytes) = Base64::decode(bytes_string) {
                     if let Ok(s) = String::from_utf8(bytes) {
                         return Some(SuiMoveValue::String(s));
                     }
@@ -504,25 +507,18 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
             }
         }
         "0x2::ID::VersionedID" => {
-            if let SuiMoveValue::Address(id) = fields["id"].clone() {
-                if let SuiMoveValue::U64(version) = fields["version"].clone() {
-                    return Some(SuiMoveValue::VersionedID(VersionedID::new(
-                        id,
-                        SequenceNumber::from(version),
-                    )));
+            if let SuiMoveValue::Address(address) = fields["id"].clone() {
+                if let SuiMoveValue::Number(version) = fields["version"].clone() {
+                    return Some(SuiMoveValue::VersionedID {
+                        id: address.into(),
+                        version,
+                    });
                 }
             }
         }
         "0x2::Balance::Balance" => {
-            if let SuiMoveValue::U64(value) = fields["value"].clone() {
-                return Some(SuiMoveValue::Balance(value));
-            }
-        }
-        "0x2::Coin::Coin" => {
-            if let SuiMoveValue::Balance(balance) = fields["balance"].clone() {
-                if let SuiMoveValue::VersionedID(id) = fields["id"].clone() {
-                    return Some(SuiMoveValue::Coin(Coin::new(id, balance)));
-                }
+            if let SuiMoveValue::Number(value) = fields["value"].clone() {
+                return Some(SuiMoveValue::Number(value));
             }
         }
         "0x1::Option::Option" => {
@@ -532,7 +528,6 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
         }
         _ => {}
     }
-
     None
 }
 

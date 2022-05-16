@@ -10,7 +10,7 @@ use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
-use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue};
+use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -150,21 +150,21 @@ impl MoveObject {
     }
 
     /// Convert `self` to the JSON representation dictated by `layout`.
-    pub fn to_move_value(&self, layout: &MoveStructLayout) -> Result<MoveValue, SuiError> {
-        MoveStruct::simple_deserialize(&self.contents, layout)
-            .map_err(|e| SuiError::ObjectSerializationError {
+    pub fn to_move_struct(&self, layout: &MoveStructLayout) -> Result<MoveStruct, SuiError> {
+        MoveStruct::simple_deserialize(&self.contents, layout).map_err(|e| {
+            SuiError::ObjectSerializationError {
                 error: e.to_string(),
-            })
-            .map(MoveValue::Struct)
+            }
+        })
     }
 
     /// Convert `self` to the JSON representation dictated by `layout`.
-    pub fn to_move_value_with_resolver(
+    pub fn to_move_struct_with_resolver(
         &self,
         format: ObjectFormatOptions,
         resolver: &impl GetModule,
-    ) -> Result<MoveValue, SuiError> {
-        self.to_move_value(&self.get_layout(format, resolver)?)
+    ) -> Result<MoveStruct, SuiError> {
+        self.to_move_struct(&self.get_layout(format, resolver)?)
     }
 
     /// Approximate size of the object in bytes. This is used for gas metering.

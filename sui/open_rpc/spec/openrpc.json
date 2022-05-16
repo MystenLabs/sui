@@ -542,19 +542,6 @@
           }
         ]
       },
-      "Balance": {
-        "type": "object",
-        "required": [
-          "value"
-        ],
-        "properties": {
-          "value": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      },
       "Base64": {
         "type": "string"
       },
@@ -591,230 +578,13 @@
           }
         }
       },
-      "Coin": {
-        "type": "object",
-        "required": [
-          "balance",
-          "id"
-        ],
-        "properties": {
-          "balance": {
-            "$ref": "#/components/schemas/Balance"
-          },
-          "id": {
-            "$ref": "#/components/schemas/VersionedID"
-          }
-        }
-      },
       "Data": {
         "oneOf": [
           {
             "type": "object",
-            "oneOf": [
-              {
-                "type": "object",
-                "required": [
-                  "u8"
-                ],
-                "properties": {
-                  "u8": {
-                    "type": "integer",
-                    "format": "uint8",
-                    "minimum": 0.0
-                  }
-                },
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "required": [
-                  "u64"
-                ],
-                "properties": {
-                  "u64": {
-                    "type": "integer",
-                    "format": "uint64",
-                    "minimum": 0.0
-                  }
-                },
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "required": [
-                  "u128"
-                ],
-                "properties": {
-                  "u128": {
-                    "type": "integer",
-                    "format": "uint128",
-                    "minimum": 0.0
-                  }
-                },
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "required": [
-                  "bool"
-                ],
-                "properties": {
-                  "bool": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "required": [
-                  "address"
-                ],
-                "properties": {
-                  "address": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  }
-                },
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "required": [
-                  "vector"
-                ],
-                "properties": {
-                  "vector": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/MoveValue"
-                    }
-                  }
-                },
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "required": [
-                  "struct"
-                ],
-                "properties": {
-                  "struct": {
-                    "$ref": "#/components/schemas/MoveStruct"
-                  }
-                },
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "required": [
-                  "signer"
-                ],
-                "properties": {
-                  "signer": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  }
-                },
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "required": [
-                  "fields"
-                ],
-                "properties": {
-                  "fields": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "$ref": "#/components/schemas/MoveValue"
-                    }
-                  }
-                },
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "required": [
-                  "string"
-                ],
-                "properties": {
-                  "string": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "required": [
-                  "versionedID"
-                ],
-                "properties": {
-                  "versionedID": {
-                    "$ref": "#/components/schemas/VersionedID"
-                  }
-                },
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "required": [
-                  "balance"
-                ],
-                "properties": {
-                  "balance": {
-                    "type": "integer",
-                    "format": "uint64",
-                    "minimum": 0.0
-                  }
-                },
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "required": [
-                  "byteArray"
-                ],
-                "properties": {
-                  "byteArray": {
-                    "$ref": "#/components/schemas/Base64"
-                  }
-                },
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "required": [
-                  "coin"
-                ],
-                "properties": {
-                  "coin": {
-                    "$ref": "#/components/schemas/Coin"
-                  }
-                },
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "required": [
-                  "option"
-                ],
-                "properties": {
-                  "option": {
-                    "anyOf": [
-                      {
-                        "$ref": "#/components/schemas/MoveValue"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                },
-                "additionalProperties": false
-              }
-            ],
             "required": [
               "dataType",
+              "fields",
               "type"
             ],
             "properties": {
@@ -823,6 +593,9 @@
                 "enum": [
                   "moveObject"
                 ]
+              },
+              "fields": {
+                "$ref": "#/components/schemas/MoveStruct"
               },
               "type": {
                 "type": "string"
@@ -1094,207 +867,56 @@
         ]
       },
       "MoveValue": {
-        "oneOf": [
+        "anyOf": [
           {
-            "type": "object",
-            "required": [
-              "u8"
-            ],
-            "properties": {
-              "u8": {
-                "type": "integer",
-                "format": "uint8",
-                "minimum": 0.0
-              }
-            },
-            "additionalProperties": false
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "$ref": "#/components/schemas/SuiAddress"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoveValue"
+            }
+          },
+          {
+            "type": "string"
           },
           {
             "type": "object",
             "required": [
-              "u64"
+              "id",
+              "version"
             ],
             "properties": {
-              "u64": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "u128"
-            ],
-            "properties": {
-              "u128": {
-                "type": "integer",
-                "format": "uint128",
-                "minimum": 0.0
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "bool"
-            ],
-            "properties": {
-              "bool": {
-                "type": "boolean"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "address"
-            ],
-            "properties": {
-              "address": {
+              "id": {
                 "$ref": "#/components/schemas/ObjectID"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "vector"
-            ],
-            "properties": {
-              "vector": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/MoveValue"
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "struct"
-            ],
-            "properties": {
-              "struct": {
-                "$ref": "#/components/schemas/MoveStruct"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "signer"
-            ],
-            "properties": {
-              "signer": {
-                "$ref": "#/components/schemas/SuiAddress"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "fields"
-            ],
-            "properties": {
-              "fields": {
-                "type": "object",
-                "additionalProperties": {
-                  "$ref": "#/components/schemas/MoveValue"
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "string"
-            ],
-            "properties": {
-              "string": {
-                "type": "string"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "versionedID"
-            ],
-            "properties": {
-              "versionedID": {
-                "$ref": "#/components/schemas/VersionedID"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "balance"
-            ],
-            "properties": {
-              "balance": {
+              },
+              "version": {
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0.0
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
-            "type": "object",
-            "required": [
-              "byteArray"
-            ],
-            "properties": {
-              "byteArray": {
-                "$ref": "#/components/schemas/Base64"
-              }
-            },
-            "additionalProperties": false
+            "$ref": "#/components/schemas/MoveStruct"
           },
           {
-            "type": "object",
-            "required": [
-              "coin"
-            ],
-            "properties": {
-              "coin": {
-                "$ref": "#/components/schemas/Coin"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoveValue"
+              },
+              {
+                "type": "null"
               }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "option"
-            ],
-            "properties": {
-              "option": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/MoveValue"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              }
-            },
-            "additionalProperties": false
+            ]
           }
         ]
       },
@@ -1846,24 +1468,6 @@
       },
       "TypeTag": {
         "type": "string"
-      },
-      "VersionedID": {
-        "description": "Rust version of the Move Sui::ID::VersionedID type",
-        "type": "object",
-        "required": [
-          "id",
-          "version"
-        ],
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/ObjectID"
-          },
-          "version": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
       }
     }
   }
