@@ -9,6 +9,7 @@ use blake2::{digest::Update, VarBlake2b};
 use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::{
+    ed25519::Ed25519PublicKey,
     traits::{EncodeDecodeBase64, VerifyingKey},
     Digest, Hash, SignatureService, DIGEST_LEN,
 };
@@ -67,9 +68,12 @@ impl Hash for Batch {
     type TypedDigest = BatchDigest;
 
     fn digest(&self) -> Self::TypedDigest {
-        BatchDigest(crypto::blake2b_256(|hasher| {
-            self.0.iter().for_each(|tx| hasher.update(tx))
-        }))
+        // While the `WorkerMessage` structure is generic, the parameter has no bearing on this enum variant
+        // TODO: fix in #[246]
+        let message = crate::worker::WorkerMessage::<Ed25519PublicKey>::Batch(self.clone());
+        let serialized = bincode::serialize(&message).expect("Batch serialization should not fail");
+
+        BatchDigest::new(crypto::blake2b_256(|hasher| hasher.update(&serialized)))
     }
 }
 

@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::worker::WorkerMessage;
-use blake2::digest::Update;
 use crypto::ed25519::Ed25519PublicKey;
+use crypto::Hash;
 use store::rocks;
 use test_utils::{batch, temp_dir};
 use tokio::sync::mpsc::channel;
@@ -34,13 +34,14 @@ async fn hash_and_store() {
     );
 
     // Send a batch to the `Processor`.
-    let message = WorkerMessage::<Ed25519PublicKey>::Batch(batch());
+    let batch = batch();
+    let message = WorkerMessage::<Ed25519PublicKey>::Batch(batch.clone());
     let serialized = bincode::serialize(&message).unwrap();
     tx_batch.send(serialized.clone()).await.unwrap();
 
     // Ensure the `Processor` outputs the batch's digest.
     let output = rx_digest.recv().await.unwrap();
-    let digest = BatchDigest::new(crypto::blake2b_256(|hasher| hasher.update(&serialized)));
+    let digest = batch.digest();
     let expected = WorkerPrimaryMessage::OurBatch(digest, id);
     assert_eq!(output, expected);
 
