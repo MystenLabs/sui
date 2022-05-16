@@ -402,6 +402,7 @@ strum = { version = "0.24", features = ["std"] }
 subtle = { version = "2", default-features = false, features = ["std"] }
 sync_wrapper = { version = "0.1", default-features = false }
 tabular = { version = "0.2", features = ["ansi-cell", "strip-ansi-escapes", "unicode-width"] }
+tap = { version = "1", default-features = false }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["serde", "summaries"] }
 telemetry-subscribers-2c266570e79e716a = { package = "telemetry-subscribers", git = "https://github.com/MystenLabs/mysten-infra", rev = "2de1a391654a7ee09d867de2f16627b915ad21f0", features = ["jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry"] }
@@ -953,6 +954,7 @@ syn = { version = "1", features = ["clone-impls", "derive", "extra-traits", "ful
 sync_wrapper = { version = "0.1", default-features = false }
 synstructure = { version = "0.12", features = ["proc-macro"] }
 tabular = { version = "0.2", features = ["ansi-cell", "strip-ansi-escapes", "unicode-width"] }
+tap = { version = "1", default-features = false }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["serde", "summaries"] }
 telemetry-subscribers-2c266570e79e716a = { package = "telemetry-subscribers", git = "https://github.com/MystenLabs/mysten-infra", rev = "2de1a391654a7ee09d867de2f16627b915ad21f0", features = ["jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry"] }

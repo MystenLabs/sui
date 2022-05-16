@@ -5964,6 +5964,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-swarm"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "rand 0.7.3",
+ "serde 1.0.137",
+ "sui-config",
+ "sui-core",
+ "sui-node",
+ "sui-types",
+ "tap",
+ "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "tempfile",
+ "tokio",
+ "tonic-health",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-transactional-test-runner"
 version = "0.1.0"
 dependencies = [
@@ -6103,6 +6125,12 @@ dependencies = [
  "strip-ansi-escapes",
  "unicode-width",
 ]
+
+[[package]]
+name = "tap"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "target-lexicon"
@@ -7881,6 +7909,7 @@ dependencies = [
  "sync_wrapper",
  "synstructure",
  "tabular",
+ "tap",
  "target-lexicon",
  "target-spec",
  "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=2de1a391654a7ee09d867de2f16627b915ad21f0)",
