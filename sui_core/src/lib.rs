@@ -11,6 +11,7 @@ pub mod consensus_adapter;
 pub mod execution_engine;
 pub mod gateway_state;
 pub mod gateway_types;
+pub mod make;
 pub mod safe_client;
 pub mod sui_json;
 pub mod transaction_input_checker;
