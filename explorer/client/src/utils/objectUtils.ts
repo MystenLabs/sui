@@ -9,6 +9,7 @@ export function parseImageURL(data: any): string {
     return (
         data?.url ||
         // TODO: Remove Legacy format
+        data?.display ||
         data?.contents?.display ||
         ''
     );
