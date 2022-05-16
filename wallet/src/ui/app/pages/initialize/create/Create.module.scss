@@ -1,0 +1,15 @@
+.desc {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 16px;
+}
+
+.terms {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+
+    > input {
+        margin: 0 8px 0 0;
+    }
+}
