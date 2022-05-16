@@ -6,16 +6,15 @@ import {
   TransactionDigest,
   GetTxnDigestsResponse,
   GatewayTxSeqNumber,
-  ObjectRef,
+  SuiObjectRef,
   GetObjectInfoResponse,
-  SignedTransaction,
   TransactionResponse,
 } from '../types';
 import { Provider } from './provider';
 
 export class VoidProvider extends Provider {
   // Objects
-  async getOwnedObjectRefs(_address: string): Promise<ObjectRef[]> {
+  async getOwnedObjectRefs(_address: string): Promise<SuiObjectRef[]> {
     throw this.newError('getOwnedObjectRefs');
   }
 
@@ -31,7 +30,9 @@ export class VoidProvider extends Provider {
   }
 
   async executeTransaction(
-    _txn: SignedTransaction
+    _txnBytes: string,
+    _signature: string,
+    _pubkey: string
   ): Promise<TransactionResponse> {
     throw this.newError('executeTransaction');
   }

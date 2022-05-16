@@ -11,17 +11,14 @@ import {
   isTransactionResponse,
 } from '../index.guard';
 import {
-  CertifiedTransaction,
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
   GetObjectInfoResponse,
-  ObjectRef,
+  SuiObjectRef,
   TransactionDigest,
   TransactionEffectsResponse,
-  SignedTransaction,
   TransactionResponse,
 } from '../types';
-import { transformGetObjectInfoResponse } from '../types/framework/transformer';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 
@@ -39,7 +36,7 @@ export class JsonRpcProvider extends Provider {
   }
 
   // Objects
-  async getOwnedObjectRefs(address: string): Promise<ObjectRef[]> {
+  async getOwnedObjectRefs(address: string): Promise<SuiObjectRef[]> {
     try {
       const resp = await this.client.requestWithType(
         'sui_getOwnedObjects',
@@ -56,12 +53,11 @@ export class JsonRpcProvider extends Provider {
 
   async getObjectInfo(objectId: string): Promise<GetObjectInfoResponse> {
     try {
-      const resp = await this.client.requestWithType(
-        'sui_getObjectTypedInfo',
+      return await this.client.requestWithType(
+        'sui_getObjectInfo',
         [objectId],
         isGetObjectInfoResponse
       );
-      return transformGetObjectInfoResponse(resp);
     } catch (err) {
       throw new Error(`Error fetching object info: ${err} for id ${objectId}`);
     }
@@ -71,15 +67,14 @@ export class JsonRpcProvider extends Provider {
     objectIds: string[]
   ): Promise<GetObjectInfoResponse[]> {
     const requests = objectIds.map(id => ({
-      method: 'sui_getObjectTypedInfo',
+      method: 'sui_getObjectInfo',
       args: [id],
     }));
     try {
-      const responses = await this.client.batchRequestWithType(
+      return await this.client.batchRequestWithType(
         requests,
         isGetObjectInfoResponse
       );
-      return responses.map(r => transformGetObjectInfoResponse(r));
     } catch (err) {
       throw new Error(`Error fetching object info: ${err} for id ${objectIds}`);
     }
@@ -123,35 +118,20 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getTransaction(
-    digest: TransactionDigest
-  ): Promise<CertifiedTransaction> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getTransaction',
-        [digest],
-        isTransactionEffectsResponse
-      );
-      return resp.certificate;
-    } catch (err) {
-      throw new Error(`Error getting transaction: ${err} for digest ${digest}`);
-    }
-  }
-
   async executeTransaction(
-    txn: SignedTransaction
+    txnBytes: string,
+    signature: string,
+    pubkey: string
   ): Promise<TransactionResponse> {
     try {
       const resp = await this.client.requestWithType(
         'sui_executeTransaction',
-        [txn],
+        [txnBytes, signature, pubkey],
         isTransactionResponse
       );
       return resp;
     } catch (err) {
-      throw new Error(
-        `Error executing transaction: ${err} for txn ${JSON.stringify(txn)}`
-      );
+      throw new Error(`Error executing transaction: ${err}}`);
     }
   }
 

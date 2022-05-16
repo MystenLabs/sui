@@ -55,11 +55,11 @@ export abstract class SignerWithProvider implements Signer {
     txBytes: Base64DataBuffer
   ): Promise<TransactionResponse> {
     const sig = await this.signData(txBytes);
-    return await this.provider.executeTransaction({
-      tx_bytes: txBytes.toString(),
-      signature: sig.signature.toString(),
-      pub_key: sig.pubKey.toString(),
-    });
+    return await this.provider.executeTransaction(
+      txBytes.toString(),
+      sig.signature.toString(),
+      sig.pubKey.toString()
+    );
   }
 
   /**
