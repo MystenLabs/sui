@@ -687,10 +687,10 @@ async fn test_process_transaction1() {
         .await
         .unwrap();
 
-    // Check which authorities has successfully processed the cert.  Should be all of them.
+    // Check which authorities has successfully processed the cert.
     // (NOTE: this method gets the TxInfoResponse from each authority, then reconstructs the cert)
     let cert2 = extract_cert(&authority_clients, &authorities.committee, create2.digest()).await;
-    assert_eq!(4, cert2.auth_sign_info.signatures.len());
+    assert_eq!(3, cert2.auth_sign_info.signatures.len());
 }
 
 async fn get_owned_objects(

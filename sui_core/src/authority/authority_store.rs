@@ -476,14 +476,16 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     ) -> Result<(), SuiError> {
         let tx_digest = *transaction.digest();
 
-        // Write transaction first as this is idempotent and then once we acquire lock we know the Tx
-        // will be present
-        self.transactions.insert(&tx_digest, &transaction)?;
-
         // Acquire the lock on input objects
         self.lock_service
             .acquire_locks(owned_input_objects.to_owned(), tx_digest)
             .await?;
+
+        // TODO: we should have transaction insertion be atomic with lock acquisition, or retry.
+        // For now write transactions after because if we write before, there is a chance the lock can fail
+        // and this can cause invalid transactions to be inserted in the table.
+        // https://github.com/MystenLabs/sui/issues/1990
+        self.transactions.insert(&tx_digest, &transaction)?;
 
         Ok(())
     }

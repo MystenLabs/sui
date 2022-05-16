@@ -482,7 +482,10 @@ SuiError:
         STRUCT:
           - refs:
             SEQ:
-              TYPENAME: ObjectRef
+              TUPLE:
+                - TYPENAME: ObjectID
+                - TYPENAME: SequenceNumber
+                - TYPENAME: ObjectDigest
     73:
       TransactionLockDoesNotExist: UNIT
     74:
