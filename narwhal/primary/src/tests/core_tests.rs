@@ -12,13 +12,13 @@ use types::{BatchDigest, Header, Vote};
 
 #[tokio::test]
 async fn process_header() {
-    let mut keys = keys();
+    let mut keys = keys(None);
     let _ = keys.pop().unwrap(); // Skip the header' author.
     let kp = keys.pop().unwrap();
     let name = kp.public().clone();
     let mut signature_service = SignatureService::new(kp);
 
-    let committee = committee();
+    let committee = committee(None);
 
     let (tx_sync_headers, _rx_sync_headers) = channel(1);
     let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
@@ -90,7 +90,7 @@ async fn process_header() {
 
 #[tokio::test]
 async fn process_header_missing_parent() {
-    let kp = keys().pop().unwrap();
+    let kp = keys(None).pop().unwrap();
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
@@ -109,7 +109,7 @@ async fn process_header_missing_parent() {
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
         name.clone(),
-        &committee(),
+        &committee(None),
         certificates_store.clone(),
         payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers,
@@ -119,7 +119,7 @@ async fn process_header_missing_parent() {
     // Spawn the core.
     Core::spawn(
         name,
-        committee(),
+        committee(None),
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,
@@ -151,7 +151,7 @@ async fn process_header_missing_parent() {
 
 #[tokio::test]
 async fn process_header_missing_payload() {
-    let kp = keys().pop().unwrap();
+    let kp = keys(None).pop().unwrap();
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
@@ -170,7 +170,7 @@ async fn process_header_missing_payload() {
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
         name.clone(),
-        &committee(),
+        &committee(None),
         certificates_store.clone(),
         payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers,
@@ -180,7 +180,7 @@ async fn process_header_missing_payload() {
     // Spawn the core.
     Core::spawn(
         name,
-        committee(),
+        committee(None),
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,
@@ -212,11 +212,11 @@ async fn process_header_missing_payload() {
 
 #[tokio::test]
 async fn process_votes() {
-    let kp = keys().pop().unwrap();
+    let kp = keys(None).pop().unwrap();
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
-    let committee = committee();
+    let committee = committee(None);
 
     let (tx_sync_headers, _rx_sync_headers) = channel(1);
     let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
@@ -288,7 +288,7 @@ async fn process_votes() {
 
 #[tokio::test]
 async fn process_certificates() {
-    let kp = keys().pop().unwrap();
+    let kp = keys(None).pop().unwrap();
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
@@ -307,7 +307,7 @@ async fn process_certificates() {
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
         name.clone(),
-        &committee(),
+        &committee(None),
         certificates_store.clone(),
         payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers,
@@ -317,7 +317,7 @@ async fn process_certificates() {
     // Spawn the core.
     Core::spawn(
         name,
-        committee(),
+        committee(None),
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,

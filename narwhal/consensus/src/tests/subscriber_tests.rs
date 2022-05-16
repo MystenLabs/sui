@@ -12,7 +12,10 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 /// Make enough certificates to commit a leader.
 pub fn commit_certificates() -> VecDeque<Certificate<Ed25519PublicKey>> {
     // Make certificates for rounds 1 to 4.
-    let keys: Vec<_> = keys().into_iter().map(|kp| kp.public().clone()).collect();
+    let keys: Vec<_> = keys(None)
+        .into_iter()
+        .map(|kp| kp.public().clone())
+        .collect();
     let genesis = Certificate::genesis(&mock_committee(&keys[..]))
         .iter()
         .map(|x| x.digest())
@@ -36,7 +39,10 @@ pub async fn spawn_node(
     let certificates = commit_certificates();
 
     // Make the committee.
-    let keys: Vec<_> = keys().into_iter().map(|kp| kp.public().clone()).collect();
+    let keys: Vec<_> = keys(None)
+        .into_iter()
+        .map(|kp| kp.public().clone())
+        .collect();
     let committee = mock_committee(&keys[..]);
 
     // Create the storages.

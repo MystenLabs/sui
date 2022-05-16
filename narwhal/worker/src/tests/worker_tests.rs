@@ -16,9 +16,9 @@ use types::{TransactionsClient, WorkerToWorkerClient};
 
 #[tokio::test]
 async fn handle_clients_transactions() {
-    let name = keys().pop().unwrap().public().clone();
+    let name = keys(None).pop().unwrap().public().clone();
     let id = 0;
-    let committee = committee();
+    let committee = committee(None);
     let parameters = Parameters {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
@@ -74,9 +74,9 @@ async fn handle_clients_transactions() {
 
 #[tokio::test]
 async fn handle_client_batch_request() {
-    let name = keys().pop().unwrap().public().clone();
+    let name = keys(None).pop().unwrap().public().clone();
     let id = 0;
-    let committee = committee();
+    let committee = committee(None);
     let parameters = Parameters {
         max_header_delay: Duration::from_millis(100_000), // Ensure no batches are created.
         ..Parameters::default()

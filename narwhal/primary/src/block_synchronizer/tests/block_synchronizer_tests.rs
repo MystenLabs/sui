@@ -49,7 +49,7 @@ async fn test_successful_headers_synchronization() {
     let mut certificates: HashMap<CertificateDigest, Certificate<Ed25519PublicKey>> =
         HashMap::new();
 
-    let key = keys().pop().unwrap();
+    let key = keys(None).pop().unwrap();
     let worker_id_0 = 0;
     let worker_id_1 = 1;
 
@@ -204,7 +204,7 @@ async fn test_successful_payload_synchronization() {
     let mut certificates: HashMap<CertificateDigest, Certificate<Ed25519PublicKey>> =
         HashMap::new();
 
-    let key = keys().pop().unwrap();
+    let key = keys(None).pop().unwrap();
     let worker_id_0: u32 = 0;
     let worker_id_1: u32 = 1;
 
@@ -401,7 +401,7 @@ async fn test_multiple_overlapping_requests() {
     let mut certificates: HashMap<CertificateDigest, Certificate<Ed25519PublicKey>> =
         HashMap::new();
 
-    let key = keys().pop().unwrap();
+    let key = keys(None).pop().unwrap();
 
     // AND generate headers with distributed batches between 2 workers (0 and 1)
     for _ in 0..5 {
@@ -507,7 +507,7 @@ async fn test_timeout_while_waiting_for_certificates() {
 
     // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
-    let key = keys().pop().unwrap();
+    let key = keys(None).pop().unwrap();
 
     let (tx_commands, rx_commands) = channel(10);
     let (_, rx_certificate_responses) = channel(10);
@@ -594,7 +594,7 @@ async fn test_reply_with_certificates_already_in_storage() {
 
     // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
-    let key = keys().pop().unwrap();
+    let key = keys(None).pop().unwrap();
 
     let (_, rx_commands) = channel(10);
     let (_, rx_certificate_responses) = channel(10);
@@ -685,7 +685,7 @@ async fn test_reply_with_payload_already_in_storage() {
 
     // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
-    let key = keys().pop().unwrap();
+    let key = keys(None).pop().unwrap();
 
     let (_, rx_commands) = channel(10);
     let (_, rx_certificate_responses) = channel(10);

@@ -64,7 +64,7 @@ async fn test_successful_blocks_delete() {
     let mut header_ids = Vec::new();
     let handlers = FuturesUnordered::new();
 
-    let key = keys().pop().unwrap();
+    let key = keys(None).pop().unwrap();
 
     let mut worker_batches: HashMap<WorkerId, Vec<BatchDigest>> = HashMap::new();
 
@@ -212,7 +212,7 @@ async fn test_timeout() {
     let mut block_ids = Vec::new();
     let mut header_ids = Vec::new();
 
-    let key = keys().pop().unwrap();
+    let key = keys(None).pop().unwrap();
 
     let mut worker_batches: HashMap<WorkerId, Vec<BatchDigest>> = HashMap::new();
 
@@ -345,7 +345,7 @@ async fn test_unlocking_pending_requests() {
     let mut block_ids = Vec::new();
     let mut header_ids = Vec::new();
 
-    let key = keys().pop().unwrap();
+    let key = keys(None).pop().unwrap();
 
     let worker_id_0 = 0;
 

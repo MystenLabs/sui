@@ -14,10 +14,10 @@ async fn synchronize() {
     let (tx_message, rx_message) = channel(1);
     let (tx_primary, _) = channel(1);
 
-    let mut keys = keys();
+    let mut keys = keys(None);
     let name = keys.pop().unwrap().public().clone();
     let id = 0;
-    let committee = committee();
+    let committee = committee(None);
 
     // Create a new test store.
     let store = open_batch_store();
@@ -57,10 +57,10 @@ async fn test_successful_request_batch() {
     let (tx_message, rx_message) = channel(1);
     let (tx_primary, mut rx_primary) = channel(1);
 
-    let mut keys = keys();
+    let mut keys = keys(None);
     let name = keys.pop().unwrap().public().clone();
     let id = 0;
-    let committee = committee();
+    let committee = committee(None);
 
     // Create a new test store.
     let store = open_batch_store();
@@ -112,10 +112,10 @@ async fn test_request_batch_not_found() {
     let (tx_message, rx_message) = channel(1);
     let (tx_primary, mut rx_primary) = channel(1);
 
-    let mut keys = keys();
+    let mut keys = keys(None);
     let name = keys.pop().unwrap().public().clone();
     let id = 0;
-    let committee = committee();
+    let committee = committee(None);
 
     // Create a new test store.
     let store = open_batch_store();
@@ -166,10 +166,10 @@ async fn test_successful_batch_delete() {
     let (tx_message, rx_message) = channel(1);
     let (tx_primary, mut rx_primary) = channel(1);
 
-    let mut keys = keys();
+    let mut keys = keys(None);
     let name = keys.pop().unwrap().public().clone();
     let id = 0;
-    let committee = committee();
+    let committee = committee(None);
 
     // Create a new test store.
     let store = open_batch_store();

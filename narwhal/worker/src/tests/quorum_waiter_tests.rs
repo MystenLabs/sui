@@ -13,8 +13,8 @@ use tokio::sync::mpsc::channel;
 async fn wait_for_quorum() {
     let (tx_message, rx_message) = channel(1);
     let (tx_batch, mut rx_batch) = channel(1);
-    let myself = keys().pop().unwrap().public().clone();
-    let committee = committee();
+    let myself = keys(None).pop().unwrap().public().clone();
+    let committee = committee(None);
 
     // Spawn a `QuorumWaiter` instance.
     QuorumWaiter::spawn(committee.clone(), /* stake */ 1, rx_message, tx_batch);

@@ -24,7 +24,10 @@ pub fn process_certificates(c: &mut Criterion) {
         let rounds: Round = *size;
 
         // process certificates for rounds, check we don't grow the dag too much
-        let keys: Vec<_> = keys().into_iter().map(|kp| kp.public().clone()).collect();
+        let keys: Vec<_> = keys(None)
+            .into_iter()
+            .map(|kp| kp.public().clone())
+            .collect();
         let genesis = Certificate::genesis(&mock_committee(&keys[..]))
             .iter()
             .map(|x| x.digest())

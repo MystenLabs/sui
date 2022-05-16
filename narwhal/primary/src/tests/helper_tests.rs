@@ -24,7 +24,7 @@ use types::{BatchDigest, Certificate, CertificateDigest};
 async fn test_process_certificates_stream_mode() {
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
-    let key = keys().pop().unwrap();
+    let key = keys(None).pop().unwrap();
     let (name, committee) = resolve_name_and_committee();
     let (tx_primaries, rx_primaries) = channel(10);
 
@@ -94,7 +94,7 @@ async fn test_process_certificates_stream_mode() {
 async fn test_process_certificates_batch_mode() {
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
-    let key = keys().pop().unwrap();
+    let key = keys(None).pop().unwrap();
     let (name, committee) = resolve_name_and_committee();
     let (tx_primaries, rx_primaries) = channel(10);
 
@@ -185,7 +185,7 @@ async fn test_process_certificates_batch_mode() {
 async fn test_process_payload_availability_success() {
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
-    let key = keys().pop().unwrap();
+    let key = keys(None).pop().unwrap();
     let (name, committee) = resolve_name_and_committee();
     let (tx_primaries, rx_primaries) = channel(10);
 
@@ -296,7 +296,7 @@ async fn test_process_payload_availability_when_failures() {
     let payload_store: Store<(types::BatchDigest, WorkerId), PayloadToken> =
         Store::new(payload_map);
 
-    let key = keys().pop().unwrap();
+    let key = keys(None).pop().unwrap();
     let (name, committee) = resolve_name_and_committee();
     let (tx_primaries, rx_primaries) = channel(10);
 

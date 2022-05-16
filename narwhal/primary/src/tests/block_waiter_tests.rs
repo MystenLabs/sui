@@ -133,7 +133,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
     // GIVEN
     let (name, committee) = resolve_name_and_committee();
 
-    let key = keys().pop().unwrap();
+    let key = keys(None).pop().unwrap();
     let mut block_ids = Vec::new();
     let mut expected_batch_messages = HashMap::new();
     let worker_id = 0;

@@ -8,7 +8,7 @@ use tokio::sync::mpsc::channel;
 
 #[tokio::test]
 async fn propose_empty() {
-    let kp = keys().pop().unwrap();
+    let kp = keys(None).pop().unwrap();
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
@@ -19,7 +19,7 @@ async fn propose_empty() {
     // Spawn the proposer.
     Proposer::spawn(
         name,
-        &committee(),
+        &committee(None),
         signature_service,
         /* header_size */ 1_000,
         /* max_header_delay */ Duration::from_millis(20),
@@ -32,12 +32,12 @@ async fn propose_empty() {
     let header = rx_headers.recv().await.unwrap();
     assert_eq!(header.round, 1);
     assert!(header.payload.is_empty());
-    assert!(header.verify(&committee()).is_ok());
+    assert!(header.verify(&committee(None)).is_ok());
 }
 
 #[tokio::test]
 async fn propose_payload() {
-    let kp = keys().pop().unwrap();
+    let kp = keys(None).pop().unwrap();
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
@@ -48,7 +48,7 @@ async fn propose_payload() {
     // Spawn the proposer.
     Proposer::spawn(
         name.clone(),
-        &committee(),
+        &committee(None),
         signature_service,
         /* header_size */ 32,
         /* max_header_delay */
@@ -68,5 +68,5 @@ async fn propose_payload() {
     let header = rx_headers.recv().await.unwrap();
     assert_eq!(header.round, 1);
     assert_eq!(header.payload.get(&digest), Some(&worker_id));
-    assert!(header.verify(&committee()).is_ok());
+    assert!(header.verify(&committee(None)).is_ok());
 }

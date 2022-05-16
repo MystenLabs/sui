@@ -157,7 +157,7 @@ pub fn make_certificate_store(
 #[tokio::test]
 async fn commit_one() {
     // Make certificates for rounds 1 to 4.
-    let keys: Vec<_> = test_utils::keys()
+    let keys: Vec<_> = test_utils::keys(None)
         .into_iter()
         .map(|kp| kp.public().clone())
         .collect();
@@ -207,7 +207,7 @@ async fn commit_one() {
 #[tokio::test]
 async fn dead_node() {
     // Make the certificates.
-    let mut keys: Vec<_> = test_utils::keys()
+    let mut keys: Vec<_> = test_utils::keys(None)
         .into_iter()
         .map(|kp| kp.public().clone())
         .collect();
@@ -257,7 +257,7 @@ async fn dead_node() {
 // round 4 does. The leader of rounds 2 and 4 should thus be committed upon entering round 6.
 #[tokio::test]
 async fn not_enough_support() {
-    let mut keys: Vec<_> = test_utils::keys()
+    let mut keys: Vec<_> = test_utils::keys(None)
         .into_iter()
         .map(|kp| kp.public().clone())
         .collect();
@@ -356,7 +356,7 @@ async fn not_enough_support() {
 // and reapers from round 3.
 #[tokio::test]
 async fn missing_leader() {
-    let mut keys: Vec<_> = test_utils::keys()
+    let mut keys: Vec<_> = test_utils::keys(None)
         .into_iter()
         .map(|kp| kp.public().clone())
         .collect();

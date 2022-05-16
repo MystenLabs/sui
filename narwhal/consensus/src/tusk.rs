@@ -408,7 +408,7 @@ mod tests {
         let rounds: Round = rand::thread_rng().gen_range(10, 100);
 
         // process certificates for rounds, check we don't grow the dag too much
-        let keys: Vec<_> = test_utils::keys()
+        let keys: Vec<_> = test_utils::keys(None)
             .into_iter()
             .map(|kp| kp.public().clone())
             .collect();
@@ -457,7 +457,7 @@ mod tests {
         let rounds: Round = rand::thread_rng().gen_range(10, 100);
 
         // process certificates for rounds, check we don't grow the dag too much
-        let keys: Vec<_> = test_utils::keys()
+        let keys: Vec<_> = test_utils::keys(None)
             .into_iter()
             .map(|kp| kp.public().clone())
             .collect();

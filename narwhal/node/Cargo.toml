@@ -39,6 +39,7 @@ pretty_assertions = "1.2.1"
 serde-reflection = "0.3.5"
 serde_yaml = "0.8.23"
 structopt = "0.3.26"
+test_utils = { path = "../test_utils" }
 
 [features]
 benchmark = ["worker/benchmark", "primary/benchmark", "consensus/benchmark"]
