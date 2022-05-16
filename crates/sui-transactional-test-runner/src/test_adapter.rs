@@ -205,10 +205,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         extra: Self::ExtraPublishArgs,
     ) -> anyhow::Result<(Option<String>, CompiledModule)> {
         let SuiPublishArgs { sender } = extra;
-        let named_addr = named_addr_opt.expect(
-            "Cannot publish without a named address. \
-            This named address will be associated with the published package",
-        );
         let module_name = module.self_id().name().to_string();
         let module_bytes = {
             let mut buf = vec![];
@@ -234,17 +230,19 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             })
             .unwrap();
         let package_addr = NumericalAddress::new(created_package.into_bytes(), NumberFormat::Hex);
-        let prev_package = self
-            .compiled_state
-            .named_address_mapping
-            .insert(named_addr.to_string(), package_addr);
-        match prev_package.map(|a| a.into_inner()) {
-            Some(addr) if addr != AccountAddress::ZERO => panic!(
-                "Cannot reuse named address '{}' for multiple packages. \
+        if let Some(named_addr) = named_addr_opt {
+            let prev_package = self
+                .compiled_state
+                .named_address_mapping
+                .insert(named_addr.to_string(), package_addr);
+            match prev_package.map(|a| a.into_inner()) {
+                Some(addr) if addr != AccountAddress::ZERO => panic!(
+                    "Cannot reuse named address '{}' for multiple packages. \
                 It should be set to 0 initially",
-                named_addr
-            ),
-            _ => (),
+                    named_addr
+                ),
+                _ => (),
+            }
         }
         let view_events = false;
         let output = self.object_summary_output(&summary, view_events);

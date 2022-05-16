@@ -1,0 +1,11 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//# publish
+module 0x0.ID {
+    import 0x2.ID;
+    struct VersionedID has store { flag: bool }
+    struct S has key {
+        id: Self.VersionedID
+    }
+}
