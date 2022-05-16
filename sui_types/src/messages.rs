@@ -458,11 +458,12 @@ impl<S> TransactionEnvelope<S> {
     pub fn input_objects_in_compiled_modules(
         compiled_modules: &[CompiledModule],
     ) -> Vec<InputObjectKind> {
+        let to_be_publised: BTreeSet<_> = compiled_modules.iter().map(|m| m.self_id()).collect();
         let mut dependent_packages = BTreeSet::new();
-        for module in compiled_modules.iter() {
-            for handle in module.module_handles.iter() {
-                let address = ObjectID::from(*module.address_identifier_at(handle.address));
-                if address != ObjectID::ZERO {
+        for module in compiled_modules {
+            for handle in &module.module_handles {
+                if !to_be_publised.contains(&module.module_id_for_handle(handle)) {
+                    let address = ObjectID::from(*module.address_identifier_at(handle.address));
                     dependent_packages.insert(address);
                 }
             }
