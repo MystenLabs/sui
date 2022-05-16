@@ -216,7 +216,7 @@ impl Validator for AuthorityServer {
         // the transaction, (ii) we already assigned locks to the transaction but failed to execute it.
         // The later scenario happens when the authority missed some of the transaction's dependencies;
         // we can thus try to re-execute it now.
-        let ConsensusTransaction::UserTransaction(certificate) = &transaction;
+        let ConsensusTransaction::UserTransaction(certificate) = transaction.clone();
         let info = match self
             .state
             .try_skip_consensus(certificate)

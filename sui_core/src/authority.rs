@@ -486,12 +486,12 @@ impl AuthorityState {
     /// all shared-objects of the transaction and can (re-)attempt execution.
     pub async fn try_skip_consensus(
         &self,
-        certificate: &CertifiedTransaction,
+        certificate: CertifiedTransaction,
     ) -> Result<Option<TransactionInfoResponse>, SuiError> {
         // Ensure it is a shared object certificate
         fp_ensure!(
             certificate.contains_shared_object(),
-            SuiError::OnlySharedObjectTransactionNeedSequencing
+            SuiError::NotASharedObjectTransaction
         );
 
         // If we already executed this transaction, return the sign effects.
@@ -511,9 +511,7 @@ impl AuthorityState {
             Some(_) => {
                 // Attempt to execute the transaction. This will only succeed if the authority
                 // already executed all its dependencies.
-                let confirmation_transaction = ConfirmationTransaction {
-                    certificate: certificate.clone(),
-                };
+                let confirmation_transaction = ConfirmationTransaction { certificate };
                 self.handle_confirmation_transaction(confirmation_transaction.clone())
                     .await
                     .map(Some)

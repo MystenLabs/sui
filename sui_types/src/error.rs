@@ -321,7 +321,7 @@ pub enum SuiError {
     #[error("Failed to serialize/deserialize Narwhal message: {0}")]
     ConsensusNarwhalSerializationError(String),
     #[error("Only shared object transactions need to be sequenced")]
-    OnlySharedObjectTransactionNeedSequencing,
+    NotASharedObjectTransaction,
 
     // Cryptography errors.
     #[error("Signature seed invalid length, input byte size was: {0}")]
