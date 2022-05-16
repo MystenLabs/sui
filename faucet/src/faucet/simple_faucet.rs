@@ -4,11 +4,11 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
 use sui::wallet_commands::WalletContext;
+use sui_core::gateway_types::{SuiExecutionStatus, SuiObject};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
-    messages::{ExecutionStatus, Transaction},
-    object::Object,
+    messages::Transaction,
 };
 use tracing::info;
 
@@ -66,7 +66,7 @@ impl SimpleFaucet {
         })
     }
 
-    async fn get_coins(&self, amounts: &[u64]) -> Result<Vec<Object>, FaucetError> {
+    async fn get_coins(&self, amounts: &[u64]) -> Result<Vec<SuiObject>, FaucetError> {
         let result = self
             .split_coins(
                 amounts,
@@ -107,7 +107,7 @@ impl SimpleFaucet {
         gas_object_id: ObjectID,
         signer: SuiAddress,
         budget: u64,
-    ) -> Result<Vec<Object>, anyhow::Error> {
+    ) -> Result<Vec<SuiObject>, anyhow::Error> {
         // TODO: move this function to impl WalletContext{} and reuse in wallet_commands
         let context = &self.wallet;
         let data = context
@@ -153,13 +153,13 @@ impl SimpleFaucet {
             .read()
             .unwrap()
             .sign(&signer, &data.to_bytes())?;
-        let (_cert, effects) = context
+        let effects = context
             .gateway
             .execute_transaction(Transaction::new(data, signature))
             .await?
-            .to_effect_response()?;
-
-        if matches!(effects.status, ExecutionStatus::Failure { .. }) {
+            .to_effect_response()?
+            .effects;
+        if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
             return Err(anyhow!("Error transferring object: {:#?}", effects.status));
         }
         Ok(())

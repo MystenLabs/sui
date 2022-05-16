@@ -3,10 +3,10 @@
 use crate::FaucetError;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use sui_core::gateway_types::SuiObject;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
-    object::Object,
 };
 
 mod simple_faucet;
@@ -33,16 +33,16 @@ pub trait Faucet {
     ) -> Result<FaucetReceipt, FaucetError>;
 }
 
-impl<'a> FromIterator<&'a Object> for FaucetReceipt {
-    fn from_iter<T: IntoIterator<Item = &'a Object>>(iter: T) -> Self {
+impl<'a> FromIterator<&'a SuiObject> for FaucetReceipt {
+    fn from_iter<T: IntoIterator<Item = &'a SuiObject>>(iter: T) -> Self {
         FaucetReceipt {
             sent: iter.into_iter().map(|o| o.into()).collect(),
         }
     }
 }
 
-impl From<&Object> for CoinInfo {
-    fn from(v: &Object) -> Self {
+impl From<&SuiObject> for CoinInfo {
+    fn from(v: &SuiObject) -> Self {
         let gas_coin = GasCoin::try_from(v).unwrap();
         Self {
             amount: gas_coin.value(),

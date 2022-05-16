@@ -4,24 +4,19 @@
 use std::path::Path;
 
 use crate::{
-    api::{RpcGatewayServer, SignedTransaction, TransactionBytes},
-    rpc_gateway::responses::{GetObjectInfoResponse, ObjectResponse, SuiTypeTag},
+    api::{RpcGatewayServer, TransactionBytes},
+    rpc_gateway::responses::{ObjectResponse, SuiTypeTag},
 };
 use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
-use move_core_types::identifier::Identifier;
+use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
 
-use sui_core::gateway_state::{
-    gateway_responses::{TransactionEffectsResponse, TransactionResponse},
-    GatewayTxSeqNumber,
-};
+use sui_core::gateway_state::GatewayTxSeqNumber;
+use sui_core::gateway_types::GetObjectInfoResponse;
 use sui_core::sui_json::SuiJsonValue;
-use sui_types::{
-    base_types::{ObjectID, SuiAddress, TransactionDigest},
-    json_schema::Base64,
-    object::ObjectRead,
-};
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::sui_serde::Base64;
 
 pub struct SuiNode {}
 
@@ -80,20 +75,15 @@ impl RpcGatewayServer for SuiNode {
         todo!()
     }
 
-    async fn get_object_info(&self, _object_id: ObjectID) -> RpcResult<ObjectRead> {
-        todo!()
-    }
-
-    async fn get_object_typed_info(
-        &self,
-        _object_id: ObjectID,
-    ) -> RpcResult<GetObjectInfoResponse> {
+    async fn get_object_info(&self, _object_id: ObjectID) -> RpcResult<GetObjectInfoResponse> {
         todo!()
     }
 
     async fn execute_transaction(
         &self,
-        _signed_tx: SignedTransaction,
+        _tx_bytes: Base64,
+        _signature: Base64,
+        _pub_key: Base64,
     ) -> RpcResult<TransactionResponse> {
         Err(anyhow!("Sui Node only supports read-only methods").into())
     }
@@ -102,8 +92,8 @@ impl RpcGatewayServer for SuiNode {
         &self,
         _signer: SuiAddress,
         _package_object_id: ObjectID,
-        _module: Identifier,
-        _function: Identifier,
+        _module: String,
+        _function: String,
         _type_arguments: Vec<SuiTypeTag>,
         _rpc_arguments: Vec<SuiJsonValue>,
         _gas: Option<ObjectID>,

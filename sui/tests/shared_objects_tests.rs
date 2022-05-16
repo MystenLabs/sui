@@ -511,8 +511,8 @@ async fn shared_object_on_gateway() {
         .execute_transaction(create_counter_transaction)
         .await
         .unwrap();
-    let effects = resp.to_effect_response().unwrap().1;
-    let (shared_object_id, _, _) = effects.created[0].0;
+    let effects = resp.to_effect_response().unwrap().effects;
+    let shared_object_id = effects.created[0].reference.object_id;
     // We need to have one gas object left for the final value check.
     let last_gas_object = gas_objects.pop().unwrap();
     let increment_amount = gas_objects.len();
@@ -552,6 +552,6 @@ async fn shared_object_on_gateway() {
         .execute_transaction(assert_value_transaction)
         .await
         .unwrap();
-    let effects = resp.to_effect_response().unwrap().1;
+    let effects = resp.to_effect_response().unwrap().effects;
     assert!(effects.status.is_ok());
 }

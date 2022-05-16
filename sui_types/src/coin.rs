@@ -9,11 +9,13 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::balance::Balance;
 use crate::{
     base_types::{ObjectID, SequenceNumber},
     id::VersionedID,
     SUI_FRAMEWORK_ADDRESS,
 };
+use schemars::JsonSchema;
 
 pub const COIN_MODULE_NAME: &IdentStr = ident_str!("Coin");
 pub const COIN_STRUCT_NAME: &IdentStr = COIN_MODULE_NAME;
@@ -21,15 +23,18 @@ pub const COIN_JOIN_FUNC_NAME: &IdentStr = ident_str!("join_");
 pub const COIN_SPLIT_VEC_FUNC_NAME: &IdentStr = ident_str!("split_vec");
 
 // Rust version of the Move Sui::Coin::Coin type
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Eq, PartialEq)]
 pub struct Coin {
-    id: VersionedID,
-    value: u64,
+    pub id: VersionedID,
+    pub balance: Balance,
 }
 
 impl Coin {
     pub fn new(id: VersionedID, value: u64) -> Self {
-        Self { id, value }
+        Self {
+            id,
+            balance: Balance::new(value),
+        }
     }
 
     pub fn type_(type_param: StructTag) -> StructTag {
@@ -50,7 +55,7 @@ impl Coin {
     }
 
     pub fn value(&self) -> u64 {
-        self.value
+        self.balance.value()
     }
 
     pub fn to_bcs_bytes(&self) -> Vec<u8> {
@@ -59,13 +64,16 @@ impl Coin {
 
     pub fn layout(type_param: StructTag) -> MoveStructLayout {
         MoveStructLayout::WithTypes {
-            type_: Self::type_(type_param),
+            type_: Self::type_(type_param.clone()),
             fields: vec![
                 MoveFieldLayout::new(
                     ident_str!("id").to_owned(),
                     MoveTypeLayout::Struct(VersionedID::layout()),
                 ),
-                MoveFieldLayout::new(ident_str!("value").to_owned(), MoveTypeLayout::U64),
+                MoveFieldLayout::new(
+                    ident_str!("balance").to_owned(),
+                    MoveTypeLayout::Struct(Balance::layout(type_param)),
+                ),
             ],
         }
     }

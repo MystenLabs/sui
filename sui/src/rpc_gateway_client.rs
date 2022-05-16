@@ -4,19 +4,19 @@
 use anyhow::Error;
 use async_trait::async_trait;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
-use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use tokio::runtime::Handle;
 
-use sui_core::gateway_state::gateway_responses::{TransactionEffectsResponse, TransactionResponse};
 use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
+use sui_core::gateway_types::{
+    GetObjectInfoResponse, SuiObjectRef, TransactionEffectsResponse, TransactionResponse,
+};
 use sui_core::sui_json::SuiJsonValue;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
-use sui_types::json_schema::Base64;
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::messages::{Transaction, TransactionData};
-use sui_types::object::ObjectRead;
+use sui_types::sui_serde::Base64;
 
-use crate::api::{RpcGatewayClient as RpcGateway, SignedTransaction, TransactionBytes};
+use crate::api::{RpcGatewayClient as RpcGateway, TransactionBytes};
 use crate::rpc_gateway::responses::ObjectResponse;
 
 pub struct RpcGatewayClient {
@@ -34,13 +34,14 @@ impl RpcGatewayClient {
 impl GatewayAPI for RpcGatewayClient {
     async fn execute_transaction(&self, tx: Transaction) -> Result<TransactionResponse, Error> {
         let signature = tx.tx_signature;
-        let signed_tx = SignedTransaction {
-            tx_bytes: tx.data.to_bytes(),
-            signature: signature.signature_bytes().to_vec(),
-            pub_key: signature.public_key_bytes().to_vec(),
-        };
+        let tx_bytes = Base64::from_bytes(&tx.data.to_bytes());
+        let signature_bytes = Base64::from_bytes(signature.signature_bytes());
+        let pub_key = Base64::from_bytes(signature.public_key_bytes());
 
-        Ok(self.client.execute_transaction(signed_tx).await?)
+        Ok(self
+            .client
+            .execute_transaction(tx_bytes, signature_bytes, pub_key)
+            .await?)
     }
 
     async fn transfer_coin(
@@ -67,8 +68,8 @@ impl GatewayAPI for RpcGatewayClient {
         &self,
         signer: SuiAddress,
         package_object_id: ObjectID,
-        module: Identifier,
-        function: Identifier,
+        module: String,
+        function: String,
         type_arguments: Vec<TypeTag>,
         arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
@@ -100,7 +101,10 @@ impl GatewayAPI for RpcGatewayClient {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, Error> {
-        let package_bytes = package_bytes.into_iter().map(Base64).collect();
+        let package_bytes = package_bytes
+            .iter()
+            .map(|bytes| Base64::from_bytes(bytes))
+            .collect();
         let bytes: TransactionBytes = self
             .client
             .publish(signer, package_bytes, gas, gas_budget)
@@ -138,18 +142,16 @@ impl GatewayAPI for RpcGatewayClient {
         bytes.to_data()
     }
 
-    async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, Error> {
+    async fn get_object_info(&self, object_id: ObjectID) -> Result<GetObjectInfoResponse, Error> {
         Ok(self.client.get_object_info(object_id).await?)
     }
 
-    async fn get_owned_objects(&self, account_addr: SuiAddress) -> Result<Vec<ObjectRef>, Error> {
+    async fn get_owned_objects(
+        &self,
+        account_addr: SuiAddress,
+    ) -> Result<Vec<SuiObjectRef>, Error> {
         let object_response: ObjectResponse = self.client.get_owned_objects(account_addr).await?;
-        let object_refs = object_response
-            .objects
-            .into_iter()
-            .map(|o| o.to_object_ref())
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(object_refs)
+        Ok(object_response.objects)
     }
 
     fn get_total_transaction_number(&self) -> Result<u64, Error> {

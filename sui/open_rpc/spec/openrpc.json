@@ -16,37 +16,11 @@
   },
   "methods": [
     {
-      "name": "sui_getObjectTypedInfo",
-      "description": "Return the object information for a specified object",
-      "params": [
-        {
-          "name": "object_id",
-          "summary": "",
-          "description": "",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        }
-      ],
-      "result": {
-        "name": "GetObjectInfoResponse",
-        "summary": "",
-        "description": "",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/GetObjectInfoResponse"
-        }
-      }
-    },
-    {
       "name": "sui_transferCoin",
       "description": "Create a transaction to transfer a Sui coin from one address to another.",
       "params": [
         {
           "name": "signer",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -54,8 +28,6 @@
         },
         {
           "name": "object_id",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -63,16 +35,12 @@
         },
         {
           "name": "gas",
-          "summary": "",
-          "description": "",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
         },
         {
           "name": "gas_budget",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "type": "integer",
@@ -82,8 +50,6 @@
         },
         {
           "name": "recipient",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -92,8 +58,6 @@
       ],
       "result": {
         "name": "TransactionBytes",
-        "summary": "",
-        "description": "",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/TransactionBytes"
@@ -106,8 +70,6 @@
       "params": [
         {
           "name": "signer",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -115,8 +77,6 @@
         },
         {
           "name": "package_object_id",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -124,38 +84,30 @@
         },
         {
           "name": "module",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/Identifier"
+            "type": "string"
           }
         },
         {
           "name": "function",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/Identifier"
+            "type": "string"
           }
         },
         {
           "name": "type_arguments",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/TypeTagString"
+              "$ref": "#/components/schemas/TypeTag"
             }
           }
         },
         {
           "name": "arguments",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "type": "array",
@@ -166,16 +118,12 @@
         },
         {
           "name": "gas",
-          "summary": "",
-          "description": "",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
         },
         {
           "name": "gas_budget",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "type": "integer",
@@ -186,8 +134,6 @@
       ],
       "result": {
         "name": "TransactionBytes",
-        "summary": "",
-        "description": "",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/TransactionBytes"
@@ -200,8 +146,6 @@
       "params": [
         {
           "name": "sender",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -209,8 +153,6 @@
         },
         {
           "name": "compiled_modules",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "type": "array",
@@ -221,16 +163,12 @@
         },
         {
           "name": "gas",
-          "summary": "",
-          "description": "",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
         },
         {
           "name": "gas_budget",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "type": "integer",
@@ -241,8 +179,6 @@
       ],
       "result": {
         "name": "TransactionBytes",
-        "summary": "",
-        "description": "",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/TransactionBytes"
@@ -255,8 +191,6 @@
       "params": [
         {
           "name": "signer",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -264,8 +198,6 @@
         },
         {
           "name": "coin_object_id",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -273,8 +205,6 @@
         },
         {
           "name": "split_amounts",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "type": "array",
@@ -287,16 +217,12 @@
         },
         {
           "name": "gas",
-          "summary": "",
-          "description": "",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
         },
         {
           "name": "gas_budget",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "type": "integer",
@@ -307,8 +233,6 @@
       ],
       "result": {
         "name": "TransactionBytes",
-        "summary": "",
-        "description": "",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/TransactionBytes"
@@ -321,8 +245,6 @@
       "params": [
         {
           "name": "signer",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -330,8 +252,6 @@
         },
         {
           "name": "primary_coin",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -339,8 +259,6 @@
         },
         {
           "name": "coin_to_merge",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -348,16 +266,12 @@
         },
         {
           "name": "gas",
-          "summary": "",
-          "description": "",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
         },
         {
           "name": "gas_budget",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "type": "integer",
@@ -368,8 +282,6 @@
       ],
       "result": {
         "name": "TransactionBytes",
-        "summary": "",
-        "description": "",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/TransactionBytes"
@@ -381,19 +293,29 @@
       "description": "Execute the transaction using the transaction data, signature and public key.",
       "params": [
         {
-          "name": "signed_transaction",
-          "summary": "",
-          "description": "",
+          "name": "tx_bytes",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/SignedTransaction"
+            "$ref": "#/components/schemas/Base64"
+          }
+        },
+        {
+          "name": "signature",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Base64"
+          }
+        },
+        {
+          "name": "pub_key",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Base64"
           }
         }
       ],
       "result": {
         "name": "TransactionResponse",
-        "summary": "",
-        "description": "",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/TransactionResponse"
@@ -406,8 +328,6 @@
       "params": [
         {
           "name": "address",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -416,8 +336,6 @@
       ],
       "result": {
         "name": "()",
-        "summary": "",
-        "description": "",
         "required": true,
         "schema": {
           "type": "null"
@@ -430,8 +348,6 @@
       "params": [
         {
           "name": "owner",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -440,8 +356,6 @@
       ],
       "result": {
         "name": "ObjectResponse",
-        "summary": "",
-        "description": "",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/ObjectResponse"
@@ -454,8 +368,6 @@
       "params": [],
       "result": {
         "name": "u64",
-        "summary": "",
-        "description": "",
         "required": true,
         "schema": {
           "type": "integer",
@@ -470,8 +382,6 @@
       "params": [
         {
           "name": "start",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "type": "integer",
@@ -481,8 +391,6 @@
         },
         {
           "name": "end",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "type": "integer",
@@ -493,8 +401,6 @@
       ],
       "result": {
         "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
-        "summary": "",
-        "description": "",
         "required": true,
         "schema": {
           "type": "array",
@@ -522,8 +428,6 @@
       "params": [
         {
           "name": "count",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "type": "integer",
@@ -534,8 +438,6 @@
       ],
       "result": {
         "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
-        "summary": "",
-        "description": "",
         "required": true,
         "schema": {
           "type": "array",
@@ -563,8 +465,6 @@
       "params": [
         {
           "name": "digest",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/TransactionDigest"
@@ -573,8 +473,6 @@
       ],
       "result": {
         "name": "TransactionEffectsResponse",
-        "summary": "",
-        "description": "",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/TransactionEffectsResponse"
@@ -582,13 +480,11 @@
       }
     },
     {
-      "name": "sui_getObjectInfoRaw",
-      "description": "Low level API to get object info. Client Applications should prefer to use `get_object_typed_info` instead.",
+      "name": "sui_getObjectInfo",
+      "description": "Return the object information for a specified object",
       "params": [
         {
           "name": "object_id",
-          "summary": "",
-          "description": "",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -596,9 +492,7 @@
         }
       ],
       "result": {
-        "name": "ObjectRead",
-        "summary": "",
-        "description": "",
+        "name": "GetObjectInfoResponse",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/ObjectRead"
@@ -609,9 +503,6 @@
   "components": {
     "contentDescriptors": {},
     "schemas": {
-      "AccountAddress": {
-        "$ref": "#/components/schemas/Hex"
-      },
       "AuthorityQuorumSignInfo": {
         "description": "Represents at least a quorum (could be more) of authority signatures.",
         "type": "object",
@@ -654,96 +545,85 @@
       "Base64": {
         "type": "string"
       },
-      "CallArg": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "Pure"
-            ],
-            "properties": {
-              "Pure": {
-                "type": "array",
-                "items": {
-                  "type": "integer",
-                  "format": "uint8",
-                  "minimum": 0.0
-                }
+      "CertifiedTransaction": {
+        "type": "object",
+        "required": [
+          "authSignInfo",
+          "data",
+          "transactionDigest",
+          "txSignature"
+        ],
+        "properties": {
+          "authSignInfo": {
+            "description": "authority signature information, if available, is signed by an authority, applied on `data`.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AuthorityQuorumSignInfo"
               }
-            },
-            "additionalProperties": false
+            ]
           },
-          {
-            "type": "object",
-            "required": [
-              "ImmOrOwnedObject"
-            ],
-            "properties": {
-              "ImmOrOwnedObject": {
-                "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SequenceNumber"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ObjectDigest"
-                  }
-                ],
-                "maxItems": 3,
-                "minItems": 3
-              }
-            },
-            "additionalProperties": false
+          "data": {
+            "$ref": "#/components/schemas/TransactionData"
           },
-          {
-            "type": "object",
-            "required": [
-              "SharedObject"
-            ],
-            "properties": {
-              "SharedObject": {
-                "$ref": "#/components/schemas/ObjectID"
+          "transactionDigest": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          },
+          "txSignature": {
+            "description": "tx_signature is signed by the transaction sender, applied on `data`.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Signature"
               }
-            },
-            "additionalProperties": false
+            ]
           }
-        ]
+        }
       },
       "Data": {
         "oneOf": [
           {
-            "description": "An object whose governing logic lives in a published Move module",
             "type": "object",
             "required": [
-              "Move"
+              "dataType",
+              "fields",
+              "type"
             ],
             "properties": {
-              "Move": {
-                "$ref": "#/components/schemas/MoveObject"
+              "dataType": {
+                "type": "string",
+                "enum": [
+                  "moveObject"
+                ]
+              },
+              "fields": {
+                "$ref": "#/components/schemas/MoveStruct"
+              },
+              "type": {
+                "type": "string"
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
-            "description": "Map from each module name to raw serialized Move module bytes",
             "type": "object",
             "required": [
-              "Package"
+              "dataType",
+              "disassembled"
             ],
             "properties": {
-              "Package": {
-                "$ref": "#/components/schemas/MovePackage"
+              "dataType": {
+                "type": "string",
+                "enum": [
+                  "package"
+                ]
+              },
+              "disassembled": {
+                "type": "object",
+                "additionalProperties": true
               }
-            },
-            "additionalProperties": false
+            }
           }
         ]
       },
       "Event": {
-        "description": "User-defined event emitted by executing Move code. Executing a transaction produces an ordered log of these",
         "type": "object",
         "required": [
           "contents",
@@ -751,10 +631,15 @@
         ],
         "properties": {
           "contents": {
-            "type": "string"
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
           },
           "type_": {
-            "$ref": "#/components/schemas/StructTag"
+            "type": "string"
           }
         }
       },
@@ -763,136 +648,71 @@
           {
             "type": "object",
             "required": [
-              "Success"
+              "gas_cost",
+              "status"
             ],
             "properties": {
-              "Success": {
-                "type": "object",
-                "required": [
-                  "gas_cost"
-                ],
-                "properties": {
-                  "gas_cost": {
-                    "$ref": "#/components/schemas/GasCostSummary"
-                  }
-                }
+              "gas_cost": {
+                "$ref": "#/components/schemas/GasCostSummary"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "success"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           },
           {
             "type": "object",
             "required": [
-              "Failure"
+              "error",
+              "gas_cost",
+              "status"
             ],
             "properties": {
-              "Failure": {
-                "type": "object",
-                "required": [
-                  "error",
-                  "gas_cost"
-                ],
-                "properties": {
-                  "error": {
-                    "type": "string"
-                  },
-                  "gas_cost": {
-                    "$ref": "#/components/schemas/GasCostSummary"
-                  }
-                }
+              "error": {
+                "type": "string"
+              },
+              "gas_cost": {
+                "$ref": "#/components/schemas/GasCostSummary"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "failure"
+                ]
               }
-            },
-            "additionalProperties": false
+            }
           }
         ]
       },
       "GasCostSummary": {
         "type": "object",
         "required": [
-          "computation_cost",
-          "storage_cost",
-          "storage_rebate"
+          "computationCost",
+          "storageCost",
+          "storageRebate"
         ],
         "properties": {
-          "computation_cost": {
+          "computationCost": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "storage_cost": {
+          "storageCost": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "storage_rebate": {
+          "storageRebate": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           }
         }
       },
-      "GetObjectInfoResponse": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "details",
-              "status"
-            ],
-            "properties": {
-              "details": {
-                "$ref": "#/components/schemas/ObjectExistsResponse"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "Exists"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "details",
-              "status"
-            ],
-            "properties": {
-              "details": {
-                "$ref": "#/components/schemas/ObjectNotExistsResponse"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "NotExists"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "details",
-              "status"
-            ],
-            "properties": {
-              "details": {
-                "$ref": "#/components/schemas/NamedObjectRef"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "Deleted"
-                ]
-              }
-            }
-          }
-        ]
-      },
       "Hex": {
-        "type": "string"
-      },
-      "Identifier": {
         "type": "string"
       },
       "InputObjectKind": {
@@ -916,20 +736,7 @@
             ],
             "properties": {
               "ImmOrOwnedMoveObject": {
-                "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SequenceNumber"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ObjectDigest"
-                  }
-                ],
-                "maxItems": 3,
-                "minItems": 3
+                "$ref": "#/components/schemas/ObjectRef"
               }
             },
             "additionalProperties": false
@@ -952,19 +759,19 @@
         "type": "object",
         "required": [
           "certificate",
-          "updated_coin",
-          "updated_gas"
+          "updatedCoin",
+          "updatedGas"
         ],
         "properties": {
           "certificate": {
             "description": "Certificate of the transaction",
             "allOf": [
               {
-                "$ref": "#/components/schemas/TransactionEnvelope_for_AuthorityQuorumSignInfo"
+                "$ref": "#/components/schemas/CertifiedTransaction"
               }
             ]
           },
-          "updated_coin": {
+          "updatedCoin": {
             "description": "The updated original coin object after merge",
             "allOf": [
               {
@@ -972,7 +779,7 @@
               }
             ]
           },
-          "updated_gas": {
+          "updatedGas": {
             "description": "The updated gas payment object after deducting payment",
             "allOf": [
               {
@@ -985,249 +792,142 @@
       "MoveCall": {
         "type": "object",
         "required": [
-          "arguments",
           "function",
           "module",
-          "package",
-          "type_arguments"
+          "package"
         ],
         "properties": {
           "arguments": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/CallArg"
+              "$ref": "#/components/schemas/SuiJsonValue"
             }
           },
           "function": {
-            "$ref": "#/components/schemas/Identifier"
+            "type": "string"
           },
           "module": {
-            "$ref": "#/components/schemas/Identifier"
+            "type": "string"
           },
           "package": {
-            "type": "array",
-            "items": [
-              {
-                "$ref": "#/components/schemas/ObjectID"
-              },
-              {
-                "$ref": "#/components/schemas/SequenceNumber"
-              },
-              {
-                "$ref": "#/components/schemas/ObjectDigest"
-              }
-            ],
-            "maxItems": 3,
-            "minItems": 3
+            "$ref": "#/components/schemas/ObjectRef"
           },
-          "type_arguments": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TypeTag"
-            }
-          }
-        }
-      },
-      "MoveFieldLayout": {
-        "type": "object",
-        "required": [
-          "layout",
-          "name"
-        ],
-        "properties": {
-          "layout": {
-            "$ref": "#/components/schemas/MoveTypeLayout"
-          },
-          "name": {
-            "$ref": "#/components/schemas/Identifier"
-          }
-        }
-      },
-      "MoveModulePublish": {
-        "type": "object",
-        "required": [
-          "modules"
-        ],
-        "properties": {
-          "modules": {
+          "typeArguments": {
             "type": "array",
             "items": {
               "type": "string"
             }
           }
         }
-      },
-      "MoveObject": {
-        "type": "object",
-        "required": [
-          "contents",
-          "type_"
-        ],
-        "properties": {
-          "contents": {
-            "$ref": "#/components/schemas/Base64"
-          },
-          "type_": {
-            "$ref": "#/components/schemas/StructTag"
-          }
-        }
-      },
-      "MoveObjectType": {
-        "type": "string",
-        "enum": [
-          "moveObject",
-          "movePackage"
-        ]
       },
       "MovePackage": {
         "type": "object",
         "required": [
-          "id",
-          "module_map"
+          "disassembled"
         ],
         "properties": {
-          "id": {
-            "$ref": "#/components/schemas/ObjectID"
-          },
-          "module_map": {
+          "disassembled": {
             "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
+            "additionalProperties": true
           }
         }
       },
-      "MoveStructLayout": {
-        "oneOf": [
+      "MoveStruct": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoveValue"
+            }
+          },
           {
             "type": "object",
-            "required": [
-              "Runtime"
-            ],
-            "properties": {
-              "Runtime": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/MoveTypeLayout"
-                }
-              }
-            },
-            "additionalProperties": false
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MoveValue"
+            }
           },
           {
             "type": "object",
             "required": [
-              "WithFields"
+              "fields",
+              "type"
             ],
             "properties": {
-              "WithFields": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/MoveFieldLayout"
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "WithTypes"
-            ],
-            "properties": {
-              "WithTypes": {
+              "fields": {
                 "type": "object",
-                "required": [
-                  "fields",
-                  "type_"
-                ],
-                "properties": {
-                  "fields": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/MoveFieldLayout"
-                    }
-                  },
-                  "type_": {
-                    "$ref": "#/components/schemas/StructTag"
-                  }
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/MoveValue"
                 }
+              },
+              "type": {
+                "type": "string"
               }
-            },
-            "additionalProperties": false
+            }
           }
         ]
       },
-      "MoveTypeLayout": {
-        "oneOf": [
+      "MoveValue": {
+        "anyOf": [
           {
-            "type": "string",
-            "enum": [
-              "bool",
-              "u8",
-              "u64",
-              "u128",
-              "address",
-              "signer"
-            ]
-          },
-          {
-            "type": "object",
-            "required": [
-              "vector"
-            ],
-            "properties": {
-              "vector": {
-                "$ref": "#/components/schemas/MoveTypeLayout"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "struct"
-            ],
-            "properties": {
-              "struct": {
-                "$ref": "#/components/schemas/MoveStructLayout"
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
-      "NamedObjectRef": {
-        "type": "object",
-        "required": [
-          "digest",
-          "objectId",
-          "version"
-        ],
-        "properties": {
-          "digest": {
-            "description": "Base64 string representing the object digest",
-            "type": "string"
-          },
-          "objectId": {
-            "description": "Hex code as string representing the object id",
-            "type": "string"
-          },
-          "version": {
-            "description": "Object version.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "$ref": "#/components/schemas/SuiAddress"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoveValue"
+            }
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "version"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/ObjectID"
+              },
+              "version": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            }
+          },
+          {
+            "$ref": "#/components/schemas/MoveStruct"
+          },
+          {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoveValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
-        }
+        ]
       },
       "Object": {
         "type": "object",
         "required": [
           "data",
           "owner",
-          "previous_transaction",
-          "storage_rebate"
+          "previousTransaction",
+          "reference",
+          "storageRebate"
         ],
         "properties": {
           "data": {
@@ -1246,7 +946,7 @@
               }
             ]
           },
-          "previous_transaction": {
+          "previousTransaction": {
             "description": "The digest of the transaction that created or last mutated this object",
             "allOf": [
               {
@@ -1254,7 +954,10 @@
               }
             ]
           },
-          "storage_rebate": {
+          "reference": {
+            "$ref": "#/components/schemas/ObjectRef"
+          },
+          "storageRebate": {
             "description": "The amount of SUI we would rebate if this object gets deleted. This number is re-calculated each time the object is mutated based on the present storage gas price.",
             "type": "integer",
             "format": "uint64",
@@ -1265,39 +968,29 @@
       "ObjectDigest": {
         "$ref": "#/components/schemas/Base64"
       },
-      "ObjectExistsResponse": {
-        "type": "object",
-        "required": [
-          "object",
-          "objectRef",
-          "objectType"
-        ],
-        "properties": {
-          "object": true,
-          "objectRef": {
-            "$ref": "#/components/schemas/NamedObjectRef"
-          },
-          "objectType": {
-            "$ref": "#/components/schemas/MoveObjectType"
-          }
-        }
-      },
       "ObjectID": {
         "$ref": "#/components/schemas/Hex"
       },
-      "ObjectNotExistsResponse": {
-        "type": "object",
-        "required": [
-          "objectId"
-        ],
-        "properties": {
-          "objectId": {
-            "type": "string"
-          }
-        }
-      },
       "ObjectRead": {
         "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "details",
+              "status"
+            ],
+            "properties": {
+              "details": {
+                "$ref": "#/components/schemas/Object"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "Exists"
+                ]
+              }
+            }
+          },
           {
             "type": "object",
             "required": [
@@ -1324,71 +1017,7 @@
             ],
             "properties": {
               "details": {
-                "type": "array",
-                "items": [
-                  {
-                    "type": "array",
-                    "items": [
-                      {
-                        "$ref": "#/components/schemas/ObjectID"
-                      },
-                      {
-                        "$ref": "#/components/schemas/SequenceNumber"
-                      },
-                      {
-                        "$ref": "#/components/schemas/ObjectDigest"
-                      }
-                    ],
-                    "maxItems": 3,
-                    "minItems": 3
-                  },
-                  {
-                    "$ref": "#/components/schemas/Object"
-                  },
-                  {
-                    "anyOf": [
-                      {
-                        "$ref": "#/components/schemas/MoveStructLayout"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                ],
-                "maxItems": 3,
-                "minItems": 3
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "Exists"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "details",
-              "status"
-            ],
-            "properties": {
-              "details": {
-                "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SequenceNumber"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ObjectDigest"
-                  }
-                ],
-                "maxItems": 3,
-                "minItems": 3
+                "$ref": "#/components/schemas/ObjectRef"
               },
               "status": {
                 "type": "string",
@@ -1400,6 +1029,40 @@
           }
         ]
       },
+      "ObjectRef": {
+        "type": "object",
+        "required": [
+          "digest",
+          "objectId",
+          "version"
+        ],
+        "properties": {
+          "digest": {
+            "description": "Base64 string representing the object digest",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectDigest"
+              }
+            ]
+          },
+          "objectId": {
+            "description": "Hex code as string representing the object id",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            ]
+          },
+          "version": {
+            "description": "Object version.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SequenceNumber"
+              }
+            ]
+          }
+        }
+      },
       "ObjectResponse": {
         "type": "object",
         "required": [
@@ -1409,7 +1072,7 @@
           "objects": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/NamedObjectRef"
+              "$ref": "#/components/schemas/ObjectRef"
             }
           }
         }
@@ -1458,20 +1121,20 @@
         "type": "object",
         "required": [
           "certificate",
-          "created_objects",
+          "createdObjects",
           "package",
-          "updated_gas"
+          "updatedGas"
         ],
         "properties": {
           "certificate": {
             "description": "Certificate of the transaction",
             "allOf": [
               {
-                "$ref": "#/components/schemas/TransactionEnvelope_for_AuthorityQuorumSignInfo"
+                "$ref": "#/components/schemas/CertifiedTransaction"
               }
             ]
           },
-          "created_objects": {
+          "createdObjects": {
             "description": "List of Move objects created as part of running the module initializers in the package",
             "type": "array",
             "items": {
@@ -1480,22 +1143,13 @@
           },
           "package": {
             "description": "The newly published package object reference.",
-            "type": "array",
-            "items": [
+            "allOf": [
               {
-                "$ref": "#/components/schemas/ObjectID"
-              },
-              {
-                "$ref": "#/components/schemas/SequenceNumber"
-              },
-              {
-                "$ref": "#/components/schemas/ObjectDigest"
+                "$ref": "#/components/schemas/ObjectRef"
               }
-            ],
-            "maxItems": 3,
-            "minItems": 3
+            ]
           },
-          "updated_gas": {
+          "updatedGas": {
             "description": "The updated gas payment object after deducting payment",
             "allOf": [
               {
@@ -1513,26 +1167,196 @@
       "Signature": {
         "$ref": "#/components/schemas/Base64"
       },
-      "SignedTransaction": {
+      "SplitCoinResponse": {
         "type": "object",
         "required": [
-          "pub_key",
-          "signature",
-          "tx_bytes"
+          "certificate",
+          "newCoins",
+          "updatedCoin",
+          "updatedGas"
         ],
         "properties": {
-          "pub_key": {
-            "$ref": "#/components/schemas/Base64"
+          "certificate": {
+            "description": "Certificate of the transaction",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CertifiedTransaction"
+              }
+            ]
           },
-          "signature": {
-            "$ref": "#/components/schemas/Base64"
+          "newCoins": {
+            "description": "All the newly created coin objects generated from the split",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Object"
+            }
           },
-          "tx_bytes": {
+          "updatedCoin": {
+            "description": "The updated original coin object after split",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Object"
+              }
+            ]
+          },
+          "updatedGas": {
+            "description": "The updated gas payment object after deducting payment",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Object"
+              }
+            ]
+          }
+        }
+      },
+      "SuiAddress": {
+        "$ref": "#/components/schemas/Hex"
+      },
+      "SuiJsonValue": {},
+      "TransactionBytes": {
+        "type": "object",
+        "required": [
+          "gas",
+          "inputObjects",
+          "txBytes"
+        ],
+        "properties": {
+          "gas": {
+            "$ref": "#/components/schemas/ObjectRef"
+          },
+          "inputObjects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InputObjectKind"
+            }
+          },
+          "txBytes": {
             "$ref": "#/components/schemas/Base64"
           }
         }
       },
-      "SingleTransactionKind": {
+      "TransactionData": {
+        "type": "object",
+        "required": [
+          "gasBudget",
+          "gasPayment",
+          "sender",
+          "transactions"
+        ],
+        "properties": {
+          "gasBudget": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "gasPayment": {
+            "$ref": "#/components/schemas/ObjectRef"
+          },
+          "sender": {
+            "$ref": "#/components/schemas/SuiAddress"
+          },
+          "transactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransactionKind"
+            }
+          }
+        }
+      },
+      "TransactionDigest": {
+        "description": "A transaction will have a (unique) digest.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Base64"
+          }
+        ]
+      },
+      "TransactionEffects": {
+        "description": "The response from processing a transaction or a certified transaction",
+        "type": "object",
+        "required": [
+          "gasObject",
+          "status",
+          "transactionDigest"
+        ],
+        "properties": {
+          "created": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectRef"
+            }
+          },
+          "deleted": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectRef"
+            }
+          },
+          "dependencies": {
+            "description": "The set of transaction digests this transaction depends on.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransactionDigest"
+            }
+          },
+          "events": {
+            "description": "The events emitted during execution. Note that only successful transactions emit events",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
+          },
+          "gasObject": {
+            "$ref": "#/components/schemas/ObjectRef"
+          },
+          "mutated": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectRef"
+            }
+          },
+          "sharedObjects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectRef"
+            }
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExecutionStatus"
+          },
+          "transactionDigest": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          },
+          "unwrapped": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectRef"
+            }
+          },
+          "wrapped": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectRef"
+            }
+          }
+        }
+      },
+      "TransactionEffectsResponse": {
+        "type": "object",
+        "required": [
+          "certificate",
+          "effects"
+        ],
+        "properties": {
+          "certificate": {
+            "$ref": "#/components/schemas/CertifiedTransaction"
+          },
+          "effects": {
+            "$ref": "#/components/schemas/TransactionEffects"
+          }
+        }
+      },
+      "TransactionKind": {
         "oneOf": [
           {
             "description": "Initiate a coin transfer between addresses",
@@ -1555,7 +1379,7 @@
             ],
             "properties": {
               "Publish": {
-                "$ref": "#/components/schemas/MoveModulePublish"
+                "$ref": "#/components/schemas/MovePackage"
               }
             },
             "additionalProperties": false
@@ -1569,446 +1393,6 @@
             "properties": {
               "Call": {
                 "$ref": "#/components/schemas/MoveCall"
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
-      "SplitCoinResponse": {
-        "type": "object",
-        "required": [
-          "certificate",
-          "new_coins",
-          "updated_coin",
-          "updated_gas"
-        ],
-        "properties": {
-          "certificate": {
-            "description": "Certificate of the transaction",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/TransactionEnvelope_for_AuthorityQuorumSignInfo"
-              }
-            ]
-          },
-          "new_coins": {
-            "description": "All the newly created coin objects generated from the split",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Object"
-            }
-          },
-          "updated_coin": {
-            "description": "The updated original coin object after split",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Object"
-              }
-            ]
-          },
-          "updated_gas": {
-            "description": "The updated gas payment object after deducting payment",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Object"
-              }
-            ]
-          }
-        }
-      },
-      "StructTag": {
-        "type": "object",
-        "required": [
-          "address",
-          "module",
-          "name",
-          "type_args"
-        ],
-        "properties": {
-          "address": {
-            "$ref": "#/components/schemas/AccountAddress"
-          },
-          "module": {
-            "$ref": "#/components/schemas/Identifier"
-          },
-          "name": {
-            "$ref": "#/components/schemas/Identifier"
-          },
-          "type_args": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TypeTag"
-            }
-          }
-        }
-      },
-      "SuiAddress": {
-        "$ref": "#/components/schemas/Hex"
-      },
-      "SuiJsonValue": {},
-      "TransactionBytes": {
-        "type": "object",
-        "required": [
-          "gas",
-          "input_objects",
-          "tx_bytes"
-        ],
-        "properties": {
-          "gas": {
-            "type": "array",
-            "items": [
-              {
-                "$ref": "#/components/schemas/ObjectID"
-              },
-              {
-                "$ref": "#/components/schemas/SequenceNumber"
-              },
-              {
-                "$ref": "#/components/schemas/ObjectDigest"
-              }
-            ],
-            "maxItems": 3,
-            "minItems": 3
-          },
-          "input_objects": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/InputObjectKind"
-            }
-          },
-          "tx_bytes": {
-            "$ref": "#/components/schemas/Base64"
-          }
-        }
-      },
-      "TransactionData": {
-        "type": "object",
-        "required": [
-          "gas_budget",
-          "gas_payment",
-          "kind",
-          "sender"
-        ],
-        "properties": {
-          "gas_budget": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "gas_payment": {
-            "type": "array",
-            "items": [
-              {
-                "$ref": "#/components/schemas/ObjectID"
-              },
-              {
-                "$ref": "#/components/schemas/SequenceNumber"
-              },
-              {
-                "$ref": "#/components/schemas/ObjectDigest"
-              }
-            ],
-            "maxItems": 3,
-            "minItems": 3
-          },
-          "kind": {
-            "$ref": "#/components/schemas/TransactionKind"
-          },
-          "sender": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      },
-      "TransactionDigest": {
-        "description": "A transaction will have a (unique) digest.",
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Base64"
-          }
-        ]
-      },
-      "TransactionEffects": {
-        "description": "The response from processing a transaction or a certified transaction",
-        "type": "object",
-        "required": [
-          "created",
-          "deleted",
-          "dependencies",
-          "events",
-          "gas_object",
-          "mutated",
-          "shared_objects",
-          "status",
-          "transaction_digest",
-          "unwrapped",
-          "wrapped"
-        ],
-        "properties": {
-          "created": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": [
-                {
-                  "type": "array",
-                  "items": [
-                    {
-                      "$ref": "#/components/schemas/ObjectID"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SequenceNumber"
-                    },
-                    {
-                      "$ref": "#/components/schemas/ObjectDigest"
-                    }
-                  ],
-                  "maxItems": 3,
-                  "minItems": 3
-                },
-                {
-                  "$ref": "#/components/schemas/Owner"
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
-            }
-          },
-          "deleted": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": [
-                {
-                  "$ref": "#/components/schemas/ObjectID"
-                },
-                {
-                  "$ref": "#/components/schemas/SequenceNumber"
-                },
-                {
-                  "$ref": "#/components/schemas/ObjectDigest"
-                }
-              ],
-              "maxItems": 3,
-              "minItems": 3
-            }
-          },
-          "dependencies": {
-            "description": "The set of transaction digests this transaction depends on.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TransactionDigest"
-            }
-          },
-          "events": {
-            "description": "The events emitted during execution. Note that only successful transactions emit events",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Event"
-            }
-          },
-          "gas_object": {
-            "type": "array",
-            "items": [
-              {
-                "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SequenceNumber"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ObjectDigest"
-                  }
-                ],
-                "maxItems": 3,
-                "minItems": 3
-              },
-              {
-                "$ref": "#/components/schemas/Owner"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
-          },
-          "mutated": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": [
-                {
-                  "type": "array",
-                  "items": [
-                    {
-                      "$ref": "#/components/schemas/ObjectID"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SequenceNumber"
-                    },
-                    {
-                      "$ref": "#/components/schemas/ObjectDigest"
-                    }
-                  ],
-                  "maxItems": 3,
-                  "minItems": 3
-                },
-                {
-                  "$ref": "#/components/schemas/Owner"
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
-            }
-          },
-          "shared_objects": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": [
-                {
-                  "$ref": "#/components/schemas/ObjectID"
-                },
-                {
-                  "$ref": "#/components/schemas/SequenceNumber"
-                },
-                {
-                  "$ref": "#/components/schemas/ObjectDigest"
-                }
-              ],
-              "maxItems": 3,
-              "minItems": 3
-            }
-          },
-          "status": {
-            "$ref": "#/components/schemas/ExecutionStatus"
-          },
-          "transaction_digest": {
-            "$ref": "#/components/schemas/TransactionDigest"
-          },
-          "unwrapped": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": [
-                {
-                  "type": "array",
-                  "items": [
-                    {
-                      "$ref": "#/components/schemas/ObjectID"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SequenceNumber"
-                    },
-                    {
-                      "$ref": "#/components/schemas/ObjectDigest"
-                    }
-                  ],
-                  "maxItems": 3,
-                  "minItems": 3
-                },
-                {
-                  "$ref": "#/components/schemas/Owner"
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
-            }
-          },
-          "wrapped": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": [
-                {
-                  "$ref": "#/components/schemas/ObjectID"
-                },
-                {
-                  "$ref": "#/components/schemas/SequenceNumber"
-                },
-                {
-                  "$ref": "#/components/schemas/ObjectDigest"
-                }
-              ],
-              "maxItems": 3,
-              "minItems": 3
-            }
-          }
-        }
-      },
-      "TransactionEffectsResponse": {
-        "type": "object",
-        "required": [
-          "certificate",
-          "effects"
-        ],
-        "properties": {
-          "certificate": {
-            "$ref": "#/components/schemas/TransactionEnvelope_for_AuthorityQuorumSignInfo"
-          },
-          "effects": {
-            "$ref": "#/components/schemas/TransactionEffects"
-          }
-        }
-      },
-      "TransactionEnvelope_for_AuthorityQuorumSignInfo": {
-        "description": "A transaction signed by a client, optionally signed by an authority (depending on `S`). `S` indicates the authority signing state. It can be either empty or signed. We make the authority signature templated so that `TransactionEnvelope<S>` can be used universally in the transactions storage in `SuiDataStore`, shared by both authorities and non-authorities: authorities store signed transactions, while non-authorities store unsigned transactions.",
-        "type": "object",
-        "required": [
-          "auth_sign_info",
-          "data",
-          "tx_signature"
-        ],
-        "properties": {
-          "auth_sign_info": {
-            "description": "authority signature information, if available, is signed by an authority, applied on `data`.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AuthorityQuorumSignInfo"
-              }
-            ]
-          },
-          "data": {
-            "$ref": "#/components/schemas/TransactionData"
-          },
-          "tx_signature": {
-            "description": "tx_signature is signed by the transaction sender, applied on `data`.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Signature"
-              }
-            ]
-          }
-        }
-      },
-      "TransactionKind": {
-        "oneOf": [
-          {
-            "description": "A single transaction.",
-            "type": "object",
-            "required": [
-              "Single"
-            ],
-            "properties": {
-              "Single": {
-                "$ref": "#/components/schemas/SingleTransactionKind"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "A batch of single transactions.",
-            "type": "object",
-            "required": [
-              "Batch"
-            ],
-            "properties": {
-              "Batch": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SingleTransactionKind"
-                }
               }
             },
             "additionalProperties": false
@@ -2070,25 +1454,12 @@
       "TransferCoin": {
         "type": "object",
         "required": [
-          "object_ref",
+          "objectRef",
           "recipient"
         ],
         "properties": {
-          "object_ref": {
-            "type": "array",
-            "items": [
-              {
-                "$ref": "#/components/schemas/ObjectID"
-              },
-              {
-                "$ref": "#/components/schemas/SequenceNumber"
-              },
-              {
-                "$ref": "#/components/schemas/ObjectDigest"
-              }
-            ],
-            "maxItems": 3,
-            "minItems": 3
+          "objectRef": {
+            "$ref": "#/components/schemas/ObjectRef"
           },
           "recipient": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -2096,45 +1467,6 @@
         }
       },
       "TypeTag": {
-        "oneOf": [
-          {
-            "type": "string",
-            "enum": [
-              "bool",
-              "u8",
-              "u64",
-              "u128",
-              "address",
-              "signer"
-            ]
-          },
-          {
-            "type": "object",
-            "required": [
-              "vector"
-            ],
-            "properties": {
-              "vector": {
-                "$ref": "#/components/schemas/TypeTag"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "struct"
-            ],
-            "properties": {
-              "struct": {
-                "$ref": "#/components/schemas/StructTag"
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
-      "TypeTagString": {
         "type": "string"
       }
     }

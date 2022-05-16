@@ -7,6 +7,11 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str::FromStr;
 
+use crate::crypto::PublicKeyBytes;
+use crate::error::SuiError;
+use crate::sui_serde::Base64;
+use crate::sui_serde::Hex;
+use crate::sui_serde::Readable;
 use anyhow::anyhow;
 use base64ct::Encoding;
 use digest::Digest;
@@ -21,13 +26,6 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 use sha3::Sha3_256;
-
-use crate::crypto::PublicKeyBytes;
-use crate::error::SuiError;
-use crate::json_schema;
-use crate::readable_serde::encoding::Base64;
-use crate::readable_serde::encoding::Hex;
-use crate::readable_serde::Readable;
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -59,7 +57,7 @@ pub type AuthorityName = PublicKeyBytes;
 #[serde_as]
 #[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct ObjectID(
-    #[schemars(with = "json_schema::Hex")]
+    #[schemars(with = "Hex")]
     #[serde_as(as = "Readable<Hex, _>")]
     AccountAddress,
 );
@@ -73,7 +71,7 @@ pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;
     Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema,
 )]
 pub struct SuiAddress(
-    #[schemars(with = "json_schema::Hex")]
+    #[schemars(with = "Hex")]
     #[serde_as(as = "Readable<Hex, _>")]
     [u8; SUI_ADDRESS_LENGTH],
 );
@@ -177,7 +175,7 @@ pub const OBJECT_DIGEST_LENGTH: usize = 32;
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct TransactionDigest(
-    #[schemars(with = "json_schema::Base64")]
+    #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
     [u8; TRANSACTION_DIGEST_LENGTH],
 );
@@ -186,7 +184,7 @@ pub struct TransactionDigest(
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct ObjectDigest(
-    #[schemars(with = "json_schema::Base64")]
+    #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
     pub [u8; 32],
 ); // We use SHA3-256 hence 32 bytes here
