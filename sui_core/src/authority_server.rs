@@ -212,12 +212,24 @@ impl Validator for AuthorityServer {
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let transaction = request.into_inner();
 
-        let info = self
-            .consensus_adapter
-            .submit(&transaction)
+        // In some cases we can skip consensus for shared-object transactions: (i) we already executed
+        // the transaction, (ii) we already assigned locks to the transaction but failed to execute it.
+        // The later scenario happens when the authority missed some of the transaction's dependencies;
+        // we can thus try to re-execute it now.
+        let ConsensusTransaction::UserTransaction(certificate) = transaction.clone();
+        let info = match self
+            .state
+            .try_skip_consensus(certificate)
             .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
+            .map_err(|e| tonic::Status::internal(e.to_string()))?
+        {
+            Some(info) => info,
+            None => self
+                .consensus_adapter
+                .submit(&transaction)
+                .await
+                .map_err(|e| tonic::Status::internal(e.to_string()))?,
+        };
         Ok(tonic::Response::new(info))
     }
 

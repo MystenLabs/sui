@@ -585,15 +585,17 @@ SuiError:
       ConsensusNarwhalSerializationError:
         NEWTYPE: STR
     101:
+      NotASharedObjectTransaction: UNIT
+    102:
       SignatureSeedInvalidLength:
         NEWTYPE: U64
-    102:
+    103:
       HkdfError:
         NEWTYPE: STR
-    103:
+    104:
       SignatureKeyGenError:
         NEWTYPE: STR
-    104:
+    105:
       RpcError:
         NEWTYPE: STR
 TransactionDigest:
