@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/sui-adapter-transactional-tests",
     "crates/sui-config",
     "crates/sui-network",
     "crates/sui-transactional-test-runner",
@@ -12,7 +13,6 @@ members = [
     "sui/open_rpc/macros",
     "sui_core",
     "sui_programmability/adapter",
-    "sui_programmability/adapter/transactional-tests",
     "sui_programmability/framework",
     "test_utils",
 ]
