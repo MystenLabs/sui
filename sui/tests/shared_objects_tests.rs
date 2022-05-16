@@ -454,7 +454,7 @@ async fn replay_shared_object_transaction() {
     // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;
     let package_ref =
-        publish_counter_package(gas_objects.pop().unwrap(), &configs.validator_set()).await;
+        publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
 
     // Send a transaction to create a counter (only to one authority) -- twice.
     tokio::task::yield_now().await;
