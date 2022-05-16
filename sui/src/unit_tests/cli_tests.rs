@@ -84,6 +84,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     assert!(files.contains(&SUI_WALLET_CONFIG.to_string()));
     assert!(files.contains(&SUI_GATEWAY_CONFIG.to_string()));
     assert!(files.contains(&SUI_NETWORK_CONFIG.to_string()));
+
     assert!(files.contains(&"wallet.key".to_string()));
 
     // Check network config
