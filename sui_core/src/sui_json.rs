@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::VecDeque;
+use std::fmt::{Debug, Formatter};
 
 use anyhow::{anyhow, bail};
 // Alias the type names for clarity
@@ -16,7 +17,7 @@ use move_core_types::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::{Number, Value as JsonValue};
+use serde_json::{json, Number, Value as JsonValue};
 
 use sui_types::base_types::{decode_bytes_hex, ObjectID, SuiAddress};
 use sui_types::move_package::MovePackage;
@@ -35,7 +36,7 @@ pub enum SuiJsonCallArg {
     Pure(Vec<u8>),
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[derive(Eq, PartialEq, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct SuiJsonValue(JsonValue);
 impl SuiJsonValue {
     pub fn new(json_value: JsonValue) -> Result<SuiJsonValue, anyhow::Error> {
@@ -141,6 +142,12 @@ impl SuiJsonValue {
     }
 }
 
+impl Debug for SuiJsonValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 fn try_from_bcs_bytes(bytes: &[u8]) -> Result<JsonValue, anyhow::Error> {
     // Try to deserialize data
     if let Ok(v) = bcs::from_bytes::<String>(bytes) {
@@ -175,13 +182,7 @@ fn try_from_bcs_bytes(bytes: &[u8]) -> Result<JsonValue, anyhow::Error> {
 impl std::str::FromStr for SuiJsonValue {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self, anyhow::Error> {
-        // Add quotes for hex value start with 0x if it's missing
-        let s = if s.starts_with(HEX_PREFIX) {
-            serde_json::from_str(&format!("\"{}\"", s))
-        } else {
-            serde_json::from_str(s)
-        }?;
-        SuiJsonValue::new(s)
+        SuiJsonValue::new(serde_json::from_value(json!(s))?)
     }
 }
 
