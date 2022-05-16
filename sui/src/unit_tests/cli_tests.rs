@@ -6,10 +6,10 @@ use std::{
 };
 
 use anyhow::anyhow;
-use move_core_types::identifier::Identifier;
 use serde_json::{json, Value};
 use tracing_test::traced_test;
 
+use sui::wallet_commands::SwitchResponse;
 use sui::{
     config::{
         Config, GatewayConfig, GatewayType, PersistedConfig, WalletConfig, SUI_GATEWAY_CONFIG,
@@ -20,20 +20,19 @@ use sui::{
     wallet_commands::{WalletCommandResult, WalletCommands, WalletContext},
 };
 use sui_config::{AccountConfig, GenesisConfig, NetworkConfig, ObjectConfig};
-use sui_core::gateway_state::gateway_responses::SwitchResponse;
+use sui_core::gateway_types::{GetObjectInfoResponse, SuiObject, SuiTransactionEffects};
 use sui_core::sui_json::SuiJsonValue;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     crypto::get_key_pair,
     gas_coin::GasCoin,
-    messages::TransactionEffects,
-    object::{Object, ObjectRead, GAS_VALUE_FOR_TESTING},
+    object::GAS_VALUE_FOR_TESTING,
 };
 
 use test_utils::network::start_test_network;
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
-const AIRDROP_SOURCE_CONTRACT_ADDRESS: &str = "bc4ca0eda7647a8ab7c2061c2e118a18a936f13d";
+const AIRDROP_SOURCE_CONTRACT_ADDRESS: &str = "0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d";
 const AIRDROP_SOURCE_TOKEN_ID: u64 = 101u64;
 const AIRDROP_TOKEN_NAME: &str = "BoredApeYachtClub";
 const AIRDROP_TOKEN_URI: &str = "ipfs://QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/101";
@@ -179,12 +178,12 @@ async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
 
     // Assemble the move call to claim the airdrop
     let oracle_obj_str = format!(
-        "0x{:02x}",
+        "{}",
         airdrop_get_oracle_object(oracle_address, &mut context).await?
     );
     let args_json = json!([
         oracle_obj_str,
-        format!("0x{:02x}", recipient_address),
+        format!("{}", recipient_address),
         AIRDROP_SOURCE_CONTRACT_ADDRESS.to_string(),
         json!(AIRDROP_SOURCE_TOKEN_ID),
         AIRDROP_TOKEN_NAME.to_string(),
@@ -207,11 +206,8 @@ async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
     dbg!(&token);
 
     // Verify the airdrop token
-    assert_eq!(
-        token["contents"]["type"],
-        ("0x2::CrossChainAirdrop::ERC721")
-    );
-    let erc721_metadata = &token["contents"]["fields"]["metadata"];
+    assert_eq!(token["data"]["type"], ("0x2::CrossChainAirdrop::ERC721"));
+    let erc721_metadata = &token["data"]["fields"]["metadata"];
     assert_eq!(
         erc721_metadata["fields"]["token_id"]["fields"]["id"],
         AIRDROP_SOURCE_TOKEN_ID
@@ -245,8 +241,8 @@ async fn airdrop_call_move_and_get_created_object(
 ) -> Result<Value, anyhow::Error> {
     let resp = WalletCommands::Call {
         package: ObjectID::from_hex_literal("0x2").unwrap(),
-        module: Identifier::new("CrossChainAirdrop").unwrap(),
-        function: Identifier::new("claim").unwrap(),
+        module: "CrossChainAirdrop".to_string(),
+        function: "claim".to_string(),
         type_args: vec![],
         args: args.to_vec(),
         gas: Some(gas),
@@ -258,12 +254,12 @@ async fn airdrop_call_move_and_get_created_object(
     let minted_token_id = match resp {
         WalletCommandResult::Call(
             _,
-            TransactionEffects {
+            SuiTransactionEffects {
                 created: new_objs, ..
             },
         ) => {
             assert_eq!(new_objs.len(), 1);
-            new_objs[0].0 .0
+            new_objs[0].reference.object_id
         }
         _ => panic!("unexpected WalletCommandResult"),
     };
@@ -287,8 +283,8 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
-    for (object_id, _, _) in object_refs {
-        assert!(logs_contain(format!("{object_id}").as_str()))
+    for oref in object_refs {
+        assert!(logs_contain(format!("{}", oref.object_id).as_str()))
     }
 
     network.kill().await?;
@@ -311,13 +307,10 @@ async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
     .await?;
 
     match result {
-        WalletCommandResult::CreateExampleNFT(ObjectRead::Exists(_, obj, layout)) => {
+        WalletCommandResult::CreateExampleNFT(GetObjectInfoResponse::Exists(obj)) => {
             assert_eq!(obj.owner, address);
-            assert_eq!(
-                obj.type_().unwrap().to_string(),
-                "0x2::DevNetNFT::DevNetNFT"
-            );
-            Ok(obj.to_json(&layout).unwrap_or_else(|_| json!("")))
+            assert_eq!(obj.data.type_().unwrap(), "0x2::DevNetNFT::DevNetNFT");
+            Ok(obj)
         }
         _ => Err(anyhow!(
             "WalletCommands::CreateExampleNFT returns wrong type"
@@ -431,7 +424,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
-    let object_id = object_refs.first().unwrap().0;
+    let object_id = object_refs.first().unwrap().object_id;
 
     WalletCommands::Object { id: object_id }
         .execute(&mut context)
@@ -456,8 +449,8 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
 
     let object_refs = context.gateway.get_owned_objects(address).await?;
 
-    let object_id = object_refs.first().unwrap().0;
-    let object_to_send = object_refs.get(1).unwrap().0;
+    let object_id = object_refs.first().unwrap().object_id;
+    let object_to_send = object_refs.get(1).unwrap().object_id;
 
     WalletCommands::Gas {
         address: Some(address),
@@ -569,7 +562,7 @@ async fn get_move_objects_by_type(
     let objects = get_move_objects(context, address).await?;
     Ok(objects
         .into_iter()
-        .filter(|(_, obj)| obj["contents"]["type"].to_string().contains(type_substr))
+        .filter(|(_, obj)| obj["data"]["type"].to_string().contains(type_substr))
         .collect())
 }
 
@@ -595,8 +588,11 @@ async fn get_move_objects(
     match objects_result {
         WalletCommandResult::Objects(object_refs) => {
             let mut objs = vec![];
-            for (id, ..) in object_refs {
-                objs.push((id, get_move_object(context, id).await?));
+            for oref in object_refs {
+                objs.push((
+                    oref.object_id,
+                    get_move_object(context, oref.object_id).await?,
+                ));
             }
             Ok(objs)
         }
@@ -615,9 +611,7 @@ async fn get_move_object(
 
     match obj {
         WalletCommandResult::Object(obj) => match obj {
-            ObjectRead::Exists(_, obj, layout) => {
-                Ok(obj.to_json(&layout).unwrap_or_else(|_| json!("")))
-            }
+            GetObjectInfoResponse::Exists(obj) => Ok(serde_json::to_value(obj)?),
             _ => panic!("WalletCommands::Object returns wrong type"),
         },
         _ => panic!("WalletCommands::Object returns wrong type {obj}"),
@@ -651,16 +645,16 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let object_refs = context.gateway.get_owned_objects(address1).await?;
 
     // Check log output contains all object ids.
-    for (object_id, _, _) in &object_refs {
-        assert!(logs_contain(format!("{object_id}").as_str()))
+    for oref in &object_refs {
+        assert!(logs_contain(format!("{}", oref.object_id).as_str()))
     }
 
     // Create an object for address1 using Move call
 
     // Certain prep work
     // Get a gas object
-    let gas = object_refs.first().unwrap().0;
-    let obj = object_refs.get(1).unwrap().0;
+    let gas = object_refs.first().unwrap().object_id;
+    let obj = object_refs.get(1).unwrap().object_id;
 
     // Create the args
     let addr1_str = format!("0x{:02x}", address1);
@@ -674,8 +668,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     // Test case with no gas specified
     let resp = WalletCommands::Call {
         package: ObjectID::from_hex_literal("0x2").unwrap(),
-        module: Identifier::new("ObjectBasics").unwrap(),
-        function: Identifier::new("create").unwrap(),
+        module: "ObjectBasics".to_string(),
+        function: "create".to_string(),
         type_args: vec![],
         args,
         gas: None,
@@ -694,13 +688,12 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     // Get the created object
     let created_obj: ObjectID = if let WalletCommandResult::Call(
         _,
-        TransactionEffects {
+        SuiTransactionEffects {
             created: new_objs, ..
         },
     ) = resp
     {
-        let ((obj_id, _seq_num, _obj_digest), _owner) = new_objs.first().unwrap();
-        *obj_id
+        new_objs.first().unwrap().reference.object_id
     } else {
         // User assert since panic causes test issues
         assert!(false);
@@ -721,8 +714,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     let resp = WalletCommands::Call {
         package: ObjectID::from_hex_literal("0x2").unwrap(),
-        module: Identifier::new("ObjectBasics").unwrap(),
-        function: Identifier::new("create").unwrap(),
+        module: "ObjectBasics".to_string(),
+        function: "create".to_string(),
         type_args: vec![],
         args: args.to_vec(),
         gas: Some(gas),
@@ -749,8 +742,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     let resp = WalletCommands::Call {
         package: ObjectID::from_hex_literal("0x2").unwrap(),
-        module: Identifier::new("ObjectBasics").unwrap(),
-        function: Identifier::new("transfer").unwrap(),
+        module: "ObjectBasics".to_string(),
+        function: "transfer".to_string(),
         type_args: vec![],
         args: args.to_vec(),
         gas: Some(gas),
@@ -776,8 +769,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     WalletCommands::Call {
         package: ObjectID::from_hex_literal("0x2").unwrap(),
-        module: Identifier::new("ObjectBasics").unwrap(),
-        function: Identifier::new("transfer").unwrap(),
+        module: "ObjectBasics".to_string(),
+        function: "transfer".to_string(),
         type_args: vec![],
         args: args.to_vec(),
         gas: Some(gas),
@@ -805,7 +798,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
-    let gas_obj_id = object_refs.first().unwrap().0;
+    let gas_obj_id = object_refs.first().unwrap().object_id;
 
     // Provide path to well formed package sources
     let mut path = TEST_DATA_DIR.to_owned();
@@ -822,10 +815,10 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     // Print it out to CLI/logs
     resp.print(true);
 
-    let (package, created_obj) = if let WalletCommandResult::Publish(resppnse) = resp {
+    let (package, created_obj) = if let WalletCommandResult::Publish(response) = resp {
         (
-            resppnse.package,
-            resppnse.created_objects[0].compute_object_reference(),
+            response.package,
+            response.created_objects[0].reference.clone(),
         )
     } else {
         unreachable!("Invalid response");
@@ -833,29 +826,33 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
 
     // One is the actual module, while the other is the object created at init
     retry_assert!(
-        logs_contain(&format!("{}", package.0)),
+        logs_contain(&format!("{}", package.object_id)),
         Duration::from_millis(5000)
     );
     retry_assert!(
-        logs_contain(&format!("{}", created_obj.0)),
+        logs_contain(&format!("{}", created_obj.object_id)),
         Duration::from_millis(5000)
     );
 
     // Check the objects
-    let resp = WalletCommands::Object { id: package.0 }
-        .execute(&mut context)
-        .await?;
+    let resp = WalletCommands::Object {
+        id: package.object_id,
+    }
+    .execute(&mut context)
+    .await?;
     assert!(matches!(
         resp,
-        WalletCommandResult::Object(ObjectRead::Exists(..))
+        WalletCommandResult::Object(GetObjectInfoResponse::Exists(..))
     ));
 
-    let resp = WalletCommands::Object { id: created_obj.0 }
-        .execute(&mut context)
-        .await?;
+    let resp = WalletCommands::Object {
+        id: created_obj.object_id,
+    }
+    .execute(&mut context)
+    .await?;
     assert!(matches!(
         resp,
-        WalletCommandResult::Object(ObjectRead::Exists(..))
+        WalletCommandResult::Object(GetObjectInfoResponse::Exists(..))
     ));
 
     network.kill().await?;
@@ -872,8 +869,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
-    let gas_obj_id = object_refs.first().unwrap().0;
-    let obj_id = object_refs.get(1).unwrap().0;
+    let gas_obj_id = object_refs.first().unwrap().object_id;
+    let obj_id = object_refs.get(1).unwrap().object_id;
 
     let resp = WalletCommands::Transfer {
         gas: Some(gas_obj_id),
@@ -887,26 +884,24 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     // Print it out to CLI/logs
     resp.print(true);
 
-    let dumy_obj = Object::with_id_owner_for_testing(ObjectID::random(), address);
-
     // Get the mutated objects
     let (mut_obj1, mut_obj2) =
-        if let WalletCommandResult::Transfer(_, _, TransactionEffects { mutated, .. }) = resp {
-            (mutated.get(0).unwrap().0, mutated.get(1).unwrap().0)
+        if let WalletCommandResult::Transfer(_, _, SuiTransactionEffects { mutated, .. }) = resp {
+            (
+                mutated.get(0).unwrap().reference.object_id,
+                mutated.get(1).unwrap().reference.object_id,
+            )
         } else {
             assert!(false);
-            (
-                dumy_obj.compute_object_reference(),
-                dumy_obj.compute_object_reference(),
-            )
+            panic!()
         };
 
     retry_assert!(
-        logs_contain(&format!("{}", mut_obj1.0)),
+        logs_contain(&format!("{}", mut_obj1)),
         Duration::from_millis(5000)
     );
     retry_assert!(
-        logs_contain(&format!("{}", mut_obj2.0)),
+        logs_contain(&format!("{}", mut_obj2)),
         Duration::from_millis(5000)
     );
 
@@ -925,36 +920,38 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     .print(true);
 
     // Check the objects
-    let resp = WalletCommands::Object { id: mut_obj1.0 }
+    let resp = WalletCommands::Object { id: mut_obj1 }
         .execute(&mut context)
         .await?;
-    let mut_obj1 = if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
+    let mut_obj1 = if let WalletCommandResult::Object(GetObjectInfoResponse::Exists(object)) = resp
+    {
         object
     } else {
         // Fail this way because Panic! causes test issues
         assert!(false);
-        dumy_obj.clone()
+        panic!()
     };
 
-    let resp = WalletCommands::Object { id: mut_obj2.0 }
+    let resp = WalletCommands::Object { id: mut_obj2 }
         .execute(&mut context)
         .await?;
-    let mut_obj2 = if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
+    let mut_obj2 = if let WalletCommandResult::Object(GetObjectInfoResponse::Exists(object)) = resp
+    {
         object
     } else {
         // Fail this way because Panic! causes test issues
         assert!(false);
-        dumy_obj
+        panic!()
     };
 
-    let (gas, obj) = if mut_obj1.get_single_owner().unwrap() == address {
+    let (gas, obj) = if mut_obj1.owner.get_owner_address().unwrap() == address {
         (mut_obj1, mut_obj2)
     } else {
         (mut_obj2, mut_obj1)
     };
 
-    assert_eq!(gas.get_single_owner().unwrap(), address);
-    assert_eq!(obj.get_single_owner().unwrap(), recipient);
+    assert_eq!(gas.owner.get_owner_address().unwrap(), address);
+    assert_eq!(obj.owner.get_owner_address().unwrap(), recipient);
 
     // Sync client to retrieve objects from the network.
     WalletCommands::SyncClientState {
@@ -967,7 +964,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
-    let obj_id = object_refs.get(1).unwrap().0;
+    let obj_id = object_refs.get(1).unwrap().object_id;
 
     let resp = WalletCommands::Transfer {
         gas: None,
@@ -981,26 +978,24 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     // Print it out to CLI/logs
     resp.print(true);
 
-    let dumy_obj = Object::with_id_owner_for_testing(ObjectID::random(), address);
-
     // Get the mutated objects
     let (mut_obj1, mut_obj2) =
-        if let WalletCommandResult::Transfer(_, _, TransactionEffects { mutated, .. }) = resp {
-            (mutated.get(0).unwrap().0, mutated.get(1).unwrap().0)
+        if let WalletCommandResult::Transfer(_, _, SuiTransactionEffects { mutated, .. }) = resp {
+            (
+                mutated.get(0).unwrap().reference.object_id,
+                mutated.get(1).unwrap().reference.object_id,
+            )
         } else {
             assert!(false);
-            (
-                dumy_obj.compute_object_reference(),
-                dumy_obj.compute_object_reference(),
-            )
+            panic!()
         };
 
     retry_assert!(
-        logs_contain(&format!("{}", mut_obj1.0)),
+        logs_contain(&format!("{}", mut_obj1)),
         Duration::from_millis(5000)
     );
     retry_assert!(
-        logs_contain(&format!("{}", mut_obj2.0)),
+        logs_contain(&format!("{}", mut_obj2)),
         Duration::from_millis(5000)
     );
 
@@ -1011,7 +1006,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 #[test]
 // Test for issue https://github.com/MystenLabs/sui/issues/1078
 fn test_bug_1078() {
-    let read = WalletCommandResult::Object(ObjectRead::NotExists(ObjectID::random()));
+    let read = WalletCommandResult::Object(GetObjectInfoResponse::NotExists(ObjectID::random()));
     let mut writer = String::new();
     // fmt ObjectRead should not fail.
     write!(writer, "{}", read).unwrap();
@@ -1168,14 +1163,12 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-fn get_gas_value(o: &Object) -> u64 {
-    GasCoin::try_from(o.data.try_as_move().unwrap())
-        .unwrap()
-        .value()
+fn get_gas_value(o: &SuiObject) -> u64 {
+    GasCoin::try_from(o).unwrap().value()
 }
 
-async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<Object> {
-    if let ObjectRead::Exists(_, o, _) = context.gateway.get_object_info(id).await.unwrap() {
+async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<SuiObject> {
+    if let GetObjectInfoResponse::Exists(o) = context.gateway.get_object_info(id).await.unwrap() {
         Some(o)
     } else {
         None
@@ -1191,9 +1184,9 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
-    let gas = object_refs.first().unwrap().0;
-    let primary_coin = object_refs.get(1).unwrap().0;
-    let coin_to_merge = object_refs.get(2).unwrap().0;
+    let gas = object_refs.first().unwrap().object_id;
+    let primary_coin = object_refs.get(1).unwrap().object_id;
+    let coin_to_merge = object_refs.get(2).unwrap().object_id;
 
     let total_value = get_gas_value(&get_object(primary_coin, &mut context).await.unwrap())
         + get_gas_value(&get_object(coin_to_merge, &mut context).await.unwrap());
@@ -1228,8 +1221,8 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     .await?;
     let object_refs = context.gateway.get_owned_objects(address).await?;
 
-    let primary_coin = object_refs.get(1).unwrap().0;
-    let coin_to_merge = object_refs.get(2).unwrap().0;
+    let primary_coin = object_refs.get(1).unwrap().object_id;
+    let coin_to_merge = object_refs.get(2).unwrap().object_id;
 
     let total_value = get_gas_value(&get_object(primary_coin, &mut context).await.unwrap())
         + get_gas_value(&get_object(coin_to_merge, &mut context).await.unwrap());
@@ -1268,8 +1261,8 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
-    let gas = object_refs.first().unwrap().0;
-    let mut coin = object_refs.get(1).unwrap().0;
+    let gas = object_refs.first().unwrap().object_id;
+    let mut coin = object_refs.get(1).unwrap().object_id;
 
     let orig_value = get_gas_value(&get_object(coin, &mut context).await.unwrap());
 
@@ -1305,8 +1298,8 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
 
     // Get another coin
     for c in object_refs {
-        if get_gas_value(&get_object(c.0, &mut context).await.unwrap()) > 2000 {
-            coin = c.0;
+        if get_gas_value(&get_object(c.object_id, &mut context).await.unwrap()) > 2000 {
+            coin = c.object_id;
         }
     }
     let orig_value = get_gas_value(&get_object(coin, &mut context).await.unwrap());

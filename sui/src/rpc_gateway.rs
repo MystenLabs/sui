@@ -7,28 +7,25 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use ed25519_dalek::ed25519::signature::Signature;
 use jsonrpsee::core::RpcResult;
-use move_core_types::identifier::Identifier;
+use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
 use tracing::debug;
 
-use sui_core::gateway_state::{
-    gateway_responses::{TransactionEffectsResponse, TransactionResponse},
-    GatewayClient, GatewayState, GatewayTxSeqNumber,
-};
+use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
+use sui_core::gateway_types::GetObjectInfoResponse;
 use sui_core::sui_json::SuiJsonValue;
+use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     crypto,
     crypto::SignableBytes,
-    json_schema::Base64,
     messages::{Transaction, TransactionData},
-    object::ObjectRead,
 };
 
 use crate::rpc_gateway::responses::SuiTypeTag;
 use crate::{
-    api::{RpcGatewayServer, SignedTransaction, TransactionBytes},
+    api::{RpcGatewayServer, TransactionBytes},
     config::{GatewayConfig, PersistedConfig},
-    rpc_gateway::responses::{GetObjectInfoResponse, NamedObjectRef, ObjectResponse},
+    rpc_gateway::responses::ObjectResponse,
 };
 
 pub mod responses;
@@ -84,7 +81,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
         let compiled_modules = compiled_modules
             .into_iter()
             .map(|data| data.to_vec())
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, _>>()?;
         let data = self
             .gateway
             .publish(sender, compiled_modules, gas, gas_budget)
@@ -125,49 +122,37 @@ impl RpcGatewayServer for RpcGatewayImpl {
 
     async fn get_owned_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse> {
         debug!("get_objects : {}", owner);
-        let objects = self
-            .gateway
-            .get_owned_objects(owner)
-            .await?
-            .into_iter()
-            .map(NamedObjectRef::from)
-            .collect();
+        let objects = self.gateway.get_owned_objects(owner).await?;
         Ok(ObjectResponse { objects })
     }
 
-    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<ObjectRead> {
+    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse> {
         Ok(self.gateway.get_object_info(object_id).await?)
-    }
-
-    async fn get_object_typed_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse> {
-        Ok(self
-            .gateway
-            .get_object_info(object_id)
-            .await?
-            .try_into()
-            .map_err(|e| anyhow!("{}", e))?)
     }
 
     async fn execute_transaction(
         &self,
-        signed_tx: SignedTransaction,
+        tx_bytes: Base64,
+        signature: Base64,
+        pub_key: Base64,
     ) -> RpcResult<TransactionResponse> {
-        let data = TransactionData::from_signable_bytes(&signed_tx.tx_bytes)?;
+        let data = TransactionData::from_signable_bytes(&tx_bytes.to_vec()?)?;
         let signature =
-            crypto::Signature::from_bytes(&[&*signed_tx.signature, &*signed_tx.pub_key].concat())
+            crypto::Signature::from_bytes(&[&*signature.to_vec()?, &*pub_key.to_vec()?].concat())
                 .map_err(|e| anyhow!(e))?;
-        Ok(self
+        let result = self
             .gateway
             .execute_transaction(Transaction::new(data, signature))
-            .await?)
+            .await;
+        Ok(result?)
     }
 
     async fn move_call(
         &self,
         signer: SuiAddress,
         package_object_id: ObjectID,
-        module: Identifier,
-        function: Identifier,
+        module: String,
+        function: String,
         type_arguments: Vec<SuiTypeTag>,
         rpc_arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,

@@ -4,14 +4,18 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use anyhow::anyhow;
+use base64ct::Encoding as _;
 use move_core_types::account_address::AccountAddress;
+use schemars::JsonSchema;
 use serde;
-use serde::de::{Deserialize, Deserializer, Error};
+use serde::de::{Deserializer, Error};
 use serde::ser::Serializer;
+use serde::Deserialize;
 use serde::Serialize;
 use serde_with::{DeserializeAs, SerializeAs};
 
-use crate::readable_serde::encoding::Encoding;
+use crate::base_types::{decode_bytes_hex, encode_bytes_hex};
 
 fn to_custom_error<'de, D, E>(e: E) -> D::Error
 where
@@ -43,14 +47,14 @@ impl<T, R, E> SerializeAs<T> for Readable<E, R>
 where
     T: AsRef<[u8]>,
     R: SerializeAs<T>,
-    E: Encoding,
+    E: SerializeAs<T>,
 {
     fn serialize_as<S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         if serializer.is_human_readable() {
-            E::encode(value).serialize(serializer)
+            E::serialize_as(value, serializer)
         } else {
             R::serialize_as(value, serializer)
         }
@@ -60,15 +64,14 @@ where
 impl<'de, R, E, const N: usize> DeserializeAs<'de, [u8; N]> for Readable<E, R>
 where
     R: DeserializeAs<'de, [u8; N]>,
-    E: Encoding,
+    E: DeserializeAs<'de, Vec<u8>>,
 {
     fn deserialize_as<D>(deserializer: D) -> Result<[u8; N], D::Error>
     where
         D: Deserializer<'de>,
     {
         if deserializer.is_human_readable() {
-            let s = String::deserialize(deserializer)?;
-            let value = E::decode(s).map_err(to_custom_error::<'de, D, _>)?;
+            let value = E::deserialize_as(deserializer)?;
             let mut array = [0u8; N];
             array.copy_from_slice(&value[..N]);
             Ok(array)
@@ -81,15 +84,14 @@ where
 impl<'de, R, E> DeserializeAs<'de, Vec<u8>> for Readable<E, R>
 where
     R: DeserializeAs<'de, Vec<u8>>,
-    E: Encoding,
+    E: DeserializeAs<'de, Vec<u8>>,
 {
     fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
     where
         D: Deserializer<'de>,
     {
         if deserializer.is_human_readable() {
-            let s = String::deserialize(deserializer)?;
-            E::decode(s).map_err(to_custom_error::<'de, D, _>)
+            E::deserialize_as(deserializer)
         } else {
             R::deserialize_as(deserializer)
         }
@@ -99,15 +101,14 @@ where
 impl<'de, R, E> DeserializeAs<'de, ed25519_dalek::Signature> for Readable<E, R>
 where
     R: DeserializeAs<'de, ed25519_dalek::Signature>,
-    E: Encoding,
+    E: DeserializeAs<'de, Vec<u8>>,
 {
     fn deserialize_as<D>(deserializer: D) -> Result<ed25519_dalek::Signature, D::Error>
     where
         D: Deserializer<'de>,
     {
         if deserializer.is_human_readable() {
-            let s = String::deserialize(deserializer)?;
-            let value = E::decode(s).map_err(to_custom_error::<'de, D, _>)?;
+            let value = E::deserialize_as(deserializer)?;
             ed25519_dalek::Signature::from_bytes(&value).map_err(to_custom_error::<'de, D, _>)
         } else {
             R::deserialize_as(deserializer)
@@ -139,35 +140,85 @@ where
     }
 }
 
-pub mod encoding {
-    use anyhow::anyhow;
-    use base64ct::Encoding as _;
+pub trait Encoding {
+    fn decode(s: String) -> Result<Vec<u8>, anyhow::Error>;
+    fn encode<T: AsRef<[u8]>>(data: T) -> String;
+}
 
-    use crate::base_types::{decode_bytes_hex, encode_bytes_hex};
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct Hex(pub String);
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, JsonSchema)]
+pub struct Base64(pub String);
 
-    pub trait Encoding {
-        fn decode(s: String) -> Result<Vec<u8>, anyhow::Error>;
-        fn encode<T: AsRef<[u8]>>(data: T) -> String;
+impl Base64 {
+    pub fn to_vec(self) -> Result<Vec<u8>, anyhow::Error> {
+        Self::decode(self.0)
     }
-    pub struct Hex;
-    pub struct Base64;
 
-    impl Encoding for Hex {
-        fn decode(s: String) -> Result<Vec<u8>, anyhow::Error> {
-            decode_bytes_hex(&s)
-        }
-
-        fn encode<T: AsRef<[u8]>>(data: T) -> String {
-            format!("0x{}", encode_bytes_hex(&data).to_lowercase())
-        }
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        Self(Self::encode(bytes))
     }
-    impl Encoding for Base64 {
-        fn decode(s: String) -> Result<Vec<u8>, anyhow::Error> {
-            base64ct::Base64::decode_vec(&s).map_err(|e| anyhow!(e))
-        }
+}
 
-        fn encode<T: AsRef<[u8]>>(data: T) -> String {
-            base64ct::Base64::encode_string(data.as_ref())
-        }
+impl Encoding for Hex {
+    fn decode(s: String) -> Result<Vec<u8>, anyhow::Error> {
+        decode_bytes_hex(&s)
+    }
+
+    fn encode<T: AsRef<[u8]>>(data: T) -> String {
+        format!("0x{}", encode_bytes_hex(&data).to_lowercase())
+    }
+}
+impl Encoding for Base64 {
+    fn decode(s: String) -> Result<Vec<u8>, anyhow::Error> {
+        base64ct::Base64::decode_vec(&s).map_err(|e| anyhow!(e))
+    }
+
+    fn encode<T: AsRef<[u8]>>(data: T) -> String {
+        base64ct::Base64::encode_string(data.as_ref())
+    }
+}
+
+impl<'de> DeserializeAs<'de, Vec<u8>> for Base64 {
+    fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::decode(s).map_err(to_custom_error::<'de, D, _>)
+    }
+}
+
+impl<T> SerializeAs<T> for Base64
+where
+    T: AsRef<[u8]>,
+{
+    fn serialize_as<S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        Self::encode(value).serialize(serializer)
+    }
+}
+
+impl<'de> DeserializeAs<'de, Vec<u8>> for Hex {
+    fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::decode(s).map_err(to_custom_error::<'de, D, _>)
+    }
+}
+
+impl<T> SerializeAs<T> for Hex
+where
+    T: AsRef<[u8]>,
+{
+    fn serialize_as<S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        Self::encode(value).serialize(serializer)
     }
 }
