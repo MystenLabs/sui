@@ -2,6 +2,7 @@
 members = [
     "crates/sui-config",
     "crates/sui-network",
+    "crates/sui-types",
     "crates/x",
     "faucet",
     "sui",
@@ -13,7 +14,6 @@ members = [
     "sui_programmability/framework",
     "sui_programmability/transactional-test-runner",
     "sui_programmability/verifier",
-    "sui_types",
     "test_utils",
 ]
 

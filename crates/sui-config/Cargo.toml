@@ -25,4 +25,4 @@ move-package = { git = "https://github.com/move-language/move", rev = "1b2d3b427
 
 sui-framework = { path = "../../sui_programmability/framework" }
 sui-adapter = { path = "../../sui_programmability/adapter" }
-sui-types = { path = "../../sui_types" }
+sui-types = { path = "../sui-types" }
