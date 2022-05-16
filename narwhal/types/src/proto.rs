@@ -4,6 +4,7 @@
 #[path = "generated/narwhal.rs"]
 #[rustfmt::skip]
 mod narwhal;
+use crypto::{ed25519::Ed25519PublicKey, traits::ToFromBytes};
 
 use std::{array::TryFromSliceError, ops::Deref};
 
@@ -12,6 +13,8 @@ use bytes::Bytes;
 
 pub use narwhal::{
     collection_retrieval_result::RetrievalResult,
+    configuration_client::ConfigurationClient,
+    configuration_server::{Configuration, ConfigurationServer},
     primary_to_primary_client::PrimaryToPrimaryClient,
     primary_to_primary_server::{PrimaryToPrimary, PrimaryToPrimaryServer},
     primary_to_worker_client::PrimaryToWorkerClient,
@@ -27,8 +30,26 @@ pub use narwhal::{
     Batch as BatchProto, BatchDigest as BatchDigestProto, BatchMessage as BatchMessageProto,
     BincodeEncodedPayload, CertificateDigest as CertificateDigestProto, CollectionError,
     CollectionErrorType, CollectionRetrievalResult, Empty, GetCollectionsRequest,
-    GetCollectionsResponse, RemoveCollectionsRequest, Transaction as TransactionProto,
+    GetCollectionsResponse, MultiAddr as MultiAddrProto, NewNetworkInfoRequest,
+    PublicKey as PublicKeyProto, RemoveCollectionsRequest, Transaction as TransactionProto,
+    ValidatorData,
 };
+
+impl From<Ed25519PublicKey> for PublicKeyProto {
+    fn from(pub_key: Ed25519PublicKey) -> Self {
+        PublicKeyProto {
+            bytes: Bytes::from(pub_key.as_ref().to_vec()),
+        }
+    }
+}
+
+impl TryFrom<&PublicKeyProto> for Ed25519PublicKey {
+    type Error = crypto::traits::Error;
+
+    fn try_from(pub_key: &PublicKeyProto) -> Result<Self, Self::Error> {
+        Ed25519PublicKey::from_bytes(pub_key.bytes.as_ref())
+    }
+}
 
 impl From<BatchMessage> for BatchMessageProto {
     fn from(message: BatchMessage) -> Self {

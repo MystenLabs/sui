@@ -1,14 +1,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use self::configuration::NarwhalConfiguration;
 use self::validator::NarwhalValidator;
 use crate::{BlockCommand, BlockRemoverCommand};
 use multiaddr::Multiaddr;
 use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 use tracing::error;
-use types::ValidatorServer;
+use types::{ConfigurationServer, ValidatorServer};
 
+mod configuration;
 mod validator;
 
 pub struct ConsensusAPIGrpc {
@@ -42,17 +44,20 @@ impl ConsensusAPIGrpc {
     }
 
     async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let narwhal = NarwhalValidator::new(
+        let narwhal_validator = NarwhalValidator::new(
             self.tx_get_block_commands.to_owned(),
             self.tx_block_removal_commands.to_owned(),
             self.get_collections_timeout,
             self.remove_collections_timeout,
         );
 
+        let narwhal_configuration = NarwhalConfiguration::new();
+
         let config = mysten_network::config::Config::default();
         config
             .server_builder()
-            .add_service(ValidatorServer::new(narwhal))
+            .add_service(ValidatorServer::new(narwhal_validator))
+            .add_service(ConfigurationServer::new(narwhal_configuration))
             .bind(&self.socket_addr)
             .await?
             .serve()
