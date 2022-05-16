@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { useNetwork } from '../../app/App';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import ErrorResult from '../error-result/ErrorResult';
@@ -16,10 +17,13 @@ async function getTransactionCount(): Promise<number> {
 }
 
 function TxCountCard({ count }: { count: number | string }) {
+    const [network] = useNetwork();
     return (
         <div className={styles.txcount} id="txcount">
             Total Transactions
             <div>{count}</div>
+            Network
+            <div>{network}</div>
         </div>
     );
 }
