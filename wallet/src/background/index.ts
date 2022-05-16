@@ -3,9 +3,10 @@
 
 import Browser from 'webextension-polyfill';
 
+import { openInNewTab } from '_shared/utils';
+
 Browser.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') {
-        const url = Browser.runtime.getURL('ui.html');
-        Browser.tabs.create({ url });
+        openInNewTab();
     }
 });
