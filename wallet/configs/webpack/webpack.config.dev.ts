@@ -18,4 +18,8 @@ const configDev: Configuration = {
     },
 };
 
-export default merge(configCommon, configDev);
+async function getConfig() {
+    return merge(await configCommon(), configDev);
+}
+
+export default getConfig;

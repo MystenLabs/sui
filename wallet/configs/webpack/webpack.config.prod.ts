@@ -11,4 +11,8 @@ const configProd: Configuration = {
     mode: 'production',
 };
 
-export default merge(configCommon, configProd);
+async function getConfig() {
+    return merge(await configCommon(), configProd);
+}
+
+export default getConfig;
