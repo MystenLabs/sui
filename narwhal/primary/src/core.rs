@@ -18,7 +18,10 @@ use std::{
     },
 };
 use store::Store;
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::{
+    sync::mpsc::{Receiver, Sender},
+    task::JoinHandle,
+};
 use tracing::{debug, error, warn};
 use types::{
     ensure,
@@ -95,7 +98,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         rx_proposer: Receiver<Header<PublicKey>>,
         tx_consensus: Sender<Certificate<PublicKey>>,
         tx_proposer: Sender<(Vec<CertificateDigest>, Round)>,
-    ) {
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
                 name,
@@ -123,7 +126,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
             }
             .run()
             .await;
-        });
+        })
     }
 
     async fn process_own_header(&mut self, header: Header<PublicKey>) -> DagResult<()> {

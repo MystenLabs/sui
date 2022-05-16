@@ -11,7 +11,10 @@ use store::{
     rocks::{open_cf, DBMap},
     Store,
 };
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::{
+    sync::mpsc::{channel, Receiver, Sender},
+    task::JoinHandle,
+};
 use tracing::debug;
 use types::{BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Round};
 use worker::{SerializedBatchMessage, Worker};
@@ -102,7 +105,7 @@ impl Node {
         execution_state: Arc<State>,
         // A channel to output transactions execution confirmations.
         tx_confirmation: Sender<(SubscriberResult<Vec<u8>>, SerializedTransaction)>,
-    ) -> SubscriberResult<()>
+    ) -> SubscriberResult<JoinHandle<()>>
     where
         PublicKey: VerifyingKey,
         Keys: KeyPair<PubKey = PublicKey> + Signer<PublicKey::Sig> + Send + 'static,
@@ -134,7 +137,7 @@ impl Node {
         };
 
         // Spawn the primary.
-        Primary::spawn(
+        let primary_handle = Primary::spawn(
             name.clone(),
             keypair,
             committee.clone(),
@@ -147,7 +150,7 @@ impl Node {
             /* dag */ dag,
         );
 
-        Ok(())
+        Ok(primary_handle)
     }
 
     /// Spawn the consensus core and the client executing transactions.
@@ -218,15 +221,18 @@ impl Node {
         store: &NodeStorage<PublicKey>,
         // The configuration parameters.
         parameters: Parameters,
-    ) {
+    ) -> Vec<JoinHandle<()>> {
+        let mut handles = Vec::new();
+
         for id in ids {
-            Worker::spawn(
+            handles.push(Worker::spawn(
                 name.clone(),
                 id,
                 committee.clone(),
                 parameters.clone(),
                 store.batch_store.clone(),
-            );
+            ));
         }
+        handles
     }
 }

@@ -14,7 +14,10 @@ use multiaddr::{Multiaddr, Protocol};
 use primary::{PrimaryWorkerMessage, WorkerPrimaryMessage};
 use std::{net::Ipv4Addr, pin::Pin};
 use store::Store;
-use tokio::sync::mpsc::{channel, Sender};
+use tokio::{
+    sync::mpsc::{channel, Sender},
+    task::JoinHandle,
+};
 use tonic::{Request, Response, Status};
 use tracing::info;
 use types::{
@@ -61,7 +64,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         committee: Committee<PublicKey>,
         parameters: Parameters,
         store: Store<BatchDigest, SerializedBatchMessage>,
-    ) {
+    ) -> JoinHandle<()> {
         // Define a worker instance.
         let worker = Self {
             name,
@@ -78,7 +81,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         worker.handle_workers_messages(tx_primary);
 
         // The `PrimaryConnector` allows the worker to send messages to its primary.
-        PrimaryConnector::spawn(
+        let handle = PrimaryConnector::spawn(
             worker
                 .committee
                 .primary(&worker.name)
@@ -97,6 +100,8 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
                 .expect("Our public key or worker id is not in the committee")
                 .transactions
         );
+
+        handle
     }
 
     /// Spawn all tasks responsible to handle messages from our primary.

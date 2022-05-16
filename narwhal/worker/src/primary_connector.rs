@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use multiaddr::Multiaddr;
 use primary::WorkerPrimaryMessage;
-use tokio::sync::mpsc::Receiver;
+use tokio::{sync::mpsc::Receiver, task::JoinHandle};
 use tonic::transport::Channel;
 use types::{BincodeEncodedPayload, WorkerToPrimaryClient};
 
@@ -18,7 +18,10 @@ pub struct PrimaryConnector {
 }
 
 impl PrimaryConnector {
-    pub fn spawn(primary_address: Multiaddr, rx_digest: Receiver<WorkerPrimaryMessage>) {
+    pub fn spawn(
+        primary_address: Multiaddr,
+        rx_digest: Receiver<WorkerPrimaryMessage>,
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
                 _primary_address: primary_address.clone(),
@@ -27,7 +30,7 @@ impl PrimaryConnector {
             }
             .run()
             .await;
-        });
+        })
     }
 
     async fn run(&mut self) {

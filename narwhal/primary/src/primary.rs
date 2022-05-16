@@ -32,7 +32,10 @@ use std::{
 };
 use store::Store;
 use thiserror::Error;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::{
+    sync::mpsc::{channel, Receiver, Sender},
+    task::JoinHandle,
+};
 use tonic::{Request, Response, Status};
 use tracing::info;
 use types::{
@@ -91,7 +94,7 @@ impl Primary {
         tx_consensus: Sender<Certificate<PublicKey>>,
         rx_consensus: Receiver<Certificate<PublicKey>>,
         dag: Option<Arc<Dag<PublicKey>>>,
-    ) {
+    ) -> JoinHandle<()> {
         let (tx_others_digests, rx_others_digests) = channel(CHANNEL_CAPACITY);
         let (tx_our_digests, rx_our_digests) = channel(CHANNEL_CAPACITY);
         let (tx_parents, rx_parents) = channel(CHANNEL_CAPACITY);
@@ -175,7 +178,7 @@ impl Primary {
         let signature_service = SignatureService::new(signer);
 
         // The `Core` receives and handles headers, votes, and certificates from the other primaries.
-        Core::spawn(
+        let primary_handle = Core::spawn(
             name.clone(),
             committee.clone(),
             header_store.clone(),
@@ -317,6 +320,8 @@ impl Primary {
                 .expect("Our public key or worker id is not in the committee")
                 .primary_to_primary
         );
+
+        primary_handle
     }
 }
 

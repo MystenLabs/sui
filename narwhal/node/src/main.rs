@@ -16,6 +16,7 @@ use crypto::{ed25519::Ed25519KeyPair, generate_production_keypair, traits::KeyPa
 use executor::{
     ExecutionIndices, ExecutionState, ExecutionStateError, SerializedTransaction, SubscriberResult,
 };
+use futures::future::join_all;
 use node::{Node, NodeStorage};
 use std::sync::Arc;
 use thiserror::Error;
@@ -119,10 +120,10 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
         channel(Node::CHANNEL_CAPACITY);
 
     // Check whether to run a primary, a worker, or an entire authority.
-    match matches.subcommand() {
+    let node_handles = match matches.subcommand() {
         // Spawn the primary and consensus core.
         ("primary", Some(sub_matches)) => {
-            Node::spawn_primary(
+            let handle = Node::spawn_primary(
                 keypair,
                 committee,
                 &store,
@@ -132,6 +133,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
                 tx_transaction_confirmation,
             )
             .await?;
+            vec![handle]
         }
 
         // Spawn a single worker.
@@ -149,13 +151,16 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
                 committee,
                 &store,
                 parameters,
-            );
+            )
         }
         _ => unreachable!(),
-    }
+    };
 
     // Analyze the consensus' output.
     analyze(rx_transaction_confirmation).await;
+
+    // Await on the completion handles of all the nodes we have launched
+    join_all(node_handles).await;
 
     // If this expression is reached, the program ends and all other tasks terminate.
     unreachable!();

@@ -1,17 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::{Duration, Instant};
-
 use config::Export;
+use std::time::{Duration, Instant};
 use test_utils::{committee, keys, temp_dir};
+
+const TEST_DURATION: Duration = Duration::from_secs(3);
 
 #[test]
 fn test_primary_no_consensus() {
     let db_path = temp_dir().into_os_string().into_string().unwrap();
     let config_path = temp_dir().into_os_string().into_string().unwrap();
     let now = Instant::now();
-    let duration = Duration::from_secs(5);
+    let duration = TEST_DURATION;
 
     let keys = keys(None);
     let keys_file_path = format!("{config_path}/smoke_test_keys.json");
@@ -60,7 +61,7 @@ fn test_primary_with_consensus() {
     let db_path = temp_dir().into_os_string().into_string().unwrap();
     let config_path = temp_dir().into_os_string().into_string().unwrap();
     let now = Instant::now();
-    let duration = Duration::from_secs(5);
+    let duration = TEST_DURATION;
 
     let keys = keys(None);
     let keys_file_path = format!("{config_path}/smoke_test_keys.json");
