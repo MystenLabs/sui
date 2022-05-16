@@ -17,10 +17,10 @@ use typed_store::rocks::{DBBatch, DBMap};
 
 use typed_store::{reopen, traits::Map};
 
-pub type AuthorityStore = SuiDataStore<false, AuthoritySignInfo>;
+pub type AuthorityStore = SuiDataStore<false, true, AuthoritySignInfo>;
 #[allow(dead_code)]
-pub type ReplicaStore = SuiDataStore<true, EmptySignInfo>;
-pub type GatewayStore = SuiDataStore<false, EmptySignInfo>;
+pub type ReplicaStore = SuiDataStore<true, false, EmptySignInfo>;
+pub type GatewayStore = SuiDataStore<false, true, EmptySignInfo>;
 
 const NUM_SHARDS: usize = 4096;
 
@@ -31,10 +31,12 @@ const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 /// ALL_OBJ_VER determines whether we want to store all past
 /// versions of every object in the store. Authority doesn't store
 /// them, but other entities such as replicas will.
+/// USE_LOCKS determines whether we maintain locks when updating state
+/// this is because replicas for example don't currently require locks`
 /// S is a template on Authority signature state. This allows SuiDataStore to be used on either
 /// authorities or non-authorities. Specifically, when storing transactions and effects,
 /// S allows SuiDataStore to either store the authority signed version or unsigned version.
-pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
+pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
     /// This is a map between the object ID and the latest state of the object, namely the
     /// state that is needed to process new transactions. If an object is deleted its entry is
     /// removed from this map.
@@ -107,8 +109,11 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     last_consensus_index: DBMap<u64, ExecutionIndices>,
 }
 
-impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
-    SuiDataStore<ALL_OBJ_VER, S>
+impl<
+        const ALL_OBJ_VER: bool,
+        const USE_LOCKS: bool,
+        S: Eq + Serialize + for<'de> Deserialize<'de>,
+    > SuiDataStore<ALL_OBJ_VER, USE_LOCKS, S>
 {
     /// Open an authority store by directory path
     pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Self {
@@ -265,6 +270,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         &self,
         input_objects: impl Iterator<Item = &'a ObjectRef>,
     ) -> Vec<parking_lot::MutexGuard<'_, ()>> {
+        if !USE_LOCKS {
+            return vec![];
+        }
+
         let num_locks = self.lock_table.len();
         // TODO: randomize the lock mapping based on a secret to avoid DoS attacks.
         let lock_number: BTreeSet<usize> = input_objects
@@ -645,8 +654,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             .iter()
             .filter(|(id, _, _)| objects.get(id).unwrap().is_owned());
 
-        // Archive the old lock.
-        write_batch = write_batch.delete_batch(&self.transaction_lock, owned_inputs.clone())?;
+        if USE_LOCKS {
+            // Archive the old lock.
+            write_batch = write_batch.delete_batch(&self.transaction_lock, owned_inputs.clone())?;
+        }
 
         // Delete objects.
         // Wrapped objects need to be deleted as well because we can no longer track their
@@ -705,17 +716,19 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             }),
         )?;
 
-        // Create locks for new objects, if they are owned.
-        write_batch = write_batch.insert_batch(
-            &self.transaction_lock,
-            written.iter().filter_map(|(_, (object_ref, new_object))| {
-                if new_object.is_owned() {
-                    Some((object_ref, None))
-                } else {
-                    None
-                }
-            }),
-        )?;
+        if USE_LOCKS {
+            // Create locks for new objects, if they are owned.
+            write_batch = write_batch.insert_batch(
+                &self.transaction_lock,
+                written.iter().filter_map(|(_, (object_ref, new_object))| {
+                    if new_object.is_owned() {
+                        Some((object_ref, None))
+                    } else {
+                        None
+                    }
+                }),
+            )?;
+        }
 
         if ALL_OBJ_VER {
             // Keep all versions of every object if ALL_OBJ_VER is true.
@@ -755,11 +768,13 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             // Acquire the lock to ensure no one else writes when we are in here.
             let _mutexes = self.acquire_locks(owned_inputs.clone());
 
-            // Check the locks are still active
-            // TODO: maybe we could just check if the certificate is there instead?
-            let locks = self.transaction_lock.multi_get(owned_inputs)?;
-            for object_lock in locks {
-                object_lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
+            if USE_LOCKS {
+                // Check the locks are still active
+                // TODO: maybe we could just check if the certificate is there instead?
+                let locks = self.transaction_lock.multi_get(owned_inputs)?;
+                for object_lock in locks {
+                    object_lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
+                }
             }
 
             if let Some(next_seq) = seq_opt {
@@ -1025,7 +1040,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     }
 }
 
-impl<const A: bool> SuiDataStore<A, AuthoritySignInfo> {
+impl<const A: bool, const B: bool> SuiDataStore<A, B, AuthoritySignInfo> {
     pub fn get_signed_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
@@ -1038,14 +1053,14 @@ impl<const A: bool> SuiDataStore<A, AuthoritySignInfo> {
     }
 }
 
-impl<const A: bool> SuiDataStore<A, EmptySignInfo> {
+impl<const A: bool, const B: bool> SuiDataStore<A, B, EmptySignInfo> {
     pub fn pending_transactions(&self) -> &DBMap<TransactionDigest, Transaction> {
         &self.transactions
     }
 }
 
-impl<const A: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> BackingPackageStore
-    for SuiDataStore<A, S>
+impl<const A: bool, const B: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
+    BackingPackageStore for SuiDataStore<A, B, S>
 {
     fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         let package = self.get_object(package_id)?;
@@ -1061,8 +1076,8 @@ impl<const A: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> BackingPackag
     }
 }
 
-impl<const A: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> ModuleResolver
-    for SuiDataStore<A, S>
+impl<const A: bool, const B: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> ModuleResolver
+    for SuiDataStore<A, B, S>
 {
     type Error = SuiError;
 
