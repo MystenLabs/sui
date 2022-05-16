@@ -585,7 +585,7 @@ SuiError:
       ConsensusNarwhalSerializationError:
         NEWTYPE: STR
     101:
-      OnlySharedObjectTransactionNeedSequencing: UNIT
+      NotASharedObjectTransaction: UNIT
     102:
       SignatureSeedInvalidLength:
         NEWTYPE: U64
