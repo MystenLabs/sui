@@ -256,4 +256,15 @@ module Sui::SuiSystem {
         // remaining balance in `computation_reward`. All of these go to the storage fund.
         Balance::join(&mut self.storage_fund, computation_reward)
     }
+
+    /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
+    /// since epochs are ever-increasing and epoch changes are intended to happen every 24 hours.
+    public fun epoch(self: &SuiSystemState): u64 {
+        self.epoch
+    }
+
+    #[test_only]
+    public fun set_epoch_for_testing(self: &mut SuiSystemState, epoch_num: u64) {
+        self.epoch = epoch_num
+    }
 }
