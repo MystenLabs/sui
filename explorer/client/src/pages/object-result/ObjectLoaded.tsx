@@ -170,7 +170,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                 ? toHexString(data.data.tx_digest as number[])
                 : data.data.tx_digest,
         owner: processOwner(data.owner),
-        url: parseImageURL(data.data),
+        url: parseImageURL(data.data.contents),
     };
 
     //TO DO remove when have distinct name field under Description

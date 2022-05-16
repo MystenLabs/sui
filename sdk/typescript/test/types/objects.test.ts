@@ -1,10 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import mockObjectData from '../mocks/data/objects.json';
+import mockObjectData from '../../../../sui/open_rpc/samples/objects.json';
 
 import { isGetObjectInfoResponse } from '../../src/index.guard';
-import { GetObjectInfoResponse } from '../../src';
 
 describe('Test Objects Definition', () => {
   it('Test against different object definitions', () => {
@@ -15,10 +14,7 @@ describe('Test Objects Definition', () => {
   });
 });
 
-function validate(
-  key: 'coin' | 'example_nft' | 'move_package' | 'hero'
-): GetObjectInfoResponse {
+function validate(key: 'coin' | 'example_nft' | 'move_package' | 'hero') {
   const data = mockObjectData[key];
   expect(isGetObjectInfoResponse(data)).toBeTruthy();
-  return data as GetObjectInfoResponse;
 }

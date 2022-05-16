@@ -38,9 +38,10 @@ use crate::{
     keystore::Keystore,
 };
 
-const EXAMPLE_NFT_NAME: &str = "Example NFT";
-const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the wallet Command Line Tool";
-const EXAMPLE_NFT_URL: &str = "ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty";
+pub const EXAMPLE_NFT_NAME: &str = "Example NFT";
+pub const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the wallet Command Line Tool";
+pub const EXAMPLE_NFT_URL: &str =
+    "ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty";
 
 #[derive(Parser)]
 #[clap(name = "", rename_all = "kebab-case", no_binary_name = true)]
