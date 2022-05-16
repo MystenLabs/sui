@@ -1,0 +1,11 @@
+processed 4 tasks
+
+task 1 'publish'. lines 6-14:
+created: object(103)
+written: object(102)
+
+task 2 'run'. lines 15-17:
+Error: Function signature is invalid: "Expected 3 arguments calling function 'create', but found 2".
+
+task 3 'run'. lines 18-18:
+Error: Execution aborted: "VMError with status FAILED_TO_DESERIALIZE_ARGUMENT at location UNDEFINED".

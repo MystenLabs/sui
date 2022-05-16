@@ -1,0 +1,25 @@
+processed 6 tasks
+
+init:
+A: object(100)
+
+task 1 'run'. lines 9-9:
+created: object(104)
+written: object(103)
+
+task 2 'view-object'. lines 11-11:
+Owner: Account Address ( A )
+Contents: Sui::ObjectBasics::Object {id: Sui::ID::VersionedID {id: Sui::ID::UniqueID {id: Sui::ID::ID {bytes: fake(104)}}, version: 1u64}, value: 10u64}
+
+task 3 'run'. lines 13-13:
+created: object(106)
+written: object(105)
+deleted: object(104)
+
+task 4 'run'. lines 15-15:
+written: object(104), object(107)
+deleted: object(106)
+
+task 5 'view-object'. lines 17-17:
+Owner: Account Address ( A )
+Contents: Sui::ObjectBasics::Object {id: Sui::ID::VersionedID {id: Sui::ID::UniqueID {id: Sui::ID::ID {bytes: fake(104)}}, version: 3u64}, value: 10u64}

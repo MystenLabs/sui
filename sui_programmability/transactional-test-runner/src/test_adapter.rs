@@ -40,9 +40,13 @@ use sui_adapter::{adapter::new_move_vm, genesis};
 use sui_core::{authority::AuthorityTemporaryStore, execution_engine};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
+    base_types::{
+        ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
+        SUI_ADDRESS_LENGTH,
+    },
     crypto::{get_key_pair_from_rng, KeyPair, Signature},
     error::SuiError,
+    event::Event,
     gas,
     messages::{
         ExecutionStatus, InputObjectKind, Transaction, TransactionData, TransactionEffects,
@@ -77,6 +81,7 @@ struct TxnSummary {
     created: Vec<ObjectID>,
     written: Vec<ObjectID>,
     deleted: Vec<ObjectID>,
+    events: Vec<Event>,
 }
 
 impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
@@ -141,9 +146,17 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
 
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+        let mut objects = genesis::clone_genesis_packages();
+        let mut account_objects = BTreeMap::new();
+        for (account, (addr, _)) in &accounts {
+            let obj = Object::with_id_owner_for_testing(ObjectID::new(rng.gen()), *addr);
+            objects.push(obj.clone());
+            account_objects.insert(account.clone(), obj);
+        }
+
         let mut test_adapter = Self {
             vm: Arc::new(new_move_vm(native_functions.clone()).unwrap()),
-            storage: Arc::new(InMemoryStorage::new(genesis::clone_genesis_packages())),
+            storage: Arc::new(InMemoryStorage::new(objects)),
             native_functions,
             compiled_state: CompiledState::new(
                 named_address_mapping,
@@ -165,10 +178,23 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             .keys()
             .copied()
             .collect::<Vec<_>>();
+        let mut output = String::new();
+        for (account, obj) in account_objects {
+            let fake = test_adapter.enumerate_fake(obj.id());
+            if !output.is_empty() {
+                output.push_str(", ")
+            }
+            output.push_str(&format!("{}: object({})", account, fake))
+        }
         for object_id in object_ids {
             test_adapter.enumerate_fake(object_id);
         }
-        (test_adapter, None)
+        let output = if output.is_empty() {
+            None
+        } else {
+            Some(output)
+        };
+        (test_adapter, output)
     }
 
     fn publish_module(
@@ -220,7 +246,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             ),
             _ => (),
         }
-        let output = self.object_summary_output(&summary);
+        let view_events = false;
+        let output = self.object_summary_output(&summary, view_events);
         let published_module_bytes = self
             .storage
             .get_object(&created_package)
@@ -247,22 +274,30 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         extra: Self::ExtraRunArgs,
     ) -> anyhow::Result<(Option<String>, SerializedReturnValues)> {
         assert!(signers.is_empty(), "signers are not used");
-        let SuiRunArgs { sender } = extra;
+        let SuiRunArgs {
+            sender,
+            view_events,
+        } = extra;
         let arguments = args
             .into_iter()
             .map(|arg| arg.into_call_args(self))
             .collect();
         let package_id = ObjectID::from(*module_id.address());
-        let package = self
-            .storage
-            .get_object(&package_id)
-            .unwrap()
-            .compute_object_reference();
+        let package_ref = match self.storage.get_object(&package_id) {
+            Some(obj) => obj.compute_object_reference(),
+            // object not found
+            None => (
+                package_id,
+                SequenceNumber::from(1),
+                ObjectDigest::new([0; 32]),
+            ),
+        };
+
         let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
         let data = |sender, gas_payment| {
             TransactionData::new_move_call(
                 sender,
-                package,
+                package_ref,
                 module_id.name().to_owned(),
                 function.to_owned(),
                 type_args,
@@ -273,7 +308,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         };
         let transaction = self.sign_txn(sender, data);
         let summary = self.execute_txn(transaction, gas_budget)?;
-        let output = self.object_summary_output(&summary);
+        let output = self.object_summary_output(&summary, view_events);
         let empty = SerializedReturnValues {
             mutable_reference_outputs: vec![],
             return_values: vec![],
@@ -403,11 +438,11 @@ impl<'a> SuiTestAdapter<'a> {
             .input_objects()
             .unwrap()
             .into_iter()
-            .map(|kind| {
+            .flat_map(|kind| {
                 let id = kind.object_id();
-                let obj_opt = self.storage.get_object(&id);
-                let obj = obj_opt.unwrap().clone();
-                (kind, obj)
+                // might be none if passed a bad object to invoke
+                let obj = self.storage.get_object(&id)?.clone();
+                Some((kind, obj))
             })
             .collect::<Vec<_>>();
         let transaction_dependencies = objects_by_kind
@@ -424,15 +459,15 @@ impl<'a> SuiTestAdapter<'a> {
             AuthorityTemporaryStore::new(self.storage.clone(), objects_by_kind, transaction_digest);
         let TransactionEffects {
             status,
+            events,
+            created,
             // TODO display all these somehow
             transaction_digest: _,
-            created,
             mutated: _,
             unwrapped: _,
             deleted: _,
             wrapped: _,
             gas_object: _,
-            events: _,
             ..
         } = execution_engine::execute_transaction_to_effects(
             shared_object_refs,
@@ -476,6 +511,7 @@ impl<'a> SuiTestAdapter<'a> {
                 created: created_ids,
                 written: written_ids,
                 deleted: deleted_ids,
+                events,
             }),
             ExecutionStatus::Failure { error, .. } => Err(self.render_sui_error(*error)),
         }
@@ -504,6 +540,9 @@ impl<'a> SuiTestAdapter<'a> {
     }
 
     fn enumerate_fake(&mut self, id: ObjectID) -> FakeID {
+        if let Some(fake) = self.object_enumeration.get_by_left(&id) {
+            return *fake;
+        }
         let fake_id = self.next_fake;
         self.object_enumeration.insert(id, fake_id);
         self.next_fake += 1;
@@ -516,10 +555,22 @@ impl<'a> SuiTestAdapter<'a> {
             created,
             written,
             deleted,
+            events,
         }: &TxnSummary,
+        view_events: bool,
     ) -> Option<String> {
         let mut out = String::new();
+        if view_events {
+            if events.is_empty() {
+                out += "No events"
+            } else {
+                out += &format!("events: {}", self.list_events(events))
+            }
+        }
         if !created.is_empty() {
+            if !out.is_empty() {
+                out.push('\n')
+            }
             out += &format!("created: {}", self.list_objs(created));
         }
         if !written.is_empty() {
@@ -540,6 +591,20 @@ impl<'a> SuiTestAdapter<'a> {
         } else {
             Some(out)
         }
+    }
+
+    fn list_events(&self, events: &[Event]) -> String {
+        events
+            .iter()
+            .map(|event| {
+                self.stabilize_str(format!(
+                    "event<{}>(\"{}\")",
+                    event.type_,
+                    String::from_utf8_lossy(&event.contents)
+                ))
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
     fn list_objs(&self, objs: &[ObjectID]) -> String {
