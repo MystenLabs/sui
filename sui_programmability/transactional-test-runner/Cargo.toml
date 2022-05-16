@@ -35,7 +35,7 @@ move-vm-types = { git = "https://github.com/move-language/move", rev = "1b2d3b42
 
 
 sui-framework = { path = "../framework" }
-sui-verifier = { path = "../verifier" }
+sui-verifier = { path = "../../crates/sui-verifier" }
 sui-types = { path = "../../crates/sui-types" }
 sui-adapter = { path = "../adapter" }
 sui_core = { path = "../../sui_core" }

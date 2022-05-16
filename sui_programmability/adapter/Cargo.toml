@@ -22,7 +22,7 @@ move-vm-runtime = { git = "https://github.com/move-language/move", rev = "1b2d3b
 move-vm-types = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
 
 sui-framework = { path = "../framework" }
-sui-verifier = { path = "../verifier" }
+sui-verifier = { path = "../../crates/sui-verifier" }
 sui-types = { path = "../../crates/sui-types" }
 
 [dev-dependencies]
