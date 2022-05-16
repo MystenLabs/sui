@@ -1,9 +1,3 @@
-.noobjects {
-    @apply font-sans tracking-tight font-semibold
-        bg-amber-300 rounded-l-md
-          h-[1.5rem] p-2 mt-2;
-}
-
 .ownedobjects {
     @apply w-[100%] lg:flex lg:flex-wrap lg:justify-between;
 }
@@ -70,5 +64,9 @@ button.btncontainer {
 }
 
 .gray {
-    color: gray;
+    @apply text-slate-500;
+}
+
+.fail {
+    @apply text-red-600 font-sans font-semibold mt-2;
 }

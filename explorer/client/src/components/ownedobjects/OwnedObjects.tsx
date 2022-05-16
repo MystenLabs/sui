@@ -42,6 +42,10 @@ const IS_COIN_TYPE = (typeDesc: string): boolean => /::Coin::/.test(typeDesc);
 const lastRowHas2Elements = (itemList: any[]): boolean =>
     itemList.length % 3 === 2;
 
+const NoOwnedObjects = () => (
+    <div className={styles.fail}>Failed to find Owned Objects</div>
+);
+
 const OwnedObject = ({ id }: { id: string }) =>
     IS_STATIC_ENV ? <OwnedObjectStatic id={id} /> : <OwnedObjectAPI id={id} />;
 
@@ -62,61 +66,63 @@ function OwnedObjectStatic({ id }: { id: string }) {
 
         return <OwnedObjectLayout results={results} />;
     } else {
-        return <div />;
+        return <NoOwnedObjects />;
     }
 }
 
 function OwnedObjectAPI({ id }: { id: string }) {
     const [results, setResults] = useState(DATATYPE_DEFAULT);
     const [isLoaded, setIsLoaded] = useState(false);
+    const [isFail, setIsFail] = useState(false);
 
     // TODO - The below will fail for a large number of owned objects
     // due to the number of calls to the API
     // Backend changes will be required to enable a scalable solution
     // getOwnedObjectRefs will need to return id, type and balance for each owned object
     useEffect(() => {
-        rpc.getOwnedObjectRefs(id).then((objects) => {
-            const ids = objects.map(({ objectId }) => objectId);
-            rpc.getObjectInfoBatch(ids).then((results) => {
-                setResults(
-                    results
-                        .filter(({ status }) => status === 'Exists')
-                        .map(
-                            (resp) => {
-                                const info = getObjectExistsResponse(resp)!;
-                                const contents = getObjectContent(resp);
-                                const url = parseImageURL(info.object);
-                                const balanceValue = (
-                                    typeof contents?.fields.balance === 'number'
-                                        ? contents.fields.balance
-                                        : undefined
-                                ) as number;
-                                return {
-                                    id: info.objectRef.objectId,
-                                    Type: parseObjectType(info),
-                                    display: url
-                                        ? processDisplayValue(url)
-                                        : undefined,
-                                    balance: balanceValue,
-                                };
-                            }
-                            //TO DO - add back version
-                        )
-                );
-                setIsLoaded(true);
-            });
-        });
+        setIsFail(false);
+        setIsLoaded(false);
+        rpc.getOwnedObjectRefs(id)
+            .then((objects) => {
+                const ids = objects.map(({ objectId }) => objectId);
+                rpc.getObjectInfoBatch(ids).then((results) => {
+                    setResults(
+                        results
+                            .filter(({ status }) => status === 'Exists')
+                            .map(
+                                (resp) => {
+                                    const info = getObjectExistsResponse(resp)!;
+                                    const contents = getObjectContent(resp);
+                                    const url = parseImageURL(info.object);
+                                    const balanceValue = (
+                                        typeof contents?.fields.balance ===
+                                        'number'
+                                            ? contents.fields.balance
+                                            : undefined
+                                    ) as number;
+                                    return {
+                                        id: info.objectRef.objectId,
+                                        Type: parseObjectType(info),
+                                        display: url
+                                            ? processDisplayValue(url)
+                                            : undefined,
+                                        balance: balanceValue,
+                                    };
+                                }
+                                //TO DO - add back version
+                            )
+                    );
+                    setIsLoaded(true);
+                });
+            })
+            .catch(() => setIsFail(true));
     }, [id]);
 
-    if (isLoaded) {
-        return <OwnedObjectLayout results={results} />;
-    } else {
-        return results.length > 0 ? (
-            <div className={styles.gray}>loading...</div>
-        ) : (
-            <div />
-        );
-    }
+    if (isFail) return <NoOwnedObjects />;
+
+    if (isLoaded) return <OwnedObjectLayout results={results} />;
+
+    return <div className={styles.gray}>loading...</div>;
 }
 
 function OwnedObjectLayout({ results }: { results: resultType }) {

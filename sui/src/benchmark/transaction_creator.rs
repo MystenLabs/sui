@@ -4,9 +4,9 @@
 use crate::benchmark::validator_preparer::ValidatorPreparer;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use rayon::prelude::*;
+use sui_config::NetworkConfig;
 use sui_types::{
     base_types::*,
-    committee::*,
     crypto::{get_key_pair, AuthoritySignature, KeyPair, Signature},
     messages::*,
     object::Object,
@@ -59,12 +59,17 @@ fn create_gas_object(object_id: ObjectID, owner: SuiAddress) -> Object {
 }
 
 /// This builds, signs a cert
-fn make_cert(keys: &[KeyPair], committee: &Committee, tx: &Transaction) -> CertifiedTransaction {
+fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTransaction {
     // Make certificate
     let mut certificate = CertifiedTransaction::new(tx.clone());
+    let committee = network_config.committee();
     certificate.auth_sign_info.epoch = committee.epoch();
     for i in 0..committee.quorum_threshold() {
-        let secx = keys.get(i).unwrap();
+        let secx = network_config
+            .validator_configs()
+            .get(i)
+            .unwrap()
+            .key_pair();
         let pubx = secx.public_key_bytes();
         let sig = AuthoritySignature::new(&certificate.data, secx);
         certificate.auth_sign_info.signatures.push((*pubx, sig));
@@ -75,9 +80,8 @@ fn make_cert(keys: &[KeyPair], committee: &Committee, tx: &Transaction) -> Certi
 fn make_transactions(
     address: SuiAddress,
     keypair: KeyPair,
-    committee: &Committee,
+    network_config: &NetworkConfig,
     account_gas_objects: &[(Vec<Object>, Object)],
-    authority_keys: &[KeyPair],
     batch_size: usize,
     use_move: bool,
 ) -> Vec<(Transaction, CertifiedTransaction)> {
@@ -115,7 +119,7 @@ fn make_transactions(
 
             let signature = Signature::new(&data, &keypair);
             let transaction = Transaction::new(data, signature);
-            let cert = make_cert(authority_keys, committee, &transaction);
+            let cert = make_cert(network_config, &transaction);
 
             (transaction, cert)
         })
@@ -164,8 +168,7 @@ impl TransactionCreator {
             tcp_conns,
             use_move,
             self.object_id_offset,
-            &validator_preparer.keys,
-            &validator_preparer.committee,
+            &validator_preparer.network_config,
         );
 
         validator_preparer.update_objects_for_validator(txn_objects, address);
@@ -219,8 +222,7 @@ impl TransactionCreator {
         conn: usize,
         use_move: bool,
         object_id_offset: ObjectID,
-        auth_keys: &[KeyPair],
-        committee: &Committee,
+        network_config: &NetworkConfig,
     ) -> (Vec<(Transaction, CertifiedTransaction)>, Vec<Object>) {
         assert_eq!(chunk_size % conn, 0);
         let batch_size_per_conn = chunk_size / conn;
@@ -245,9 +247,8 @@ impl TransactionCreator {
         let transactions = make_transactions(
             address,
             key_pair,
-            committee,
+            network_config,
             &account_gas_objects,
-            auth_keys,
             batch_size_per_conn,
             use_move,
         );
