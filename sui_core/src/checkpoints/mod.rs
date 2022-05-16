@@ -137,7 +137,7 @@ impl CheckpointStore {
     // Manage persistent local variables
 
     /// Loads the locals from the store -- do this at init
-    fn load_locals(&self) -> Result<CheckpointLocals, SuiError> {
+    fn load_locals(&mut self) -> Result<CheckpointLocals, SuiError> {
         // Loads locals from disk, or inserts initial locals
         let mut locals = match self.locals.get(&LOCALS)? {
             Some(locals) => locals,
@@ -176,7 +176,7 @@ impl CheckpointStore {
 
     /// Set the local variables in memory and store
     fn set_locals(
-        &self,
+        &mut self,
         _previous: Arc<CheckpointLocals>,
         locals: CheckpointLocals,
     ) -> Result<(), SuiError> {
@@ -186,7 +186,7 @@ impl CheckpointStore {
     }
 
     /// Read the local variables
-    pub fn get_locals(&self) -> Arc<CheckpointLocals> {
+    pub fn get_locals(&mut self) -> Arc<CheckpointLocals> {
         self.memory_locals.load().clone().unwrap()
     }
 
@@ -262,7 +262,7 @@ impl CheckpointStore {
             "locals";<DBLabel, CheckpointLocals>
         );
 
-        let check_point_db = CheckpointStore {
+        let mut check_point_db = CheckpointStore {
             name,
             committee,
             secret,
@@ -303,7 +303,7 @@ impl CheckpointStore {
     }
 
     pub fn handle_latest_proposal(
-        &self,
+        &mut self,
         request: &CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
         // Set a proposal if there is not one, and one could be set
@@ -357,7 +357,7 @@ impl CheckpointStore {
     }
 
     pub fn handle_past_checkpoint(
-        &self,
+        &mut self,
         request: &CheckpointRequest,
         seq: CheckpointSequenceNumber,
     ) -> Result<CheckpointResponse, SuiError> {
@@ -393,7 +393,7 @@ impl CheckpointStore {
     /// in the signed checkpoint being signed, stored and the contents
     /// registered as processed or unprocessed.
     pub fn handle_internal_set_checkpoint(
-        &self,
+        &mut self,
         checkpoint: CheckpointSummary,
         contents: &CheckpointContents,
     ) -> Result<(), SuiError> {
@@ -457,7 +457,7 @@ impl CheckpointStore {
     /// transactions processed by this authority. The latest batch is
     /// stored to ensure upon crash recovery all batches are processed.
     pub fn handle_internal_batch(
-        &self,
+        &mut self,
         next_sequence_number: TxSequenceNumber,
         transactions: &[(TxSequenceNumber, TransactionDigest)],
     ) -> Result<(), SuiError> {
@@ -478,7 +478,7 @@ impl CheckpointStore {
     //       consensus, as well as to check it is the right node to
     //       submit to consensus.
     pub fn handle_receive_fragment(
-        &self,
+        &mut self,
         _fragment: &CheckpointFragment,
     ) -> Result<CheckpointResponse, SuiError> {
         // Check structure is correct and signatures verify
@@ -558,7 +558,7 @@ impl CheckpointStore {
     /// and if called again with the same sequence number will do nothing. However,
     /// fragments should be provided in seq increasing order.
     pub fn handle_internal_fragment(
-        &self,
+        &mut self,
         _seq: u64,
         _fragment: CheckpointFragment,
     ) -> Result<(), FragmentInternalError> {
@@ -612,7 +612,7 @@ impl CheckpointStore {
 
     /// Attempt to construct the next expected checkpoint, and return true if a new
     /// checkpoint is created or false if it is not.
-    fn attempt_to_construct_checkpoint(&self) -> Result<bool, FragmentInternalError> {
+    fn attempt_to_construct_checkpoint(&mut self) -> Result<bool, FragmentInternalError> {
         let next_sequence_number = self.next_checkpoint();
         let fragments: Vec<_> = self
             .fragments
@@ -733,7 +733,7 @@ impl CheckpointStore {
     /// internally the checkpoint. A cert with contents is processed as if
     /// it came from the internal consensus.
     pub fn handle_checkpoint_certificate(
-        &self,
+        &mut self,
         checkpoint: &CertifiedCheckpoint,
         contents: &Option<CheckpointContents>,
     ) -> Result<CheckpointResponse, SuiError> {
@@ -798,13 +798,13 @@ impl CheckpointStore {
     // Helper read functions
 
     /// Return the seq number of the last checkpoint we have recorded.
-    pub fn next_checkpoint(&self) -> CheckpointSequenceNumber {
+    pub fn next_checkpoint(&mut self) -> CheckpointSequenceNumber {
         self.get_locals().next_checkpoint
     }
 
     /// Returns the lowest checkpoint sequence number with unprocessed transactions
     /// if any, otherwise the next checkpoint (not seen).
-    pub fn lowest_unprocessed_checkpoint(&self) -> CheckpointSequenceNumber {
+    pub fn lowest_unprocessed_checkpoint(&mut self) -> CheckpointSequenceNumber {
         self.unprocessed_transactions
             .iter()
             .map(|(_, chk_seq)| chk_seq)
@@ -813,14 +813,14 @@ impl CheckpointStore {
     }
 
     /// Returns the next transactions sequence number expected.
-    pub fn next_transaction_sequence_expected(&self) -> TxSequenceNumber {
+    pub fn next_transaction_sequence_expected(&mut self) -> TxSequenceNumber {
         self.get_locals().next_transaction_sequence
     }
 
     // Helper write functions
 
     /// Set the next checkpoint proposal.
-    fn set_proposal(&self) -> Result<CheckpointProposal, SuiError> {
+    fn set_proposal(&mut self) -> Result<CheckpointProposal, SuiError> {
         // Check that:
         // - there is no current proposal.
         // - there are no unprocessed transactions.
@@ -867,7 +867,7 @@ impl CheckpointStore {
     }
 
     pub fn update_new_checkpoint(
-        &self,
+        &mut self,
         seq: CheckpointSequenceNumber,
         transactions: &[TransactionDigest],
     ) -> Result<(), SuiError> {
@@ -879,7 +879,7 @@ impl CheckpointStore {
     /// Add transactions associated with a new checkpoint in the structure, and
     /// updates all tables including unprocessed and extra transactions.
     fn update_new_checkpoint_inner(
-        &self,
+        &mut self,
         seq: CheckpointSequenceNumber,
         transactions: &[TransactionDigest],
         batch: DBBatch,
@@ -982,7 +982,7 @@ impl CheckpointStore {
     /// and nothing unsafe happens if it is called twice. Returns the lowest checkpoint number with
     /// unprocessed transactions (this is the low watermark).
     fn update_processed_transactions(
-        &self, // We take by &mut to prevent concurrent access.
+        &mut self, // We take by &mut to prevent concurrent access.
         transactions: &[(TxSequenceNumber, TransactionDigest)],
     ) -> Result<CheckpointSequenceNumber, SuiError> {
         let in_checkpoint = self

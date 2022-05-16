@@ -72,7 +72,7 @@ fn crash_recovery() {
 
     // Open store first time
 
-    let cps = CheckpointStore::open(
+    let mut cps = CheckpointStore::open(
         path.clone(),
         Some(opts.clone()),
         *k.public_key_bytes(),
@@ -116,7 +116,7 @@ fn crash_recovery() {
     // Delete and re-open DB
     drop(cps);
 
-    let cps_new = CheckpointStore::open(
+    let mut cps_new = CheckpointStore::open(
         path,
         Some(opts),
         *k.public_key_bytes(),
@@ -146,7 +146,7 @@ fn crash_recovery() {
 
 #[test]
 fn make_checkpoint_db() {
-    let (_, cps) = random_ckpoint_store().pop().unwrap();
+    let (_, mut cps) = random_ckpoint_store().pop().unwrap();
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -190,10 +190,10 @@ fn make_checkpoint_db() {
 #[test]
 fn make_proposals() {
     let mut test_objects = random_ckpoint_store();
-    let (_, cps1) = test_objects.pop().unwrap();
-    let (_, cps2) = test_objects.pop().unwrap();
-    let (_, cps3) = test_objects.pop().unwrap();
-    let (_, cps4) = test_objects.pop().unwrap();
+    let (_, mut cps1) = test_objects.pop().unwrap();
+    let (_, mut cps2) = test_objects.pop().unwrap();
+    let (_, mut cps3) = test_objects.pop().unwrap();
+    let (_, mut cps4) = test_objects.pop().unwrap();
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -244,10 +244,10 @@ fn make_proposals() {
 #[test]
 fn make_diffs() {
     let mut test_objects = random_ckpoint_store();
-    let (_, cps1) = test_objects.pop().unwrap();
-    let (_, cps2) = test_objects.pop().unwrap();
-    let (_, cps3) = test_objects.pop().unwrap();
-    let (_, cps4) = test_objects.pop().unwrap();
+    let (_, mut cps1) = test_objects.pop().unwrap();
+    let (_, mut cps2) = test_objects.pop().unwrap();
+    let (_, mut cps3) = test_objects.pop().unwrap();
+    let (_, mut cps4) = test_objects.pop().unwrap();
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -298,10 +298,10 @@ fn make_diffs() {
 #[test]
 fn latest_proposal() {
     let mut test_objects = random_ckpoint_store();
-    let (_, cps1) = test_objects.pop().unwrap();
-    let (_, cps2) = test_objects.pop().unwrap();
-    let (_, cps3) = test_objects.pop().unwrap();
-    let (_, cps4) = test_objects.pop().unwrap();
+    let (_, mut cps1) = test_objects.pop().unwrap();
+    let (_, mut cps2) = test_objects.pop().unwrap();
+    let (_, mut cps3) = test_objects.pop().unwrap();
+    let (_, mut cps4) = test_objects.pop().unwrap();
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -645,7 +645,7 @@ fn checkpoint_integration() {
 
     // Make a checkpoint store:
 
-    let cps = CheckpointStore::open(
+    let mut cps = CheckpointStore::open(
         path,
         Some(opts.clone()),
         *k.public_key_bytes(),
@@ -996,10 +996,10 @@ fn set_fragment_external() {
 #[test]
 fn set_fragment_reconstruct() {
     let mut test_objects = random_ckpoint_store();
-    let (_, cps1) = test_objects.pop().unwrap();
-    let (_, cps2) = test_objects.pop().unwrap();
-    let (_, cps3) = test_objects.pop().unwrap();
-    let (_, cps4) = test_objects.pop().unwrap();
+    let (_, mut cps1) = test_objects.pop().unwrap();
+    let (_, mut cps2) = test_objects.pop().unwrap();
+    let (_, mut cps3) = test_objects.pop().unwrap();
+    let (_, mut cps4) = test_objects.pop().unwrap();
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -1222,7 +1222,7 @@ fn test_fragment_full_flow() {
     // sequence of fragments.
 
     let mut seq = 0;
-    let cps6 = &test_objects[6].1;
+    let cps6 = &mut test_objects[6].1;
     for fragment in &all_fragments {
         let _ = cps6.handle_internal_fragment(seq, fragment.clone());
         seq += 1;
