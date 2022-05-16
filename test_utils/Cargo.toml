@@ -27,7 +27,7 @@ typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev ="7c2479
 narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "23745f48103656eae4a4205d0b3edd53ad8894de", package = "config" }
 
 sui-config = { path = "../crates/sui-config" }
-sui-types = { path = "../sui_types" }
+sui-types = { path = "../crates/sui-types" }
 sui_core = { path = "../sui_core" }
 sui-network = { path = "../crates/sui-network" }
 sui = { path = "../sui" }

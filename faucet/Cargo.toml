@@ -21,7 +21,7 @@ serde_json = "1.0.80"
 tower = { version = "0.4.12", features = ["util", "timeout", "load-shed", "limit"] }
 
 sui = { path = "../sui" }
-sui-types = { path = "../sui_types" }
+sui-types = { path = "../crates/sui-types" }
 sui_core = { path = "../sui_core" }
 
 [dev-dependencies]
