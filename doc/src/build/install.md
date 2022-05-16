@@ -7,6 +7,15 @@ dependencies.  As a prerequisite, you will need to [install
 Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
 version 1.60.0 or higher in order to build and install Sui on your machine.
 
+> **Tip:** Assuming you have Rust Cargo, the `git` command, and a GitHub account,
+> you can download the `sui-setup.sh` script and run it to conduct all of the setup
+> below, from a terminal like so:
+> ```shell
+> $ curl https://raw.githubusercontent.com/MystenLabs/sui/main/doc/utils/sui-setup.sh -o sui-setup.sh
+> chmod 755 sui-setup.sh
+> ./sui-setup.sh
+> ```
+
 ## Binaries
 
 To develop in Sui, you will need the Sui binaries. After installing `cargo`, run:
