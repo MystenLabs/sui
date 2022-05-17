@@ -47,3 +47,5 @@ export function normalizeMnemonics(mnemonics: string): string {
         .map((part) => part.toLowerCase())
         .join(' ');
 }
+
+export const validateMnemonics = bip39.validateMnemonic;
