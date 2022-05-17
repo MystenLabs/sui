@@ -2,11 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::Path;
+use std::str::FromStr;
 
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, value::MoveTypeLayout,
 };
 use serde_json::{json, Value};
+use test_fuzz::runtime::num_traits::ToPrimitive;
+
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::object::Object;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
@@ -509,4 +512,47 @@ fn test_convert_number_array_from_bcs() {
     for value in value.0.as_array().unwrap() {
         assert_eq!(50000, value.as_u64().unwrap())
     }
+}
+
+#[test]
+fn test_from_str() {
+    // test number
+    let test = SuiJsonValue::from_str("10000").unwrap();
+    assert!(test.0.is_number());
+    // Test array
+    let test = SuiJsonValue::from_str("[10,10,10,10]").unwrap();
+    assert!(test.0.is_array());
+    assert_eq!(
+        vec![10, 10, 10, 10],
+        test.0
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| value.as_u64().unwrap().to_u8().unwrap())
+            .collect::<Vec<_>>()
+    );
+    // test bool
+    let test = SuiJsonValue::from_str("true").unwrap();
+    assert!(test.0.is_boolean());
+
+    // test id without quotes
+    let object_id = ObjectID::random().to_hex_literal();
+    let test = SuiJsonValue::from_str(&object_id).unwrap();
+    assert!(test.0.is_string());
+    assert_eq!(object_id, test.0.as_str().unwrap());
+
+    // test id with quotes
+    let test = SuiJsonValue::from_str(&format!("\"{}\"", &object_id)).unwrap();
+    assert!(test.0.is_string());
+    assert_eq!(object_id, test.0.as_str().unwrap());
+
+    // test string without quotes
+    let test = SuiJsonValue::from_str("Some string").unwrap();
+    assert!(test.0.is_string());
+    assert_eq!("Some string", test.0.as_str().unwrap());
+
+    // test string with quotes
+    let test = SuiJsonValue::from_str("\"Some string\"").unwrap();
+    assert!(test.0.is_string());
+    assert_eq!("Some string", test.0.as_str().unwrap())
 }
