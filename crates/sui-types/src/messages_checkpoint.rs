@@ -184,6 +184,7 @@ pub struct CheckpointSummary {
     pub sequence_number: CheckpointSequenceNumber,
     pub waypoint: Box<Waypoint>, // Bigger strucure, can live on heap.
     digest: CheckpointDigest,
+    // TODO: add digest of previous checkpoint summary
 }
 
 impl CheckpointSummary {
@@ -198,7 +199,7 @@ impl CheckpointSummary {
 
         let proposal_digest = transactions.digest();
 
-        CheckpointSummary {
+        Self {
             sequence_number,
             waypoint,
             digest: proposal_digest,
@@ -227,14 +228,8 @@ impl SignedCheckpoint {
         signer: &dyn signature::Signer<AuthoritySignature>,
         transactions: &CheckpointContents,
     ) -> SignedCheckpoint {
-        let proposal = CheckpointSummary::new(sequence_number, transactions);
-        let signature = AuthoritySignature::new(&proposal, signer);
-
-        SignedCheckpoint {
-            checkpoint: proposal,
-            authority,
-            signature,
-        }
+        let checkpoint = CheckpointSummary::new(sequence_number, transactions);
+        SignedCheckpoint::new_from_summary(checkpoint, authority, signer)
     }
 
     pub fn new_from_summary(
@@ -252,14 +247,14 @@ impl SignedCheckpoint {
     }
 
     /// Checks that the signature on the digest is correct
-    pub fn check_digest(&self) -> Result<(), SuiError> {
+    pub fn verify(&self) -> Result<(), SuiError> {
         self.signature.verify(&self.checkpoint, self.authority)?;
         Ok(())
     }
 
     // Check that the digest and transactions are correctly signed
-    pub fn check_transactions(&self, contents: &CheckpointContents) -> Result<(), SuiError> {
-        self.check_digest()?;
+    pub fn verify_with_transactions(&self, contents: &CheckpointContents) -> Result<(), SuiError> {
+        self.verify()?;
         let recomputed = CheckpointSummary::new(*self.checkpoint.sequence_number(), contents);
 
         fp_ensure!(
@@ -303,12 +298,12 @@ impl CertifiedCheckpoint {
                 .collect(),
         };
 
-        certified_checkpoint.check_digest(committee)?;
+        certified_checkpoint.verify(committee)?;
         Ok(certified_checkpoint)
     }
 
     /// Check that a certificate is valid, and signed by a quorum of authorities
-    pub fn check_digest(&self, committee: &Committee) -> Result<(), SuiError> {
+    pub fn verify(&self, committee: &Committee) -> Result<(), SuiError> {
         // Note: this code is nearly the same as the code that checks
         // transaction certificates. There is an opportunity to unify this
         // logic.
@@ -369,12 +364,12 @@ impl CertifiedCheckpoint {
     }
 
     /// Check the certificate and whether it matches with a set of transactions.
-    pub fn check_transactions(
+    pub fn verify_with_transactions(
         &self,
         committee: &Committee,
         contents: &CheckpointContents,
     ) -> Result<(), SuiError> {
-        self.check_digest(committee)?;
+        self.verify(committee)?;
         fp_ensure!(
             contents.digest() == self.checkpoint.digest,
             SuiError::from("Transaction digest mismatch")
@@ -417,8 +412,8 @@ pub struct CheckpointFragment {
 impl CheckpointFragment {
     pub fn verify(&self, _committee: &Committee) -> Result<(), SuiError> {
         // Check the signatures of proposer and other
-        self.proposer.0.check_digest()?;
-        self.other.0.check_digest()?;
+        self.proposer.0.verify()?;
+        self.other.0.verify()?;
 
         // Check the proposers are authorities
         fp_ensure!(
@@ -465,18 +460,18 @@ mod tests {
         let mut proposal = SignedCheckpoint::new(1, *name, &authority_key[0], &set);
 
         // Signature is correct on proposal, and with same transactions
-        assert!(proposal.check_digest().is_ok());
-        assert!(proposal.check_transactions(&set).is_ok());
+        assert!(proposal.verify().is_ok());
+        assert!(proposal.verify_with_transactions(&set).is_ok());
 
         // Error on different transactions
         let contents = CheckpointContents {
             transactions: [TransactionDigest::random()].into_iter().collect(),
         };
-        assert!(proposal.check_transactions(&contents).is_err());
+        assert!(proposal.verify_with_transactions(&contents).is_err());
 
         // Modify the proposal, and observe the signature fail
         proposal.checkpoint.sequence_number = 2;
-        assert!(proposal.check_digest().is_err());
+        assert!(proposal.verify().is_err());
     }
 
     #[test]
@@ -499,7 +494,9 @@ mod tests {
             CertifiedCheckpoint::aggregate(signed_checkpoints, &committee).expect("Cert is OK");
 
         // Signature is correct on proposal, and with same transactions
-        assert!(checkpoint_cert.check_transactions(&committee, &set).is_ok());
+        assert!(checkpoint_cert
+            .verify_with_transactions(&committee, &set)
+            .is_ok());
 
         // Make a bad proposal
         let signed_checkpoints: Vec<_> = keys

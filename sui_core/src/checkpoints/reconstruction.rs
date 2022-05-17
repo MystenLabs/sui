@@ -114,10 +114,12 @@ struct SpanGraph {
 impl SpanGraph {
     /// Initialize the graph with each authority just pointing to itself.
     pub fn new(committee: &Committee) -> SpanGraph {
-        let mut nodes: HashMap<AuthorityName, (AuthorityName, usize)> = HashMap::new();
-        for (n, w) in &committee.voting_rights {
-            nodes.insert(*n, (*n, *w));
-        }
+        let nodes: HashMap<AuthorityName, (AuthorityName, usize)> = committee
+            .voting_rights
+            .iter()
+            .map(|(n, w)| (*n, (*n, *w)))
+            .collect();
+
         SpanGraph { nodes }
     }
 

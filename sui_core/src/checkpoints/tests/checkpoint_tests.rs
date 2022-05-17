@@ -361,10 +361,7 @@ fn latest_proposal() {
         assert!(matches!(previous, AuthenticatedCheckpoint::None));
 
         let current_proposal = current.unwrap();
-        current_proposal
-            .0
-            .check_digest()
-            .expect("no signature error");
+        current_proposal.0.verify().expect("no signature error");
         assert_eq!(*current_proposal.0.checkpoint.sequence_number(), 0);
     }
 
@@ -385,7 +382,7 @@ fn latest_proposal() {
         let current_proposal = current.unwrap();
         current_proposal
             .0
-            .check_transactions(response.detail.as_ref().unwrap())
+            .verify_with_transactions(response.detail.as_ref().unwrap())
             .expect("no signature error");
         assert_eq!(*current_proposal.0.checkpoint.sequence_number(), 0);
     }
@@ -432,7 +429,7 @@ fn latest_proposal() {
 
     // --- TEST 4 ---
 
-    // When details are needed, then return unexecuted trasnactions if there is no proposal
+    // When details are needed, then return unexecuted transactions if there is no proposal
     let request = CheckpointRequest::latest(true);
     let response = cps1.handle_latest_proposal(&request).expect("no errors");
     assert!(response.detail.is_some());
@@ -476,10 +473,7 @@ fn latest_proposal() {
         assert!(matches!(previous, AuthenticatedCheckpoint::Signed { .. }));
 
         let current_proposal = current.unwrap();
-        current_proposal
-            .0
-            .check_digest()
-            .expect("no signature error");
+        current_proposal.0.verify().expect("no signature error");
         assert_eq!(*current_proposal.0.checkpoint.sequence_number(), 1);
     }
 }
@@ -566,7 +560,7 @@ fn set_get_checkpoint() {
     ));
     if let AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Signed(signed)) = response.info {
         signed
-            .check_transactions(&response.detail.unwrap())
+            .verify_with_transactions(&response.detail.unwrap())
             .unwrap();
     }
 

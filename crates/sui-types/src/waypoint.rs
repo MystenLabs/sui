@@ -38,6 +38,10 @@ impl WaypointError {
    A MulHash accumulator: each element is mapped to a
    point on an eliptic curve on which the DL problem is
    hard. The accumulator is the sum of all points.
+
+    See for more information about the construction and
+    its security: https://arxiv.org/abs/1601.06502
+
 */
 #[derive(Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Accumulator {
@@ -73,9 +77,11 @@ impl std::fmt::Debug for Accumulator {
 }
 
 /*
-    A way point represents a sequential point in a stream that summarizes
-    all elements so far. Waypoints with increasing sequence numbers should
-    contain all element in previous waypoints and expand them.
+    A waypoint represents an authenticator that summarizes
+    all elements in a set. It has a homomorphic structure allowing
+    proofs that two waypoints differ in a certain sets of elements,
+    without having to enumerate all elements within the accumulated
+    sets, but only the elements in the difference.
 */
 pub type Waypoint = Accumulator;
 
@@ -95,6 +101,7 @@ where
     pub key: K,
     pub waypoint: Waypoint,
     pub items: BTreeSet<I>,
+    // TODO: add a size hint to avoid extremely long lists of items.
 }
 
 impl<K, I> WaypointWithItems<K, I>
@@ -113,16 +120,6 @@ where
     /// Insert an element in the accumulator and list of items
     pub fn insert_full(&mut self, item: I) {
         self.waypoint.insert(&item);
-        self.items.insert(item);
-    }
-
-    /// Insert an element in the accumulator only
-    pub fn insert_accumulator(&mut self, item: &I) {
-        self.waypoint.insert(item);
-    }
-
-    /// Insert an element in the items only
-    pub fn insert_item(&mut self, item: I) {
         self.items.insert(item);
     }
 }

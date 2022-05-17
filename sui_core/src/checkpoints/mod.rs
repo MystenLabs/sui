@@ -120,7 +120,7 @@ pub struct CheckpointStore {
     pub fragments: DBMap<u64, CheckpointFragment>,
 
     /// The local sequence at which the proposal for the next checkpoint is created
-    /// This is a sequence number containing all unprocessed trasnactions lower than
+    /// This is a sequence number containing all unprocessed transactions lower than
     /// this sequence number. At this point the unprocessed_transactions sequence
     /// should be empty. It is none if there is no active proposal. We also include here
     /// the proposal, although we could re-create it from the database.
@@ -323,7 +323,7 @@ impl CheckpointStore {
             .as_ref()
             .map(|proposal| proposal.proposal.clone());
 
-        // If requested include either the trasnactions in the latest checkpoint proposal
+        // If requested include either the transactions in the latest checkpoint proposal
         // or the unprocessed transactions that block the generation of a proposal.
         let detail = if request.detail {
             latest_checkpoint_proposal
@@ -384,7 +384,7 @@ impl CheckpointStore {
 
     /// Call this function internally to update the latest checkpoint.
     /// Internally it is called with an unsigned checkpoint, and results
-    /// in the signed checkpoint being signed, stored and the contents
+    /// in the checkpoint being signed, stored and the contents
     /// registered as processed or unprocessed.
     pub fn handle_internal_set_checkpoint(
         &mut self,
@@ -473,15 +473,15 @@ impl CheckpointStore {
     //       submit to consensus.
     pub fn handle_receive_fragment(
         &mut self,
-        _fragment: &CheckpointFragment,
+        fragment: &CheckpointFragment,
     ) -> Result<CheckpointResponse, SuiError> {
         // Check structure is correct and signatures verify
-        _fragment.verify(&self.committee)?;
+        fragment.verify(&self.committee)?;
 
         // Does the fragment event suggest it is for the current round?
         let next_checkpoint_seq = self.next_checkpoint();
         fp_ensure!(
-            *_fragment.proposer.0.checkpoint.sequence_number() == next_checkpoint_seq,
+            *fragment.proposer.0.checkpoint.sequence_number() == next_checkpoint_seq,
             SuiError::GenericAuthorityError {
                 error: format!(
                     "Incorrect sequence number, expected {}",
@@ -493,18 +493,18 @@ impl CheckpointStore {
         // Only a fragment that involves ourselves to be sequenced through
         // this node.
         fp_ensure!(
-            _fragment.proposer.0.authority == self.name || _fragment.other.0.authority == self.name,
+            fragment.proposer.0.authority == self.name || fragment.other.0.authority == self.name,
             SuiError::from("Fragment does not involve this node")
         );
 
         // Save in the list of local fragments for this sequence.
-        let other_name = if _fragment.proposer.0.authority == self.name {
-            _fragment.other.0.authority
+        let other_name = if fragment.proposer.0.authority == self.name {
+            fragment.other.0.authority
         } else {
-            _fragment.proposer.0.authority
+            fragment.proposer.0.authority
         };
         if !self.local_fragments.contains_key(&other_name)? {
-            self.local_fragments.insert(&other_name, _fragment)?;
+            self.local_fragments.insert(&other_name, fragment)?;
         } else {
             // We already have this fragment, so we can ignore it.
             return Err(SuiError::GenericAuthorityError {
@@ -520,7 +520,7 @@ impl CheckpointStore {
         if !locals.no_more_fragments {
             // Send to consensus for sequencing.
             if let Some(sender) = &self.sender {
-                sender.send_to_consensus(_fragment.clone())?;
+                sender.send_to_consensus(fragment.clone())?;
             } else {
                 return Err(SuiError::from("No consensus sender configured"));
             }
@@ -745,7 +745,7 @@ impl CheckpointStore {
             None => {
                 if let &Some(contents) = &contents {
                     // Check and process contents
-                    checkpoint.check_transactions(&self.committee, contents)?;
+                    checkpoint.verify_with_transactions(&self.committee, contents)?;
                     self.handle_internal_set_checkpoint(checkpoint.checkpoint.clone(), contents)?;
                     // Then insert it
                     self.checkpoints.insert(
@@ -770,7 +770,7 @@ impl CheckpointStore {
             // In this case we have an internal signed checkpoint so we propote it to a
             // full certificate.
             Some(AuthenticatedCheckpoint::Signed(_)) => {
-                checkpoint.check_digest(&self.committee)?;
+                checkpoint.verify(&self.committee)?;
                 self.checkpoints.insert(
                     checkpoint.checkpoint.sequence_number(),
                     &AuthenticatedCheckpoint::Certified(checkpoint.clone()),
@@ -1066,7 +1066,7 @@ impl CheckpointStore {
         )?;
 
         // If the transactions processed did not belong to a checkpoint yet, we add them to the list
-        // of `extra` trasnactions, that we should be activelly propagating to others.
+        // of `extra` transactions, that we should be activelly propagating to others.
         let batch = batch.insert_batch(
             &self.extra_transactions,
             transactions

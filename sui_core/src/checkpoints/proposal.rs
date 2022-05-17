@@ -22,8 +22,8 @@ pub struct CheckpointProposal {
 impl CheckpointProposal {
     /// Create a proposal for a checkpoint at a partiular height
     /// This contains a sequence number, waypoint and a list of
-    /// proposed trasnactions.
-    /// TOOD: Add an identifier for the proposer, probably
+    /// proposed transactions.
+    /// TODO: Add an identifier for the proposer, probably
     ///       an AuthorityName.
     pub fn new(proposal: SignedCheckpointProposal, transactions: CheckpointContents) -> Self {
         CheckpointProposal {
