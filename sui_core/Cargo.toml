@@ -36,6 +36,7 @@ multiaddr = "0.14.0"
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
 prometheus_exporter = "0.8.4"
 once_cell = "1.10.0"
+colored = "2.0.0"
 
 sui-adapter = { path = "../crates/sui-adapter" }
 sui-framework = { path = "../sui_programmability/framework" }
