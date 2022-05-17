@@ -91,11 +91,10 @@ function OwnedObjectAPI({ id }: { id: string }) {
                                     const contents = getObjectFields(resp);
                                     const url = parseImageURL(contents);
                                     const objType = parseObjectType(resp);
-                                    // TODO: handle big number
-                                    const rawBalance = Coin.getBalance(resp);
-                                    const balanceValue = rawBalance
-                                        ? parseInt(rawBalance)
-                                        : undefined;
+                                    // TODO: handle big number by making the balance field
+                                    // in resultType a string
+                                    const balanceValue =
+                                        Coin.getBalance(resp)?.toNumber();
                                     return {
                                         id: getObjectId(resp),
                                         Type: objType,
