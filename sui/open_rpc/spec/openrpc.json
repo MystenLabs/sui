@@ -842,12 +842,6 @@
           },
           {
             "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/MoveValue"
-            }
-          },
-          {
-            "type": "object",
             "required": [
               "fields",
               "type"
@@ -862,6 +856,12 @@
               "type": {
                 "type": "string"
               }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MoveValue"
             }
           }
         ]
@@ -884,6 +884,9 @@
             "items": {
               "$ref": "#/components/schemas/MoveValue"
             }
+          },
+          {
+            "$ref": "#/components/schemas/Base64"
           },
           {
             "type": "string"
