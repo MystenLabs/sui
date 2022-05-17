@@ -1,32 +1,37 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { DefaultRpcClient as rpc } from './DefaultRpcClient';
+import { DefaultRpcClient as rpc, type Network } from './DefaultRpcClient';
 
 export const navigateWithUnknown = async (
     input: string,
-    navigate: Function
+    navigate: Function,
+    network: Network
 ) => {
-    const addrPromise = rpc.getOwnedObjectRefs(input).then((data) => {
-        if (data.length <= 0) throw new Error('No objects for Address');
+    const addrPromise = rpc(network)
+        .getOwnedObjectRefs(input)
+        .then((data) => {
+            if (data.length <= 0) throw new Error('No objects for Address');
 
-        return {
-            category: 'addresses',
-            data: data,
-        };
-    });
-    const objInfoPromise = rpc.getObjectInfo(input).then((data) => {
-        if (data.status !== 'Exists') {
-            throw new Error('no object found');
-        }
+            return {
+                category: 'addresses',
+                data: data,
+            };
+        });
+    const objInfoPromise = rpc(network)
+        .getObjectInfo(input)
+        .then((data) => {
+            if (data.status !== 'Exists') {
+                throw new Error('no object found');
+            }
 
-        return {
-            category: 'objects',
-            data: data,
-        };
-    });
+            return {
+                category: 'objects',
+                data: data,
+            };
+        });
 
-    const txDetailsPromise = rpc
+    const txDetailsPromise = rpc(network)
         .getTransactionWithEffects(input)
         .then((data) => ({
             category: 'transactions',

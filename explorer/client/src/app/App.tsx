@@ -5,15 +5,16 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import Footer from '../components/footer/Footer';
-import Network from '../components/network/Network';
+import NetworkSelect from '../components/network/Network';
 import Search from '../components/search/Search';
 import { NetworkContext } from '../context';
 import AppRoutes from '../pages/config/AppRoutes';
+import { Network } from '../utils/api/DefaultRpcClient';
 
 import styles from './App.module.css';
 
 function App() {
-    const [network, setNetwork] = useState<'local'|'devnet'>('devnet');
+    const [network, setNetwork] = useState<Network>(Network.Devnet);
 
     return (
         <NetworkContext.Provider value={[network, setNetwork]}>
@@ -23,7 +24,7 @@ function App() {
                         <Link to="/">Sui Explorer</Link>
                     </h2>
                     <Search />
-                    <Network />
+                    <NetworkSelect />
                 </div>
                 <main>
                     <AppRoutes />

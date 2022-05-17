@@ -1,6 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+export enum Network {
+    Local = 'local',
+    Devnet = 'devnet',
+}
+
 const tryGetRpcParam = (): string | null => {
     const params = new URLSearchParams(window.location.search);
     return params.get('rpc');
@@ -39,16 +44,16 @@ export const tryGetRpcSetting = (): string | null => {
 };
 
 const ENDPOINTS = {
-    local: 'http://127.0.0.1:5001',
-    devnet: 'https://gateway.devnet.sui.io:9000',
+    [Network.Local]: 'http://127.0.0.1:5001',
+    [Network.Devnet]: 'https://gateway.devnet.sui.io:9000',
 };
 
-export function getEndpoint(network : 'local' | 'devnet'): string {
+export function getEndpoint(network: Network): string {
     const override = tryGetRpcSetting();
     if (override) return override;
-    if (network === 'local') {
+    if (network === Network.Local) {
         return ENDPOINTS[network];
     }
     // Use DevNet as the fallback option
-    return ENDPOINTS.devnet;
+    return ENDPOINTS[Network.Devnet];
 }

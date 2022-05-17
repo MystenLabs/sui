@@ -3,7 +3,7 @@
 
 import { JsonRpcProvider } from '@mysten/sui.js';
 
-import { getEndpoint } from './rpcSetting';
+import { getEndpoint, Network } from './rpcSetting';
 
 // TODO: Remove these types with SDK types
 export type AddressBytes = number[];
@@ -12,4 +12,7 @@ export type AddressOwner = { AddressOwner: AddressBytes };
 export type AnyVec = { vec: any[] };
 export type JsonBytes = { bytes: number[] };
 
-export const DefaultRpcClient = (network: 'local' | 'devnet') => new JsonRpcProvider(getEndpoint(network));
+export { Network };
+
+export const DefaultRpcClient = (network: Network) =>
+    new JsonRpcProvider(getEndpoint(network));

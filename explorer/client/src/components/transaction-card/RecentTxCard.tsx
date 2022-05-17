@@ -16,7 +16,10 @@ import { Link } from 'react-router-dom';
 import Longtext from '../../components/longtext/Longtext';
 import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
-import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
+import {
+    DefaultRpcClient as rpc,
+    type Network,
+} from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { getAllMockTransaction } from '../../utils/static/searchUtil';
 import ErrorResult from '../error-result/ErrorResult';
@@ -46,7 +49,10 @@ type TxnData = {
     From: string;
 };
 
-async function getRecentTransactions(network: 'local' | 'devnet', txNum: number): Promise<TxnData[]> {
+async function getRecentTransactions(
+    network: Network,
+    txNum: number
+): Promise<TxnData[]> {
     try {
         // Get the latest transactions
         const transactions = await rpc(network)
@@ -216,7 +222,7 @@ function LatestTxCardStatic() {
 function LatestTxCardAPI() {
     const [isLoaded, setIsLoaded] = useState(false);
     const [results, setResults] = useState(initState);
-  const [network] = useContext(NetworkContext);
+    const [network] = useContext(NetworkContext);
     useEffect(() => {
         let isMounted = true;
         getRecentTransactions(network, 15)
@@ -240,7 +246,7 @@ function LatestTxCardAPI() {
         return () => {
             isMounted = false;
         };
-    }, []);
+    }, [network]);
     if (results.loadState === 'pending') {
         return (
             <div className={theme.textresults}>
