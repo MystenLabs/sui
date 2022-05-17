@@ -271,7 +271,7 @@ pub async fn spawn_authority_server(
     state: AuthorityState,
 ) -> AuthorityServerHandle {
     // The following two fields are only needed for shared objects (not by this bench).
-    let consensus_address = "127.0.0.1:0".parse().unwrap();
+    let consensus_address = "/dns/localhost/tcp/0/http".parse().unwrap();
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     let server = AuthorityServer::new(
