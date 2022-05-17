@@ -5681,6 +5681,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-verifier-transactional-tests"
+version = "0.1.0"
+dependencies = [
+ "datatest-stable",
+ "sui-transactional-test-runner",
+]
+
+[[package]]
 name = "sui_core"
 version = "0.1.0"
 dependencies = [
