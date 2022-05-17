@@ -3,6 +3,8 @@ import { useCallback, useContext } from 'react';
 import { NetworkContext } from '../../context';
 import { Network } from '../../utils/api/DefaultRpcClient';
 
+import styles from './Network.module.css';
+
 export default function NetworkSelect() {
     const [network, setNetwork] = useContext(NetworkContext);
     const handleClick = useCallback(
@@ -13,5 +15,9 @@ export default function NetworkSelect() {
         [setNetwork, network]
     );
 
-    return <div onClick={handleClick}>Click Here</div>;
+    return (
+        <div onClick={handleClick} className={styles.networkbox}>
+            {network}
+        </div>
+    );
 }

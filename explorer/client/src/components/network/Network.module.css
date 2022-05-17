@@ -1,0 +1,3 @@
+.networkbox {
+    @apply text-lg cursor-pointer text-offblack bg-green-500 hover:bg-green-900 hover:text-offwhite text-center rounded-lg px-2 my-2 lg:my-0 lg:w-[20vw];
+}
