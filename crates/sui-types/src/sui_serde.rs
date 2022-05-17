@@ -148,7 +148,7 @@ where
 }
 
 pub trait Encoding {
-    fn decode(s: &String) -> Result<Vec<u8>, anyhow::Error>;
+    fn decode(s: &str) -> Result<Vec<u8>, anyhow::Error>;
     fn encode<T: AsRef<[u8]>>(data: T) -> String;
 }
 
@@ -178,7 +178,7 @@ impl Base64 {
 }
 
 impl Encoding for Hex {
-    fn decode(s: &String) -> Result<Vec<u8>, anyhow::Error> {
+    fn decode(s: &str) -> Result<Vec<u8>, anyhow::Error> {
         decode_bytes_hex(s)
     }
 
@@ -187,7 +187,7 @@ impl Encoding for Hex {
     }
 }
 impl Encoding for Base64 {
-    fn decode(s: &String) -> Result<Vec<u8>, anyhow::Error> {
+    fn decode(s: &str) -> Result<Vec<u8>, anyhow::Error> {
         base64ct::Base64::decode_vec(s).map_err(|e| anyhow!(e))
     }
 

@@ -11,7 +11,6 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::MoveObject;
 use sui_types::sui_serde::Base64;
-use sui_types::sui_serde::Encoding;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 use crate::gateway_types::{SuiMoveStruct, SuiMoveValue};
