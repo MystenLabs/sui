@@ -516,8 +516,10 @@ fn test_convert_number_array_from_bcs() {
 
 #[test]
 fn test_from_str() {
+    // test number
     let test = SuiJsonValue::from_str("10000").unwrap();
     assert!(test.0.is_number());
+    // Test array
     let test = SuiJsonValue::from_str("[10,10,10,10]").unwrap();
     assert!(test.0.is_array());
     assert_eq!(
@@ -529,8 +531,10 @@ fn test_from_str() {
             .map(|value| value.as_u64().unwrap().to_u8().unwrap())
             .collect::<Vec<_>>()
     );
+    // test bool
     let test = SuiJsonValue::from_str("true").unwrap();
     assert!(test.0.is_boolean());
+
     // test id without quotes
     let object_id = ObjectID::random().to_hex_literal();
     let test = SuiJsonValue::from_str(&object_id).unwrap();
@@ -538,11 +542,17 @@ fn test_from_str() {
     assert_eq!(object_id, test.0.as_str().unwrap());
 
     // test id with quotes
-    let test = SuiJsonValue::from_str(&format!("{}", &object_id)).unwrap();
+    let test = SuiJsonValue::from_str(&format!("\"{}\"", &object_id)).unwrap();
     assert!(test.0.is_string());
     assert_eq!(object_id, test.0.as_str().unwrap());
 
+    // test string without quotes
     let test = SuiJsonValue::from_str("Some string").unwrap();
+    assert!(test.0.is_string());
+    assert_eq!("Some string", test.0.as_str().unwrap());
+
+    // test string with quotes
+    let test = SuiJsonValue::from_str("\"Some string\"").unwrap();
     assert!(test.0.is_string());
     assert_eq!("Some string", test.0.as_str().unwrap())
 }
