@@ -18,6 +18,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 
+use colored::Colorize;
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
@@ -99,9 +100,9 @@ pub struct SplitCoinResponse {
 impl Display for SplitCoinResponse {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
-        writeln!(writer, "----- Certificate ----")?;
+        writeln!(writer, "{}", "----- Certificate ----".bold())?;
         write!(writer, "{}", self.certificate)?;
-        writeln!(writer, "----- Split Coin Results ----")?;
+        writeln!(writer, "{}", "----- Split Coin Results ----".bold())?;
 
         let coin = GasCoin::try_from(&self.updated_coin).map_err(fmt::Error::custom)?;
         writeln!(writer, "Updated Coin : {}", coin)?;
@@ -135,9 +136,9 @@ pub struct MergeCoinResponse {
 impl Display for MergeCoinResponse {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
-        writeln!(writer, "----- Certificate ----")?;
+        writeln!(writer, "{}", "----- Certificate ----".bold())?;
         write!(writer, "{}", self.certificate)?;
-        writeln!(writer, "----- Merge Coin Results ----")?;
+        writeln!(writer, "{}", "----- Merge Coin Results ----".bold())?;
 
         let coin = GasCoin::try_from(&self.updated_coin).map_err(fmt::Error::custom)?;
         writeln!(writer, "Updated Coin : {}", coin)?;
@@ -638,14 +639,14 @@ impl Display for SuiTransactionKind {
                 writeln!(writer, "Recipient : {}", t.recipient)?;
                 writeln!(writer, "Object ID : {}", t.object_ref.object_id)?;
                 writeln!(writer, "Version : {:?}", t.object_ref.version)?;
-                writeln!(
+                write!(
                     writer,
                     "Object Digest : {}",
                     Base64::encode(t.object_ref.digest)
                 )?;
             }
             Self::Publish(_p) => {
-                writeln!(writer, "Transaction Kind : Publish")?;
+                write!(writer, "Transaction Kind : Publish")?;
             }
             Self::Call(c) => {
                 writeln!(writer, "Transaction Kind : Call")?;
@@ -657,7 +658,7 @@ impl Display for SuiTransactionKind {
                 writeln!(writer, "Module : {}", c.module)?;
                 writeln!(writer, "Function : {}", c.function)?;
                 writeln!(writer, "Arguments : {:?}", c.arguments)?;
-                writeln!(writer, "Type Arguments : {:?}", c.type_arguments)?;
+                write!(writer, "Type Arguments : {:?}", c.type_arguments)?;
             }
         }
         write!(f, "{}", writer)
