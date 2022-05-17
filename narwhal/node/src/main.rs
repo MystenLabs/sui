@@ -22,7 +22,7 @@ use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::mpsc::{channel, Receiver};
 use tracing::subscriber::set_global_default;
-use tracing_subscriber::filter::EnvFilter;
+use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -63,9 +63,20 @@ async fn main() -> Result<()> {
         3 => "debug",
         _ => "trace",
     };
+    // network is very verbose, so we require more 'v's
+    let network_tracing_level = match matches.occurrences_of("v") {
+        0 | 1 => "error",
+        2 => "warn",
+        3 => "info",
+        4 => "debug",
+        _ => "trace",
+    };
 
-    let env_filter =
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(tracing_level));
+    let filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .parse(format!("{tracing_level},h2::codec={network_tracing_level}"))?;
+
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or(filter);
     cfg_if::cfg_if! {
         if #[cfg(feature = "benchmark")] {
             let timer = tracing_subscriber::fmt::time::UtcTime::rfc_3339();
