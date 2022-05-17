@@ -63,7 +63,7 @@ async fn main() -> Result<()> {
         3 => "debug",
         _ => "trace",
     };
-    // network is very verbose, so we require more 'v's
+    // some of the network is very verbose, so we require more 'v's
     let network_tracing_level = match matches.occurrences_of("v") {
         0 | 1 => "error",
         2 => "warn",
@@ -72,9 +72,20 @@ async fn main() -> Result<()> {
         _ => "trace",
     };
 
+    // In benchmarks, transactions are not deserializable => many errors at the debug level
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "benchmark")] {
+            let custom_directive = "executor::core=info";
+        } else {
+            let custom_directive = "";
+        }
+    }
+
     let filter = EnvFilter::builder()
         .with_default_directive(LevelFilter::INFO.into())
-        .parse(format!("{tracing_level},h2::codec={network_tracing_level}"))?;
+        .parse(format!(
+            "{tracing_level},h2::codec={network_tracing_level},{custom_directive}"
+        ))?;
 
     let env_filter = EnvFilter::try_from_default_env().unwrap_or(filter);
     cfg_if::cfg_if! {
