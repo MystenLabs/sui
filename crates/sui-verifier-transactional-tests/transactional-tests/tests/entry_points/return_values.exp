@@ -1,0 +1,13 @@
+processed 4 tasks
+
+task 0 'publish'. lines 4-11:
+Error: Failed to verify the Move module, reason: "Entry function foo cannot have return values".
+
+task 1 'publish'. lines 13-20:
+Error: Failed to verify the Move module, reason: "Entry function foo cannot have return values".
+
+task 2 'publish'. lines 22-29:
+Error: Failed to verify the Move module, reason: "Entry function foo cannot have return values".
+
+task 3 'publish'. lines 32-39:
+Error: Failed to verify the Move module, reason: "Entry function foo cannot have return values".
