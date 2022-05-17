@@ -15,13 +15,14 @@ export default function NetworkSelect() {
     );
     const closeModal = useCallback(() => setModuleOpen(false), [setModuleOpen]);
 
-    const switchNetwork = useCallback(
-        () =>
-            setNetwork(
-                network === Network.Devnet ? Network.Local : Network.Devnet
-            ),
-        [setNetwork, network]
+    const chooseNetwork = useCallback(
+        (specified: Network) => () =>
+            network !== specified ? setNetwork(specified) : null,
+        [network, setNetwork]
     );
+
+    const networkStyle = (iconNetwork: Network) =>
+        network === iconNetwork ? styles.active : styles.inactive;
 
     return (
         <div>
@@ -36,7 +37,18 @@ export default function NetworkSelect() {
                         &times;
                     </div>
                     <h2>Choose a Network</h2>
-                    <div onClick={switchNetwork}>Switch Network</div>
+                    <div
+                        onClick={chooseNetwork(Network.Devnet)}
+                        className={networkStyle(Network.Devnet)}
+                    >
+                        Devnet
+                    </div>
+                    <div
+                        onClick={chooseNetwork(Network.Local)}
+                        className={networkStyle(Network.Local)}
+                    >
+                        Local
+                    </div>
                 </div>
                 <div className={styles.detailsbg} onClick={closeModal}></div>
             </div>

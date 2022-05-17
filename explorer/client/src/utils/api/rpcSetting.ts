@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 export enum Network {
-    Local = 'local',
-    Devnet = 'devnet',
+    Local = 'Local',
+    Devnet = 'Devnet',
 }
 
 const tryGetRpcParam = (): string | null => {

@@ -18,6 +18,14 @@ div.detailsbg {
     @apply absolute top-0 left-0 w-full h-full bg-gray-500 z-20 opacity-50;
 }
 
+div.inactive {
+    @apply p-2 my-2 cursor-pointer hover:bg-green-500 hover:text-offblack w-[30vw] mx-auto rounded-lg;
+}
+
+div.active {
+    @apply p-2 my-2 bg-sui text-offblack w-[30vw] mx-auto rounded-lg;
+}
+
 .remove {
     @apply hidden;
 }
