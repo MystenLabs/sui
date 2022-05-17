@@ -390,7 +390,8 @@ where
             "Setting transaction lock"
         );
         self.store
-            .set_transaction_lock(mutable_input_objects, transaction)
+            .lock_and_write_transaction(mutable_input_objects, transaction)
+            .await
     }
 
     /// Make sure all objects in the input exist in the gateway store.
@@ -480,14 +481,16 @@ where
         let mutated_objects = self
             .download_objects_from_authorities(mutated_object_refs)
             .await?;
-        self.store.update_gateway_state(
-            all_objects,
-            mutated_objects,
-            new_certificate.clone(),
-            effects.clone().to_unsigned_effects(),
-            self.next_tx_seq_number
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-        )?;
+        self.store
+            .update_gateway_state(
+                all_objects,
+                mutated_objects,
+                new_certificate.clone(),
+                effects.clone().to_unsigned_effects(),
+                self.next_tx_seq_number
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+            )
+            .await?;
 
         Ok((new_certificate, effects))
     }
@@ -499,7 +502,7 @@ where
             if local_object.is_none()
                 || &local_object.unwrap().compute_object_reference() != obj_ref
             {
-                self.store.insert_object_direct(*obj_ref, object)?;
+                self.store.insert_object_direct(*obj_ref, object).await?;
             }
         }
         debug!(?result, "Downloaded object from authorities");
@@ -820,7 +823,6 @@ where
                 error!(
                     num_retries = MAX_NUM_TX_RETRIES,
                     ?tx_digest,
-                    ?tx,
                     "All transaction retries failed"
                 );
                 // Okay to unwrap since we checked that this is an error
@@ -832,7 +834,7 @@ where
             debug!(
                 remaining_retries,
                 ?tx_digest,
-                ?tx,
+                ?res,
                 "Retrying failed transaction"
             );
 
@@ -914,7 +916,8 @@ where
 
         for (object, _option_layout, _option_cert) in active_object_certs {
             self.store
-                .insert_object_direct(object.compute_object_reference(), &object)?;
+                .insert_object_direct(object.compute_object_reference(), &object)
+                .await?;
         }
 
         Ok(())

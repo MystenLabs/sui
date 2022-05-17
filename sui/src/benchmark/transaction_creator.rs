@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::benchmark::validator_preparer::ValidatorPreparer;
+use crate::benchmark::validator_preparer::{get_multithread_runtime, ValidatorPreparer};
 use move_core_types::{account_address::AccountAddress, ident_str};
 use rayon::prelude::*;
 use sui_config::NetworkConfig;
@@ -171,7 +171,11 @@ impl TransactionCreator {
             &validator_preparer.network_config,
         );
 
-        validator_preparer.update_objects_for_validator(txn_objects, address);
+        get_multithread_runtime().block_on(async move {
+            validator_preparer
+                .update_objects_for_validator(txn_objects, address)
+                .await;
+        });
 
         transactions
     }

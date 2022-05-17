@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use sui_types::crypto::PublicKeyBytes;
 use sui_types::{base_types::*, committee::*, fp_ensure};
+use tracing::info;
 
 use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
 use sui_types::{
@@ -229,11 +230,8 @@ impl<C> SafeClient<C> {
 
     /// This function is used by the higher level authority logic to report an
     /// error that could be due to this authority.
-    pub fn report_client_error(&self, _error: SuiError) {
-        // TODO: At a minimum we log this error along the authority name, and potentially
-        // in case of strong evidence of byzantine behaviour we could share this error
-        // with the rest of the network, or de-prioritize requests to this authority given
-        // weaker evidence.
+    pub fn report_client_error(&self, error: SuiError) {
+        info!(?error, authority =? self.address, "Client error");
     }
 }
 

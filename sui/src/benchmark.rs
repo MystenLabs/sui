@@ -8,7 +8,7 @@ use crate::benchmark::{
         calculate_throughput, check_transaction_response, send_tx_chunks, FixedRateLoadGenerator,
     },
     transaction_creator::TransactionCreator,
-    validator_preparer::ValidatorPreparer,
+    validator_preparer::{get_multithread_runtime, ValidatorPreparer},
 };
 use futures::{join, StreamExt};
 use multiaddr::Multiaddr;
@@ -19,7 +19,6 @@ use sui_types::{
     batch::UpdateItem,
     messages::{BatchInfoRequest, BatchInfoResponseItem},
 };
-use tokio::runtime::{Builder, Runtime};
 use tracing::{error, info};
 
 pub mod bench_types;
@@ -31,7 +30,7 @@ const FOLLOWER_BATCH_SIZE: u64 = 10_000;
 
 pub fn run_benchmark(benchmark: Benchmark) -> BenchmarkResult {
     // Only microbenchmark is supported
-    info!("benchmark : {:?}", benchmark);
+    info!(?benchmark, "benchmark");
     BenchmarkResult::MicroBenchmark(run_microbenchmark(benchmark))
 }
 
@@ -257,13 +256,4 @@ async fn run_follower(address: Multiaddr) {
             }
         }
     });
-}
-
-fn get_multithread_runtime() -> Runtime {
-    Builder::new_multi_thread()
-        .enable_all()
-        .thread_stack_size(32 * 1024 * 1024)
-        .worker_threads(usize::min(num_cpus::get(), 24))
-        .build()
-        .unwrap()
 }

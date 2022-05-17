@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use sui_adapter::genesis;
 use sui_types::{base_types::SequenceNumber, crypto::get_key_pair, object::Object};
-use tracing_test::traced_test;
 
 use super::*;
 use crate::{
@@ -70,7 +69,6 @@ pub async fn test_gossip() {
 }
 
 #[tokio::test]
-#[traced_test]
 pub async fn test_gossip_no_network() {
     info!("Start running test");
 
@@ -114,7 +112,4 @@ pub async fn test_gossip_no_network() {
     // Let the helper tasks start
     tokio::task::yield_now().await;
     tokio::time::sleep(Duration::from_secs(10)).await;
-
-    // There have been timeouts and as a result the logs contain backoff messages
-    assert!(logs_contain("Waiting for 3.99"));
 }

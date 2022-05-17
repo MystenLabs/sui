@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use move_core_types::{account_address::AccountAddress, ident_str};
+use once_cell::sync::Lazy;
 use signature::Signer;
 
 use sui_adapter::genesis;
@@ -29,12 +30,16 @@ pub fn authority_genesis_objects(
     objects
 }
 
+static LOGGING_INIT: Lazy<()> = Lazy::new(tracing_subscriber::fmt::init);
+
 pub async fn init_local_authorities(
     genesis_objects: Vec<Vec<Object>>,
 ) -> (
     AuthorityAggregator<LocalAuthorityClient>,
     Vec<Arc<AuthorityState>>,
 ) {
+    #[allow(clippy::no_effect)]
+    *LOGGING_INIT; // Initialize logging if needed
     let mut key_pairs = Vec::new();
     let mut voting_rights = BTreeMap::new();
     for _ in 0..genesis_objects.len() {
@@ -642,7 +647,7 @@ async fn test_sync_all_owned_objects() {
 }
 
 #[tokio::test]
-async fn test_process_transaction() {
+async fn test_process_transaction1() {
     let (addr1, key1) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
@@ -682,9 +687,24 @@ async fn test_process_transaction() {
         .await
         .unwrap();
 
-    // The transaction still only has 3 votes, as only these are needed.
+    // Check which authorities has successfully processed the cert.
+    // (NOTE: this method gets the TxInfoResponse from each authority, then reconstructs the cert)
     let cert2 = extract_cert(&authority_clients, &authorities.committee, create2.digest()).await;
     assert_eq!(3, cert2.auth_sign_info.signatures.len());
+}
+
+async fn get_owned_objects(
+    authorities: &AuthorityAggregator<LocalAuthorityClient>,
+    addr: SuiAddress,
+) -> BTreeMap<ObjectRef, Vec<PublicKeyBytes>> {
+    let (owned_objects, _) = authorities
+        .get_all_owned_objects(addr, Duration::from_secs(10))
+        .await
+        .unwrap();
+
+    // As a result, we have 2 gas objects and 1 created object.
+    dbg!(&owned_objects);
+    owned_objects
 }
 
 #[tokio::test]
@@ -719,6 +739,7 @@ async fn test_process_certificate() {
     // Check the new object is at version 1
     let new_object_version = authorities.get_latest_sequence_number(new_ref_1.0).await;
     assert_eq!(SequenceNumber::from(1), new_object_version);
+    get_owned_objects(&authorities, addr1).await;
 
     // Make a schedule of transactions
     let gas_ref_set = get_latest_ref(authority_clients[0], gas_object1.id()).await;
@@ -730,6 +751,8 @@ async fn test_process_certificate() {
     do_transaction(authority_clients[2], &create2).await;
 
     let cert2 = extract_cert(&authority_clients, &authorities.committee, create2.digest()).await;
+    println!("Hey before process_certificate");
+    get_owned_objects(&authorities, addr1).await;
 
     // Test: process the certificate, including bring up to date authority 3.
     //       which is 2 certs behind.
@@ -738,12 +761,8 @@ async fn test_process_certificate() {
         .await
         .unwrap();
 
-    let (owned_object, _) = authorities
-        .get_all_owned_objects(addr1, Duration::from_secs(10))
-        .await
-        .unwrap();
-
     // As a result, we have 2 gas objects and 1 created object.
+    let owned_object = get_owned_objects(&authorities, addr1).await;
     assert_eq!(3, owned_object.len());
     // Check this is the latest version.
     let new_object_version = authorities.get_latest_sequence_number(new_ref_1.0).await;

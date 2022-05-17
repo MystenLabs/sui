@@ -18,7 +18,7 @@ use sui_types::{
     object::Object,
     storage::{BackingPackageStore, Storage},
 };
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, trace};
 
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
 pub fn execute_transaction_to_effects<S: BackingPackageStore>(
@@ -95,6 +95,7 @@ fn execute_transaction<S: BackingPackageStore>(
         .get(&gas_object_id)
         .expect("We constructed the object map so it should always have the gas object id")
         .clone();
+    trace!(?gas_object_id, "Obtained gas object");
 
     // We must charge object read gas inside here during transaction execution, because if this fails
     // we must still ensure an effect is committed and all objects versions incremented.
@@ -180,6 +181,7 @@ fn execute_transaction<S: BackingPackageStore>(
     let gas_used = cost_summary.gas_used();
     let gas_rebate = cost_summary.storage_rebate;
     gas::deduct_gas(&mut gas_object, gas_used, gas_rebate);
+    trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
     temporary_store.write_object(gas_object);
 
     // TODO: Return cost_summary so that the detailed summary exists in TransactionEffects for

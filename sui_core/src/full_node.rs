@@ -69,7 +69,10 @@ where
             if local_object.is_none()
                 || &local_object.unwrap().compute_object_reference() != obj_ref
             {
-                self.state.store.insert_object_direct(*obj_ref, object)?;
+                self.state
+                    .store
+                    .insert_object_direct(*obj_ref, object)
+                    .await?;
             }
         }
         debug!(?result, "Downloaded object from authorities");
