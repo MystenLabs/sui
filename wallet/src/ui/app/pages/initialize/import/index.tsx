@@ -1,10 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { validateMnemonic } from 'bip39-light';
 import { useCallback, useState } from 'react';
 
-import { normalizeMnemonics } from '_shared/cryptography/mnemonics';
+import {
+    normalizeMnemonics,
+    validateMnemonics,
+} from '_shared/cryptography/mnemonics';
 import { useAppDispatch, useAppSelector } from '_src/ui/app/hooks';
 import { createMnemonic, setMnemonic } from '_src/ui/app/redux/slices/account';
 
@@ -24,7 +26,7 @@ const ImportPage = () => {
     const onHandleInputBlur = useCallback(() => {
         const adjMnemonic = normalizeMnemonics(mnemonicInput);
         setMnemonicInput(adjMnemonic);
-        setMnemonicValid(validateMnemonic(adjMnemonic));
+        setMnemonicValid(validateMnemonics(adjMnemonic));
     }, [mnemonicInput]);
     const createInProgress = useAppSelector(({ account }) => account.creating);
     const dispatch = useAppDispatch();
@@ -52,7 +54,7 @@ const ImportPage = () => {
             <button
                 type="button"
                 className="btn"
-                disabled={!mnemonicInput || createInProgress}
+                disabled={!mnemonicInput || createInProgress || !mnemonicValid}
                 onClick={onHandleImport}
             >
                 Import
