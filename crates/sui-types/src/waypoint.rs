@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::{Deserialize, Serialize};
-use std::borrow::Borrow;
+use std::convert::AsRef;
 use std::fmt::Debug;
 use thiserror::Error;
 
@@ -52,9 +52,9 @@ impl Accumulator {
     /// Insert one item in the accumulator
     pub fn insert<I>(&mut self, item: &I)
     where
-        I: Borrow<[u8]>,
+        I: AsRef<[u8]>,
     {
-        let point = RistrettoPoint::hash_from_bytes::<Sha512>(item.borrow());
+        let point = RistrettoPoint::hash_from_bytes::<Sha512>(item.as_ref());
         self.accumulator += point;
     }
 
@@ -62,7 +62,7 @@ impl Accumulator {
     pub fn insert_all<'a, I, It>(&'a mut self, items: It)
     where
         It: Iterator<Item = &'a I>,
-        I: 'a + Borrow<[u8]>,
+        I: 'a + AsRef<[u8]>,
     {
         for i in items {
             self.insert(i);
@@ -107,7 +107,7 @@ where
 impl<K, I> WaypointWithItems<K, I>
 where
     K: Clone,
-    I: Borrow<[u8]> + Ord,
+    I: AsRef<[u8]> + Ord,
 {
     pub fn new(key: K) -> WaypointWithItems<K, I> {
         WaypointWithItems {
@@ -132,7 +132,7 @@ where
 pub struct WaypointDiff<K, I>
 where
     K: Clone,
-    I: Borrow<[u8]> + Ord,
+    I: AsRef<[u8]> + Ord,
 {
     pub first: WaypointWithItems<K, I>,
     pub second: WaypointWithItems<K, I>,
@@ -141,7 +141,7 @@ where
 impl<K, I> WaypointDiff<K, I>
 where
     K: Clone,
-    I: Borrow<[u8]> + Ord,
+    I: AsRef<[u8]> + Ord,
 {
     pub fn new<V1, V2>(
         first_key: K,
@@ -203,7 +203,7 @@ where
 pub struct GlobalCheckpoint<K, I>
 where
     K: Clone,
-    I: Borrow<[u8]> + Ord,
+    I: AsRef<[u8]> + Ord,
 {
     pub reference_waypoint: Waypoint,
     pub authority_waypoints: BTreeMap<K, WaypointWithItems<K, I>>,
@@ -212,7 +212,7 @@ where
 impl<K, I> Default for GlobalCheckpoint<K, I>
 where
     K: Eq + Ord + Clone,
-    I: Borrow<[u8]> + Ord + Clone,
+    I: AsRef<[u8]> + Ord + Clone,
 {
     fn default() -> Self {
         Self::new()
@@ -222,7 +222,7 @@ where
 impl<K, I> GlobalCheckpoint<K, I>
 where
     K: Eq + Ord + Clone,
-    I: Borrow<[u8]> + Ord + Clone,
+    I: AsRef<[u8]> + Ord + Clone,
 {
     /// Initializes an empty global checkpoint at a specific
     /// sequence number.
@@ -408,7 +408,7 @@ where
 
 impl<I> GlobalCheckpoint<AuthorityName, I>
 where
-    I: Borrow<[u8]> + Ord,
+    I: AsRef<[u8]> + Ord,
 {
     /// In case keys are authority names we can check if the set of
     /// authorities represented in this checkpoint represent a quorum
