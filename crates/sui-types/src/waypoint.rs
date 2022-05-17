@@ -95,7 +95,6 @@ pub type Waypoint = Accumulator;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WaypointWithItems<K, I>
 where
-    K: Clone,
     I: Ord,
 {
     pub key: K,
@@ -106,7 +105,6 @@ where
 
 impl<K, I> WaypointWithItems<K, I>
 where
-    K: Clone,
     I: AsRef<[u8]> + Ord,
 {
     pub fn new(key: K) -> WaypointWithItems<K, I> {
@@ -131,7 +129,6 @@ where
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WaypointDiff<K, I>
 where
-    K: Clone,
     I: AsRef<[u8]> + Ord,
 {
     pub first: WaypointWithItems<K, I>,
@@ -140,7 +137,6 @@ where
 
 impl<K, I> WaypointDiff<K, I>
 where
-    K: Clone,
     I: AsRef<[u8]> + Ord,
 {
     pub fn new<V1, V2>(
@@ -202,8 +198,7 @@ where
 #[derive(Clone)]
 pub struct GlobalCheckpoint<K, I>
 where
-    K: Clone,
-    I: AsRef<[u8]> + Ord,
+    I: Ord,
 {
     pub reference_waypoint: Waypoint,
     pub authority_waypoints: BTreeMap<K, WaypointWithItems<K, I>>,
