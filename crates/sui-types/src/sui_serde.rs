@@ -72,6 +72,13 @@ where
     {
         if deserializer.is_human_readable() {
             let value = E::deserialize_as(deserializer)?;
+            if value.len() != N {
+                return Err(D::Error::custom(anyhow!(
+                    "invalid array length {}, expecting {}",
+                    value.len(),
+                    N
+                )));
+            }
             let mut array = [0u8; N];
             array.copy_from_slice(&value[..N]);
             Ok(array)
@@ -141,18 +148,28 @@ where
 }
 
 pub trait Encoding {
-    fn decode(s: String) -> Result<Vec<u8>, anyhow::Error>;
+    fn decode(s: &str) -> Result<Vec<u8>, anyhow::Error>;
     fn encode<T: AsRef<[u8]>>(data: T) -> String;
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
-pub struct Hex(pub String);
+pub struct Hex(String);
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, JsonSchema)]
-pub struct Base64(pub String);
+#[serde(try_from = "String")]
+pub struct Base64(String);
+
+impl TryFrom<String> for Base64 {
+    type Error = anyhow::Error;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        // Make sure the value is valid base64 string.
+        Base64::decode(&value)?;
+        Ok(Self(value))
+    }
+}
 
 impl Base64 {
     pub fn to_vec(self) -> Result<Vec<u8>, anyhow::Error> {
-        Self::decode(self.0)
+        Self::decode(&self.0)
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Self {
@@ -161,8 +178,8 @@ impl Base64 {
 }
 
 impl Encoding for Hex {
-    fn decode(s: String) -> Result<Vec<u8>, anyhow::Error> {
-        decode_bytes_hex(&s)
+    fn decode(s: &str) -> Result<Vec<u8>, anyhow::Error> {
+        decode_bytes_hex(s)
     }
 
     fn encode<T: AsRef<[u8]>>(data: T) -> String {
@@ -170,8 +187,8 @@ impl Encoding for Hex {
     }
 }
 impl Encoding for Base64 {
-    fn decode(s: String) -> Result<Vec<u8>, anyhow::Error> {
-        base64ct::Base64::decode_vec(&s).map_err(|e| anyhow!(e))
+    fn decode(s: &str) -> Result<Vec<u8>, anyhow::Error> {
+        base64ct::Base64::decode_vec(s).map_err(|e| anyhow!(e))
     }
 
     fn encode<T: AsRef<[u8]>>(data: T) -> String {
@@ -185,7 +202,7 @@ impl<'de> DeserializeAs<'de, Vec<u8>> for Base64 {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        Self::decode(s).map_err(to_custom_error::<'de, D, _>)
+        Self::decode(&s).map_err(to_custom_error::<'de, D, _>)
     }
 }
 
@@ -207,7 +224,7 @@ impl<'de> DeserializeAs<'de, Vec<u8>> for Hex {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        Self::decode(s).map_err(to_custom_error::<'de, D, _>)
+        Self::decode(&s).map_err(to_custom_error::<'de, D, _>)
     }
 }
 
