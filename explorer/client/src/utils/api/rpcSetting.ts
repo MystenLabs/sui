@@ -43,10 +43,9 @@ const ENDPOINTS = {
     devnet: 'https://gateway.devnet.sui.io:9000',
 };
 
-export function getEndpoint(): string {
+export function getEndpoint(network : 'local' | 'devnet'): string {
     const override = tryGetRpcSetting();
     if (override) return override;
-    const network = process.env.REACT_APP_DATA;
     if (network === 'local') {
         return ENDPOINTS[network];
     }

@@ -13,7 +13,7 @@ import AppRoutes from '../pages/config/AppRoutes';
 import styles from './App.module.css';
 
 function App() {
-    const [network, setNetwork] = useState('Devnet');
+    const [network, setNetwork] = useState<'local'|'devnet'>('devnet');
 
     return (
         <NetworkContext.Provider value={[network, setNetwork]}>

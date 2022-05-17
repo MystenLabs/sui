@@ -12,4 +12,4 @@ export type AddressOwner = { AddressOwner: AddressBytes };
 export type AnyVec = { vec: any[] };
 export type JsonBytes = { bytes: number[] };
 
-export const DefaultRpcClient = new JsonRpcProvider(getEndpoint());
+export const DefaultRpcClient = (network: 'local' | 'devnet') => new JsonRpcProvider(getEndpoint(network));

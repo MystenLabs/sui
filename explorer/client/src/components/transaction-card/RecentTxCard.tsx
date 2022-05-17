@@ -46,16 +46,16 @@ type TxnData = {
     From: string;
 };
 
-async function getRecentTransactions(txNum: number): Promise<TxnData[]> {
+async function getRecentTransactions(network: 'local' | 'devnet', txNum: number): Promise<TxnData[]> {
     try {
         // Get the latest transactions
-        const transactions = await rpc
+        const transactions = await rpc(network)
             .getRecentTransactions(txNum)
             .then((res: GetTxnDigestsResponse) => res);
 
         const digests = transactions.map((tx) => tx[1]);
 
-        const txLatest = await rpc
+        const txLatest = await rpc(network)
             .getTransactionWithEffectsBatch(digests)
             .then((txEffs: TransactionEffectsResponse[]) => {
                 return txEffs.map((txEff, i) => {
@@ -216,9 +216,10 @@ function LatestTxCardStatic() {
 function LatestTxCardAPI() {
     const [isLoaded, setIsLoaded] = useState(false);
     const [results, setResults] = useState(initState);
+  const [network] = useContext(NetworkContext);
     useEffect(() => {
         let isMounted = true;
-        getRecentTransactions(15)
+        getRecentTransactions(network, 15)
             .then((resp: any) => {
                 if (isMounted) {
                     setIsLoaded(true);
