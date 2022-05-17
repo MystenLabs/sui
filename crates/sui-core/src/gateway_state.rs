@@ -508,7 +508,7 @@ where
         if exec_result.is_err() && is_last_retry {
             // If we cannot successfully execute this transaction, even after all the retries,
             // we have to give up. Here we reset all transaction locks for each input object.
-            self.store.reset_transaction_lock(&owned_objects)?;
+            self.store.reset_transaction_lock(&owned_objects).await?;
         }
         exec_result
     }

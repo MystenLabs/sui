@@ -492,7 +492,9 @@ impl<
         self.parent_sync
             .insert(&object_ref, &object.previous_transaction)?;
 
-        self.lock_service.initialize_locks(vec![object_ref]).await?;
+        self.lock_service
+            .initialize_locks(&[object_ref], false /* force_reset */)
+            .await?;
 
         Ok(())
     }
@@ -530,7 +532,9 @@ impl<
             .write()?;
 
         let refs: Vec<_> = ref_and_objects.iter().map(|(oref, _)| *oref).collect();
-        self.lock_service.initialize_locks(refs).await?;
+        self.lock_service
+            .initialize_locks(&refs, false /* force_reset */)
+            .await?;
 
         Ok(())
     }
@@ -562,13 +566,10 @@ impl<
     /// This function should only be used by the gateway.
     /// It's called when we could not get a transaction to successfully execute,
     /// and have to roll back.
-    pub fn reset_transaction_lock(&self, owned_input_objects: &[ObjectRef]) -> SuiResult {
-        let lock_batch = self.transaction_lock.batch().insert_batch(
-            &self.transaction_lock,
-            owned_input_objects.iter().map(|obj_ref| (obj_ref, None)),
-        )?;
-
-        lock_batch.write()?;
+    pub async fn reset_transaction_lock(&self, owned_input_objects: &[ObjectRef]) -> SuiResult {
+        self.lock_service
+            .initialize_locks(owned_input_objects, true /* force_reset */)
+            .await?;
         Ok(())
     }
 
@@ -829,7 +830,7 @@ impl<
                     })
                     .collect();
                 self.lock_service
-                    .initialize_locks(new_locks_to_init)
+                    .initialize_locks(&new_locks_to_init, false /* force_reset */)
                     .await?;
 
                 // Remove the old lock - timing of this matters less
