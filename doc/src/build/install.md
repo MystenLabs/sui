@@ -8,7 +8,7 @@ Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
 version 1.60.0 or higher in order to build and install Sui on your machine.
 Also ensure you have `cmake` installed:
 ```shell
-which cmake
+$ which cmake
 ```
 
 > **Tip:** Assuming you have Rust Cargo, the `git` command, and a GitHub account,
