@@ -290,6 +290,7 @@ fn test_basic_args_linter_top_level() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sui_programmability/examples/nfts");
     let compiled_modules = sui_framework::build_and_verify_user_package(&path).unwrap();
     let example_package = Object::new_package(compiled_modules, TransactionDigest::genesis());
+    let example_package = example_package.data.try_as_package().unwrap();
 
     let module = Identifier::new("Geniteam").unwrap();
     let function = Identifier::new("create_monster").unwrap();
@@ -350,7 +351,7 @@ fn test_basic_args_linter_top_level() {
     .collect();
 
     let json_args =
-        resolve_move_function_args(&example_package, module.clone(), function.clone(), args)
+        resolve_move_function_args(example_package, module.clone(), function.clone(), args)
             .unwrap();
 
     assert!(!json_args.is_empty());
@@ -388,14 +389,17 @@ fn test_basic_args_linter_top_level() {
     .iter()
     .map(|q| SuiJsonValue::new(q.clone()).unwrap())
     .collect();
-    assert!(resolve_move_function_args(&example_package, module, function, args).is_err());
+    assert!(resolve_move_function_args(example_package, module, function, args).is_err());
 
     // Test with vecu8 as address
     let genesis_objs = sui_adapter::genesis::clone_genesis_packages();
     let framework_pkg = genesis_objs
         .iter()
         .find(|q| q.id() == ObjectID::from(SUI_FRAMEWORK_ADDRESS))
-        .expect("Unable to find framework object");
+        .expect("Unable to find framework object")
+        .data
+        .try_as_package()
+        .unwrap();
 
     let module = Identifier::new("ObjectBasics").unwrap();
     let function = Identifier::new("create").unwrap();
@@ -468,4 +472,41 @@ fn test_basic_args_linter_top_level() {
         args[1],
         SuiJsonCallArg::Pure(bcs::to_bytes(&AccountAddress::from(address)).unwrap())
     );
+}
+
+#[test]
+fn test_convert_address_from_bcs() {
+    let bcs_bytes = [
+        108u8, 214, 91, 255, 14, 227, 197, 199, 210, 104, 209, 187, 210, 219, 24, 72, 248, 243,
+        180, 6,
+    ];
+
+    let value = SuiJsonValue::from_bcs_bytes(&bcs_bytes).unwrap();
+    assert_eq!(
+        "0x6cd65bff0ee3c5c7d268d1bbd2db1848f8f3b406",
+        value.0.as_str().unwrap()
+    );
+}
+
+#[test]
+fn test_convert_number_from_bcs() {
+    let bcs_bytes = [160u8, 134, 1, 0, 0, 0, 0, 0];
+    let value = SuiJsonValue::from_bcs_bytes(&bcs_bytes).unwrap();
+    assert_eq!(100000, value.0.as_u64().unwrap());
+}
+
+#[test]
+fn test_convert_number_array_from_bcs() {
+    let bcs_bytes = [
+        5, 80, 195, 0, 0, 0, 0, 0, 0, 80, 195, 0, 0, 0, 0, 0, 0, 80, 195, 0, 0, 0, 0, 0, 0, 80,
+        195, 0, 0, 0, 0, 0, 0, 80, 195, 0, 0, 0, 0, 0, 0,
+    ];
+
+    let value = SuiJsonValue::from_bcs_bytes(&bcs_bytes).unwrap();
+
+    println!("{:?}", value);
+
+    for value in value.0.as_array().unwrap() {
+        assert_eq!(50000, value.as_u64().unwrap())
+    }
 }

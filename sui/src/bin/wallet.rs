@@ -24,7 +24,6 @@ use sui::{
     },
     wallet_commands::*,
 };
-use sui_core::gateway_state::gateway_responses::SwitchResponse;
 use sui_types::exit_main;
 
 const SUI: &str = "   _____       _    _       __      ____     __
@@ -228,7 +227,7 @@ async fn handle_command(
             WalletCommandResult::Objects(ref objects) => {
                 let objects = objects
                     .iter()
-                    .map(|(object_id, _, _)| format!("{object_id}"))
+                    .map(|oref| format!("{}", oref.object_id))
                     .collect::<Vec<_>>();
                 cache.insert(CacheKey::new("object", "--id"), objects.clone());
                 cache.insert(CacheKey::flag("--gas"), objects.clone());

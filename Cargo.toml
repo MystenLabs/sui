@@ -1,20 +1,20 @@
 [workspace]
 members = [
+    "crates/sui-adapter",
+    "crates/sui-adapter-transactional-tests",
     "crates/sui-config",
+    "crates/sui-faucet",
     "crates/sui-network",
+    "crates/sui-transactional-test-runner",
+    "crates/sui-types",
+    "crates/sui-verifier",
     "crates/x",
-    "faucet",
     "sui",
     "sui/open_rpc",
     "sui/open_rpc/macros",
     "sui_core",
-    "sui_programmability/adapter",
-    "sui_programmability/adapter/transactional-tests",
     "sui_programmability/framework",
-    "sui_programmability/transactional-test-runner",
-    "sui_programmability/verifier",
     "sui_storage",
-    "sui_types",
     "test_utils",
 ]
 

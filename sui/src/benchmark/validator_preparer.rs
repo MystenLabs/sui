@@ -176,7 +176,11 @@ impl ValidatorPreparer {
         sleep(Duration::from_secs(3));
     }
 
-    pub async fn update_objects_for_validator(&mut self, objects: Vec<Object>, _address: SuiAddress) {
+    pub async fn update_objects_for_validator(
+        &mut self,
+        objects: Vec<Object>,
+        _address: SuiAddress,
+    ) {
         match self.running_mode {
             RunningMode::SingleValidatorProcess => {
                 let _all_objects: Vec<ObjectConfig> = objects
