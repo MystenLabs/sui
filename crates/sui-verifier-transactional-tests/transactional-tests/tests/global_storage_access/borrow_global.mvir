@@ -1,0 +1,27 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//# publish
+module 0x0.M {
+    import 0x2.ID;
+    struct R has key { id: ID.VersionedID }
+
+    no(addr: address) acquires R {
+        label l0:
+        _ = borrow_global<R>(move(addr));
+        return;
+    }
+
+}
+
+//# publish
+module 0x0.M {
+    import 0x2.ID;
+    struct R<phantom T> has key { id: ID.VersionedID }
+
+    no<T>(addr: address) acquires R {
+        label l0:
+        _ = borrow_global<R<T>>(move(addr));
+        return;
+    }
+}
