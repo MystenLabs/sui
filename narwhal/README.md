@@ -3,6 +3,8 @@
 [![build status](https://img.shields.io/github/workflow/status/mystenlabs/narwhal/Rust/main?style=flat-square&logo=github)](https://github.com/mystenlabs/narwhal/actions)
 [![rustc](https://img.shields.io/badge/rustc-1.60+-blue?style=flat-square&logo=rust)](https://www.rust-lang.org)
 [![license](https://img.shields.io/badge/license-Apache-blue.svg?style=flat-square)](LICENSE)
+[![Narwhal Rust Crates Documentation (main)](https://img.shields.io/badge/docs-main-0f0)](https://mystenlabs.github.io/narwhal/)
+[![codecov](https://codecov.io/gh/MystenLabs/narwhal/branch/main/graph/badge.svg?token=C4bY6ovBlx)](https://codecov.io/gh/MystenLabs/narwhal)
 
 This repo provides an implementation of [Narwhal and Tusk](https://arxiv.org/pdf/2105.11827.pdf), a [DAG](https://en.wikipedia.org/wiki/Directed_acyclic_graph)-based mempool and efficient [BFT](https://en.wikipedia.org/wiki/Byzantine_fault) consensus. The codebase has been designed to be small, efficient, and easy to benchmark and modify. We're still working on making the project ready for production, but already uses real cryptography ([ed25519-](https://doc.dalek.rs/ed25519_dalek) & other signing schemes), networking ([tokio](https://docs.rs/tokio)), and storage ([rocksdb](https://docs.rs/rocksdb)).
 
