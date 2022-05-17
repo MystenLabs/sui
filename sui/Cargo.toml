@@ -58,9 +58,9 @@ move-binary-format = { git = "https://github.com/move-language/move", rev = "3d8
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
 move-unit-test = { git = "https://github.com/move-language/move", rev = "3d80936565ef39550f99b37c7c1accde74069fc5" }
 
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "a188b870eb1a4b601a58e5744290b7d56ccd4039", package = "node" }
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "a188b870eb1a4b601a58e5744290b7d56ccd4039", package = "config" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "a188b870eb1a4b601a58e5744290b7d56ccd4039", package = "crypto" }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "23745f48103656eae4a4205d0b3edd53ad8894de", package = "node" }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "23745f48103656eae4a4205d0b3edd53ad8894de", package = "config" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "23745f48103656eae4a4205d0b3edd53ad8894de", package = "crypto" }
 
 once_cell = "1.10.0"
 
