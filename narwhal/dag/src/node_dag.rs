@@ -449,7 +449,7 @@ mod tests {
                 }
             }
             // the chance of this happening is (1/2)^90
-            assert!(!compressibles.is_empty());
+            prop_assume!(!compressibles.is_empty());
 
             let mut heads = HashSet::new();
             for hash in digests {
