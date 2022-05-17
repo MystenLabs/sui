@@ -16,7 +16,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };
-use tracing::{debug, trace, Instrument};
+use tracing::{debug, info, trace, Instrument};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
@@ -97,6 +97,7 @@ where
         let mut attempted_certificates: HashSet<TransactionDigest> = HashSet::new();
 
         while let Some(target_cert) = missing_certificates.pop() {
+            debug!(?digest, authority =? destination_authority, "Running confirmation transaction for missing cert");
             match destination_client
                 .handle_confirmation_transaction(target_cert.clone())
                 .await
@@ -109,6 +110,10 @@ where
             // If we are here it means that the destination authority is missing
             // the previous certificates, so we need to read them from the source
             // authority.
+            debug!(
+                ?digest,
+                "Missing previous certificates, need to find parents from source authorities"
+            );
 
             // The first time we cannot find the cert from the destination authority
             // we try to get its dependencies. But the second time we have already tried
@@ -134,6 +139,11 @@ where
                 // we send the cert for execution. Since execution is idempotent this
                 // is ok.
 
+                trace!(
+                    ?source_authority,
+                    ?cert_digest,
+                    "Having source authority run confirmation again"
+                );
                 source_client
                     .handle_confirmation_transaction(target_cert.clone())
                     .await?
@@ -143,6 +153,11 @@ where
                 // cert must have been processed, so here we just ask for the effects
                 // of such an execution.
 
+                trace!(
+                    ?source_authority,
+                    ?cert_digest,
+                    "handle_transaction_info_request from source"
+                );
                 source_client
                     .handle_transaction_info_request(TransactionInfoRequest {
                         transaction_digest: *cert_digest,
@@ -156,7 +171,9 @@ where
                 .signed_effects
                 .ok_or(SuiError::AuthorityInformationUnavailable)?;
 
+            trace!(dependencies =? &signed_effects.effects.dependencies, "Got dependencies from source");
             for returned_digest in &signed_effects.effects.dependencies {
+                trace!(digest =? returned_digest, "Found parent of missing cert");
                 // We check that we are not processing twice the same certificate, as
                 // it would be common if two objects used by one transaction, were also both
                 // mutated by the same preceding transaction.
@@ -169,6 +186,7 @@ where
                             transaction_digest: *returned_digest,
                         })
                         .await?;
+                    trace!(?returned_digest, source =? source_authority, "Got transaction info from source");
 
                     let returned_certificate = inner_transaction_info
                         .certified_transaction
@@ -220,6 +238,9 @@ where
                 source_authorities.push(*sample_authority);
             }
         }
+        debug!(cert =? cert.certificate.digest(),
+               dest_authority =? destination_authority,
+               ?source_authorities, "Syncing certificate to dest authority");
 
         // Now try to update the destination authority sequentially using
         // the source authorities we have sampled.
@@ -228,42 +249,53 @@ where
             //       `sync_authority_source_to_destination` call a cache of
             //       certificates and parents to avoid re-downloading them.
 
-            let logic = async {
-                let res = self
-                    .sync_authority_source_to_destination(
-                        cert.clone(),
-                        source_authority,
-                        destination_authority,
-                    )
-                    .await;
+            let sync_fut = self.sync_authority_source_to_destination(
+                cert.clone(),
+                source_authority,
+                destination_authority,
+            );
 
-                if let Err(err) = &res {
-                    // We checked that the source authority has all the information
-                    // since the source has signed the certificate. Either the
-                    // source or the destination authority may be faulty.
+            // Be careful.  timeout() returning OK just means the Future completed.
+            if let Ok(inner_res) = timeout(timeout_period, sync_fut).await {
+                match inner_res {
+                    Ok(_) => {
+                        // If the updates succeeds we return, since there is no need
+                        // to try other sources.
+                        return Ok(());
+                    }
+                    // Getting here means the sync_authority_source fn finished within timeout but errored out.
+                    Err(err) => {
+                        // We checked that the source authority has all the information
+                        // since the source has signed the certificate. Either the
+                        // source or the destination authority may be faulty.
 
-                    let inner_err = SuiError::PairwiseSyncFailed {
-                        xsource: source_authority,
-                        destination: destination_authority,
-                        tx_digest: *cert.certificate.digest(),
-                        error: Box::new(err.clone()),
-                    };
+                        let inner_err = SuiError::PairwiseSyncFailed {
+                            xsource: source_authority,
+                            destination: destination_authority,
+                            tx_digest: *cert.certificate.digest(),
+                            error: Box::new(err.clone()),
+                        };
 
-                    // Report the error to both authority clients.
-                    let source_client = &self.authority_clients[&source_authority];
-                    let destination_client = &self.authority_clients[&destination_authority];
+                        // Report the error to both authority clients.
+                        let source_client = &self.authority_clients[&source_authority];
+                        let destination_client = &self.authority_clients[&destination_authority];
 
-                    source_client.report_client_error(inner_err.clone());
-                    destination_client.report_client_error(inner_err);
+                        source_client.report_client_error(inner_err.clone());
+                        destination_client.report_client_error(inner_err);
+
+                        debug!(
+                            ?source_authority,
+                            ?destination_authority,
+                            ?err,
+                            "Error from syncing authorities, retrying"
+                        );
+                    }
                 }
-
-                res
-            };
-
-            if timeout(timeout_period, logic).await.is_ok() {
-                // If the updates succeeds we return, since there is no need
-                // to try other sources.
-                return Ok(());
+            } else {
+                info!(
+                    ?timeout_period,
+                    "sync_authority_source_to_destination() timed out"
+                );
             }
 
             // If we are here it means that the update failed, either due to the
@@ -569,6 +601,7 @@ where
                         // as keys and append the authority that holds them in the values.
                         match result {
                             Ok(AccountInfoResponse { object_ids, .. }) => {
+                                trace!(?object_ids, ?name, "Got response");
                                 // Also keep a record of all authorities that responded.
                                 state.responded_authorities.push(name);
                                 // Update the map.
@@ -973,7 +1006,7 @@ where
         let state = self
             .quorum_map_then_reduce_with_timeout(
                 state,
-                |_name, client| {
+                |name, client| {
                     Box::pin(async move {
                         // Here is the per-authority logic to process a certificate:
                         // - we try to process a cert, and return Ok on success.
@@ -989,7 +1022,7 @@ where
                             ))
                         };
                         let res = handle
-                            .instrument(tracing::trace_span!("handle_cert", authority =? _name))
+                            .instrument(tracing::trace_span!("handle_cert", authority =? name))
                             .await;
 
                         if res.is_ok() {
@@ -1006,23 +1039,25 @@ where
                             return res;
                         }
 
+                        debug!(authority =? name, error =? res, ?timeout_after_quorum, "Authority out of date - syncing certificates");
                         // If we got LockErrors, we try to update the authority.
-                        let _result = self
+                        self
                             .sync_certificate_to_authority_with_timeout(
                                 ConfirmationTransaction::new(cert_ref.clone()),
-                                _name,
+                                name,
                                 timeout_after_quorum,
                                 DEFAULT_RETRIES,
                             )
-                            .instrument(tracing::trace_span!("sync_cert", authority =? _name))
-                            .await?;
+                            .instrument(tracing::trace_span!("sync_cert", authority =? name))
+                            .await
+                            .map_err(|e| { info!(err =? e, "Error from sync_certificate"); e})?;
 
                         // Now try again
                         client
                             .handle_confirmation_transaction(ConfirmationTransaction::new(
                                 cert_ref.clone(),
                             ))
-                            .instrument(tracing::trace_span!("handle_cert", authority =? _name, retry = true))
+                            .instrument(tracing::trace_span!("handle_cert_after_sync", authority =? name, retry = true))
                             .await
                     })
                 },

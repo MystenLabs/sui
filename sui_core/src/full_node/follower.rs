@@ -262,16 +262,19 @@ where
         }
 
         // TODO: is it safe to continue if some objects are missing?
-        self.state.store.update_gateway_state(
-            active_input_objects,
-            modified_objects,
-            certificate,
-            signed_effects.effects.to_unsigned_effects(),
-            // TODO: decide what to do with this
-            self.state
-                .next_tx_seq_number
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-        )?;
+        self.state
+            .store
+            .update_gateway_state(
+                active_input_objects,
+                modified_objects,
+                certificate,
+                signed_effects.effects.to_unsigned_effects(),
+                // TODO: decide what to do with this
+                self.state
+                    .next_tx_seq_number
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+            )
+            .await?;
         Ok(())
     }
 

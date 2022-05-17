@@ -5725,6 +5725,7 @@ dependencies = [
  "sui-framework",
  "sui-network",
  "sui-types",
+ "sui_storage",
  "temp_testdir",
  "tempfile",
  "test-fuzz",
@@ -5733,9 +5734,27 @@ dependencies = [
  "tokio-stream",
  "tokio-util 0.7.2",
  "tracing",
+ "tracing-subscriber 0.3.11",
  "tracing-test",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
  "types",
+]
+
+[[package]]
+name = "sui_storage"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "pretty_assertions",
+ "rocksdb",
+ "serde 1.0.137",
+ "serde_json",
+ "sui-types",
+ "tokio",
+ "tracing",
+ "tracing-subscriber 0.3.11",
+ "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
 ]
 
 [[package]]

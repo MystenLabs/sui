@@ -14,6 +14,7 @@ members = [
     "sui/open_rpc/macros",
     "sui_core",
     "sui_programmability/framework",
+    "sui_storage",
     "test_utils",
 ]
 

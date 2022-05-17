@@ -176,7 +176,11 @@ impl ValidatorPreparer {
         sleep(Duration::from_secs(3));
     }
 
-    pub fn update_objects_for_validator(&mut self, objects: Vec<Object>, _address: SuiAddress) {
+    pub async fn update_objects_for_validator(
+        &mut self,
+        objects: Vec<Object>,
+        _address: SuiAddress,
+    ) {
         match self.running_mode {
             RunningMode::SingleValidatorProcess => {
                 let _all_objects: Vec<ObjectConfig> = objects
@@ -205,6 +209,7 @@ impl ValidatorPreparer {
                 {
                     authority_store
                         .bulk_object_insert(&objects[..].iter().collect::<Vec<&Object>>())
+                        .await
                         .unwrap();
                 } else {
                     panic!("invalid validator config in local-single-validator-thread mode");
@@ -242,7 +247,7 @@ fn get_gas_value(o: &Object) -> u64 {
         .value()
 }
 
-fn get_multithread_runtime() -> Runtime {
+pub fn get_multithread_runtime() -> Runtime {
     Builder::new_multi_thread()
         .enable_all()
         .thread_stack_size(32 * 1024 * 1024)

@@ -6,15 +6,14 @@ use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
-use std::convert::TryInto;
 use std::path::Path;
+use sui_storage::LockService;
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use sui_types::object::OBJECT_START_VERSION;
-use tracing::warn;
+use tracing::trace;
 use typed_store::rocks::{DBBatch, DBMap};
-
 use typed_store::{reopen, traits::Map};
 
 pub type AuthorityStore = SuiDataStore<false, true, AuthoritySignInfo>;
@@ -47,13 +46,11 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
     #[allow(dead_code)]
     all_object_versions: DBMap<(ObjectID, SequenceNumber), Object>,
 
-    /// This is a map between object references of currently active objects that can be mutated,
-    /// and the transaction that they are lock on for use by this specific authority. Where an object
-    /// lock exists for an object version, but no transaction has been seen using it the lock is set
-    /// to None. The safety of consistent broadcast depend on each honest authority never changing
-    /// the lock once it is set. After a certificate for this object is processed it can be
-    /// forgotten.
-    transaction_lock: DBMap<ObjectRef, Option<TransactionDigest>>,
+    /// The LockService this store depends on for locking functionality
+    lock_service: LockService,
+
+    /// Internal vector of locks to manage concurrent writes to the database
+    lock_table: Vec<tokio::sync::Mutex<()>>,
 
     /// This is a an index of object references to currently existing objects, indexed by the
     /// composite key of the SuiAddress of their owner and the object ID of the object.
@@ -91,9 +88,6 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
     /// TODO: These two maps should be merged into a single one (no reason to have two).
     sequenced: DBMap<(TransactionDigest, ObjectID), SequenceNumber>,
     schedule: DBMap<ObjectID, SequenceNumber>,
-
-    /// Internal vector of locks to manage concurrent writes to the database
-    lock_table: Vec<parking_lot::Mutex<()>>,
 
     // Tables used for authority batch structure
     /// A sequence on all executed certificates and effects.
@@ -147,7 +141,6 @@ impl<
                 ("all_object_versions", &options),
                 ("transactions", &point_lookup),
                 ("owner_index", &options),
-                ("transaction_lock", &point_lookup),
                 ("certificates", &point_lookup),
                 ("parent_sync", &options),
                 ("effects", &point_lookup),
@@ -168,7 +161,6 @@ impl<
             objects,
             all_object_versions,
             owner_index,
-            transaction_lock,
             transactions,
             certificates,
             parent_sync,
@@ -182,7 +174,6 @@ impl<
             "objects";<ObjectID, Object>,
             "all_object_versions";<(ObjectID, SequenceNumber), Object>,
             "owner_index";<(SuiAddress, ObjectID), ObjectRef>,
-            "transaction_lock";<ObjectRef, Option<TransactionDigest>>,
             "transactions";<TransactionDigest, TransactionEnvelope<S>>,
             "certificates";<TransactionDigest, CertifiedTransaction>,
             "parent_sync";<ObjectRef, TransactionDigest>,
@@ -192,21 +183,28 @@ impl<
             "batches";<TxSequenceNumber, SignedBatch>,
             "last_consensus_index";<u64, ExecutionIndices>
         );
+
+        // For now, create one LockService for each SuiDataStore, and we use a specific
+        // subdir of the data store directory
+        let lockdb_path = path.as_ref().join("lockdb");
+        let lock_service =
+            LockService::new(lockdb_path, None).expect("Could not initialize lockdb");
+
         Self {
             objects,
             all_object_versions,
+            lock_service,
+            lock_table: (0..NUM_SHARDS)
+                .into_iter()
+                .map(|_| tokio::sync::Mutex::new(()))
+                .collect(),
             owner_index,
-            transaction_lock,
             transactions,
             certificates,
             parent_sync,
             effects,
             sequenced,
             schedule,
-            lock_table: (0..NUM_SHARDS)
-                .into_iter()
-                .map(|_| parking_lot::Mutex::new(()))
-                .collect(),
             executed_sequence,
             batches,
             last_consensus_index,
@@ -266,32 +264,35 @@ impl<
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
-    fn acquire_locks<'a>(
+    async fn acquire_locks(
         &self,
-        input_objects: impl Iterator<Item = &'a ObjectRef>,
-    ) -> Vec<parking_lot::MutexGuard<'_, ()>> {
+        input_objects: &[ObjectRef],
+    ) -> Vec<tokio::sync::MutexGuard<'_, ()>> {
         if !USE_LOCKS {
             return vec![];
         }
 
         let num_locks = self.lock_table.len();
         // TODO: randomize the lock mapping based on a secret to avoid DoS attacks.
-        let lock_number: BTreeSet<usize> = input_objects
+        let lock_numbers: BTreeSet<usize> = input_objects
+            .iter()
             .map(|(_, _, digest)| {
                 usize::from_le_bytes(digest.0[0..8].try_into().unwrap()) % num_locks
             })
             .collect();
         // Note: we need to iterate over the sorted unique elements, hence the use of a Set
         //       in order to prevent deadlocks when trying to acquire many locks.
-        lock_number
-            .into_iter()
-            .map(|lock_seq| self.lock_table[lock_seq].lock())
-            .collect()
+        let mut locks = Vec::new();
+        for lock_seq in lock_numbers {
+            locks.push(self.lock_table[lock_seq].lock().await);
+        }
+        locks
     }
 
     // Methods to read the store
 
     pub fn get_account_objects(&self, account: SuiAddress) -> Result<Vec<ObjectRef>, SuiError> {
+        debug!(?account, "get_account_objects");
         Ok(self
             .owner_index
             .iter()
@@ -312,14 +313,15 @@ impl<
         self.objects.multi_get(_objects).map_err(|e| e.into())
     }
 
-    /// Read a lock or returns Err(TransactionLockDoesNotExist) if the lock does not exist.
-    pub fn get_transaction_lock(
+    /// Read a transaction envelope via lock or returns Err(TransactionLockDoesNotExist) if the lock does not exist.
+    pub async fn get_transaction_envelope(
         &self,
         object_ref: &ObjectRef,
     ) -> Result<Option<TransactionEnvelope<S>>, SuiError> {
         let transaction_option = self
-            .transaction_lock
-            .get(object_ref)?
+            .lock_service
+            .get_lock(*object_ref)
+            .await?
             .ok_or(SuiError::TransactionLockDoesNotExist)?;
 
         match transaction_option {
@@ -408,21 +410,20 @@ impl<
     // Methods to mutate the store
 
     /// Insert a genesis object.
-    pub fn insert_genesis_object(&self, object: Object) -> SuiResult {
+    pub async fn insert_genesis_object(&self, object: Object) -> SuiResult {
         // We only side load objects with a genesis parent transaction.
         debug_assert!(object.previous_transaction == TransactionDigest::genesis());
         let object_ref = object.compute_object_reference();
-        self.insert_object_direct(object_ref, &object)
+        self.insert_object_direct(object_ref, &object).await
     }
 
-    /// Insert an object directly into the store, and also update relevant tables, including
-    /// initiating the transaction lock. This is used by the gateway to insert object directly.
+    /// Insert an object directly into the store, and also update relevant tables
+    /// NOTE: does not handle transaction lock.
+    /// This is used by the gateway to insert object directly.
     /// TODO: We need this today because we don't have another way to sync an account.
-    pub fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
+    pub async fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
         // Insert object
         self.objects.insert(&object_ref.0, object)?;
-
-        self.transaction_lock.get_or_insert(&object_ref, || None)?;
 
         // Update the index
         if let Some(address) = object.get_single_owner() {
@@ -433,13 +434,15 @@ impl<
         self.parent_sync
             .insert(&object_ref, &object.previous_transaction)?;
 
+        self.lock_service.initialize_locks(vec![object_ref]).await?;
+
         Ok(())
     }
 
     /// This function is used by the bench.rs script, and should not be used in other contexts
     /// In particular it does not check the old locks before inserting new ones, so the objects
     /// must be new.
-    pub fn bulk_object_insert(&self, objects: &[&Object]) -> SuiResult<()> {
+    pub async fn bulk_object_insert(&self, objects: &[&Object]) -> SuiResult<()> {
         let batch = self.objects.batch();
         let ref_and_objects: Vec<_> = objects
             .iter()
@@ -450,10 +453,6 @@ impl<
             .insert_batch(
                 &self.objects,
                 ref_and_objects.iter().map(|(oref, o)| (oref.0, **o)),
-            )?
-            .insert_batch(
-                &self.transaction_lock,
-                ref_and_objects.iter().map(|(oref, _)| (oref, None)),
             )?
             .insert_batch(
                 &self.owner_index,
@@ -470,69 +469,32 @@ impl<
             )?
             .write()?;
 
+        let refs: Vec<_> = ref_and_objects.iter().map(|(oref, _)| *oref).collect();
+        self.lock_service.initialize_locks(refs).await?;
+
         Ok(())
     }
 
-    /// Set the transaction lock to a specific transaction
-    ///
-    /// This function checks all locks exist, are either None or equal to the passed transaction
-    /// and then sets them to the transaction. Otherwise an Err is returned. Locks are set
-    /// atomically in this implementation.
-    ///
-    pub fn set_transaction_lock(
+    /// Acquires the transaction lock for a specific transaction, writing the transaction
+    /// to the transaction column family if acquiring the lock succeeds.
+    /// The lock service is used to atomically acquire locks.
+    pub async fn lock_and_write_transaction(
         &self,
         owned_input_objects: &[ObjectRef],
         transaction: TransactionEnvelope<S>,
     ) -> Result<(), SuiError> {
         let tx_digest = *transaction.digest();
-        let lock_batch = self
-            .transaction_lock
-            .batch()
-            .insert_batch(
-                &self.transaction_lock,
-                owned_input_objects
-                    .iter()
-                    .map(|obj_ref| (obj_ref, Some(tx_digest))),
-            )?
-            .insert_batch(
-                &self.transactions,
-                std::iter::once((tx_digest, transaction)),
-            )?;
 
-        // This is the critical region: testing the locks and writing the
-        // new locks must be atomic, and not writes should happen in between.
-        let mut need_write = false;
-        {
-            // Acquire the lock to ensure no one else writes when we are in here.
-            // MutexGuards are unlocked on drop (ie end of this block)
-            let _mutexes = self.acquire_locks(owned_input_objects.iter());
+        // Acquire the lock on input objects
+        self.lock_service
+            .acquire_locks(owned_input_objects.to_owned(), tx_digest)
+            .await?;
 
-            let locks = self.transaction_lock.multi_get(owned_input_objects)?;
-
-            for lock in locks {
-                // The object / version must exist, and therefore lock initialized.
-                let lock = lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
-                if let Some(previous_tx_digest) = lock {
-                    if previous_tx_digest != tx_digest {
-                        warn!(prev_tx_digest =? previous_tx_digest,
-                              cur_tx_digest =? tx_digest,
-                              "Conflicting transaction!  Lock state changed in unexpected way");
-                        return Err(SuiError::ConflictingTransaction {
-                            pending_transaction: previous_tx_digest,
-                        });
-                    }
-                } else {
-                    need_write |= true;
-                }
-            }
-
-            if need_write {
-                // Atomic write of all locks
-                lock_batch.write()?
-            }
-
-            // Implicit: drop(_mutexes);
-        } // End of critical region
+        // TODO: we should have transaction insertion be atomic with lock acquisition, or retry.
+        // For now write transactions after because if we write before, there is a chance the lock can fail
+        // and this can cause invalid transactions to be inserted in the table.
+        // https://github.com/MystenLabs/sui/issues/1990
+        self.transactions.insert(&tx_digest, &transaction)?;
 
         Ok(())
     }
@@ -541,7 +503,7 @@ impl<
     ///
     /// Internally it checks that all locks for active inputs are at the correct
     /// version, and then writes locks, objects, certificates, parents atomically.
-    pub fn update_state<BackingPackageStore>(
+    pub async fn update_state<BackingPackageStore>(
         &self,
         temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
         certificate: &CertifiedTransaction,
@@ -550,7 +512,7 @@ impl<
     ) -> SuiResult {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
-        let mut write_batch = self.transaction_lock.batch();
+        let mut write_batch = self.certificates.batch();
 
         // Store the certificate indexed by transaction digest
         let transaction_digest: &TransactionDigest = certificate.digest();
@@ -576,23 +538,25 @@ impl<
             *transaction_digest,
             sequence_number,
         )
+        .await
     }
 
     /// Persist temporary storage to DB for genesis modules
-    pub fn update_objects_state_for_genesis<BackingPackageStore>(
+    pub async fn update_objects_state_for_genesis<BackingPackageStore>(
         &self,
         temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
         transaction_digest: TransactionDigest,
     ) -> Result<(), SuiError> {
         debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
-        let write_batch = self.transaction_lock.batch();
+        let write_batch = self.certificates.batch();
         self.batch_update_objects(write_batch, temporary_store, transaction_digest, None)
+            .await
     }
 
     /// This is used by the Gateway to update its local store after a transaction succeeded
     /// on the authorities. Since we don't yet have local execution on the gateway, we will
     /// need to recreate the temporary store based on the inputs and effects to update it properly.
-    pub fn update_gateway_state(
+    pub async fn update_gateway_state(
         &self,
         active_inputs: Vec<(InputObjectKind, Object)>,
         mutated_objects: HashMap<ObjectRef, Object>,
@@ -613,7 +577,7 @@ impl<
             temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Wrap);
         }
 
-        let mut write_batch = self.transaction_lock.batch();
+        let mut write_batch = self.certificates.batch();
 
         // Store the certificate indexed by transaction digest
         write_batch = write_batch.insert_batch(
@@ -638,10 +602,11 @@ impl<
             *transaction_digest,
             Some(sequence_number),
         )
+        .await
     }
 
     /// Helper function for updating the objects in the state
-    fn batch_update_objects<BackingPackageStore>(
+    async fn batch_update_objects<BackingPackageStore>(
         &self,
         mut write_batch: DBBatch,
         temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
@@ -649,15 +614,14 @@ impl<
         seq_opt: Option<TxSequenceNumber>,
     ) -> Result<(), SuiError> {
         let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
+        trace!(written =? written.values().map(|((obj_id, ver, _), _)| (obj_id, ver)).collect::<Vec<_>>(),
+               "batch_update_objects: temp store written");
 
-        let owned_inputs = active_inputs
+        let owned_inputs: Vec<_> = active_inputs
             .iter()
-            .filter(|(id, _, _)| objects.get(id).unwrap().is_owned());
-
-        if USE_LOCKS {
-            // Archive the old lock.
-            write_batch = write_batch.delete_batch(&self.transaction_lock, owned_inputs.clone())?;
-        }
+            .filter(|(id, _, _)| objects.get(id).unwrap().is_owned())
+            .cloned()
+            .collect();
 
         // Delete objects.
         // Wrapped objects need to be deleted as well because we can no longer track their
@@ -716,20 +680,6 @@ impl<
             }),
         )?;
 
-        if USE_LOCKS {
-            // Create locks for new objects, if they are owned.
-            write_batch = write_batch.insert_batch(
-                &self.transaction_lock,
-                written.iter().filter_map(|(_, (object_ref, new_object))| {
-                    if new_object.is_owned() {
-                        Some((object_ref, None))
-                    } else {
-                        None
-                    }
-                }),
-            )?;
-        }
-
         if ALL_OBJ_VER {
             // Keep all versions of every object if ALL_OBJ_VER is true.
             write_batch = write_batch.insert_batch(
@@ -746,6 +696,7 @@ impl<
             written
                 .iter()
                 .filter_map(|(_id, (object_ref, new_object))| {
+                    trace!(?object_ref, owner =? new_object.owner, "Updating owner_index");
                     new_object
                         .get_single_owner_and_id()
                         .map(|owner_id| (owner_id, object_ref))
@@ -760,21 +711,21 @@ impl<
                 .map(|(object_id, (_, new_object))| (object_id, new_object)),
         )?;
 
-        // Update the indexes of the objects written
-
-        // This is the critical region: testing the locks and writing the
-        // new locks must be atomic, and no writes should happen in between.
+        // Need to have a critical section for now because we need to prevent execution of older
+        // certs which may overwrite newer objects with older ones.  This can be removed once we have
+        // an object storage supporting multiple object versions at once, then there is idempotency and
+        // old writes would be OK.
         {
             // Acquire the lock to ensure no one else writes when we are in here.
-            let _mutexes = self.acquire_locks(owned_inputs.clone());
+            let _mutexes = self.acquire_locks(&owned_inputs[..]).await;
 
+            // NOTE: We just check here that locks exist, not that they are locked to a specific TX.  Why?
+            // 1. Lock existence prevents re-execution of old certs when objects have been upgraded
+            // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
+            //    (But the lock should exist which means previous transactions finished)
+            // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its fine
             if USE_LOCKS {
-                // Check the locks are still active
-                // TODO: maybe we could just check if the certificate is there instead?
-                let locks = self.transaction_lock.multi_get(owned_inputs)?;
-                for object_lock in locks {
-                    object_lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
-                }
+                self.lock_service.locks_exist(owned_inputs.clone()).await?;
             }
 
             if let Some(next_seq) = seq_opt {
@@ -791,11 +742,35 @@ impl<
                 )?;
             }
 
-            // Atomic write of all locks & other data
+            // Atomic write of all data other than locks
             write_batch.write()?;
+            trace!("Finished writing batch");
+
+            if USE_LOCKS {
+                // Initialize object locks for new objects.  After this point, transactions on new objects
+                // can run.  So it is critical this is done AFTER objects are done writing.
+                // TODO: add retries https://github.com/MystenLabs/sui/issues/1993
+                let new_locks_to_init: Vec<_> = written
+                    .iter()
+                    .filter_map(|(_, (object_ref, new_object))| {
+                        if new_object.is_owned() {
+                            Some(*object_ref)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                self.lock_service
+                    .initialize_locks(new_locks_to_init)
+                    .await?;
+
+                // Remove the old lock - timing of this matters less
+                let locks_to_remove = owned_inputs;
+                self.lock_service.remove_locks(locks_to_remove).await?;
+            }
 
             // implicit: drop(_mutexes);
-        } // End of critical region
+        }
 
         Ok(())
     }

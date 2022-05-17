@@ -167,11 +167,13 @@ impl FullNodeState {
         )?;
         self.store
             .update_objects_state_for_genesis(temporary_store, ctx.digest())
+            .await
     }
 
     pub async fn insert_genesis_objects_bulk_unsafe(&self, objects: &[&Object]) {
         self.store
             .bulk_object_insert(objects)
+            .await
             .expect("TODO: propagate the error")
     }
 
