@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::authority_active::ActiveAuthority;
 use crate::authority_client::NetworkAuthorityClient;
@@ -11,6 +10,7 @@ use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusListener;
 use anyhow::{anyhow, Result};
 use futures::future::join_all;
+use parking_lot::Mutex;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -19,7 +19,6 @@ use sui_config::NetworkConfig;
 use sui_config::ValidatorConfig;
 use tokio::sync::mpsc::channel;
 use tracing::{error, info};
-use parking_lot::Mutex;
 
 pub struct SuiNetwork {
     pub spawned_authorities: Vec<AuthorityServerHandle>,
@@ -85,7 +84,7 @@ pub async fn make_server(validator_config: &ValidatorConfig) -> Result<Authority
         &checkpoints_path,
         None,
         name,
-        validator_config.committee_config().committee().clone(),
+        validator_config.committee_config().committee(),
         secret.clone(),
     )?;
 
@@ -116,7 +115,7 @@ pub async fn make_server_with_genesis(
         &checkpoints_path,
         None,
         name,
-        validator_config.committee_config().committee().clone(),
+        validator_config.committee_config().committee(),
         secret.clone(),
     )?;
 
