@@ -1,4 +1,4 @@
-import { useCallback, useContext } from 'react';
+import { useCallback, useContext, useState } from 'react';
 
 import { NetworkContext } from '../../context';
 import { Network } from '../../utils/api/DefaultRpcClient';
@@ -7,7 +7,15 @@ import styles from './Network.module.css';
 
 export default function NetworkSelect() {
     const [network, setNetwork] = useContext(NetworkContext);
-    const handleClick = useCallback(
+    const [isModuleOpen, setModuleOpen] = useState(false);
+
+    const openModal = useCallback(
+        () => (isModuleOpen ? setModuleOpen(false) : setModuleOpen(true)),
+        [isModuleOpen, setModuleOpen]
+    );
+    const closeModal = useCallback(() => setModuleOpen(false), [setModuleOpen]);
+
+    const switchNetwork = useCallback(
         () =>
             setNetwork(
                 network === Network.Devnet ? Network.Local : Network.Devnet
@@ -16,8 +24,19 @@ export default function NetworkSelect() {
     );
 
     return (
-        <div onClick={handleClick} className={styles.networkbox}>
-            {network}
+        <div>
+            <div onClick={openModal} className={styles.networkbox}>
+                {network}
+            </div>
+            <div
+                className={isModuleOpen ? styles.opennetworkbox : styles.remove}
+            >
+                <div className={styles.opennetworkdetails}>
+                    <div onClick={closeModal}>&times;</div>
+                    <div onClick={switchNetwork}>Switch Network</div>
+                </div>
+                <div className={styles.detailsbg} onClick={closeModal}></div>
+            </div>
         </div>
     );
 }

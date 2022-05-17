@@ -1,3 +1,19 @@
 .networkbox {
     @apply text-lg cursor-pointer text-offblack bg-green-500 hover:bg-green-900 hover:text-offwhite text-center rounded-lg px-2 my-2 lg:my-0 lg:w-[20vw];
 }
+
+.opennetworkbox {
+    @apply absolute top-0 right-0 w-full h-full;
+}
+
+div.opennetworkdetails {
+    @apply fixed w-[100vw] sm:w-[50vw] right-0 top-[10vh] h-full bg-offblack opacity-100 z-50;
+}
+
+div.detailsbg {
+    @apply absolute top-0 left-0 w-full h-full bg-gray-500 z-20 opacity-50;
+}
+
+.remove {
+    @apply hidden;
+}
