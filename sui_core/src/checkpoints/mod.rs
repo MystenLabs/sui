@@ -196,14 +196,8 @@ impl CheckpointStore {
         Ok(())
     }
 
-    /* TODO: Crash recovery logic.
-
-    We need to check that the highest batch processed, is the same
-    as within the authority store. If not we should also update the checkpoint
-    store with all the batches since the last batch processed.
-
-    */
-
+    /// Open a checkpoint store to use to generate checkpoints, incl the information
+    /// needed to sign new checkpoints.
     pub fn open<P: AsRef<Path>>(
         path: P,
         db_options: Option<Options>,
