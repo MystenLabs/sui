@@ -8,6 +8,7 @@ members = [
     "crates/sui-transactional-test-runner",
     "crates/sui-types",
     "crates/sui-verifier",
+    "crates/sui-verifier-transactional-tests",
     "crates/x",
     "sui",
     "sui/open_rpc",
