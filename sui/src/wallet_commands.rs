@@ -684,7 +684,7 @@ impl Display for WalletCommandResult {
                 writeln!(writer, "{}", object)?;
             }
         }
-        write!(f, "{}", writer)
+        write!(f, "{}", writer.trim_end_matches('\n'))
     }
 }
 
