@@ -32,7 +32,10 @@ export default function NetworkSelect() {
                 className={isModuleOpen ? styles.opennetworkbox : styles.remove}
             >
                 <div className={styles.opennetworkdetails}>
-                    <div onClick={closeModal}>&times;</div>
+                    <div className={styles.closeicon} onClick={closeModal}>
+                        &times;
+                    </div>
+                    <h2>Choose a Network</h2>
                     <div onClick={switchNetwork}>Switch Network</div>
                 </div>
                 <div className={styles.detailsbg} onClick={closeModal}></div>

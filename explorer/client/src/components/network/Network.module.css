@@ -3,11 +3,15 @@
 }
 
 .opennetworkbox {
-    @apply absolute top-0 right-0 w-full h-full;
+    @apply absolute top-0 right-0 w-full h-full text-center;
+}
+
+.closeicon {
+    @apply text-left pl-2 cursor-pointer w-[1rem];
 }
 
 div.opennetworkdetails {
-    @apply fixed w-[100vw] sm:w-[50vw] right-0 top-[10vh] h-full bg-offblack opacity-100 z-50;
+    @apply fixed w-[100vw] sm:w-[50vw] right-0 top-0 h-full bg-offblack opacity-100 z-50;
 }
 
 div.detailsbg {
