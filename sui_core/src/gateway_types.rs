@@ -471,6 +471,7 @@ pub enum SuiMoveValue {
     Bool(bool),
     Address(SuiAddress),
     Vector(Vec<SuiMoveValue>),
+    Bytearray(Base64),
     String(String),
     VersionedID { id: ObjectID, version: u64 },
     Struct(SuiMoveStruct),
@@ -490,7 +491,13 @@ impl Display for SuiMoveValue {
             SuiMoveValue::Address(value) => {
                 write!(writer, "{}", value)?;
             }
-            SuiMoveValue::Vector(_) => {}
+            SuiMoveValue::Vector(vec) => {
+                write!(
+                    writer,
+                    "{}",
+                    vec.iter().map(|value| format!("{value}")).join(",\n")
+                )?;
+            }
             SuiMoveValue::String(value) => {
                 write!(writer, "{}", value)?;
             }
@@ -503,9 +510,16 @@ impl Display for SuiMoveValue {
             SuiMoveValue::Option(value) => {
                 write!(writer, "{:?}", value)?;
             }
+            SuiMoveValue::Bytearray(value) => {
+                write!(
+                    writer,
+                    "{:?}",
+                    value.clone().to_vec().map_err(fmt::Error::custom)?
+                )?;
+            }
         }
 
-        write!(f, "{}", writer)
+        write!(f, "{}", writer.trim_end_matches('\n'))
     }
 }
 
@@ -529,7 +543,7 @@ impl From<MoveValue> for SuiMoveValue {
                             }
                         })
                         .collect::<Vec<_>>();
-                    return SuiMoveValue::String(Base64::encode(&bytearray));
+                    return SuiMoveValue::Bytearray(Base64::from_bytes(&bytearray));
                 }
                 SuiMoveValue::Vector(value.into_iter().map(|value| value.into()).collect())
             }
@@ -602,8 +616,8 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
         .collect::<BTreeMap<_, SuiMoveValue>>();
     match struct_name.as_str() {
         "0x2::UTF8::String" | "0x1::ASCII::String" => {
-            if let SuiMoveValue::String(bytes_string) = fields["bytes"].clone() {
-                if let Ok(bytes) = Base64::decode(bytes_string) {
+            if let SuiMoveValue::Bytearray(bytes) = fields["bytes"].clone() {
+                if let Ok(bytes) = bytes.to_vec() {
                     if let Ok(s) = String::from_utf8(bytes) {
                         return Some(SuiMoveValue::String(s));
                     }
