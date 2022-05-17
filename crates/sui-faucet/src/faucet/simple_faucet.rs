@@ -120,11 +120,7 @@ impl SimpleFaucet {
                 budget,
             )
             .await?;
-        let signature = context
-            .keystore
-            .read()
-            .unwrap()
-            .sign(&signer, &data.to_bytes())?;
+        let signature = context.keystore.sign(&signer, &data.to_bytes())?;
         let response = context
             .gateway
             .execute_transaction(Transaction::new(data, signature))
@@ -148,11 +144,7 @@ impl SimpleFaucet {
             .gateway
             .transfer_coin(signer, coin_id, Some(gas_object_id), budget, recipient)
             .await?;
-        let signature = context
-            .keystore
-            .read()
-            .unwrap()
-            .sign(&signer, &data.to_bytes())?;
+        let signature = context.keystore.sign(&signer, &data.to_bytes())?;
         let effects = context
             .gateway
             .execute_transaction(Transaction::new(data, signature))

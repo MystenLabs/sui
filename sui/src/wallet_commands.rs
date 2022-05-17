@@ -6,7 +6,6 @@ use std::{
     collections::BTreeSet,
     fmt::{Debug, Display, Formatter, Write},
     path::Path,
-    sync::{Arc, RwLock},
     time::Instant,
 };
 
@@ -243,10 +242,6 @@ pub enum WalletCommands {
     },
 }
 
-pub struct SimpleTransactionSigner {
-    pub keystore: Arc<RwLock<Box<dyn Keystore>>>,
-}
-
 impl WalletCommands {
     pub async fn execute(
         self,
@@ -266,11 +261,7 @@ impl WalletCommands {
                     .gateway
                     .publish(sender, compiled_modules, gas, gas_budget)
                     .await?;
-                let signature = context
-                    .keystore
-                    .read()
-                    .unwrap()
-                    .sign(&sender, &data.to_bytes())?;
+                let signature = context.keystore.sign(&sender, &data.to_bytes())?;
                 let response = context
                     .gateway
                     .execute_transaction(Transaction::new(data, signature))
@@ -295,7 +286,7 @@ impl WalletCommands {
                 args,
             } => {
                 let (cert, effects) = call_move(
-                    package, module, function, type_args, gas, gas_budget, args, context,
+                    package, &module, &function, type_args, gas, gas_budget, args, context,
                 )
                 .await?;
                 WalletCommandResult::Call(cert, effects)
@@ -314,11 +305,7 @@ impl WalletCommands {
                     .gateway
                     .transfer_coin(from, object_id, gas, gas_budget, to)
                     .await?;
-                let signature = context
-                    .keystore
-                    .read()
-                    .unwrap()
-                    .sign(&from, &data.to_bytes())?;
+                let signature = context.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
                     .gateway
                     .execute_transaction(Transaction::new(data, signature))
@@ -349,7 +336,7 @@ impl WalletCommands {
                 WalletCommandResult::SyncClientState
             }
             WalletCommands::NewAddress => {
-                let address = context.keystore.write().unwrap().add_random_key()?;
+                let address = context.keystore.add_random_key()?;
                 context.config.accounts.push(address);
                 context.config.save()?;
                 WalletCommandResult::NewAddress(address)
@@ -376,11 +363,7 @@ impl WalletCommands {
                     .gateway
                     .split_coin(signer, coin_id, amounts, gas, gas_budget)
                     .await?;
-                let signature = context
-                    .keystore
-                    .read()
-                    .unwrap()
-                    .sign(&signer, &data.to_bytes())?;
+                let signature = context.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
                     .gateway
                     .execute_transaction(Transaction::new(data, signature))
@@ -399,11 +382,7 @@ impl WalletCommands {
                     .gateway
                     .merge_coins(signer, primary_coin, coin_to_merge, gas, gas_budget)
                     .await?;
-                let signature = context
-                    .keystore
-                    .read()
-                    .unwrap()
-                    .sign(&signer, &data.to_bytes())?;
+                let signature = context.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
                     .gateway
                     .execute_transaction(Transaction::new(data, signature))
@@ -455,10 +434,10 @@ impl WalletCommands {
                     args.push(SuiJsonValue::new(a.clone()).unwrap());
                 }
                 let (_, effects) = call_move(
-                    &ObjectID::from(SUI_FRAMEWORK_ADDRESS),
+                    ObjectID::from(SUI_FRAMEWORK_ADDRESS),
                     "DevNetNFT",
                     "mint",
-                    &[],
+                    vec![],
                     gas,
                     gas_budget.unwrap_or(3000),
                     args,
@@ -481,7 +460,7 @@ impl WalletCommands {
 
 pub struct WalletContext {
     pub config: PersistedConfig<WalletConfig>,
-    pub keystore: Arc<RwLock<Box<dyn Keystore>>>,
+    pub keystore: Box<dyn Keystore>,
     pub gateway: GatewayClient,
 }
 
@@ -494,7 +473,7 @@ impl WalletContext {
             ))
         })?;
         let config = config.persisted(config_path);
-        let keystore = Arc::new(RwLock::new(config.keystore.init()?));
+        let keystore = config.keystore.init()?;
         let gateway = config.gateway.init()?;
         let context = Self {
             config,
@@ -677,13 +656,13 @@ impl Display for WalletCommandResult {
 }
 
 async fn call_move(
-    package: &ObjectID,
+    package: ObjectID,
     module: &str,
     function: &str,
-    type_args: &[TypeTag],
-    gas: &Option<ObjectID>,
-    gas_budget: &u64,
-    args: &[SuiJsonValue],
+    type_args: Vec<TypeTag>,
+    gas: Option<ObjectID>,
+    gas_budget: u64,
+    args: Vec<SuiJsonValue>,
     context: &mut WalletContext,
 ) -> Result<(SuiCertifiedTransaction, SuiTransactionEffects), anyhow::Error> {
     let gas_owner = context.try_get_object_owner(&gas).await?;
@@ -696,17 +675,13 @@ async fn call_move(
             package,
             module.to_string(),
             function.to_string(),
-            type_args.to_owned(),
-            args.to_vec(),
+            type_args,
+            args,
             gas,
             gas_budget,
         )
         .await?;
-    let signature = context
-        .keystore
-        .read()
-        .unwrap()
-        .sign(&sender, &data.to_bytes())?;
+    let signature = context.keystore.sign(&sender, &data.to_bytes())?;
     let transaction = Transaction::new(data, signature);
     let response = context
         .gateway
