@@ -54,6 +54,7 @@ fn test_primary_no_consensus() {
             }
         }
     }
+    let _ = child.kill();
 }
 
 #[test]
@@ -104,4 +105,5 @@ fn test_primary_with_consensus() {
             }
         }
     }
+    let _ = child.kill();
 }
