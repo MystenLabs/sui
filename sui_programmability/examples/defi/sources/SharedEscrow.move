@@ -33,7 +33,7 @@ module DeFi::SharedEscrow {
     const EAlreadyExchangedOrCancelled: u64 = 3;
 
     /// Create an escrow for exchanging goods with counterparty
-    public fun create<T: key + store, ExchangeForT: key + store>(
+    public(script) fun create<T: key + store, ExchangeForT: key + store>(
         recipient: address,
         exchange_for: ID,
         escrowed_item: T,
