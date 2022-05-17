@@ -1,8 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use self::configuration::NarwhalConfiguration;
-use self::validator::NarwhalValidator;
+use self::{configuration::NarwhalConfiguration, validator::NarwhalValidator};
 use crate::{BlockCommand, BlockRemoverCommand};
 use multiaddr::Multiaddr;
 use std::time::Duration;

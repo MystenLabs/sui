@@ -73,6 +73,12 @@ async fn test_successfully_retrieve_block() {
         .expect_get_and_synchronize_block_headers()
         .with(predicate::eq(vec![block_id]))
         .times(1)
+        .return_const(vec![Ok(certificate.clone())]);
+
+    mock_handler
+        .expect_synchronize_block_payloads()
+        .with(predicate::eq(vec![certificate.clone()]))
+        .times(1)
         .return_const(vec![Ok(certificate)]);
 
     BlockWaiter::spawn(
@@ -217,7 +223,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
 
     // AND mock the responses from the BlockSynchronizer
     let mut expected_result: Vec<Result<Certificate<Ed25519PublicKey>, handler::Error>> =
-        certificates.into_iter().map(Ok).collect();
+        certificates.clone().into_iter().map(Ok).collect();
 
     expected_result.push(Err(handler::Error::BlockNotFound {
         block_id: missing_block_id,
@@ -227,6 +233,12 @@ async fn test_successfully_retrieve_multiple_blocks() {
     mock_handler
         .expect_get_and_synchronize_block_headers()
         .with(predicate::eq(block_ids.clone()))
+        .times(1)
+        .return_const(expected_result.clone());
+
+    mock_handler
+        .expect_synchronize_block_payloads()
+        .with(predicate::eq(certificates))
         .times(1)
         .return_const(expected_result);
 
@@ -294,6 +306,12 @@ async fn test_one_pending_request_for_block_at_time() {
         .expect_get_and_synchronize_block_headers()
         .with(predicate::eq(vec![block_id]))
         .times(4)
+        .return_const(vec![Ok(certificate.clone())]);
+
+    mock_handler
+        .expect_synchronize_block_payloads()
+        .with(predicate::eq(vec![certificate.clone()]))
+        .times(4)
         .return_const(vec![Ok(certificate)]);
 
     let mut waiter = BlockWaiter {
@@ -358,6 +376,12 @@ async fn test_unlocking_pending_get_block_request_after_response() {
         .expect_get_and_synchronize_block_headers()
         .with(predicate::eq(vec![block_id]))
         .times(3)
+        .return_const(vec![Ok(certificate.clone())]);
+
+    mock_handler
+        .expect_synchronize_block_payloads()
+        .with(predicate::eq(vec![certificate.clone()]))
+        .times(3)
         .return_const(vec![Ok(certificate)]);
 
     let mut waiter = BlockWaiter {
@@ -418,6 +442,12 @@ async fn test_batch_timeout() {
     mock_handler
         .expect_get_and_synchronize_block_headers()
         .with(predicate::eq(vec![block_id]))
+        .times(1)
+        .return_const(vec![Ok(certificate.clone())]);
+
+    mock_handler
+        .expect_synchronize_block_payloads()
+        .with(predicate::eq(vec![certificate.clone()]))
         .times(1)
         .return_const(vec![Ok(certificate)]);
 

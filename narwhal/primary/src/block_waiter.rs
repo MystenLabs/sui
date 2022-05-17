@@ -10,7 +10,7 @@ use futures::{
 };
 use network::PrimaryToWorkerNetwork;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt,
     fmt::Formatter,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -136,6 +136,10 @@ type RequestKey = Vec<u8>;
 ///     }
 ///
 ///     async fn get_block_headers(&self, block_ids: Vec<CertificateDigest>) -> Vec<BlockSynchronizeResult<BlockHeader<PublicKey>>> {
+///         vec![]
+///     }
+///
+///     async fn synchronize_block_payloads(&self, certificates: Vec<Certificate<PublicKey>>) -> Vec<Result<Certificate<PublicKey>, Error>> {
 ///         vec![]
 ///     }
 ///
@@ -431,16 +435,47 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
         let mut futures = Vec::new();
         let mut ids = Vec::new();
 
+        // ensure payloads are synchronized for the found certificates
+        let found_certificates: Vec<Certificate<PublicKey>> = certificates
+            .clone()
+            .into_iter()
+            .filter(|(_, c)| c.is_some())
+            .map(|(_, c)| c.unwrap())
+            .collect();
+
+        let sync_result = self
+            .block_synchronizer_handler
+            .synchronize_block_payloads(found_certificates)
+            .await;
+        let successful_payload_sync_set = sync_result
+            .clone()
+            .into_iter()
+            .flatten()
+            .map(|c| c.digest())
+            .collect::<HashSet<CertificateDigest>>();
+
         for (id, c) in certificates {
             let (get_block_sender, get_block_receiver) = oneshot::channel();
             ids.push(id);
 
             // certificate has been found
             if let Some(certificate) = c {
-                let fut = self.get_block(id, certificate, get_block_sender).await;
+                // Proceed on getting the block only if the payload has
+                // been successfully synced.
+                if successful_payload_sync_set.contains(&id) {
+                    let fut = self.get_block(id, certificate, get_block_sender).await;
 
-                if fut.is_some() {
-                    futures.push(fut.unwrap().boxed());
+                    if let Some(f) = fut {
+                        futures.push(f.boxed());
+                    }
+                } else {
+                    // Send a batch error in this case
+                    get_block_sender
+                        .send(Err(BlockError {
+                            id,
+                            error: BlockErrorKind::BatchError,
+                        }))
+                        .expect("Couldn't send BatchError error for a GetBlocks request");
                 }
             } else {
                 // if certificate has not been found , we just want to send directly a non-found block response
@@ -471,7 +506,27 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
         sender: oneshot::Sender<BlockResult<GetBlockResponse>>,
     ) -> Option<BoxFuture<'a, BlockResult<GetBlockResponse>>> {
         match self.get_certificate(id).await {
-            Some(certificate) => self.get_block(id, certificate, sender).await,
+            Some(certificate) => {
+                // Before sending a request to fetch the block's batches, ensure that
+                // those are synchronized and available.
+                if !self
+                    .ensure_payload_is_synchronized(certificate.clone())
+                    .await
+                {
+                    // If the payload is not available or didn't manage to successfully
+                    // sync, then we want to reply with an error and return.
+                    sender
+                        .send(Err(BlockError {
+                            id,
+                            error: BlockErrorKind::BatchError,
+                        }))
+                        .expect("Couldn't send message back to sender");
+
+                    return None;
+                }
+
+                self.get_block(id, certificate, sender).await
+            }
             None => {
                 sender
                     .send(Err(BlockError {
@@ -502,7 +557,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
             return None;
         }
 
-        debug!("No pending get block for {}", id.clone());
+        debug!("No pending get block for {}", id);
 
         // Add on a vector the receivers
         let batch_receivers = self.send_batch_requests(certificate.header.clone()).await;
@@ -519,6 +574,28 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
             .push(sender);
 
         return Some(fut.boxed());
+    }
+
+    /// This method will ensure that the payload for a block is available to
+    /// the worker before going ahead to retrieve. This is done via the
+    /// block synchronizer handler which will trigger the process of syncing
+    /// if the payload is missing.
+    ///
+    /// # Returns
+    ///
+    /// `true`: If the payload was already synchronized or the synchronization
+    /// was successful
+    /// `false`: When synchronization failed
+    async fn ensure_payload_is_synchronized(&self, certificate: Certificate<PublicKey>) -> bool {
+        let sync_result = self
+            .block_synchronizer_handler
+            .synchronize_block_payloads(vec![certificate.clone()])
+            .await;
+
+        sync_result
+            .first()
+            .expect("Expected at least one result back")
+            .is_ok()
     }
 
     async fn wait_for_all_blocks(

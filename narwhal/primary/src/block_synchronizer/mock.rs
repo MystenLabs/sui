@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::block_synchronizer::{BlockHeader, BlockSynchronizeResult, Command};
-use crypto::traits::VerifyingKey;
+use crypto::{traits::VerifyingKey, Hash};
 use std::collections::HashMap;
 use tokio::sync::{
     mpsc::{channel, Receiver, Sender},
@@ -17,15 +17,33 @@ enum Core<PublicKey: VerifyingKey> {
         result: Vec<BlockSynchronizeResult<BlockHeader<PublicKey>>>,
         ready: oneshot::Sender<()>,
     },
+    SynchronizeBlockPayload {
+        block_ids: Vec<CertificateDigest>,
+        times: u32,
+        result: Vec<BlockSynchronizeResult<BlockHeader<PublicKey>>>,
+        ready: oneshot::Sender<()>,
+    },
     AssertExpectations {
         ready: oneshot::Sender<()>,
     },
 }
 
 struct MockBlockSynchronizerCore<PublicKey: VerifyingKey> {
+    /// A map that holds the expected requests for sync block headers and their
+    /// stubbed response.
     block_headers_expected_requests:
         HashMap<Vec<CertificateDigest>, (u32, Vec<BlockSynchronizeResult<BlockHeader<PublicKey>>>)>,
+
+    /// A map that holds the expected requests for sync block payload and their
+    /// stubbed response.
+    block_payload_expected_requests:
+        HashMap<Vec<CertificateDigest>, (u32, Vec<BlockSynchronizeResult<BlockHeader<PublicKey>>>)>,
+
+    /// Channel to receive the messages that are supposed to be sent to the
+    /// block synchronizer.
     rx_commands: Receiver<Command<PublicKey>>,
+
+    /// Channel to receive the commands to mock the requests.
     rx_core: Receiver<Core<PublicKey>>,
 }
 
@@ -50,7 +68,22 @@ impl<PublicKey: VerifyingKey> MockBlockSynchronizerCore<PublicKey> {
                                 respond_to.send(result).await.expect("Couldn't send message");
                             }
                         }
-                        Command::SynchronizeBlockPayload { .. } => {}
+                        Command::SynchronizeBlockPayload { certificates, respond_to } => {
+                            let block_ids = certificates.into_iter().map(|c|c.digest()).collect();
+                            let (times, results) = self
+                                .block_payload_expected_requests
+                                .remove(&block_ids)
+                                .unwrap_or_else(||panic!("{}", format!("Unexpected call received for SynchronizeBlockPayload, {:?}", block_ids).as_str()))
+                                .to_owned();
+
+                            if times > 1 {
+                                self.block_payload_expected_requests.insert(block_ids, (times - 1, results.clone()));
+                            }
+
+                            for result in results {
+                                respond_to.send(result).await.expect("Couldn't send message");
+                            }
+                        }
                     }
                 }
                 Some(command) = self.rx_core.recv() => {
@@ -62,6 +95,15 @@ impl<PublicKey: VerifyingKey> MockBlockSynchronizerCore<PublicKey> {
                             ready,
                         } => {
                             self.block_headers_expected_requests.insert(block_ids, (times, result));
+                            ready.send(()).expect("Failed to send ready message");
+                        },
+                        Core::SynchronizeBlockPayload {
+                            block_ids,
+                            times,
+                            result,
+                            ready,
+                        } => {
+                            self.block_payload_expected_requests.insert(block_ids, (times, result));
                             ready.send(()).expect("Failed to send ready message");
                         },
                         Core::AssertExpectations {ready} => {
@@ -81,6 +123,16 @@ impl<PublicKey: VerifyingKey> MockBlockSynchronizerCore<PublicKey> {
             result.push_str(
                 format!(
                     "SynchronizeBlockHeaders, ids={:?}, results={:?}",
+                    ids, results
+                )
+                .as_str(),
+            );
+        }
+
+        for (ids, results) in &self.block_payload_expected_requests {
+            result.push_str(
+                format!(
+                    "SynchronizeBlockPayload, ids={:?}, results={:?}",
                     ids, results
                 )
                 .as_str(),
@@ -109,6 +161,7 @@ impl<PublicKey: VerifyingKey> MockBlockSynchronizer<PublicKey> {
 
         let mut core = MockBlockSynchronizerCore {
             block_headers_expected_requests: HashMap::new(),
+            block_payload_expected_requests: HashMap::new(),
             rx_commands,
             rx_core,
         };
@@ -134,6 +187,33 @@ impl<PublicKey: VerifyingKey> MockBlockSynchronizer<PublicKey> {
         let (tx, rx) = oneshot::channel();
         self.tx_core
             .send(Core::SynchronizeBlockHeaders {
+                block_ids,
+                times,
+                result,
+                ready: tx,
+            })
+            .await
+            .expect("Failed to send mock expectation");
+
+        Self::await_channel(rx).await;
+    }
+
+    /// A method that allow us to mock responses for the
+    /// SynchronizeBlockPayload requests. It has to be noted that we use
+    /// the block_ids as a way to identify the expected certificates for
+    /// the request since that on its own suffice to identify them.
+    /// `block_ids`: The block_ids we expect
+    /// `results`: The results we would like to respond with
+    /// `times`: How many times we should expect to be called.
+    pub async fn expect_synchronize_block_payload(
+        &self,
+        block_ids: Vec<CertificateDigest>,
+        result: Vec<BlockSynchronizeResult<BlockHeader<PublicKey>>>,
+        times: u32,
+    ) {
+        let (tx, rx) = oneshot::channel();
+        self.tx_core
+            .send(Core::SynchronizeBlockPayload {
                 block_ids,
                 times,
                 result,

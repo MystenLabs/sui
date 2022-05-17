@@ -8,8 +8,10 @@ use crypto::{ed25519::Ed25519PublicKey, traits::ToFromBytes};
 
 use std::{array::TryFromSliceError, ops::Deref};
 
-use crate::{Batch, BatchMessage, BlockError, BlockErrorKind, CertificateDigest};
-use bytes::Bytes;
+use crate::{
+    Batch, BatchDigest, BatchMessage, BlockError, BlockErrorKind, CertificateDigest, Transaction,
+};
+use bytes::{Buf, Bytes};
 
 pub use narwhal::{
     collection_retrieval_result::RetrievalResult,
@@ -66,11 +68,36 @@ impl From<Batch> for BatchProto {
             transaction: batch
                 .0
                 .into_iter()
-                .map(|transaction| TransactionProto {
-                    transaction: Bytes::from(transaction),
-                })
+                .map(TransactionProto::from)
                 .collect::<Vec<TransactionProto>>(),
         }
+    }
+}
+
+impl From<Transaction> for TransactionProto {
+    fn from(transaction: Transaction) -> Self {
+        TransactionProto {
+            transaction: Bytes::from(transaction),
+        }
+    }
+}
+
+impl From<BatchProto> for Batch {
+    fn from(batch: BatchProto) -> Self {
+        let transactions: Vec<Vec<u8>> = batch
+            .transaction
+            .into_iter()
+            .map(|t| t.transaction.to_vec())
+            .collect();
+        Batch(transactions)
+    }
+}
+
+impl From<BatchDigestProto> for BatchDigest {
+    fn from(batch_digest: BatchDigestProto) -> Self {
+        let mut result: [u8; crypto::DIGEST_LEN] = [0; crypto::DIGEST_LEN];
+        batch_digest.digest.as_ref().copy_to_slice(&mut result);
+        BatchDigest::new(result)
     }
 }
 

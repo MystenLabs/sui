@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::worker::WorkerMessage;
-use crypto::ed25519::Ed25519PublicKey;
-use crypto::Hash;
+use crypto::{ed25519::Ed25519PublicKey, Hash};
 use store::rocks;
 use test_utils::{batch, temp_dir};
 use tokio::sync::mpsc::channel;

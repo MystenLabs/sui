@@ -1,15 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    block_synchronizer::handler::{BlockSynchronizerHandler, Error, Handler},
+    block_synchronizer::{
+        handler::{BlockSynchronizerHandler, Error, Handler},
+        SyncError,
+    },
     common::create_db_stores,
     BlockHeader, MockBlockSynchronizer,
 };
-use crypto::Hash;
+use crypto::{ed25519::Ed25519PublicKey, Hash};
 use std::{collections::HashSet, time::Duration};
 use test_utils::{certificate, fixture_header_with_payload};
 use tokio::sync::mpsc::channel;
-use types::{CertificateDigest, PrimaryMessage};
+use types::{Certificate, CertificateDigest, PrimaryMessage};
 
 #[tokio::test]
 async fn test_get_and_synchronize_block_headers_when_fetched_from_storage() {
@@ -205,6 +208,74 @@ async fn test_get_and_synchronize_block_headers_timeout_on_causal_completion() {
         } else {
             match r.err().unwrap() {
                 Error::BlockDeliveryTimeout { block_id } => {
+                    assert_eq!(cert_missing.digest(), block_id)
+                }
+                _ => panic!("Unexpected error returned"),
+            }
+        }
+    }
+
+    // AND
+    mock_synchronizer.assert_expectations().await;
+}
+
+#[tokio::test]
+async fn test_synchronize_block_payload() {
+    // GIVEN
+    let (_, certificate_store, payload_store) = create_db_stores();
+    let (tx_block_synchronizer, rx_block_synchronizer) = channel(1);
+    let (tx_core, _rx_core) = channel(1);
+
+    let synchronizer = BlockSynchronizerHandler {
+        tx_block_synchronizer,
+        tx_core,
+        certificate_store: certificate_store.clone(),
+        certificate_deliver_timeout: Duration::from_millis(2_000),
+    };
+
+    // AND a certificate with payload already available
+    let cert_stored: Certificate<Ed25519PublicKey> = certificate(&fixture_header_with_payload(1));
+    for e in cert_stored.clone().header.payload {
+        payload_store.write(e, 1).await;
+    }
+
+    // AND a certificate with payload NOT available
+    let cert_missing = certificate(&fixture_header_with_payload(2));
+
+    // AND
+    let block_ids = vec![cert_stored.digest(), cert_missing.digest()];
+
+    // AND mock the block_synchronizer where the certificate is fetched
+    // from peers (fetched_from_storage = false)
+    let mock_synchronizer = MockBlockSynchronizer::new(rx_block_synchronizer);
+    let expected_result = vec![
+        Ok(BlockHeader {
+            certificate: cert_stored.clone(),
+            fetched_from_storage: true,
+        }),
+        Err(SyncError::NoResponse {
+            block_id: cert_missing.digest(),
+        }),
+    ];
+    mock_synchronizer
+        .expect_synchronize_block_payload(block_ids.clone(), expected_result, 1)
+        .await;
+
+    // WHEN
+    let result = synchronizer
+        .synchronize_block_payloads(vec![cert_stored.clone(), cert_missing.clone()])
+        .await;
+
+    // THEN
+    assert_eq!(result.len(), 2);
+
+    // AND
+    for r in result {
+        if let Ok(cert) = r {
+            assert_eq!(cert_stored.digest(), cert.digest());
+        } else {
+            match r.err().unwrap() {
+                Error::PayloadSyncError { block_id, .. } => {
                     assert_eq!(cert_missing.digest(), block_id)
                 }
                 _ => panic!("Unexpected error returned"),

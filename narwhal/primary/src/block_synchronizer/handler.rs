@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     block_synchronizer::{
-        handler::Error::{BlockDeliveryTimeout, BlockNotFound, Internal},
-        BlockSynchronizeResult, Command,
+        handler::Error::{BlockDeliveryTimeout, BlockNotFound, Internal, PayloadSyncError},
+        BlockSynchronizeResult, Command, SyncError,
     },
     BlockHeader,
 };
@@ -19,7 +19,7 @@ use tokio::{
     sync::mpsc::{channel, Sender},
     time::timeout,
 };
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, instrument, trace};
 use types::{Certificate, CertificateDigest, PrimaryMessage};
 
 #[cfg(test)]
@@ -38,6 +38,12 @@ pub enum Error {
 
     #[error("Timed out while waiting for {block_id} to become available after submitting for processing")]
     BlockDeliveryTimeout { block_id: CertificateDigest },
+
+    #[error("Payload for block with {block_id} couldn't be synchronized: {error}")]
+    PayloadSyncError {
+        block_id: CertificateDigest,
+        error: SyncError,
+    },
 }
 
 impl Error {
@@ -45,7 +51,8 @@ impl Error {
         match *self {
             BlockNotFound { block_id }
             | Internal { block_id }
-            | BlockDeliveryTimeout { block_id } => block_id,
+            | BlockDeliveryTimeout { block_id }
+            | PayloadSyncError { block_id, .. } => block_id,
         }
     }
 }
@@ -78,6 +85,13 @@ pub trait Handler<PublicKey: VerifyingKey> {
         &self,
         block_ids: Vec<CertificateDigest>,
     ) -> Vec<BlockSynchronizeResult<BlockHeader<PublicKey>>>;
+
+    /// Synchronizes the block payload for the provided certificates via the
+    /// block synchronizer and returns the result back.
+    async fn synchronize_block_payloads(
+        &self,
+        certificates: Vec<Certificate<PublicKey>>,
+    ) -> Vec<Result<Certificate<PublicKey>, Error>>;
 }
 
 /// A helper struct to allow us access the block_synchronizer in a synchronous
@@ -238,10 +252,58 @@ impl<PublicKey: VerifyingKey> Handler<PublicKey> for BlockSynchronizerHandler<Pu
         loop {
             match rx.recv().await {
                 None => {
-                    debug!("Channel closed when getting certificates, no more messages to get");
+                    trace!("Channel closed when getting certificates, no more messages to get");
                     break;
                 }
                 Some(result) => results.push(result),
+            }
+        }
+
+        results
+    }
+
+    #[instrument(level = "debug", skip_all)]
+    async fn synchronize_block_payloads(
+        &self,
+        certificates: Vec<Certificate<PublicKey>>,
+    ) -> Vec<Result<Certificate<PublicKey>, Error>> {
+        let (tx, mut rx) = channel(certificates.len());
+
+        self.tx_block_synchronizer
+            .send(Command::SynchronizeBlockPayload {
+                certificates,
+                respond_to: tx,
+            })
+            .await
+            .expect("Couldn't send message to block synchronizer");
+
+        // now wait to retrieve all the results
+        let mut results = Vec::new();
+
+        // We want to block and wait until we get all the results back.
+        loop {
+            match rx.recv().await {
+                None => {
+                    trace!("Channel closed when getting results, no more messages to get");
+                    break;
+                }
+                Some(result) => {
+                    let r = result
+                        .map(|h| h.certificate)
+                        .map_err(|e| Error::PayloadSyncError {
+                            block_id: e.block_id(),
+                            error: e,
+                        });
+
+                    if let Err(err) = r {
+                        error!(
+                            "Error for payload synchronization with block id {}, error: {err}",
+                            err.block_id()
+                        );
+                    }
+
+                    results.push(r)
+                }
             }
         }
 
