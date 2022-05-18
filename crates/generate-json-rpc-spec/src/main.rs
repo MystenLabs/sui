@@ -4,6 +4,7 @@
 use clap::ArgEnum;
 use clap::Parser;
 use pretty_assertions::assert_str_eq;
+use regex::Regex;
 use serde::Serialize;
 use serde_json::json;
 use std::fs::File;
@@ -74,18 +75,24 @@ async fn main() {
             let content = serde_json::to_string_pretty(&open_rpc).unwrap();
             println!("{content}");
             let (objects, txs) = create_response_sample().await.unwrap();
-            println!("{}", serde_json::to_string_pretty(&objects).unwrap());
-            println!("{}", serde_json::to_string_pretty(&txs).unwrap());
+            println!(
+                "{}",
+                replace_all_ids(serde_json::to_string_pretty(&objects).unwrap())
+            );
+            println!(
+                "{}",
+                replace_all_ids(serde_json::to_string_pretty(&txs).unwrap())
+            );
         }
         Action::Record => {
             let content = serde_json::to_string_pretty(&open_rpc).unwrap();
             let mut f = File::create(FILE_PATH).unwrap();
             writeln!(f, "{content}").unwrap();
             let (objects, txs) = create_response_sample().await.unwrap();
-            let content = serde_json::to_string_pretty(&objects).unwrap();
+            let content = replace_all_ids(serde_json::to_string_pretty(&objects).unwrap());
             let mut f = File::create(OBJECT_SAMPLE_FILE_PATH).unwrap();
             writeln!(f, "{content}").unwrap();
-            let content = serde_json::to_string_pretty(&txs).unwrap();
+            let content = replace_all_ids(serde_json::to_string_pretty(&txs).unwrap());
             let mut f = File::create(TRANSACTION_SAMPLE_FILE_PATH).unwrap();
             writeln!(f, "{content}").unwrap();
         }
@@ -95,6 +102,32 @@ async fn main() {
             assert_str_eq!(&reference, &content);
         }
     }
+}
+
+fn replace_all_ids(s: String) -> String {
+    let s = Regex::new(r"0x[a-f\d]{40}")
+        .unwrap()
+        .replace_all(&s, "0x1234567890abcdef101112131415161718191a1b")
+        .to_string();
+    let s = Regex::new(r#"".{43}=""#)
+        .unwrap()
+        .replace_all(&s, "\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"")
+        .to_string();
+    let s = Regex::new(r#"".{86}==""#)
+        .unwrap()
+        .replace_all(&s, "\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"")
+        .to_string();
+    let s = Regex::new(r#""txSignature": ".{128}""#)
+        .unwrap()
+        .replace_all(
+            &s,
+            "\"txSignature\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"",
+        )
+        .to_string();
+    Regex::new(r#"module [a-f\d]{40}.M1"#)
+        .unwrap()
+        .replace_all(&s, "module 1234567890abcdef101112131415161718191a1b.M1")
+        .to_string()
 }
 
 async fn create_response_sample(
