@@ -1247,6 +1247,8 @@ fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStor
 
     let mut opts = rocksdb::Options::default();
     opts.set_max_open_files(max_files_authority_tests());
+    opts.set_manual_wal_flush(true);
+
     let store = Arc::new(AuthorityStore::open(path, Some(opts)));
     (committee, authority_address, authority_key, store)
 }
@@ -1259,6 +1261,7 @@ pub async fn init_state() -> AuthorityState {
         *authority_key.public_key_bytes(),
         Arc::pin(authority_key),
         store,
+        None,
         genesis::clone_genesis_compiled_modules(),
         &mut genesis::get_genesis_context(),
     )

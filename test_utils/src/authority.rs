@@ -47,6 +47,7 @@ where
             validator.public_key(),
             Arc::pin(validator.key_pair().copy()),
             Arc::new(test_authority_store()),
+            None,
             genesis::clone_genesis_compiled_modules(),
             &mut genesis::get_genesis_context(),
         )

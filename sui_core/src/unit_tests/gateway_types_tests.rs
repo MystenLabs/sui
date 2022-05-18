@@ -11,7 +11,6 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::MoveObject;
 use sui_types::sui_serde::Base64;
-use sui_types::sui_serde::Encoding;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 use crate::gateway_types::{SuiMoveStruct, SuiMoveValue};
@@ -26,8 +25,8 @@ fn test_move_value_to_sui_bytearray() {
         MoveValue::U8(4),
     ]);
     let sui_value = SuiMoveValue::from(move_value);
-    let bytes_base64 = Base64::encode(&[0, 1, 2, 3, 4]);
-    assert!(matches!(sui_value, SuiMoveValue::String(bytes) if bytes == bytes_base64))
+    let bytes_base64 = Base64::from_bytes(&[0, 1, 2, 3, 4]);
+    assert!(matches!(sui_value, SuiMoveValue::Bytearray(bytes) if bytes == bytes_base64))
 }
 
 #[test]
@@ -117,6 +116,7 @@ fn test_serde() {
         SuiMoveValue::Address(SuiAddress::random_for_testing_only()),
         SuiMoveValue::Bool(true),
         SuiMoveValue::Option(Box::new(None)),
+        SuiMoveValue::Bytearray(Base64::from_bytes(&[10u8; 20])),
     ];
 
     for value in test_values {

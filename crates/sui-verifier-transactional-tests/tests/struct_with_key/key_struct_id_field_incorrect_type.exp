@@ -1,0 +1,4 @@
+processed 1 task
+
+task 0 'publish'. lines 4-10:
+Error: Failed to verify the Move module, reason: "First field of struct S must be of ID type, Bool type found".

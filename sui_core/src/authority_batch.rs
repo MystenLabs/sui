@@ -20,6 +20,7 @@ use futures::StreamExt;
 use typed_store::Map;
 
 use tokio::sync::broadcast::{error::RecvError, Receiver};
+use tracing::error;
 
 #[cfg(test)]
 #[path = "unit_tests/batch_tests.rs"]
@@ -135,6 +136,8 @@ impl crate::authority::AuthorityState {
         // Then we operate in a loop, where for each new update we consider
         // whether to create a new batch or not.
         let mut interval = interval(max_delay);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
         let mut exit = false;
         let mut make_batch;
 
@@ -192,6 +195,17 @@ impl crate::authority::AuthorityState {
                 self.db()
                     .batches
                     .insert(&new_batch.batch.next_sequence_number, &new_batch)?;
+
+                // If a checkpointing service is present, register the batch with it
+                // to insert the transactions into future checkpoint candidates
+                if let Some(checkpoint) = &self._checkpoints {
+                    if let Err(err) = checkpoint
+                        .lock()
+                        .handle_internal_batch(new_batch.batch.next_sequence_number, &current_batch)
+                    {
+                        error!("Checkpointing service error: {}", err);
+                    }
+                }
 
                 // Send the update
                 let _ = self

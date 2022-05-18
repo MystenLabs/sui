@@ -16,7 +16,7 @@
         "lint": "npm run eslint:check && npm run prettier:check && npm run stylelint:check",
         "lint:fix": "npm run eslint:fix && npm run prettier:fix && npm run stylelint:fix",
         "start": "concurrently --restart-tries 10 --raw \"npm:build:dev -- --watch\" \"npm:prettier:fix:watch\"",
-        "test": "npx jest"
+        "test": "jest"
     },
     "repository": {
         "type": "git",
@@ -69,9 +69,15 @@
     },
     "dependencies": {
         "@mysten/sui.js": "file:../sdk/typescript",
+        "@reduxjs/toolkit": "^1.8.1",
         "bip39-light": "^1.0.7",
+        "buffer": "^6.0.3",
+        "classnames": "^2.3.1",
         "react": "^18.1.0",
         "react-dom": "^18.1.0",
+        "react-redux": "^8.0.1",
+        "react-router-dom": "^6.3.0",
+        "stream-browserify": "^3.0.0",
         "tweetnacl": "^1.0.3",
         "webextension-polyfill": "^0.9.0"
     }

@@ -86,6 +86,7 @@ where
                 // Are we likely to never terminate because of this condition?
                 // - We check we have nodes left by stake
                 // - We check that we have at least 2/3 of nodes that can be contacted.
+                tokio::time::sleep(Duration::from_millis(10)).await;
                 continue;
             }
             peer_names.insert(*name);
