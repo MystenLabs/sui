@@ -1,0 +1,27 @@
+$error-color: #8b1111;
+
+.container {
+    display: flex;
+    flex-flow: row nowrap;
+    padding: 8px;
+    border: 1px solid;
+    border-radius: 4px;
+    align-items: center;
+
+    &.error {
+        border-color: $error-color;
+    }
+}
+
+.icon {
+    align-self: flex-start;
+    font-size: 20px;
+
+    .error & {
+        color: $error-color;
+    }
+}
+
+.message {
+    margin-left: 12px;
+}

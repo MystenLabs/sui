@@ -7,5 +7,10 @@
     flex-flow: column nowrap;
     align-items: center;
     min-width: 300px;
-    padding: 8px;
+    max-width: 300px;
+    padding: 12px;
+
+    :global(.is-popup) & {
+        min-height: 300px;
+    }
 }

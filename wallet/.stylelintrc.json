@@ -2,5 +2,18 @@
     "extends": [
         "stylelint-config-standard-scss",
         "stylelint-config-prettier-scss"
+    ],
+    "overrides": [
+        {
+            "files": ["**/*.module.scss"],
+            "rules": {
+                "selector-pseudo-class-no-unknown": [
+                    true,
+                    {
+                        "ignorePseudoClasses": ["global"]
+                    }
+                ]
+            }
+        }
     ]
 }
