@@ -89,6 +89,7 @@ module Sui::ValidatorSetTests {
             addr,
             vector[hint],
             vector[hint],
+            vector[hint],
             init_stake,
         );
         (ctx, validator)
