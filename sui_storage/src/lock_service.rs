@@ -193,13 +193,7 @@ impl LockServiceImpl {
         let existing_locks: Vec<ObjectRef> = locks
             .iter()
             .zip(objects)
-            .filter_map(|(lock_opt, objref)| {
-                if let Some(Some(_tx_digest)) = lock_opt {
-                    Some(*objref)
-                } else {
-                    None
-                }
-            })
+            .filter_map(|(lock_opt, objref)| lock_opt.flatten().map(|_tx_digest| *objref))
             .collect();
         if !existing_locks.is_empty() {
             info!(
