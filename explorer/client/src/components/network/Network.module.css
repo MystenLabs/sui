@@ -11,7 +11,7 @@
 }
 
 div.opennetworkdetails {
-    @apply fixed w-[100vw] sm:w-[50vw] right-0 top-0 h-full bg-offblack opacity-100 z-50;
+    @apply fixed w-full sm:w-[35vw] lg:w-[25vw] right-0 top-0 h-full bg-offblack opacity-100 z-50;
 }
 
 div.detailsbg {
@@ -28,7 +28,7 @@ div.active {
 
 .opennetworkdetails > div > div,
 .opennetworkdetails > div > input {
-    @apply p-2 my-2 w-[30vw] mx-auto rounded-lg;
+    @apply p-2 my-2 w-[80vw] sm:w-[30vw] lg:w-[20vw] mx-auto rounded-lg;
 }
 
 .opennetworkdetails > div > input {
