@@ -17,7 +17,7 @@ const VALID_BASE64_REGEX =
   /^(?:[a-zA-Z0-9+\/]{4})*(?:|(?:[a-zA-Z0-9+\/]{3}=)|(?:[a-zA-Z0-9+\/]{2}==)|(?:[a-zA-Z0-9+\/]{1}===))$/;
 
 export function isValidTransactionDigest(value: string): value is TransactionDigest {
-  return value.length === TX_DIGEST_BASE64_LENGTH
+  return (new Base64DataBuffer(value)).getLength() === TX_DIGEST_LENGTH
     && VALID_BASE64_REGEX.test(value);
 }
 
