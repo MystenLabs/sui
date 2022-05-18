@@ -33,6 +33,8 @@ pub fn test_authority_configs() -> NetworkConfig {
     let mut configs = NetworkConfig::generate_with_rng(&config_dir, TEST_COMMITTEE_SIZE, rng);
     for config in configs.validator_configs.iter_mut() {
         let parameters = &mut config.consensus_config.narwhal_config;
+        // NOTE: the following parameters are important to ensure tests run fast. Using the default
+        // Narwhal parameters may result in tests taking >60 seconds.
         parameters.header_size = 1;
         parameters.max_header_delay = Duration::from_millis(200);
         parameters.batch_size = 1;
