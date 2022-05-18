@@ -41,11 +41,11 @@ const checkIsNotDisabled = async (page: any, element: string) => {
 };
 
 const expectHome = async (page: any) => {
-    await checkDataTestID(page, 'main > div', 'home-page');
+    await checkDataTestID(page, 'main > div:nth-child(2)', 'home-page');
 };
 
 const expectErrorResult = async (page: any) => {
-    await checkID(page, 'main > div', 'errorResult');
+    await checkID(page, 'main > div:nth-child(2)', 'errorResult');
 };
 
 const searchText = async (page: any, text: string) => {
