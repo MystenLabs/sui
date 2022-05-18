@@ -59,13 +59,13 @@ impl Accumulator {
     }
 
     // Insert all items from an iterator into the accumulator
-    pub fn insert_all<'a, I, It>(&'a mut self, items: It)
+    pub fn insert_all<'a, It>(&'a mut self, items: It)
     where
-        It: Iterator<Item = &'a I>,
-        I: 'a + AsRef<[u8]>,
+        It: IntoIterator,
+        It::Item: 'a + AsRef<[u8]>,
     {
         for i in items {
-            self.insert(i);
+            self.insert(&i);
         }
     }
 }
@@ -148,18 +148,18 @@ where
         missing_from_second: V2,
     ) -> WaypointDiff<K, I>
     where
-        V1: Iterator<Item = I>,
-        V2: Iterator<Item = I>,
+        V1: IntoIterator<Item = I>,
+        V2: IntoIterator<Item = I>,
     {
         let w1 = WaypointWithItems {
             key: first_key,
             waypoint: first,
-            items: missing_from_first.collect(),
+            items: missing_from_first.into_iter().collect(),
         };
         let w2 = WaypointWithItems {
             key: second_key,
             waypoint: second,
-            items: missing_from_second.collect(),
+            items: missing_from_second.into_iter().collect(),
         };
 
         WaypointDiff {
