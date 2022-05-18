@@ -11,7 +11,9 @@ export type ObjectOwner =
   | 'Immutable';
 
 
-const TX_DIGEST_BASE64_LENGTH = 44;
+// source of truth is
+// https://github.com/MystenLabs/sui/blob/acb2b97ae21f47600e05b0d28127d88d0725561d/crates/sui-types/src/base_types.rs#L171
+const TX_DIGEST_LENGTH = 32;
 // taken from https://rgxdb.com/r/1NUN74O6
 const VALID_BASE64_REGEX =
   /^(?:[a-zA-Z0-9+\/]{4})*(?:|(?:[a-zA-Z0-9+\/]{3}=)|(?:[a-zA-Z0-9+\/]{2}==)|(?:[a-zA-Z0-9+\/]{1}===))$/;
