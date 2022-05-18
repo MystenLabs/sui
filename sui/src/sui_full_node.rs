@@ -36,7 +36,7 @@ use sui_types::{
 use tracing::info;
 
 pub struct SuiFullNode {
-    client: FullNode<NetworkAuthorityClient>,
+    pub client: FullNode<NetworkAuthorityClient>,
 }
 
 impl SuiFullNode {

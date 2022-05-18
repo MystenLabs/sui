@@ -9,9 +9,11 @@ use sui::{
     },
     keystore::{KeystoreType, SuiKeystore},
     sui_commands::SuiNetwork,
+    wallet_commands::{WalletCommands, WalletContext},
 };
 use sui_config::{builder::ConfigBuilder, GenesisConfig};
 use sui_types::base_types::SuiAddress;
+use tempfile::TempDir;
 
 const NUM_VALIDAOTR: usize = 4;
 
@@ -77,4 +79,29 @@ pub async fn start_test_network(
 
     // Return network handle
     Ok(network)
+}
+
+pub async fn setup_network_and_wallet_in_working_dir(
+    working_dir: &TempDir,
+) -> Result<(SuiNetwork, WalletContext, SuiAddress), anyhow::Error> {
+    let network = start_test_network(working_dir.path(), None).await?;
+
+    // Create Wallet context.
+    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
+    let mut context = WalletContext::new(&wallet_conf)?;
+    let address = context.config.accounts.first().cloned().unwrap();
+
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState {
+        address: Some(address),
+    }
+    .execute(&mut context)
+    .await?;
+    Ok((network, context, address))
+}
+
+pub async fn setup_network_and_wallet(
+) -> Result<(SuiNetwork, WalletContext, SuiAddress), anyhow::Error> {
+    let working_dir = tempfile::tempdir()?;
+    setup_network_and_wallet_in_working_dir(&working_dir).await
 }
