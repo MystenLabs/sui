@@ -23,11 +23,16 @@ pub mod gas;
 pub mod gas_coin;
 pub mod id;
 pub mod messages;
+pub mod messages_checkpoint;
 pub mod move_package;
 pub mod object;
 pub mod signature_seed;
 pub mod storage;
 pub mod sui_serde;
+pub mod waypoint;
+
+#[path = "./unit_tests/utils.rs"]
+pub mod utils;
 
 /// 0x1-- account address where Move stdlib modules are stored
 /// Same as the ObjectID

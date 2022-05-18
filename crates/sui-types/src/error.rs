@@ -182,6 +182,8 @@ pub enum SuiError {
     SubscriptionItemsDroppedError(u64),
     #[error("Subscription service closed.")]
     SubscriptionServiceClosed,
+    #[error("Checkpointing error: {}", error)]
+    CheckpointingError { error: String },
 
     // Move module publishing related errors
     #[error("Failed to load the Move module, reason: {error:?}.")]
@@ -360,6 +362,14 @@ impl std::convert::From<SubscriberError> for SuiError {
 impl From<tonic::Status> for SuiError {
     fn from(status: tonic::Status) -> Self {
         Self::RpcError(status.message().to_owned())
+    }
+}
+
+impl std::convert::From<&str> for SuiError {
+    fn from(error: &str) -> Self {
+        SuiError::GenericAuthorityError {
+            error: error.to_string(),
+        }
     }
 }
 

@@ -39,7 +39,7 @@ async fn test_start_stop_batch_subsystem() {
         tx_consensus_listener,
     ));
     let join = server
-        .spawn_batch_subsystem(1000, Duration::from_secs(5))
+        .spawn_batch_subsystem(1000, Duration::from_secs(50))
         .await
         .expect("Problem launching subsystem.");
 
@@ -85,7 +85,7 @@ async fn test_simple_request() {
     client.handle_object_info_request(req).await.unwrap();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_subscription() {
     let sender = dbg_addr(1);
     let object_id = dbg_object_id(1);
@@ -103,7 +103,7 @@ async fn test_subscription() {
         tx_consensus_listener,
     );
     server.min_batch_size = 10;
-    server.max_delay = Duration::from_secs(500);
+    server.max_delay = Duration::from_secs(5);
 
     let db = server.state.db().clone();
     let db2 = server.state.db().clone();
@@ -115,6 +115,8 @@ async fn test_subscription() {
     let client = NetworkAuthorityClient::connect(server_handle.address())
         .await
         .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
 
     let tx_zero = TransactionDigest::new([0; 32]);
     for _i in 0u64..105 {
@@ -132,6 +134,7 @@ async fn test_subscription() {
         start: Some(12),
         length: 22,
     };
+    tokio::time::sleep(Duration::from_millis(10)).await;
 
     let mut resp = client.handle_batch_stream(req).await.unwrap();
 
@@ -182,6 +185,7 @@ async fn test_subscription() {
         length: 11,
     };
 
+    tokio::time::sleep(Duration::from_millis(10)).await;
     let mut resp = client.handle_batch_stream(req).await.unwrap();
 
     println!("TEST2: Send request.");
@@ -212,12 +216,16 @@ async fn test_subscription() {
     println!("TEST2: Finished.");
 
     println!("TEST3: Sending from very latest.");
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     let req = BatchInfoRequest {
         start: None,
         length: 10,
     };
 
+    // Use 17 since it is prime and unlikely to collide with the exact timing
+    // of the tick interval (set to 5 seconds.)
+    tokio::time::sleep(Duration::from_millis(17)).await;
     let mut resp = client.handle_batch_stream(req).await.unwrap();
 
     println!("TEST3: Send request.");
@@ -235,11 +243,13 @@ async fn test_subscription() {
             .expect("Failed to write.");
         println!("Send item {i}");
         i += 1;
+        tokio::time::sleep(Duration::from_millis(17)).await;
 
         // Then we wait to receive
         if let Some(data) = resp.next().await {
             match data.expect("No error expected here") {
                 BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                    println!("Batch(next={})", signed_batch.batch.next_sequence_number);
                     num_batches += 1;
                     if signed_batch.batch.next_sequence_number >= 129 {
                         break;
@@ -253,13 +263,13 @@ async fn test_subscription() {
         }
     }
 
-    assert_eq!(2, num_batches);
-    assert_eq!(10, num_transactions);
+    assert!(num_batches >= 2);
+    assert!(num_transactions >= 10);
 
     state.batch_notifier.close();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_subscription_safe_client() {
     let sender = dbg_addr(1);
     let object_id = dbg_object_id(1);
@@ -296,12 +306,16 @@ async fn test_subscription_safe_client() {
         .await
         .expect("Problem launching subsystem.");
 
+    tokio::time::sleep(Duration::from_millis(10)).await;
+
     let tx_zero = TransactionDigest::new([0; 32]);
     for _i in 0u64..105 {
         let ticket = server.state.batch_notifier.ticket().expect("all good");
         db.executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
+        drop(ticket);
+        tokio::time::sleep(Duration::from_millis(10)).await;
     }
     println!("Sent tickets.");
 
@@ -386,6 +400,7 @@ async fn test_subscription_safe_client() {
     while let Some(data) = stream1.next().await {
         match &data.expect("No error") {
             BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                println!("Batch(next={})", signed_batch.batch.next_sequence_number);
                 num_batches += 1;
                 if signed_batch.batch.next_sequence_number >= 112 {
                     break;
@@ -435,6 +450,7 @@ async fn test_subscription_safe_client() {
             .expect("Failed to write.");
         println!("Send item {i}");
         i += 1;
+        tokio::time::sleep(Duration::from_millis(20)).await;
 
         // Then we wait to receive
         if let Some(data) = stream1.next().await {

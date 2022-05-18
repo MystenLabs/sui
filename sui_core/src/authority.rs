@@ -4,6 +4,7 @@
 
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
+    checkpoints::CheckpointStore,
     execution_engine, transaction_input_checker,
 };
 use async_trait::async_trait;
@@ -17,6 +18,7 @@ use move_core_types::{
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use once_cell::sync::Lazy;
+use parking_lot::Mutex;
 use prometheus_exporter::prometheus::{
     register_histogram, register_int_counter, Histogram, IntCounter,
 };
@@ -44,6 +46,7 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 use tracing::{debug, instrument, log};
+use typed_store::Map;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -183,6 +186,9 @@ pub struct AuthorityState {
 
     /// The database
     pub(crate) _database: Arc<AuthorityStore>, // TODO: remove pub
+
+    /// The checkpoint store
+    pub(crate) _checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
 
     // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
@@ -692,11 +698,18 @@ impl AuthorityState {
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
+        checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
         genesis_packages: Vec<Vec<CompiledModule>>,
         genesis_ctx: &mut TxContext,
     ) -> Self {
-        let state =
-            AuthorityState::new_without_genesis(committee, name, secret, store.clone()).await;
+        let state = AuthorityState::new_without_genesis(
+            committee,
+            name,
+            secret,
+            store.clone(),
+            checkpoints,
+        )
+        .await;
 
         // Only initialize an empty database.
         if store
@@ -711,6 +724,38 @@ impl AuthorityState {
             }
         }
 
+        // If a checkpoint store is present, ensure it is up-to-date with the latest
+        // batches.
+        if let Some(checkpoint) = &state._checkpoints {
+            let next_expected_tx = checkpoint.lock().next_transaction_sequence_expected();
+
+            // Get all unprocessed checkpoints
+            for (_seq, batch) in state
+                ._database
+                .batches
+                .iter()
+                .skip_to(&next_expected_tx)
+                .expect("Seeking batches should never fail at this point")
+            {
+                let transactions: Vec<(TxSequenceNumber, TransactionDigest)> = state
+                    ._database
+                    .executed_sequence
+                    .iter()
+                    .skip_to(&batch.batch.initial_sequence_number)
+                    .expect("Should never fail to get an iterator")
+                    .take_while(|(seq, _tx)| *seq < batch.batch.next_sequence_number)
+                    .collect();
+
+                if batch.batch.next_sequence_number > next_expected_tx {
+                    // Update the checkpointing mechanism
+                    checkpoint
+                        .lock()
+                        .handle_internal_batch(batch.batch.next_sequence_number, &transactions)
+                        .expect("Should see no errors updating the checkpointing mechanism.");
+                }
+            }
+        }
+
         state
     }
 
@@ -720,9 +765,16 @@ impl AuthorityState {
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
         genesis: &Genesis,
+        checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
     ) -> Self {
-        let state =
-            AuthorityState::new_without_genesis(committee, name, secret, store.clone()).await;
+        let state = AuthorityState::new_without_genesis(
+            committee,
+            name,
+            secret,
+            store.clone(),
+            checkpoints,
+        )
+        .await;
 
         // Only initialize an empty database.
         if store
@@ -752,6 +804,7 @@ impl AuthorityState {
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
+        checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -767,6 +820,7 @@ impl AuthorityState {
                     .expect("We defined natives to not fail here"),
             ),
             _database: store.clone(),
+            _checkpoints: checkpoints,
             batch_channels: tx,
             batch_notifier: Arc::new(
                 authority_notifier::TransactionNotifier::new(store)
@@ -781,6 +835,10 @@ impl AuthorityState {
             .expect("Init batches failed!");
 
         state
+    }
+
+    pub(crate) fn checkpoints(&self) -> Option<Arc<Mutex<CheckpointStore>>> {
+        self._checkpoints.clone()
     }
 
     pub(crate) fn db(&self) -> Arc<AuthorityStore> {
