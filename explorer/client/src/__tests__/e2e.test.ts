@@ -40,12 +40,14 @@ const checkIsNotDisabled = async (page: any, element: string) => {
     expect(id).toBeNull();
 };
 
+const mainBodyCSS = 'main > div:nth-child(2)';
+
 const expectHome = async (page: any) => {
-    await checkDataTestID(page, 'main > div:nth-child(2)', 'home-page');
+    await checkDataTestID(page, mainBodyCSS, 'home-page');
 };
 
 const expectErrorResult = async (page: any) => {
-    await checkID(page, 'main > div:nth-child(2)', 'errorResult');
+    await checkID(page, mainBodyCSS, 'errorResult');
 };
 
 const searchText = async (page: any, text: string) => {
@@ -65,6 +67,9 @@ const coinGroup = (num: number) => {
 };
 
 const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num})`;
+
+const clickBtn = async (cssValue: string) =>
+    page.$eval(cssValue, (elem: any) => elem.click());
 
 describe('End-to-end Tests', () => {
     beforeAll(async () => {
@@ -252,7 +257,7 @@ describe('End-to-end Tests', () => {
             // First see Please Wait Message:
             await checkID(
                 page,
-                'main > div > div:first-child > div > div',
+                `${mainBodyCSS} > div:first-child > div > div`,
                 'pleaseWaitImage'
             );
             await page.waitForFunction(
@@ -262,7 +267,7 @@ describe('End-to-end Tests', () => {
             //Then see No Image Warning:
             await checkID(
                 page,
-                'main > div > div:first-child > div > div',
+                `${mainBodyCSS} > div:first-child > div > div`,
                 'noImage'
             );
 
@@ -274,15 +279,15 @@ describe('End-to-end Tests', () => {
             );
             await checkID(
                 page,
-                'main > div > div:first-child > div > img',
+                `${mainBodyCSS} > div:first-child > div > img`,
                 'loadedImage'
             );
 
             //And no No Image / Please Wait message:
             await expect(
-                page.$eval('main > div > div:first-child > div > div')
+                page.$eval(`${mainBodyCSS} > div:first-child > div > div`)
             ).rejects.toThrow(
-                'Error: failed to find element matching selector "main > div > div:first-child > div > div"'
+                'Error: failed to find element matching selector "main > div:nth-child(2) > div:first-child > div > div"'
             );
         });
     });
@@ -290,8 +295,7 @@ describe('End-to-end Tests', () => {
         it('to go to the next page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            const btn = await page.$('#nextBtn');
-            await btn.click();
+            await clickBtn('button#nextBtn');
             const objectLink = await page.$(nftObject(1));
             await objectLink.click();
 
@@ -306,9 +310,8 @@ describe('End-to-end Tests', () => {
         it('to go to the last page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
+            await clickBtn('button#lastBtn');
 
-            const btn = await page.$('#lastBtn');
-            await btn.click();
             const objectLink = await page.$(nftObject(1));
             await objectLink.click();
 
@@ -325,9 +328,7 @@ describe('End-to-end Tests', () => {
         it('where last and next disappear in final page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-
-            const btn = await page.$('#lastBtn');
-            await btn.click();
+            await clickBtn('button#lastBtn');
 
             //Back and First buttons are not disabled:
             await checkIsNotDisabled(page, '#backBtn');
@@ -341,9 +342,8 @@ describe('End-to-end Tests', () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
 
-            await page.$('#lastBtn').then((btn: any) => btn.click());
-
-            await page.$('#backBtn').then((btn: any) => btn.click());
+            await clickBtn('#lastBtn');
+            await clickBtn('#backBtn');
 
             const objectLink = await page.$(nftObject(1));
             await objectLink.click();
@@ -361,11 +361,9 @@ describe('End-to-end Tests', () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
 
-            await page.$('#lastBtn').then((btn: any) => btn.click());
-
-            await page.$('#backBtn').then((btn: any) => btn.click());
-
-            await page.$('#firstBtn').then((btn: any) => btn.click());
+            await clickBtn('#lastBtn');
+            await clickBtn('#backBtn');
+            await clickBtn('#firstBtn');
 
             const objectLink = await page.$(nftObject(1));
             await objectLink.click();
