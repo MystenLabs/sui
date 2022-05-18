@@ -74,7 +74,7 @@ export const navigateWithUnknown = async (
             //if none of the queries find a result, show missing page
             .catch((error) => {
                 // encode url in
-                navigate(`../missing/${encodeURIComponent(input)}`);
+                navigate(`../error/missing/${encodeURIComponent(input)}`);
             })
     );
 };
