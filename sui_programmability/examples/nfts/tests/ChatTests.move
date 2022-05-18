@@ -15,10 +15,9 @@ module NFTs::ChatTests {
     public(script) fun test_chat() {
         let scenario = &mut TestScenario::begin(&USER1_ADDRESS);
         {
-            Chat::mint(
+            Chat::post(
                 @0xC001, // This should be an application object ID.
                 HELLO,
-                @0x0000, // We're referencing the all-zero bytes object (i.e., it's not a retweet or reply).
                 METADATA, // Some metadata (it could be empty).
                 TestScenario::ctx(scenario)
             );
