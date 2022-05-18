@@ -46,7 +46,7 @@ export const navigateWithUnknown = async (
     }
 
     if (searchPromises.length === 0) {
-        navigate(`../searcherror/${encodeURIComponent(input)}`);
+        navigate(`../error/all/${encodeURIComponent(input)}`);
         return;
     }
 

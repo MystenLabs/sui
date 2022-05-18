@@ -4,6 +4,8 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { isValidTransactionDigest, isValidSuiAddress } from '@mysten/sui.js';
+
 import { navigateWithUnknown } from '../../utils/searchUtil';
 
 import styles from './Search.module.css';
@@ -21,6 +23,18 @@ function getPlaceholderText(category: SearchCategory) {
     }
 }
 
+function isInputValid(category: SearchCategory, input: string): boolean {
+    switch (category) {
+        case 'objects':
+        case 'addresses':
+            return isValidSuiAddress(input);
+        case 'transactions':
+            return isValidTransactionDigest(input);
+        case 'all':
+            return isValidSuiAddress(input) || isValidTransactionDigest(input);
+    }
+}
+
 function Search() {
     const [input, setInput] = useState('');
     const [category, setCategory] = useState('all' as SearchCategory);
@@ -35,14 +49,22 @@ function Search() {
             if (!input.length) return;
             setPleaseWaitMode(true);
 
+            // remove empty char from input
+            let query = input.trim();
+            if (!isInputValid(category, query)) {
+                navigate(`../error/${category}/${query}`);
+                setInput('');
+                setPleaseWaitMode(false);
+                return;
+            }
+
             if (category === 'all') {
-                // remove empty char from input
-                navigateWithUnknown(input.trim(), navigate).then(() => {
+                navigateWithUnknown(query, navigate).then(() => {
                     setInput('');
                     setPleaseWaitMode(false);
                 });
             } else {
-                navigate(`../${category}/${input.trim()}`);
+                navigate(`../${category}/${query}`);
                 setInput('');
                 setPleaseWaitMode(false);
                 setCategory('all');

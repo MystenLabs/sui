@@ -4,9 +4,8 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import AddressResult from '../address-result/AddressResult';
-import FormatError from '../format-error/FormatError';
+import SearchError from '../searcherror/SearchError';
 import Home from '../home/Home';
-import MissingResource from '../missing-resource/MissingResource';
 import { ObjectResult } from '../object-result/ObjectResult';
 import TransactionResult from '../transaction-result/TransactionResult';
 
@@ -17,8 +16,7 @@ const AppRoutes = () => {
             <Route path="/objects/:id" element={<ObjectResult />} />
             <Route path="/transactions/:id" element={<TransactionResult />} />
             <Route path="/addresses/:id" element={<AddressResult />} />
-            <Route path="/missing/:id" element={<MissingResource />} />
-            <Route path="/searcherror/:id" element={<FormatError />} />
+            <Route path="/error/:category/:id" element={<SearchError />} />
             <Route path="*" element={<Navigate to="/" replace={true} />} />
         </Routes>
     );
