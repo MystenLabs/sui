@@ -168,7 +168,7 @@ impl SuiCommand {
                 let db_folder_path = sui_config_dir.join("client_db");
                 let gateway_db_folder_path = sui_config_dir.join("gateway_client_db");
 
-                let genesis_conf = match from_config {
+                let mut genesis_conf = match from_config {
                     Some(q) => PersistedConfig::read(q)?,
                     None => GenesisConfig::for_local_testing()?,
                 };
@@ -179,10 +179,17 @@ impl SuiCommand {
                     return Ok(());
                 }
 
-                let network_config = ConfigBuilder::new(sui_config_dir)
-                    .committee_size(NonZeroUsize::new(genesis_conf.committee_size).unwrap())
-                    .initial_accounts_config(genesis_conf)
-                    .build();
+                let validator_info = genesis_conf.validator_genesis_info.take();
+                let network_config = if let Some(validators) = validator_info {
+                    ConfigBuilder::new(sui_config_dir)
+                        .initial_accounts_config(genesis_conf)
+                        .build_with_validators(validators)
+                } else {
+                    ConfigBuilder::new(sui_config_dir)
+                        .committee_size(NonZeroUsize::new(genesis_conf.committee_size).unwrap())
+                        .initial_accounts_config(genesis_conf)
+                        .build()
+                };
 
                 let mut accounts = Vec::new();
                 let mut keystore = SuiKeystore::default();
@@ -197,6 +204,7 @@ impl SuiCommand {
                 let network_config = network_config.persisted(&network_path);
                 network_config.save()?;
                 info!("Network config file is stored in {:?}.", network_path);
+
                 keystore.set_path(&keystore_path);
                 keystore.save()?;
                 info!("Wallet keystore is stored in {:?}.", keystore_path);
@@ -233,6 +241,17 @@ impl SuiCommand {
                 let wallet_config = wallet_config.persisted(&wallet_path);
                 wallet_config.save()?;
                 info!("Wallet config file is stored in {:?}.", wallet_path);
+
+                for (i, validator) in network_config
+                    .into_inner()
+                    .into_validator_configs()
+                    .into_iter()
+                    .enumerate()
+                {
+                    let validator_config = validator
+                        .persisted(&sui_config_dir.join(format!("validator-config-{}.conf", i)));
+                    validator_config.save()?;
+                }
 
                 Ok(())
             }
