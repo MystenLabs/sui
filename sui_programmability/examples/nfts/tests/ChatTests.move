@@ -17,7 +17,7 @@ module NFTs::ChatTests {
         {
             Chat::mint(
                 @0xC001, // This should be an application object ID.
-                ASCII::string(HELLO),
+                HELLO,
                 @0x0000, // We're referencing the all-zero bytes object (i.e., it's not a retweet or reply).
                 METADATA, // Some metadata (it could be empty).
                 TestScenario::ctx(scenario)
