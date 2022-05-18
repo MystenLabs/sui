@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createRoot } from 'react-dom/client';
+import { IntlProvider } from 'react-intl';
 import { Provider } from 'react-redux';
 import { HashRouter } from 'react-router-dom';
 
@@ -25,7 +26,9 @@ const root = createRoot(rootDom);
 root.render(
     <HashRouter>
         <Provider store={store}>
-            <App />
+            <IntlProvider locale={navigator.language}>
+                <App />
+            </IntlProvider>
         </Provider>
     </HashRouter>
 );
