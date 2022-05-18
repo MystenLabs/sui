@@ -4,9 +4,9 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import AddressResult from '../address-result/AddressResult';
-import SearchError from '../searcherror/SearchError';
 import Home from '../home/Home';
 import { ObjectResult } from '../object-result/ObjectResult';
+import SearchError from '../searcherror/SearchError';
 import TransactionResult from '../transaction-result/TransactionResult';
 
 const AppRoutes = () => {

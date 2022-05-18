@@ -1,10 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { isValidTransactionDigest, isValidSuiAddress } from '@mysten/sui.js';
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-import { isValidTransactionDigest, isValidSuiAddress } from '@mysten/sui.js';
 
 import { navigateWithUnknown } from '../../utils/searchUtil';
 
