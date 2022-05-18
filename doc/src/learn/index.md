@@ -14,6 +14,7 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](http
 
 Find the latest updates to these contents in this section:
 
+* New [`sui-setup.sh`](https://github.com/MystenLabs/sui/blob/main/doc/utils/sui-setup.sh) script enables full environment setup in a [single set of commands](../build/install.md).
 * Sui version 0.2.0 released to DevNet!
 * DevNet data will be wiped along with this release. If you have requested test SUI tokens via faucet, please do so again via the [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) channel on Discord.
 * Added rustdoc output for [sui](https://mystenlabs.github.io/sui/), [narwhal](https://mystenlabs.github.io/narwhal/), and [mysten-infra](https://mystenlabs.github.io/mysten-infra/) projects available from both [Install Sui](../build/install.md#source-code) and [Contribute to Sui](../contribute/index.md#download-sui).
