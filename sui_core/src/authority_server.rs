@@ -74,6 +74,7 @@ impl AuthorityServer {
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
     ) -> Self {
         let consensus_adapter = ConsensusAdapter::new(
+            state.clone(),
             consensus_address,
             state.committee.clone(),
             tx_consensus_listener,
