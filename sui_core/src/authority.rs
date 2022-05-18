@@ -977,7 +977,7 @@ impl AuthorityState {
     async fn shared_locks_exist(&self, certificate: &CertifiedTransaction) -> SuiResult<bool> {
         let digest = certificate.digest();
         let shared_inputs = certificate.shared_input_objects();
-        let shared_locks = self._database.sequenced(digest, shared_inputs)?;
+        let shared_locks = self.database.sequenced(digest, shared_inputs)?;
         Ok(shared_locks[0].is_some())
     }
 
@@ -1061,7 +1061,7 @@ impl ExecutionState for AuthorityState {
 
         // If we already executed this transaction, return the signed effects.
         let digest = certificate.digest();
-        if self._database.effects_exists(digest)? {
+        if self.database.effects_exists(digest)? {
             debug!(tx_digest =? digest, "Shared-object transaction already executed");
             let info = self.make_transaction_info(digest).await?;
             return Ok(bincode::serialize(&info).expect("Failed to serialize tx info"));
@@ -1080,7 +1080,7 @@ impl ExecutionState for AuthorityState {
             // this function and that the last consensus index is also kept in memory. It is
             // thus ok to only persist now (despite this function may have returned earlier).
             // In the worst case, the synchronizer of the consensus client will catch up.
-            self._database
+            self.database
                 .persist_certificate_and_lock_shared_objects(certificate, execution_indices)?;
         }
 
