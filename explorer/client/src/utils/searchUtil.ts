@@ -5,12 +5,10 @@ let navigateWithUnknown: Function;
 let overrideTypeChecks = false;
 
 if (process.env.REACT_APP_DATA === 'static') {
-    import('./static/searchUtil').then(
-        (uf) => {
-            navigateWithUnknown = uf.navigateWithUnknown;
-            overrideTypeChecks = true;
-        }
-    );
+    import('./static/searchUtil').then((uf) => {
+        navigateWithUnknown = uf.navigateWithUnknown;
+        overrideTypeChecks = true;
+    });
 } else {
     import('./api/searchUtil').then(
         (uf) => (navigateWithUnknown = uf.navigateWithUnknown)
