@@ -555,20 +555,6 @@ async fn shared_object_on_gateway() {
             break;
         }
     }
-    /*
-    assert!(replies
-        .iter()
-        // It may happen that no authorities manage to get their transaction sequenced by consensus
-        // (we may be unlucky and consensus may drop all our transactions). It would have been nice
-        // to only filter "timeout" errors, but this will have to be fixed by issue #1717.
-        .filter(|result| match result {
-            Err(e) => !e.to_string().contains(
-                "An invalid answer was returned by the authority while requesting a certificate"
-            ),
-            _ => true,
-        })
-        .all(|result| result.is_ok()));
-        */
 
     let assert_value_transaction = move_transaction(
         last_gas_object,
@@ -583,12 +569,12 @@ async fn shared_object_on_gateway() {
 
     // Same problem may happen here (consensus may drop transactions).
     loop {
-        let resp = gateway
+        let result = gateway
             .clone()
             .execute_transaction(assert_value_transaction.clone())
             .await;
-        if resp.is_ok() {
-            let effects = resp.unwrap().to_effect_response().unwrap().effects;
+        if let Ok(response) = result {
+            let effects = response.to_effect_response().unwrap().effects;
             assert!(effects.status.is_ok());
             break;
         }
