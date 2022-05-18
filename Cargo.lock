@@ -5454,6 +5454,7 @@ dependencies = [
  "sui-types",
  "sui-verifier",
  "sui_core",
+ "sui_storage",
  "telemetry-subscribers",
  "tempfile",
  "test_utils",
