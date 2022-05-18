@@ -16,10 +16,7 @@ use sui_types::{
     base_types::{ObjectID, TransactionDigest},
     crypto::Signature,
     gas_coin::GasCoin,
-    messages::{
-        CallArg, CertifiedTransaction, ConfirmationTransaction, SignatureAggregator, Transaction,
-        TransactionData,
-    },
+    messages::{CallArg, CertifiedTransaction, SignatureAggregator, Transaction, TransactionData},
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
 };
 use test_utils::test_keys;
@@ -170,24 +167,15 @@ async fn submit_transaction_to_consensus() {
             ConsensusListenerMessage::New(serialized, replier) => (serialized, replier),
             message => panic!("Unexpected message {message:?}"),
         };
-
         let message =
             bincode::deserialize(&serialized).expect("Failed to deserialize consensus tx");
         let ConsensusTransaction::UserTransaction(certificate) = message;
+
         // Set the shared object locks.
         state_guard
             .handle_consensus_certificate(certificate.clone(), ExecutionIndices::default())
             .await
             .unwrap();
-
-        // Execute the transaction.
-        /*
-        let confirmation_transaction = ConfirmationTransaction { certificate };
-        let result = state
-            .handle_confirmation_transaction(confirmation_transaction)
-            .await
-            .map(|info| bincode::serialize(&info).unwrap());
-            */
 
         // Reply to the submitter.
         let result = Ok(Vec::default());
