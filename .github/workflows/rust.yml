@@ -58,17 +58,13 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
-      # Disable caching on self-hosted jobs
-      # Enable caching of the 'librocksdb-sys' crate by additionally caching the
-      # 'librocksdb-sys' src directory which is managed by cargo
-      # - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-      #   with:
-      #     path: ~/.cargo/registry/src/**/librocksdb-sys-*
+      - uses: taiki-e/install-action@nextest
       - name: cargo test
         run: |
-          cargo build --all-features --lib
-          cargo test --all-features --no-run # -j N # uncomment and set a low number if builds start OOMing again
-          cargo test --all-features
+          cargo nextest run --all-features --profile ci
+      - name: Doctests
+        run: |
+          cargo test --doc --all-features
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
 
