@@ -3,28 +3,37 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{HashMap, HashSet};
+
+use crate::crypto::PublicKeyBytes;
+use crate::error::SuiError;
+
+use hex::FromHex;
+use rand::Rng;
+use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
+
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str::FromStr;
 
-use crate::crypto::PublicKeyBytes;
-use crate::error::SuiError;
 use crate::sui_serde::Base64;
 use crate::sui_serde::Hex;
 use crate::sui_serde::Readable;
+
 use anyhow::anyhow;
 use base64ct::Encoding;
 use digest::Digest;
-use hex::FromHex;
+
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use opentelemetry::{global, Context};
-use rand::Rng;
+
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+
 use serde_with::serde_as;
 use serde_with::Bytes;
+
 use sha3::Sha3_256;
 
 #[cfg(test)]
@@ -189,6 +198,14 @@ pub struct ObjectDigest(
     pub [u8; 32],
 ); // We use SHA3-256 hence 32 bytes here
 
+#[serde_as]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
+pub struct TransactionEffectsDigest(
+    #[schemars(with = "Base64")]
+    #[serde_as(as = "Readable<Base64, Bytes>")]
+    pub [u8; TRANSACTION_DIGEST_LENGTH],
+);
+
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
 
@@ -311,6 +328,18 @@ pub fn context_from_digest(digest: TransactionDigest) -> Context {
     // carrier.insert("tx_digest".to_string(), hex::encode(digest.0));
 
     global::get_text_map_propagator(|propagator| propagator.extract(&carrier))
+}
+
+impl Borrow<[u8]> for TransactionDigest {
+    fn borrow(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl Borrow<[u8]> for &TransactionDigest {
+    fn borrow(&self) -> &[u8] {
+        &self.0
+    }
 }
 
 impl ObjectDigest {

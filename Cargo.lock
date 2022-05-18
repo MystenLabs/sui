@@ -62,6 +62,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "arc-swap"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5d78ce20460b82d3fa150275ed9d55e21064fc7951177baacf86a145c4a4b1f"
+
+[[package]]
 name = "ark-bls12-377"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1203,6 +1209,7 @@ dependencies = [
  "byteorder",
  "digest 0.9.0",
  "rand_core 0.5.1",
+ "serde 1.0.137",
  "subtle",
  "zeroize",
 ]
@@ -5635,6 +5642,7 @@ dependencies = [
  "bcs",
  "bincode",
  "crypto",
+ "curve25519-dalek",
  "digest 0.10.3",
  "ed25519-dalek",
  "executor",
@@ -5693,6 +5701,7 @@ name = "sui_core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "async-trait",
  "bcs",
  "bincode",
@@ -5700,6 +5709,7 @@ dependencies = [
  "clap 3.1.18",
  "colored",
  "crypto",
+ "curve25519-dalek",
  "ed25519-dalek",
  "executor",
  "fdlimit",
@@ -5739,6 +5749,7 @@ dependencies = [
  "tempfile",
  "test-fuzz",
  "test_utils",
+ "thiserror",
  "tokio",
  "tokio-stream",
  "tokio-util 0.7.2",

@@ -920,6 +920,10 @@ impl TransactionEffects {
             auth_signature: EmptySignInfo {},
         }
     }
+
+    pub fn digest(&self) -> TransactionEffectsDigest {
+        TransactionEffectsDigest(sha3_hash(self))
+    }
 }
 
 impl BcsSignable for TransactionEffects {}

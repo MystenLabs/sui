@@ -6,6 +6,7 @@ use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use async_trait::async_trait;
 use futures::StreamExt;
 use sui_types::crypto::PublicKeyBytes;
+use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use tracing::info;
 
@@ -366,6 +367,15 @@ where
             return Err(err);
         }
         Ok(transaction_info)
+    }
+
+    async fn handle_checkpoint(
+        &self,
+        request: CheckpointRequest,
+    ) -> Result<CheckpointResponse, SuiError> {
+        // SECURITY TODO: Implement all checks!
+
+        self.authority_client.handle_checkpoint(request).await
     }
 
     /// Handle Batch information requests for this authority.

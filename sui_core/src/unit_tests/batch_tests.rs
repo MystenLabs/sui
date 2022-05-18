@@ -7,6 +7,8 @@ use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::get_key_pair_from_rng;
 use sui_types::crypto::KeyPair;
+use sui_types::messages_checkpoint::CheckpointRequest;
+use sui_types::messages_checkpoint::CheckpointResponse;
 
 use super::*;
 use crate::authority::authority_tests::*;
@@ -53,6 +55,7 @@ pub(crate) async fn init_state(
         *authority_key.public_key_bytes(),
         Arc::pin(authority_key),
         store,
+        None,
         genesis::clone_genesis_compiled_modules(),
         &mut genesis::get_genesis_context(),
     )
@@ -262,7 +265,7 @@ async fn test_batch_manager_out_of_order() {
     _join.await.expect("No errors in task").expect("ok");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_batch_manager_drop_out_of_order() {
     // Create a random directory to store the DB
     let dir = env::temp_dir();
@@ -564,6 +567,13 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         })
     }
 
+    async fn handle_checkpoint(
+        &self,
+        _request: CheckpointRequest,
+    ) -> Result<CheckpointResponse, SuiError> {
+        unimplemented!();
+    }
+
     /// Handle Batch information requests for this authority.
     async fn handle_batch_stream(
         &self,
@@ -683,6 +693,13 @@ impl AuthorityAPI for ByzantineAuthorityClient {
         })
     }
 
+    async fn handle_checkpoint(
+        &self,
+        _request: CheckpointRequest,
+    ) -> Result<CheckpointResponse, SuiError> {
+        unimplemented!();
+    }
+
     /// Handle Batch information requests for this authority.
     /// This function comes from a byzantine authority that has incorrect behavior.
     async fn handle_batch_stream(
@@ -761,6 +778,7 @@ async fn test_safe_batch_stream() {
         public_key_bytes,
         Arc::pin(authority_key),
         store.clone(),
+        None,
         genesis::clone_genesis_compiled_modules(),
         &mut genesis::get_genesis_context(),
     )
@@ -805,6 +823,7 @@ async fn test_safe_batch_stream() {
         public_key_bytes_b,
         Arc::pin(authority_key),
         store,
+        None,
         genesis::clone_genesis_compiled_modules(),
         &mut genesis::get_genesis_context(),
     )
