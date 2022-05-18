@@ -22,7 +22,7 @@ export const navigateWithUnknown = async (
 
     // object IDs and addresses can't be distinguished just by the string, so search both.
     // allow navigating to the standard Move packages at 0x1 & 0x2 as a convenience
-    else if (isValidSuiAddress(input) || /^(0x|0X)[12]{1}$/.test(input)) {
+    else if (isValidSuiAddress(input) || isGenesisLibAddress(input)) {
         const addrPromise = rpc.getOwnedObjectRefs(input).then((data) => {
             if (data.length <= 0) throw new Error('No objects for Address');
 
