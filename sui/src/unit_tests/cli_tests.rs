@@ -406,12 +406,11 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
 
     // Create Wallet context.
     let wallet_conf_path = working_dir.join(SUI_WALLET_CONFIG);
-    let wallet_conf: WalletConfig = PersistedConfig::read(&wallet_conf_path)?;
-    let address = *wallet_conf.accounts.last().unwrap();
     let mut context = WalletContext::new(&wallet_conf_path)?;
 
     // Make sure init() is executed correctly for custom_genesis_package_2::M1
-    let move_objects = get_move_objects_by_type(&mut context, address, "M1::Object").await?;
+    let move_objects =
+        get_move_objects_by_type(&mut context, SuiAddress::default(), "M1::Object").await?;
     assert_eq!(move_objects.len(), 1);
     network.kill().await?;
     Ok(())

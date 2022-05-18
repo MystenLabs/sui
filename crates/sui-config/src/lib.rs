@@ -322,11 +322,9 @@ impl GenesisConfig {
 
     pub fn generate_custom_move_modules(
         &self,
-        address: SuiAddress,
-    ) -> Result<(Vec<Vec<CompiledModule>>, TxContext)> {
+        genesis_ctx: &mut TxContext,
+    ) -> Result<Vec<Vec<CompiledModule>>> {
         let mut custom_modules = Vec::new();
-        let mut genesis_ctx =
-            sui_adapter::genesis::get_genesis_context_with_custom_address(&address);
         // Build custom move packages
         if !self.move_packages.is_empty() {
             info!(
@@ -343,13 +341,13 @@ impl GenesisConfig {
                 )?;
 
                 let package_id =
-                    sui_adapter::adapter::generate_package_id(&mut modules, &mut genesis_ctx)?;
+                    sui_adapter::adapter::generate_package_id(&mut modules, genesis_ctx)?;
 
                 info!("Loaded package [{}] from {:?}.", package_id, path);
                 custom_modules.push(modules)
             }
         }
-        Ok((custom_modules, genesis_ctx))
+        Ok(custom_modules)
     }
 }
 
