@@ -159,6 +159,7 @@ impl Builder {
 
         // add custom modules
         modules.extend(self.move_modules);
+        info!("Finished loading genesis modules and objects");
 
         Genesis {
             modules,

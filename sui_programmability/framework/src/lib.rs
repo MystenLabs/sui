@@ -44,8 +44,11 @@ pub enum EventType {
 }
 
 pub fn get_sui_framework_modules(lib_dir: &Path) -> SuiResult<Vec<CompiledModule>> {
+    println!("before build_framework");
     let modules = build_framework(lib_dir)?;
+    println!("before verify_modules");
     verify_modules(&modules)?;
+    println!("after verify_modules");
     Ok(modules)
 }
 
@@ -111,11 +114,13 @@ pub fn build_move_package(
     build_config: BuildConfig,
     is_framework: bool,
 ) -> SuiResult<Vec<CompiledModule>> {
+    println!("before compile");
     match build_config.compile_package(path, &mut Vec::new()) {
         Err(error) => Err(SuiError::ModuleBuildFailure {
             error: error.to_string(),
         }),
         Ok(package) => {
+            println!("success compile");
             let compiled_modules = package.root_modules_map();
             if !is_framework {
                 if let Some(m) = compiled_modules
