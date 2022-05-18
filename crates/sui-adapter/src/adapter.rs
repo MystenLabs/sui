@@ -6,6 +6,7 @@ use anyhow::Result;
 use crate::bytecode_rewriter::ModuleHandleRewriter;
 use move_binary_format::{
     access::ModuleAccess,
+    binary_views::BinaryIndexedView,
     errors::PartialVMResult,
     file_format::{CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
 };
@@ -922,7 +923,10 @@ fn type_check_struct(
         Err(SuiError::TypeError {
             error: format!(
                 "Expected argument of type {}, but found type {}",
-                sui_verifier::format_signature_token(module, param_type),
+                sui_verifier::format_signature_token(
+                    &BinaryIndexedView::Module(module),
+                    param_type
+                ),
                 arg_type
             ),
         })
@@ -994,7 +998,8 @@ fn struct_tag_equals_struct_inst(
     param_type: StructHandleIndex,
     param_type_arguments: &[SignatureToken],
 ) -> bool {
-    let (address, module_name, struct_name) = sui_verifier::resolve_struct(module, param_type);
+    let view = BinaryIndexedView::Module(module);
+    let (address, module_name, struct_name) = sui_verifier::resolve_struct(&view, param_type);
 
     // same address, module, name, and type parameters
     &arg_type.address == address
