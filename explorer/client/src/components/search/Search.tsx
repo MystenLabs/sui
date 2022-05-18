@@ -6,7 +6,7 @@ import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { isGenesisLibAddress } from '../../utils/api/searchUtil';
-import { navigateWithUnknown } from '../../utils/searchUtil';
+import { navigateWithUnknown, overrideTypeChecks } from '../../utils/searchUtil';
 
 import styles from './Search.module.css';
 
@@ -24,6 +24,9 @@ function getPlaceholderText(category: SearchCategory) {
 }
 
 function isInputValid(category: SearchCategory, input: string): boolean {
+    if(overrideTypeChecks)
+        return true;
+
     switch (category) {
         case 'objects':
         case 'addresses':

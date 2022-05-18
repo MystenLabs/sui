@@ -2,10 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 let navigateWithUnknown: Function;
+let overrideTypeChecks = false;
 
 if (process.env.REACT_APP_DATA === 'static') {
     import('./static/searchUtil').then(
-        (uf) => (navigateWithUnknown = uf.navigateWithUnknown)
+        (uf) => {
+            navigateWithUnknown = uf.navigateWithUnknown;
+            overrideTypeChecks = true;
+        }
     );
 } else {
     import('./api/searchUtil').then(
@@ -13,4 +17,4 @@ if (process.env.REACT_APP_DATA === 'static') {
     );
 }
 
-export { navigateWithUnknown };
+export { navigateWithUnknown, overrideTypeChecks };
