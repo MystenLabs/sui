@@ -11,7 +11,7 @@ module Sui::Transfer {
     friend Sui::Collection;
 
     // When transferring a child object, this error is thrown if the child object
-    // doesn't match the ChildRef that represents the onwership.
+    // doesn't match the ChildRef that represents the ownership.
     const EChildIDMismatch: u64 = 0;
 
     /// Represents a reference to a child object, whose type is T.
