@@ -94,7 +94,7 @@ describe('End-to-end Tests', () => {
 
         it('has a go home button', async () => {
             await page.goto(`${BASE_URL}/apples`);
-            await page.$eval('#homeBtn', (form: any) => form.click());
+            await page.click('#homeBtn');
             await expectHome(page);
         });
     });
@@ -207,8 +207,7 @@ describe('End-to-end Tests', () => {
             await page.goto(`${BASE_URL}/${parentIsA}/${parentValue}`);
 
             //Click on child in Owned Objects List:
-            const objectLink = await page.$(nftObject(parentToChildNo));
-            await objectLink.click();
+            await page.click(nftObject(parentToChildNo));
 
             //Check ID of child object:
             const childIDEl = await page.$('#objectID');
@@ -251,8 +250,7 @@ describe('End-to-end Tests', () => {
             await page.goto(`${BASE_URL}/objects/${parentValue}`);
 
             //Click on child in Owned Objects List:
-            const objectLink = await page.$(nftObject(1));
-            await objectLink.click();
+            await page.click(nftObject(1));
 
             // First see Please Wait Message:
             await checkID(
