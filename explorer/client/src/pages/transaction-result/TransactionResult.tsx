@@ -67,7 +67,7 @@ const initState: TxnState = {
 
 function fetchTransactionData(
     txId: string | undefined,
-    network: Network
+    network: Network | string
 ): Promise<TransactionEffectsResponse> {
     try {
         if (!txId) {

@@ -48,12 +48,17 @@ const ENDPOINTS = {
     [Network.Devnet]: 'https://gateway.devnet.sui.io:9000',
 };
 
-export function getEndpoint(network: Network): string {
+export function getEndpoint(network: Network | string): string {
+    //Endpoint has 3 types:
+    // 1) An override value
     const override = tryGetRpcSetting();
     if (override) return override;
-    if (network === Network.Local) {
-        return ENDPOINTS[network];
+
+    //2) A Network value
+    if (Object.values(ENDPOINTS).includes(network)) {
+        return ENDPOINTS[network as Network];
     }
-    // Use DevNet as the fallback option
-    return ENDPOINTS[Network.Devnet];
+
+    //3) Some Other String
+    return network;
 }

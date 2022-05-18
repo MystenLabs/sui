@@ -14,7 +14,7 @@ import { Network } from '../utils/api/DefaultRpcClient';
 import styles from './App.module.css';
 
 function App() {
-    const [network, setNetwork] = useState<Network>(Network.Devnet);
+    const [network, setNetwork] = useState<Network | string>(Network.Devnet);
 
     return (
         <NetworkContext.Provider value={[network, setNetwork]}>

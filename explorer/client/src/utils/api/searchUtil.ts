@@ -6,7 +6,7 @@ import { DefaultRpcClient as rpc, type Network } from './DefaultRpcClient';
 export const navigateWithUnknown = async (
     input: string,
     navigate: Function,
-    network: Network
+    network: Network | string
 ) => {
     const addrPromise = rpc(network)
         .getOwnedObjectRefs(input)

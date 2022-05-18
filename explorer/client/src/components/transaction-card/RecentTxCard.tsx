@@ -50,7 +50,7 @@ type TxnData = {
 };
 
 async function getRecentTransactions(
-    network: Network,
+    network: Network | string,
     txNum: number
 ): Promise<TxnData[]> {
     try {

@@ -19,11 +19,20 @@ div.detailsbg {
 }
 
 div.inactive {
-    @apply p-2 my-2 cursor-pointer hover:bg-green-500 hover:text-offblack w-[30vw] mx-auto rounded-lg;
+    @apply cursor-pointer hover:bg-green-500 hover:text-offblack;
 }
 
 div.active {
-    @apply p-2 my-2 bg-sui text-offblack w-[30vw] mx-auto rounded-lg;
+    @apply bg-sui text-offblack;
+}
+
+.opennetworkdetails > div > div,
+.opennetworkdetails > div > input {
+    @apply p-2 my-2 w-[30vw] mx-auto rounded-lg;
+}
+
+.opennetworkdetails > div > input {
+    @apply bg-offblack text-offwhite border-green-500 border-solid font-mono;
 }
 
 .remove {

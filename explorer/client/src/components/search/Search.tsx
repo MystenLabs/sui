@@ -1,9 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { NetworkContext } from '../../context';
 import { navigateWithUnknown } from '../../utils/searchUtil';
 
 import styles from './Search.module.css';
@@ -24,6 +25,7 @@ function getPlaceholderText(category: SearchCategory) {
 function Search() {
     const [input, setInput] = useState('');
     const [category, setCategory] = useState('all' as SearchCategory);
+    const [network] = useContext(NetworkContext);
     const navigate = useNavigate();
 
     const [pleaseWaitMode, setPleaseWaitMode] = useState(false);
@@ -37,10 +39,12 @@ function Search() {
 
             if (category === 'all') {
                 // remove empty char from input
-                navigateWithUnknown(input.trim(), navigate).then(() => {
-                    setInput('');
-                    setPleaseWaitMode(false);
-                });
+                navigateWithUnknown(input.trim(), navigate, network).then(
+                    () => {
+                        setInput('');
+                        setPleaseWaitMode(false);
+                    }
+                );
             } else {
                 navigate(`../${category}/${input.trim()}`);
                 setInput('');
@@ -48,7 +52,7 @@ function Search() {
                 setCategory('all');
             }
         },
-        [input, navigate, category, setInput]
+        [input, navigate, category, setInput, network]
     );
 
     const handleTextChange = useCallback(

@@ -14,5 +14,5 @@ export type JsonBytes = { bytes: number[] };
 
 export { Network };
 
-export const DefaultRpcClient = (network: Network) =>
+export const DefaultRpcClient = (network: Network | string) =>
     new JsonRpcProvider(getEndpoint(network));

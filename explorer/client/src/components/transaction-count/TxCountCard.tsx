@@ -15,7 +15,7 @@ import styles from './TxCountCard.module.css';
 
 const initState = { count: 0, loadState: 'pending' };
 
-async function getTransactionCount(network: Network): Promise<number> {
+async function getTransactionCount(network: Network | string): Promise<number> {
     return rpc(network).getTotalTransactionNumber();
 }
 

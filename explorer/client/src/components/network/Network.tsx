@@ -9,6 +9,7 @@ import styles from './Network.module.css';
 export default function NetworkSelect() {
     const [network, setNetwork] = useContext(NetworkContext);
     const [isModuleOpen, setModuleOpen] = useState(false);
+    const [isOpenInput, setIsOpenInput] = useState(false);
 
     const openModal = useCallback(
         () => (isModuleOpen ? setModuleOpen(false) : setModuleOpen(true)),
@@ -16,14 +17,34 @@ export default function NetworkSelect() {
     );
     const closeModal = useCallback(() => setModuleOpen(false), [setModuleOpen]);
 
+    const openInput = useCallback(() => {
+        setIsOpenInput(true);
+        setNetwork('http://127.0.0.1:5001');
+    }, [setIsOpenInput, setNetwork]);
+
     const chooseNetwork = useCallback(
-        (specified: Network) => () =>
-            network !== specified ? setNetwork(specified) : null,
+        (specified: Network | string) => () => {
+            if (network !== specified) {
+                setNetwork(specified);
+                setIsOpenInput(false);
+            }
+        },
         [network, setNetwork]
     );
 
-    const networkStyle = (iconNetwork: Network) =>
-        network === iconNetwork ? styles.active : styles.inactive;
+    const handleTextChange = useCallback(
+        (e: React.ChangeEvent<HTMLInputElement>) =>
+            setNetwork(e.currentTarget.value),
+        [setNetwork]
+    );
+    const networkStyle = (iconNetwork: Network | 'other') =>
+        //Button text matches network or
+        network === iconNetwork ||
+        //network is not one of options and button text is other
+        (iconNetwork === 'other' &&
+            !Object.values(Network).includes(network as Network))
+            ? styles.active
+            : styles.inactive;
 
     if (!IS_STATIC_ENV) {
         return (
@@ -41,17 +62,32 @@ export default function NetworkSelect() {
                             &times;
                         </div>
                         <h2>Choose a Network</h2>
-                        <div
-                            onClick={chooseNetwork(Network.Devnet)}
-                            className={networkStyle(Network.Devnet)}
-                        >
-                            Devnet
-                        </div>
-                        <div
-                            onClick={chooseNetwork(Network.Local)}
-                            className={networkStyle(Network.Local)}
-                        >
-                            Local
+                        <div>
+                            <div
+                                onClick={chooseNetwork(Network.Devnet)}
+                                className={networkStyle(Network.Devnet)}
+                            >
+                                Devnet
+                            </div>
+                            <div
+                                onClick={chooseNetwork(Network.Local)}
+                                className={networkStyle(Network.Local)}
+                            >
+                                Local
+                            </div>
+                            <div
+                                onClick={openInput}
+                                className={networkStyle('other')}
+                            >
+                                Custom RPC URL
+                            </div>
+                            {isOpenInput && (
+                                <input
+                                    type="text"
+                                    value={network}
+                                    onChange={handleTextChange}
+                                />
+                            )}
                         </div>
                     </div>
                     <div
