@@ -593,7 +593,7 @@ SuiError:
     100:
       ListenerCapacityExceeded: UNIT
     101:
-      ConsensusNarwhalSerializationError:
+      ConsensusSuiSerializationError:
         NEWTYPE: STR
     102:
       NotASharedObjectTransaction: UNIT
