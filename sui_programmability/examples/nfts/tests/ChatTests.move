@@ -5,8 +5,6 @@
 module NFTs::ChatTests {
     use NFTs::Chat::{Self, Chat};
     use Std::ASCII::Self;
-    use Sui::ID::Self;
-    use Std::Option::Self;
     use Sui::TestScenario::Self;
 
     const USER1_ADDRESS: address = @0xA001;
@@ -18,9 +16,9 @@ module NFTs::ChatTests {
         let scenario = &mut TestScenario::begin(&USER1_ADDRESS);
         {
             Chat::mint(
-                ID::new(@0xC001), // This should be an application object ID.
+                @0xC001, // This should be an application object ID.
                 ASCII::string(HELLO),
-                Option::none(), // We're not referencing another Object (it's not a retweet or reply).
+                @0x0000, // We're referencing the all-zero bytes object (i.e., it's not a retweet or reply).
                 METADATA, // Some metadata (it could be empty).
                 TestScenario::ctx(scenario)
             );
