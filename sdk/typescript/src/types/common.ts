@@ -24,7 +24,12 @@ export function isValidTransactionDigest(value: string): value is TransactionDig
 }
 
 // TODO - can we automatically sync this with rust length definition?
-const SUI_ADDRESS_LENGTH = 16;
+// Source of truth is
+// https://github.com/MystenLabs/sui/blob/acb2b97ae21f47600e05b0d28127d88d0725561d/crates/sui-types/src/base_types.rs#L67 
+// which uses the Move account address length 
+// https://github.com/move-language/move/blob/67ec40dc50c66c34fd73512fcc412f3b68d67235/language/move-core/types/src/account_address.rs#L23 .
+
+const SUI_ADDRESS_LENGTH = 20;
 export function isValidSuiAddress(value: string): value is SuiAddress {
   return isHex(value) &&
     getHexByteLength(value) === SUI_ADDRESS_LENGTH;
