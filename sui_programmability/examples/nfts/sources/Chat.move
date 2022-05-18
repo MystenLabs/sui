@@ -6,6 +6,7 @@ module NFTs::Chat {
     use Std::ASCII::{Self, String};
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
+    use Std::Vector::length;
 
     /// Max text length.
     const MAX_TEXT_LENGTH: u64 = 512;
@@ -35,19 +36,19 @@ module NFTs::Chat {
 
     /// Mint (post) a Chat object.
     /// TODO: Using `address` as `app_identifier` & `ref_identifier` type, because we cannot pass `ID` to entry
-    ///     functions.
+    ///     functions. Using `vector<u8>` for `text` instead of `String`  for the same reason.
     public(script) fun mint(
             app_identifier: address,
-            text: String,
+            text: vector<u8>,
             ref_identifier: address,
             metadata: vector<u8>,
             ctx: &mut TxContext,
         ) {
-        assert!(ASCII::length(&text) <= MAX_TEXT_LENGTH, ETextOverflow);
+        assert!(length(&text) <= MAX_TEXT_LENGTH, ETextOverflow);
         let chat = Chat {
             id: TxContext::new_id(ctx),
             app_id: ID::new(app_identifier),
-            text,
+            text: ASCII::string(text),
             ref_id: ID::new(ref_identifier),
             metadata,
         };
