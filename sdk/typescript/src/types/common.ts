@@ -16,7 +16,7 @@ const TX_DIGEST_BASE64_LENGTH = 44;
 const VALID_BASE64_REGEX =
   /^(?:[a-zA-Z0-9+\/]{4})*(?:|(?:[a-zA-Z0-9+\/]{3}=)|(?:[a-zA-Z0-9+\/]{2}==)|(?:[a-zA-Z0-9+\/]{1}===))$/;
 
-export function isTransactionDigest(value: string): value is TransactionDigest {
+export function isValidTransactionDigest(value: string): value is TransactionDigest {
   return value.length === TX_DIGEST_BASE64_LENGTH
     && VALID_BASE64_REGEX.test(value);
 }
@@ -24,7 +24,8 @@ export function isTransactionDigest(value: string): value is TransactionDigest {
 // TODO - can we automatically sync this with rust length definition?
 const SUI_ADDRESS_LENGTH = 16;
 export function isValidSuiAddress(value: string): value is SuiAddress {
-  return isHex(value) && getHexByteLength(value) === SUI_ADDRESS_LENGTH;
+  return isHex(value) &&
+    getHexByteLength(value) === SUI_ADDRESS_LENGTH;
 }
 
 // TODO - which type should this guard ?
