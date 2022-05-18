@@ -4,7 +4,6 @@
 module NFTs::Chat {
     use Sui::ID::{Self, ID, VersionedID};
     use Std::ASCII::{Self, String};
-    use Std::Option::Option;
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
 
@@ -23,7 +22,8 @@ module NFTs::Chat {
         text: String,
         // Set if referencing an another object (i.e., due to a Like, Retweet, Reply etc).
         // We allow referencing any object type, not ony Chat NFTs.
-        ref_id: Option<ID>,
+        // By convention applications can use the all zeros address, when no reference is required.
+        ref_id: ID,
         // app-specific metadata.
         metadata: vector<u8>,
     }
@@ -34,23 +34,24 @@ module NFTs::Chat {
     }
 
     /// Mint (post) a Chat object.
+    /// TODO: Using `address` as `app_identifier` & `ref_identifier` type, because we cannot pass `ID` to entry
+    ///     functions.
     public(script) fun mint(
-            app_id: ID,
+            app_identifier: address,
             text: String,
-            ref_id: Option<ID>,
+            ref_identifier: address,
             metadata: vector<u8>,
             ctx: &mut TxContext,
         ) {
         assert!(ASCII::length(&text) <= MAX_TEXT_LENGTH, ETextOverflow);
-        let sender = TxContext::sender(ctx);
         let chat = Chat {
             id: TxContext::new_id(ctx),
-            app_id,
+            app_id: ID::new(app_identifier),
             text,
-            ref_id,
+            ref_id: ID::new(ref_identifier),
             metadata,
         };
-        Transfer::transfer(chat, sender);
+        Transfer::transfer(chat, TxContext::sender(ctx));
     }
 
     /// Burn a Chat object.
