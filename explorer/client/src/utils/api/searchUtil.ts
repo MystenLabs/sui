@@ -80,4 +80,4 @@ export const navigateWithUnknown = async (
 };
 
 export const isGenesisLibAddress = (value: string): boolean =>
-    /^(0x|0X)[12]0*$/.test(value)
+    /^(0x|0X)[12]0*$/.test(value);

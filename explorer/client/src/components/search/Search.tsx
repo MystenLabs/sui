@@ -5,8 +5,8 @@ import { isValidTransactionDigest, isValidSuiAddress } from '@mysten/sui.js';
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { navigateWithUnknown } from '../../utils/searchUtil';
 import { isGenesisLibAddress } from '../../utils/api/searchUtil';
+import { navigateWithUnknown } from '../../utils/searchUtil';
 
 import styles from './Search.module.css';
 
@@ -31,9 +31,11 @@ function isInputValid(category: SearchCategory, input: string): boolean {
         case 'transactions':
             return isValidTransactionDigest(input);
         case 'all':
-            return isValidSuiAddress(input)
-                || isValidTransactionDigest(input)
-                || isGenesisLibAddress(input);
+            return (
+                isValidSuiAddress(input) ||
+                isValidTransactionDigest(input) ||
+                isGenesisLibAddress(input)
+            );
     }
 }
 
