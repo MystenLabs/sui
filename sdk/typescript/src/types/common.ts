@@ -28,7 +28,6 @@ export function isValidSuiAddress(value: string): value is SuiAddress {
     getHexByteLength(value) === SUI_ADDRESS_LENGTH;
 }
 
-// TODO - which type should this guard ?
 export function isValidSuiObjectId(value: string): boolean {
   return isValidSuiAddress(value);
 }
