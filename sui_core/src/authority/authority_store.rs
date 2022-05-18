@@ -5,6 +5,7 @@ use crate::gateway_state::GatewayTxSeqNumber;
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::collections::BTreeSet;
 use std::path::Path;
 use sui_storage::LockService;
@@ -306,17 +307,33 @@ impl<
             .collect())
     }
 
-    /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
-    pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    // Returns true if the most recent version of the object does not correspond to a deleted
+    // version.
+    fn object_is_live(&self, object_id: &ObjectID) -> Result<bool, SuiError> {
         let obj = self
-            .objects
+            .parent_sync
             .iter()
-            .skip_prior_to(&ObjectKey::max_for_id(object_id))?
+            .skip_prior_to(&(*object_id, SequenceNumber::MAX, ObjectDigest::MAX))?
             .next();
 
-        match obj {
-            Some(obj) if obj.0 .0 == *object_id => Ok(Some(obj.1)),
-            _ => Ok(None),
+        Ok(obj.map(|(k, _)| k.2.is_live()).unwrap_or(false))
+    }
+
+    /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
+    pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        if !self.object_is_live(object_id)? {
+            Ok(None)
+        } else {
+            let obj = self
+                .objects
+                .iter()
+                .skip_prior_to(&ObjectKey::max_for_id(object_id))?
+                .next();
+
+            match obj {
+                Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => Ok(Some(obj)),
+                _ => Ok(None),
+            }
         }
     }
 
@@ -640,17 +657,6 @@ impl<
             .filter(|(id, _, _)| objects.get(id).unwrap().is_owned())
             .cloned()
             .collect();
-
-        // Delete objects.
-        // Wrapped objects need to be deleted as well because we can no longer track their
-        // content nor use them directly.
-        for key in deleted.iter() {
-            write_batch = write_batch.delete_range(
-                &self.objects,
-                &ObjectKey::min_for_id(key.0),
-                &ObjectKey::max_for_id(key.0),
-            )?;
-        }
 
         // Make an iterator over all objects that are either deleted or have changed owner,
         // along with their old owner.  This is used to update the owner index.
@@ -1096,5 +1102,30 @@ impl<const A: bool, const B: bool, S: Eq + Serialize + for<'de> Deserialize<'de>
                     .get(module_id.name().as_str())
                     .cloned()
             }))
+    }
+}
+
+// The primary key type for object storage.
+#[serde_as]
+#[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+struct ObjectKey(pub ObjectID, pub VersionNumber);
+
+impl ObjectKey {
+    pub const ZERO: ObjectKey = ObjectKey(ObjectID::ZERO, VersionNumber::MIN);
+
+    pub fn max_for_id(id: &ObjectID) -> Self {
+        Self(*id, VersionNumber::MAX)
+    }
+}
+
+impl From<ObjectRef> for ObjectKey {
+    fn from(object_ref: ObjectRef) -> Self {
+        (&object_ref).into()
+    }
+}
+
+impl From<&ObjectRef> for ObjectKey {
+    fn from(object_ref: &ObjectRef) -> Self {
+        Self(object_ref.0, object_ref.1)
     }
 }

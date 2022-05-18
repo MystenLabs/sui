@@ -73,39 +73,6 @@ pub struct ObjectID(
 
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
-// The primary key type for object storage.
-#[serde_as]
-#[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
-pub struct ObjectKey(pub ObjectID, pub VersionNumber);
-
-impl ObjectKey {
-    pub const ZERO: ObjectKey = ObjectKey(ObjectID::ZERO, VersionNumber::MIN);
-
-    pub fn new(id: &ObjectID, version: &VersionNumber) -> Self {
-        Self(*id, *version)
-    }
-
-    pub fn min_for_id(id: &ObjectID) -> Self {
-        Self(*id, VersionNumber::MIN)
-    }
-
-    pub fn max_for_id(id: &ObjectID) -> Self {
-        Self(*id, VersionNumber::MAX)
-    }
-}
-
-impl From<ObjectRef> for ObjectKey {
-    fn from(object_ref: ObjectRef) -> Self {
-        (&object_ref).into()
-    }
-}
-
-impl From<&ObjectRef> for ObjectKey {
-    fn from(object_ref: &ObjectRef) -> Self {
-        Self(object_ref.0, object_ref.1)
-    }
-}
-
 pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;
 
 #[serde_as]
@@ -387,6 +354,10 @@ impl ObjectDigest {
 
     pub fn new(bytes: [u8; 32]) -> Self {
         Self(bytes)
+    }
+
+    pub fn is_live(&self) -> bool {
+        *self != Self::OBJECT_DIGEST_DELETED && *self != Self::OBJECT_DIGEST_WRAPPED
     }
 
     // for testing
