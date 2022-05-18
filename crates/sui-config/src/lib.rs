@@ -35,7 +35,7 @@ pub struct ValidatorConfig {
     network_address: Multiaddr,
     metrics_address: Multiaddr,
 
-    consensus_config: ConsensuseConfig,
+    pub consensus_config: ConsensuseConfig,
     committee_config: CommitteeConfig,
 
     genesis: genesis::Genesis,
@@ -85,7 +85,7 @@ pub struct ConsensuseConfig {
     //TODO make narwhal config serializable
     #[serde(skip_serializing)]
     #[serde(default)]
-    narwhal_config: DebugIgnore<ConsensusParameters>,
+    pub narwhal_config: DebugIgnore<ConsensusParameters>,
 }
 
 impl ConsensuseConfig {
@@ -164,7 +164,7 @@ impl ValidatorInfo {
 /// all validators
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NetworkConfig {
-    validator_configs: Vec<ValidatorConfig>,
+    pub validator_configs: Vec<ValidatorConfig>,
     loaded_move_packages: Vec<(PathBuf, ObjectID)>,
     genesis: genesis::Genesis,
     pub account_keys: Vec<KeyPair>,
