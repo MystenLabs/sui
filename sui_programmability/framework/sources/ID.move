@@ -6,6 +6,7 @@ module Sui::ID {
     use Std::BCS;
     use Std::Vector;
 
+    friend Sui::SuiSystem;
     friend Sui::Transfer;
     friend Sui::TxContext;
 
@@ -14,6 +15,9 @@ module Sui::ID {
 
     /// Version of an object ID created by the current transaction.
     const INITIAL_VERSION: u64 = 0;
+
+    /// The hardcoded ID for the singleton Sui System State Object.
+    const SUI_SYSTEM_STATE_OBJECT_ID: address = @0x5;
 
     /// Number of bytes in an object ID
     const ID_SIZE: u64 = 20;
@@ -75,6 +79,12 @@ module Sui::ID {
     /// This is the only way to create either a `VersionedID` or a `UniqueID`.
     public(friend) fun new_versioned_id(bytes: address): VersionedID {
         VersionedID { id: UniqueID { id: ID { bytes } }, version: INITIAL_VERSION }
+    }
+
+    /// Create the `VersionedID` for the singleton SuiSystemState object.
+    /// This should only be called once from SuiSsytem.
+    public(friend) fun get_sui_system_state_object_id(): VersionedID {
+        new_versioned_id(SUI_SYSTEM_STATE_OBJECT_ID)
     }
 
     // === reads ===

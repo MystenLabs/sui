@@ -6,7 +6,7 @@ module Sui::SuiSystem {
     use Sui::Coin::{Self, Coin, TreasuryCap};
     use Sui::Delegation::{Self, Delegation};
     use Sui::EpochRewardRecord::{Self, EpochRewardRecord};
-    use Sui::ID::VersionedID;
+    use Sui::ID::{Self, VersionedID};
     use Sui::SUI::SUI;
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
@@ -60,11 +60,11 @@ module Sui::SuiSystem {
         max_validator_candidate_count: u64,
         min_validator_stake: u64,
         max_validator_stake: u64,
-        ctx: &mut TxContext,
     ) {
         assert!(min_validator_stake < max_validator_stake, 0);
         let state = SuiSystemState {
-            id: TxContext::new_id(ctx),
+            // Use a hardcoded ID.
+            id: ID::get_sui_system_state_object_id(),
             epoch: 0,
             validators: ValidatorSet::new(validators),
             treasury_cap,
@@ -88,6 +88,7 @@ module Sui::SuiSystem {
     // someone to become a validator?
     public(script) fun request_add_validator(
         self: &mut SuiSystemState,
+        pubkey_bytes: vector<u8>,
         name: vector<u8>,
         net_address: vector<u8>,
         stake: Coin<SUI>,
@@ -105,6 +106,7 @@ module Sui::SuiSystem {
         );
         let validator = Validator::new(
             TxContext::sender(ctx),
+            pubkey_bytes,
             name,
             net_address,
             Coin::into_balance(stake)

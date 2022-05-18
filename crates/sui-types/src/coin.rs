@@ -78,3 +78,10 @@ impl Coin {
         }
     }
 }
+
+// Rust version of the Move Sui::Coin::TreasuryCap type
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct TreasuryCap {
+    pub id: VersionedID,
+    pub total_supply: u64,
+}

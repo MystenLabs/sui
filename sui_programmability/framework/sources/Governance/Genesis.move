@@ -25,6 +25,7 @@ module Sui::Genesis {
 
     /// Basic information of Validator1, as an example, all dummy values.
     const VALIDATOR1_SUI_ADDRESS: address = @0x1234;
+    const VALIDATOR1_PUBKEY_BYTES: vector<u8> = x"FF";
     const VALIDATOR1_NAME: vector<u8> = b"Validator1";
     const VALIDATOR1_IP_ADDRESS: vector<u8> = x"00FF00FF";
     const VALIDATOR1_STAKE: u64 = 100000000000000;
@@ -38,6 +39,7 @@ module Sui::Genesis {
         let validators = Vector::empty();
         Vector::push_back(&mut validators, Validator::new(
             VALIDATOR1_SUI_ADDRESS,
+            VALIDATOR1_PUBKEY_BYTES,
             VALIDATOR1_NAME,
             VALIDATOR1_IP_ADDRESS,
             Coin::mint_balance(VALIDATOR1_STAKE, &mut treasury_cap),
@@ -49,7 +51,6 @@ module Sui::Genesis {
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
             INIT_MAX_VALIDATOR_STAKE,
-            ctx,
         );
     }
 }

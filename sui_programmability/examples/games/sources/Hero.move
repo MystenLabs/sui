@@ -22,7 +22,7 @@ module Games::Hero {
         experience: u64,
         /// The hero's minimal inventory
         sword: Option<Sword>,
-        // An ID of the game user is playing
+        /// An ID of the game user is playing
         game_id: ID,
     }
 

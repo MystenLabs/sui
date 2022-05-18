@@ -547,6 +547,12 @@ impl ObjectID {
         Self::from(AccountAddress::random())
     }
 
+    pub const fn from_single_byte(byte: u8) -> ObjectID {
+        let mut bytes = [0u8; Self::LENGTH];
+        bytes[Self::LENGTH - 1] = byte;
+        ObjectID::new(bytes)
+    }
+
     /// Converts from hex string to ObjectID where the string is prefixed with 0x
     /// Its okay if the strings are less than expected
     pub fn from_hex_literal(literal: &str) -> Result<Self, ObjectIDParseError> {
