@@ -18,6 +18,7 @@ module Sui::ValidatorTests {
             let init_stake = Coin::into_balance(Coin::mint_for_testing(10, ctx));
             let validator = Validator::new(
                 sender,
+                x"FF",
                 b"Validator1",
                 x"FFFF",
                 init_stake,
@@ -45,6 +46,7 @@ module Sui::ValidatorTests {
         let init_stake = Coin::into_balance(Coin::mint_for_testing(10, ctx));
         let validator = Validator::new(
             sender,
+            x"FF",
             b"Validator1",
             x"FFFF",
             init_stake,
