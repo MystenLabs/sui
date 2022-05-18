@@ -127,7 +127,7 @@ fn verify_entry_function_impl(
 
     let last_param = params.0.last().unwrap();
     let last_param_idx = params.0.len() - 1;
-    if !is_tx_context(&view, last_param) {
+    if !is_tx_context(view, last_param) {
         return Err(format!(
             "{}::{}. Expected last parameter of function signature to be &mut {}::{}::{}, but \
             found {}",
