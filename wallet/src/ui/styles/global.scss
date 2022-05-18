@@ -1,12 +1,20 @@
+@import url('bootstrap-icons');
+
 html,
 body {
     min-width: 0;
     min-height: 0;
     margin: 0;
     padding: 0;
-    background-color: #f8f8f8;
+    background-color: #e1e1e1;
     color: black;
     scroll-behavior: smooth;
+}
+
+#root {
+    display: flex;
+    align-items: center;
+    flex-flow: column nowrap;
 }
 
 .btn {

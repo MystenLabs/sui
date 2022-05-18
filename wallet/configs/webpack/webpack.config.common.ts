@@ -152,6 +152,7 @@ const commonConfig: () => Promise<Configuration> = async () => {
             }),
             new DefinePlugin({
                 'typeof window': JSON.stringify(typeof {}),
+                'process.env.NODE_DEBUG': false,
             }),
             new ProvidePlugin({
                 Buffer: ['buffer', 'Buffer'],
