@@ -1,4 +1,4 @@
-# Resilient Componets
+# Resilient Components
 
 This library provides supervision of components that should be consistently running without downtime.
 We automatically restart a component when it stops running, and provide a contract for the component to
@@ -8,7 +8,7 @@ communicate with the supervisor to signal when a situation arises that requires 
 ## Use
 
 For each component that needs to be registered with supervision, we will instantiate a `Supervisor` object to do supervision for that component.
-The supervisor should be initialized by passin in an object that implements the `Manageable` trait. To start the component,
+The supervisor should be initialized by passing in an object that implements the `Manageable` trait. To start the component,
 call the spawn method and await.
 ```asm
  let supervisor = Supervisor::new(stream_component);
