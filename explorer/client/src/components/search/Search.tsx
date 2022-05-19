@@ -4,7 +4,7 @@
 import { isValidTransactionDigest, isValidSuiAddress } from '@mysten/sui.js';
 import React, { useState, useCallback, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-        
+
 import { NetworkContext } from '../../context';
 import { isGenesisLibAddress } from '../../utils/api/searchUtil';
 import {
@@ -71,12 +71,10 @@ function Search() {
 
             if (category === 'all') {
                 // remove empty char from input
-                navigateWithUnknown(query, navigate, network).then(
-                    () => {
-                        setInput('');
-                        setPleaseWaitMode(false);
-                    }
-                );
+                navigateWithUnknown(query, navigate, network).then(() => {
+                    setInput('');
+                    setPleaseWaitMode(false);
+                });
             } else {
                 navigate(`../${category}/${query}`);
                 setInput('');
