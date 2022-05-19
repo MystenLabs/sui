@@ -18,8 +18,8 @@ use tracing::{debug, instrument};
 use crate::authority::SuiDataStore;
 
 #[instrument(level = "trace", skip_all)]
-pub async fn check_transaction_input<const A: bool, const B: bool, S, T>(
-    store: &SuiDataStore<A, B, S>,
+pub async fn check_transaction_input<const B: bool, S, T>(
+    store: &SuiDataStore<B, S>,
     transaction: &TransactionEnvelope<T>,
     shared_obj_metric: &IntCounter,
 ) -> Result<(SuiGasStatus<'static>, Vec<(InputObjectKind, Object)>), SuiError>
@@ -51,8 +51,8 @@ where
 /// Returns the gas object (to be able to reuse it latter) and a gas status
 /// that will be used in the entire lifecycle of the transaction execution.
 #[instrument(level = "trace", skip_all)]
-async fn check_gas<const A: bool, const B: bool, S>(
-    store: &SuiDataStore<A, B, S>,
+async fn check_gas<const B: bool, S>(
+    store: &SuiDataStore<B, S>,
     gas_payment_id: ObjectID,
     gas_budget: u64,
 ) -> SuiResult<(Object, SuiGasStatus<'static>)>
@@ -70,8 +70,8 @@ where
 }
 
 #[instrument(level = "trace", skip_all, fields(num_objects = input_objects.len()))]
-async fn fetch_objects<const A: bool, const B: bool, S>(
-    store: &SuiDataStore<A, B, S>,
+async fn fetch_objects<const B: bool, S>(
+    store: &SuiDataStore<B, S>,
     input_objects: &[InputObjectKind],
     gas_object_opt: Option<Object>,
 ) -> Result<Vec<Option<Object>>, SuiError>
@@ -94,8 +94,8 @@ where
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
 #[instrument(level = "trace", skip_all)]
-async fn check_locks<const A: bool, const B: bool, S>(
-    store: &SuiDataStore<A, B, S>,
+async fn check_locks<const B: bool, S>(
+    store: &SuiDataStore<B, S>,
     transaction: &TransactionData,
     gas_object: Object,
 ) -> Result<Vec<(InputObjectKind, Object)>, SuiError>

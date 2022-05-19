@@ -17,10 +17,10 @@ use tracing::{debug, error, trace};
 use typed_store::rocks::{DBBatch, DBMap};
 use typed_store::{reopen, traits::Map};
 
-pub type AuthorityStore = SuiDataStore<false, true, AuthoritySignInfo>;
+pub type AuthorityStore = SuiDataStore<true, AuthoritySignInfo>;
 #[allow(dead_code)]
-pub type ReplicaStore = SuiDataStore<true, false, EmptySignInfo>;
-pub type GatewayStore = SuiDataStore<false, true, EmptySignInfo>;
+pub type ReplicaStore = SuiDataStore<false, EmptySignInfo>;
+pub type GatewayStore = SuiDataStore<true, EmptySignInfo>;
 
 const NUM_SHARDS: usize = 4096;
 
@@ -28,15 +28,12 @@ const NUM_SHARDS: usize = 4096;
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
 const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 
-/// ALL_OBJ_VER determines whether we want to store all past
-/// versions of every object in the store. Authority doesn't store
-/// them, but other entities such as replicas will.
 /// USE_LOCKS determines whether we maintain locks when updating state
 /// this is because replicas for example don't currently require locks`
 /// S is a template on Authority signature state. This allows SuiDataStore to be used on either
 /// authorities or non-authorities. Specifically, when storing transactions and effects,
 /// S allows SuiDataStore to either store the authority signed version or unsigned version.
-pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
+pub struct SuiDataStore<const USE_LOCKS: bool, S> {
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions. If an object is deleted its entry is
     /// removed from this map.
@@ -44,11 +41,6 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
     /// Note that while this map can store all versions of an object, in practice it only stores
     /// the most recent version.
     objects: DBMap<ObjectKey, Object>,
-
-    /// Stores all history versions of all objects.
-    /// This is not needed by an authority, but is needed by a replica.
-    #[allow(dead_code)]
-    all_object_versions: DBMap<ObjectKey, Object>,
 
     /// The LockService this store depends on for locking functionality
     lock_service: LockService,
@@ -107,11 +99,8 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
     last_consensus_index: DBMap<u64, ExecutionIndices>,
 }
 
-impl<
-        const ALL_OBJ_VER: bool,
-        const USE_LOCKS: bool,
-        S: Eq + Serialize + for<'de> Deserialize<'de>,
-    > SuiDataStore<ALL_OBJ_VER, USE_LOCKS, S>
+impl<const USE_LOCKS: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
+    SuiDataStore<USE_LOCKS, S>
 {
     /// Open an authority store by directory path
     pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Self {
@@ -142,7 +131,6 @@ impl<
             let db_options = Some(options.clone());
             let opt_cfs: &[(&str, &rocksdb::Options)] = &[
                 ("objects", &point_lookup),
-                ("all_object_versions", &options),
                 ("transactions", &point_lookup),
                 ("owner_index", &options),
                 ("certificates", &point_lookup),
@@ -163,7 +151,6 @@ impl<
 
         let (
             objects,
-            all_object_versions,
             owner_index,
             transactions,
             certificates,
@@ -176,7 +163,6 @@ impl<
         ) = reopen! (
             &db,
             "objects";<ObjectKey, Object>,
-            "all_object_versions";<ObjectKey, Object>,
             "owner_index";<(SuiAddress, ObjectID), ObjectRef>,
             "transactions";<TransactionDigest, TransactionEnvelope<S>>,
             "certificates";<TransactionDigest, CertifiedTransaction>,
@@ -196,7 +182,6 @@ impl<
 
         Self {
             objects,
-            all_object_versions,
             lock_service,
             lock_table: (0..NUM_SHARDS)
                 .into_iter()
@@ -718,16 +703,6 @@ impl<
             }),
         )?;
 
-        if ALL_OBJ_VER {
-            // Keep all versions of every object if ALL_OBJ_VER is true.
-            write_batch = write_batch.insert_batch(
-                &self.all_object_versions,
-                written
-                    .iter()
-                    .map(|(_, (object_ref, object))| (ObjectKey::from(object_ref), object)),
-            )?;
-        }
-
         // Update the indexes of the objects written
         write_batch = write_batch.insert_batch(
             &self.owner_index,
@@ -1053,7 +1028,7 @@ impl<
     }
 }
 
-impl<const A: bool, const B: bool> SuiDataStore<A, B, AuthoritySignInfo> {
+impl<const B: bool> SuiDataStore<B, AuthoritySignInfo> {
     pub fn get_signed_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
@@ -1066,14 +1041,14 @@ impl<const A: bool, const B: bool> SuiDataStore<A, B, AuthoritySignInfo> {
     }
 }
 
-impl<const A: bool, const B: bool> SuiDataStore<A, B, EmptySignInfo> {
+impl<const B: bool> SuiDataStore<B, EmptySignInfo> {
     pub fn pending_transactions(&self) -> &DBMap<TransactionDigest, Transaction> {
         &self.transactions
     }
 }
 
-impl<const A: bool, const B: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
-    BackingPackageStore for SuiDataStore<A, B, S>
+impl<const B: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> BackingPackageStore
+    for SuiDataStore<B, S>
 {
     fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         let package = self.get_object(package_id)?;
@@ -1089,8 +1064,8 @@ impl<const A: bool, const B: bool, S: Eq + Serialize + for<'de> Deserialize<'de>
     }
 }
 
-impl<const A: bool, const B: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> ModuleResolver
-    for SuiDataStore<A, B, S>
+impl<const B: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> ModuleResolver
+    for SuiDataStore<B, S>
 {
     type Error = SuiError;
 
