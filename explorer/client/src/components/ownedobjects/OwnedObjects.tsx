@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Coin, getObjectFields, getObjectId } from '@mysten/sui.js';
-import React, { useCallback, useEffect, useState, useContext } from 'react';
+import React, {
+    useCallback,
+    useEffect,
+    useState,
+    useContext,
+    createContext,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { NetworkContext } from '../../context';
@@ -50,7 +56,18 @@ const NoOwnedObjects = () => (
 const OwnedObject = ({ id }: { id: string }) =>
     IS_STATIC_ENV ? <OwnedObjectStatic id={id} /> : <OwnedObjectAPI id={id} />;
 
+const NavigateFunctionContext = createContext<(id: string) => () => void>(
+    (id: string) => () => {}
+);
+
 function OwnedObjectStatic({ id }: { id: string }) {
+    const navigate = useNavigate();
+
+    const navigateFn = useCallback(
+        (id: string) => () => navigateWithUnknown(id, navigate),
+        [navigate]
+    );
+
     const objects = findOwnedObjectsfromID(id);
 
     if (objects) {
@@ -66,7 +83,11 @@ function OwnedObjectStatic({ id }: { id: string }) {
             };
         });
 
-        return <OwnedObjectLayout results={results} />;
+        return (
+            <NavigateFunctionContext.Provider value={navigateFn}>
+                <OwnedObjectLayout results={results} />
+            </NavigateFunctionContext.Provider>
+        );
     } else {
         return <NoOwnedObjects />;
     }
@@ -77,6 +98,11 @@ function OwnedObjectAPI({ id }: { id: string }) {
     const [isLoaded, setIsLoaded] = useState(false);
     const [isFail, setIsFail] = useState(false);
     const [network] = useContext(NetworkContext);
+    const navigate = useNavigate();
+    const navigateFn = useCallback(
+        (id: string) => () => navigateWithUnknown(id, navigate, network),
+        [navigate, network]
+    );
 
     useEffect(() => {
         setIsFail(false);
@@ -121,7 +147,12 @@ function OwnedObjectAPI({ id }: { id: string }) {
 
     if (isFail) return <NoOwnedObjects />;
 
-    if (isLoaded) return <OwnedObjectLayout results={results} />;
+    if (isLoaded)
+        return (
+            <NavigateFunctionContext.Provider value={navigateFn}>
+                <OwnedObjectLayout results={results} />
+            </NavigateFunctionContext.Provider>
+        );
 
     return <div className={styles.gray}>loading...</div>;
 }
@@ -344,20 +375,14 @@ function OwnedObjectSection({ results }: { results: resultType }) {
     );
 }
 function OwnedObjectView({ results }: { results: resultType }) {
-    const handlePreviewClick = useCallback(
-        (id: string, navigate: Function) => (e: React.MouseEvent) =>
-            navigateWithUnknown(id, navigate),
-        []
-    );
-    const navigate = useNavigate();
-
+    const navigateWithUnknown = useContext(NavigateFunctionContext);
     return (
         <div id="ownedObjects" className={styles.ownedobjects}>
             {results.map((entryObj, index1) => (
                 <div
                     className={styles.objectbox}
                     key={`object-${index1}`}
-                    onClick={handlePreviewClick(entryObj.id, navigate)}
+                    onClick={navigateWithUnknown(entryObj.id)}
                 >
                     {entryObj.display !== undefined && (
                         <div className={styles.previewimage}>
