@@ -356,7 +356,7 @@ impl ObjectDigest {
         Self(bytes)
     }
 
-    pub fn is_live(&self) -> bool {
+    pub fn is_alive(&self) -> bool {
         *self != Self::OBJECT_DIGEST_DELETED && *self != Self::OBJECT_DIGEST_WRAPPED
     }
 

@@ -13,7 +13,7 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use sui_types::object::OBJECT_START_VERSION;
-use tracing::trace;
+use tracing::{debug, error, trace};
 use typed_store::rocks::{DBBatch, DBMap};
 use typed_store::{reopen, traits::Map};
 
@@ -307,32 +307,44 @@ impl<
             .collect())
     }
 
-    // Returns true if the most recent version of the object does not correspond to a deleted
-    // version.
-    fn object_is_live(&self, object_id: &ObjectID) -> Result<bool, SuiError> {
+    // Returns true if the given version of the object has not been deleted (or wrapped).
+    fn object_is_alive(&self, object_id: &ObjectID) -> Result<bool, SuiError> {
         let obj = self
             .parent_sync
             .iter()
             .skip_prior_to(&(*object_id, SequenceNumber::MAX, ObjectDigest::MAX))?
             .next();
 
-        Ok(obj.map(|(k, _)| k.2.is_live()).unwrap_or(false))
+        Ok(obj
+            .map(|(k, _)| k.0 == *object_id && k.2.is_alive())
+            .unwrap_or(false))
     }
 
     /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
     pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        if !self.object_is_live(object_id)? {
-            Ok(None)
-        } else {
-            let obj = self
-                .objects
-                .iter()
-                .skip_prior_to(&ObjectKey::max_for_id(object_id))?
-                .next();
+        let obj = self
+            .objects
+            .iter()
+            .skip_prior_to(&ObjectKey::max_for_id(object_id))?
+            .next();
 
-            match obj {
-                Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => Ok(Some(obj)),
-                _ => Ok(None),
+        // Note that the two reads in this function are (obviously) not atomic, and the
+        // object may be deleted after we have read it. Hence we check object_is_alive last
+        // so that the write to self.parent_sync gets the last word.
+        match obj {
+            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => {
+                if self.object_is_alive(&obj_id)? {
+                    Ok(Some(obj))
+                } else {
+                    Ok(None)
+                }
+            }
+            _ => {
+                error!(
+                    ?object_id,
+                    "Object is missing parent_sync entry, data store is inconsistent"
+                );
+                Ok(None)
             }
         }
     }
