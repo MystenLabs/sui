@@ -931,7 +931,7 @@ dependencies = [
 [[package]]
 name = "config"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=23745f48103656eae4a4205d0b3edd53ad8894de#23745f48103656eae4a4205d0b3edd53ad8894de"
+source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
 dependencies = [
  "crypto",
  "multiaddr",
@@ -960,20 +960,23 @@ dependencies = [
 [[package]]
 name = "consensus"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=23745f48103656eae4a4205d0b3edd53ad8894de#23745f48103656eae4a4205d0b3edd53ad8894de"
+source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
 dependencies = [
  "bincode",
  "blake2",
  "bytes",
  "config 0.1.0",
  "crypto",
+ "dag",
+ "match_opt",
  "rand 0.7.3",
  "rocksdb",
  "serde 1.0.137",
  "serde_bytes",
+ "thiserror",
  "tokio",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "typed-store",
  "types",
 ]
 
@@ -1124,7 +1127,7 @@ dependencies = [
 [[package]]
 name = "crypto"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=23745f48103656eae4a4205d0b3edd53ad8894de#23745f48103656eae4a4205d0b3edd53ad8894de"
+source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
 dependencies = [
  "ark-bls12-377",
  "ark-ec",
@@ -1226,6 +1229,23 @@ dependencies = [
  "rand_core 0.6.3",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "dag"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
+dependencies = [
+ "arc-swap",
+ "crypto",
+ "dashmap",
+ "either",
+ "itertools",
+ "once_cell",
+ "rayon",
+ "serde 1.0.137",
+ "serde_with",
+ "thiserror",
 ]
 
 [[package]]
@@ -1636,7 +1656,7 @@ checksum = "77f3309417938f28bf8228fcff79a4a37103981e3e186d2ccd19c74b38f4eb71"
 [[package]]
 name = "executor"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=23745f48103656eae4a4205d0b3edd53ad8894de#23745f48103656eae4a4205d0b3edd53ad8894de"
+source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
 dependencies = [
  "async-trait",
  "bincode",
@@ -1647,7 +1667,7 @@ dependencies = [
  "crypto",
  "futures",
  "multiaddr",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "mysten-network",
  "primary",
  "rocksdb",
  "serde 1.0.137",
@@ -1656,7 +1676,7 @@ dependencies = [
  "tokio-util 0.7.2",
  "tonic",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "typed-store",
  "types",
  "worker",
 ]
@@ -2696,6 +2716,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
 
 [[package]]
+name = "match_opt"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "405ba1524a1e6ae755334d6966380c60ec40157e0155f9032dd3c294b6384da9"
+
+[[package]]
 name = "matchers"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3517,24 +3543,6 @@ checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 [[package]]
 name = "mysten-network"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866#3b7daedf91fd8937dde26e905b8114cac459b866"
-dependencies = [
- "anyhow",
- "bincode",
- "bytes",
- "futures",
- "multiaddr",
- "serde 1.0.137",
- "tokio",
- "tokio-stream",
- "tonic",
- "tonic-health",
- "tower",
-]
-
-[[package]]
-name = "mysten-network"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe#7c247967e5a5abd59ecaa75bc62b05bcdf4503fe"
 dependencies = [
  "anyhow",
@@ -3583,7 +3591,7 @@ checksum = "ca2b420f638f07fe83056b55ea190bb815f609ec5a35e7017884a10f78839c9e"
 [[package]]
 name = "network"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=23745f48103656eae4a4205d0b3edd53ad8894de#23745f48103656eae4a4205d0b3edd53ad8894de"
+source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
 dependencies = [
  "async-trait",
  "backoff",
@@ -3591,7 +3599,7 @@ dependencies = [
  "crypto",
  "futures",
  "multiaddr",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "mysten-network",
  "rand 0.7.3",
  "thiserror",
  "tokio",
@@ -3656,7 +3664,7 @@ dependencies = [
 [[package]]
 name = "node"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=23745f48103656eae4a4205d0b3edd53ad8894de#23745f48103656eae4a4205d0b3edd53ad8894de"
+source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3678,7 +3686,7 @@ dependencies = [
  "tracing",
  "tracing-log",
  "tracing-subscriber 0.3.11",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "typed-store",
  "types",
  "url",
  "worker",
@@ -4262,7 +4270,7 @@ dependencies = [
 [[package]]
 name = "primary"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=23745f48103656eae4a4205d0b3edd53ad8894de#23745f48103656eae4a4205d0b3edd53ad8894de"
+source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
 dependencies = [
  "async-recursion",
  "async-trait",
@@ -4271,12 +4279,14 @@ dependencies = [
  "blake2",
  "bytes",
  "config 0.1.0",
+ "consensus",
  "crypto",
  "derive_builder",
  "ed25519-dalek",
  "futures",
+ "itertools",
  "multiaddr",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "mysten-network",
  "network",
  "prost",
  "rand 0.7.3",
@@ -4287,7 +4297,7 @@ dependencies = [
  "tonic",
  "tower",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "typed-store",
  "types",
 ]
 
@@ -5425,7 +5435,7 @@ dependencies = [
  "move-package",
  "move-unit-test",
  "multiaddr",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
+ "mysten-network",
  "node",
  "num_cpus",
  "once_cell",
@@ -5571,7 +5581,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "bytes",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
+ "mysten-network",
  "prost",
  "serde 1.0.137",
  "sui-types",
@@ -5673,7 +5683,7 @@ dependencies = [
  "static_assertions",
  "thiserror",
  "tonic",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
+ "typed-store",
  "zeroize",
 ]
 
@@ -5724,7 +5734,7 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-types",
  "multiaddr",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
+ "mysten-network",
  "node",
  "once_cell",
  "parking_lot 0.12.0",
@@ -5757,7 +5767,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber 0.3.11",
  "tracing-test",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
+ "typed-store",
  "types",
 ]
 
@@ -5775,7 +5785,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.11",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
+ "typed-store",
 ]
 
 [[package]]
@@ -5971,7 +5981,7 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.2",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
+ "typed-store",
 ]
 
 [[package]]
@@ -6505,20 +6515,6 @@ checksum = "0685c84d5d54d1c26f7d3eb96cd41550adb97baed141a761cf335d3d33bcd0ae"
 [[package]]
 name = "typed-store"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866#3b7daedf91fd8937dde26e905b8114cac459b866"
-dependencies = [
- "bincode",
- "collectable",
- "eyre",
- "rocksdb",
- "serde 1.0.137",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "typed-store"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe#7c247967e5a5abd59ecaa75bc62b05bcdf4503fe"
 dependencies = [
  "bincode",
@@ -6540,7 +6536,7 @@ checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 [[package]]
 name = "types"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=23745f48103656eae4a4205d0b3edd53ad8894de#23745f48103656eae4a4205d0b3edd53ad8894de"
+source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
 dependencies = [
  "base64",
  "bincode",
@@ -6548,6 +6544,7 @@ dependencies = [
  "bytes",
  "config 0.1.0",
  "crypto",
+ "dag",
  "derive_builder",
  "ed25519-dalek",
  "prost",
@@ -6557,7 +6554,7 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.2",
  "tonic",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "typed-store",
 ]
 
 [[package]]
@@ -7021,7 +7018,7 @@ checksum = "c811ca4a8c853ef420abd8592ba53ddbbac90410fab6903b3e79972a631f7680"
 [[package]]
 name = "worker"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=23745f48103656eae4a4205d0b3edd53ad8894de#23745f48103656eae4a4205d0b3edd53ad8894de"
+source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7033,7 +7030,7 @@ dependencies = [
  "ed25519-dalek",
  "futures",
  "multiaddr",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "mysten-network",
  "network",
  "primary",
  "serde 1.0.137",
@@ -7043,7 +7040,7 @@ dependencies = [
  "tonic",
  "tower",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=3b7daedf91fd8937dde26e905b8114cac459b866)",
+ "typed-store",
  "types",
 ]
 
