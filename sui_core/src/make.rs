@@ -39,7 +39,7 @@ impl SuiNetwork {
 
         let mut spawned_authorities = Vec::new();
         for validator in config.validator_configs() {
-            let server = make_server_with_genesis(validator).await?;
+            let server = make_server(validator).await?;
             spawned_authorities.push(server.spawn().await?);
         }
         info!("Started {} authorities", spawned_authorities.len());
@@ -88,44 +88,13 @@ pub async fn make_server(validator_config: &ValidatorConfig) -> Result<Authority
         secret.clone(),
     )?;
 
-    let state = AuthorityState::new_without_genesis(
+    let state = AuthorityState::new(
         validator_config.committee_config().committee(),
         name,
         secret.clone(),
         store,
         Some(Arc::new(Mutex::new(checkpoints))),
-    )
-    .await;
-
-    make_authority(validator_config, state).await
-}
-
-pub async fn make_server_with_genesis(
-    validator_config: &ValidatorConfig,
-) -> Result<AuthorityServer> {
-    let mut store_path = PathBuf::from(validator_config.db_path());
-    store_path.push("store");
-    let store = Arc::new(AuthorityStore::open(store_path, None));
-    let name = validator_config.public_key();
-    let mut checkpoints_path = PathBuf::from(validator_config.db_path());
-    checkpoints_path.push("checkpoints");
-
-    let secret = Arc::pin(validator_config.key_pair().copy());
-    let checkpoints = CheckpointStore::open(
-        &checkpoints_path,
-        None,
-        name,
-        validator_config.committee_config().committee(),
-        secret.clone(),
-    )?;
-
-    let state = AuthorityState::new_with_genesis(
-        validator_config.committee_config().committee(),
-        name,
-        secret.clone(),
-        store,
         validator_config.genesis(),
-        Some(Arc::new(Mutex::new(checkpoints))),
     )
     .await;
 

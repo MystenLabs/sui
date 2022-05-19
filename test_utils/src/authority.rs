@@ -6,7 +6,6 @@ use rand::{prelude::StdRng, SeedableRng};
 use std::time::Duration;
 use std::{collections::BTreeMap, sync::Arc};
 use sui::sui_commands::make_authority;
-use sui_adapter::genesis;
 use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
@@ -59,8 +58,7 @@ where
             Arc::pin(validator.key_pair().copy()),
             Arc::new(test_authority_store()),
             None,
-            genesis::clone_genesis_compiled_modules(),
-            &mut genesis::get_genesis_context(),
+            &sui_config::genesis::Genesis::get_default_genesis(),
         )
         .await;
 

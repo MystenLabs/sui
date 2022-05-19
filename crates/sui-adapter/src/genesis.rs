@@ -41,11 +41,7 @@ pub fn get_framework_object_ref() -> ObjectRef {
 }
 
 pub fn get_genesis_context() -> TxContext {
-    get_genesis_context_with_custom_address(&SuiAddress::default())
-}
-
-pub fn get_genesis_context_with_custom_address(address: &SuiAddress) -> TxContext {
-    TxContext::new(address, &TransactionDigest::genesis())
+    TxContext::new(&SuiAddress::default(), &TransactionDigest::genesis())
 }
 
 /// Create and return objects wrapping the genesis modules for sui

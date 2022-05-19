@@ -18,7 +18,6 @@ use std::{
     thread::sleep,
     time::Duration,
 };
-use sui_adapter::genesis;
 use sui_core::authority::*;
 use sui_types::{
     base_types::{SuiAddress, *},
@@ -288,8 +287,7 @@ fn make_authority_state(
                 Arc::pin(secx),
                 store.clone(),
                 None,
-                genesis::clone_genesis_compiled_modules(),
-                &mut genesis::get_genesis_context(),
+                &sui_config::genesis::Genesis::get_default_genesis(),
             )
             .await
         }),

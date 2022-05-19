@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use rand::{prelude::StdRng, SeedableRng};
-use sui_adapter::genesis;
 use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::get_key_pair_from_rng;
@@ -56,8 +55,7 @@ pub(crate) async fn init_state(
         Arc::pin(authority_key),
         store,
         None,
-        genesis::clone_genesis_compiled_modules(),
-        &mut genesis::get_genesis_context(),
+        &sui_config::genesis::Genesis::get_default_genesis(),
     )
     .await
 }
@@ -779,8 +777,7 @@ async fn test_safe_batch_stream() {
         Arc::pin(authority_key),
         store.clone(),
         None,
-        genesis::clone_genesis_compiled_modules(),
-        &mut genesis::get_genesis_context(),
+        &sui_config::genesis::Genesis::get_default_genesis(),
     )
     .await;
 
@@ -824,8 +821,7 @@ async fn test_safe_batch_stream() {
         Arc::pin(authority_key),
         store,
         None,
-        genesis::clone_genesis_compiled_modules(),
-        &mut genesis::get_genesis_context(),
+        &sui_config::genesis::Genesis::get_default_genesis(),
     )
     .await;
     let auth_client_from_byzantine = ByzantineAuthorityClient::new(state_b);

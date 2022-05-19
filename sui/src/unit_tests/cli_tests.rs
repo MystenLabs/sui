@@ -1,9 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeSet, fmt::Write, fs::read_dir, ops::Add, path::PathBuf, str, time::Duration,
-};
+use std::{fmt::Write, fs::read_dir, ops::Add, path::PathBuf, str, time::Duration};
 
 use anyhow::anyhow;
 use serde_json::{json, Value};
@@ -32,10 +30,6 @@ use sui_types::{
 use test_utils::network::start_test_network;
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
-const AIRDROP_SOURCE_CONTRACT_ADDRESS: &str = "0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d";
-const AIRDROP_SOURCE_TOKEN_ID: u64 = 101u64;
-const AIRDROP_TOKEN_NAME: &str = "BoredApeYachtClub";
-const AIRDROP_TOKEN_URI: &str = "ipfs://QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/101";
 
 macro_rules! retry_assert {
     ($test:expr, $timeout:expr) => {{
@@ -160,112 +154,6 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     }
 
     Ok(())
-}
-
-#[traced_test]
-#[tokio::test]
-// TODO<https://github.com/MystenLabs/sui/issues/505> move this function to a standalone file
-async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
-    let working_dir = tempfile::tempdir()?;
-
-    let network = start_test_network(working_dir.path(), None).await?;
-
-    // Create Wallet context with the oracle account
-    let wallet_conf_path = working_dir.path().join(SUI_WALLET_CONFIG);
-    let mut context = WalletContext::new(&wallet_conf_path)?;
-
-    let recipient_address = *context.config.accounts.first().unwrap();
-    let oracle_address = *context.config.accounts.last().unwrap();
-
-    // Assemble the move call to claim the airdrop
-    let oracle_obj_str = format!(
-        "{}",
-        airdrop_get_oracle_object(oracle_address, &mut context).await?
-    );
-    let args_json = json!([
-        oracle_obj_str,
-        format!("{}", recipient_address),
-        AIRDROP_SOURCE_CONTRACT_ADDRESS.to_string(),
-        json!(AIRDROP_SOURCE_TOKEN_ID),
-        AIRDROP_TOKEN_NAME.to_string(),
-        AIRDROP_TOKEN_URI.to_string()
-    ]);
-    let mut args = vec![];
-    for a in args_json.as_array().unwrap() {
-        args.push(SuiJsonValue::new(a.clone()).unwrap());
-    }
-
-    // Pick some large enough budget
-    let gas_object_id = context
-        .gas_for_owner_budget(oracle_address, 10000, BTreeSet::new())
-        .await?
-        .1
-        .id();
-    // Claim the airdrop
-    let token = airdrop_call_move_and_get_created_object(args, gas_object_id, &mut context).await?;
-
-    dbg!(&token);
-
-    // Verify the airdrop token
-    assert_eq!(token["data"]["type"], ("0x2::CrossChainAirdrop::ERC721"));
-    let erc721_metadata = &token["data"]["fields"]["metadata"];
-    assert_eq!(
-        erc721_metadata["fields"]["token_id"]["fields"]["id"],
-        AIRDROP_SOURCE_TOKEN_ID
-    );
-
-    // TODO: verify the other string fields once SuiJSON has better support for rendering
-    // string fields
-
-    network.kill().await?;
-    Ok(())
-}
-
-async fn airdrop_get_oracle_object(
-    address: SuiAddress,
-    context: &mut WalletContext,
-) -> Result<ObjectID, anyhow::Error> {
-    let move_objects = get_move_objects_by_type(
-        context,
-        address,
-        "CrossChainAirdrop::CrossChainAirdropOracle",
-    )
-    .await?;
-    assert_eq!(move_objects.len(), 1);
-    Ok(move_objects.first().unwrap().0)
-}
-
-async fn airdrop_call_move_and_get_created_object(
-    args: Vec<SuiJsonValue>,
-    gas: ObjectID,
-    context: &mut WalletContext,
-) -> Result<Value, anyhow::Error> {
-    let resp = WalletCommands::Call {
-        package: ObjectID::from_hex_literal("0x2").unwrap(),
-        module: "CrossChainAirdrop".to_string(),
-        function: "claim".to_string(),
-        type_args: vec![],
-        args: args.to_vec(),
-        gas: Some(gas),
-        gas_budget: 1000,
-    }
-    .execute(context)
-    .await?;
-
-    let minted_token_id = match resp {
-        WalletCommandResult::Call(
-            _,
-            SuiTransactionEffects {
-                created: new_objs, ..
-            },
-        ) => {
-            assert_eq!(new_objs.len(), 1);
-            new_objs[0].reference.object_id
-        }
-        _ => panic!("unexpected WalletCommandResult"),
-    };
-
-    get_move_object(context, minted_token_id).await
 }
 
 #[traced_test]
@@ -406,12 +294,11 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
 
     // Create Wallet context.
     let wallet_conf_path = working_dir.join(SUI_WALLET_CONFIG);
-    let wallet_conf: WalletConfig = PersistedConfig::read(&wallet_conf_path)?;
-    let address = *wallet_conf.accounts.last().unwrap();
     let mut context = WalletContext::new(&wallet_conf_path)?;
 
     // Make sure init() is executed correctly for custom_genesis_package_2::M1
-    let move_objects = get_move_objects_by_type(&mut context, address, "M1::Object").await?;
+    let move_objects =
+        get_move_objects_by_type(&mut context, SuiAddress::default(), "M1::Object").await?;
     assert_eq!(move_objects.len(), 1);
     network.kill().await?;
     Ok(())

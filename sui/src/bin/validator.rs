@@ -6,7 +6,7 @@ use multiaddr::Multiaddr;
 use std::{num::NonZeroUsize, path::PathBuf};
 use sui::{
     config::{sui_config_dir, SUI_NETWORK_CONFIG},
-    sui_commands::make_server_with_genesis,
+    sui_commands::make_server,
 };
 use sui_config::{builder::ConfigBuilder, PersistedConfig};
 use sui_config::{GenesisConfig, ValidatorConfig};
@@ -77,7 +77,7 @@ async fn main() -> Result<(), anyhow::Error> {
     prometheus_exporter::start(prom_binding).expect("Failed to start Prometheus exporter");
 
     // Pass in the newtwork parameters of all authorities
-    if let Err(e) = make_server_with_genesis(&validator_config)
+    if let Err(e) = make_server(&validator_config)
         .await?
         .spawn_with_bind_address(listen_address)
         .await

@@ -326,7 +326,6 @@ impl LocalAuthorityClient {
         use crate::checkpoints::CheckpointStore;
         use parking_lot::Mutex;
         use std::{env, fs};
-        use sui_adapter::genesis;
 
         // Random directory
         let dir = env::temp_dir();
@@ -355,8 +354,7 @@ impl LocalAuthorityClient {
             secret.clone(),
             store,
             Some(Arc::new(Mutex::new(checkpoints))),
-            genesis::clone_genesis_compiled_modules(),
-            &mut genesis::get_genesis_context(),
+            &sui_config::genesis::Genesis::get_default_genesis(),
         )
         .await;
         Self {

@@ -1279,8 +1279,7 @@ pub async fn init_state() -> AuthorityState {
         Arc::pin(authority_key),
         store,
         None,
-        genesis::clone_genesis_compiled_modules(),
-        &mut genesis::get_genesis_context(),
+        &sui_config::genesis::Genesis::get_default_genesis(),
     )
     .await
 }
