@@ -1,14 +1,17 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::authority::AuthorityState;
 use bytes::Bytes;
 use multiaddr::Multiaddr;
 use narwhal_executor::SubscriberResult;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
+use std::sync::Arc;
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
 };
+use sui_types::messages::ConfirmationTransaction;
 use sui_types::{
     committee::Committee,
     error::{SuiError, SuiResult},
@@ -57,8 +60,9 @@ type ConsensusOutput = (
 
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusAdapter {
-    /// The network address of the consensus node.
-    _consensus_address: Multiaddr,
+    /// The authority's state.
+    state: Arc<AuthorityState>,
+    /// The network client connecting to the consensus node of this authority.
     consensus_client: TransactionsClient<sui_network::tonic::transport::Channel>,
     /// The Sui committee information.
     committee: Committee,
@@ -71,18 +75,20 @@ pub struct ConsensusAdapter {
 }
 
 impl ConsensusAdapter {
-    /// Make a new Consensus submitter instance.
+    /// Make a new Consensus adapter instance.
     pub fn new(
+        state: Arc<AuthorityState>,
         consensus_address: Multiaddr,
         committee: Committee,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
         max_delay: Duration,
     ) -> Self {
         let consensus_client = TransactionsClient::new(
-            mysten_network::client::connect_lazy(&consensus_address).unwrap(),
+            mysten_network::client::connect_lazy(&consensus_address)
+                .expect("Failed to connect to consensus"),
         );
         Self {
-            _consensus_address: consensus_address,
+            state,
             consensus_client,
             committee,
             tx_consensus_listener,
@@ -131,7 +137,7 @@ impl ConsensusAdapter {
         // certificate will be sequenced. So the best we can do is to set a timer and notify the
         // client to retry if we timeout without hearing back from consensus (this module does not
         // handle retries). The best timeout value depends on the consensus protocol.
-        let resp = match timeout(self.max_delay, receiver).await {
+        let info = match timeout(self.max_delay, receiver).await {
             Ok(reply) => reply.expect("Failed to read back from consensus listener"),
             Err(e) => {
                 let message = ConsensusListenerMessage::Cleanup(serialized);
@@ -141,12 +147,20 @@ impl ConsensusAdapter {
                     .expect("Cleanup channel with consensus listener dropped");
                 Err(SuiError::ConsensusConnectionBroken(e.to_string()))
             }
-        };
+        }?;
 
-        resp.and_then(|r| {
-            bincode::deserialize(&r)
-                .map_err(|e| SuiError::ConsensusNarwhalSerializationError(e.to_string()))
-        })
+        if info.is_empty() {
+            // Consensus successfully assigned shared-locks to this certificate.
+            let ConsensusTransaction::UserTransaction(certificate) = certificate.clone();
+            let confirmation_transaction = ConfirmationTransaction { certificate };
+            self.state
+                .handle_confirmation_transaction(confirmation_transaction)
+                .await
+        } else {
+            // This certificate has already been executed.
+            bincode::deserialize(&info)
+                .map_err(|e| SuiError::ConsensusSuiSerializationError(e.to_string()))
+        }
     }
 }
 

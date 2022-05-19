@@ -7,7 +7,7 @@ use sui_types::object::{MoveObject, Object, Owner, OBJECT_START_VERSION};
 
 /// Make a few test gas objects.
 pub fn test_gas_objects() -> Vec<Object> {
-    (0..19)
+    (0..9)
         .map(|i| {
             let seed = format!("0x555555555555555{i}");
             let gas_object_id = ObjectID::from_hex_literal(&seed).unwrap();

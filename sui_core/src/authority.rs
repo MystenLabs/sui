@@ -495,13 +495,13 @@ impl AuthorityState {
         &self,
         certificate: CertifiedTransaction,
     ) -> Result<Option<TransactionInfoResponse>, SuiError> {
-        // Ensure it is a shared object certificate
+        // Ensure the input is a shared object certificate
         fp_ensure!(
             certificate.contains_shared_object(),
             SuiError::NotASharedObjectTransaction
         );
 
-        // If we already executed this transaction, return the sign effects.
+        // If we already executed this transaction, return the signed effects.
         let digest = certificate.digest();
         if self.database.effects_exists(digest)? {
             debug!("Shared-object transaction {digest:?} already executed");
@@ -511,20 +511,18 @@ impl AuthorityState {
         // If we already assigned locks to this transaction, we can try to execute it immediately.
         // This can happen to transaction previously submitted to consensus that failed execution
         // due to missing dependencies.
-        match self
-            .database
-            .sequenced(digest, certificate.shared_input_objects())?[0]
-        {
-            Some(_) => {
-                // Attempt to execute the transaction. This will only succeed if the authority
-                // already executed all its dependencies.
-                let confirmation_transaction = ConfirmationTransaction { certificate };
-                self.handle_confirmation_transaction(confirmation_transaction.clone())
-                    .await
-                    .map(Some)
-            }
-            None => Ok(None),
+        if self.shared_locks_exist(&certificate).await? {
+            // Attempt to execute the transaction. This will only succeed if the authority
+            // already executed all its dependencies and if the locks are correctly attributed to
+            // the transaction (ie. this transaction is the next to be executed).
+            debug!("Shared-locks already assigned to {digest:?} - executing now");
+            let confirmation = ConfirmationTransaction { certificate };
+            return self.process_certificate(confirmation).await.map(Some);
         }
+
+        // If we didn't already attributed shared locks to this transaction, it needs to go
+        // through consensus.
+        Ok(None)
     }
 
     pub async fn handle_transaction_info_request(
@@ -975,6 +973,14 @@ impl AuthorityState {
         // implicitly we drop the ticket here and that notifies the batch manager
     }
 
+    /// Check whether a shared-object certificate has already been given shared-locks.
+    async fn shared_locks_exist(&self, certificate: &CertifiedTransaction) -> SuiResult<bool> {
+        let digest = certificate.digest();
+        let shared_inputs = certificate.shared_input_objects();
+        let shared_locks = self.database.sequenced(digest, shared_inputs)?;
+        Ok(shared_locks[0].is_some())
+    }
+
     /// Get a read reference to an object/seq lock
     pub async fn get_transaction_lock(
         &self,
@@ -1046,31 +1052,40 @@ impl ExecutionState for AuthorityState {
     ) -> Result<Vec<u8>, Self::Error> {
         let ConsensusTransaction::UserTransaction(certificate) = transaction;
 
-        // Ensure an idempotent answer.
+        // Ensure the input is a shared object certificate. Remember that Byzantine authorities
+        // may input anything into consensus.
+        fp_ensure!(
+            certificate.contains_shared_object(),
+            SuiError::NotASharedObjectTransaction
+        );
+
+        // If we already executed this transaction, return the signed effects.
         let digest = certificate.digest();
         if self.database.effects_exists(digest)? {
-            let info = self.make_transaction_info(digest).await?;
             debug!(tx_digest =? digest, "Shared-object transaction already executed");
-            return Ok(bincode::serialize(&info).unwrap());
+            let info = self.make_transaction_info(digest).await?;
+            return Ok(bincode::serialize(&info).expect("Failed to serialize tx info"));
         }
 
-        // Assign locks to shared objects.
-        self.handle_consensus_certificate(certificate.clone(), execution_indices)
-            .await?;
-        debug!(tx_digest =? digest, "Shared objects locks successfully attributed");
+        // If we didn't already assigned shared-locks to this transaction, we do it now.
+        if !self.shared_locks_exist(&certificate).await? {
+            // Check the certificate. Remember that Byzantine authorities may input anything into
+            // consensus.
+            certificate.verify(&self.committee)?;
 
-        // Attempt to execute the transaction. This will only succeed if the authority
-        // already executed all its dependencies.
-        let confirmation_transaction = ConfirmationTransaction {
-            certificate: certificate.clone(),
-        };
-        let info = self
-            .handle_confirmation_transaction(confirmation_transaction.clone())
-            .await?;
-        debug!(tx_digest =? digest, "Executed consensus transaction");
+            // Persist the certificate since we are about to lock one or more shared object.
+            // We thus need to make sure someone (if not the client) can continue the protocol.
+            // Also atomically lock the shared objects for this particular transaction and
+            // increment the last consensus index. Note that a single process can ever call
+            // this function and that the last consensus index is also kept in memory. It is
+            // thus ok to only persist now (despite this function may have returned earlier).
+            // In the worst case, the synchronizer of the consensus client will catch up.
+            self.database
+                .persist_certificate_and_lock_shared_objects(certificate, execution_indices)?;
+        }
 
-        // Return a serialized transaction info response. This will be sent back to the client.
-        Ok(bincode::serialize(&info).unwrap())
+        // TODO: This return time is not ideal.
+        Ok(Vec::default())
     }
 
     fn ask_consensus_write_lock(&self) -> bool {
