@@ -56,6 +56,9 @@ pub struct FullNodeState {
     pub committee: SuiCommittee,
     pub next_tx_seq_number: AtomicU64,
 
+    // Used by the tests to wait for a particular tx cert to be processed.
+    // TODO: This should be removed once there is an event subscription system that the tests can
+    // use.
     tx_notify: Notify,
 
     /// Move native functions that are available to invoke
