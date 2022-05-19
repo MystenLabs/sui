@@ -14,7 +14,7 @@ use sui::{
         SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
     },
     keystore::KeystoreType,
-    sui_commands::{SuiCommand, SuiNetwork},
+    sui_commands::SuiCommand,
     wallet_commands::{WalletCommandResult, WalletCommands, WalletContext},
 };
 use sui_config::{AccountConfig, GenesisConfig, NetworkConfig, ObjectConfig};
@@ -27,7 +27,7 @@ use sui_types::{
     object::GAS_VALUE_FOR_TESTING,
 };
 
-use test_utils::network::start_test_network;
+use test_utils::network::{setup_network_and_wallet, start_test_network};
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
 
@@ -1214,24 +1214,4 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     assert!((get_gas_value(&g.new_coins[1]) == 1000) || (get_gas_value(&g.new_coins[1]) == 10));
     network.kill().await?;
     Ok(())
-}
-
-async fn setup_network_and_wallet() -> Result<(SuiNetwork, WalletContext, SuiAddress), anyhow::Error>
-{
-    let working_dir = tempfile::tempdir()?;
-
-    let network = start_test_network(working_dir.path(), None).await?;
-
-    // Create Wallet context.
-    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
-    let mut context = WalletContext::new(&wallet_conf)?;
-    let address = context.config.accounts.first().cloned().unwrap();
-
-    // Sync client to retrieve objects from the network.
-    WalletCommands::SyncClientState {
-        address: Some(address),
-    }
-    .execute(&mut context)
-    .await?;
-    Ok((network, context, address))
 }

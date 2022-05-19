@@ -128,6 +128,30 @@ pub trait RpcGateway {
         digest: TransactionDigest,
     ) -> RpcResult<TransactionEffectsResponse>;
 
+    #[method(name = "getTransactionsByInputObject")]
+    async fn get_transactions_by_input_object(
+        &self,
+        object: ObjectID,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
+
+    #[method(name = "getTransactionsByMutatedObject")]
+    async fn get_transactions_by_mutated_object(
+        &self,
+        object: ObjectID,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
+
+    #[method(name = "getTransactionsFromAddress")]
+    async fn get_transactions_from_addr(
+        &self,
+        addr: SuiAddress,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
+
+    #[method(name = "getTransactionsToAddress")]
+    async fn get_transactions_to_addr(
+        &self,
+        addr: SuiAddress,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
+
     /// Return the object information for a specified object
     #[method(name = "getObjectInfo")]
     async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse>;
