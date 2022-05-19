@@ -55,7 +55,7 @@ export function getEndpoint(network: Network | string): string {
     if (override) return override;
 
     //2) A Network value
-    if (Object.values(ENDPOINTS).includes(network)) {
+    if (Object.keys(ENDPOINTS).includes(network)) {
         return ENDPOINTS[network as Network];
     }
 
