@@ -1,14 +1,21 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// invalid, non key structs are not supported
+// valid, option of primitives is allowed
 
 //# publish
 module 0x0.M {
     import 0x2.TxContext;
     import 0x1.Option;
 
-    public(script) no(s: Option.Option<u64>, ctx: &mut TxContext.TxContext) {
+    public(script) yes<T>(
+        l0: Option.Option<u64>,
+        l1: Option.Option<Option.Option<u64>>,
+        l2: Option.Option<vector<u64>>,
+        l3: vector<Option.Option<u64>>,
+        l4: Option.Option<Option.Option<T>>,
+        ctx: &mut TxContext.TxContext
+    ) {
         label l0:
         abort 0;
     }

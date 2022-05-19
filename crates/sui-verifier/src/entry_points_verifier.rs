@@ -7,14 +7,18 @@ use move_binary_format::{
     file_format::{AbilitySet, FunctionDefinition, SignatureToken, Visibility},
     CompiledModule,
 };
-use move_core_types::{ident_str, identifier::IdentStr};
+use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
 use sui_types::{
-    base_types::{TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
+    base_types::{
+        STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME, TX_CONTEXT_MODULE_NAME,
+        TX_CONTEXT_STRUCT_NAME,
+    },
     error::{SuiError, SuiResult},
-    SUI_FRAMEWORK_ADDRESS,
+    id::{ID_MODULE_NAME, ID_STRUCT_NAME},
+    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::format_signature_token;
+use crate::{format_signature_token, resolve_struct};
 
 pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
 
@@ -160,7 +164,7 @@ fn verify_param_type(
     function_type_args: &[AbilitySet],
     param: &SignatureToken,
 ) -> Result<(), String> {
-    if is_primitive(param) {
+    if is_primitive(view, function_type_args, param) {
         return Ok(());
     }
 
@@ -174,21 +178,44 @@ fn verify_param_type(
     }
 }
 
-fn is_primitive(s: &SignatureToken) -> bool {
+pub const RESOLVED_SUI_ID: (&AccountAddress, &IdentStr, &IdentStr) =
+    (&SUI_FRAMEWORK_ADDRESS, ID_MODULE_NAME, ID_STRUCT_NAME);
+pub const RESOLVED_STD_OPTION: (&AccountAddress, &IdentStr, &IdentStr) = (
+    &MOVE_STDLIB_ADDRESS,
+    STD_OPTION_MODULE_NAME,
+    STD_OPTION_STRUCT_NAME,
+);
+
+fn is_primitive(
+    view: &BinaryIndexedView,
+    function_type_args: &[AbilitySet],
+    s: &SignatureToken,
+) -> bool {
     match s {
         SignatureToken::Bool
         | SignatureToken::U8
         | SignatureToken::U64
         | SignatureToken::U128
         | SignatureToken::Address => true,
-        // optimistic
-        SignatureToken::TypeParameter(_) => true,
         SignatureToken::Signer => false,
-        SignatureToken::Vector(inner) => is_primitive(inner),
-        SignatureToken::Struct(_)
-        | SignatureToken::StructInstantiation(_, _)
-        | SignatureToken::Reference(_)
-        | SignatureToken::MutableReference(_) => false,
+        // optimistic, but no primitive has key
+        SignatureToken::TypeParameter(idx) => !function_type_args[*idx as usize].has_key(),
+
+        SignatureToken::Struct(idx) => {
+            let resolved_struct = resolve_struct(view, *idx);
+            resolved_struct == RESOLVED_SUI_ID
+        }
+
+        SignatureToken::StructInstantiation(idx, targs) => {
+            let resolved_struct = resolve_struct(view, *idx);
+            // is option of a primitive
+            resolved_struct == RESOLVED_STD_OPTION
+                && targs.len() == 1
+                && is_primitive(view, function_type_args, &targs[0])
+        }
+
+        SignatureToken::Vector(inner) => is_primitive(view, function_type_args, inner),
+        SignatureToken::Reference(_) | SignatureToken::MutableReference(_) => false,
     }
 }
 
@@ -196,11 +223,7 @@ fn is_tx_context(view: &BinaryIndexedView, p: &SignatureToken) -> bool {
     match p {
         SignatureToken::MutableReference(m) => match &**m {
             SignatureToken::Struct(idx) => {
-                let struct_handle = view.struct_handle_at(*idx);
-                let struct_name = view.identifier_at(struct_handle.name);
-                let module = view.module_handle_at(struct_handle.module);
-                let module_name = view.identifier_at(module.name);
-                let module_addr = view.address_identifier_at(module.address);
+                let (module_addr, module_name, struct_name) = resolve_struct(view, *idx);
                 module_name == TX_CONTEXT_MODULE_NAME
                     && module_addr == &SUI_FRAMEWORK_ADDRESS
                     && struct_name == TX_CONTEXT_STRUCT_NAME
