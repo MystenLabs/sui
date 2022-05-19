@@ -1038,7 +1038,7 @@ impl ExecutionState for AuthorityState {
             }
             ConsensusTransaction::Checkpoint(fragment) => {
                 // TODO [issue #2036]: What is exactly this sequence number?
-                let seq = 0;
+                let seq = execution_indices;
 
                 if let Some(checkpoint) = &self.checkpoints {
                     let _result = checkpoint.lock().handle_internal_fragment(seq, fragment);
