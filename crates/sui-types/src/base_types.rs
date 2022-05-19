@@ -356,6 +356,10 @@ impl ObjectDigest {
         Self(bytes)
     }
 
+    pub fn is_alive(&self) -> bool {
+        *self != Self::OBJECT_DIGEST_DELETED && *self != Self::OBJECT_DIGEST_WRAPPED
+    }
+
     // for testing
     pub fn random() -> Self {
         let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
