@@ -1066,7 +1066,7 @@ impl CheckpointStore {
         )?;
 
         // If the transactions processed did not belong to a checkpoint yet, we add them to the list
-        // of `extra` transactions, that we should be activelly propagating to others.
+        // of `extra` transactions, that we should be actively propagating to others.
         let batch = batch.insert_batch(
             &self.extra_transactions,
             transactions

@@ -188,7 +188,7 @@ pub struct AuthorityState {
     pub(crate) database: Arc<AuthorityStore>, // TODO: remove pub
 
     /// The checkpoint store
-    pub(crate) _checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
+    pub(crate) checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
 
     // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
@@ -713,7 +713,7 @@ impl AuthorityState {
                     .expect("We defined natives to not fail here"),
             ),
             database: store.clone(),
-            _checkpoints: checkpoints,
+            checkpoints,
             batch_channels: tx,
             batch_notifier: Arc::new(
                 authority_notifier::TransactionNotifier::new(store.clone())
@@ -749,7 +749,7 @@ impl AuthorityState {
 
         // If a checkpoint store is present, ensure it is up-to-date with the latest
         // batches.
-        if let Some(checkpoint) = &state._checkpoints {
+        if let Some(checkpoint) = &state.checkpoints {
             let next_expected_tx = checkpoint.lock().next_transaction_sequence_expected();
 
             // Get all unprocessed checkpoints
@@ -783,7 +783,7 @@ impl AuthorityState {
     }
 
     pub(crate) fn checkpoints(&self) -> Option<Arc<Mutex<CheckpointStore>>> {
-        self._checkpoints.clone()
+        self.checkpoints.clone()
     }
 
     pub(crate) fn db(&self) -> Arc<AuthorityStore> {
@@ -1036,7 +1036,19 @@ impl ExecutionState for AuthorityState {
                 // TODO: This return time is not ideal.
                 Ok(Vec::default())
             }
-            ConsensusTransaction::Checkpoint(_fragment) => {
+            ConsensusTransaction::Checkpoint(fragment) => {
+                let seq = 0;
+                if let Some(checkpoint) = &self.checkpoints {
+                    let _result = checkpoint.lock().handle_internal_fragment(seq, fragment);
+                    // TODO: What should we do with this result? There can be two kind of errors:
+                    // (i) malformed messages (then we ignore the message) or (ii) internal
+                    // authority errors (then we stop processing further transactions).
+
+                    // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
+                    // to persist the execution indices. If the validator crashes, this transaction
+                    // may be reprocessed again and the checkpoint store will simply ignore it.
+                }
+
                 // TODO: This return time is not ideal. The authority submitting the checkpoint fragment
                 // is not expecting any reply.
                 Ok(Vec::default())
