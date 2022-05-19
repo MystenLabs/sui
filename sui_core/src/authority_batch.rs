@@ -154,9 +154,16 @@ impl crate::authority::AuthorityState {
 
             // check if we should make a new block
             tokio::select! {
-              _ = interval.tick() => {
+              t = interval.tick() => {
                 // Every so often we check if we should make a batch
-                // but it should never be empty. But never empty.
+                // but it should never be empty.
+                  if t.elapsed() < max_delay / 10 {
+                      // For reasons yet to be discovered, on some systems we observe the tick
+                      // fired multiple times without any observable delay.
+                      // Add a check here to reduce non-determinism in the timing of the tick,
+                      // make sure enough time has passed.
+                      continue;
+                  }
                   make_batch = true;
               },
               item_option = transaction_stream.next() => {
