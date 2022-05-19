@@ -3,7 +3,7 @@
 }
 
 .opennetworkbox {
-    @apply absolute top-0 right-0 w-full h-full text-center;
+    @apply fixed top-0 right-0 w-screen h-screen text-center z-30;
 }
 
 .closeicon {
