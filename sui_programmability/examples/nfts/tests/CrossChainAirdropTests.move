@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module Sui::CrossChainAirdropTests {
-    use Sui::CrossChainAirdrop::{Self, CrossChainAirdropOracle, ERC721};
+module NFTs::CrossChainAirdropTests {
+    use NFTs::CrossChainAirdrop::{Self, CrossChainAirdropOracle, ERC721};
     use Sui::ID::{VersionedID};
     use Sui::TestScenario::{Self, Scenario};
 

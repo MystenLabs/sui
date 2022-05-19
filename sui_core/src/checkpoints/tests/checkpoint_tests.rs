@@ -13,7 +13,6 @@ use crate::{
 use rand::prelude::StdRng;
 use rand::SeedableRng;
 use std::{collections::HashSet, env, fs, path::PathBuf, sync::Arc, time::Duration};
-use sui_adapter::genesis;
 use sui_types::{
     base_types::{AuthorityName, ObjectID},
     batch::UpdateItem,
@@ -605,7 +604,7 @@ fn set_get_checkpoint() {
     let response_ckp = cps4.handle_checkpoint_request(&request_ckp);
     assert!(response_ckp.is_err());
 
-    // Setting with contents suceeds
+    // Setting with contents succeeds
     let request_ckp = CheckpointRequest::set_checkpoint(checkpoint_cert, Some(transactions));
     let response_ckp = cps4.handle_checkpoint_request(&request_ckp).unwrap();
     assert!(matches!(
@@ -748,8 +747,7 @@ async fn test_batch_to_checkpointing() {
         secret,
         store.clone(),
         Some(checkpoints.clone()),
-        genesis::clone_genesis_compiled_modules(),
-        &mut genesis::get_genesis_context(),
+        &sui_config::genesis::Genesis::get_default_genesis(),
     )
     .await;
     let authority_state = Arc::new(state);
@@ -840,8 +838,7 @@ async fn test_batch_to_checkpointing_init_crash() {
             secret.clone(),
             store.clone(),
             None,
-            genesis::clone_genesis_compiled_modules(),
-            &mut genesis::get_genesis_context(),
+            &sui_config::genesis::Genesis::get_default_genesis(),
         )
         .await;
         let authority_state = Arc::new(state);
@@ -921,8 +918,7 @@ async fn test_batch_to_checkpointing_init_crash() {
             secret,
             store.clone(),
             Some(checkpoints.clone()),
-            genesis::clone_genesis_compiled_modules(),
-            &mut genesis::get_genesis_context(),
+            &sui_config::genesis::Genesis::get_default_genesis(),
         )
         .await;
         let authority_state = Arc::new(state);
@@ -1365,8 +1361,7 @@ async fn checkpoint_tests_setup() -> TestSetup {
             secret,
             store.clone(),
             Some(checkpoint.clone()),
-            genesis::clone_genesis_compiled_modules(),
-            &mut genesis::get_genesis_context(),
+            &sui_config::genesis::Genesis::get_default_genesis(),
         )
         .await;
 
@@ -1498,7 +1493,7 @@ async fn checkpoint_messaging_flow() {
     tokio::time::sleep(Duration::from_secs(1)).await;
 
     // Note that some will be having a signed checkpoint and some will node
-    // because they were not inlcuded in the first two links that make a checkpoint.
+    // because they were not included in the first two links that make a checkpoint.
 
     // Step 3 - get the signed checkpoint
     let mut signed_checkpoint = Vec::new();

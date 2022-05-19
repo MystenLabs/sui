@@ -697,29 +697,54 @@ impl AuthorityState {
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
         checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
-        genesis_packages: Vec<Vec<CompiledModule>>,
-        genesis_ctx: &mut TxContext,
+        genesis: &Genesis,
     ) -> Self {
-        let state = AuthorityState::new_without_genesis(
+        let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
+        let native_functions =
+            sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+
+        let mut state = AuthorityState {
             committee,
             name,
             secret,
-            store.clone(),
-            checkpoints,
-        )
-        .await;
+            _native_functions: native_functions.clone(),
+            move_vm: Arc::new(
+                adapter::new_move_vm(native_functions)
+                    .expect("We defined natives to not fail here"),
+            ),
+            database: store.clone(),
+            _checkpoints: checkpoints,
+            batch_channels: tx,
+            batch_notifier: Arc::new(
+                authority_notifier::TransactionNotifier::new(store.clone())
+                    .expect("Notifier cannot start."),
+            ),
+            consensus_guardrail: AtomicUsize::new(0),
+            metrics: &METRICS,
+        };
+
+        state
+            .init_batches_from_database()
+            .expect("Init batches failed!");
 
         // Only initialize an empty database.
         if store
             .database_is_empty()
             .expect("Database read should not fail.")
         {
-            for genesis_modules in genesis_packages {
+            let mut genesis_ctx = genesis.genesis_ctx().to_owned();
+            for genesis_modules in genesis.modules() {
                 state
-                    .store_package_and_init_modules_for_genesis(genesis_ctx, genesis_modules)
+                    .store_package_and_init_modules_for_genesis(
+                        &mut genesis_ctx,
+                        genesis_modules.to_owned(),
+                    )
                     .await
                     .expect("We expect publishing the Genesis packages to not fail");
             }
+            state
+                .insert_genesis_objects_bulk_unsafe(&genesis.objects().iter().collect::<Vec<_>>())
+                .await;
         }
 
         // If a checkpoint store is present, ensure it is up-to-date with the latest
@@ -753,84 +778,6 @@ impl AuthorityState {
                 }
             }
         }
-
-        state
-    }
-
-    pub async fn new_with_genesis(
-        committee: Committee,
-        name: AuthorityName,
-        secret: StableSyncAuthoritySigner,
-        store: Arc<AuthorityStore>,
-        genesis: &Genesis,
-        checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
-    ) -> Self {
-        let state = AuthorityState::new_without_genesis(
-            committee,
-            name,
-            secret,
-            store.clone(),
-            checkpoints,
-        )
-        .await;
-
-        // Only initialize an empty database.
-        if store
-            .database_is_empty()
-            .expect("Database read should not fail.")
-        {
-            let mut genesis_ctx = genesis.genesis_ctx().to_owned();
-            for genesis_modules in genesis.modules() {
-                state
-                    .store_package_and_init_modules_for_genesis(
-                        &mut genesis_ctx,
-                        genesis_modules.to_owned(),
-                    )
-                    .await
-                    .expect("We expect publishing the Genesis packages to not fail");
-            }
-            state
-                .insert_genesis_objects_bulk_unsafe(&genesis.objects().iter().collect::<Vec<_>>())
-                .await;
-        }
-
-        state
-    }
-
-    pub async fn new_without_genesis(
-        committee: Committee,
-        name: AuthorityName,
-        secret: StableSyncAuthoritySigner,
-        store: Arc<AuthorityStore>,
-        checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
-    ) -> Self {
-        let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
-        let native_functions =
-            sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-
-        let mut state = AuthorityState {
-            committee,
-            name,
-            secret,
-            _native_functions: native_functions.clone(),
-            move_vm: Arc::new(
-                adapter::new_move_vm(native_functions)
-                    .expect("We defined natives to not fail here"),
-            ),
-            database: store.clone(),
-            _checkpoints: checkpoints,
-            batch_channels: tx,
-            batch_notifier: Arc::new(
-                authority_notifier::TransactionNotifier::new(store)
-                    .expect("Notifier cannot start."),
-            ),
-            consensus_guardrail: AtomicUsize::new(0),
-            metrics: &METRICS,
-        };
-
-        state
-            .init_batches_from_database()
-            .expect("Init batches failed!");
 
         state
     }

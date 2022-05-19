@@ -10,11 +10,7 @@ use std::{
     num::NonZeroUsize,
     path::{Path, PathBuf},
 };
-use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_types::{
-    base_types::{encode_bytes_hex, SuiAddress},
-    crypto::get_key_pair_from_rng,
-};
+use sui_types::{base_types::encode_bytes_hex, crypto::get_key_pair_from_rng};
 
 use crate::{
     genesis, new_network_address, CommitteeConfig, ConsensuseConfig, GenesisConfig, NetworkConfig,
@@ -98,28 +94,16 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         let (account_keys, objects) = initial_accounts_config
             .generate_accounts(&mut self.rng)
             .unwrap();
-        // TODO: allow custom address to be used after the Gateway refactoring
-        // Default to use the last address in the wallet config for initializing modules.
-        // If there's no address in wallet config, then use 0x0
-        let (custom_modules, genesis_ctx) = initial_accounts_config
-            .generate_custom_move_modules(
-                account_keys
-                    .last()
-                    .map(|key| SuiAddress::from(key.public_key_bytes()))
-                    .unwrap_or_else(SuiAddress::default),
-            )
+        // It is important that we create a single genesis ctx, and use it to generate
+        // modules and objects from now on. This ensures all object IDs created are unique.
+        let mut genesis_ctx = sui_adapter::genesis::get_genesis_context();
+        let custom_modules = initial_accounts_config
+            .generate_custom_move_modules(&mut genesis_ctx)
             .unwrap();
 
         let genesis = {
-            let mut builder = genesis::Builder::new()
-                .sui_framework(PathBuf::from(DEFAULT_FRAMEWORK_PATH))
-                .move_framework(
-                    PathBuf::from(DEFAULT_FRAMEWORK_PATH)
-                        .join("deps")
-                        .join("move-stdlib"),
-                )
+            let mut builder = genesis::Builder::new(genesis_ctx)
                 .add_move_modules(custom_modules)
-                .genesis_ctx(genesis_ctx)
                 .add_objects(objects);
 
             for validator in &validator_set {
@@ -163,7 +147,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             authorities: narwhal_committee,
         };
 
-        let committe_config = CommitteeConfig {
+        let committee_config = CommitteeConfig {
             epoch,
             validator_set,
             consensus_committee: DebugIgnore(consensus_committee),
@@ -176,13 +160,13 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     .config_directory
                     .join(AUTHORITIES_DB_NAME)
                     .join(encode_bytes_hex(key.public_key_bytes()));
-                let network_address = committe_config
+                let network_address = committee_config
                     .validator_set()
                     .iter()
                     .find(|validator| validator.public_key() == *key.public_key_bytes())
                     .map(|validator| validator.network_address().clone())
                     .unwrap();
-                let consensus_address = committe_config
+                let consensus_address = committee_config
                     .narwhal_committee()
                     .authorities
                     .get(&key.public_key_bytes().make_narwhal_public_key().unwrap())
@@ -210,7 +194,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     network_address,
                     metrics_address,
                     consensus_config,
-                    committee_config: committe_config.clone(),
+                    committee_config: committee_config.clone(),
                     genesis: genesis.clone(),
                 }
             })
