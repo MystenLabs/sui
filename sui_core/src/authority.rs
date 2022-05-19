@@ -697,7 +697,7 @@ impl AuthorityState {
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
         checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
-        genesis: Option<&Genesis>,
+        genesis: &Genesis,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -728,27 +728,23 @@ impl AuthorityState {
             .expect("Init batches failed!");
 
         // Only initialize an empty database.
-        if let Some(genesis) = genesis {
-            if store
-                .database_is_empty()
-                .expect("Database read should not fail.")
-            {
-                let mut genesis_ctx = genesis.genesis_ctx().to_owned();
-                for genesis_modules in genesis.modules() {
-                    state
-                        .store_package_and_init_modules_for_genesis(
-                            &mut genesis_ctx,
-                            genesis_modules.to_owned(),
-                        )
-                        .await
-                        .expect("We expect publishing the Genesis packages to not fail");
-                }
+        if store
+            .database_is_empty()
+            .expect("Database read should not fail.")
+        {
+            let mut genesis_ctx = genesis.genesis_ctx().to_owned();
+            for genesis_modules in genesis.modules() {
                 state
-                    .insert_genesis_objects_bulk_unsafe(
-                        &genesis.objects().iter().collect::<Vec<_>>(),
+                    .store_package_and_init_modules_for_genesis(
+                        &mut genesis_ctx,
+                        genesis_modules.to_owned(),
                     )
-                    .await;
+                    .await
+                    .expect("We expect publishing the Genesis packages to not fail");
             }
+            state
+                .insert_genesis_objects_bulk_unsafe(&genesis.objects().iter().collect::<Vec<_>>())
+                .await;
         }
 
         // If a checkpoint store is present, ensure it is up-to-date with the latest

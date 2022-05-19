@@ -55,7 +55,7 @@ pub(crate) async fn init_state(
         Arc::pin(authority_key),
         store,
         None,
-        Some(&sui_config::genesis::Genesis::get_default_genesis()),
+        &sui_config::genesis::Genesis::get_default_genesis(),
     )
     .await
 }
@@ -777,7 +777,7 @@ async fn test_safe_batch_stream() {
         Arc::pin(authority_key),
         store.clone(),
         None,
-        Some(&sui_config::genesis::Genesis::get_default_genesis()),
+        &sui_config::genesis::Genesis::get_default_genesis(),
     )
     .await;
 
@@ -821,7 +821,7 @@ async fn test_safe_batch_stream() {
         Arc::pin(authority_key),
         store,
         None,
-        Some(&sui_config::genesis::Genesis::get_default_genesis()),
+        &sui_config::genesis::Genesis::get_default_genesis(),
     )
     .await;
     let auth_client_from_byzantine = ByzantineAuthorityClient::new(state_b);

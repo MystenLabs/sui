@@ -354,7 +354,7 @@ impl LocalAuthorityClient {
             secret.clone(),
             store,
             Some(Arc::new(Mutex::new(checkpoints))),
-            Some(&sui_config::genesis::Genesis::get_default_genesis()),
+            &sui_config::genesis::Genesis::get_default_genesis(),
         )
         .await;
         Self {

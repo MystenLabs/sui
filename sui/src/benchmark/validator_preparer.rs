@@ -287,7 +287,7 @@ fn make_authority_state(
                 Arc::pin(secx),
                 store.clone(),
                 None,
-                Some(&sui_config::genesis::Genesis::get_default_genesis()),
+                &sui_config::genesis::Genesis::get_default_genesis(),
             )
             .await
         }),

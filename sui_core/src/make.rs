@@ -94,7 +94,7 @@ pub async fn make_server(validator_config: &ValidatorConfig) -> Result<Authority
         secret.clone(),
         store,
         Some(Arc::new(Mutex::new(checkpoints))),
-        Some(validator_config.genesis()),
+        validator_config.genesis(),
     )
     .await;
 
