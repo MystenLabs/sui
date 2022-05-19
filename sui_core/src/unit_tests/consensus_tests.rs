@@ -169,7 +169,10 @@ async fn submit_transaction_to_consensus() {
         };
         let message =
             bincode::deserialize(&serialized).expect("Failed to deserialize consensus tx");
-        let ConsensusTransaction::UserTransaction(certificate) = message;
+        let certificate = match message {
+            ConsensusTransaction::UserTransaction(certificate) => certificate,
+            _ => panic!("Unexpected message {message:?}"),
+        };
 
         // Set the shared object locks.
         state_guard
@@ -190,10 +193,12 @@ async fn submit_transaction_to_consensus() {
 
     // Ensure the consensus node got the transaction.
     let bytes = handle.recv().await.unwrap().transaction;
-    match bincode::deserialize(&bytes).unwrap() {
+    let message = bincode::deserialize(&bytes).unwrap();
+    match message {
         ConsensusTransaction::UserTransaction(x) => {
             assert_eq!(x.to_transaction(), expected_transaction)
         }
+        _ => panic!("Unexpected message {message:?}"),
     }
 }
 
