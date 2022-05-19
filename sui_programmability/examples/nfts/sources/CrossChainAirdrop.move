@@ -5,7 +5,7 @@
 /// only be one copy for each unique pair of contract_address and token_id. We only
 /// support a single chain(Ethereum) right now, but this can be extended to other
 /// chains by adding a chain_id field.
-module Sui::CrossChainAirdrop {
+module NFTs::CrossChainAirdrop {
     use Std::Vector;
     use Sui::ERC721Metadata::{Self, ERC721Metadata, TokenID};
     use Sui::ID::{VersionedID};
@@ -52,6 +52,8 @@ module Sui::CrossChainAirdrop {
     const ETokenIDClaimed: u64 = 0;
 
     /// Create the `Orcacle` capability and hand it off to the oracle
+    /// TODO: To make this usable, the oracle should be sent to a
+    /// hardcoded address that the contract creator has private key.
     fun init(ctx: &mut TxContext) {
         Transfer::transfer(
             CrossChainAirdropOracle {
