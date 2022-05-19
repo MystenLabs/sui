@@ -97,6 +97,28 @@ service Validator {
     rpc RemoveCollections (RemoveCollectionsRequest) returns (Empty);
 }
 
+message RoundsRequest {
+    /// The validator's key for which we want to retrieve
+    /// the available rounds.
+    PublicKey public_key = 1;
+}
+
+message RoundsResponse {
+    /// The oldest round for which the node has available
+    /// blocks to propose for the defined validator.
+    uint64 oldest_round = 1;
+
+    /// The newest (latest) round for which the node has available
+    /// blocks to propose for the defined validator.
+    uint64 newest_round = 2;
+}
+
+/// The API that hosts the endpoints that should be used to help
+/// proposing a block.
+service Proposer {
+  rpc Rounds (RoundsRequest) returns (RoundsResponse);
+}
+
 service Configuration {
     // Signals a change in networking info
     rpc NewNetworkInfo (NewNetworkInfoRequest) returns (Empty);

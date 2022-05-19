@@ -2,31 +2,39 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use self::{configuration::NarwhalConfiguration, validator::NarwhalValidator};
-use crate::{BlockCommand, BlockRemoverCommand};
+use crate::{grpc_server::proposer::NarwhalProposer, BlockCommand, BlockRemoverCommand};
+use config::Committee;
+use consensus::dag::Dag;
+use crypto::traits::VerifyingKey;
 use multiaddr::Multiaddr;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use tokio::sync::mpsc::Sender;
 use tracing::error;
-use types::{ConfigurationServer, ValidatorServer};
+use types::{ConfigurationServer, ProposerServer, ValidatorServer};
 
 mod configuration;
+mod proposer;
 mod validator;
 
-pub struct ConsensusAPIGrpc {
+pub struct ConsensusAPIGrpc<PublicKey: VerifyingKey> {
     socket_addr: Multiaddr,
     tx_get_block_commands: Sender<BlockCommand>,
     tx_block_removal_commands: Sender<BlockRemoverCommand>,
     get_collections_timeout: Duration,
     remove_collections_timeout: Duration,
+    dag: Option<Arc<Dag<PublicKey>>>,
+    committee: Committee<PublicKey>,
 }
 
-impl ConsensusAPIGrpc {
+impl<PublicKey: VerifyingKey> ConsensusAPIGrpc<PublicKey> {
     pub fn spawn(
         socket_addr: Multiaddr,
         tx_get_block_commands: Sender<BlockCommand>,
         tx_block_removal_commands: Sender<BlockRemoverCommand>,
         get_collections_timeout: Duration,
         remove_collections_timeout: Duration,
+        dag: Option<Arc<Dag<PublicKey>>>,
+        committee: Committee<PublicKey>,
     ) {
         tokio::spawn(async move {
             let _ = Self {
@@ -35,6 +43,8 @@ impl ConsensusAPIGrpc {
                 tx_block_removal_commands,
                 get_collections_timeout,
                 remove_collections_timeout,
+                dag,
+                committee,
             }
             .run()
             .await
@@ -50,6 +60,8 @@ impl ConsensusAPIGrpc {
             self.remove_collections_timeout,
         );
 
+        let narwhal_proposer = NarwhalProposer::new(self.dag.clone(), self.committee.clone());
+
         let narwhal_configuration = NarwhalConfiguration::new();
 
         let config = mysten_network::config::Config::default();
@@ -57,6 +69,7 @@ impl ConsensusAPIGrpc {
             .server_builder()
             .add_service(ValidatorServer::new(narwhal_validator))
             .add_service(ConfigurationServer::new(narwhal_configuration))
+            .add_service(ProposerServer::new(narwhal_proposer))
             .bind(&self.socket_addr)
             .await?
             .serve()

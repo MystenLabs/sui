@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crypto::ed25519::Ed25519PublicKey;
+use crypto::{ed25519::Ed25519PublicKey, traits::ToFromBytes};
 use multiaddr::Multiaddr;
 use tonic::{Request, Response, Status};
 use types::{Configuration, Empty, NewNetworkInfoRequest};
@@ -25,14 +25,15 @@ impl Configuration for NarwhalConfiguration {
         let validators = new_network_info_request.validators;
         let mut parsed_input = vec![];
         for validator in validators.iter() {
-            let public_key: Ed25519PublicKey = validator
+            let proto_key = validator
                 .public_key
                 .as_ref()
-                .ok_or_else(|| Status::invalid_argument("Missing public key"))?
-                .try_into()
-                .map_err(|err| {
+                .ok_or_else(|| Status::invalid_argument("Missing public key"))?;
+            let public_key: Ed25519PublicKey =
+                Ed25519PublicKey::from_bytes(proto_key.bytes.as_ref()).map_err(|err| {
                     Status::invalid_argument(format!("Could not serialize: {:?}", err))
                 })?;
+
             let stake_weight = validator.stake_weight;
             let address: Multiaddr = validator
                 .address

@@ -4,7 +4,6 @@
 #[path = "generated/narwhal.rs"]
 #[rustfmt::skip]
 mod narwhal;
-use crypto::{ed25519::Ed25519PublicKey, traits::ToFromBytes};
 
 use std::{array::TryFromSliceError, ops::Deref};
 
@@ -12,6 +11,7 @@ use crate::{
     Batch, BatchDigest, BatchMessage, BlockError, BlockErrorKind, CertificateDigest, Transaction,
 };
 use bytes::{Buf, Bytes};
+use crypto::traits::VerifyingKey;
 
 pub use narwhal::{
     collection_retrieval_result::RetrievalResult,
@@ -21,6 +21,8 @@ pub use narwhal::{
     primary_to_primary_server::{PrimaryToPrimary, PrimaryToPrimaryServer},
     primary_to_worker_client::PrimaryToWorkerClient,
     primary_to_worker_server::{PrimaryToWorker, PrimaryToWorkerServer},
+    proposer_client::ProposerClient,
+    proposer_server::{Proposer, ProposerServer},
     transactions_client::TransactionsClient,
     transactions_server::{Transactions, TransactionsServer},
     validator_client::ValidatorClient,
@@ -33,23 +35,15 @@ pub use narwhal::{
     BincodeEncodedPayload, CertificateDigest as CertificateDigestProto, CollectionError,
     CollectionErrorType, CollectionRetrievalResult, Empty, GetCollectionsRequest,
     GetCollectionsResponse, MultiAddr as MultiAddrProto, NewNetworkInfoRequest,
-    PublicKey as PublicKeyProto, RemoveCollectionsRequest, Transaction as TransactionProto,
-    ValidatorData,
+    PublicKey as PublicKeyProto, RemoveCollectionsRequest, RoundsRequest, RoundsResponse,
+    Transaction as TransactionProto, ValidatorData,
 };
 
-impl From<Ed25519PublicKey> for PublicKeyProto {
-    fn from(pub_key: Ed25519PublicKey) -> Self {
+impl<PublicKey: VerifyingKey> From<PublicKey> for PublicKeyProto {
+    fn from(pub_key: PublicKey) -> Self {
         PublicKeyProto {
             bytes: Bytes::from(pub_key.as_ref().to_vec()),
         }
-    }
-}
-
-impl TryFrom<&PublicKeyProto> for Ed25519PublicKey {
-    type Error = crypto::traits::Error;
-
-    fn try_from(pub_key: &PublicKeyProto) -> Result<Self, Self::Error> {
-        Ed25519PublicKey::from_bytes(pub_key.bytes.as_ref())
     }
 }
 

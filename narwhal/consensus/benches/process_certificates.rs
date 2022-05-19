@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use consensus::tusk::{
-    consensus_tests::{make_consensus_store, make_optimal_certificates, mock_committee},
+    consensus_tests::{make_consensus_store, mock_committee},
     *,
 };
 use criterion::{
@@ -10,7 +10,7 @@ use criterion::{
 use crypto::{traits::KeyPair, Hash};
 use pprof::criterion::{Output, PProfProfiler};
 use std::collections::BTreeSet;
-use test_utils::{keys, temp_dir};
+use test_utils::{keys, make_optimal_certificates, temp_dir};
 use types::{Certificate, Round};
 
 pub fn process_certificates(c: &mut Criterion) {

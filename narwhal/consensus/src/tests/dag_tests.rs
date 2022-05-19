@@ -5,10 +5,11 @@ use std::collections::BTreeSet;
 
 use crypto::{traits::KeyPair, Hash};
 use dag::node_dag::NodeDagError;
+use test_utils::make_optimal_certificates;
 use tokio::sync::mpsc::channel;
 use types::Certificate;
 
-use crate::tusk::consensus_tests::{make_optimal_certificates, mock_committee};
+use crate::tusk::consensus_tests::mock_committee;
 
 use super::{Dag, ValidatorDagError};
 

@@ -20,10 +20,11 @@ pub fn commit_certificates() -> VecDeque<Certificate<Ed25519PublicKey>> {
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (mut certificates, next_parents) = make_optimal_certificates(1, 4, &genesis, &keys);
+    let (mut certificates, next_parents) =
+        test_utils::make_optimal_certificates(1, 4, &genesis, &keys);
 
     // Make one certificate with round 5 to trigger the commits.
-    let (_, certificate) = mock_certificate(keys[0].clone(), 5, next_parents);
+    let (_, certificate) = test_utils::mock_certificate(keys[0].clone(), 5, next_parents);
     certificates.push_back(certificate);
     certificates
 }

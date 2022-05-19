@@ -231,7 +231,7 @@ impl Primary {
             certificate_store.clone(),
             header_store,
             payload_store.clone(),
-            dag,
+            dag.clone(),
             PrimaryToWorkerNetwork::default(),
             rx_block_removal_commands,
             rx_batch_removal,
@@ -308,6 +308,8 @@ impl Primary {
                 tx_block_removal_commands,
                 parameters.consensus_api_grpc.get_collections_timeout,
                 parameters.consensus_api_grpc.remove_collections_timeout,
+                dag,
+                committee.clone(),
             );
         }
 
