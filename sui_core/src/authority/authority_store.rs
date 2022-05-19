@@ -307,45 +307,22 @@ impl<
             .collect())
     }
 
-    // Returns true if the given version of the object has not been deleted (or wrapped).
-    //
-    // Only call this on an object that is already known to exist in self.objects,
-    // (and don't make this method public)
-    fn object_is_alive(&self, object_id: &ObjectID) -> Result<bool, SuiError> {
-        let obj = self
-            .parent_sync
-            .iter()
-            .skip_prior_to(&(*object_id, SequenceNumber::MAX, ObjectDigest::MAX))?
-            .next();
-
-        let obj_ref = match obj {
-            Some((obj_ref, _)) if obj_ref.0 == *object_id => Some(obj_ref),
-            _ => None,
-        };
-
-        match obj_ref {
-            None => {
-                error!(
-                    ?object_id,
-                    "Object is missing parent_sync entry, data store is inconsistent"
-                );
-                Ok(false)
-            }
-            Some(obj_ref) => Ok(obj_ref.2.is_alive()),
-        }
-    }
-
     /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
     pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        let obj = self
+        let obj_entry = self
             .objects
             .iter()
             .skip_prior_to(&ObjectKey::max_for_id(object_id))?
             .next();
 
+        let obj = match obj_entry {
+            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => obj,
+            _ => return Ok(None),
+        };
+
         // Note that the two reads in this function are (obviously) not atomic, and the
-        // object may be deleted after we have read it. Hence we check object_is_alive last
-        // so that the write to self.parent_sync gets the last word.
+        // object may be deleted after we have read it. Hence we check get_latest_parent_entry
+        // last, so that the write to self.parent_sync gets the last word.
         //
         // TODO: verify this race is ok.
         //
@@ -353,14 +330,17 @@ impl<
         // race with object deletions (the object could be deleted between when the function is
         // called and when the first read takes place, which would be indistinguishable to the
         // caller with the case in which the object is deleted in between the two reads).
-        match obj {
-            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => {
-                if self.object_is_alive(&obj_id)? {
-                    Ok(Some(obj))
-                } else {
-                    Ok(None)
-                }
+        let parent_entry = self.get_latest_parent_entry(*object_id)?;
+
+        match parent_entry {
+            None => {
+                error!(
+                    ?object_id,
+                    "Object is missing parent_sync entry, data store is inconsistent"
+                );
+                Ok(None)
             }
+            Some((obj_ref, _)) if obj_ref.2.is_alive() => Ok(Some(obj)),
             _ => Ok(None),
         }
     }
