@@ -8,7 +8,7 @@
     },
     "permissions": ["storage"],
     "action": {
-        "default_popup": "ui.html"
+        "default_popup": "ui.html?type=popup"
     },
     "host_permissions": [],
     "icons": {

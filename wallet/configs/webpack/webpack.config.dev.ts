@@ -12,10 +12,17 @@ import type { Configuration } from 'webpack';
 const configDev: Configuration = {
     mode: 'development',
     devtool: 'cheap-source-map',
-    plugins: [new ESLintPlugin(), new StyleLintPlugin()],
+    plugins: [
+        new ESLintPlugin({ extensions: ['ts', 'tsx', 'js', 'jsx'] }),
+        new StyleLintPlugin(),
+    ],
     watchOptions: {
         aggregateTimeout: 600,
     },
 };
 
-export default merge(configCommon, configDev);
+async function getConfig() {
+    return merge(await configCommon(), configDev);
+}
+
+export default getConfig;

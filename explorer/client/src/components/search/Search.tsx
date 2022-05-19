@@ -1,11 +1,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { isValidTransactionDigest, isValidSuiAddress } from '@mysten/sui.js';
 import React, { useState, useCallback, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-
+        
 import { NetworkContext } from '../../context';
-import { navigateWithUnknown } from '../../utils/searchUtil';
+import { isGenesisLibAddress } from '../../utils/api/searchUtil';
+import {
+    navigateWithUnknown,
+    overrideTypeChecks,
+} from '../../utils/searchUtil';
 
 import styles from './Search.module.css';
 
@@ -19,6 +24,24 @@ function getPlaceholderText(category: SearchCategory) {
         case 'objects':
         case 'all':
             return 'Search by ID';
+    }
+}
+
+function isInputValid(category: SearchCategory, input: string): boolean {
+    if (overrideTypeChecks) return true;
+
+    switch (category) {
+        case 'objects':
+        case 'addresses':
+            return isValidSuiAddress(input) || isGenesisLibAddress(input);
+        case 'transactions':
+            return isValidTransactionDigest(input);
+        case 'all':
+            return (
+                isValidSuiAddress(input) ||
+                isValidTransactionDigest(input) ||
+                isGenesisLibAddress(input)
+            );
     }
 }
 
@@ -37,16 +60,25 @@ function Search() {
             if (!input.length) return;
             setPleaseWaitMode(true);
 
+            // remove empty char from input
+            let query = input.trim();
+            if (!isInputValid(category, query)) {
+                navigate(`../error/${category}/${query}`);
+                setInput('');
+                setPleaseWaitMode(false);
+                return;
+            }
+
             if (category === 'all') {
                 // remove empty char from input
-                navigateWithUnknown(input.trim(), navigate, network).then(
+                navigateWithUnknown(query, navigate, network).then(
                     () => {
                         setInput('');
                         setPleaseWaitMode(false);
                     }
                 );
             } else {
-                navigate(`../${category}/${input.trim()}`);
+                navigate(`../${category}/${query}`);
                 setInput('');
                 setPleaseWaitMode(false);
                 setCategory('all');

@@ -33,5 +33,6 @@ fn main() {
         }
 
         println!("cargo:rustc-env=GIT_REV={}", git_rev);
+        println!("cargo:rerun-if-changed=build.rs");
     }
 }

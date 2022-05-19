@@ -1,0 +1,11 @@
+.logo {
+    width: 60px;
+}
+
+.container {
+    display: flex;
+    flex-flow: column nowrap;
+    align-items: center;
+    min-width: 300px;
+    padding: 8px;
+}

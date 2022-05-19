@@ -79,7 +79,7 @@ pub fn get_local_client(
     clients.next().unwrap().authority_client()
 }
 
-fn transfer_coin_transaction(
+pub fn transfer_coin_transaction(
     src: SuiAddress,
     secret: &dyn signature::Signer<Signature>,
     dest: SuiAddress,

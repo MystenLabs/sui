@@ -312,7 +312,7 @@ where
     }
 
     /// This function takes an initial state, than executes an asynchronous function (FMap) for each
-    /// uthority, and folds the results as they become available into the state using an async function (FReduce).
+    /// authority, and folds the results as they become available into the state using an async function (FReduce).
     ///
     /// FMap can do io, and returns a result V. An error there may not be fatal, and could be consumed by the
     /// MReduce function to overall recover from it. This is necessary to ensure byzantine authorities cannot

@@ -6,6 +6,19 @@ Sui is written in Rust, and we are using Cargo to build and manage the
 dependencies.  As a prerequisite, you will need to [install
 Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
 version 1.60.0 or higher in order to build and install Sui on your machine.
+Also ensure you have `cmake` installed:
+```shell
+$ which cmake
+```
+
+> **Tip:** Assuming you have Rust Cargo, the `git` command, and a GitHub account,
+> you can download the `sui-setup.sh` script and run it to conduct all of the setup
+> below, from a terminal like so:
+> ```shell
+> $ curl https://raw.githubusercontent.com/MystenLabs/sui/main/doc/utils/sui-setup.sh -o sui-setup.sh
+> chmod 755 sui-setup.sh
+> ./sui-setup.sh
+> ```
 
 ## Binaries
 
@@ -51,7 +64,7 @@ You can start exploring Sui's source code by looking into the following primary 
 * [sui](https://github.com/MystenLabs/sui/tree/main/sui) - the Sui binaries (`wallet`, `sui-move`, and more)
 * [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui's Move language integration also including games and other Move code examples for testing and reuse
 * [sui_core](https://github.com/MystenLabs/sui/tree/main/sui_core) - authority server and Sui Gateway
-* [sui_types](https://github.com/MystenLabs/sui/tree/main/sui_types) - coins, gas, and other object types
+* [sui-types](https://github.com/MystenLabs/sui/tree/main/crates/sui-types) - coins, gas, and other object types
 * [explorer](https://github.com/MystenLabs/sui/tree/main/explorer) - object explorer for the Sui network
 * [sui-network](https://github.com/MystenLabs/sui/tree/main/crates/sui-network) - networking interfaces
 

@@ -77,6 +77,15 @@ fn bootstrap() {
         )
         .method(
             Method::builder()
+                .name("checkpoint")
+                .route_name("Checkpoint")
+                .input_type("sui_types::messages_checkpoint::CheckpointRequest")
+                .output_type("sui_types::messages_checkpoint::CheckpointResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            Method::builder()
                 .name("batch_info")
                 .route_name("BatchInfo")
                 .input_type("sui_types::messages::BatchInfoRequest")

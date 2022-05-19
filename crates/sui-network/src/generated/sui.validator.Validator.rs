@@ -197,6 +197,30 @@ pub mod validator_client {
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
+        pub async fn checkpoint(
+            &mut self,
+            request: impl tonic::IntoRequest<
+                sui_types::messages_checkpoint::CheckpointRequest,
+            >,
+        ) -> Result<
+                tonic::Response<sui_types::messages_checkpoint::CheckpointResponse>,
+                tonic::Status,
+            > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = mysten_network::codec::BincodeCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.validator.Validator/Checkpoint",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
         pub async fn batch_info(
             &mut self,
             request: impl tonic::IntoRequest<sui_types::messages::BatchInfoRequest>,
@@ -270,6 +294,13 @@ pub mod validator_server {
             request: tonic::Request<sui_types::messages::TransactionInfoRequest>,
         ) -> Result<
                 tonic::Response<sui_types::messages::TransactionInfoResponse>,
+                tonic::Status,
+            >;
+        async fn checkpoint(
+            &self,
+            request: tonic::Request<sui_types::messages_checkpoint::CheckpointRequest>,
+        ) -> Result<
+                tonic::Response<sui_types::messages_checkpoint::CheckpointResponse>,
                 tonic::Status,
             >;
         ///Server streaming response type for the BatchInfo method.
@@ -570,6 +601,47 @@ pub mod validator_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = TransactionInfoSvc(inner);
+                        let codec = mysten_network::codec::BincodeCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.validator.Validator/Checkpoint" => {
+                    #[allow(non_camel_case_types)]
+                    struct CheckpointSvc<T: Validator>(pub Arc<T>);
+                    impl<
+                        T: Validator,
+                    > tonic::server::UnaryService<
+                        sui_types::messages_checkpoint::CheckpointRequest,
+                    > for CheckpointSvc<T> {
+                        type Response = sui_types::messages_checkpoint::CheckpointResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                sui_types::messages_checkpoint::CheckpointRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).checkpoint(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = CheckpointSvc(inner);
                         let codec = mysten_network::codec::BincodeCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

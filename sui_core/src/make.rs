@@ -6,10 +6,13 @@ use crate::authority_active::ActiveAuthority;
 use crate::authority_client::NetworkAuthorityClient;
 use crate::authority_server::AuthorityServer;
 use crate::authority_server::AuthorityServerHandle;
+use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusListener;
 use anyhow::{anyhow, Result};
 use futures::future::join_all;
+use parking_lot::Mutex;
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::NetworkConfig;
@@ -69,13 +72,28 @@ impl SuiNetwork {
 }
 
 pub async fn make_server(validator_config: &ValidatorConfig) -> Result<AuthorityServer> {
-    let store = Arc::new(AuthorityStore::open(validator_config.db_path(), None));
+    let mut store_path = PathBuf::from(validator_config.db_path());
+    store_path.push("store");
+    let store = Arc::new(AuthorityStore::open(store_path, None));
     let name = validator_config.public_key();
+    let mut checkpoints_path = PathBuf::from(validator_config.db_path());
+    checkpoints_path.push("checkpoints");
+
+    let secret = Arc::pin(validator_config.key_pair().copy());
+    let checkpoints = CheckpointStore::open(
+        &checkpoints_path,
+        None,
+        name,
+        validator_config.committee_config().committee(),
+        secret.clone(),
+    )?;
+
     let state = AuthorityState::new_without_genesis(
         validator_config.committee_config().committee(),
         name,
-        Arc::pin(validator_config.key_pair().copy()),
+        secret.clone(),
         store,
+        Some(Arc::new(Mutex::new(checkpoints))),
     )
     .await;
 
@@ -85,14 +103,29 @@ pub async fn make_server(validator_config: &ValidatorConfig) -> Result<Authority
 pub async fn make_server_with_genesis(
     validator_config: &ValidatorConfig,
 ) -> Result<AuthorityServer> {
-    let store = Arc::new(AuthorityStore::open(validator_config.db_path(), None));
+    let mut store_path = PathBuf::from(validator_config.db_path());
+    store_path.push("store");
+    let store = Arc::new(AuthorityStore::open(store_path, None));
     let name = validator_config.public_key();
+    let mut checkpoints_path = PathBuf::from(validator_config.db_path());
+    checkpoints_path.push("checkpoints");
+
+    let secret = Arc::pin(validator_config.key_pair().copy());
+    let checkpoints = CheckpointStore::open(
+        &checkpoints_path,
+        None,
+        name,
+        validator_config.committee_config().committee(),
+        secret.clone(),
+    )?;
+
     let state = AuthorityState::new_with_genesis(
         validator_config.committee_config().committee(),
         name,
-        Arc::pin(validator_config.key_pair().copy()),
+        secret.clone(),
         store,
         validator_config.genesis(),
+        Some(Arc::new(Mutex::new(checkpoints))),
     )
     .await;
 

@@ -24,11 +24,20 @@ module.exports = {
                 ],
                 pathGroups: [
                     {
+                        pattern: '_*',
+                        group: 'internal',
+                    },
+                    {
+                        pattern: '_*/**',
+                        group: 'internal',
+                    },
+                    {
                         pattern: '{.,..}/**/*.?(s)css',
                         group: 'type',
                         position: 'after',
                     },
                 ],
+                pathGroupsExcludedImportTypes: ['builtin', 'object', 'type'],
                 'newlines-between': 'always',
                 alphabetize: { order: 'asc' },
                 warnOnUnassignedImports: true,

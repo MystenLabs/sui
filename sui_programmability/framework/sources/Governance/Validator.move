@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Sui::Validator {
-    use Std::ASCII::{Self, String};
+    use Std::ASCII;
     use Std::Option::{Self, Option};
     use Std::Vector;
 
@@ -25,8 +25,11 @@ module Sui::Validator {
         /// The Sui Address of the validator. This is the sender that created the Validator object,
         /// and also the address to send validator/coins to during withdraws.
         sui_address: address,
+        /// The public key bytes corresponding to the private key that the validator
+        /// holds to sign transactions. For now, this is the same as AuthorityName.
+        pubkey_bytes: vector<u8>,
         /// A unique human-readable name of this validator.
-        name: String,
+        name: vector<u8>,
         /// The network address of the validator (could also contain extra info such as port, DNS and etc.).
         net_address: vector<u8>,
         /// The current active stake. This will not change during an epoch. It can only
@@ -54,17 +57,22 @@ module Sui::Validator {
 
     public(friend) fun new(
         sui_address: address,
+        pubkey_bytes: vector<u8>,
         name: vector<u8>,
         net_address: vector<u8>,
         stake: Balance<SUI>,
     ): Validator {
         assert!(
-            Vector::length(&net_address) <= 100 || Vector::length(&name) <= 50,
+            // TODO: These constants are arbitrary, will adjust once we know more.
+            Vector::length(&net_address) <= 100 && Vector::length(&name) <= 50 && Vector::length(&pubkey_bytes) <= 128,
             0
         );
+        // Check that the name is human-readable.
+        ASCII::string(copy name);
         Validator {
             sui_address,
-            name: ASCII::string(name),
+            pubkey_bytes,
+            name,
             net_address,
             stake,
             delegation: 0,
@@ -81,6 +89,7 @@ module Sui::Validator {
     public(friend) fun destroy(self: Validator, ctx: &mut TxContext) {
         let Validator {
             sui_address,
+            pubkey_bytes: _,
             name: _,
             net_address: _,
             stake,

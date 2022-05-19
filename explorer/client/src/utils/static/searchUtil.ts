@@ -20,7 +20,7 @@ const navigateWithUnknown = async (
     } else if (ownedObjects && ownedObjects.length > 0) {
         navigate(`../addresses/${input}`, { state: data });
     } else {
-        navigate(`../missing/${input}`);
+        navigate(`../error/missing/${input}`);
     }
 };
 

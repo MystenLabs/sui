@@ -45,7 +45,7 @@ export const tryGetRpcSetting = (): string | null => {
 
 const ENDPOINTS = {
     [Network.Local]: 'http://127.0.0.1:5001',
-    [Network.Devnet]: 'https://gateway.devnet.sui.io:9000',
+    [Network.Devnet]: 'https://gateway.devnet.sui.io:443',
 };
 
 export function getEndpoint(network: Network | string): string {
