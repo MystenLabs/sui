@@ -3,10 +3,13 @@
 use consensus::SequenceNumber;
 use serde::{Deserialize, Serialize};
 
+#[cfg(test)]
+#[path = "tests/state_tests.rs"]
+pub mod state_tests;
+
 /// The state of the subscriber keeping track of the transactions that have already been
 /// executed. It ensures we do not process twice the same transaction despite crash-recovery.
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExecutionIndices {
     /// The index of the latest consensus message we processed (used for crash-recovery).
     pub next_certificate_index: SequenceNumber,
@@ -57,5 +60,27 @@ impl ExecutionIndices {
     /// Check whether the input index is the next expected transaction index.
     pub fn check_next_transaction_index(&self, transaction_index: SequenceNumber) -> bool {
         transaction_index == self.next_transaction_index
+    }
+}
+
+impl Ord for ExecutionIndices {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if self.next_certificate_index == other.next_certificate_index {
+            if self.next_batch_index == other.next_batch_index {
+                self.next_transaction_index
+                    .cmp(&other.next_transaction_index)
+            } else {
+                self.next_batch_index.cmp(&other.next_batch_index)
+            }
+        } else {
+            self.next_certificate_index
+                .cmp(&other.next_certificate_index)
+        }
+    }
+}
+
+impl PartialOrd for ExecutionIndices {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
