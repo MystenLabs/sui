@@ -12,6 +12,8 @@ use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::ModuleCache;
 use move_core_types::{
+    account_address::AccountAddress,
+    ident_str,
     language_storage::{ModuleId, StructTag},
     resolver::{ModuleResolver, ResourceResolver},
 };
@@ -704,7 +706,7 @@ impl AuthorityState {
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
 
         let mut state = AuthorityState {
-            committee,
+            committee: committee.clone(),
             name,
             secret,
             _native_functions: native_functions.clone(),
@@ -745,6 +747,10 @@ impl AuthorityState {
             state
                 .insert_genesis_objects_bulk_unsafe(&genesis.objects().iter().collect::<Vec<_>>())
                 .await;
+            state
+                .call_genesis_move_functions(&committee, &mut genesis_ctx)
+                .await
+                .unwrap();
         }
 
         // If a checkpoint store is present, ensure it is up-to-date with the latest
@@ -806,6 +812,57 @@ impl AuthorityState {
             .bulk_object_insert(objects)
             .await
             .expect("Cannot bulk insert genesis objects")
+    }
+
+    pub async fn call_genesis_move_functions(
+        &self,
+        committee: &Committee,
+        genesis_ctx: &mut TxContext,
+    ) -> SuiResult {
+        let genesis_digest = genesis_ctx.digest();
+        let mut temporary_store =
+            AuthorityTemporaryStore::new(self.database.clone(), vec![], genesis_digest);
+        let pubkeys: Vec<Vec<u8>> = committee
+            .expanded_keys
+            .values()
+            .map(|pk| pk.to_bytes().to_vec())
+            .collect();
+        // TODO: May use separate sui address than derived from pubkey.
+        let sui_addresses: Vec<AccountAddress> = committee
+            .voting_rights
+            .keys()
+            .map(|pk| SuiAddress::from(pk).into())
+            .collect();
+        // TODO: Allow config to specify human readable validator names.
+        let names: Vec<Vec<u8>> = (0..sui_addresses.len())
+            .map(|i| Vec::from(format!("Validator{}", i).as_bytes()))
+            .collect();
+        // TODO: Change voting_rights to use u64 instead of usize.
+        let stakes: Vec<u64> = committee
+            .voting_rights
+            .values()
+            .map(|v| *v as u64)
+            .collect();
+        adapter::execute(
+            &self.move_vm,
+            &mut temporary_store,
+            ModuleId::new(SUI_FRAMEWORK_ADDRESS, ident_str!("Genesis").to_owned()),
+            &ident_str!("create").to_owned(),
+            vec![],
+            vec![
+                CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&sui_addresses).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&names).unwrap()),
+                // TODO: below is netaddress, for now just use names as we don't yet want to expose them.
+                CallArg::Pure(bcs::to_bytes(&names).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&stakes).unwrap()),
+            ],
+            &mut SuiGasStatus::new_unmetered(),
+            genesis_ctx,
+        )?;
+        self.database
+            .update_objects_state_for_genesis(temporary_store, genesis_digest)
+            .await
     }
 
     /// Persist the Genesis package to DB along with the side effects for module initialization

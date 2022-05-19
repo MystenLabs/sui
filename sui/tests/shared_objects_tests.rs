@@ -163,7 +163,6 @@ async fn call_shared_object_contract() {
     // the handles (or the authorities will stop).
     let configs = test_authority_configs();
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
-
     // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
