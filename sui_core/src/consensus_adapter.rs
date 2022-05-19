@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::AuthorityState;
+use crate::checkpoints::ConsensusSender;
 use bytes::Bytes;
 use multiaddr::Multiaddr;
 use narwhal_executor::SubscriberResult;
@@ -12,6 +13,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 use sui_types::messages::ConfirmationTransaction;
+use sui_types::messages_checkpoint::CheckpointFragment;
 use sui_types::{
     committee::Committee,
     error::{SuiError, SuiResult},
@@ -260,5 +262,44 @@ impl ConsensusListener {
         let mut hasher = DefaultHasher::new();
         serialized.hash(&mut hasher);
         hasher.finish()
+    }
+}
+
+/// Send checkpoints through consensus.
+pub struct CheckpointSender {
+    /// The network client connecting to the consensus node of this authority.
+    consensus_client: TransactionsClient<sui_network::tonic::transport::Channel>,
+}
+
+impl CheckpointSender {
+    pub fn new(consensus_address: Multiaddr) -> Self {
+        Self {
+            consensus_client: TransactionsClient::new(
+                mysten_network::client::connect_lazy(&consensus_address)
+                    .expect("Failed to connect to consensus"),
+            ),
+        }
+    }
+}
+
+impl ConsensusSender for CheckpointSender {
+    fn send_to_consensus(&self, fragment: CheckpointFragment) -> SuiResult {
+        let transaction = ConsensusTransaction::Checkpoint(fragment);
+
+        // Serialize the transaction in a way that is understandable to consensus (i.e., using
+        // bincode) and it certificate to consensus.
+        let serialized =
+            bincode::serialize(&transaction).expect("Failed to serialize consensus tx");
+        let bytes = Bytes::from(serialized);
+
+        // Send the transaction to consensus.
+        // TODO: Blocking on the function below is not great.
+        futures::executor::block_on(
+            self.consensus_client
+                .clone()
+                .submit_transaction(TransactionProto { transaction: bytes }),
+        )
+        .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))?;
+        Ok(())
     }
 }
