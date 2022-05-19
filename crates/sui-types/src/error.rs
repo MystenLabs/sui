@@ -316,7 +316,7 @@ pub enum SuiError {
     #[error("Consensus listener is out of capacity")]
     ListenerCapacityExceeded,
     #[error("Failed to serialize/deserialize Narwhal message: {0}")]
-    ConsensusNarwhalSerializationError(String),
+    ConsensusSuiSerializationError(String),
     #[error("Only shared object transactions need to be sequenced")]
     NotASharedObjectTransaction,
 

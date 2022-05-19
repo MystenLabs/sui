@@ -3,6 +3,7 @@
 
 use crate::TEST_COMMITTEE_SIZE;
 use rand::{prelude::StdRng, SeedableRng};
+use std::time::Duration;
 use std::{collections::BTreeMap, sync::Arc};
 use sui::sui_commands::make_authority;
 use sui_adapter::genesis;
@@ -29,7 +30,17 @@ pub fn test_authority_store() -> AuthorityStore {
 pub fn test_authority_configs() -> NetworkConfig {
     let config_dir = tempfile::tempdir().unwrap().into_path();
     let rng = StdRng::from_seed([0; 32]);
-    NetworkConfig::generate_with_rng(&config_dir, TEST_COMMITTEE_SIZE, rng)
+    let mut configs = NetworkConfig::generate_with_rng(&config_dir, TEST_COMMITTEE_SIZE, rng);
+    for config in configs.validator_configs.iter_mut() {
+        let parameters = &mut config.consensus_config.narwhal_config;
+        // NOTE: the following parameters are important to ensure tests run fast. Using the default
+        // Narwhal parameters may result in tests taking >60 seconds.
+        parameters.header_size = 1;
+        parameters.max_header_delay = Duration::from_millis(200);
+        parameters.batch_size = 1;
+        parameters.max_batch_delay = Duration::from_millis(200);
+    }
+    configs
 }
 
 /// Spawn all authorities in the test committee into a separate tokio task.

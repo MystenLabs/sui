@@ -9,7 +9,7 @@ use sui_core::{
 use sui_types::object::OBJECT_START_VERSION;
 use sui_types::{
     base_types::ObjectRef,
-    error::{SuiError, SuiResult},
+    error::SuiResult,
     messages::{
         CallArg, ConfirmationTransaction, ConsensusTransaction, ExecutionStatus, Transaction,
         TransactionInfoResponse,
@@ -72,8 +72,14 @@ async fn submit_shared_object_transaction(
         let replies: Vec<_> = futures::future::join_all(futures)
             .await
             .into_iter()
-            // Remove all `ConsensusConnectionBroken` replies.
-            .filter(|result| !matches!(result, Err(SuiError::ConsensusConnectionBroken(..))))
+            // Remove all `ConsensusConnectionBroken` replies. Note that the original Sui error type
+            // `SuiError::ConsensusConnectionBroken(..)` is lost when the message is sent through the
+            // network (it is replaced by `RpcError`). As a result, the following filter doesn't work:
+            // `.filter(|result| !matches!(result, Err(SuiError::ConsensusConnectionBroken(..))))`.
+            .filter(|result| match result {
+                Err(e) => !e.to_string().contains("deadline has elapsed"),
+                _ => true,
+            })
             .collect();
 
         if !replies.is_empty() {
@@ -482,6 +488,7 @@ async fn replay_shared_object_transaction() {
 }
 
 #[tokio::test]
+//#[ignore] // cargo test gateway -p sui --test shared_objects_tests -- --nocapture
 async fn shared_object_on_gateway() {
     let mut gas_objects = test_gas_objects();
 
@@ -516,27 +523,38 @@ async fn shared_object_on_gateway() {
     // We need to have one gas object left for the final value check.
     let last_gas_object = gas_objects.pop().unwrap();
     let increment_amount = gas_objects.len();
-    let futures: Vec<_> = gas_objects
-        .into_iter()
-        .map(|gas_object| {
-            let g = gateway.clone();
-            let increment_counter_transaction = move_transaction(
-                gas_object,
-                "Counter",
-                "increment",
-                package_ref,
-                /* arguments */ vec![CallArg::SharedObject(shared_object_id)],
-            );
-            async move { g.execute_transaction(increment_counter_transaction).await }
-        })
-        .collect();
 
-    let replies: Vec<_> = futures::future::join_all(futures)
-        .await
-        .into_iter()
-        .collect();
-    assert_eq!(replies.len(), increment_amount);
-    assert!(replies.iter().all(|result| result.is_ok()));
+    // It may happen that no authorities manage to get their transaction sequenced by consensus
+    // (we may be unlucky and consensus may drop all our transactions). It would have been nice
+    // to only filter "timeout" errors, but the game way simply returns `anyhow::Error`, this
+    // will be fixed by issue #1717. Note that the gateway has an internal retry mechanism but
+    // it is not an infinite loop.
+    loop {
+        let futures: Vec<_> = gas_objects
+            .iter()
+            .cloned()
+            .map(|gas_object| {
+                let g = gateway.clone();
+                let increment_counter_transaction = move_transaction(
+                    gas_object,
+                    "Counter",
+                    "increment",
+                    package_ref,
+                    /* arguments */ vec![CallArg::SharedObject(shared_object_id)],
+                );
+                async move { g.execute_transaction(increment_counter_transaction).await }
+            })
+            .collect();
+
+        let replies: Vec<_> = futures::future::join_all(futures)
+            .await
+            .into_iter()
+            .collect();
+        assert_eq!(replies.len(), increment_amount);
+        if replies.iter().all(|result| result.is_ok()) {
+            break;
+        }
+    }
 
     let assert_value_transaction = move_transaction(
         last_gas_object,
@@ -548,10 +566,17 @@ async fn shared_object_on_gateway() {
             CallArg::Pure((increment_amount as u64).to_le_bytes().to_vec()),
         ],
     );
-    let resp = gateway
-        .execute_transaction(assert_value_transaction)
-        .await
-        .unwrap();
-    let effects = resp.to_effect_response().unwrap().effects;
-    assert!(effects.status.is_ok());
+
+    // Same problem may happen here (consensus may drop transactions).
+    loop {
+        let result = gateway
+            .clone()
+            .execute_transaction(assert_value_transaction.clone())
+            .await;
+        if let Ok(response) = result {
+            let effects = response.to_effect_response().unwrap().effects;
+            assert!(effects.status.is_ok());
+            break;
+        }
+    }
 }
