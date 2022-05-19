@@ -28,7 +28,7 @@ use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{sleep, timeout},
 };
-use tracing::log::{debug, error, warn};
+use tracing::{debug, error, trace, warn};
 use types::{BatchDigest, Certificate, CertificateDigest};
 
 #[cfg(test)]
@@ -725,6 +725,8 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         loop {
             tokio::select! {
                 Some(response) = receiver.recv() => {
+                    trace!("Received response: {:?}", &response);
+
                     if peers.contains_peer(&response.from) {
                         // skip , we already got an answer from this peer
                         continue;
@@ -767,8 +769,8 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                                 };
                             }
                         },
-                        Err(_) => {
-                            warn!("Got invalid certificates from peer");
+                        Err(err) => {
+                            warn!("Got invalid certificates from peer: {:?}", err);
                         }
                     }
                 },

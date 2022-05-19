@@ -30,7 +30,7 @@ use tokio::{
     time::{sleep, timeout},
 };
 
-use tracing::log::debug;
+use tracing::debug;
 use types::{Certificate, CertificateDigest};
 
 #[tokio::test]

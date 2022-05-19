@@ -19,7 +19,7 @@ use tokio::{
     sync::{mpsc::Receiver, oneshot},
     time::timeout,
 };
-use tracing::{error, instrument, log::debug, warn};
+use tracing::{debug, error, instrument, warn};
 use types::{
     BatchDigest, BatchMessage, BlockError, BlockErrorKind, BlockResult, Certificate,
     CertificateDigest, Header,

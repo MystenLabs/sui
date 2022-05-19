@@ -5,7 +5,7 @@ use config::Committee;
 use crypto::{traits::VerifyingKey, Digest, Hash};
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
-use tracing::log::{error, warn};
+use tracing::{error, warn};
 use types::{Certificate, CertificateDigest};
 
 // RequestID helps us identify an incoming request and
@@ -109,7 +109,17 @@ impl<PublicKey: VerifyingKey> CertificatesResponse<PublicKey> {
         let invalid_certificates: Vec<Certificate<PublicKey>> = peer_found_certs
             .clone()
             .into_iter()
-            .filter(|c| c.verify(committee).is_err())
+            .filter(|c| {
+                if let Err(err) = c.verify(committee) {
+                    error!(
+                        "Certificate verification failed for id {} with error {:?}",
+                        c.digest(),
+                        err
+                    );
+                    return true;
+                }
+                false
+            })
             .collect();
 
         if !invalid_certificates.is_empty() {
