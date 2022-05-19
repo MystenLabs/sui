@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { createContext, type Dispatch, type SetStateAction } from 'react';
 
 import { Network } from './utils/api/DefaultRpcClient';
