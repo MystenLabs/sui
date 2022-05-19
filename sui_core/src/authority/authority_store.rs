@@ -6,7 +6,6 @@ use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::collections::BTreeSet;
 use std::path::Path;
 use sui_storage::LockService;
 use sui_types::base_types::SequenceNumber;
@@ -21,8 +20,6 @@ pub type AuthorityStore = SuiDataStore<true, AuthoritySignInfo>;
 #[allow(dead_code)]
 pub type ReplicaStore = SuiDataStore<false, EmptySignInfo>;
 pub type GatewayStore = SuiDataStore<true, EmptySignInfo>;
-
-const NUM_SHARDS: usize = 4096;
 
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
@@ -44,9 +41,6 @@ pub struct SuiDataStore<const USE_LOCKS: bool, S> {
 
     /// The LockService this store depends on for locking functionality
     lock_service: LockService,
-
-    /// Internal vector of locks to manage concurrent writes to the database
-    lock_table: Vec<tokio::sync::Mutex<()>>,
 
     /// This is a an index of object references to currently existing objects, indexed by the
     /// composite key of the SuiAddress of their owner and the object ID of the object.
@@ -183,10 +177,6 @@ impl<const USE_LOCKS: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         Self {
             objects,
             lock_service,
-            lock_table: (0..NUM_SHARDS)
-                .into_iter()
-                .map(|_| tokio::sync::Mutex::new(()))
-                .collect(),
             owner_index,
             transactions,
             certificates,
@@ -250,32 +240,6 @@ impl<const USE_LOCKS: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     #[cfg(test)]
     pub fn side_sequence(&self, seq: TxSequenceNumber, digest: &TransactionDigest) {
         self.executed_sequence.insert(&seq, digest).unwrap();
-    }
-
-    /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
-    async fn acquire_locks(
-        &self,
-        input_objects: &[ObjectRef],
-    ) -> Vec<tokio::sync::MutexGuard<'_, ()>> {
-        if !USE_LOCKS {
-            return vec![];
-        }
-
-        let num_locks = self.lock_table.len();
-        // TODO: randomize the lock mapping based on a secret to avoid DoS attacks.
-        let lock_numbers: BTreeSet<usize> = input_objects
-            .iter()
-            .map(|(_, _, digest)| {
-                usize::from_le_bytes(digest.0[0..8].try_into().unwrap()) % num_locks
-            })
-            .collect();
-        // Note: we need to iterate over the sorted unique elements, hence the use of a Set
-        //       in order to prevent deadlocks when trying to acquire many locks.
-        let mut locks = Vec::new();
-        for lock_seq in lock_numbers {
-            locks.push(self.lock_table[lock_seq].lock().await);
-        }
-        locks
     }
 
     // Methods to read the store
@@ -728,61 +692,55 @@ impl<const USE_LOCKS: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         // certs which may overwrite newer objects with older ones.  This can be removed once we have
         // an object storage supporting multiple object versions at once, then there is idempotency and
         // old writes would be OK.
-        {
-            // Acquire the lock to ensure no one else writes when we are in here.
-            let _mutexes = self.acquire_locks(&owned_inputs[..]).await;
 
-            // NOTE: We just check here that locks exist, not that they are locked to a specific TX.  Why?
-            // 1. Lock existence prevents re-execution of old certs when objects have been upgraded
-            // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
-            //    (But the lock should exist which means previous transactions finished)
-            // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its fine
-            if USE_LOCKS {
-                self.lock_service.locks_exist(owned_inputs.clone()).await?;
-            }
+        // NOTE: We just check here that locks exist, not that they are locked to a specific TX.  Why?
+        // 1. Lock existence prevents re-execution of old certs when objects have been upgraded
+        // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
+        //    (But the lock should exist which means previous transactions finished)
+        // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its fine
+        if USE_LOCKS {
+            self.lock_service.locks_exist(owned_inputs.clone()).await?;
+        }
 
-            if let Some(next_seq) = seq_opt {
-                // Now we are sure we are going to execute, add to the sequence
-                // number and insert into authority sequence.
-                //
-                // NOTE: it is possible that we commit to the database transactions
-                //       out of order with respect to their sequence number. It is also
-                //       possible for the authority to crash without committing the
-                //       full sequence, and the batching logic needs to deal with this.
-                write_batch = write_batch.insert_batch(
-                    &self.executed_sequence,
-                    std::iter::once((next_seq, transaction_digest)),
-                )?;
-            }
+        if let Some(next_seq) = seq_opt {
+            // Now we are sure we are going to execute, add to the sequence
+            // number and insert into authority sequence.
+            //
+            // NOTE: it is possible that we commit to the database transactions
+            //       out of order with respect to their sequence number. It is also
+            //       possible for the authority to crash without committing the
+            //       full sequence, and the batching logic needs to deal with this.
+            write_batch = write_batch.insert_batch(
+                &self.executed_sequence,
+                std::iter::once((next_seq, transaction_digest)),
+            )?;
+        }
 
-            // Atomic write of all data other than locks
-            write_batch.write()?;
-            trace!("Finished writing batch");
+        // Atomic write of all data other than locks
+        write_batch.write()?;
+        trace!("Finished writing batch");
 
-            if USE_LOCKS {
-                // Initialize object locks for new objects.  After this point, transactions on new objects
-                // can run.  So it is critical this is done AFTER objects are done writing.
-                // TODO: add retries https://github.com/MystenLabs/sui/issues/1993
-                let new_locks_to_init: Vec<_> = written
-                    .iter()
-                    .filter_map(|(_, (object_ref, new_object))| {
-                        if new_object.is_owned() {
-                            Some(*object_ref)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                self.lock_service
-                    .initialize_locks(new_locks_to_init)
-                    .await?;
+        if USE_LOCKS {
+            // Initialize object locks for new objects.  After this point, transactions on new objects
+            // can run.  So it is critical this is done AFTER objects are done writing.
+            // TODO: add retries https://github.com/MystenLabs/sui/issues/1993
+            let new_locks_to_init: Vec<_> = written
+                .iter()
+                .filter_map(|(_, (object_ref, new_object))| {
+                    if new_object.is_owned() {
+                        Some(*object_ref)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            self.lock_service
+                .initialize_locks(new_locks_to_init)
+                .await?;
 
-                // Remove the old lock - timing of this matters less
-                let locks_to_remove = owned_inputs;
-                self.lock_service.remove_locks(locks_to_remove).await?;
-            }
-
-            // implicit: drop(_mutexes);
+            // Remove the old lock - timing of this matters less
+            let locks_to_remove = owned_inputs;
+            self.lock_service.remove_locks(locks_to_remove).await?;
         }
 
         Ok(())
