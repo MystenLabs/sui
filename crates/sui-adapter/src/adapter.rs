@@ -8,7 +8,7 @@ use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
     errors::PartialVMResult,
-    file_format::{CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
+    file_format::{CompiledModule, LocalIndex, SignatureToken, StructHandleIndex, Visibility},
 };
 use sui_framework::EventType;
 use sui_types::{
@@ -645,6 +645,11 @@ pub fn resolve_and_type_check(
             })
         }
     };
+    if fdef.visibility != Visibility::Script {
+        return Err(SuiError::InvalidFunctionVisibility {
+            error: format!("Can only call functions with 'public(script)' visibility"),
+        });
+    }
     let fhandle = module.function_handle_at(fdef.function);
 
     // check arity of type and value arguments

@@ -213,6 +213,8 @@ pub enum SuiError {
     ModuleNotFound { module_name: String },
     #[error("Function signature is invalid: {error:?}.")]
     InvalidFunctionSignature { error: String },
+    #[error("Function visibility is invalid for an entry point to execution: {error:?}.")]
+    InvalidFunctionVisibility { error: String },
     #[error("Type error while binding function arguments: {error:?}.")]
     TypeError { error: String },
     #[error("Execution aborted: {error:?}.")]
