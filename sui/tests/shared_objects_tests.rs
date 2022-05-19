@@ -72,10 +72,10 @@ async fn submit_shared_object_transaction(
         let replies: Vec<_> = futures::future::join_all(futures)
             .await
             .into_iter()
-            // Remove all `ConsensusConnectionBroken` replies. Note that the original Sui error type
-            // `SuiError::ConsensusConnectionBroken(..)` is lost when the message is sent through the
+            // Remove all `FailedToHearBackFromConsensus` replies. Note that the original Sui error type
+            // `SuiError::FailedToHearBackFromConsensus(..)` is lost when the message is sent through the
             // network (it is replaced by `RpcError`). As a result, the following filter doesn't work:
-            // `.filter(|result| !matches!(result, Err(SuiError::ConsensusConnectionBroken(..))))`.
+            // `.filter(|result| !matches!(result, Err(SuiError::FailedToHearBackFromConsensus(..))))`.
             .filter(|result| match result {
                 Err(e) => !e.to_string().contains("deadline has elapsed"),
                 _ => true,
@@ -163,7 +163,6 @@ async fn call_shared_object_contract() {
     // the handles (or the authorities will stop).
     let configs = test_authority_configs();
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
-
     // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;

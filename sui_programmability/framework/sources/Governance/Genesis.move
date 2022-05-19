@@ -23,27 +23,44 @@ module Sui::Genesis {
     /// Initial value of the upper-bound on the number of validators.
     const INIT_MAX_VALIDATOR_COUNT: u64 = 100;
 
-    /// Basic information of Validator1, as an example, all dummy values.
-    const VALIDATOR1_SUI_ADDRESS: address = @0x1234;
-    const VALIDATOR1_PUBKEY_BYTES: vector<u8> = x"FF";
-    const VALIDATOR1_NAME: vector<u8> = b"Validator1";
-    const VALIDATOR1_IP_ADDRESS: vector<u8> = x"00FF00FF";
-    const VALIDATOR1_STAKE: u64 = 100000000000000;
-
-    /// This is a module initializer that runs during module publishing.
+    /// This function will be explicitly called once at genesis.
     /// It will create a singleton SuiSystemState object, which contains
     /// all the information we need in the system.
-    fun init(ctx: &mut TxContext) {
+    fun create(
+        validator_pubkeys: vector<vector<u8>>,
+        validator_sui_addresses: vector<address>,
+        validator_names: vector<vector<u8>>,
+        validator_net_addresses: vector<vector<u8>>,
+        validator_stakes: vector<u64>,
+        ctx: &mut TxContext,
+    ) {
         let treasury_cap = SUI::new(ctx);
         let storage_fund = Coin::mint_balance(INIT_STORAGE_FUND, &mut treasury_cap);
         let validators = Vector::empty();
-        Vector::push_back(&mut validators, Validator::new(
-            VALIDATOR1_SUI_ADDRESS,
-            VALIDATOR1_PUBKEY_BYTES,
-            VALIDATOR1_NAME,
-            VALIDATOR1_IP_ADDRESS,
-            Coin::mint_balance(VALIDATOR1_STAKE, &mut treasury_cap),
-        ));
+        let count = Vector::length(&validator_pubkeys);
+        assert!(
+            Vector::length(&validator_sui_addresses) == count
+                && Vector::length(&validator_stakes) == count
+                && Vector::length(&validator_names) == count
+                && Vector::length(&validator_net_addresses) == count,
+            1
+        );
+        let i = 0;
+        while (i < count) {
+            let sui_address = *Vector::borrow(&validator_sui_addresses, i);
+            let pubkey = *Vector::borrow(&validator_pubkeys, i);
+            let name = *Vector::borrow(&validator_names, i);
+            let net_address = *Vector::borrow(&validator_net_addresses, i);
+            let stake = *Vector::borrow(&validator_stakes, i);
+            Vector::push_back(&mut validators, Validator::new(
+                sui_address,
+                pubkey,
+                name,
+                net_address,
+                Coin::mint_balance(stake, &mut treasury_cap),
+            ));
+            i = i + 1;
+        };
         SuiSystem::create(
             validators,
             treasury_cap,

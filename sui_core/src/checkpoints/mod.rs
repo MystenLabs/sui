@@ -48,7 +48,7 @@ pub struct CheckpointLocals {
     // The next transaction after what is included in the proposal
     pub proposal_next_transaction: Option<TxSequenceNumber>,
 
-    // The next trasnaction sequence number of transactions processed
+    // The next transaction sequence number of transactions processed
     pub next_transaction_sequence: TxSequenceNumber,
 
     // True if no more fragments are to be added.

@@ -147,7 +147,7 @@ impl ConsensusAdapter {
                     .send(message)
                     .await
                     .expect("Cleanup channel with consensus listener dropped");
-                Err(SuiError::ConsensusConnectionBroken(e.to_string()))
+                Err(SuiError::FailedToHearBackFromConsensus(e.to_string()))
             }
         }?;
 
