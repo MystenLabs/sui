@@ -308,6 +308,9 @@ impl<
     }
 
     // Returns true if the given version of the object has not been deleted (or wrapped).
+    //
+    // Only call this on an object that is already known to exist in self.objects,
+    // (and don't make this method public)
     fn object_is_alive(&self, object_id: &ObjectID) -> Result<bool, SuiError> {
         let obj = self
             .parent_sync
@@ -315,9 +318,16 @@ impl<
             .skip_prior_to(&(*object_id, SequenceNumber::MAX, ObjectDigest::MAX))?
             .next();
 
-        Ok(obj
-            .map(|(k, _)| k.0 == *object_id && k.2.is_alive())
-            .unwrap_or(false))
+        match obj {
+            None => {
+                error!(
+                    ?object_id,
+                    "Object is missing parent_sync entry, data store is inconsistent"
+                );
+                Ok(false)
+            }
+            Some((obj_ref, _)) => Ok(obj_ref.0 == *object_id && obj_ref.2.is_alive()),
+        }
     }
 
     /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
@@ -331,6 +341,13 @@ impl<
         // Note that the two reads in this function are (obviously) not atomic, and the
         // object may be deleted after we have read it. Hence we check object_is_alive last
         // so that the write to self.parent_sync gets the last word.
+        //
+        // TODO: verify this race is ok.
+        //
+        // I believe it is - Even if the reads were atomic, calls to this function would still
+        // race with object deletions (the object could be deleted between when the function is
+        // called and when the first read takes place, which would be indistinguishable to the
+        // caller with the case in which the object is deleted in between the two reads).
         match obj {
             Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => {
                 if self.object_is_alive(&obj_id)? {
@@ -339,13 +356,7 @@ impl<
                     Ok(None)
                 }
             }
-            _ => {
-                error!(
-                    ?object_id,
-                    "Object is missing parent_sync entry, data store is inconsistent"
-                );
-                Ok(None)
-            }
+            _ => Ok(None),
         }
     }
 
