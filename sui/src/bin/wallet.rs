@@ -157,7 +157,7 @@ async fn try_main() -> Result<(), anyhow::Error> {
         );
 
         shell.run_async(&mut out, &mut stderr()).await?;
-    } else if let Some(mut cmd) = options.cmd {
+    } else if let Some(cmd) = options.cmd {
         cmd.execute(&mut context).await?.print(!options.json);
     } else {
         ClientOpt::command().print_long_help()?
@@ -209,7 +209,7 @@ async fn handle_command(
     context: &mut WalletContext,
     completion_cache: CompletionCache,
 ) -> Result<bool, anyhow::Error> {
-    let mut wallet_opts = wallet_opts?;
+    let wallet_opts = wallet_opts?;
     let result = wallet_opts.command.execute(context).await?;
 
     // Update completion cache
