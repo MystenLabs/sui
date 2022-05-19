@@ -65,17 +65,16 @@ impl ExecutionIndices {
 
 impl Ord for ExecutionIndices {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        if self.next_certificate_index == other.next_certificate_index {
-            if self.next_batch_index == other.next_batch_index {
-                self.next_transaction_index
-                    .cmp(&other.next_transaction_index)
-            } else {
-                self.next_batch_index.cmp(&other.next_batch_index)
-            }
-        } else {
-            self.next_certificate_index
-                .cmp(&other.next_certificate_index)
-        }
+        (
+            self.next_certificate_index,
+            self.next_batch_index,
+            self.next_transaction_index,
+        )
+            .cmp(&(
+                other.next_certificate_index,
+                other.next_batch_index,
+                other.next_transaction_index,
+            ))
     }
 }
 
