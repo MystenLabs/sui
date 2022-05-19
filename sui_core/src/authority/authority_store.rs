@@ -5,6 +5,7 @@ use crate::gateway_state::GatewayTxSeqNumber;
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::collections::BTreeSet;
 use std::path::Path;
 use sui_storage::LockService;
@@ -12,7 +13,7 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use sui_types::object::OBJECT_START_VERSION;
-use tracing::trace;
+use tracing::{debug, error, trace};
 use typed_store::rocks::{DBBatch, DBMap};
 use typed_store::{reopen, traits::Map};
 
@@ -36,15 +37,18 @@ const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 /// authorities or non-authorities. Specifically, when storing transactions and effects,
 /// S allows SuiDataStore to either store the authority signed version or unsigned version.
 pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
-    /// This is a map between the object ID and the latest state of the object, namely the
+    /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions. If an object is deleted its entry is
     /// removed from this map.
-    objects: DBMap<ObjectID, Object>,
+    ///
+    /// Note that while this map can store all versions of an object, in practice it only stores
+    /// the most recent version.
+    objects: DBMap<ObjectKey, Object>,
 
     /// Stores all history versions of all objects.
     /// This is not needed by an authority, but is needed by a replica.
     #[allow(dead_code)]
-    all_object_versions: DBMap<(ObjectID, SequenceNumber), Object>,
+    all_object_versions: DBMap<ObjectKey, Object>,
 
     /// The LockService this store depends on for locking functionality
     lock_service: LockService,
@@ -171,8 +175,8 @@ impl<
             last_consensus_index,
         ) = reopen! (
             &db,
-            "objects";<ObjectID, Object>,
-            "all_object_versions";<(ObjectID, SequenceNumber), Object>,
+            "objects";<ObjectKey, Object>,
+            "all_object_versions";<ObjectKey, Object>,
             "owner_index";<(SuiAddress, ObjectID), ObjectRef>,
             "transactions";<TransactionDigest, TransactionEnvelope<S>>,
             "certificates";<TransactionDigest, CertifiedTransaction>,
@@ -243,7 +247,7 @@ impl<
         Ok(self
             .objects
             .iter()
-            .skip_to(&ObjectID::ZERO)?
+            .skip_to(&ObjectKey::ZERO)?
             .next()
             .is_none())
     }
@@ -305,12 +309,49 @@ impl<
 
     /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
     pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        self.objects.get(object_id).map_err(|e| e.into())
+        let obj_entry = self
+            .objects
+            .iter()
+            .skip_prior_to(&ObjectKey::max_for_id(object_id))?
+            .next();
+
+        let obj = match obj_entry {
+            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => obj,
+            _ => return Ok(None),
+        };
+
+        // Note that the two reads in this function are (obviously) not atomic, and the
+        // object may be deleted after we have read it. Hence we check get_latest_parent_entry
+        // last, so that the write to self.parent_sync gets the last word.
+        //
+        // TODO: verify this race is ok.
+        //
+        // I believe it is - Even if the reads were atomic, calls to this function would still
+        // race with object deletions (the object could be deleted between when the function is
+        // called and when the first read takes place, which would be indistinguishable to the
+        // caller with the case in which the object is deleted in between the two reads).
+        let parent_entry = self.get_latest_parent_entry(*object_id)?;
+
+        match parent_entry {
+            None => {
+                error!(
+                    ?object_id,
+                    "Object is missing parent_sync entry, data store is inconsistent"
+                );
+                Ok(None)
+            }
+            Some((obj_ref, _)) if obj_ref.2.is_alive() => Ok(Some(obj)),
+            _ => Ok(None),
+        }
     }
 
     /// Get many objects
-    pub fn get_objects(&self, _objects: &[ObjectID]) -> Result<Vec<Option<Object>>, SuiError> {
-        self.objects.multi_get(_objects).map_err(|e| e.into())
+    pub fn get_objects(&self, objects: &[ObjectID]) -> Result<Vec<Option<Object>>, SuiError> {
+        let mut result = Vec::new();
+        for id in objects {
+            result.push(self.get_object(id)?);
+        }
+        Ok(result)
     }
 
     /// Read a transaction envelope via lock or returns Err(TransactionLockDoesNotExist) if the lock does not exist.
@@ -423,7 +464,7 @@ impl<
     /// TODO: We need this today because we don't have another way to sync an account.
     pub async fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
         // Insert object
-        self.objects.insert(&object_ref.0, object)?;
+        self.objects.insert(&object_ref.into(), object)?;
 
         // Update the index
         if let Some(address) = object.get_single_owner() {
@@ -452,7 +493,9 @@ impl<
         batch
             .insert_batch(
                 &self.objects,
-                ref_and_objects.iter().map(|(oref, o)| (oref.0, **o)),
+                ref_and_objects
+                    .iter()
+                    .map(|(oref, o)| (ObjectKey::from(oref), **o)),
             )?
             .insert_batch(
                 &self.owner_index,
@@ -623,11 +666,6 @@ impl<
             .cloned()
             .collect();
 
-        // Delete objects.
-        // Wrapped objects need to be deleted as well because we can no longer track their
-        // content nor use them directly.
-        write_batch = write_batch.delete_batch(&self.objects, deleted.iter().map(|(id, _)| *id))?;
-
         // Make an iterator over all objects that are either deleted or have changed owner,
         // along with their old owner.  This is used to update the owner index.
         // For wrapped objects, although their owners technically didn't change, we will lose track
@@ -686,7 +724,7 @@ impl<
                 &self.all_object_versions,
                 written
                     .iter()
-                    .map(|(id, (_object_ref, object))| ((*id, object.version()), object)),
+                    .map(|(_, (object_ref, object))| (ObjectKey::from(object_ref), object)),
             )?;
         }
 
@@ -708,7 +746,7 @@ impl<
             &self.objects,
             written
                 .iter()
-                .map(|(object_id, (_, new_object))| (object_id, new_object)),
+                .map(|(_, (obj_ref, new_object))| (ObjectKey::from(obj_ref), new_object)),
         )?;
 
         // Need to have a critical section for now because we need to prevent execution of older
@@ -1072,5 +1110,30 @@ impl<const A: bool, const B: bool, S: Eq + Serialize + for<'de> Deserialize<'de>
                     .get(module_id.name().as_str())
                     .cloned()
             }))
+    }
+}
+
+// The primary key type for object storage.
+#[serde_as]
+#[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+struct ObjectKey(pub ObjectID, pub VersionNumber);
+
+impl ObjectKey {
+    pub const ZERO: ObjectKey = ObjectKey(ObjectID::ZERO, VersionNumber::MIN);
+
+    pub fn max_for_id(id: &ObjectID) -> Self {
+        Self(*id, VersionNumber::MAX)
+    }
+}
+
+impl From<ObjectRef> for ObjectKey {
+    fn from(object_ref: ObjectRef) -> Self {
+        (&object_ref).into()
+    }
+}
+
+impl From<&ObjectRef> for ObjectKey {
+    fn from(object_ref: &ObjectRef) -> Self {
+        Self(object_ref.0, object_ref.1)
     }
 }
