@@ -19,25 +19,3 @@ textarea:focus,
 select:focus {
     outline: none;
 }
-
-/* TODO - The below CSS alters how smart contract code is displayed in the Ace Editor
-
-.ace_active-line {
-    background-color: rgb(203 213 225) !important;
-}
-
-.ace_gutter-layer {
-    color: black !important;
-}
-
-.ace_editor {
-    width: 80vw !important;
-    font-family: 'Ubuntu Mono', 'Courier New', monospace;
-}
-
-@media only screen and (min-width: 1024px) {
-    .ace_editor {
-        width: 35rem !important;
-    }
-}
-*/
