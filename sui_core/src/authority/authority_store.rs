@@ -318,7 +318,12 @@ impl<
             .skip_prior_to(&(*object_id, SequenceNumber::MAX, ObjectDigest::MAX))?
             .next();
 
-        match obj {
+        let obj_ref = match obj {
+            Some((obj_ref, _)) if obj_ref.0 == *object_id => Some(obj_ref),
+            _ => None,
+        };
+
+        match obj_ref {
             None => {
                 error!(
                     ?object_id,
@@ -326,7 +331,7 @@ impl<
                 );
                 Ok(false)
             }
-            Some((obj_ref, _)) => Ok(obj_ref.0 == *object_id && obj_ref.2.is_alive()),
+            Some(obj_ref) => Ok(obj_ref.2.is_alive()),
         }
     }
 
