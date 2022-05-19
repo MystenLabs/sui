@@ -588,25 +588,28 @@ SuiError:
       ConsensusConnectionBroken:
         NEWTYPE: STR
     99:
-      SharedObjectLockingFailure:
+      FailedToHearBackFromConsensus:
         NEWTYPE: STR
     100:
-      ListenerCapacityExceeded: UNIT
+      SharedObjectLockingFailure:
+        NEWTYPE: STR
     101:
+      ListenerCapacityExceeded: UNIT
+    102:
       ConsensusSuiSerializationError:
         NEWTYPE: STR
-    102:
-      NotASharedObjectTransaction: UNIT
     103:
+      NotASharedObjectTransaction: UNIT
+    104:
       SignatureSeedInvalidLength:
         NEWTYPE: U64
-    104:
+    105:
       HkdfError:
         NEWTYPE: STR
-    105:
+    106:
       SignatureKeyGenError:
         NEWTYPE: STR
-    106:
+    107:
       RpcError:
         NEWTYPE: STR
 TransactionDigest:

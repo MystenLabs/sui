@@ -311,6 +311,8 @@ pub enum SuiError {
     OnlyOneConsensusClientPermitted,
     #[error("Failed to connect with consensus node: {0}")]
     ConsensusConnectionBroken(String),
+    #[error("Failed to hear back from consensus: {0}")]
+    FailedToHearBackFromConsensus(String),
     #[error("Failed to lock shared objects: {0}")]
     SharedObjectLockingFailure(String),
     #[error("Consensus listener is out of capacity")]
