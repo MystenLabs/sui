@@ -1037,11 +1037,13 @@ impl ExecutionState for AuthorityState {
                 Ok(Vec::default())
             }
             ConsensusTransaction::Checkpoint(fragment) => {
+                // TODO [issue #2036]: What is exactly this sequence number?
                 let seq = 0;
+
                 if let Some(checkpoint) = &self.checkpoints {
                     let _result = checkpoint.lock().handle_internal_fragment(seq, fragment);
-                    // TODO: What should we do with this result? There can be two kind of errors:
-                    // (i) malformed messages (then we ignore the message) or (ii) internal
+                    // TODO [issue #2036]: What should we do with this result? There can be two kind of
+                    // errors: (i) malformed messages (then we ignore the message) or (ii) internal
                     // authority errors (then we stop processing further transactions).
 
                     // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need

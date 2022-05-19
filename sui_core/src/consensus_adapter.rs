@@ -293,7 +293,7 @@ impl ConsensusSender for CheckpointSender {
         let bytes = Bytes::from(serialized);
 
         // Send the transaction to consensus.
-        // TODO: Blocking on the function below is not great.
+        // TODO [issue #2036]: Blocking on the function below is not great.
         futures::executor::block_on(
             self.consensus_client
                 .clone()
