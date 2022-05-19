@@ -151,11 +151,20 @@ impl ConsensusAdapter {
 
         if info.is_empty() {
             // Consensus successfully assigned shared-locks to this certificate.
-            let ConsensusTransaction::UserTransaction(certificate) = certificate.clone();
-            let confirmation_transaction = ConfirmationTransaction { certificate };
-            self.state
-                .handle_confirmation_transaction(confirmation_transaction)
-                .await
+            match certificate {
+                ConsensusTransaction::UserTransaction(certificate) => {
+                    let confirmation = ConfirmationTransaction {
+                        certificate: certificate.clone(),
+                    };
+                    self.state
+                        .handle_confirmation_transaction(confirmation)
+                        .await
+                }
+                message => {
+                    tracing::error!("Unexpected message {message:?}");
+                    Err(SuiError::UnexpectedMessage)
+                }
+            }
         } else {
             // This certificate has already been executed.
             bincode::deserialize(&info)

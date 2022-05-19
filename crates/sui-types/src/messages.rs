@@ -9,6 +9,7 @@ use crate::crypto::{
     EmptySignInfo, Signable, Signature, VerificationObligation,
 };
 use crate::gas::GasCostSummary;
+use crate::messages_checkpoint::CheckpointFragment;
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use base64ct::Encoding;
 use itertools::Either;
@@ -1234,13 +1235,14 @@ pub struct ConsensusSync {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ConsensusTransaction {
     UserTransaction(CertifiedTransaction),
-    // NOTE: Other data types (e.g., for reconfiguration) go here
+    Checkpoint(CheckpointFragment),
 }
 
 impl ConsensusTransaction {
     pub fn verify(&self, committee: &Committee) -> SuiResult<()> {
         match self {
             Self::UserTransaction(certificate) => certificate.verify(committee),
+            Self::Checkpoint(fragment) => fragment.verify(committee),
         }
     }
 }

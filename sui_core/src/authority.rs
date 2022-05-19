@@ -997,42 +997,51 @@ impl ExecutionState for AuthorityState {
         execution_indices: ExecutionIndices,
         transaction: Self::Transaction,
     ) -> Result<Vec<u8>, Self::Error> {
-        let ConsensusTransaction::UserTransaction(certificate) = transaction;
+        match transaction {
+            ConsensusTransaction::UserTransaction(certificate) => {
+                // Ensure the input is a shared object certificate. Remember that Byzantine authorities
+                // may input anything into consensus.
+                fp_ensure!(
+                    certificate.contains_shared_object(),
+                    SuiError::NotASharedObjectTransaction
+                );
 
-        // Ensure the input is a shared object certificate. Remember that Byzantine authorities
-        // may input anything into consensus.
-        fp_ensure!(
-            certificate.contains_shared_object(),
-            SuiError::NotASharedObjectTransaction
-        );
+                // If we already executed this transaction, return the signed effects.
+                let digest = certificate.digest();
+                if self.database.effects_exists(digest)? {
+                    debug!(tx_digest =? digest, "Shared-object transaction already executed");
+                    let info = self.make_transaction_info(digest).await?;
+                    return Ok(bincode::serialize(&info).expect("Failed to serialize tx info"));
+                }
 
-        // If we already executed this transaction, return the signed effects.
-        let digest = certificate.digest();
-        if self.database.effects_exists(digest)? {
-            debug!(tx_digest =? digest, "Shared-object transaction already executed");
-            let info = self.make_transaction_info(digest).await?;
-            return Ok(bincode::serialize(&info).expect("Failed to serialize tx info"));
+                // If we didn't already assigned shared-locks to this transaction, we do it now.
+                if !self.shared_locks_exist(&certificate).await? {
+                    // Check the certificate. Remember that Byzantine authorities may input anything into
+                    // consensus.
+                    certificate.verify(&self.committee)?;
+
+                    // Persist the certificate since we are about to lock one or more shared object.
+                    // We thus need to make sure someone (if not the client) can continue the protocol.
+                    // Also atomically lock the shared objects for this particular transaction and
+                    // increment the last consensus index. Note that a single process can ever call
+                    // this function and that the last consensus index is also kept in memory. It is
+                    // thus ok to only persist now (despite this function may have returned earlier).
+                    // In the worst case, the synchronizer of the consensus client will catch up.
+                    self.database.persist_certificate_and_lock_shared_objects(
+                        certificate,
+                        execution_indices,
+                    )?;
+                }
+
+                // TODO: This return time is not ideal.
+                Ok(Vec::default())
+            }
+            ConsensusTransaction::Checkpoint(_fragment) => {
+                // TODO: This return time is not ideal. The authority submitting the checkpoint fragment
+                // is not expecting any reply.
+                Ok(Vec::default())
+            }
         }
-
-        // If we didn't already assigned shared-locks to this transaction, we do it now.
-        if !self.shared_locks_exist(&certificate).await? {
-            // Check the certificate. Remember that Byzantine authorities may input anything into
-            // consensus.
-            certificate.verify(&self.committee)?;
-
-            // Persist the certificate since we are about to lock one or more shared object.
-            // We thus need to make sure someone (if not the client) can continue the protocol.
-            // Also atomically lock the shared objects for this particular transaction and
-            // increment the last consensus index. Note that a single process can ever call
-            // this function and that the last consensus index is also kept in memory. It is
-            // thus ok to only persist now (despite this function may have returned earlier).
-            // In the worst case, the synchronizer of the consensus client will catch up.
-            self.database
-                .persist_certificate_and_lock_shared_objects(certificate, execution_indices)?;
-        }
-
-        // TODO: This return time is not ideal.
-        Ok(Vec::default())
     }
 
     fn ask_consensus_write_lock(&self) -> bool {
