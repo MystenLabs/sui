@@ -74,13 +74,14 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         })
         .collect();
     let module = vm.load_module(&module_id, state_view)?;
+    let is_genesis = ctx.digest() == TransactionDigest::genesis();
     let TypeCheckSuccess {
         module_id,
         args,
         object_data,
         by_value_objects,
         mutable_ref_objects,
-    } = resolve_and_type_check(&objects, &module, function, &type_args, args)?;
+    } = resolve_and_type_check(&objects, &module, function, &type_args, args, is_genesis)?;
 
     let mut args = args;
     args.push(ctx.to_vec());
@@ -627,6 +628,7 @@ pub fn resolve_and_type_check(
     function: &Identifier,
     type_args: &[TypeTag],
     args: Vec<CallArg>,
+    is_genesis: bool,
 ) -> Result<TypeCheckSuccess, SuiError> {
     // Resolve the function we are calling
     let function_str = function.as_ident_str();
@@ -645,9 +647,10 @@ pub fn resolve_and_type_check(
             })
         }
     };
-    if fdef.visibility != Visibility::Script {
+    // Check for script visibility, but ignore for genesis
+    if fdef.visibility != Visibility::Script && !is_genesis {
         return Err(SuiError::InvalidFunctionVisibility {
-            error: format!("Can only call functions with 'public(script)' visibility"),
+            error: "Can only call functions with 'public(script)' visibility".to_string(),
         });
     }
     let fhandle = module.function_handle_at(fdef.function);
