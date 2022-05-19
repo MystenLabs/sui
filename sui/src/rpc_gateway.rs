@@ -210,4 +210,32 @@ impl RpcGatewayServer for RpcGatewayImpl {
     ) -> RpcResult<TransactionEffectsResponse> {
         Ok(self.gateway.get_transaction(digest).await?)
     }
+
+    async fn get_transactions_by_input_object(
+        &self,
+        _object: ObjectID,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        Err(anyhow!("Method not supported on gateway. (query a fullnode instead)").into())
+    }
+
+    async fn get_transactions_by_mutated_object(
+        &self,
+        _object: ObjectID,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        Err(anyhow!("Method not supported on gateway. (query a fullnode instead)").into())
+    }
+
+    async fn get_transactions_to_addr(
+        &self,
+        _addr: SuiAddress,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        Err(anyhow!("Method not supported on gateway. (query a fullnode instead)").into())
+    }
+
+    async fn get_transactions_from_addr(
+        &self,
+        _addr: SuiAddress,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        Err(anyhow!("Method not supported on gateway. (query a fullnode instead)").into())
+    }
 }

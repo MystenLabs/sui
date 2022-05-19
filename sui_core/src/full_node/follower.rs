@@ -146,7 +146,7 @@ where
             while let Some(item) = batch_listen_chann.next().await {
                 match item {
                     Ok(BatchInfoResponseItem(UpdateItem::Transaction((tx_seq, tx_digest)))) => {
-                        debug!(
+                        debug!(?tx_seq, digest=?tx_digest,
                             "Received single tx_seq {tx_seq}, digest {:?} from authority {:?}",
                             tx_digest, self.name
                         );
@@ -209,11 +209,6 @@ where
         name: AuthorityName,
         tx_resp: TransactionInfoResponse,
     ) -> Result<(), SuiError> {
-        debug!(
-            "Updating state from authority {:?}, with tx resp {:?}",
-            name, tx_resp
-        );
-
         let signed_effects = tx_resp
             .clone()
             .signed_effects
@@ -222,6 +217,16 @@ where
             .clone()
             .certified_transaction
             .ok_or(SuiError::ByzantineAuthoritySuspicion { authority: name })?;
+
+        let seq_number = self
+            .state
+            .next_tx_seq_number
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+        debug!(authority = ?name, digest = ?certificate.digest(), sequence = seq_number,
+            "Updating state from authority {:?}, with tx resp {:?}",
+            name, tx_resp
+        );
 
         // Get all the objects which were changed
         let mutated_and_created_objects = signed_effects.effects.mutated_and_created();
@@ -263,16 +268,12 @@ where
 
         // TODO: is it safe to continue if some objects are missing?
         self.state
-            .store
-            .update_gateway_state(
+            .record_certificate(
                 active_input_objects,
                 modified_objects,
                 certificate,
                 signed_effects.effects.to_unsigned_effects(),
-                // TODO: decide what to do with this
-                self.state
-                    .next_tx_seq_number
-                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+                seq_number,
             )
             .await?;
         Ok(())

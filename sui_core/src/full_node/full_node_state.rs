@@ -3,10 +3,11 @@
 
 use anyhow::anyhow;
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::{atomic::AtomicU64, Arc},
 };
 use sui_config::genesis::Genesis;
+use sui_storage::IndexStore;
 
 use crate::{
     authority::{AuthorityTemporaryStore, ReplicaStore},
@@ -17,15 +18,17 @@ use move_binary_format::CompiledModule;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::adapter;
 use sui_types::{
-    base_types::{ObjectID, TransactionDigest, TxContext},
+    base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
     committee::Committee as SuiCommittee,
+    crypto::EmptySignInfo,
     error::{SuiError, SuiResult},
     fp_ensure,
     gas::SuiGasStatus,
-    messages::Transaction,
+    messages::{CertifiedTransaction, InputObjectKind, Transaction, TransactionEffectsEnvelope},
     object::Object,
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
+use tokio::sync::Notify;
 use tracing::debug;
 
 // use std::path::Path;
@@ -49,8 +52,14 @@ const MAX_TX_RANGE_SIZE: u64 = 4096;
 
 pub struct FullNodeState {
     pub store: Arc<ReplicaStore>,
+    pub indexes: Arc<IndexStore>,
     pub committee: SuiCommittee,
     pub next_tx_seq_number: AtomicU64,
+
+    // Used by the tests to wait for a particular tx cert to be processed.
+    // TODO: This should be removed once there is an event subscription system that the tests can
+    // use.
+    tx_notify: Notify,
 
     /// Move native functions that are available to invoke
     _native_functions: NativeFunctionTable,
@@ -62,28 +71,33 @@ impl FullNodeState {
     pub async fn new_without_genesis(
         committee: SuiCommittee,
         store: Arc<ReplicaStore>,
+        indexes: Arc<IndexStore>,
     ) -> Result<Self, SuiError> {
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
         let next_tx_seq_number = AtomicU64::new(store.next_sequence_number()?);
+
         Ok(Self {
             committee,
             store,
+            indexes,
             _native_functions: native_functions.clone(),
             _move_vm: Arc::new(
                 adapter::new_move_vm(native_functions)
                     .expect("We defined natives to not fail here"),
             ),
             next_tx_seq_number,
+            tx_notify: Notify::new(),
         })
     }
 
     pub async fn new_with_genesis(
         committee: SuiCommittee,
         store: Arc<ReplicaStore>,
+        indexes: Arc<IndexStore>,
         genesis: &Genesis,
     ) -> Result<Self, SuiError> {
-        let state = Self::new_without_genesis(committee, store.clone()).await?;
+        let state = Self::new_without_genesis(committee, store.clone(), indexes).await?;
 
         // Only initialize an empty database.
         if store
@@ -108,6 +122,48 @@ impl FullNodeState {
         }
 
         Ok(state)
+    }
+
+    // This is used by tests to wait until the node has seen a tx.
+    pub async fn wait_for_cert(&self, digest: TransactionDigest) -> SuiResult {
+        loop {
+            let tx = self.store.get_certified_transaction(&digest)?;
+            if tx.is_some() {
+                break;
+            }
+            self.tx_notify.notified().await;
+        }
+        Ok(())
+    }
+
+    pub async fn record_certificate(
+        &self,
+        active_inputs: Vec<(InputObjectKind, Object)>,
+        mutated_objects: HashMap<ObjectRef, Object>,
+        certificate: CertifiedTransaction,
+        effects: TransactionEffectsEnvelope<EmptySignInfo>,
+        sequence_number: GatewayTxSeqNumber,
+    ) -> SuiResult {
+        self.indexes.index_tx(
+            certificate.data.signer(),
+            &active_inputs,
+            &mutated_objects,
+            sequence_number,
+            certificate.digest(),
+        )?;
+
+        self.store
+            .update_gateway_state(
+                active_inputs,
+                mutated_objects,
+                certificate,
+                effects,
+                sequence_number,
+            )
+            .await?;
+
+        self.tx_notify.notify_one();
+        Ok(())
     }
 
     /// TODO: consolidate with Authoritycounterpart
@@ -249,5 +305,33 @@ impl FullNodeState {
             }),
             None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
         }
+    }
+
+    pub async fn get_transactions_by_input_object(
+        &self,
+        object: ObjectID,
+    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
+        Ok(self.indexes.get_transactions_by_input_object(object)?)
+    }
+
+    pub async fn get_transactions_by_mutated_object(
+        &self,
+        object: ObjectID,
+    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
+        Ok(self.indexes.get_transactions_by_mutated_object(object)?)
+    }
+
+    pub async fn get_transactions_from_addr(
+        &self,
+        address: SuiAddress,
+    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
+        Ok(self.indexes.get_transactions_from_addr(address)?)
+    }
+
+    pub async fn get_transactions_to_addr(
+        &self,
+        address: SuiAddress,
+    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
+        Ok(self.indexes.get_transactions_to_addr(address)?)
     }
 }

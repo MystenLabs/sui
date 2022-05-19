@@ -480,6 +480,146 @@
       }
     },
     {
+      "name": "sui_getTransactionsByInputObject",
+      "description": "",
+      "params": [
+        {
+          "name": "object",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getTransactionsByMutatedObject",
+      "description": "",
+      "params": [
+        {
+          "name": "object",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getTransactionsFromAddress",
+      "description": "",
+      "params": [
+        {
+          "name": "addr",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getTransactionsToAddress",
+      "description": "",
+      "params": [
+        {
+          "name": "addr",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      }
+    },
+    {
       "name": "sui_getObjectInfo",
       "description": "Return the object information for a specified object",
       "params": [

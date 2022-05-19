@@ -7,6 +7,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use sui_storage::IndexStore;
 use sui_types::sui_serde::Base64;
 
 use crate::{
@@ -36,7 +37,7 @@ use sui_types::{
 use tracing::info;
 
 pub struct SuiFullNode {
-    client: FullNode<NetworkAuthorityClient>,
+    pub client: FullNode<NetworkAuthorityClient>,
 }
 
 impl SuiFullNode {
@@ -179,13 +180,51 @@ impl RpcGatewayServer for SuiFullNode {
     ) -> RpcResult<TransactionEffectsResponse> {
         Ok(self.client.state.get_transaction(digest).await?)
     }
+
+    async fn get_transactions_by_input_object(
+        &self,
+        object: ObjectID,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        Ok(self
+            .client
+            .state
+            .get_transactions_by_input_object(object)
+            .await?)
+    }
+
+    async fn get_transactions_by_mutated_object(
+        &self,
+        object: ObjectID,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        Ok(self
+            .client
+            .state
+            .get_transactions_by_mutated_object(object)
+            .await?)
+    }
+
+    async fn get_transactions_from_addr(
+        &self,
+        addr: SuiAddress,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        Ok(self.client.state.get_transactions_from_addr(addr).await?)
+    }
+
+    async fn get_transactions_to_addr(
+        &self,
+        addr: SuiAddress,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        Ok(self.client.state.get_transactions_to_addr(addr).await?)
+    }
 }
 
 pub async fn make_full_node(
     db_store_path: PathBuf,
     net_config: &NetworkConfig,
 ) -> Result<FullNode<NetworkAuthorityClient>, SuiError> {
-    let store = Arc::new(ReplicaStore::open(db_store_path, None));
+    let store = Arc::new(ReplicaStore::open(&db_store_path, None));
+    let index_path = db_store_path.join("indexes");
+    let indexes = Arc::new(IndexStore::open(index_path, None));
 
     let val_config = net_config
         .validator_configs()
@@ -193,9 +232,13 @@ pub async fn make_full_node(
         .next()
         .expect("Validtor set must be non empty");
 
-    let follower_node_state =
-        FullNodeState::new_with_genesis(net_config.committee(), store, val_config.genesis())
-            .await?;
+    let follower_node_state = FullNodeState::new_with_genesis(
+        net_config.committee(),
+        store,
+        indexes,
+        val_config.genesis(),
+    )
+    .await?;
 
     let mut authority_clients = BTreeMap::new();
     let mut config = mysten_network::config::Config::new();
