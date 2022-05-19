@@ -14,6 +14,7 @@ use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
 use sui_json::SuiJsonValue;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
+use sui_types::base_types::ObjectInfo;
 use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
@@ -21,7 +22,6 @@ use sui_types::{
     messages::TransactionData,
 };
 
-use crate::rpc_gateway::responses::ObjectResponse;
 use crate::rpc_gateway::responses::SuiTypeTag;
 
 #[open_rpc(namespace = "sui", tag = "Gateway API")]
@@ -45,8 +45,12 @@ pub trait RpcGatewayApi {
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcReadApi {
     /// Return the list of objects owned by an address.
-    #[method(name = "getOwnedObjects")]
-    async fn get_owned_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse>;
+    #[method(name = "getObjectsOwnedByAddress")]
+    async fn get_objects_owned_by_address(&self, address: SuiAddress)
+        -> RpcResult<Vec<ObjectInfo>>;
+
+    #[method(name = "getObjectsOwnedByObject")]
+    async fn get_objects_owned_by_object(&self, object_id: ObjectID) -> RpcResult<Vec<ObjectInfo>>;
 
     #[method(name = "getTotalTransactionNumber")]
     async fn get_total_transaction_number(&self) -> RpcResult<u64>;

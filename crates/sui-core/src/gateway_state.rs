@@ -22,7 +22,7 @@ use tracing::{debug, error, Instrument};
 
 use sui_adapter::adapter::resolve_and_type_check;
 use sui_types::gas_coin::GasCoin;
-use sui_types::object::ObjectFormatOptions;
+use sui_types::object::{ObjectFormatOptions, Owner};
 use sui_types::{
     base_types::*,
     coin,
@@ -309,10 +309,15 @@ pub trait GatewayAPI {
     ) -> Result<GetObjectInfoResponse, anyhow::Error>;
 
     /// Get refs of all objects we own from local cache.
-    async fn get_owned_objects(
+    async fn get_objects_owned_by_address(
         &self,
         account_addr: SuiAddress,
-    ) -> Result<Vec<SuiObjectRef>, anyhow::Error>;
+    ) -> Result<Vec<ObjectInfo>, anyhow::Error>;
+
+    async fn get_objects_owned_by_object(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<Vec<ObjectInfo>, anyhow::Error>;
 
     /// Get the total number of transactions ever happened in history.
     fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error>;
@@ -779,11 +784,11 @@ where
         address: SuiAddress,
     ) -> Result<Vec<(ObjectRef, u64)>, anyhow::Error> {
         let mut coins = Vec::new();
-        for (id, _, _) in self.store.get_account_objects(address)? {
-            let object = self.get_object(&id).await?;
-            if matches!(object.data.type_(), Some(ty)  if *ty == GasCoin::type_()) {
+        for info in self.store.get_owner_objects(Owner::AddressOwner(address))? {
+            if info.type_ == GasCoin::type_().to_string() {
+                let object = self.get_object(&info.object_id).await?;
                 let gas_coin = GasCoin::try_from(object.data.try_as_move().unwrap())?;
-                coins.push((object.compute_object_reference(), gas_coin.value()));
+                coins.push((info.into(), gas_coin.value()));
             }
         }
         Ok(coins)
@@ -1105,12 +1110,23 @@ where
         Ok(result.try_into()?)
     }
 
-    async fn get_owned_objects(
+    async fn get_objects_owned_by_address(
         &self,
         account_addr: SuiAddress,
-    ) -> Result<Vec<SuiObjectRef>, anyhow::Error> {
-        let refs: Vec<ObjectRef> = self.store.get_account_objects(account_addr)?;
-        let refs = refs.into_iter().map(SuiObjectRef::from).collect();
+    ) -> Result<Vec<ObjectInfo>, anyhow::Error> {
+        let refs: Vec<ObjectInfo> = self
+            .store
+            .get_owner_objects(Owner::AddressOwner(account_addr))?;
+        Ok(refs)
+    }
+
+    async fn get_objects_owned_by_object(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<Vec<ObjectInfo>, anyhow::Error> {
+        let refs: Vec<ObjectInfo> = self
+            .store
+            .get_owner_objects(Owner::ObjectOwner(object_id.into()))?;
         Ok(refs)
     }
 

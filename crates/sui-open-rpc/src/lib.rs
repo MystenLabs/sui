@@ -231,7 +231,7 @@ impl RpcModuleDocBuilder {
     ) -> ContentDescriptor {
         let schema = self.schema_generator.subschema_for::<T>().into_object();
         ContentDescriptor {
-            name: name.to_string(),
+            name: name.replace(' ', ""),
             summary,
             description,
             required,

@@ -10,6 +10,8 @@ use sui::{
 use sui_config::{NetworkConfig, PersistedConfig};
 use sui_core::authority::AuthorityState;
 use sui_node::SuiNode;
+
+use sui_types::object::Owner;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     batch::UpdateItem,
@@ -26,9 +28,11 @@ async fn transfer_coin(
     let sender = context.config.accounts.get(0).cloned().unwrap();
     let receiver = context.config.accounts.get(1).cloned().unwrap();
 
-    let object_refs = node.state().get_owned_objects(sender).await?;
-    let gas_object = object_refs.get(0).unwrap().0;
-    let object_to_send = object_refs.get(1).unwrap().0;
+    let object_refs = node
+        .state()
+        .get_owner_objects(Owner::AddressOwner(sender))?;
+    let gas_object = object_refs.get(0).unwrap().object_id;
+    let object_to_send = object_refs.get(1).unwrap().object_id;
 
     // Send an object
     info!(

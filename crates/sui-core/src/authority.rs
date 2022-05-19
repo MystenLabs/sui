@@ -78,6 +78,7 @@ pub use temporary_store::AuthorityTemporaryStore;
 
 mod authority_store;
 pub use authority_store::{AuthorityStore, GatewayStore, ReplicaStore, SuiDataStore};
+use sui_types::object::Owner;
 
 use self::authority_store::{
     generate_genesis_system_object, store_package_and_init_modules_for_genesis,
@@ -991,9 +992,9 @@ impl AuthorityState {
 
     fn make_account_info(&self, account: SuiAddress) -> Result<AccountInfoResponse, SuiError> {
         self.database
-            .get_account_objects(account)
+            .get_owner_objects(Owner::AddressOwner(account))
             .map(|object_ids| AccountInfoResponse {
-                object_ids,
+                object_ids: object_ids.into_iter().map(|id| id.into()).collect(),
                 owner: account,
             })
     }

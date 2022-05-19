@@ -487,8 +487,22 @@ async fn test_transfer_coin_with_retry() {
     // The transaction is deleted after this is done.
     assert!(!gateway.store().transaction_exists(&tx_digest).unwrap());
     assert_eq!(gateway.store().next_sequence_number().unwrap(), 1);
-    assert_eq!(gateway.store().get_account_objects(addr1).unwrap().len(), 1);
-    assert_eq!(gateway.store().get_account_objects(addr2).unwrap().len(), 1);
+    assert_eq!(
+        gateway
+            .store()
+            .get_owner_objects(Owner::AddressOwner(addr1))
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        gateway
+            .store()
+            .get_owner_objects(Owner::AddressOwner(addr2))
+            .unwrap()
+            .len(),
+        1
+    );
     assert_eq!(
         gateway
             .store()

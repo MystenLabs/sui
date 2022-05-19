@@ -2,40 +2,34 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{HashMap, HashSet};
-
-use crate::crypto::PublicKeyBytes;
-use crate::error::SuiError;
-
-use hex::FromHex;
-use rand::Rng;
-use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
-
+use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str::FromStr;
 
-use crate::sui_serde::Base64;
-use crate::sui_serde::Hex;
-use crate::sui_serde::Readable;
-
 use anyhow::anyhow;
 use base64ct::Encoding;
 use digest::Digest;
-
+use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use opentelemetry::{global, Context};
-
+use rand::Rng;
 use schemars::JsonSchema;
-
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
+use sha3::Sha3_256;
 
 use crate::committee::EpochId;
-use sha3::Sha3_256;
+use crate::crypto::PublicKeyBytes;
+use crate::error::SuiError;
+use crate::object::{Object, Owner};
+use crate::sui_serde::Base64;
+use crate::sui_serde::Hex;
+use crate::sui_serde::Readable;
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -79,6 +73,43 @@ pub struct ObjectID(
 );
 
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
+
+#[derive(Clone, Serialize, Deserialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectInfo {
+    pub object_id: ObjectID,
+    pub version: SequenceNumber,
+    pub digest: ObjectDigest,
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub owner: Owner,
+    pub previous_transaction: TransactionDigest,
+}
+
+impl ObjectInfo {
+    pub fn new(oref: &ObjectRef, o: &Object) -> Self {
+        let (object_id, version, digest) = *oref;
+        let type_ = o
+            .data
+            .type_()
+            .map(|tag| tag.to_string())
+            .unwrap_or_else(|| "Package".to_string());
+        Self {
+            object_id,
+            version,
+            digest,
+            type_,
+            owner: o.owner,
+            previous_transaction: o.previous_transaction,
+        }
+    }
+}
+
+impl From<ObjectInfo> for ObjectRef {
+    fn from(info: ObjectInfo) -> Self {
+        (info.object_id, info.version, info.digest)
+    }
+}
 
 pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;
 

@@ -14,7 +14,7 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
-use sui_types::object::OBJECT_START_VERSION;
+use sui_types::object::{Owner, OBJECT_START_VERSION};
 use tracing::{debug, error, trace};
 use typed_store::rocks::{DBBatch, DBMap};
 use typed_store::{reopen, traits::Map};
@@ -62,7 +62,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
     /// composite key of the SuiAddress of their owner and the object ID of the object.
     /// This composite index allows an efficient iterator to list all objected currently owned
     /// by a specific user, and their object reference.
-    owner_index: DBMap<(SuiAddress, ObjectID), ObjectRef>,
+    owner_index: DBMap<(Owner, ObjectID), ObjectInfo>,
 
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
     /// NOTE: after a lock is deleted (after a certificate is processed) the corresponding entry here
@@ -164,7 +164,7 @@ impl<
             &db,
             "objects";<ObjectKey, Object>,
             "all_object_versions";<ObjectKey, Object>,
-            "owner_index";<(SuiAddress, ObjectID), ObjectRef>,
+            "owner_index";<(Owner, ObjectID), ObjectInfo>,
             "transactions";<TransactionDigest, TransactionEnvelope<S>>,
             "certificates";<TransactionDigest, CertifiedTransaction>,
             "parent_sync";<ObjectRef, TransactionDigest>,
@@ -283,16 +283,15 @@ impl<
     }
 
     // Methods to read the store
-
-    pub fn get_account_objects(&self, account: SuiAddress) -> Result<Vec<ObjectRef>, SuiError> {
-        debug!(?account, "get_account_objects");
+    pub fn get_owner_objects(&self, owner: Owner) -> Result<Vec<ObjectInfo>, SuiError> {
+        debug!(?owner, "get_owner_objects");
         Ok(self
             .owner_index
             .iter()
             // The object id 0 is the smallest possible
-            .skip_to(&(account, ObjectID::ZERO))?
-            .take_while(|((owner, _id), _object_ref)| (owner == &account))
-            .map(|((_owner, _id), object_ref)| object_ref)
+            .skip_to(&(owner, ObjectID::ZERO))?
+            .take_while(|((object_owner, _), _)| (object_owner == &owner))
+            .map(|(_, object_info)| object_info)
             .collect())
     }
 
@@ -464,10 +463,10 @@ impl<
         self.objects.insert(&object_ref.into(), object)?;
 
         // Update the index
-        if let Some(address) = object.get_single_owner() {
-            self.owner_index
-                .insert(&(address, object_ref.0), &object_ref)?;
-        }
+        self.owner_index.insert(
+            &(object.owner, object_ref.0),
+            &ObjectInfo::new(&object_ref, object),
+        )?;
         // Update the parent
         self.parent_sync
             .insert(&object_ref, &object.previous_transaction)?;
@@ -498,10 +497,9 @@ impl<
             )?
             .insert_batch(
                 &self.owner_index,
-                ref_and_objects.iter().filter_map(|(oref, o)| {
-                    o.get_single_owner()
-                        .map(|address| ((address, oref.0), oref))
-                }),
+                ref_and_objects
+                    .iter()
+                    .map(|(oref, o)| ((o.owner, oref.0), ObjectInfo::new(oref, o))),
             )?
             .insert_batch(
                 &self.parent_sync,
@@ -687,13 +685,13 @@ impl<
             // We need to call get() on objects because some object that were just deleted may not
             // be in the objects list. This can happen if these deleted objects were wrapped in the past,
             // and hence will not show up in the input objects.
-            .filter_map(|(id, _)| objects.get(id).and_then(Object::get_single_owner_and_id))
+            .filter_map(|(id, _)| objects.get(id).and_then(Object::get_owner_and_id))
             .chain(
                 written
                     .iter()
                     .filter_map(|(id, (_, new_object))| match objects.get(id) {
                         Some(old_object) if old_object.owner != new_object.owner => {
-                            old_object.get_single_owner_and_id()
+                            old_object.get_owner_and_id()
                         }
                         _ => None,
                     }),
@@ -747,8 +745,8 @@ impl<
                 .filter_map(|(_id, (object_ref, new_object))| {
                     trace!(?object_ref, owner =? new_object.owner, "Updating owner_index");
                     new_object
-                        .get_single_owner_and_id()
-                        .map(|owner_id| (owner_id, object_ref))
+                        .get_owner_and_id()
+                        .map(|owner_id| (owner_id, ObjectInfo::new(object_ref, new_object)))
                 }),
         )?;
 

@@ -4,6 +4,10 @@
 use crate::api::RpcReadApiServer;
 use crate::api::{RpcFullNodeReadApiServer, SuiRpcModule};
 use crate::rpc_gateway::responses::ObjectResponse;
+use crate::{
+    api::{RpcGatewayServer, TransactionBytes},
+    rpc_gateway::responses::SuiTypeTag,
+};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
@@ -12,6 +16,11 @@ use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_core::gateway_types::{GetObjectInfoResponse, SuiObjectRef, TransactionEffectsResponse};
+use sui_core::{
+    authority::AuthorityState,
+    gateway_types::{GetObjectInfoResponse, TransactionEffectsResponse, TransactionResponse},
+};
+use sui_json::SuiJsonValue;
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 
@@ -39,18 +48,19 @@ impl ReadApi {
 
 #[async_trait]
 impl RpcReadApiServer for ReadApi {
-    async fn get_owned_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse> {
-        let resp = ObjectResponse {
-            objects: self
-                .state
-                .get_owned_objects(owner)
-                .await
-                .map_err(|e| anyhow!("{}", e))?
-                .iter()
-                .map(|w| SuiObjectRef::from(*w))
-                .collect(),
-        };
-        Ok(resp)
+    async fn get_objects_owned_by_address(
+        &self,
+        address: SuiAddress,
+    ) -> RpcResult<Vec<ObjectInfo>> {
+        Ok(self
+            .client
+            .get_owner_objects(Owner::AddressOwner(address))?)
+    }
+
+    async fn get_objects_owned_by_object(&self, object_id: ObjectID) -> RpcResult<Vec<ObjectInfo>> {
+        Ok(self
+            .client
+            .get_owner_objects(Owner::ObjectOwner(object_id.into()))?)
     }
 
     async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse> {

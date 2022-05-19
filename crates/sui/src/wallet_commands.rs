@@ -20,10 +20,13 @@ use tracing::info;
 
 use sui_core::gateway_state::GatewayClient;
 use sui_core::gateway_types::{
-    GetObjectInfoResponse, SuiCertifiedTransaction, SuiExecutionStatus, SuiObject, SuiObjectRef,
+    GetObjectInfoResponse, SuiCertifiedTransaction, SuiExecutionStatus, SuiObject,
     SuiTransactionEffects,
 };
 use sui_framework::build_move_package_to_bytes;
+use sui_types::base_types::ObjectInfo;
+use sui_types::object::Owner;
+use sui_types::sui_serde::{Base64, Encoding};
 use sui_json::SuiJsonValue;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -327,7 +330,17 @@ impl WalletCommands {
 
             WalletCommands::Objects { address } => {
                 let address = address.unwrap_or(context.active_address()?);
-                WalletCommandResult::Objects(context.gateway.get_owned_objects(address).await?)
+                let mut address_object = context
+                    .gateway
+                    .get_objects_owned_by_address(address)
+                    .await?;
+                let object_objects = context
+                    .gateway
+                    .get_objects_owned_by_object(address.into())
+                    .await?;
+                address_object.extend(object_objects);
+
+                WalletCommandResult::Objects(address_object)
             }
 
             WalletCommands::SyncClientState { address } => {
@@ -505,7 +518,7 @@ impl WalletContext {
         &self,
         address: SuiAddress,
     ) -> Result<Vec<(u64, SuiObject)>, anyhow::Error> {
-        let object_refs = self.gateway.get_owned_objects(address).await?;
+        let object_refs = self.gateway.get_objects_owned_by_address(address).await?;
 
         // TODO: We should ideally fetch the objects from local cache
         let mut values_objects = Vec::new();
@@ -587,17 +600,25 @@ impl Display for WalletCommandResult {
             WalletCommandResult::Objects(object_refs) => {
                 writeln!(
                     writer,
-                    " {0: ^42} | {1: ^10} | {2: ^68}",
-                    "Object ID", "Version", "Digest"
+                    " {0: ^42} | {1: ^10} | {2: ^44} | {3: ^15} | {4: ^40}",
+                    "Object ID", "Version", "Digest", "Owner Type", "Object Type"
                 )?;
-                writeln!(writer, "{}", ["-"; 126].join(""))?;
+                writeln!(writer, "{}", ["-"; 165].join(""))?;
                 for oref in object_refs {
+                    let owner_type = match oref.owner {
+                        Owner::AddressOwner(_) => "AddressOwner",
+                        Owner::ObjectOwner(_) => "ObjectOwner",
+                        Owner::Shared => "Shared",
+                        Owner::Immutable => "Immutable",
+                    };
                     writeln!(
                         writer,
-                        " {0: ^42} | {1: ^10} | {2: ^34?}",
+                        " {0: ^42} | {1: ^10} | {2: ^44} | {3: ^15} | {4: ^40}",
                         oref.object_id,
                         oref.version.value(),
-                        oref.digest
+                        Base64::encode(oref.digest),
+                        owner_type,
+                        oref.type_
                     )?
                 }
                 writeln!(writer, "Showing {} results.", object_refs.len())?;
@@ -765,7 +786,7 @@ pub enum WalletCommandResult {
         SuiTransactionEffects,
     ),
     Addresses(Vec<SuiAddress>),
-    Objects(Vec<SuiObjectRef>),
+    Objects(Vec<ObjectInfo>),
     SyncClientState,
     NewAddress(SuiAddress),
     Gas(Vec<GasCoin>),
