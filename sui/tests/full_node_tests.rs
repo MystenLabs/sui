@@ -9,6 +9,7 @@ use sui::{
 
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use test_utils::network::setup_network_and_wallet_in_working_dir;
+use tokio::time::{sleep, Duration};
 
 async fn transfer_coin(
     node: &SuiFullNode,
@@ -17,7 +18,7 @@ async fn transfer_coin(
     let sender = context.config.accounts.get(0).cloned().unwrap();
     let receiver = context.config.accounts.get(1).cloned().unwrap();
 
-    let object_refs = node.client.get_owned_objects(sender).await?;
+    let object_refs = node.state.get_owned_objects(sender).await?;
     let gas_object = object_refs.get(0).unwrap().0;
     let object_to_send = object_refs.get(1).unwrap().0;
 
@@ -55,7 +56,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     let (transfered_object, _, receiver, _) = transfer_coin(&node, &mut context).await?;
 
     // verify that the node has seen the transfer
-    let object_info = node.client.get_object_info(transfered_object).await?;
+    let object_info = node.state.get_object_info(&transfered_object).await?;
     let object = object_info.into_object()?;
 
     assert_eq!(object.owner.get_owner_address().unwrap(), receiver);
@@ -77,39 +78,35 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 
     let (transfered_object, sender, receiver, digest) = transfer_coin(&node, &mut context).await?;
 
-    node.client.state.wait_for_cert(digest).await?;
+    // XXX
+    // node.client.state.wait_for_cert(digest).await?;
+    sleep(Duration::from_millis(500)).await;
 
     let txes = node
-        .client
         .state
         .get_transactions_by_input_object(transfered_object)
         .await?;
     assert_eq!(txes[0].1, digest);
 
     let txes = node
-        .client
         .state
         .get_transactions_by_mutated_object(transfered_object)
         .await?;
     assert_eq!(txes[0].1, digest);
 
-    let txes = node.client.state.get_transactions_from_addr(sender).await?;
+    let txes = node.state.get_transactions_from_addr(sender).await?;
     assert_eq!(txes[0].1, digest);
 
-    let txes = node.client.state.get_transactions_to_addr(receiver).await?;
+    let txes = node.state.get_transactions_to_addr(receiver).await?;
     assert_eq!(txes[0].1, digest);
 
     // Note that this is also considered a tx to the sender, because it mutated
     // one or more of the sender's objects.
-    let txes = node.client.state.get_transactions_to_addr(sender).await?;
+    let txes = node.state.get_transactions_to_addr(sender).await?;
     assert_eq!(txes[0].1, digest);
 
     // No transactions have originated from the receiver
-    let txes = node
-        .client
-        .state
-        .get_transactions_from_addr(receiver)
-        .await?;
+    let txes = node.state.get_transactions_from_addr(receiver).await?;
     assert_eq!(txes.len(), 0);
 
     Ok(())

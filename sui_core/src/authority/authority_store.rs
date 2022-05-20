@@ -307,6 +307,14 @@ impl<
             .collect())
     }
 
+    pub fn get_object_version(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> Result<Option<Object>, SuiError> {
+        Ok(self.objects.get(&ObjectKey(*object_id, version))?)
+    }
+
     /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
     pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         let obj_entry = self
