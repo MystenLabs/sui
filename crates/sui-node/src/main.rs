@@ -5,7 +5,7 @@ use anyhow::Result;
 use clap::Parser;
 use multiaddr::Multiaddr;
 use std::path::PathBuf;
-use sui_config::{PersistedConfig, ValidatorConfig};
+use sui_config::{NodeConfig, PersistedConfig};
 use tracing::info;
 
 const PROM_PORT_ADDR: &str = "0.0.0.0:9184";
@@ -34,7 +34,7 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    let mut config = PersistedConfig::<ValidatorConfig>::read(&args.config_path)?;
+    let mut config = PersistedConfig::<NodeConfig>::read(&args.config_path)?;
 
     // TODO: Switch from prometheus exporter. See https://github.com/MystenLabs/sui/issues/1907
     let prom_binding = PROM_PORT_ADDR.parse().unwrap();
