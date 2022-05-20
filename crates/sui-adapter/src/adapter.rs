@@ -647,7 +647,11 @@ pub fn resolve_and_type_check(
             })
         }
     };
-    // Check for script visibility, but ignore for genesis
+    // Check for script visibility, but ignore for genesis.
+    // Genesis calls private functions, and bypasses this rule. This is helpful for ensuring the
+    // functions are not called again later.
+    // In other words, this is an implementation detail that we are using `execute` for genesis
+    // functions, and as such need to bypass this check.
     if fdef.visibility != Visibility::Script && !is_genesis {
         return Err(SuiError::InvalidFunctionVisibility {
             error: "Can only call functions with 'public(script)' visibility".to_string(),
