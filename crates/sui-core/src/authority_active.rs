@@ -47,6 +47,9 @@ use tokio::time::Instant;
 pub mod gossip;
 use gossip::gossip_process;
 
+pub mod checkpoint_driver;
+use checkpoint_driver::checkpoint_process;
+
 // TODO: Make these into a proper config
 const MAX_RETRIES_RECORDED: u32 = 10;
 const DELAY_FOR_1_RETRY_MS: u64 = 2_000;
@@ -91,6 +94,7 @@ impl AuthorityHealth {
     }
 }
 
+#[derive(Clone)]
 pub struct ActiveAuthority<A> {
     // The local authority state
     pub state: Arc<AuthorityState>,
@@ -171,10 +175,20 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     /// Spawn all active tasks.
-    pub async fn spawn_all_active_processes(self) -> JoinHandle<()> {
+    pub async fn spawn_all_active_processes(self) {
         // Spawn a task to take care of gossip
-        tokio::task::spawn(async move {
-            gossip_process(&self, 4).await;
-        })
+        let gossip_locals = self.clone();
+        let _gossip_join = tokio::task::spawn(async move {
+            gossip_process(&gossip_locals, 4).await;
+        });
+
+        // Spawn task to take care of checkpointing
+        let checkpoint_locals = self; // .clone();
+        let _checkpoint_join = tokio::task::spawn(async move {
+            checkpoint_process(&checkpoint_locals).await;
+        });
+
+        _gossip_join.await;
+        _checkpoint_join.await;
     }
 }

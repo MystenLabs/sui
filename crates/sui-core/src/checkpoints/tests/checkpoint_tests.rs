@@ -1265,28 +1265,28 @@ impl AsyncTestConsensus {
 }
 
 #[allow(dead_code)]
-struct TestAuthority {
-    store: Arc<AuthorityStore>,
-    authority: Arc<AuthorityState>,
-    checkpoint: Arc<Mutex<CheckpointStore>>,
+pub struct TestAuthority {
+    pub store: Arc<AuthorityStore>,
+    pub authority: Arc<AuthorityState>,
+    pub checkpoint: Arc<Mutex<CheckpointStore>>,
 }
 
 #[allow(dead_code)]
-struct TestSetup {
-    committee: Committee,
-    authorities: Vec<TestAuthority>,
-    transactions: Vec<sui_types::messages::Transaction>,
-    aggregator: AuthorityAggregator<LocalAuthorityClient>,
+pub struct TestSetup {
+    pub committee: Committee,
+    pub authorities: Vec<TestAuthority>,
+    pub transactions: Vec<sui_types::messages::Transaction>,
+    pub aggregator: AuthorityAggregator<LocalAuthorityClient>,
 }
 
-async fn checkpoint_tests_setup() -> TestSetup {
+pub async fn checkpoint_tests_setup(num_objects: usize, batch_interval: Duration) -> TestSetup {
     let (keys, committee) = make_committee_key();
 
     let mut genesis_objects = Vec::new();
     let mut transactions = Vec::new();
 
     // Generate a large number of objects for testing
-    for _i in 0..10 {
+    for _i in 0..num_objects {
         let (addr1, key1) = get_key_pair();
         let (addr2, _) = get_key_pair();
         let gas_object1 = Object::with_owner_for_testing(addr1);
@@ -1363,11 +1363,10 @@ async fn checkpoint_tests_setup() -> TestSetup {
         let authority = Arc::new(authority);
 
         let inner_state = authority.clone();
-        let _join = tokio::task::spawn(async move {
-            inner_state
-                .run_batch_service(1000, Duration::from_millis(500))
-                .await
-        });
+        let _join =
+            tokio::task::spawn(
+                async move { inner_state.run_batch_service(1000, batch_interval).await },
+            );
 
         authorities.push(TestAuthority {
             store,
@@ -1422,7 +1421,7 @@ use crate::authority_client::AuthorityAPI;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn checkpoint_messaging_flow() {
-    let mut setup = checkpoint_tests_setup().await;
+    let mut setup = checkpoint_tests_setup(5, Duration::from_millis(500)).await;
 
     // Check that the system is running.
     let t = setup.transactions.pop().unwrap();

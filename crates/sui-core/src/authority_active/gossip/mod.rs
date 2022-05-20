@@ -26,7 +26,7 @@ use tracing::{debug, error, info};
 mod configurable_batch_action_client;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 struct PeerGossip<A> {
     peer_name: AuthorityName,
