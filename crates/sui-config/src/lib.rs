@@ -29,21 +29,21 @@ pub mod utils;
 const DEFAULT_STAKE: usize = 1;
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct ValidatorConfig {
-    key_pair: KeyPair,
-    db_path: PathBuf,
-    network_address: Multiaddr,
-    metrics_address: Multiaddr,
+pub struct NodeConfig {
+    pub key_pair: KeyPair,
+    pub db_path: PathBuf,
+    pub network_address: Multiaddr,
+    pub metrics_address: Multiaddr,
 
-    pub consensus_config: ConsensuseConfig,
-    committee_config: CommitteeConfig,
+    pub consensus_config: ConsensusConfig,
+    pub committee_config: CommitteeConfig,
 
     genesis: genesis::Genesis,
 }
 
-impl Config for ValidatorConfig {}
+impl Config for NodeConfig {}
 
-impl ValidatorConfig {
+impl NodeConfig {
     pub fn key_pair(&self) -> &KeyPair {
         &self.key_pair
     }
@@ -64,7 +64,7 @@ impl ValidatorConfig {
         &self.network_address
     }
 
-    pub fn consensus_config(&self) -> &ConsensuseConfig {
+    pub fn consensus_config(&self) -> &ConsensusConfig {
         &self.consensus_config
     }
 
@@ -78,7 +78,7 @@ impl ValidatorConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ConsensuseConfig {
+pub struct ConsensusConfig {
     consensus_address: Multiaddr,
     consensus_db_path: PathBuf,
 
@@ -88,7 +88,7 @@ pub struct ConsensuseConfig {
     pub narwhal_config: DebugIgnore<ConsensusParameters>,
 }
 
-impl ConsensuseConfig {
+impl ConsensusConfig {
     pub fn address(&self) -> &Multiaddr {
         &self.consensus_address
     }
@@ -164,7 +164,7 @@ impl ValidatorInfo {
 /// all validators
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NetworkConfig {
-    pub validator_configs: Vec<ValidatorConfig>,
+    pub validator_configs: Vec<NodeConfig>,
     loaded_move_packages: Vec<(PathBuf, ObjectID)>,
     genesis: genesis::Genesis,
     pub account_keys: Vec<KeyPair>,
@@ -173,7 +173,7 @@ pub struct NetworkConfig {
 impl Config for NetworkConfig {}
 
 impl NetworkConfig {
-    pub fn validator_configs(&self) -> &[ValidatorConfig] {
+    pub fn validator_configs(&self) -> &[NodeConfig] {
         &self.validator_configs
     }
 
@@ -195,7 +195,7 @@ impl NetworkConfig {
         self.validator_configs()[0].committee_config().committee()
     }
 
-    pub fn into_validator_configs(self) -> Vec<ValidatorConfig> {
+    pub fn into_validator_configs(self) -> Vec<NodeConfig> {
         self.validator_configs
     }
 

@@ -13,8 +13,8 @@ use std::{
 use sui_types::{base_types::encode_bytes_hex, crypto::get_key_pair_from_rng};
 
 use crate::{
-    genesis, new_network_address, CommitteeConfig, ConsensuseConfig, GenesisConfig, NetworkConfig,
-    ValidatorConfig, ValidatorGenesisInfo, ValidatorInfo, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME,
+    genesis, new_network_address, CommitteeConfig, ConsensusConfig, GenesisConfig, NetworkConfig,
+    NodeConfig, ValidatorGenesisInfo, ValidatorInfo, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME,
     DEFAULT_STAKE,
 };
 
@@ -183,7 +183,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     .config_directory
                     .join(CONSENSUS_DB_NAME)
                     .join(encode_bytes_hex(public_key));
-                let consensus_config = ConsensuseConfig {
+                let consensus_config = ConsensusConfig {
                     consensus_address,
                     consensus_db_path,
                     narwhal_config: Default::default(),
@@ -191,7 +191,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
 
                 let metrics_address = new_network_address();
 
-                ValidatorConfig {
+                NodeConfig {
                     key_pair: validator.key_pair,
                     db_path,
                     network_address,

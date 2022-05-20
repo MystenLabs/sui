@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use sui_config::ValidatorConfig;
+use sui_config::NodeConfig;
 use sui_core::authority_server::AuthorityServerHandle;
 use tracing::info;
 
@@ -11,7 +11,7 @@ pub struct SuiNode {
 }
 
 impl SuiNode {
-    pub async fn start(config: &ValidatorConfig) -> Result<()> {
+    pub async fn start(config: &NodeConfig) -> Result<()> {
         let server = sui_core::make::make_server(config).await?.spawn().await?;
 
         info!(node =? config.public_key(),
