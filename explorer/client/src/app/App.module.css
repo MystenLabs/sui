@@ -7,7 +7,7 @@ div.header {
 }
 
 a.suititle {
-    @apply text-lg text-offwhite no-underline;
+    @apply text-lg text-offwhite font-bold no-underline hover:underline;
 }
 
 .search {
