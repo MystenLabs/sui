@@ -250,6 +250,7 @@ pub fn sui_config_dir() -> Result<PathBuf, anyhow::Error> {
 
 #[derive(Serialize, Deserialize)]
 pub struct GenesisConfig {
+    pub validator_genesis_info: Option<Vec<ValidatorGenesisInfo>>,
     pub committee_size: usize,
     pub accounts: Vec<AccountConfig>,
     pub move_packages: Vec<PathBuf>,
@@ -351,6 +352,18 @@ impl GenesisConfig {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ValidatorGenesisInfo {
+    pub key_pair: KeyPair,
+    pub network_address: Multiaddr,
+    pub stake: usize,
+    pub narwhal_primary_to_primary: Multiaddr,
+    pub narwhal_worker_to_primary: Multiaddr,
+    pub narwhal_primary_to_worker: Multiaddr,
+    pub narwhal_worker_to_worker: Multiaddr,
+    pub narwhal_consensus_address: Multiaddr,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AccountConfig {
     #[serde(
@@ -435,6 +448,7 @@ impl GenesisConfig {
 impl Default for GenesisConfig {
     fn default() -> Self {
         Self {
+            validator_genesis_info: None,
             committee_size: DEFAULT_NUMBER_OF_AUTHORITIES,
             accounts: vec![],
             move_packages: vec![],
@@ -478,6 +492,10 @@ where
         let config = serde_json::to_string_pretty(&self.inner)?;
         fs::write(&self.path, config)?;
         Ok(())
+    }
+
+    pub fn into_inner(self) -> C {
+        self.inner
     }
 }
 
