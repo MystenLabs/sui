@@ -8,7 +8,7 @@ use crate::{
         authority_aggregator_tests::transfer_coin_transaction, AuthorityAggregator,
     },
     authority_batch::batch_tests::init_state_parameters_from_rng,
-    authority_client::LocalAuthorityClient,
+    authority_client::{AuthorityClient, LocalAuthorityClient},
 };
 use rand::prelude::StdRng;
 use rand::SeedableRng;
@@ -1283,7 +1283,7 @@ struct TestSetup {
     committee: Committee,
     authorities: Vec<TestAuthority>,
     transactions: Vec<sui_types::messages::Transaction>,
-    aggregator: AuthorityAggregator<LocalAuthorityClient>,
+    aggregator: AuthorityAggregator,
 }
 
 async fn checkpoint_tests_setup() -> TestSetup {
@@ -1407,10 +1407,10 @@ async fn checkpoint_tests_setup() -> TestSetup {
         authorities
             .iter()
             .map(|a| {
-                (
-                    a.authority.name,
-                    LocalAuthorityClient::new_from_authority(a.authority.clone()),
-                )
+                let client: AuthorityClient = Arc::new(LocalAuthorityClient::new_from_authority(
+                    a.authority.clone(),
+                ));
+                (a.authority.name, client)
             })
             .collect(),
     );

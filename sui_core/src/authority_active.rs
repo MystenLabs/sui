@@ -39,7 +39,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI,
+    authority_client::AuthorityClient,
 };
 use tokio::time::Instant;
 
@@ -89,19 +89,19 @@ impl AuthorityHealth {
     }
 }
 
-pub struct ActiveAuthority<A> {
+pub struct ActiveAuthority {
     // The local authority state
     pub state: Arc<AuthorityState>,
     // The network interfaces to other authorities
-    pub net: Arc<AuthorityAggregator<A>>,
+    pub net: Arc<AuthorityAggregator>,
     // Network health
     pub health: Arc<Mutex<HashMap<AuthorityName, AuthorityHealth>>>,
 }
 
-impl<A> ActiveAuthority<A> {
+impl ActiveAuthority {
     pub fn new(
         authority: Arc<AuthorityState>,
-        authority_clients: BTreeMap<AuthorityName, A>,
+        authority_clients: BTreeMap<AuthorityName, AuthorityClient>,
     ) -> SuiResult<Self> {
         let committee = authority.committee.clone();
 
@@ -164,10 +164,7 @@ impl<A> ActiveAuthority<A> {
     }
 }
 
-impl<A> ActiveAuthority<A>
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
+impl ActiveAuthority {
     // TODO: Active tasks go here + logic to spawn them all
     pub async fn spawn_all_active_processes(self) -> Option<()> {
         // Spawn a task to take care of gossip

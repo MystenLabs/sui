@@ -27,7 +27,8 @@ use sui_core::{
     sui_json::SuiJsonValue,
 };
 use sui_core::{
-    authority_client::NetworkAuthorityClient, full_node::FullNode,
+    authority_client::{AuthorityClient, NetworkAuthorityClient},
+    full_node::FullNode,
     gateway_state::GatewayTxSeqNumber,
 };
 use sui_types::{
@@ -37,7 +38,7 @@ use sui_types::{
 use tracing::info;
 
 pub struct SuiFullNode {
-    pub client: FullNode<NetworkAuthorityClient>,
+    pub client: FullNode,
 }
 
 impl SuiFullNode {
@@ -221,7 +222,7 @@ impl RpcGatewayServer for SuiFullNode {
 pub async fn make_full_node(
     db_store_path: PathBuf,
     net_config: &NetworkConfig,
-) -> Result<FullNode<NetworkAuthorityClient>, SuiError> {
+) -> Result<FullNode, SuiError> {
     let store = Arc::new(ReplicaStore::open(&db_store_path, None));
     let index_path = db_store_path.join("indexes");
     let indexes = Arc::new(IndexStore::open(index_path, None));
@@ -240,7 +241,7 @@ pub async fn make_full_node(
     )
     .await?;
 
-    let mut authority_clients = BTreeMap::new();
+    let mut authority_clients: BTreeMap<_, AuthorityClient> = BTreeMap::new();
     let mut config = mysten_network::config::Config::new();
     config.connect_timeout = Some(Duration::from_secs(5));
     config.request_timeout = Some(Duration::from_secs(5));
@@ -253,7 +254,7 @@ pub async fn make_full_node(
         .validator_set()
     {
         let channel = config.connect_lazy(validator.network_address()).unwrap();
-        let client = NetworkAuthorityClient::new(channel);
+        let client = Arc::new(NetworkAuthorityClient::new(channel));
         authority_clients.insert(validator.public_key(), client);
     }
 

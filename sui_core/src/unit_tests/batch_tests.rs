@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use rand::{prelude::StdRng, SeedableRng};
+use std::any::Any;
 use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::get_key_pair_from_rng;
@@ -612,6 +613,11 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         });
         Ok(Box::pin(stream))
     }
+
+    #[cfg(test)]
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl TrustworthyAuthorityClient {
@@ -745,6 +751,11 @@ impl AuthorityAPI for ByzantineAuthorityClient {
         });
         Ok(Box::pin(stream))
     }
+
+    #[cfg(test)]
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl ByzantineAuthorityClient {
@@ -782,7 +793,7 @@ async fn test_safe_batch_stream() {
     .await;
 
     // Happy path:
-    let auth_client = TrustworthyAuthorityClient::new(state);
+    let auth_client = Arc::new(TrustworthyAuthorityClient::new(state));
     let safe_client = SafeClient::new(auth_client, committee.clone(), public_key_bytes);
 
     let request = BatchInfoRequest {
@@ -824,7 +835,7 @@ async fn test_safe_batch_stream() {
         &sui_config::genesis::Genesis::get_default_genesis(),
     )
     .await;
-    let auth_client_from_byzantine = ByzantineAuthorityClient::new(state_b);
+    let auth_client_from_byzantine = Arc::new(ByzantineAuthorityClient::new(state_b));
     let safe_client_from_byzantine = SafeClient::new(
         auth_client_from_byzantine,
         committee.clone(),

@@ -38,7 +38,7 @@ use crate::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use crate::transaction_input_checker;
 use crate::{
     authority::GatewayStore, authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI,
+    authority_client::AuthorityClient,
 };
 
 use crate::gateway_types::*;
@@ -167,8 +167,8 @@ impl Default for GatewayMetrics {
 // for cases such as local tests or "sui start" which starts multiple authorities in one process.
 pub static METRICS: Lazy<GatewayMetrics> = Lazy::new(GatewayMetrics::new);
 
-pub struct GatewayState<A> {
-    authorities: AuthorityAggregator<A>,
+pub struct GatewayState {
+    authorities: AuthorityAggregator,
     store: Arc<GatewayStore>,
     /// Every transaction committed in authorities (and hence also committed in the Gateway)
     /// will have a unique sequence number. This number is specific to this gateway,
@@ -179,19 +179,19 @@ pub struct GatewayState<A> {
     metrics: &'static GatewayMetrics,
 }
 
-impl<A> GatewayState<A> {
+impl GatewayState {
     /// Create a new manager which stores its managed addresses at `path`
     pub fn new(
         path: PathBuf,
         committee: Committee,
-        authority_clients: BTreeMap<AuthorityName, A>,
+        authority_clients: BTreeMap<AuthorityName, AuthorityClient>,
     ) -> SuiResult<Self> {
         Self::new_with_authorities(path, AuthorityAggregator::new(committee, authority_clients))
     }
 
     pub fn new_with_authorities(
         path: PathBuf,
-        authorities: AuthorityAggregator<A>,
+        authorities: AuthorityAggregator,
     ) -> SuiResult<Self> {
         let store = Arc::new(GatewayStore::open(path, None));
         let next_tx_seq_number = AtomicU64::new(store.next_sequence_number()?);
@@ -215,7 +215,7 @@ impl<A> GatewayState<A> {
     }
 
     #[cfg(test)]
-    pub fn get_authorities(&self) -> &AuthorityAggregator<A> {
+    pub fn get_authorities(&self) -> &AuthorityAggregator {
         &self.authorities
     }
 
@@ -338,10 +338,7 @@ pub trait GatewayAPI {
     ) -> Result<TransactionEffectsResponse, anyhow::Error>;
 }
 
-impl<A> GatewayState<A>
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
+impl GatewayState {
     pub async fn get_framework_object_ref(&self) -> Result<ObjectRef, anyhow::Error> {
         Ok(self
             .get_object_ref(&ObjectID::from(SUI_FRAMEWORK_ADDRESS))
@@ -789,10 +786,7 @@ where
 }
 
 #[async_trait]
-impl<A> GatewayAPI for GatewayState<A>
-where
-    A: AuthorityAPI + Send + Sync + Clone + 'static,
-{
+impl GatewayAPI for GatewayState {
     async fn execute_transaction(
         &self,
         tx: Transaction,

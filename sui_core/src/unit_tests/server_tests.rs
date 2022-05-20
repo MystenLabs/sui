@@ -293,10 +293,10 @@ async fn test_subscription_safe_client() {
     let db3 = server.state.db().clone();
 
     let _master_safe_client = SafeClient::new(
-        LocalAuthorityClient {
+        Arc::new(LocalAuthorityClient {
             state: state.clone(),
             fault_config: LocalAuthorityClientFaultConfig::default(),
-        },
+        }),
         state.committee.clone(),
         state.name,
     );

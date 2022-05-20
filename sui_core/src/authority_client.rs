@@ -2,6 +2,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(test)]
+use std::any::Any;
+
 use crate::authority::AuthorityState;
 use async_trait::async_trait;
 use futures::{stream::BoxStream, TryStreamExt};
@@ -12,6 +15,8 @@ use sui_network::{api::ValidatorClient, tonic};
 use sui_types::{error::SuiError, messages::*};
 
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
+
+pub type AuthorityClient = Arc<dyn AuthorityAPI + Send + Sync>;
 
 #[cfg(test)]
 use sui_types::{
@@ -68,6 +73,9 @@ pub trait AuthorityAPI {
         &self,
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError>;
+
+    #[cfg(test)]
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoResponseItem, SuiError>>;
@@ -196,6 +204,11 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map(tonic::Response::into_inner)
             .map_err(Into::into)
     }
+
+    #[cfg(test)]
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -316,6 +329,11 @@ impl AuthorityAPI for LocalAuthorityClient {
             .lock()
             .handle_checkpoint_request(&request);
         result
+    }
+
+    #[cfg(test)]
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

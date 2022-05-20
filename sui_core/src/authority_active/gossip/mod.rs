@@ -23,12 +23,12 @@ use tracing::{debug, error, info};
 #[cfg(test)]
 mod tests;
 
-struct PeerGossip<A> {
+struct PeerGossip {
     peer_name: AuthorityName,
-    client: SafeClient<A>,
+    client: SafeClient,
     state: Arc<AuthorityState>,
     max_seq: Option<TxSequenceNumber>,
-    aggregator: Arc<AuthorityAggregator<A>>,
+    aggregator: Arc<AuthorityAggregator>,
 }
 
 const EACH_ITEM_DELAY_MS: u64 = 1_000;
@@ -37,10 +37,7 @@ const REFRESH_FOLLOWER_PERIOD_SECS: u64 = 60;
 
 use super::ActiveAuthority;
 
-pub async fn gossip_process<A>(active_authority: &ActiveAuthority<A>, degree: usize)
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
+pub async fn gossip_process(active_authority: &ActiveAuthority, degree: usize) {
     // A copy of the committee
     let committee = &active_authority.net.committee;
 
@@ -130,11 +127,8 @@ where
     }
 }
 
-impl<A> PeerGossip<A>
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
-    pub fn new(peer_name: AuthorityName, active_authority: &ActiveAuthority<A>) -> PeerGossip<A> {
+impl PeerGossip {
+    pub fn new(peer_name: AuthorityName, active_authority: &ActiveAuthority) -> PeerGossip {
         PeerGossip {
             peer_name,
             client: active_authority.net.authority_clients[&peer_name].clone(),

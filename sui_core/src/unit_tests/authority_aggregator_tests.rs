@@ -34,10 +34,7 @@ static LOGGING_INIT: Lazy<()> = Lazy::new(tracing_subscriber::fmt::init);
 
 pub async fn init_local_authorities(
     genesis_objects: Vec<Vec<Object>>,
-) -> (
-    AuthorityAggregator<LocalAuthorityClient>,
-    Vec<Arc<AuthorityState>>,
-) {
+) -> (AuthorityAggregator, Vec<Arc<AuthorityState>>) {
     #[allow(clippy::no_effect)]
     *LOGGING_INIT; // Initialize logging if needed
     let mut key_pairs = Vec::new();
@@ -50,24 +47,33 @@ pub async fn init_local_authorities(
     }
     let committee = Committee::new(0, voting_rights);
 
-    let mut clients = BTreeMap::new();
+    let mut clients: BTreeMap<_, AuthorityClient> = BTreeMap::new();
     let mut states = Vec::new();
     for ((authority_name, secret), objects) in key_pairs.into_iter().zip(genesis_objects) {
-        let client = LocalAuthorityClient::new_with_objects(
-            committee.clone(),
-            authority_name,
-            secret,
-            objects,
-        )
-        .await;
+        let client = Arc::new(
+            LocalAuthorityClient::new_with_objects(
+                committee.clone(),
+                authority_name,
+                secret,
+                objects,
+            )
+            .await,
+        );
         states.push(client.state.clone());
         clients.insert(authority_name, client);
     }
     (AuthorityAggregator::new(committee, clients), states)
 }
 
+fn cast_client_to_local(client: &mut dyn AuthorityAPI) -> &mut LocalAuthorityClient {
+    client
+        .as_any_mut()
+        .downcast_mut::<LocalAuthorityClient>()
+        .expect("wasn't a LocalAuthorityClient")
+}
+
 pub fn get_local_client(
-    authorities: &mut AuthorityAggregator<LocalAuthorityClient>,
+    authorities: &mut AuthorityAggregator,
     index: usize,
 ) -> &mut LocalAuthorityClient {
     let mut clients = authorities.authority_clients.values_mut();
@@ -76,7 +82,9 @@ pub fn get_local_client(
         clients.next();
         i += 1;
     }
-    clients.next().unwrap().authority_client()
+    let client: &mut LocalAuthorityClient =
+        cast_client_to_local(clients.next().unwrap().authority_client());
+    client
 }
 
 pub fn transfer_coin_transaction(
@@ -309,7 +317,9 @@ async fn execute_transaction_with_fault_configs(
         .await?;
 
     for client in authorities.authority_clients.values_mut() {
-        client.authority_client().fault_config.reset();
+        cast_client_to_local(client.authority_client())
+            .fault_config
+            .reset();
     }
     for (index, config) in configs_before_process_certificate {
         get_local_client(&mut authorities, *index).fault_config = *config;
@@ -694,7 +704,7 @@ async fn test_process_transaction1() {
 }
 
 async fn get_owned_objects(
-    authorities: &AuthorityAggregator<LocalAuthorityClient>,
+    authorities: &AuthorityAggregator,
     addr: SuiAddress,
 ) -> BTreeMap<ObjectRef, Vec<PublicKeyBytes>> {
     let (owned_objects, _) = authorities

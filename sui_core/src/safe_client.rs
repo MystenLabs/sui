@@ -2,7 +2,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
+#[cfg(test)]
+use std::any::Any;
+
+#[cfg(test)]
+use std::sync::Arc;
+
+use crate::authority_client::{AuthorityAPI, AuthorityClient, BatchInfoResponseItemStream};
 use async_trait::async_trait;
 use futures::StreamExt;
 use sui_types::crypto::PublicKeyBytes;
@@ -17,14 +23,18 @@ use sui_types::{
 };
 
 #[derive(Clone)]
-pub struct SafeClient<C> {
-    authority_client: C,
+pub struct SafeClient {
+    authority_client: AuthorityClient,
     committee: Committee,
     address: PublicKeyBytes,
 }
 
-impl<C> SafeClient<C> {
-    pub fn new(authority_client: C, committee: Committee, address: PublicKeyBytes) -> Self {
+impl SafeClient {
+    pub fn new(
+        authority_client: AuthorityClient,
+        committee: Committee,
+        address: PublicKeyBytes,
+    ) -> Self {
         Self {
             authority_client,
             committee,
@@ -33,8 +43,8 @@ impl<C> SafeClient<C> {
     }
 
     #[cfg(test)]
-    pub fn authority_client(&mut self) -> &mut C {
-        &mut self.authority_client
+    pub fn authority_client(&mut self) -> &mut dyn AuthorityAPI {
+        Arc::get_mut(&mut self.authority_client).unwrap()
     }
 
     // Here we centralize all checks for transaction info responses
@@ -236,10 +246,7 @@ impl<C> SafeClient<C> {
     }
 }
 
-impl<C> SafeClient<C>
-where
-    C: AuthorityAPI + Send + Sync + Clone + 'static,
-{
+impl SafeClient {
     /// Uses the follower API and augments each digest received with a full transactions info structure.
     pub async fn handle_transaction_info_request_to_transaction_info(
         &self,
@@ -278,10 +285,7 @@ where
 }
 
 #[async_trait]
-impl<C> AuthorityAPI for SafeClient<C>
-where
-    C: AuthorityAPI + Send + Sync + Clone + 'static,
-{
+impl AuthorityAPI for SafeClient {
     /// Initiate a new transfer to a Sui or Primary account.
     async fn handle_transaction(
         &self,
@@ -445,5 +449,10 @@ where
             },
         ));
         Ok(Box::pin(stream))
+    }
+
+    #[cfg(test)]
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }

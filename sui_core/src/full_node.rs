@@ -12,7 +12,7 @@ use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::Mutex;
 use tracing::debug;
 
-use crate::authority_client::AuthorityAPI;
+use crate::authority_client::AuthorityClient;
 use crate::{authority_active::AuthorityHealth, authority_aggregator::AuthorityAggregator};
 use futures::channel::mpsc::channel as MpscChannel;
 mod follower;
@@ -25,26 +25,23 @@ use self::follower::Downloader;
 
 const DOWNLOADER_CHANNEL_SIZE: usize = 1024;
 
-pub struct FullNode<A> {
+pub struct FullNode {
     // Local state
     pub state: Arc<FullNodeState>,
 
     // The network interfaces to authorities
-    pub aggregator: Arc<AuthorityAggregator<A>>,
+    pub aggregator: Arc<AuthorityAggregator>,
 
     // Network health
     pub health: Arc<TokioMutex<HashMap<AuthorityName, AuthorityHealth>>>,
 }
 
-impl<A> FullNode<A>
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
+impl FullNode {
     // TODO: Provide way to run genesis here
 
     pub fn new(
         state: Arc<FullNodeState>,
-        authority_clients: BTreeMap<AuthorityName, A>,
+        authority_clients: BTreeMap<AuthorityName, AuthorityClient>,
     ) -> SuiResult<Self> {
         let committee = state.committee.clone();
 
@@ -93,18 +90,12 @@ where
     }
 }
 
-impl<A> FullNode<A>
-where
-    A: AuthorityAPI + Send + 'static + Sync + Clone,
-{
+impl FullNode {
     pub async fn spawn_tasks(&self) {
         let (send_chann, recv_chann) = MpscChannel(DOWNLOADER_CHANNEL_SIZE);
 
         let downloader = Downloader {
-            aggregator: Arc::new(AuthorityAggregator::new(
-                self.state.committee.clone(),
-                self.aggregator.authority_clients.clone(),
-            )),
+            aggregator: Arc::new(self.aggregator.as_ref().clone()),
             state: self.state.clone(),
         };
 

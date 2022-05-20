@@ -10,7 +10,7 @@ use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
     authority_aggregator::AuthorityAggregator,
-    authority_client::NetworkAuthorityClient,
+    authority_client::{AuthorityClient, NetworkAuthorityClient},
     authority_server::AuthorityServerHandle,
     safe_client::SafeClient,
 };
@@ -77,25 +77,21 @@ where
     handles
 }
 
-pub fn create_authority_aggregator(
-    authority_configs: &[ValidatorInfo],
-) -> AuthorityAggregator<SafeClient<NetworkAuthorityClient>> {
+pub fn create_authority_aggregator(authority_configs: &[ValidatorInfo]) -> AuthorityAggregator {
     let voting_rights: BTreeMap<_, _> = authority_configs
         .iter()
         .map(|config| (config.public_key(), config.stake()))
         .collect();
     let committee = Committee::new(0, voting_rights);
-    let clients: BTreeMap<_, _> = authority_configs
+    let clients: BTreeMap<_, AuthorityClient> = authority_configs
         .iter()
         .map(|config| {
-            (
+            let client: AuthorityClient = Arc::new(SafeClient::new(
+                Arc::new(NetworkAuthorityClient::connect_lazy(config.network_address()).unwrap()),
+                committee.clone(),
                 config.public_key(),
-                SafeClient::new(
-                    NetworkAuthorityClient::connect_lazy(config.network_address()).unwrap(),
-                    committee.clone(),
-                    config.public_key(),
-                ),
-            )
+            ));
+            (config.public_key(), client)
         })
         .collect();
     AuthorityAggregator::new(committee, clients)

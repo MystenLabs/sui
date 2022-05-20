@@ -3,7 +3,7 @@
 
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::authority_active::ActiveAuthority;
-use crate::authority_client::NetworkAuthorityClient;
+use crate::authority_client::{AuthorityClient, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
 use crate::authority_server::AuthorityServerHandle;
 use crate::checkpoints::CheckpointStore;
@@ -158,13 +158,13 @@ pub async fn make_authority(
     // If we have network information make authority clients
     // to all authorities in the system.
     let _active_authority: Option<()> = {
-        let mut authority_clients = BTreeMap::new();
+        let mut authority_clients: BTreeMap<_, AuthorityClient> = BTreeMap::new();
         let mut config = mysten_network::config::Config::new();
         config.connect_timeout = Some(Duration::from_secs(5));
         config.request_timeout = Some(Duration::from_secs(5));
         for validator in validator_config.committee_config().validator_set() {
             let channel = config.connect_lazy(validator.network_address()).unwrap();
-            let client = NetworkAuthorityClient::new(channel);
+            let client = Arc::new(NetworkAuthorityClient::new(channel));
             authority_clients.insert(validator.public_key(), client);
         }
 

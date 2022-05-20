@@ -20,12 +20,9 @@ use crate::authority_aggregator::authority_aggregator_tests::{
     authority_genesis_objects, crate_object_move_transaction, get_local_client,
     init_local_authorities,
 };
-use crate::authority_client::LocalAuthorityClient;
 use crate::gateway_state::{GatewayAPI, GatewayState};
 
-async fn create_gateway_state(
-    genesis_objects: Vec<Vec<Object>>,
-) -> GatewayState<LocalAuthorityClient> {
+async fn create_gateway_state(genesis_objects: Vec<Vec<Object>>) -> GatewayState {
     let all_owners: HashSet<_> = genesis_objects
         .iter()
         .flat_map(|v| v.iter().map(|o| o.get_single_owner().unwrap()))
@@ -40,7 +37,7 @@ async fn create_gateway_state(
 }
 
 async fn transfer_coin(
-    gateway: &GatewayState<LocalAuthorityClient>,
+    gateway: &GatewayState,
     signer: SuiAddress,
     key: &KeyPair,
     coin_object_id: ObjectID,

@@ -7,11 +7,12 @@ use std::{
     collections::BTreeMap,
     fmt::{Display, Formatter, Write},
     path::PathBuf,
+    sync::Arc,
     time::Duration,
 };
 use sui_config::ValidatorInfo;
 use sui_core::{
-    authority_client::NetworkAuthorityClient,
+    authority_client::{AuthorityClient, NetworkAuthorityClient},
     gateway_state::{GatewayClient, GatewayState},
 };
 use sui_types::{
@@ -93,14 +94,14 @@ impl GatewayConfig {
         Committee::new(self.epoch, voting_rights)
     }
 
-    pub fn make_authority_clients(&self) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
-        let mut authority_clients = BTreeMap::new();
+    pub fn make_authority_clients(&self) -> BTreeMap<AuthorityName, AuthorityClient> {
+        let mut authority_clients: BTreeMap<_, AuthorityClient> = BTreeMap::new();
         let mut config = mysten_network::config::Config::new();
         config.connect_timeout = Some(self.send_timeout);
         config.request_timeout = Some(self.recv_timeout);
         for authority in &self.validator_set {
             let channel = config.connect_lazy(authority.network_address()).unwrap();
-            let client = NetworkAuthorityClient::new(channel);
+            let client = Arc::new(NetworkAuthorityClient::new(channel));
             authority_clients.insert(authority.public_key(), client);
         }
         authority_clients

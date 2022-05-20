@@ -29,11 +29,11 @@ use sui_types::{
 use tracing::{debug, error, info};
 
 /// Follows one authority
-struct Follower<A> {
+struct Follower {
     // Authority being followed
     name: AuthorityName,
 
-    client: SafeClient<A>,
+    client: SafeClient,
 
     state: Arc<FullNodeState>,
 
@@ -43,13 +43,11 @@ struct Follower<A> {
 use super::{FullNode, FullNodeState};
 
 /// Spawns tasks to follow a quorum of minumum stake min_stake_target
-pub async fn follow_multiple<A>(
-    full_node: &FullNode<A>,
+pub async fn follow_multiple(
+    full_node: &FullNode,
     min_stake_target: usize,
     downloader_channel: MpscSender<(AuthorityName, TransactionDigest)>,
-) where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
+) {
     let committee = &full_node.state.committee;
     if min_stake_target > committee.total_votes {
         error!("Stake target cannot be greater than total_votes")
@@ -89,15 +87,12 @@ pub async fn follow_multiple<A>(
     drop(downloader_channel);
 }
 
-impl<A> Follower<A>
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
+impl Follower {
     pub fn new(
         peer_name: AuthorityName,
-        full_node: &FullNode<A>,
+        full_node: &FullNode,
         downloader_channel: MpscSender<(AuthorityName, TransactionDigest)>,
-    ) -> Follower<A> {
+    ) -> Follower {
         Self {
             name: peer_name,
             client: full_node.aggregator.authority_clients[&peer_name].clone(),
@@ -181,15 +176,12 @@ where
 
 /// Downloads certs, objects etc and updates state
 #[derive(Clone)]
-pub struct Downloader<A> {
-    pub aggregator: Arc<AuthorityAggregator<A>>,
+pub struct Downloader {
+    pub aggregator: Arc<AuthorityAggregator>,
     pub state: Arc<FullNodeState>,
 }
 
-impl<A> Downloader<A>
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
+impl Downloader {
     //TODO: Downloader needs to be more robust to cover cases of missing dependencies, deleted objects and byzantine authorities
     pub async fn start_downloader(
         self,
@@ -298,13 +290,10 @@ where
     }
 }
 
-pub async fn downloader_task<A>(
-    d: &Downloader<A>,
+pub async fn downloader_task(
+    d: &Downloader,
     mut recv: MpscReceiver<(PublicKeyBytes, TransactionDigest)>,
-) -> Result<(), SuiError>
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
+) -> Result<(), SuiError> {
     info!("Full node downlader started...");
     loop {
         while let Some((name, digest)) = recv.next().await {

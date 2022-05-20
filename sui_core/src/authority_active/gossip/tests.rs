@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use sui_adapter::genesis;
@@ -8,7 +9,8 @@ use sui_types::{base_types::SequenceNumber, crypto::get_key_pair, object::Object
 
 use super::*;
 use crate::{
-    authority_aggregator::authority_aggregator_tests::*, authority_client::NetworkAuthorityClient,
+    authority_aggregator::authority_aggregator_tests::*,
+    authority_client::{AuthorityClient, NetworkAuthorityClient},
 };
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -34,7 +36,14 @@ pub async fn test_gossip_plain() {
                 .await
         });
         let inner_state = state.clone();
-        let inner_clients = clients.clone();
+        let inner_clients: BTreeMap<_, AuthorityClient> = clients
+            .iter()
+            .map(|(k, c)| {
+                let client: AuthorityClient = Arc::new(c.clone());
+                (*k, client)
+            })
+            .collect();
+        //let inner_clients: BTreeMap<_, AuthorityClient> = clients.clone();
 
         let _active_handle = tokio::task::spawn(async move {
             let active_state = ActiveAuthority::new(inner_state, inner_clients).unwrap();
@@ -92,10 +101,12 @@ pub async fn test_gossip_no_network() {
             .authority_clients
             .iter()
             .map(|(name, _)| {
-                let net = NetworkAuthorityClient::connect_lazy(
-                    &"/ip4/127.0.0.1/tcp/332/http".parse().unwrap(),
-                )
-                .unwrap();
+                let net: AuthorityClient = Arc::new(
+                    NetworkAuthorityClient::connect_lazy(
+                        &"/ip4/127.0.0.1/tcp/332/http".parse().unwrap(),
+                    )
+                    .unwrap(),
+                );
                 (*name, net)
             })
             .collect(),
@@ -106,7 +117,13 @@ pub async fn test_gossip_no_network() {
     // Start batch processes, and active processes.
     if let Some(state) = states.into_iter().next() {
         let inner_state = state;
-        let inner_clients = clients.clone();
+        let inner_clients: BTreeMap<_, AuthorityClient> = clients
+            .iter()
+            .map(|(k, c)| {
+                let client: AuthorityClient = Arc::new(c.clone());
+                (*k, client)
+            })
+            .collect();
 
         let _active_handle = tokio::task::spawn(async move {
             let active_state = ActiveAuthority::new(inner_state, inner_clients).unwrap();
