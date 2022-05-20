@@ -1010,14 +1010,30 @@ impl AuthorityState {
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
         let notifier_ticket = self.batch_notifier.ticket()?;
+        let seq = notifier_ticket.seq();
+
+        if let Some(indexes) = &self.indexes {
+            let inputs: Vec<_> = temporary_store.objects().iter().map(|(_, o)| o).collect();
+            let outputs: Vec<_> = temporary_store
+                .written()
+                .iter()
+                .map(|(_, (_, o))| o)
+                .collect();
+            if let Err(e) = indexes.index_tx(
+                certificate.sender_address(),
+                &inputs,
+                &outputs,
+                seq,
+                certificate.digest(),
+            ) {
+                error!("Error indexing certificate: {}", e);
+            }
+        }
+
         self.database
-            .update_state(
-                temporary_store,
-                certificate,
-                signed_effects,
-                Some(notifier_ticket.seq()),
-            )
+            .update_state(temporary_store, certificate, signed_effects, Some(seq))
             .await
+
         // implicitly we drop the ticket here and that notifies the batch manager
     }
 
