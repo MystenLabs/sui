@@ -15,7 +15,7 @@ use jsonrpsee::core::RpcResult;
 use sui_config::{NetworkConfig, PersistedConfig};
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
-    authority_active::ActiveAuthority,
+    authority_active::{gossip::gossip_process, ActiveAuthority},
     gateway_types::{
         GetObjectInfoResponse, SuiObjectRef, TransactionEffectsResponse, TransactionResponse,
     },
@@ -88,7 +88,26 @@ impl SuiFullNode {
 
         let active_authority = ActiveAuthority::new(state.clone(), authority_clients)?;
 
-        active_authority.spawn_all_active_processes().await;
+        // Start following validators
+        tokio::task::spawn(async move {
+            gossip_process(
+                &active_authority,
+                // listen to all authorities (note that gossip_process caps this to total minus 1.)
+                active_authority.state.committee.voting_rights.len(),
+            )
+            .await;
+        });
+
+        // Start batch system so the full node can be followed - currently only the
+        // tests use this, in order to wait until the full node has seen a tx.
+        // However, there's no reason full nodes won't want to follow other full nodes
+        // eventually.
+        let batch_state = state.clone();
+        tokio::task::spawn(async move {
+            batch_state
+                .run_batch_service(1000, Duration::from_secs(1))
+                .await
+        });
 
         info!("Started full node ");
 

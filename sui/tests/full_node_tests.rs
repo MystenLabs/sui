@@ -1,15 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::StreamExt;
+use std::sync::Arc;
 use sui::{
     config::SUI_NETWORK_CONFIG,
     sui_full_node::SuiFullNode,
     wallet_commands::{WalletCommandResult, WalletCommands, WalletContext},
 };
 
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_core::authority::AuthorityState;
+
+use sui_types::{
+    base_types::{ObjectID, SuiAddress, TransactionDigest},
+    batch::UpdateItem,
+    messages::{BatchInfoRequest, BatchInfoResponseItem},
+};
 use test_utils::network::setup_network_and_wallet_in_working_dir;
 use tokio::time::{sleep, Duration};
+use tracing::info;
 
 async fn transfer_coin(
     node: &SuiFullNode,
@@ -23,6 +32,10 @@ async fn transfer_coin(
     let object_to_send = object_refs.get(1).unwrap().0;
 
     // Send an object
+    info!(
+        "transferring coin {:?} from {:?} -> {:?}",
+        object_to_send, sender, receiver
+    );
     let res = WalletCommands::Transfer {
         to: receiver,
         coin_object_id: object_to_send,
@@ -41,6 +54,61 @@ async fn transfer_coin(
     Ok((object_to_send, sender, receiver, digest))
 }
 
+async fn wait_for_tx(wait_digest: TransactionDigest, state: Arc<AuthorityState>) {
+    let mut timeout = Box::pin(sleep(Duration::from_millis(5000)));
+
+    let mut max_seq = Some(0);
+
+    let mut stream = Box::pin(
+        state
+            .handle_batch_streaming(BatchInfoRequest {
+                start: max_seq,
+                length: 1000,
+            })
+            .await
+            .unwrap(),
+    );
+
+    loop {
+        tokio::select! {
+            _ = &mut timeout => panic!("wait_for_tx timed out"),
+
+            items = &mut stream.next() => {
+                match items {
+                    // Upon receiving a batch
+                    Some(Ok(BatchInfoResponseItem(UpdateItem::Batch(batch)) )) => {
+                        max_seq = Some(batch.batch.next_sequence_number);
+                        info!(?max_seq, "Received Batch");
+                    }
+                    // Upon receiving a transaction digest we store it, if it is not processed already.
+                    Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((_seq, digest))))) => {
+                        info!(?digest, "Received Transaction");
+                        if wait_digest == digest {
+                            info!(?digest, "Digest found");
+                            break;
+                        }
+                    },
+
+                    Some(Err( err )) => panic!("{}", err),
+                    None => {
+                        info!(?max_seq, "Restarting Batch");
+                        stream = Box::pin(
+                                state
+                                    .handle_batch_streaming(BatchInfoRequest {
+                                        start: max_seq,
+                                        length: 1000,
+                                    })
+                                    .await
+                                    .unwrap(),
+                            );
+
+                    }
+                }
+            },
+        }
+    }
+}
+
 #[tokio::test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
@@ -53,7 +121,8 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     )
     .await?;
 
-    let (transfered_object, _, receiver, _) = transfer_coin(&node, &mut context).await?;
+    let (transfered_object, _, receiver, digest) = transfer_coin(&node, &mut context).await?;
+    wait_for_tx(digest, node.state.clone()).await;
 
     // verify that the node has seen the transfer
     let object_info = node.state.get_object_info(&transfered_object).await?;
@@ -66,6 +135,12 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
+    let subscriber = ::tracing_subscriber::FmtSubscriber::builder()
+        .with_test_writer()
+        .with_env_filter(::tracing_subscriber::EnvFilter::from_default_env())
+        .finish();
+    let _ = ::tracing::subscriber::set_global_default(subscriber);
+
     let working_dir = tempfile::tempdir()?;
 
     let (_network, mut context, _) = setup_network_and_wallet_in_working_dir(&working_dir).await?;
@@ -78,9 +153,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 
     let (transfered_object, sender, receiver, digest) = transfer_coin(&node, &mut context).await?;
 
-    // XXX
-    // node.client.state.wait_for_cert(digest).await?;
-    sleep(Duration::from_millis(500)).await;
+    wait_for_tx(digest, node.state.clone()).await;
 
     let txes = node
         .state
