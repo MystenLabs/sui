@@ -1098,7 +1098,7 @@ impl ExecutionState for AuthorityState {
                 let seq = execution_indices;
 
                 if let Some(checkpoint) = &self.checkpoints {
-                    let _result = checkpoint.lock().handle_internal_fragment(seq, fragment);
+                    let _result = checkpoint.lock().handle_internal_fragment(seq, *fragment);
                     // TODO [issue #2036]: What should we do with this result? There can be two kind of
                     // errors: (i) malformed messages (then we ignore the message) or (ii) internal
                     // authority errors (then we stop processing further transactions).

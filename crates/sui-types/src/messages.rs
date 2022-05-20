@@ -1235,7 +1235,7 @@ pub struct ConsensusSync {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ConsensusTransaction {
     UserTransaction(CertifiedTransaction),
-    Checkpoint(CheckpointFragment),
+    Checkpoint(Box<CheckpointFragment>),
 }
 
 impl ConsensusTransaction {

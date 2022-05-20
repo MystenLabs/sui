@@ -284,7 +284,7 @@ impl CheckpointSender {
 
 impl ConsensusSender for CheckpointSender {
     fn send_to_consensus(&self, fragment: CheckpointFragment) -> SuiResult {
-        let transaction = ConsensusTransaction::Checkpoint(fragment);
+        let transaction = ConsensusTransaction::Checkpoint(Box::new(fragment));
 
         // Serialize the transaction in a way that is understandable to consensus (i.e., using
         // bincode) and it certificate to consensus.
