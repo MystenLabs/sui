@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::AuthorityState;
-use crate::checkpoints::ConsensusSender;
+
 use bytes::Bytes;
 use multiaddr::Multiaddr;
 use narwhal_executor::SubscriberResult;
@@ -13,7 +13,6 @@ use std::{
     hash::{Hash, Hasher},
 };
 use sui_types::messages::ConfirmationTransaction;
-use sui_types::messages_checkpoint::CheckpointFragment;
 use sui_types::{
     committee::Committee,
     error::{SuiError, SuiResult},
@@ -265,19 +264,83 @@ impl ConsensusListener {
     }
 }
 
+/*
+
+use std::collections::VecDeque;
+use tokio::sync::mpsc::channel
+use crate::checkpoints::ConsensusSender;
+use sui_types::messages_checkpoint::CheckpointFragment;
+
+
 /// Send checkpoints through consensus.
 pub struct CheckpointSender {
-    /// The network client connecting to the consensus node of this authority.
-    consensus_client: TransactionsClient<sui_network::tonic::transport::Channel>,
+    internal_sender: Sender<Bytes>,
+    buffer: VecDeque<Bytes>,
 }
 
 impl CheckpointSender {
+    ///
     pub fn new(consensus_address: Multiaddr) -> Self {
-        Self {
-            consensus_client: TransactionsClient::new(
+        let (sender, receiver) = channel(10_000);
+
+        //
+        tokio::spawn(async move {
+            let consensus_client = TransactionsClient::new(
                 mysten_network::client::connect_lazy(&consensus_address)
                     .expect("Failed to connect to consensus"),
-            ),
+            );
+
+            let buffer = VecDeque::with_capacity(100_000);
+            let futures = FuturesUnordered::new();
+            let pending = HashMap::with_capacity(100_000);
+
+            let timer = sleep(Duration::from_millis(5_000));
+            tokio::pin!(timer);
+
+            loop {
+                //
+                while let Some(bytes) = buffer.pop_back() {
+                    match consensus_client
+                        .clone()
+                        .submit_transaction(TransactionProto {
+                            transaction: bytes.clone(),
+                        })
+                        .await
+                        .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
+                    {
+                        Err(_) => {
+                            buffer.push_back(bytes);
+                            break;
+                        }
+                        Ok(_) => {
+                            let (sender, receiver) = oneshot::channel();
+                            pending.insert(digest);
+                            //futures.push()
+                        }
+                    }
+                }
+
+                //
+                tokio::select! {
+                    Some(bytes) = receiver.recv() => {
+                        buffer.push_front(bytes);
+                    },
+
+                    _ = futures.next() => {
+                        //
+                    },
+
+                    () = &mut timer => {
+                        //
+                    }
+                }
+            }
+        });
+
+        //
+        Self {
+            internal_sender: sender,
+            buffer: VecDeque::with_capacity(100_000),
         }
     }
 }
@@ -292,14 +355,18 @@ impl ConsensusSender for CheckpointSender {
             bincode::serialize(&transaction).expect("Failed to serialize consensus tx");
         let bytes = Bytes::from(serialized);
 
+        // We may fail to send the transaction to our internal task. So add it first to a buffer
+        // to make sure we can retry later.
+        self.buffer.push_front(bytes);
+
         // Send the transaction to consensus.
-        // TODO [issue #2036]: Blocking on the function below is not great.
-        futures::executor::block_on(
-            self.consensus_client
-                .clone()
-                .submit_transaction(TransactionProto { transaction: bytes }),
-        )
-        .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))?;
+        while let Some(data) = self.buffer.pop_back() {
+            if let Err(e) = self.internal_sender.try_send(bytes) {
+                self.buffer.push_back(data);
+                // Return error
+            }
+        }
         Ok(())
     }
 }
+*/

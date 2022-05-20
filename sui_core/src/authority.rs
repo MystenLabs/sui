@@ -2,6 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::checkpoints::FragmentInternalError;
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
     checkpoints::CheckpointStore,
@@ -18,6 +19,7 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use narwhal_executor::ExecutionStateError;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
@@ -1094,14 +1096,12 @@ impl ExecutionState for AuthorityState {
                 Ok(Vec::default())
             }
             ConsensusTransaction::Checkpoint(fragment) => {
-                // TODO [issue #2036]: What is exactly this sequence number?
                 let seq = execution_indices;
-
                 if let Some(checkpoint) = &self.checkpoints {
-                    let _result = checkpoint.lock().handle_internal_fragment(seq, *fragment);
-                    // TODO [issue #2036]: What should we do with this result? There can be two kind of
-                    // errors: (i) malformed messages (then we ignore the message) or (ii) internal
-                    // authority errors (then we stop processing further transactions).
+                    checkpoint
+                        .lock()
+                        .handle_internal_fragment(seq, *fragment)
+                        .map_err(|e| SuiError::from(&e.to_string()[..]))?;
 
                     // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
                     // to persist the execution indices. If the validator crashes, this transaction
@@ -1125,5 +1125,25 @@ impl ExecutionState for AuthorityState {
 
     async fn load_execution_indices(&self) -> Result<ExecutionIndices, Self::Error> {
         self.database.last_consensus_index()
+    }
+}
+
+impl ExecutionStateError for FragmentInternalError {
+    fn node_error(&self) -> bool {
+        match self {
+            // Those are errors caused by the client. Every authority processing this fragment will
+            // deterministically trigger this error.
+            Self::Error(..) => false,
+            // Those are errors caused by the authority (eg. storage failure). It is not guaranteed
+            // that other validators will also trigger it and they may not be deterministic.
+            Self::Retry(..) => true,
+        }
+    }
+
+    fn to_string(&self) -> String {
+        match self {
+            Self::Error(sui_error) => format!("Failed to process checkpoint fragment {sui_error}"),
+            Self::Retry(fragment) => format!("Failed to sequence checkpoint fragment {fragment:?}"),
+        }
     }
 }
