@@ -10,11 +10,14 @@ import Search from '../components/search/Search';
 import { NetworkContext } from '../context';
 import AppRoutes from '../pages/config/AppRoutes';
 import { Network } from '../utils/api/DefaultRpcClient';
+import { IS_LOCAL_ENV } from '../utils/envUtil';
 
 import styles from './App.module.css';
 
 function App() {
-    const [network, setNetwork] = useState<Network | string>(Network.Devnet);
+    const [network, setNetwork] = useState<Network | string>(
+        IS_LOCAL_ENV ? Network.Local : Network.Devnet
+    );
 
     return (
         <NetworkContext.Provider value={[network, setNetwork]}>
