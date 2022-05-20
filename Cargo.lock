@@ -5606,6 +5606,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-node"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "clap 3.1.18",
+ "multiaddr",
+ "prometheus_exporter",
+ "sui-config",
+ "sui_core",
+ "telemetry-subscribers",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "sui-open-rpc"
 version = "0.1.0"
 dependencies = [
