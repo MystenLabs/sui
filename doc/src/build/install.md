@@ -12,7 +12,8 @@ Welcome to the Sui development environment! Get started immediately:
 
 > **Tip:** Assuming you have Rust Cargo, the `git` command, and a GitHub account
 > (see prerequisites(#prerequisites)), you can download the `sui-setup.sh` script
-> and run it to conduct all of the setup below, from a terminal like so:
+> and run it to conduct all of the setup below, **including removal of any existing
+> sui assets**. To use it, run these commands in a terminal:
 > ```shell
 > $ curl https://raw.githubusercontent.com/MystenLabs/sui/main/doc/utils/sui-setup.sh -o sui-setup.sh
 > chmod 755 sui-setup.sh
