@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::NetworkConfig;
-use sui_config::ValidatorConfig;
+use sui_config::NodeConfig;
 use tokio::sync::mpsc::channel;
 use tracing::{error, info};
 
@@ -71,7 +71,7 @@ impl SuiNetwork {
     }
 }
 
-pub async fn make_server(validator_config: &ValidatorConfig) -> Result<AuthorityServer> {
+pub async fn make_server(validator_config: &NodeConfig) -> Result<AuthorityServer> {
     let mut store_path = PathBuf::from(validator_config.db_path());
     store_path.push("store");
     let store = Arc::new(AuthorityStore::open(store_path, None));
@@ -105,7 +105,7 @@ pub async fn make_server(validator_config: &ValidatorConfig) -> Result<Authority
 /// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,
 /// and a consensus listener bridging the consensus node and the sui authority.
 pub async fn make_authority(
-    validator_config: &ValidatorConfig,
+    validator_config: &NodeConfig,
     state: AuthorityState,
 ) -> Result<AuthorityServer> {
     let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1_000);
