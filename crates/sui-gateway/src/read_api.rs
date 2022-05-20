@@ -21,6 +21,9 @@ use sui_core::{
     gateway_types::{GetObjectInfoResponse, TransactionEffectsResponse, TransactionResponse},
 };
 use sui_json::SuiJsonValue;
+use sui_types::base_types::{ObjectID, ObjectInfo, SuiAddress, TransactionDigest};
+use sui_types::object::Owner;
+use sui_types::sui_serde::Base64;
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 
@@ -53,14 +56,16 @@ impl RpcReadApiServer for ReadApi {
         address: SuiAddress,
     ) -> RpcResult<Vec<ObjectInfo>> {
         Ok(self
-            .client
-            .get_owner_objects(Owner::AddressOwner(address))?)
+            .state
+            .get_owner_objects(Owner::AddressOwner(address))
+            .map_err(|e| anyhow!("{e}"))?)
     }
 
     async fn get_objects_owned_by_object(&self, object_id: ObjectID) -> RpcResult<Vec<ObjectInfo>> {
         Ok(self
-            .client
-            .get_owner_objects(Owner::ObjectOwner(object_id.into()))?)
+            .state
+            .get_owner_objects(Owner::ObjectOwner(object_id.into()))
+            .map_err(|e| anyhow!("{e}"))?)
     }
 
     async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse> {

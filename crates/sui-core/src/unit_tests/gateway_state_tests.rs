@@ -2,26 +2,27 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use serde_json::json;
 use std::{collections::HashSet, path::Path};
 
 use signature::Signer;
+use typed_store::Map;
 
 use sui_framework::build_move_package_to_bytes;
 use sui_types::crypto::KeyPair;
-use sui_types::{crypto::get_key_pair, object::Owner};
-
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::Transaction;
 use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
-use typed_store::Map;
+use sui_types::{crypto::get_key_pair, object::Owner};
 
-use super::*;
 use crate::authority_aggregator::authority_aggregator_tests::{
     authority_genesis_objects, crate_object_move_transaction, get_local_client,
     init_local_authorities,
 };
 use crate::authority_client::LocalAuthorityClient;
 use crate::gateway_state::{GatewayAPI, GatewayState};
+
+use super::*;
 
 async fn create_gateway_state(
     genesis_objects: Vec<Vec<Object>>,
@@ -520,4 +521,121 @@ async fn test_transfer_coin_with_retry() {
             .unwrap(),
         tx_digest
     );
+}
+
+#[tokio::test]
+async fn test_get_owner_object() {
+    let (addr1, key1) = get_key_pair();
+    let gas_object = Object::with_owner_for_testing(addr1);
+    let genesis_objects = authority_genesis_objects(4, vec![gas_object.clone()]);
+    let gateway = create_gateway_state(genesis_objects).await;
+
+    // Provide path to well formed package sources
+    let mut path = env!("CARGO_MANIFEST_DIR").to_owned();
+    path.push_str("/src/unit_tests/data/object_owner/");
+
+    // Publish object_owner package
+    let compiled_modules = build_move_package_to_bytes(Path::new(&path), false).unwrap();
+    let data = gateway
+        .publish(
+            addr1,
+            compiled_modules,
+            Some(gas_object.id()),
+            GAS_VALUE_FOR_TESTING,
+        )
+        .await
+        .unwrap();
+
+    let signature = key1.sign(&data.to_bytes());
+    let response = gateway
+        .execute_transaction(Transaction::new(data, signature))
+        .await
+        .unwrap()
+        .to_publish_response()
+        .unwrap();
+
+    // create parent and child object
+    let package = response.package.object_id;
+    let data = gateway
+        .move_call(
+            addr1,
+            package,
+            "ObjectOwner".to_string(),
+            "create_parent".to_string(),
+            vec![],
+            vec![],
+            None,
+            10000,
+        )
+        .await
+        .unwrap();
+    let signature = key1.sign(&data.to_bytes());
+    let response = gateway
+        .execute_transaction(Transaction::new(data, signature))
+        .await
+        .unwrap()
+        .to_effect_response()
+        .unwrap();
+    let parent = &response.effects.created.first().unwrap().reference;
+    let data = gateway
+        .move_call(
+            addr1,
+            package,
+            "ObjectOwner".to_string(),
+            "create_child".to_string(),
+            vec![],
+            vec![],
+            None,
+            10000,
+        )
+        .await
+        .unwrap();
+    let signature = key1.sign(&data.to_bytes());
+    let response = gateway
+        .execute_transaction(Transaction::new(data, signature))
+        .await
+        .unwrap()
+        .to_effect_response()
+        .unwrap();
+    let child = &response.effects.created.first().unwrap().reference;
+
+    // Make parent owns child
+    let data = gateway
+        .move_call(
+            addr1,
+            package,
+            "ObjectOwner".to_string(),
+            "add_child".to_string(),
+            vec![],
+            vec![
+                SuiJsonValue::new(json!(parent.object_id.to_hex_literal())).unwrap(),
+                SuiJsonValue::new(json!(child.object_id.to_hex_literal())).unwrap(),
+            ],
+            None,
+            10000,
+        )
+        .await
+        .unwrap();
+    let signature = key1.sign(&data.to_bytes());
+    gateway
+        .execute_transaction(Transaction::new(data, signature))
+        .await
+        .unwrap()
+        .to_effect_response()
+        .unwrap();
+
+    // Query get_objects_owned_by_object
+    let objects = gateway
+        .get_objects_owned_by_object(parent.object_id)
+        .await
+        .unwrap();
+    assert_eq!(1, objects.len());
+    assert_eq!(child.object_id, objects.first().unwrap().object_id);
+
+    // Query get_objects_owned_by_address should return nothing
+    let objects = gateway
+        .get_objects_owned_by_address(parent.object_id.into())
+        .await
+        .unwrap();
+    assert!(objects.is_empty())
 }

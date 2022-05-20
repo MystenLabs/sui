@@ -854,8 +854,8 @@ impl AuthorityState {
         }
     }
 
-    pub async fn get_owned_objects(&self, account_addr: SuiAddress) -> SuiResult<Vec<ObjectRef>> {
-        self.database.get_account_objects(account_addr)
+    pub fn get_owner_objects(&self, owner: Owner) -> SuiResult<Vec<ObjectInfo>> {
+        self.database.get_owner_objects(owner)
     }
 
     pub fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {

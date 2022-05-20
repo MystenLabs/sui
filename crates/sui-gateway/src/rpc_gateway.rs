@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::Path;
+
+use std::path::Path;
 use std::sync::Arc;
 
 use crate::api::{RpcGatewayApiServer, SuiRpcModule};
@@ -11,6 +13,8 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use ed25519_dalek::ed25519::signature::Signature;
 use jsonrpsee::core::RpcResult;
+use tracing::debug;
+
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use tracing::debug;
 
@@ -34,7 +38,7 @@ use crate::api::RpcTransactionBuilderServer;
 use crate::rpc_gateway::responses::SuiTypeTag;
 use crate::{
     api::{RpcGatewayServer, TransactionBytes},
-    config::{GatewayConfig, PersistedConfig},
+    config::GatewayConfig,
 };
 
 pub mod responses;

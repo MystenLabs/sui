@@ -14,7 +14,6 @@ use std::{
 use sui::{
     config::{PersistedConfig, WalletConfig, SUI_GATEWAY_CONFIG, SUI_WALLET_CONFIG},
     keystore::{Keystore, SuiKeystore},
-    rpc_gateway::RpcGatewayImpl,
     sui_commands::SuiNetwork,
 };
 use sui_core::gateway_state::GatewayTxSeqNumber;
@@ -28,7 +27,7 @@ use sui_gateway::{
         RpcGatewayApiClient, RpcGatewayApiServer, RpcReadApiClient, RpcReadApiServer,
         RpcTransactionBuilderClient, RpcTransactionBuilderServer, TransactionBytes,
     },
-    rpc_gateway::{responses::ObjectResponse, RpcGatewayImpl},
+    rpc_gateway::RpcGatewayImpl,
 };
 use sui_json::SuiJsonValue;
 use sui_types::sui_serde::Base64;

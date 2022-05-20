@@ -24,10 +24,10 @@ use sui_core::gateway_types::{
     SuiTransactionEffects,
 };
 use sui_framework::build_move_package_to_bytes;
+use sui_json::SuiJsonValue;
 use sui_types::base_types::ObjectInfo;
 use sui_types::object::Owner;
 use sui_types::sui_serde::{Base64, Encoding};
-use sui_json::SuiJsonValue;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
