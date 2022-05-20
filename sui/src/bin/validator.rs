@@ -12,7 +12,7 @@ use sui_config::{builder::ConfigBuilder, PersistedConfig};
 use sui_config::{GenesisConfig, ValidatorConfig};
 use tracing::{error, info};
 
-const PROM_PORT_ADDR: &str = "127.0.0.1:9184";
+const PROM_PORT_ADDR: &str = "0.0.0.0:9184";
 
 #[derive(Parser)]
 #[clap(
