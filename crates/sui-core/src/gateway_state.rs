@@ -49,7 +49,7 @@ mod gateway_state_tests;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
-pub type GatewayClient = Box<dyn GatewayAPI + Sync + Send>;
+pub type GatewayClient = Arc<dyn GatewayAPI + Sync + Send>;
 
 pub type GatewayTxSeqNumber = u64;
 

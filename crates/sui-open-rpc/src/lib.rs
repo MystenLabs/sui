@@ -32,6 +32,10 @@ pub struct ProjectBuilder {
     description: Option<String>,
 }
 
+pub trait OpenRpc {
+    fn test();
+}
+
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub struct ContentDescriptor {
     name: String,

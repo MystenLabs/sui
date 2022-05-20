@@ -7,13 +7,15 @@ use std::{
     path::PathBuf,
 };
 use sui_config::sui_config_dir;
+use sui_gateway::api::RpcReadApiServer;
+use sui_gateway::api::RpcTransactionBuilderServer;
+use sui_gateway::rpc_gateway::{create_client, GatewayReadApiImpl, TransactionBuilderImpl};
 use sui_gateway::{
-    api::{RpcGatewayOpenRpc, RpcGatewayServer},
+    api::{RpcGatewayApiOpenRpc, RpcGatewayApiServer},
     json_rpc::JsonRpcServerBuilder,
     rpc_gateway::RpcGatewayImpl,
 };
 use tracing::info;
-
 const DEFAULT_RPC_SERVER_PORT: &str = "5001";
 const DEFAULT_RPC_SERVER_ADDR_IPV4: &str = "127.0.0.1";
 const PROM_PORT_ADDR: &str = "0.0.0.0:9184";
@@ -59,10 +61,14 @@ async fn main() -> anyhow::Result<()> {
     info!("Starting Prometheus HTTP endpoint at {}", PROM_PORT_ADDR);
     prometheus_exporter::start(prom_binding).expect("Failed to start Prometheus exporter");
 
+    let client = create_client(&config_path)?;
+
     let address = SocketAddr::new(IpAddr::V4(options.host), options.port);
     let mut server = JsonRpcServerBuilder::new()?;
-    server.register_open_rpc(RpcGatewayOpenRpc::open_rpc())?;
-    server.register_methods(RpcGatewayImpl::new(&config_path)?.into_rpc())?;
+    server.register_open_rpc(RpcGatewayApiOpenRpc::open_rpc())?;
+    server.register_methods(RpcGatewayImpl::new(client.clone()).into_rpc())?;
+    server.register_methods(GatewayReadApiImpl::new(client.clone()).into_rpc())?;
+    server.register_methods(TransactionBuilderImpl::new(client).into_rpc())?;
 
     let server_handle = server.start(address).await?;
 

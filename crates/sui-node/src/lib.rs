@@ -9,12 +9,13 @@ use sui_core::{
     authority_active::{gossip::gossip_process, ActiveAuthority},
     authority_client::NetworkAuthorityClient,
 };
-use sui_gateway::api::{RpcGatewayOpenRpc, RpcGatewayServer};
+use sui_gateway::api::RpcFullNodeReadApiServer;
+use sui_gateway::api::RpcGatewayApiOpenRpc;
+use sui_gateway::api::RpcReadApiServer;
 use sui_gateway::json_rpc::JsonRpcServerBuilder;
-use sui_gateway::read_api::ReadApi;
+use sui_gateway::read_api::{ReadApi, SuiFullNode};
 use sui_storage::IndexStore;
 use tracing::info;
-
 // TODO extract the important bits from AuthorityServer and FullNode so that we can have a single
 // unified node. See https://github.com/MystenLabs/sui/issues/2068 for more info.
 pub struct SuiNode;
@@ -35,13 +36,9 @@ impl SuiNode {
             let fullnode = FullNode::start(config).await?;
 
             let mut server = JsonRpcServerBuilder::new()?;
-            server.register_open_rpc(RpcGatewayOpenRpc::open_rpc())?;
-            server.register_methods(
-                ReadApi {
-                    state: fullnode.state,
-                }
-                .into_rpc(),
-            )?;
+            server.register_open_rpc(RpcGatewayApiOpenRpc::open_rpc())?;
+            server.register_methods(ReadApi::new(fullnode.state.clone()).into_rpc())?;
+            server.register_methods(SuiFullNode::new(fullnode.state).into_rpc())?;
 
             let server_handle = server.start(config.json_rpc_address).await?;
 

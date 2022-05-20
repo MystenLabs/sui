@@ -16,7 +16,9 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::sui_serde::Base64;
 
-use crate::api::{RpcGatewayClient as RpcGateway, TransactionBytes};
+use crate::api::RpcReadApiClient;
+use crate::api::RpcTransactionBuilderClient;
+use crate::api::{RpcGatewayApiClient, TransactionBytes};
 use crate::rpc_gateway::responses::ObjectResponse;
 
 pub struct RpcGatewayClient {
