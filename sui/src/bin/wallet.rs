@@ -80,7 +80,7 @@ async fn try_main() -> Result<(), anyhow::Error> {
     // Prompt user for connect to gateway if config not exists.
     if !wallet_conf_path.exists() {
         print!(
-            "Config file [{:?}] doesn't exist, do you want to connect to a Sui Gateway [yN]?",
+            "Config file [{:?}] doesn't exist, do you want to connect to a Sui Gateway [y/n]?",
             wallet_conf_path
         );
         if matches!(read_line(), Ok(line) if line.trim().to_lowercase() == "y") {
