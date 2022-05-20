@@ -28,7 +28,7 @@ struct ValidatorOpt {
     pub force_genesis: bool,
 
     #[clap(long)]
-    pub network_config_path: Option<PathBuf>,
+    pub config_path: Option<PathBuf>,
 
     #[clap(long, help = "Specify host:port to listen on")]
     listen_address: Option<Multiaddr>,
@@ -48,10 +48,10 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let cfg = ValidatorOpt::parse();
 
-    let network_config_path = sui_config_dir()?.join(SUI_NETWORK_CONFIG);
+    let config_path = sui_config_dir()?.join(SUI_NETWORK_CONFIG);
 
-    let validator_config = match (network_config_path.exists(), cfg.force_genesis) {
-        (true, false) => PersistedConfig::<ValidatorConfig>::read(&network_config_path)?,
+    let validator_config = match (config_path.exists(), cfg.force_genesis) {
+        (true, false) => PersistedConfig::<ValidatorConfig>::read(&config_path)?,
 
         // If network.conf is missing, or if --force-genesis is true, we run genesis.
         _ => {

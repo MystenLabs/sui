@@ -58,6 +58,7 @@ fn main() {
         accounts.push(account);
     }
     let genesis_config = GenesisConfig {
+        validator_genesis_info: None,
         committee_size: bch.host_port_stake_triplets.len(),
         accounts: accounts.clone(),
         move_packages: vec![],

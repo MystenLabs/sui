@@ -14,7 +14,8 @@ use sui_types::{base_types::encode_bytes_hex, crypto::get_key_pair_from_rng};
 
 use crate::{
     genesis, new_network_address, CommitteeConfig, ConsensuseConfig, GenesisConfig, NetworkConfig,
-    ValidatorConfig, ValidatorInfo, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME, DEFAULT_STAKE,
+    ValidatorConfig, ValidatorGenesisInfo, ValidatorInfo, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME,
+    DEFAULT_STAKE,
 };
 
 pub struct ConfigBuilder<R = OsRng> {
@@ -67,18 +68,32 @@ impl<R> ConfigBuilder<R> {
 impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
     //TODO right now we always randomize ports, we may want to have a default port configuration
     pub fn build(mut self) -> NetworkConfig {
-        let epoch = 0;
-
-        let keys = (0..self.committee_size.get())
+        let validators = (0..self.committee_size.get())
             .map(|_| get_key_pair_from_rng(&mut self.rng).1)
+            .map(|key_pair| ValidatorGenesisInfo {
+                key_pair,
+                network_address: new_network_address(),
+                stake: DEFAULT_STAKE,
+                narwhal_primary_to_primary: new_network_address(),
+                narwhal_worker_to_primary: new_network_address(),
+                narwhal_primary_to_worker: new_network_address(),
+                narwhal_worker_to_worker: new_network_address(),
+                narwhal_consensus_address: new_network_address(),
+            })
             .collect::<Vec<_>>();
 
-        let validator_set = keys
+        self.build_with_validators(validators)
+    }
+
+    pub fn build_with_validators(mut self, validators: Vec<ValidatorGenesisInfo>) -> NetworkConfig {
+        let epoch = 0;
+
+        let validator_set = validators
             .iter()
-            .map(|key| {
-                let public_key = *key.public_key_bytes();
-                let stake = DEFAULT_STAKE;
-                let network_address = new_network_address();
+            .map(|validator| {
+                let public_key = *validator.key_pair.public_key_bytes();
+                let stake = validator.stake;
+                let network_address = validator.network_address.clone();
 
                 ValidatorInfo {
                     public_key,
@@ -113,29 +128,30 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             builder.build()
         };
 
-        let narwhal_committee = validator_set
+        let narwhal_committee = validators
             .iter()
             .map(|validator| {
                 let name = validator
-                    .public_key
+                    .key_pair
+                    .public_key_bytes()
                     .make_narwhal_public_key()
                     .expect("Can't get narwhal public key");
                 let primary = PrimaryAddresses {
-                    primary_to_primary: new_network_address(),
-                    worker_to_primary: new_network_address(),
+                    primary_to_primary: validator.narwhal_primary_to_primary.clone(),
+                    worker_to_primary: validator.narwhal_worker_to_primary.clone(),
                 };
                 let workers = [(
                     0, // worker_id
                     WorkerAddresses {
-                        primary_to_worker: new_network_address(),
-                        transactions: new_network_address(),
-                        worker_to_worker: new_network_address(),
+                        primary_to_worker: validator.narwhal_primary_to_worker.clone(),
+                        transactions: validator.narwhal_consensus_address.clone(),
+                        worker_to_worker: validator.narwhal_worker_to_worker.clone(),
                     },
                 )]
                 .into_iter()
                 .collect();
                 let authority = Authority {
-                    stake: validator.stake() as Stake, //TODO this should at least be the same size integer
+                    stake: validator.stake as Stake, //TODO this should at least be the same size integer
                     primary,
                     workers,
                 };
@@ -153,33 +169,20 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             consensus_committee: DebugIgnore(consensus_committee),
         };
 
-        let validator_configs = keys
+        let validator_configs = validators
             .into_iter()
-            .map(|key| {
+            .map(|validator| {
+                let public_key = validator.key_pair.public_key_bytes();
                 let db_path = self
                     .config_directory
                     .join(AUTHORITIES_DB_NAME)
-                    .join(encode_bytes_hex(key.public_key_bytes()));
-                let network_address = committee_config
-                    .validator_set()
-                    .iter()
-                    .find(|validator| validator.public_key() == *key.public_key_bytes())
-                    .map(|validator| validator.network_address().clone())
-                    .unwrap();
-                let consensus_address = committee_config
-                    .narwhal_committee()
-                    .authorities
-                    .get(&key.public_key_bytes().make_narwhal_public_key().unwrap())
-                    .unwrap()
-                    .workers
-                    .get(&0)
-                    .unwrap()
-                    .transactions
-                    .clone();
+                    .join(encode_bytes_hex(public_key));
+                let network_address = validator.network_address;
+                let consensus_address = validator.narwhal_consensus_address;
                 let consensus_db_path = self
                     .config_directory
                     .join(CONSENSUS_DB_NAME)
-                    .join(encode_bytes_hex(key.public_key_bytes()));
+                    .join(encode_bytes_hex(public_key));
                 let consensus_config = ConsensuseConfig {
                     consensus_address,
                     consensus_db_path,
@@ -189,7 +192,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 let metrics_address = new_network_address();
 
                 ValidatorConfig {
-                    key_pair: key,
+                    key_pair: validator.key_pair,
                     db_path,
                     network_address,
                     metrics_address,
