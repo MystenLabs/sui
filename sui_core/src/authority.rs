@@ -72,6 +72,10 @@ pub use temporary_store::AuthorityTemporaryStore;
 mod authority_store;
 pub use authority_store::{AuthorityStore, GatewayStore, ReplicaStore, SuiDataStore};
 
+use self::authority_store::{
+    generate_genesis_system_object, store_package_and_init_modules_for_genesis,
+};
+
 pub mod authority_notifier;
 
 pub const MAX_ITEMS_LIMIT: u64 = 100_000;
@@ -704,16 +708,42 @@ impl AuthorityState {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+        let move_vm = Arc::new(
+            adapter::new_move_vm(native_functions.clone())
+                .expect("We defined natives to not fail here"),
+        );
+
+        // Only initialize an empty database.
+        if store
+            .database_is_empty()
+            .expect("Database read should not fail.")
+        {
+            let mut genesis_ctx = genesis.genesis_ctx().to_owned();
+            for genesis_modules in genesis.modules() {
+                store_package_and_init_modules_for_genesis(
+                    &store,
+                    &native_functions,
+                    &mut genesis_ctx,
+                    genesis_modules.to_owned(),
+                )
+                .await
+                .expect("We expect publishing the Genesis packages to not fail");
+            }
+            store
+                .bulk_object_insert(&genesis.objects().iter().collect::<Vec<_>>())
+                .await
+                .expect("Cannot bulk insert genesis objects");
+            generate_genesis_system_object(&store, &move_vm, &committee, &mut genesis_ctx)
+                .await
+                .expect("Cannot generate genesis system object");
+        }
 
         let mut state = AuthorityState {
             committee: committee.clone(),
             name,
             secret,
-            _native_functions: native_functions.clone(),
-            move_vm: Arc::new(
-                adapter::new_move_vm(native_functions)
-                    .expect("We defined natives to not fail here"),
-            ),
+            _native_functions: native_functions,
+            move_vm,
             database: store.clone(),
             _checkpoints: checkpoints,
             batch_channels: tx,
@@ -728,30 +758,6 @@ impl AuthorityState {
         state
             .init_batches_from_database()
             .expect("Init batches failed!");
-
-        // Only initialize an empty database.
-        if store
-            .database_is_empty()
-            .expect("Database read should not fail.")
-        {
-            let mut genesis_ctx = genesis.genesis_ctx().to_owned();
-            for genesis_modules in genesis.modules() {
-                state
-                    .store_package_and_init_modules_for_genesis(
-                        &mut genesis_ctx,
-                        genesis_modules.to_owned(),
-                    )
-                    .await
-                    .expect("We expect publishing the Genesis packages to not fail");
-            }
-            state
-                .insert_genesis_objects_bulk_unsafe(&genesis.objects().iter().collect::<Vec<_>>())
-                .await;
-            state
-                .call_genesis_move_functions(&committee, &mut genesis_ctx)
-                .await
-                .unwrap();
-        }
 
         // If a checkpoint store is present, ensure it is up-to-date with the latest
         // batches.
@@ -812,116 +818,6 @@ impl AuthorityState {
             .bulk_object_insert(objects)
             .await
             .expect("Cannot bulk insert genesis objects")
-    }
-
-    pub async fn call_genesis_move_functions(
-        &self,
-        committee: &Committee,
-        genesis_ctx: &mut TxContext,
-    ) -> SuiResult {
-        let genesis_digest = genesis_ctx.digest();
-        let mut temporary_store =
-            AuthorityTemporaryStore::new(self.database.clone(), vec![], genesis_digest);
-        let pubkeys: Vec<Vec<u8>> = committee
-            .expanded_keys
-            .values()
-            .map(|pk| pk.to_bytes().to_vec())
-            .collect();
-        // TODO: May use separate sui address than derived from pubkey.
-        let sui_addresses: Vec<AccountAddress> = committee
-            .voting_rights
-            .keys()
-            .map(|pk| SuiAddress::from(pk).into())
-            .collect();
-        // TODO: Allow config to specify human readable validator names.
-        let names: Vec<Vec<u8>> = (0..sui_addresses.len())
-            .map(|i| Vec::from(format!("Validator{}", i).as_bytes()))
-            .collect();
-        // TODO: Change voting_rights to use u64 instead of usize.
-        let stakes: Vec<u64> = committee
-            .voting_rights
-            .values()
-            .map(|v| *v as u64)
-            .collect();
-        adapter::execute(
-            &self.move_vm,
-            &mut temporary_store,
-            ModuleId::new(SUI_FRAMEWORK_ADDRESS, ident_str!("Genesis").to_owned()),
-            &ident_str!("create").to_owned(),
-            vec![],
-            vec![
-                CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
-                CallArg::Pure(bcs::to_bytes(&sui_addresses).unwrap()),
-                CallArg::Pure(bcs::to_bytes(&names).unwrap()),
-                // TODO: below is netaddress, for now just use names as we don't yet want to expose them.
-                CallArg::Pure(bcs::to_bytes(&names).unwrap()),
-                CallArg::Pure(bcs::to_bytes(&stakes).unwrap()),
-            ],
-            &mut SuiGasStatus::new_unmetered(),
-            genesis_ctx,
-        )?;
-        self.database
-            .update_objects_state_for_genesis(temporary_store, genesis_digest)
-            .await
-    }
-
-    /// Persist the Genesis package to DB along with the side effects for module initialization
-    async fn store_package_and_init_modules_for_genesis(
-        &self,
-        ctx: &mut TxContext,
-        modules: Vec<CompiledModule>,
-    ) -> SuiResult {
-        let inputs = Transaction::input_objects_in_compiled_modules(&modules);
-        let ids: Vec<_> = inputs.iter().map(|kind| kind.object_id()).collect();
-        let input_objects = self.get_objects(&ids[..]).await?;
-        // When publishing genesis packages, since the std framework packages all have
-        // non-zero addresses, [`Transaction::input_objects_in_compiled_modules`] will consider
-        // them as dependencies even though they are not. Hence input_objects contain objects
-        // that don't exist on-chain because they are yet to be published.
-        #[cfg(debug_assertions)]
-        {
-            let to_be_published_addresses: HashSet<_> = modules
-                .iter()
-                .map(|module| *module.self_id().address())
-                .collect();
-            assert!(
-                // An object either exists on-chain, or is one of the packages to be published.
-                inputs
-                    .iter()
-                    .zip(input_objects.iter())
-                    .all(|(kind, obj_opt)| obj_opt.is_some()
-                        || to_be_published_addresses.contains(&kind.object_id()))
-            );
-        }
-        let filtered = inputs
-            .into_iter()
-            .zip(input_objects.into_iter())
-            .filter_map(|(input, object_opt)| object_opt.map(|object| (input, object)))
-            .collect::<Vec<_>>();
-
-        debug_assert!(ctx.digest() == TransactionDigest::genesis());
-        let mut temporary_store =
-            AuthorityTemporaryStore::new(self.database.clone(), filtered, ctx.digest());
-        let package_id = ObjectID::from(*modules[0].self_id().address());
-        let natives = self._native_functions.clone();
-        let mut gas_status = SuiGasStatus::new_unmetered();
-        let vm = adapter::verify_and_link(
-            &temporary_store,
-            &modules,
-            package_id,
-            natives,
-            &mut gas_status,
-        )?;
-        adapter::store_package_and_init_modules(
-            &mut temporary_store,
-            &vm,
-            modules,
-            ctx,
-            &mut gas_status,
-        )?;
-        self.db()
-            .update_objects_state_for_genesis(temporary_store, ctx.digest())
-            .await
     }
 
     /// Make an information response for a transaction
