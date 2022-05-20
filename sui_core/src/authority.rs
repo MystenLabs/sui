@@ -193,6 +193,8 @@ pub struct AuthorityState {
     /// The database
     pub(crate) database: Arc<AuthorityStore>, // TODO: remove pub
 
+    indexes: Option<Arc<IndexStore>>,
+
     /// The checkpoint store
     pub(crate) _checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
 
@@ -702,6 +704,7 @@ impl AuthorityState {
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
+        indexes: Option<Arc<IndexStore>>,
         checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
         genesis: &Genesis,
     ) -> Self {
@@ -745,6 +748,7 @@ impl AuthorityState {
             _native_functions: native_functions,
             move_vm,
             database: store.clone(),
+            indexes,
             _checkpoints: checkpoints,
             batch_channels: tx,
             batch_notifier: Arc::new(

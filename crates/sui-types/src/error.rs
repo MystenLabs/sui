@@ -306,6 +306,9 @@ pub enum SuiError {
     #[error("Invalid transaction range query to the gateway: {:?}", error)]
     GatewayInvalidTxRangeQuery { error: String },
 
+    #[error("Use of disabled feature: {:?}", error)]
+    UnsupportedFeatureError { error: String },
+
     // Errors related to the authority-consensus interface.
     #[error("Authority state can be modified by a single consensus client at the time")]
     OnlyOneConsensusClientPermitted,

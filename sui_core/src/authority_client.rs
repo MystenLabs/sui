@@ -353,6 +353,7 @@ impl LocalAuthorityClient {
             address,
             secret.clone(),
             store,
+            None,
             Some(Arc::new(Mutex::new(checkpoints))),
             &sui_config::genesis::Genesis::get_default_genesis(),
         )

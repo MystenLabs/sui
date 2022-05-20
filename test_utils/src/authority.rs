@@ -58,6 +58,7 @@ where
             Arc::pin(validator.key_pair().copy()),
             Arc::new(test_authority_store()),
             None,
+            None,
             &sui_config::genesis::Genesis::get_default_genesis(),
         )
         .await;
