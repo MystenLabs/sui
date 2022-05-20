@@ -148,16 +148,19 @@ impl crate::authority::AuthorityState {
         // transactions we may have received out of order.
         let mut current_batch: Vec<(TxSequenceNumber, TransactionDigest)> = Vec::new();
 
+        // We record here the last time we made a batch
+        let mut last_batch_instant = tokio::time::Instant::now();
+
         while !exit {
             // Reset the flags.
             make_batch = false;
 
             // check if we should make a new block
             tokio::select! {
-              t = interval.tick() => {
+              _t = interval.tick() => {
                 // Every so often we check if we should make a batch
                 // but it should never be empty.
-                  if t.elapsed() < max_delay / 10 {
+                  if last_batch_instant.elapsed() < max_delay / 10 {
                       // For reasons yet to be discovered, on some systems we observe the tick
                       // fired multiple times without any observable delay.
                       // Add a check here to reduce non-determinism in the timing of the tick,
@@ -218,6 +221,9 @@ impl crate::authority::AuthorityState {
                 let _ = self
                     .batch_channels
                     .send(UpdateItem::Batch(new_batch.clone()));
+
+                // Update the time of the last batch
+                last_batch_instant = tokio::time::Instant::now();
 
                 // A new batch is actually made, so we reset the conditions.
                 prev_batch = new_batch.batch;
