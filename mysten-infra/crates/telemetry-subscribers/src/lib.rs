@@ -206,6 +206,24 @@ pub fn init(config: TelemetryConfig) -> TelemetryGuards {
     TelemetryGuards(worker_guard, chrome_guard)
 }
 
+/// Globally set a tracing subscriber suitable for testing environments
+pub fn init_for_testing() {
+    use once_cell::sync::Lazy;
+
+    static LOGGER: Lazy<()> = Lazy::new(|| {
+        let subscriber = ::tracing_subscriber::FmtSubscriber::builder()
+            .with_env_filter(EnvFilter::from_default_env())
+            .with_file(true)
+            .with_line_number(true)
+            .with_test_writer()
+            .finish();
+        ::tracing::subscriber::set_global_default(subscriber)
+            .expect("unable to initialize logging for tests");
+    });
+
+    Lazy::force(&LOGGER);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,5 +242,17 @@ mod tests {
         debug!(a = 2, "This will be DEBUG.");
         warn!(a = 3, "This will be WARNING.");
         panic!("This should cause error logs to be printed out!");
+    }
+
+    // Both the following tests should be able to "race" to initialize logging without causing a
+    // panic
+    #[test]
+    fn testing_logger_1() {
+        init_for_testing();
+    }
+
+    #[test]
+    fn testing_logger_2() {
+        init_for_testing();
     }
 }
