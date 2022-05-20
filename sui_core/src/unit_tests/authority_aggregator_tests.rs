@@ -8,6 +8,7 @@ use once_cell::sync::Lazy;
 use signature::Signer;
 
 use sui_adapter::genesis;
+use sui_config::genesis::Genesis;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::Signature;
 
@@ -38,6 +39,17 @@ pub async fn init_local_authorities(
     AuthorityAggregator<LocalAuthorityClient>,
     Vec<Arc<AuthorityState>>,
 ) {
+    let genesis = sui_config::genesis::Genesis::get_default_genesis();
+    init_local_authorities_with_genesis(&genesis, genesis_objects).await
+}
+
+pub async fn init_local_authorities_with_genesis(
+    genesis: &Genesis,
+    genesis_objects: Vec<Vec<Object>>,
+) -> (
+    AuthorityAggregator<LocalAuthorityClient>,
+    Vec<Arc<AuthorityState>>,
+) {
     #[allow(clippy::no_effect)]
     *LOGGING_INIT; // Initialize logging if needed
     let mut key_pairs = Vec::new();
@@ -58,6 +70,7 @@ pub async fn init_local_authorities(
             authority_name,
             secret,
             objects,
+            genesis,
         )
         .await;
         states.push(client.state.clone());
@@ -282,6 +295,7 @@ pub async fn get_latest_ref<A: AuthorityAPI>(authority: &A, object_id: ObjectID)
 }
 
 async fn execute_transaction_with_fault_configs(
+    genesis: &Genesis,
     configs_before_process_transaction: &[(usize, LocalAuthorityClientFaultConfig)],
     configs_before_process_certificate: &[(usize, LocalAuthorityClientFaultConfig)],
 ) -> SuiResult {
@@ -291,7 +305,9 @@ async fn execute_transaction_with_fault_configs(
     let gas_object2 = Object::with_owner_for_testing(addr1);
     let genesis_objects =
         authority_genesis_objects(4, vec![gas_object1.clone(), gas_object2.clone()]);
-    let mut authorities = init_local_authorities(genesis_objects).await.0;
+    let mut authorities = init_local_authorities_with_genesis(genesis, genesis_objects)
+        .await
+        .0;
 
     for (index, config) in configs_before_process_transaction {
         get_local_client(&mut authorities, *index).fault_config = *config;
@@ -775,6 +791,7 @@ async fn test_process_transaction_fault_success() {
     // A transaction is sent to all authories, however one of them will error out either before or after processing the transaction.
     // A cert should still be created, and sent out to all authorities again. This time
     // a different authority errors out either before or after processing the cert.
+    let genesis = sui_config::genesis::Genesis::get_default_genesis();
     for i in 0..4 {
         let mut config_before_process_transaction = LocalAuthorityClientFaultConfig::default();
         if i % 2 == 0 {
@@ -789,6 +806,7 @@ async fn test_process_transaction_fault_success() {
             config_before_process_certificate.fail_after_handle_confirmation = true;
         }
         execute_transaction_with_fault_configs(
+            &genesis,
             &[(0, config_before_process_transaction)],
             &[(1, config_before_process_certificate)],
         )
@@ -806,7 +824,9 @@ async fn test_process_transaction_fault_fail() {
         fail_before_handle_transaction: true,
         ..Default::default()
     };
+    let genesis = sui_config::genesis::Genesis::get_default_genesis();
     assert!(execute_transaction_with_fault_configs(
+        &genesis,
         &[
             (0, fail_before_process_transaction_config),
             (1, fail_before_process_transaction_config),
@@ -821,6 +841,7 @@ async fn test_process_transaction_fault_fail() {
         ..Default::default()
     };
     assert!(execute_transaction_with_fault_configs(
+        &genesis,
         &[],
         &[
             (0, fail_before_process_certificate_config),
