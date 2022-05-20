@@ -5,7 +5,7 @@ use config::{Parameters, WorkerId};
 use consensus::dag::Dag;
 use crypto::{
     ed25519::{Ed25519KeyPair, Ed25519PublicKey},
-    traits::{KeyPair, Signer},
+    traits::KeyPair,
     Hash,
 };
 use futures::future::join_all;
@@ -57,7 +57,8 @@ async fn test_get_collections() {
 
         let header = fixture_header_builder()
             .with_payload_batch(batch.clone(), worker_id)
-            .build(|payload| key.sign(payload));
+            .build(&key)
+            .unwrap();
 
         let certificate = certificate(&header);
         let block_id = certificate.digest();
@@ -230,7 +231,8 @@ async fn test_remove_collections() {
 
         let header = fixture_header_builder()
             .with_payload_batch(batch.clone(), worker_id)
-            .build(|payload| key.sign(payload));
+            .build(&key)
+            .unwrap();
 
         let certificate = certificate(&header);
         let block_id = certificate.digest();
@@ -641,7 +643,8 @@ async fn fixture_certificate(
                 .collect(),
         )
         .payload(payload)
-        .build(|p| key.sign(p));
+        .build(&key)
+        .unwrap();
 
     let certificate = certificate(&header);
 

@@ -9,7 +9,6 @@ use crate::{
 };
 use bincode::deserialize;
 use crypto::{ed25519::Ed25519PublicKey, traits::VerifyingKey, Hash};
-use ed25519_dalek::Signer;
 use mockall::*;
 use network::PrimaryToWorkerNetwork;
 use std::collections::HashMap;
@@ -147,7 +146,8 @@ async fn test_successfully_retrieve_multiple_blocks() {
         let header = fixture_header_builder()
             .with_payload_batch(batch_1.clone(), worker_id)
             .with_payload_batch(batch_2.clone(), worker_id)
-            .build(|payload| key.sign(payload));
+            .build(&key)
+            .unwrap();
 
         let certificate = certificate(&header);
         certificates.push(certificate.clone());

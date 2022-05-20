@@ -4,7 +4,6 @@ use crate::{common::create_db_stores, helper::Helper, primary::PrimaryMessage, P
 use bincode::Options;
 use config::WorkerId;
 use crypto::{ed25519::Ed25519PublicKey, Hash};
-use ed25519_dalek::Signer;
 use itertools::Itertools;
 use std::{
     borrow::Borrow,
@@ -42,7 +41,8 @@ async fn test_process_certificates_stream_mode() {
     for _ in 0..5 {
         let header = fixture_header_builder()
             .with_payload_batch(fixture_batch_with_transactions(10), 0)
-            .build(|payload| key.sign(payload));
+            .build(&key)
+            .unwrap();
 
         let certificate = certificate(&header);
         let id = certificate.clone().digest();
@@ -114,7 +114,8 @@ async fn test_process_certificates_batch_mode() {
     for i in 0..10 {
         let header = fixture_header_builder()
             .with_payload_batch(fixture_batch_with_transactions(10), 0)
-            .build(|payload| key.sign(payload));
+            .build(&key)
+            .unwrap();
 
         let certificate = certificate(&header);
         let id = certificate.clone().digest();
@@ -205,7 +206,8 @@ async fn test_process_payload_availability_success() {
     for i in 0..10 {
         let header = fixture_header_builder()
             .with_payload_batch(fixture_batch_with_transactions(10), 0)
-            .build(|payload| key.sign(payload));
+            .build(&key)
+            .unwrap();
 
         let certificate = certificate(&header);
         let id = certificate.clone().digest();
@@ -314,7 +316,8 @@ async fn test_process_payload_availability_when_failures() {
     for _ in 0..10 {
         let header = fixture_header_builder()
             .with_payload_batch(fixture_batch_with_transactions(10), 0)
-            .build(|payload| key.sign(payload));
+            .build(&key)
+            .unwrap();
 
         let certificate = certificate(&header);
         let id = certificate.clone().digest();

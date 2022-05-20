@@ -11,11 +11,7 @@ use crate::{
 use bincode::deserialize;
 use config::{Committee, WorkerId};
 use consensus::dag::Dag;
-use crypto::{
-    ed25519::Ed25519PublicKey,
-    traits::{Signer, VerifyingKey},
-    Hash,
-};
+use crypto::{ed25519::Ed25519PublicKey, traits::VerifyingKey, Hash};
 use futures::{
     future::{join_all, try_join_all},
     stream::FuturesUnordered,
@@ -79,7 +75,8 @@ async fn test_successful_blocks_delete() {
         let header = fixture_header_builder()
             .with_payload_batch(batch_1.clone(), worker_id_0)
             .with_payload_batch(batch_2.clone(), worker_id_1)
-            .build(|payload| key.sign(payload));
+            .build(&key)
+            .unwrap();
 
         let certificate = certificate(&header);
         let block_id = certificate.digest();
@@ -227,7 +224,8 @@ async fn test_timeout() {
         let header = fixture_header_builder()
             .with_payload_batch(batch_1.clone(), worker_id_2)
             .with_payload_batch(batch_2.clone(), worker_id_3)
-            .build(|payload| key.sign(payload));
+            .build(&key)
+            .unwrap();
 
         let certificate = certificate(&header);
         let block_id = certificate.digest();
@@ -352,7 +350,8 @@ async fn test_unlocking_pending_requests() {
     let batch = fixture_batch_with_transactions(10);
     let header = fixture_header_builder()
         .with_payload_batch(batch.clone(), worker_id_0)
-        .build(|payload| key.sign(payload));
+        .build(&key)
+        .unwrap();
 
     let certificate = certificate(&header);
     let block_id = certificate.digest();

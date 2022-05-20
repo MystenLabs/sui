@@ -12,7 +12,6 @@ use crate::{
 use bincode::deserialize;
 use config::BlockSynchronizerParameters;
 use crypto::{ed25519::Ed25519PublicKey, Hash};
-use ed25519_dalek::Signer;
 use futures::{future::try_join_all, stream::FuturesUnordered};
 use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
 use serde::de::DeserializeOwned;
@@ -61,7 +60,8 @@ async fn test_successful_headers_synchronization() {
         let header = fixture_header_builder()
             .with_payload_batch(batch_1.clone(), worker_id_0)
             .with_payload_batch(batch_2.clone(), worker_id_1)
-            .build(|payload| key.sign(payload));
+            .build(&key)
+            .unwrap();
 
         let certificate = certificate(&header);
 
@@ -216,7 +216,8 @@ async fn test_successful_payload_synchronization() {
         let header = fixture_header_builder()
             .with_payload_batch(batch_1.clone(), worker_id_0)
             .with_payload_batch(batch_2.clone(), worker_id_1)
-            .build(|payload| key.sign(payload));
+            .build(&key)
+            .unwrap();
 
         let certificate = certificate(&header);
 
@@ -407,7 +408,8 @@ async fn test_multiple_overlapping_requests() {
     for _ in 0..5 {
         let header = fixture_header_builder()
             .with_payload_batch(fixture_batch_with_transactions(10), 0)
-            .build(|payload| key.sign(payload));
+            .build(&key)
+            .unwrap();
 
         let certificate = certificate(&header);
 
@@ -519,7 +521,8 @@ async fn test_timeout_while_waiting_for_certificates() {
         .map(|_| {
             let header = fixture_header_builder()
                 .with_payload_batch(fixture_batch_with_transactions(10), 0)
-                .build(|payload| key.sign(payload));
+                .build(&key)
+                .unwrap();
 
             certificate(&header).digest()
         })
@@ -629,7 +632,8 @@ async fn test_reply_with_certificates_already_in_storage() {
 
         let header = fixture_header_builder()
             .with_payload_batch(batch.clone(), 0)
-            .build(|payload| key.sign(payload));
+            .build(&key)
+            .unwrap();
 
         let certificate = certificate(&header);
 
@@ -720,7 +724,8 @@ async fn test_reply_with_payload_already_in_storage() {
 
         let header = fixture_header_builder()
             .with_payload_batch(batch.clone(), 0)
-            .build(|payload| key.sign(payload));
+            .build(&key)
+            .unwrap();
 
         let certificate: Certificate<Ed25519PublicKey> = certificate(&header);
 

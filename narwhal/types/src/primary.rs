@@ -10,7 +10,7 @@ use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::{
     ed25519::Ed25519PublicKey,
-    traits::{EncodeDecodeBase64, VerifyingKey},
+    traits::{EncodeDecodeBase64, Signer, VerifyingKey},
     Digest, Hash, SignatureService, DIGEST_LEN,
 };
 use dag::node_dag::Affiliated;
@@ -90,10 +90,9 @@ pub struct Header<PublicKey: VerifyingKey> {
 }
 
 impl<PublicKey: VerifyingKey> HeaderBuilder<PublicKey> {
-    #[allow(dead_code)]
-    pub fn build<F>(self, signer: F) -> Header<PublicKey>
+    pub fn build<F>(self, signer: &F) -> Result<Header<PublicKey>, crypto::traits::Error>
     where
-        F: FnOnce(&[u8]) -> PublicKey::Sig,
+        F: Signer<PublicKey::Sig>,
     {
         let h = Header {
             author: self.author.unwrap(),
@@ -104,11 +103,11 @@ impl<PublicKey: VerifyingKey> HeaderBuilder<PublicKey> {
             signature: PublicKey::Sig::default(),
         };
 
-        Header {
+        Ok(Header {
             id: h.digest(),
-            signature: signer(Digest::from(h.digest()).as_ref()),
+            signature: signer.try_sign(Digest::from(h.digest()).as_ref())?,
             ..h
-        }
+        })
     }
 
     // helper method to set directly values to the payload
