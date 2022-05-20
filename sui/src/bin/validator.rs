@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use clap::*;
 use multiaddr::Multiaddr;
 use std::{num::NonZeroUsize, path::PathBuf};
@@ -23,7 +24,7 @@ const PROM_PORT_ADDR: &str = "0.0.0.0:9184";
 struct ValidatorOpt {
     /// The genesis config file location
     #[clap(long)]
-    pub genesis_config_path: PathBuf,
+    pub genesis_config_path: Option<PathBuf>,
     #[clap(long, help = "If set, run genesis even if network.conf already exists")]
     pub force_genesis: bool,
 
@@ -55,7 +56,10 @@ async fn main() -> Result<(), anyhow::Error> {
 
         // If network.conf is missing, or if --force-genesis is true, we run genesis.
         _ => {
-            let genesis_conf: GenesisConfig = PersistedConfig::read(&cfg.genesis_config_path)?;
+            let genesis_path = cfg
+                .genesis_config_path
+                .ok_or_else(|| anyhow!("missing genesis config"))?;
+            let genesis_conf: GenesisConfig = PersistedConfig::read(&genesis_path)?;
             let network_config = ConfigBuilder::new(sui_config_dir()?)
                 .committee_size(NonZeroUsize::new(1).unwrap())
                 .initial_accounts_config(genesis_conf)
