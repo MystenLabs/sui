@@ -21,6 +21,9 @@ use sui_types::{
     object::Object,
 };
 
+#[cfg(test)]
+use sui_config::genesis::Genesis;
+
 #[async_trait]
 pub trait AuthorityAPI {
     /// Initiate a new transaction to a Sui or Primary account.
@@ -321,7 +324,12 @@ impl AuthorityAPI for LocalAuthorityClient {
 
 impl LocalAuthorityClient {
     #[cfg(test)]
-    pub async fn new(committee: Committee, address: PublicKeyBytes, secret: KeyPair) -> Self {
+    pub async fn new(
+        committee: Committee,
+        address: PublicKeyBytes,
+        secret: KeyPair,
+        genesis: &Genesis,
+    ) -> Self {
         use crate::authority::AuthorityStore;
         use crate::checkpoints::CheckpointStore;
         use parking_lot::Mutex;
@@ -355,7 +363,7 @@ impl LocalAuthorityClient {
             store,
             None,
             Some(Arc::new(Mutex::new(checkpoints))),
-            &sui_config::genesis::Genesis::get_default_genesis(),
+            genesis,
         )
         .await;
         Self {
@@ -370,8 +378,9 @@ impl LocalAuthorityClient {
         address: PublicKeyBytes,
         secret: KeyPair,
         objects: Vec<Object>,
+        genesis: &Genesis,
     ) -> Self {
-        let client = Self::new(committee, address, secret).await;
+        let client = Self::new(committee, address, secret, genesis).await;
 
         for object in objects {
             client.state.insert_genesis_object(object).await;
