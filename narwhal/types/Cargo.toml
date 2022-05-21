@@ -34,3 +34,4 @@ test = []
 tonic-build = { version = "0.7", features = [ "prost", "transport" ] }
 prost-build = "0.10.1"
 serde_test = "1.0.137"
+hex = "0.4.3"
