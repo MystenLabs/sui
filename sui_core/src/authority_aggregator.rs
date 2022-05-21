@@ -5,6 +5,7 @@
 use crate::authority_client::AuthorityAPI;
 use crate::gateway_state::{GatewayMetrics, METRICS};
 use crate::safe_client::SafeClient;
+use async_trait::async_trait;
 
 use futures::{future, StreamExt};
 use move_core_types::value::MoveStructLayout;
@@ -64,6 +65,35 @@ pub enum ReduceOutput<S> {
     End(S),
 }
 
+#[async_trait]
+pub trait ConfirmationTransactionHandler {
+    async fn handle(&self, cert: ConfirmationTransaction) -> SuiResult<TransactionInfoResponse>;
+
+    fn destination_name(&self) -> String;
+}
+
+// Syncs a ConfirmationTransaction to a (possibly) remote authority.
+struct RemoteConfirmationTransactionHandler<A> {
+    destination_authority: AuthorityName,
+    destination_client: SafeClient<A>,
+}
+
+#[async_trait]
+impl<A> ConfirmationTransactionHandler for RemoteConfirmationTransactionHandler<A>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    async fn handle(&self, cert: ConfirmationTransaction) -> SuiResult<TransactionInfoResponse> {
+        self.destination_client
+            .handle_confirmation_transaction(cert)
+            .await
+    }
+
+    fn destination_name(&self) -> String {
+        format!("{:?}", self.destination_authority)
+    }
+}
+
 impl<A> AuthorityAggregator<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -74,14 +104,15 @@ where
     /// Note: Both source and destination may be byzantine, therefore one should always
     /// time limit the call to this function to avoid byzantine authorities consuming
     /// an unbounded amount of resources.
-    pub async fn sync_authority_source_to_destination(
+    pub async fn sync_authority_source_to_destination<
+        CertHandler: ConfirmationTransactionHandler,
+    >(
         &self,
         cert: ConfirmationTransaction,
         source_authority: AuthorityName,
-        destination_authority: AuthorityName,
+        cert_handler: CertHandler,
     ) -> Result<(), SuiError> {
         let source_client = self.authority_clients[&source_authority].clone();
-        let destination_client = self.authority_clients[&destination_authority].clone();
 
         // This represents a stack of certificates that we need to register with the
         // destination authority. The stack is a LIFO queue, and therefore later insertions
@@ -97,11 +128,8 @@ where
         let mut attempted_certificates: HashSet<TransactionDigest> = HashSet::new();
 
         while let Some(target_cert) = missing_certificates.pop() {
-            debug!(?digest, authority =? destination_authority, "Running confirmation transaction for missing cert");
-            match destination_client
-                .handle_confirmation_transaction(target_cert.clone())
-                .await
-            {
+            debug!(?digest, authority =? cert_handler.destination_name(), "Running confirmation transaction for missing cert");
+            match cert_handler.handle(target_cert.clone()).await {
                 Ok(_) => continue,
                 Err(SuiError::LockErrors { .. }) => {}
                 Err(e) => return Err(e),
@@ -252,7 +280,10 @@ where
             let sync_fut = self.sync_authority_source_to_destination(
                 cert.clone(),
                 source_authority,
-                destination_authority,
+                RemoteConfirmationTransactionHandler {
+                    destination_authority,
+                    destination_client: self.authority_clients[&destination_authority].clone(),
+                },
             );
 
             // Be careful.  timeout() returning OK just means the Future completed.

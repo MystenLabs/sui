@@ -5,8 +5,11 @@
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
     checkpoints::CheckpointStore,
-    execution_engine, transaction_input_checker,
+    execution_engine,
+    gateway_types::TransactionEffectsResponse,
+    transaction_input_checker,
 };
+use anyhow::anyhow;
 use async_trait::async_trait;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
@@ -34,6 +37,7 @@ use std::{
 };
 use sui_adapter::adapter;
 use sui_config::genesis::Genesis;
+use sui_storage::IndexStore;
 use sui_types::{
     base_types::*,
     batch::{TxSequenceNumber, UpdateItem},
@@ -43,11 +47,11 @@ use sui_types::{
     fp_bail, fp_ensure,
     gas::SuiGasStatus,
     messages::*,
-    object::{Data, Object},
+    object::{Data, Object, ObjectFormatOptions, ObjectRead},
     storage::{BackingPackageStore, DeleteKind, Storage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
-use tracing::{debug, instrument, log};
+use tracing::{debug, error, instrument, log};
 use typed_store::Map;
 
 #[cfg(test)]
@@ -80,6 +84,7 @@ pub mod authority_notifier;
 
 pub const MAX_ITEMS_LIMIT: u64 = 100_000;
 const BROADCAST_CAPACITY: usize = 10_000;
+const MAX_TX_RANGE_SIZE: u64 = 4096;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 pub struct AuthorityMetrics {
@@ -192,6 +197,8 @@ pub struct AuthorityState {
 
     /// The database
     pub(crate) database: Arc<AuthorityStore>, // TODO: remove pub
+
+    indexes: Option<Arc<IndexStore>>,
 
     /// The checkpoint store
     pub(crate) _checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
@@ -702,6 +709,7 @@ impl AuthorityState {
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
+        indexes: Option<Arc<IndexStore>>,
         checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
         genesis: &Genesis,
     ) -> Self {
@@ -745,6 +753,7 @@ impl AuthorityState {
             _native_functions: native_functions,
             move_vm,
             database: store.clone(),
+            indexes,
             _checkpoints: checkpoints,
             batch_channels: tx,
             batch_notifier: Arc::new(
@@ -806,6 +815,145 @@ impl AuthorityState {
         self.database.get_object(object_id)
     }
 
+    pub async fn get_object_info(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
+        match self.database.get_latest_parent_entry(*object_id)? {
+            None => Ok(ObjectRead::NotExists(*object_id)),
+            Some((obj_ref, _)) => {
+                if obj_ref.2.is_alive() {
+                    match self.database.get_object_version(object_id, obj_ref.1)? {
+                        None => {
+                            error!("Object with in parent_entry is missing from object store, datastore is inconsistent");
+                            Err(SuiError::ObjectNotFound {
+                                object_id: *object_id,
+                            })
+                        }
+                        Some(object) => {
+                            let resolver = ModuleCache::new(&self);
+                            let layout =
+                                object.get_layout(ObjectFormatOptions::default(), &resolver)?;
+                            Ok(ObjectRead::Exists(obj_ref, object, layout))
+                        }
+                    }
+                } else {
+                    Ok(ObjectRead::Deleted(obj_ref))
+                }
+            }
+        }
+    }
+
+    pub async fn get_owned_objects(&self, account_addr: SuiAddress) -> SuiResult<Vec<ObjectRef>> {
+        self.database.get_account_objects(account_addr)
+    }
+
+    pub fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
+        Ok(self.database.next_sequence_number()?)
+    }
+
+    pub fn get_transactions_in_range(
+        &self,
+        start: TxSequenceNumber,
+        end: TxSequenceNumber,
+    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
+        fp_ensure!(
+            start <= end,
+            SuiError::GatewayInvalidTxRangeQuery {
+                error: format!(
+                    "start must not exceed end, (start={}, end={}) given",
+                    start, end
+                ),
+            }
+            .into()
+        );
+        fp_ensure!(
+            end - start <= MAX_TX_RANGE_SIZE,
+            SuiError::GatewayInvalidTxRangeQuery {
+                error: format!(
+                    "Number of transactions queried must not exceed {}, {} queried",
+                    MAX_TX_RANGE_SIZE,
+                    end - start
+                ),
+            }
+            .into()
+        );
+        let res = self.database.transactions_in_seq_range(start, end)?;
+        debug!(?start, ?end, ?res, "Fetched transactions");
+        Ok(res)
+    }
+
+    pub fn get_recent_transactions(
+        &self,
+        count: u64,
+    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
+        fp_ensure!(
+            count <= MAX_TX_RANGE_SIZE,
+            SuiError::GatewayInvalidTxRangeQuery {
+                error: format!(
+                    "Number of transactions queried must not exceed {}, {} queried",
+                    MAX_TX_RANGE_SIZE, count
+                ),
+            }
+            .into()
+        );
+        let end = self.get_total_transaction_number()?;
+        let start = if end >= count { end - count } else { 0 };
+        self.get_transactions_in_range(start, end)
+    }
+
+    pub async fn get_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<TransactionEffectsResponse, anyhow::Error> {
+        let opt = self.database.get_certified_transaction(&digest)?;
+        match opt {
+            Some(certificate) => Ok(TransactionEffectsResponse {
+                certificate: certificate.try_into()?,
+                effects: self.database.get_effects(&digest)?.into(),
+            }),
+            None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
+        }
+    }
+
+    fn get_indexes(&self) -> SuiResult<Arc<IndexStore>> {
+        match &self.indexes {
+            Some(i) => Ok(i.clone()),
+            None => Err(SuiError::UnsupportedFeatureError {
+                error: "extended object indexing is not enabled on this server".into(),
+            }),
+        }
+    }
+
+    pub async fn get_transactions_by_input_object(
+        &self,
+        object: ObjectID,
+    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
+        Ok(self
+            .get_indexes()?
+            .get_transactions_by_input_object(object)?)
+    }
+
+    pub async fn get_transactions_by_mutated_object(
+        &self,
+        object: ObjectID,
+    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
+        Ok(self
+            .get_indexes()?
+            .get_transactions_by_mutated_object(object)?)
+    }
+
+    pub async fn get_transactions_from_addr(
+        &self,
+        address: SuiAddress,
+    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
+        Ok(self.get_indexes()?.get_transactions_from_addr(address)?)
+    }
+
+    pub async fn get_transactions_to_addr(
+        &self,
+        address: SuiAddress,
+    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
+        Ok(self.get_indexes()?.get_transactions_to_addr(address)?)
+    }
+
     pub async fn insert_genesis_object(&self, object: Object) {
         self.database
             .insert_genesis_object(object)
@@ -862,14 +1010,30 @@ impl AuthorityState {
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
         let notifier_ticket = self.batch_notifier.ticket()?;
+        let seq = notifier_ticket.seq();
+
+        if let Some(indexes) = &self.indexes {
+            let inputs: Vec<_> = temporary_store.objects().iter().map(|(_, o)| o).collect();
+            let outputs: Vec<_> = temporary_store
+                .written()
+                .iter()
+                .map(|(_, (_, o))| o)
+                .collect();
+            if let Err(e) = indexes.index_tx(
+                certificate.sender_address(),
+                &inputs,
+                &outputs,
+                seq,
+                certificate.digest(),
+            ) {
+                error!("Error indexing certificate: {}", e);
+            }
+        }
+
         self.database
-            .update_state(
-                temporary_store,
-                certificate,
-                signed_effects,
-                Some(notifier_ticket.seq()),
-            )
+            .update_state(temporary_store, certificate, signed_effects, Some(seq))
             .await
+
         // implicitly we drop the ticket here and that notifies the batch manager
     }
 
