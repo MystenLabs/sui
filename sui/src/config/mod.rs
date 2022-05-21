@@ -16,11 +16,9 @@ use sui_types::base_types::*;
 pub use sui_config::Config;
 pub use sui_config::PersistedConfig;
 
-pub mod gateway;
-
 pub use sui_config::utils;
 
-pub use gateway::{GatewayConfig, GatewayType};
+pub use sui_gateway::config::{GatewayConfig, GatewayType};
 
 const SUI_DIR: &str = ".sui";
 const SUI_CONFIG_DIR: &str = "sui_config";

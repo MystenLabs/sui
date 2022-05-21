@@ -5472,6 +5472,7 @@ dependencies = [
  "sui-adapter",
  "sui-config",
  "sui-framework",
+ "sui-gateway",
  "sui-json",
  "sui-network",
  "sui-open-rpc",
@@ -5587,6 +5588,33 @@ dependencies = [
  "smallvec",
  "sui-types",
  "sui-verifier",
+]
+
+[[package]]
+name = "sui-gateway"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "ed25519-dalek",
+ "futures",
+ "jsonrpsee",
+ "jsonrpsee-core",
+ "jsonrpsee-proc-macros",
+ "move-core-types",
+ "mysten-network",
+ "schemars",
+ "serde 1.0.137",
+ "serde_json",
+ "serde_with",
+ "sui-config",
+ "sui-json",
+ "sui-open-rpc",
+ "sui-open-rpc-macros",
+ "sui-types",
+ "sui_core",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

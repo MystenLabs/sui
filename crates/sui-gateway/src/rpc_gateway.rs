@@ -1,17 +1,21 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
-
+use crate::rpc_gateway::responses::SuiTypeTag;
+use crate::{
+    api::{RpcGatewayServer, TransactionBytes},
+    config::GatewayConfig,
+    rpc_gateway::responses::ObjectResponse,
+};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use ed25519_dalek::ed25519::signature::Signature;
 use jsonrpsee::core::RpcResult;
-use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
-use tracing::debug;
-
+use std::path::Path;
+use sui_config::PersistedConfig;
 use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
 use sui_core::gateway_types::GetObjectInfoResponse;
+use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
 use sui_json::SuiJsonValue;
 use sui_types::sui_serde::Base64;
 use sui_types::{
@@ -20,13 +24,7 @@ use sui_types::{
     crypto::SignableBytes,
     messages::{Transaction, TransactionData},
 };
-
-use crate::rpc_gateway::responses::SuiTypeTag;
-use crate::{
-    api::{RpcGatewayServer, TransactionBytes},
-    config::{GatewayConfig, PersistedConfig},
-    rpc_gateway::responses::ObjectResponse,
-};
+use tracing::debug;
 
 pub mod responses;
 

@@ -2,12 +2,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod api;
 pub mod benchmark;
 pub mod config;
 pub mod keystore;
-pub mod rpc_gateway;
-pub mod rpc_gateway_client;
 pub mod shell;
 pub mod sui_commands;
 pub mod sui_full_node;
