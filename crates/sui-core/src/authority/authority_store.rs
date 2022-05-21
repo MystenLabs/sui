@@ -493,7 +493,7 @@ impl<
             .insert(&object_ref, &object.previous_transaction)?;
 
         self.lock_service
-            .initialize_locks(&[object_ref], false /* force_reset */)
+            .initialize_locks(&[object_ref], false /* is_force_reset */)
             .await?;
 
         Ok(())
@@ -533,7 +533,7 @@ impl<
 
         let refs: Vec<_> = ref_and_objects.iter().map(|(oref, _)| *oref).collect();
         self.lock_service
-            .initialize_locks(&refs, false /* force_reset */)
+            .initialize_locks(&refs, false /* is_force_reset */)
             .await?;
 
         Ok(())
@@ -568,7 +568,7 @@ impl<
     /// and have to roll back.
     pub async fn reset_transaction_lock(&self, owned_input_objects: &[ObjectRef]) -> SuiResult {
         self.lock_service
-            .initialize_locks(owned_input_objects, true /* force_reset */)
+            .initialize_locks(owned_input_objects, true /* is_force_reset */)
             .await?;
         Ok(())
     }
@@ -830,7 +830,7 @@ impl<
                     })
                     .collect();
                 self.lock_service
-                    .initialize_locks(&new_locks_to_init, false /* force_reset */)
+                    .initialize_locks(&new_locks_to_init, false /* is_force_reset */)
                     .await?;
 
                 // Remove the old lock - timing of this matters less
