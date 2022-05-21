@@ -33,10 +33,6 @@ pub mod worker_tests;
 /// The default channel capacity for each channel of the worker.
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
-/// The primary round number.
-// TODO: Move to the primary.
-pub type Round = u64;
-
 /// Indicates a serialized `WorkerMessage::Batch` message.
 pub type SerializedBatchMessage = Vec<u8>;
 
