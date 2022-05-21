@@ -11,8 +11,8 @@ use store::{
     rocks::{open_cf, DBMap},
     Store,
 };
-use types::{Batch, BatchDigest, Certificate, Header};
-use worker::{SerializedBatchMessage, WorkerMessage};
+use types::{Batch, BatchDigest, Certificate, Header, SerializedBatchMessage};
+use worker::WorkerMessage;
 
 /// A test batch containing specific transactions.
 pub fn test_batch<T: Serialize>(transactions: Vec<T>) -> (BatchDigest, SerializedBatchMessage) {

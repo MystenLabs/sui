@@ -15,8 +15,8 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::debug;
-use types::{Batch, BatchDigest};
-use worker::{SerializedBatchMessage, WorkerMessage};
+use types::{Batch, BatchDigest, SerializedBatchMessage};
+use worker::WorkerMessage;
 
 #[cfg(test)]
 #[path = "tests/executor_tests.rs"]

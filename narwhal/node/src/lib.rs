@@ -16,8 +16,11 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::debug;
-use types::{BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Round};
-use worker::{SerializedBatchMessage, Worker};
+use types::{
+    BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Round,
+    SerializedBatchMessage,
+};
+use worker::Worker;
 
 /// All the data stores of the node.
 pub struct NodeStorage<PublicKey: VerifyingKey> {

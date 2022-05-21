@@ -34,8 +34,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::info;
-use types::BatchDigest;
-use worker::SerializedBatchMessage;
+use types::{BatchDigest, SerializedBatchMessage};
 
 /// Default inter-task channel size.
 pub const DEFAULT_CHANNEL_SIZE: usize = 1_000;

@@ -16,4 +16,4 @@ mod quorum_waiter;
 mod synchronizer;
 mod worker;
 
-pub use crate::worker::{SerializedBatchMessage, Worker, WorkerMessage};
+pub use crate::worker::{Worker, WorkerMessage};

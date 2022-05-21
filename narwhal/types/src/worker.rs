@@ -18,3 +18,6 @@ pub enum WorkerMessage<PublicKey: VerifyingKey> {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ClientBatchRequest(pub Vec<BatchDigest>);
+
+/// Indicates a serialized `WorkerMessage::Batch` message.
+pub type SerializedBatchMessage = Vec<u8>;

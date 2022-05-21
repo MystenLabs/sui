@@ -1,7 +1,6 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::worker::SerializedBatchMessage;
 use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::traits::VerifyingKey;
@@ -9,7 +8,7 @@ use network::WorkerNetwork;
 use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{error, warn};
-use types::BatchDigest;
+use types::{BatchDigest, SerializedBatchMessage};
 
 #[cfg(test)]
 #[path = "tests/helper_tests.rs"]

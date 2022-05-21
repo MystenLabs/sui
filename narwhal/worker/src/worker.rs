@@ -22,8 +22,8 @@ use tonic::{Request, Response, Status};
 use tracing::info;
 use types::{
     BatchDigest, BincodeEncodedPayload, ClientBatchRequest, Empty, PrimaryToWorker,
-    PrimaryToWorkerServer, Transaction, TransactionProto, Transactions, TransactionsServer,
-    WorkerToWorker, WorkerToWorkerServer,
+    PrimaryToWorkerServer, SerializedBatchMessage, Transaction, TransactionProto, Transactions,
+    TransactionsServer, WorkerToWorker, WorkerToWorkerServer,
 };
 
 #[cfg(test)]
@@ -32,9 +32,6 @@ pub mod worker_tests;
 
 /// The default channel capacity for each channel of the worker.
 pub const CHANNEL_CAPACITY: usize = 1_000;
-
-/// Indicates a serialized `WorkerMessage::Batch` message.
-pub type SerializedBatchMessage = Vec<u8>;
 
 pub use types::WorkerMessage;
 

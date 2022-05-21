@@ -26,9 +26,9 @@ use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CertificateDigestProto,
     CollectionRetrievalResult, ConfigurationClient, Empty, GetCollectionsRequest, Header,
     HeaderDigest, MultiAddrProto, NewNetworkInfoRequest, PublicKeyProto, RemoveCollectionsRequest,
-    RetrievalResult, ValidatorClient, ValidatorData,
+    RetrievalResult, SerializedBatchMessage, ValidatorClient, ValidatorData,
 };
-use worker::{SerializedBatchMessage, Worker, WorkerMessage};
+use worker::{Worker, WorkerMessage};
 
 #[tokio::test]
 async fn test_get_collections() {

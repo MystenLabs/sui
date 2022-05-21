@@ -17,8 +17,8 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::warn;
+use types::SerializedBatchMessage;
 use types::{BatchDigest, BincodeEncodedPayload, ClientBatchRequest, WorkerToWorkerClient};
-use worker::SerializedBatchMessage;
 
 /// Download transactions data from the consensus workers and notifies the called when the job is done.
 pub struct BatchLoader<PublicKey: VerifyingKey> {
