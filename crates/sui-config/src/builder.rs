@@ -196,7 +196,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     db_path,
                     network_address,
                     metrics_address,
-                    consensus_config,
+                    consensus_config: Some(consensus_config),
                     committee_config: committee_config.clone(),
                     genesis: genesis.clone(),
                 }
