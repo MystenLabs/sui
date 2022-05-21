@@ -827,14 +827,21 @@ fn check_child_object_of_shared_object(
         // ancestor is a shared object, we check on their types.
         let mut ancestor_stack = vec![];
         let mut cur_id = *object_id;
+        let mut cur_obj = obj;
         let ancestor_id = loop {
             if let Some(ancestor) = ancestor_map.get(&cur_id) {
                 break *ancestor;
             }
             ancestor_stack.push(cur_id);
-            let owner = objects.get(&cur_id).unwrap().borrow().owner;
-            match owner {
+            match cur_obj.borrow().owner {
                 Owner::ObjectOwner(parent_id) => {
+                    cur_obj =
+                        objects
+                            .get(&parent_id.into())
+                            .ok_or(SuiError::MissingObjectOwner {
+                                child_id: cur_id,
+                                parent_id: parent_id.into(),
+                            })?;
                     cur_id = parent_id.into();
                     fp_ensure!(
                         cur_id != ancestor_stack[0],
@@ -844,7 +851,7 @@ fn check_child_object_of_shared_object(
                 Owner::AddressOwner(_) | Owner::Immutable | Owner::Shared => {
                     break cur_id;
                 }
-            }
+            };
         };
         // For each ancestor we have visited, cache their top ancestor so that if we
         // ever visit them in the future, we know the answer.
