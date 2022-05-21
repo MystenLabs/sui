@@ -34,12 +34,12 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use crate::transaction_input_checker;
 use crate::{
     authority::GatewayStore, authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
 };
+use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 
 use crate::gateway_types::*;
 

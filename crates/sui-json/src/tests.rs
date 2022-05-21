@@ -14,9 +14,8 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::object::Object;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
-use crate::sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
-
 use super::{is_homogeneous, HEX_PREFIX};
+use super::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 
 #[test]
 fn test_json_is_homogeneous() {
@@ -290,7 +289,8 @@ fn test_basic_args_linter_pure_args() {
 
 #[test]
 fn test_basic_args_linter_top_level() {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sui_programmability/examples/nfts");
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples/nfts");
     let compiled_modules = sui_framework::build_and_verify_user_package(&path).unwrap();
     let example_package = Object::new_package(compiled_modules, TransactionDigest::genesis());
     let example_package = example_package.data.try_as_package().unwrap();

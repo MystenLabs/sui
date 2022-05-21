@@ -11,7 +11,7 @@ use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
 use sui_core::gateway_types::{
     GetObjectInfoResponse, SuiObjectRef, TransactionEffectsResponse, TransactionResponse,
 };
-use sui_core::sui_json::SuiJsonValue;
+use sui_json::SuiJsonValue;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::sui_serde::Base64;

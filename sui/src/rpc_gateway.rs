@@ -12,7 +12,7 @@ use tracing::debug;
 
 use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
 use sui_core::gateway_types::GetObjectInfoResponse;
-use sui_core::sui_json::SuiJsonValue;
+use sui_json::SuiJsonValue;
 use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
