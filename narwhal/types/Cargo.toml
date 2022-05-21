@@ -13,25 +13,27 @@ blake2 = "0.9"
 bytes = "1.1.0"
 derive_builder = "0.11.2"
 ed25519-dalek = "1.0.1"
+proptest = "1.0.0"
+proptest-derive = "0.3.0"
+prost = "0.10"
 rand = "0.7.3"
 serde = { version = "1.0.136", features = ["derive"] }
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
 thiserror = "1.0.30"
 tokio = { version = "1.17.0", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.1", features = ["codec"] }
-prost = "0.10"
 tonic = { version = "0.7", features = ["tls"] }
 
 config = { path = "../config" }
 crypto = { path = "../crypto" }
 dag = { path = "../dag" }
 
+[dev-dependencies]
+hex = "0.4.3"
+prost-build = "0.10.1"
+serde_test = "1.0.137"
+tonic-build = { version = "0.7", features = [ "prost", "transport" ] }
+
 [features]
 default = []
 test = []
-
-[dev-dependencies]
-tonic-build = { version = "0.7", features = [ "prost", "transport" ] }
-prost-build = "0.10.1"
-serde_test = "1.0.137"
-hex = "0.4.3"

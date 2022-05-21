@@ -1,6 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+
+
+use blake2::digest::Update;
 use crypto::traits::VerifyingKey;
 use serde::{Deserialize, Serialize};
 
@@ -21,3 +24,7 @@ pub struct ClientBatchRequest(pub Vec<BatchDigest>);
 
 /// Indicates a serialized `WorkerMessage::Batch` message.
 pub type SerializedBatchMessage = Vec<u8>;
+
+pub fn serialized_batch_digest<K: AsRef<[u8]>>(sbm: K) -> BatchDigest {
+    BatchDigest::new(crypto::blake2b_256(|hasher| hasher.update(&sbm)))
+}

@@ -15,6 +15,7 @@ use crypto::{
 };
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
+use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
@@ -26,7 +27,7 @@ use std::{
 pub type Round = u64;
 
 pub type Transaction = Vec<u8>;
-#[derive(Clone, Serialize, Deserialize, Default, Debug, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Default, Debug, PartialEq, Eq, Arbitrary)]
 pub struct Batch(pub Vec<Transaction>);
 
 #[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]

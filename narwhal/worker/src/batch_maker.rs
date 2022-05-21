@@ -4,8 +4,6 @@
 use crate::{quorum_waiter::QuorumWaiterMessage, worker::WorkerMessage};
 use crypto::traits::VerifyingKey;
 
-#[cfg(feature = "benchmark")]
-use blake2::digest::Update;
 use multiaddr::Multiaddr;
 use network::WorkerNetwork;
 #[cfg(feature = "benchmark")]
@@ -17,7 +15,7 @@ use tokio::{
 #[cfg(feature = "benchmark")]
 use tracing::info;
 #[cfg(feature = "benchmark")]
-use types::BatchDigest;
+use types::serialized_batch_digest;
 use types::{Batch, Transaction};
 
 #[cfg(test)]
@@ -123,7 +121,7 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
         #[cfg(feature = "benchmark")]
         {
             // NOTE: This is one extra hash that is only needed to print the following log entries.
-            let digest = BatchDigest::new(crypto::blake2b_256(|hasher| hasher.update(&serialized)));
+            let digest = serialized_batch_digest(&serialized);
             for id in tx_ids {
                 // NOTE: This log entry is used to compute performance.
                 info!(

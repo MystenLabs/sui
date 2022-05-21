@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use blake2::digest::Update;
+
 use crypto::traits::KeyPair;
 use futures::StreamExt;
 use primary::WorkerPrimaryMessage;
@@ -12,7 +12,7 @@ use test_utils::{
     batch, committee, digest_batch, keys, serialize_batch_message, temp_dir,
     WorkerToPrimaryMockServer, WorkerToWorkerMockServer,
 };
-use types::{TransactionsClient, WorkerToWorkerClient};
+use types::{serialized_batch_digest, TransactionsClient, WorkerToWorkerClient};
 
 #[tokio::test]
 async fn handle_clients_transactions() {
@@ -39,9 +39,7 @@ async fn handle_clients_transactions() {
     // Spawn a network listener to receive our batch's digest.
     let batch = batch();
     let serialized_batch = serialize_batch_message(batch.clone());
-    let batch_digest = BatchDigest::new(crypto::blake2b_256(|hasher| {
-        hasher.update(&serialized_batch)
-    }));
+    let batch_digest = serialized_batch_digest(&serialized_batch);
 
     let primary_address = committee.primary(&name).unwrap().worker_to_primary;
     let expected = bincode::serialize(&WorkerPrimaryMessage::OurBatch(batch_digest, id)).unwrap();

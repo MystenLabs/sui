@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use blake2::digest::Update;
+
 use config::{Parameters, WorkerId};
 use consensus::dag::Dag;
 use crypto::{
@@ -23,10 +23,11 @@ use test_utils::{
 use tokio::sync::mpsc::channel;
 use tonic::transport::Channel;
 use types::{
-    Batch, BatchDigest, Certificate, CertificateDigest, CertificateDigestProto,
-    CollectionRetrievalResult, ConfigurationClient, Empty, GetCollectionsRequest, Header,
-    HeaderDigest, MultiAddrProto, NewNetworkInfoRequest, PublicKeyProto, RemoveCollectionsRequest,
-    RetrievalResult, SerializedBatchMessage, ValidatorClient, ValidatorData,
+    serialized_batch_digest, Batch, BatchDigest, Certificate, CertificateDigest,
+    CertificateDigestProto, CollectionRetrievalResult, ConfigurationClient, Empty,
+    GetCollectionsRequest, Header, HeaderDigest, MultiAddrProto, NewNetworkInfoRequest,
+    PublicKeyProto, RemoveCollectionsRequest, RetrievalResult, SerializedBatchMessage,
+    ValidatorClient, ValidatorData,
 };
 use worker::{Worker, WorkerMessage};
 
@@ -625,9 +626,7 @@ async fn fixture_certificate(
     // TODO: refactor this when the above is changed/fixed.
     let message = WorkerMessage::<Ed25519PublicKey>::Batch(batch.clone());
     let serialized_batch = bincode::serialize(&message).unwrap();
-    let batch_digest = BatchDigest::new(crypto::blake2b_256(|hasher| {
-        hasher.update(&serialized_batch)
-    }));
+    let batch_digest = serialized_batch_digest(&serialized_batch);
 
     let mut payload = BTreeMap::new();
     payload.insert(batch_digest, worker_id);

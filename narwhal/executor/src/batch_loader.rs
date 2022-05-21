@@ -4,7 +4,7 @@ use crate::{
     errors::{SubscriberError, SubscriberResult},
     DEFAULT_CHANNEL_SIZE,
 };
-use blake2::digest::Update;
+
 use config::WorkerId;
 use consensus::ConsensusOutput;
 use crypto::traits::VerifyingKey;
@@ -17,8 +17,10 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::warn;
-use types::SerializedBatchMessage;
-use types::{BatchDigest, BincodeEncodedPayload, ClientBatchRequest, WorkerToWorkerClient};
+use types::{
+    serialized_batch_digest, BatchDigest, BincodeEncodedPayload, ClientBatchRequest,
+    SerializedBatchMessage, WorkerToWorkerClient,
+};
 
 /// Download transactions data from the consensus workers and notifies the called when the job is done.
 pub struct BatchLoader<PublicKey: VerifyingKey> {
@@ -158,8 +160,7 @@ impl SyncConnection {
                         let batch = batch.payload;
                         // Store the batch in the temporary store.
                         // TODO: We can probably avoid re-computing the hash of the bach since we trust the worker.
-                        let digest =
-                            BatchDigest::new(crypto::blake2b_256(|hasher| hasher.update(&batch)));
+                        let digest = serialized_batch_digest(&batch);
                         self.store.write(digest, batch.to_vec()).await;
 
                         // Cleanup internal state.

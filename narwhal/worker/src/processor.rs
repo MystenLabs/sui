@@ -1,13 +1,12 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use types::SerializedBatchMessage;
-use blake2::digest::Update;
+
 use config::WorkerId;
 use primary::WorkerPrimaryMessage;
 use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};
-use types::BatchDigest;
+use types::{serialized_batch_digest, BatchDigest, SerializedBatchMessage};
 
 #[cfg(test)]
 #[path = "tests/processor_tests.rs"]
@@ -32,7 +31,7 @@ impl Processor {
         tokio::spawn(async move {
             while let Some(batch) = rx_batch.recv().await {
                 // Hash the batch.
-                let digest = BatchDigest::new(crypto::blake2b_256(|hasher| hasher.update(&batch)));
+                let digest = serialized_batch_digest(&batch);
 
                 // Store the batch.
                 store.write(digest, batch).await;
