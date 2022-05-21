@@ -3,9 +3,9 @@
 use criterion::{
     criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode, Throughput,
 };
-use crypto::ed25519::Ed25519PublicKey;
+use crypto::{ed25519::Ed25519PublicKey, Hash};
 use rand::Rng;
-use types::{hash_all_transactions, serialized_batch_digest, Batch, WorkerMessage};
+use types::{serialized_batch_digest, Batch, WorkerMessage};
 
 pub fn batch_digest(c: &mut Criterion) {
     let mut digest_group = c.benchmark_group("Batch digests");
@@ -30,11 +30,9 @@ pub fn batch_digest(c: &mut Criterion) {
             &serialized_batch,
             |b, i| b.iter(|| serialized_batch_digest(i)),
         );
-        digest_group.bench_with_input(
-            BenchmarkId::new("iterating through serialized batch digest", size),
-            &serialized_batch,
-            |b, i| b.iter(|| hash_all_transactions(i).unwrap()),
-        );
+        digest_group.bench_with_input(BenchmarkId::new("batch digest", size), &batch, |b, i| {
+            b.iter(|| i.digest())
+        });
     }
 }
 
