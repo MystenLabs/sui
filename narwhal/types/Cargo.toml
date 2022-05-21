@@ -17,6 +17,7 @@ proptest = "1.0.0"
 proptest-derive = "0.3.0"
 prost = "0.10"
 rand = "0.7.3"
+scroll = { version = "0.11.0", features = ["derive"] }
 serde = { version = "1.0.136", features = ["derive"] }
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
 thiserror = "1.0.30"
@@ -28,12 +29,18 @@ config = { path = "../config" }
 crypto = { path = "../crypto" }
 dag = { path = "../dag" }
 
+
 [dev-dependencies]
 hex = "0.4.3"
 prost-build = "0.10.1"
 serde_test = "1.0.137"
 tonic-build = { version = "0.7", features = [ "prost", "transport" ] }
+criterion = "0.3.5"
 
 [features]
 default = []
 test = []
+
+[[bench]]
+name = "batch_digest"
+harness = false
