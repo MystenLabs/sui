@@ -1,8 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-extern crate core;
-
 use std::fs::File;
 use std::io::Write;
 
@@ -19,6 +17,7 @@ use sui::wallet_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NF
 use sui_core::gateway_types::{
     GetObjectInfoResponse, SuiObjectRef, TransactionEffectsResponse, TransactionResponse,
 };
+use sui_gateway::api::RpcGatewayOpenRpc;
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
@@ -41,9 +40,9 @@ struct Options {
     action: Action,
 }
 
-const FILE_PATH: &str = "sui/open_rpc/spec/openrpc.json";
-const OBJECT_SAMPLE_FILE_PATH: &str = "sui/open_rpc/samples/objects.json";
-const TRANSACTION_SAMPLE_FILE_PATH: &str = "sui/open_rpc/samples/transactions.json";
+const FILE_PATH: &str = "crates/sui-open-rpc/spec/openrpc.json";
+const OBJECT_SAMPLE_FILE_PATH: &str = "crates/sui-open-rpc/samples/objects.json";
+const TRANSACTION_SAMPLE_FILE_PATH: &str = "crates/sui-open-rpc/samples/transactions.json";
 
 #[tokio::main]
 async fn main() {
