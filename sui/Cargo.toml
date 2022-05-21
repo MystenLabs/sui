@@ -46,8 +46,8 @@ sui-network = { path = "../crates/sui-network" }
 sui-config = { path = "../crates/sui-config" }
 sui-types = { path = "../crates/sui-types" }
 sui-verifier = { path = "../crates/sui-verifier" }
-sui-open-rpc = { path = "open_rpc" }
-sui-open-rpc-macros = { path = "open_rpc/macros" }
+sui-open-rpc = { path = "../crates/sui-open-rpc" }
+sui-open-rpc-macros = { path = "../crates/sui-open-rpc-macros" }
 sui-json = { path = "../crates/sui-json" }
 
 rustyline = "9.1.2"
