@@ -10,7 +10,6 @@ pub mod authority_server;
 pub mod checkpoints;
 pub mod consensus_adapter;
 pub mod execution_engine;
-pub mod full_node;
 pub mod gateway_state;
 pub mod gateway_types;
 pub mod make;

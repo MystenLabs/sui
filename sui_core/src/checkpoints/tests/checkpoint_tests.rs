@@ -746,6 +746,7 @@ async fn test_batch_to_checkpointing() {
         *secret.public_key_bytes(),
         secret,
         store.clone(),
+        None,
         Some(checkpoints.clone()),
         &sui_config::genesis::Genesis::get_default_genesis(),
     )
@@ -838,6 +839,7 @@ async fn test_batch_to_checkpointing_init_crash() {
             secret.clone(),
             store.clone(),
             None,
+            None,
             &sui_config::genesis::Genesis::get_default_genesis(),
         )
         .await;
@@ -917,6 +919,7 @@ async fn test_batch_to_checkpointing_init_crash() {
             *secret.public_key_bytes(),
             secret,
             store.clone(),
+            None,
             Some(checkpoints.clone()),
             &sui_config::genesis::Genesis::get_default_genesis(),
         )
@@ -1360,6 +1363,7 @@ async fn checkpoint_tests_setup() -> TestSetup {
             *secret.public_key_bytes(),
             secret,
             store.clone(),
+            None,
             Some(checkpoint.clone()),
             &sui_config::genesis::Genesis::get_default_genesis(),
         )

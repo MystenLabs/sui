@@ -6,13 +6,13 @@
 
 use rocksdb::Options;
 use serde::{de::DeserializeOwned, Serialize};
-use std::collections::HashMap;
+
 use std::path::Path;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
 
 use sui_types::error::SuiResult;
-use sui_types::messages::InputObjectKind;
+
 use sui_types::object::Object;
 
 use typed_store::rocks::DBMap;
@@ -80,8 +80,8 @@ impl IndexStore {
     pub fn index_tx(
         &self,
         sender: SuiAddress,
-        active_inputs: &[(InputObjectKind, Object)],
-        mutated_objects: &HashMap<ObjectRef, Object>,
+        active_inputs: &[&Object],
+        mutated_objects: &[&Object],
         sequence: TxSequenceNumber,
         digest: &TransactionDigest,
     ) -> SuiResult {
@@ -96,19 +96,19 @@ impl IndexStore {
             &self.transactions_by_input_object_id,
             active_inputs
                 .iter()
-                .map(|(_, object)| ((object.id(), sequence), *digest)),
+                .map(|object| ((object.id(), sequence), *digest)),
         )?;
 
         let batch = batch.insert_batch(
             &self.transactions_by_mutated_object_id,
             mutated_objects
                 .iter()
-                .map(|(objref, _)| ((objref.0, sequence), *digest)),
+                .map(|object| ((object.id(), sequence), *digest)),
         )?;
 
         let batch = batch.insert_batch(
             &self.transactions_to_addr,
-            mutated_objects.iter().filter_map(|(_, object)| {
+            mutated_objects.iter().filter_map(|object| {
                 object
                     .get_single_owner()
                     .map(|addr| ((addr, sequence), digest))

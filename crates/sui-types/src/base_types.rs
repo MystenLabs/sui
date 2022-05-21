@@ -56,6 +56,12 @@ mod base_types_tests;
 )]
 pub struct SequenceNumber(u64);
 
+impl fmt::Display for SequenceNumber {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:#x}", self.0)
+    }
+}
+
 pub type VersionNumber = SequenceNumber;
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]

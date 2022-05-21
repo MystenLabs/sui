@@ -334,6 +334,9 @@ pub enum SuiError {
     // Tonic::Status
     #[error("{0}")]
     RpcError(String),
+
+    #[error("Use of disabled feature: {:?}", error)]
+    UnsupportedFeatureError { error: String },
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

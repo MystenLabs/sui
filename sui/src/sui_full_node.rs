@@ -1,14 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
 use sui_storage::IndexStore;
-use sui_types::sui_serde::Base64;
+use sui_types::{crypto::get_key_pair, sui_serde::Base64};
 
 use crate::{
     api::{RpcGatewayServer, TransactionBytes},
@@ -19,25 +14,19 @@ use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use sui_config::{NetworkConfig, PersistedConfig};
 use sui_core::{
-    authority::ReplicaStore,
-    full_node::FullNodeState,
+    authority::{AuthorityState, AuthorityStore},
+    authority_active::{gossip::gossip_process, ActiveAuthority},
     gateway_types::{
         GetObjectInfoResponse, SuiObjectRef, TransactionEffectsResponse, TransactionResponse,
     },
     sui_json::SuiJsonValue,
 };
-use sui_core::{
-    authority_client::NetworkAuthorityClient, full_node::FullNode,
-    gateway_state::GatewayTxSeqNumber,
-};
-use sui_types::{
-    base_types::{ObjectID, SuiAddress, TransactionDigest},
-    error::SuiError,
-};
+use sui_core::{authority_client::NetworkAuthorityClient, gateway_state::GatewayTxSeqNumber};
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use tracing::info;
 
 pub struct SuiFullNode {
-    pub client: FullNode<NetworkAuthorityClient>,
+    pub state: Arc<AuthorityState>,
 }
 
 impl SuiFullNode {
@@ -46,14 +35,83 @@ impl SuiFullNode {
         db_path: &Path,
     ) -> anyhow::Result<Self> {
         // Network config is all we need for now
-        let network_config: NetworkConfig = PersistedConfig::read(network_config_path)?;
+        let config: NetworkConfig = PersistedConfig::read(network_config_path)?;
 
-        // Start a full node
-        let full_node = make_full_node(db_path.to_path_buf(), &network_config).await?;
-        full_node.spawn_tasks().await;
+        let (_addr, key_pair) = get_key_pair();
+
+        // TODO use ReplicaStore, or (more likely) get rid of ReplicaStore and
+        // use run-time configuration to determine how much state AuthorityStore
+        // keeps
+        let store = Arc::new(AuthorityStore::open(&db_path, None));
+
+        let index_path = db_path.join("indexes");
+        let indexes = Arc::new(IndexStore::open(index_path, None));
+
+        let val_config = config
+            .validator_configs()
+            .iter()
+            .next()
+            .expect("Validtor set must be non empty");
+
+        let state = Arc::new(
+            AuthorityState::new(
+                config.committee().clone(),
+                *key_pair.public_key_bytes(),
+                Arc::pin(key_pair.copy()),
+                store,
+                Some(indexes),
+                None,
+                val_config.genesis(),
+            )
+            .await,
+        );
+
+        let mut net_config = mysten_network::config::Config::new();
+        net_config.connect_timeout = Some(Duration::from_secs(5));
+        net_config.request_timeout = Some(Duration::from_secs(5));
+
+        let mut authority_clients = BTreeMap::new();
+        for validator in config
+            .validator_configs()
+            .iter()
+            .next()
+            .unwrap()
+            .committee_config()
+            .validator_set()
+        {
+            let channel = net_config
+                .connect_lazy(validator.network_address())
+                .unwrap();
+            let client = NetworkAuthorityClient::new(channel);
+            authority_clients.insert(validator.public_key(), client);
+        }
+
+        let active_authority = ActiveAuthority::new(state.clone(), authority_clients)?;
+
+        // Start following validators
+        tokio::task::spawn(async move {
+            gossip_process(
+                &active_authority,
+                // listen to all authorities (note that gossip_process caps this to total minus 1.)
+                active_authority.state.committee.voting_rights.len(),
+            )
+            .await;
+        });
+
+        // Start batch system so the full node can be followed - currently only the
+        // tests use this, in order to wait until the full node has seen a tx.
+        // However, there's no reason full nodes won't want to follow other full nodes
+        // eventually.
+        let batch_state = state.clone();
+        tokio::task::spawn(async move {
+            batch_state
+                .run_batch_service(1000, Duration::from_secs(1))
+                .await
+        });
+
         info!("Started full node ");
 
-        Ok(Self { client: full_node })
+        Ok(Self { state })
     }
 }
 
@@ -136,9 +194,10 @@ impl RpcGatewayServer for SuiFullNode {
     async fn get_owned_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse> {
         let resp = ObjectResponse {
             objects: self
-                .client
+                .state
                 .get_owned_objects(owner)
-                .await?
+                .await
+                .map_err(|e| anyhow!("{}", e))?
                 .iter()
                 .map(|w| SuiObjectRef::from(*w))
                 .collect(),
@@ -148,15 +207,16 @@ impl RpcGatewayServer for SuiFullNode {
 
     async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse> {
         Ok(self
-            .client
-            .get_object_info(object_id)
-            .await?
+            .state
+            .get_object_info(&object_id)
+            .await
+            .map_err(|e| anyhow!("{}", e))?
             .try_into()
             .map_err(|e| anyhow!("{}", e))?)
     }
 
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {
-        Ok(self.client.state.get_total_transaction_number()?)
+        Ok(self.state.get_total_transaction_number()?)
     }
 
     async fn get_transactions_in_range(
@@ -164,32 +224,28 @@ impl RpcGatewayServer for SuiFullNode {
         start: GatewayTxSeqNumber,
         end: GatewayTxSeqNumber,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(self.client.state.get_transactions_in_range(start, end)?)
+        Ok(self.state.get_transactions_in_range(start, end)?)
     }
 
     async fn get_recent_transactions(
         &self,
         count: u64,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(self.client.state.get_recent_transactions(count)?)
+        Ok(self.state.get_recent_transactions(count)?)
     }
 
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<TransactionEffectsResponse> {
-        Ok(self.client.state.get_transaction(digest).await?)
+        Ok(self.state.get_transaction(digest).await?)
     }
 
     async fn get_transactions_by_input_object(
         &self,
         object: ObjectID,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(self
-            .client
-            .state
-            .get_transactions_by_input_object(object)
-            .await?)
+        Ok(self.state.get_transactions_by_input_object(object).await?)
     }
 
     async fn get_transactions_by_mutated_object(
@@ -197,7 +253,6 @@ impl RpcGatewayServer for SuiFullNode {
         object: ObjectID,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
         Ok(self
-            .client
             .state
             .get_transactions_by_mutated_object(object)
             .await?)
@@ -207,55 +262,13 @@ impl RpcGatewayServer for SuiFullNode {
         &self,
         addr: SuiAddress,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(self.client.state.get_transactions_from_addr(addr).await?)
+        Ok(self.state.get_transactions_from_addr(addr).await?)
     }
 
     async fn get_transactions_to_addr(
         &self,
         addr: SuiAddress,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(self.client.state.get_transactions_to_addr(addr).await?)
+        Ok(self.state.get_transactions_to_addr(addr).await?)
     }
-}
-
-pub async fn make_full_node(
-    db_store_path: PathBuf,
-    net_config: &NetworkConfig,
-) -> Result<FullNode<NetworkAuthorityClient>, SuiError> {
-    let store = Arc::new(ReplicaStore::open(&db_store_path, None));
-    let index_path = db_store_path.join("indexes");
-    let indexes = Arc::new(IndexStore::open(index_path, None));
-
-    let val_config = net_config
-        .validator_configs()
-        .iter()
-        .next()
-        .expect("Validtor set must be non empty");
-
-    let follower_node_state = FullNodeState::new_with_genesis(
-        net_config.committee(),
-        store,
-        indexes,
-        val_config.genesis(),
-    )
-    .await?;
-
-    let mut authority_clients = BTreeMap::new();
-    let mut config = mysten_network::config::Config::new();
-    config.connect_timeout = Some(Duration::from_secs(5));
-    config.request_timeout = Some(Duration::from_secs(5));
-    for validator in net_config
-        .validator_configs()
-        .iter()
-        .next()
-        .unwrap()
-        .committee_config()
-        .validator_set()
-    {
-        let channel = config.connect_lazy(validator.network_address()).unwrap();
-        let client = NetworkAuthorityClient::new(channel);
-        authority_clients.insert(validator.public_key(), client);
-    }
-
-    Ok(FullNode::new(Arc::new(follower_node_state), authority_clients).unwrap())
 }

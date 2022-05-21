@@ -1,20 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_trait::async_trait;
 use futures::{stream::FuturesUnordered, StreamExt};
 use std::{collections::HashSet, sync::Arc, time::Duration};
 use sui_types::{
     base_types::AuthorityName,
     batch::{TxSequenceNumber, UpdateItem},
-    error::SuiError,
+    error::{SuiError, SuiResult},
     messages::{
         BatchInfoRequest, BatchInfoResponseItem, ConfirmationTransaction, TransactionInfoRequest,
+        TransactionInfoResponse,
     },
 };
 
 use crate::{
-    authority::AuthorityState, authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI, safe_client::SafeClient,
+    authority::AuthorityState,
+    authority_aggregator::{AuthorityAggregator, ConfirmationTransactionHandler},
+    authority_client::AuthorityAPI,
+    safe_client::SafeClient,
 };
 
 use futures::stream::FuturesOrdered;
@@ -130,6 +134,21 @@ where
     }
 }
 
+struct LocalConfirmationTransactionHandler {
+    state: Arc<AuthorityState>,
+}
+
+#[async_trait]
+impl ConfirmationTransactionHandler for LocalConfirmationTransactionHandler {
+    async fn handle(&self, cert: ConfirmationTransaction) -> SuiResult<TransactionInfoResponse> {
+        self.state.handle_confirmation_transaction(cert).await
+    }
+
+    fn destination_name(&self) -> String {
+        format!("{:?}", self.state.name)
+    }
+}
+
 impl<A> PeerGossip<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -234,7 +253,10 @@ where
                             self.aggregator.sync_authority_source_to_destination(
                                 ConfirmationTransaction { certificate },
                                 self.peer_name,
-                                self.state.name).await?;
+                                LocalConfirmationTransactionHandler {
+                                    state: self.state.clone(),
+                                }
+                            ).await?;
                         }
                         else {
                             // The authority did not return the certificate, despite returning info

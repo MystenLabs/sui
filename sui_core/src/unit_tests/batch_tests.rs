@@ -55,6 +55,7 @@ pub(crate) async fn init_state(
         Arc::pin(authority_key),
         store,
         None,
+        None,
         &sui_config::genesis::Genesis::get_default_genesis(),
     )
     .await
@@ -777,6 +778,7 @@ async fn test_safe_batch_stream() {
         Arc::pin(authority_key),
         store.clone(),
         None,
+        None,
         &sui_config::genesis::Genesis::get_default_genesis(),
     )
     .await;
@@ -820,6 +822,7 @@ async fn test_safe_batch_stream() {
         public_key_bytes_b,
         Arc::pin(authority_key),
         store,
+        None,
         None,
         &sui_config::genesis::Genesis::get_default_genesis(),
     )
