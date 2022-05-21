@@ -612,6 +612,10 @@ SuiError:
     107:
       RpcError:
         NEWTYPE: STR
+    108:
+      UnsupportedFeatureError:
+        STRUCT:
+          - error: STR
 TransactionDigest:
   NEWTYPESTRUCT: BYTES
 TransactionKind:
