@@ -114,10 +114,12 @@ pub async fn make_authority(
     let authority_state = Arc::new(state);
 
     // Spawn the consensus node of this authority.
+    let consensus_config = validator_config
+        .consensus_config()
+        .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
     let consensus_keypair = validator_config.key_pair().make_narwhal_keypair();
     let consensus_name = consensus_keypair.name.clone();
-    let consensus_store =
-        narwhal_node::NodeStorage::reopen(validator_config.consensus_config().db_path());
+    let consensus_store = narwhal_node::NodeStorage::reopen(consensus_config.db_path());
     narwhal_node::Node::spawn_primary(
         consensus_keypair,
         validator_config
@@ -125,10 +127,7 @@ pub async fn make_authority(
             .narwhal_committee()
             .to_owned(),
         &consensus_store,
-        validator_config
-            .consensus_config()
-            .narwhal_config()
-            .to_owned(),
+        consensus_config.narwhal_config().to_owned(),
         /* consensus */ true, // Indicate that we want to run consensus.
         /* execution_state */ authority_state.clone(),
         /* tx_confirmation */ tx_consensus_to_sui,
@@ -142,10 +141,7 @@ pub async fn make_authority(
             .narwhal_committee()
             .to_owned(),
         &consensus_store,
-        validator_config
-            .consensus_config()
-            .narwhal_config()
-            .to_owned(),
+        consensus_config.narwhal_config().to_owned(),
     );
 
     // Spawn a consensus listener. It listen for consensus outputs and notifies the
@@ -182,7 +178,7 @@ pub async fn make_authority(
     Ok(AuthorityServer::new(
         validator_config.network_address().to_owned(),
         authority_state,
-        validator_config.consensus_config().address().to_owned(),
+        consensus_config.address().to_owned(),
         /* tx_consensus_listener */ tx_sui_to_consensus,
     ))
 }
