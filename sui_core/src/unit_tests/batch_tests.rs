@@ -56,7 +56,7 @@ pub(crate) async fn init_state(
         store,
         None,
         None,
-        &sui_config::genesis::Genesis::get_default_genesis(),
+        &sui_config::genesis::Genesis::cached_default_genesis(),
     )
     .await
 }
@@ -779,7 +779,7 @@ async fn test_safe_batch_stream() {
         store.clone(),
         None,
         None,
-        &sui_config::genesis::Genesis::get_default_genesis(),
+        &sui_config::genesis::Genesis::cached_default_genesis(),
     )
     .await;
 
@@ -824,7 +824,7 @@ async fn test_safe_batch_stream() {
         store,
         None,
         None,
-        &sui_config::genesis::Genesis::get_default_genesis(),
+        &sui_config::genesis::Genesis::cached_default_genesis(),
     )
     .await;
     let auth_client_from_byzantine = ByzantineAuthorityClient::new(state_b);

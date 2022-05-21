@@ -748,7 +748,7 @@ async fn test_batch_to_checkpointing() {
         store.clone(),
         None,
         Some(checkpoints.clone()),
-        &sui_config::genesis::Genesis::get_default_genesis(),
+        &sui_config::genesis::Genesis::cached_default_genesis(),
     )
     .await;
     let authority_state = Arc::new(state);
@@ -840,7 +840,7 @@ async fn test_batch_to_checkpointing_init_crash() {
             store.clone(),
             None,
             None,
-            &sui_config::genesis::Genesis::get_default_genesis(),
+            &sui_config::genesis::Genesis::cached_default_genesis(),
         )
         .await;
         let authority_state = Arc::new(state);
@@ -921,7 +921,7 @@ async fn test_batch_to_checkpointing_init_crash() {
             store.clone(),
             None,
             Some(checkpoints.clone()),
-            &sui_config::genesis::Genesis::get_default_genesis(),
+            &sui_config::genesis::Genesis::cached_default_genesis(),
         )
         .await;
         let authority_state = Arc::new(state);
@@ -1323,7 +1323,7 @@ async fn checkpoint_tests_setup() -> TestSetup {
     let mut authorities = Vec::new();
 
     // Make all authorities and their services.
-    let genesis = sui_config::genesis::Genesis::get_default_genesis();
+    let genesis = sui_config::genesis::Genesis::cached_default_genesis();
     for k in &keys {
         let dir = env::temp_dir();
         let path = dir.join(format!("SC_{:?}", ObjectID::random()));

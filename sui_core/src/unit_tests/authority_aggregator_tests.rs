@@ -39,7 +39,7 @@ pub async fn init_local_authorities(
     AuthorityAggregator<LocalAuthorityClient>,
     Vec<Arc<AuthorityState>>,
 ) {
-    let genesis = sui_config::genesis::Genesis::get_default_genesis();
+    let genesis = sui_config::genesis::Genesis::cached_default_genesis();
     init_local_authorities_with_genesis(&genesis, genesis_objects).await
 }
 
@@ -791,7 +791,7 @@ async fn test_process_transaction_fault_success() {
     // A transaction is sent to all authories, however one of them will error out either before or after processing the transaction.
     // A cert should still be created, and sent out to all authorities again. This time
     // a different authority errors out either before or after processing the cert.
-    let genesis = sui_config::genesis::Genesis::get_default_genesis();
+    let genesis = sui_config::genesis::Genesis::cached_default_genesis();
     for i in 0..4 {
         let mut config_before_process_transaction = LocalAuthorityClientFaultConfig::default();
         if i % 2 == 0 {
@@ -824,7 +824,7 @@ async fn test_process_transaction_fault_fail() {
         fail_before_handle_transaction: true,
         ..Default::default()
     };
-    let genesis = sui_config::genesis::Genesis::get_default_genesis();
+    let genesis = sui_config::genesis::Genesis::cached_default_genesis();
     assert!(execute_transaction_with_fault_configs(
         &genesis,
         &[
