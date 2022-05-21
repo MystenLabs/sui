@@ -269,12 +269,9 @@ fn check_one_lock(
                     // Check that the object owner is another mutable object in the input.
                     fp_ensure!(
                         owned_object_authenticators.contains(&owner),
-                        SuiError::IncorrectSigner {
-                            error: format!(
-                                "Object {:?} is owned by object {:?}, which is not in the input",
-                                object.id(),
-                                owner
-                            ),
+                        SuiError::MissingObjectOwner {
+                            child_id: object.id(),
+                            parent_id: owner.into(),
                         }
                     );
                 }
