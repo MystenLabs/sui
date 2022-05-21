@@ -19,9 +19,9 @@ use sui_core::{
     gateway_types::{
         GetObjectInfoResponse, SuiObjectRef, TransactionEffectsResponse, TransactionResponse,
     },
-    sui_json::SuiJsonValue,
 };
 use sui_core::{authority_client::NetworkAuthorityClient, gateway_state::GatewayTxSeqNumber};
+use sui_json::SuiJsonValue;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use tracing::info;
 

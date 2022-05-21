@@ -35,7 +35,7 @@ use sui_types::move_package::disassemble_modules;
 use sui_types::object::{Data, Object, ObjectRead, Owner};
 use sui_types::sui_serde::{Base64, Encoding};
 
-use crate::sui_json::SuiJsonValue;
+use sui_json::SuiJsonValue;
 
 #[cfg(test)]
 #[path = "unit_tests/gateway_types_tests.rs"]

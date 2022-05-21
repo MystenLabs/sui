@@ -10,7 +10,7 @@ use serde_with::serde_as;
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_core::gateway_types::{GetObjectInfoResponse, SuiInputObjectKind, SuiObjectRef};
 use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
-use sui_core::sui_json::SuiJsonValue;
+use sui_json::SuiJsonValue;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::sui_serde::Base64;
 use sui_types::{

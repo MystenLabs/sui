@@ -23,8 +23,8 @@ use sui_core::gateway_types::{
     GetObjectInfoResponse, SuiCertifiedTransaction, SuiExecutionStatus, SuiObject, SuiObjectRef,
     SuiTransactionEffects,
 };
-use sui_core::sui_json::SuiJsonValue;
 use sui_framework::build_move_package_to_bytes;
+use sui_json::SuiJsonValue;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
