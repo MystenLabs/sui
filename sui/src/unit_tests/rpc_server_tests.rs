@@ -23,8 +23,8 @@ use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_core::gateway_types::{
     GetObjectInfoResponse, TransactionEffectsResponse, TransactionResponse,
 };
-use sui_core::sui_json::SuiJsonValue;
 use sui_framework::build_move_package_to_bytes;
+use sui_json::SuiJsonValue;
 use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},

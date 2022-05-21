@@ -19,7 +19,7 @@ use sui::wallet_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NF
 use sui_core::gateway_types::{
     GetObjectInfoResponse, SuiObjectRef, TransactionEffectsResponse, TransactionResponse,
 };
-use sui_core::sui_json::SuiJsonValue;
+use sui_json::SuiJsonValue;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_utils::network::start_test_network;

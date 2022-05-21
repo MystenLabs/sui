@@ -19,7 +19,7 @@ use sui::{
 };
 use sui_config::{AccountConfig, GenesisConfig, NetworkConfig, ObjectConfig};
 use sui_core::gateway_types::{GetObjectInfoResponse, SuiObject, SuiTransactionEffects};
-use sui_core::sui_json::SuiJsonValue;
+use sui_json::SuiJsonValue;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     crypto::get_key_pair,

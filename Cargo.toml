@@ -4,6 +4,7 @@ members = [
     "crates/sui-adapter-transactional-tests",
     "crates/sui-config",
     "crates/sui-faucet",
+    "crates/sui-json",
     "crates/sui-network",
     "crates/sui-node",
     "crates/sui-transactional-test-runner",

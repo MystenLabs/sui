@@ -5472,6 +5472,7 @@ dependencies = [
  "sui-adapter",
  "sui-config",
  "sui-framework",
+ "sui-json",
  "sui-network",
  "sui-open-rpc",
  "sui-open-rpc-macros",
@@ -5586,6 +5587,24 @@ dependencies = [
  "smallvec",
  "sui-types",
  "sui-verifier",
+]
+
+[[package]]
+name = "sui-json"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "hex",
+ "move-binary-format",
+ "move-core-types",
+ "schemars",
+ "serde 1.0.137",
+ "serde_json",
+ "sui-adapter",
+ "sui-framework",
+ "sui-types",
+ "test-fuzz",
 ]
 
 [[package]]
@@ -5782,6 +5801,7 @@ dependencies = [
  "sui-adapter",
  "sui-config",
  "sui-framework",
+ "sui-json",
  "sui-network",
  "sui-types",
  "sui_storage",
