@@ -35,7 +35,8 @@ pub struct NodeConfig {
     pub network_address: Multiaddr,
     pub metrics_address: Multiaddr,
 
-    pub consensus_config: ConsensusConfig,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub consensus_config: Option<ConsensusConfig>,
     pub committee_config: CommitteeConfig,
 
     genesis: genesis::Genesis,
@@ -64,8 +65,8 @@ impl NodeConfig {
         &self.network_address
     }
 
-    pub fn consensus_config(&self) -> &ConsensusConfig {
-        &self.consensus_config
+    pub fn consensus_config(&self) -> Option<&ConsensusConfig> {
+        self.consensus_config.as_ref()
     }
 
     pub fn committee_config(&self) -> &CommitteeConfig {
