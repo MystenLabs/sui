@@ -4,10 +4,11 @@
 use super::*;
 use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
 use test_utils::{
-    batch, batch_digest, batches, committee, keys, open_batch_store, resolve_batch_digest,
-    serialize_batch_message, WorkerToWorkerMockServer,
+    batch, batch_digest, batches, committee, keys, open_batch_store, serialize_batch_message,
+    WorkerToWorkerMockServer,
 };
 use tokio::{sync::mpsc::channel, time::timeout};
+use types::serialized_batch_digest;
 
 #[tokio::test]
 async fn synchronize() {
@@ -82,7 +83,7 @@ async fn test_successful_request_batch() {
     // Create a dummy batch and store
     let expected_batch = batch();
     let batch_serialised = serialize_batch_message(expected_batch.clone());
-    let expected_digest = resolve_batch_digest(batch_serialised.clone());
+    let expected_digest = serialized_batch_digest(&batch_serialised.clone());
     store.write(expected_digest, batch_serialised.clone()).await;
 
     // WHEN we send a message to retrieve the batch
@@ -194,7 +195,7 @@ async fn test_successful_batch_delete() {
 
     for batch in expected_batches.clone() {
         let s = serialize_batch_message(batch);
-        let digest = resolve_batch_digest(s.clone());
+        let digest = serialized_batch_digest(&s.clone());
 
         batch_digests.push(digest);
 
@@ -224,7 +225,7 @@ async fn test_successful_batch_delete() {
     // AND batches should be deleted
     for batch in expected_batches {
         let s = serialize_batch_message(batch);
-        let digest = resolve_batch_digest(s.clone());
+        let digest = serialized_batch_digest(&s.clone());
 
         let result = store.read(digest).await;
         assert!(result.as_ref().is_ok());
