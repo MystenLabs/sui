@@ -6,7 +6,7 @@ use crate::authority::{
     AuthorityState,
 };
 use move_core_types::{account_address::AccountAddress, ident_str};
-use narwhal_executor::ExecutionIndices;
+use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};
@@ -107,7 +107,10 @@ async fn listen_to_sequenced_transaction() {
 
     // Set the shared object locks.
     state
-        .handle_consensus_certificate(certificate, ExecutionIndices::default())
+        .handle_consensus_transaction(
+            ExecutionIndices::default(),
+            ConsensusTransaction::UserTransaction(certificate),
+        )
         .await
         .unwrap();
 
@@ -173,7 +176,10 @@ async fn submit_transaction_to_consensus() {
 
         // Set the shared object locks.
         state_guard
-            .handle_consensus_certificate(certificate.clone(), ExecutionIndices::default())
+            .handle_consensus_transaction(
+                ExecutionIndices::default(),
+                ConsensusTransaction::UserTransaction(certificate.clone()),
+            )
             .await
             .unwrap();
 

@@ -51,7 +51,7 @@ use sui_types::{
     storage::{BackingPackageStore, DeleteKind, Storage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
-use tracing::{debug, error, instrument, log};
+use tracing::{debug, error, instrument};
 use typed_store::Map;
 
 #[cfg(test)]
@@ -459,46 +459,6 @@ impl AuthorityState {
             certified_transaction: Some(certificate),
             signed_effects: Some(signed_effects),
         })
-    }
-
-    /// Process certificates coming from the consensus. It is crucial that this function is only
-    /// called by a single task (ie. the task handling consensus outputs).
-    pub async fn handle_consensus_certificate(
-        &self,
-        certificate: CertifiedTransaction,
-        last_consensus_index: ExecutionIndices,
-    ) -> SuiResult<()> {
-        // Ensure it is a shared object certificate
-        if !certificate.contains_shared_object() {
-            log::debug!(
-                "Transaction without shared object has been sequenced: {:?}",
-                certificate
-            );
-            return Ok(());
-        }
-
-        // Ensure it is the first time we see this certificate.
-        let transaction_digest = *certificate.digest();
-        if self
-            .database
-            .sequenced(&transaction_digest, certificate.shared_input_objects())?[0]
-            .is_some()
-        {
-            return Ok(());
-        }
-
-        // Check the certificate.
-        certificate.verify(&self.committee)?;
-
-        // Persist the certificate since we are about to lock one or more shared object.
-        // We thus need to make sure someone (if not the client) can continue the protocol.
-        // Also atomically lock the shared objects for this particular transaction and
-        // increment the last consensus index. Note that a single process can ever call
-        // this function and that the last consensus index is also kept in memory. It is
-        // thus ok to only persist now (despite this function may have returned earlier).
-        // In the worst case, the synchronizer of the consensus client will catch up.
-        self.database
-            .persist_certificate_and_lock_shared_objects(certificate, last_consensus_index)
     }
 
     /// Check if we need to submit this transaction to consensus. We usually do, unless (i) we already
