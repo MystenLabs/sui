@@ -619,7 +619,7 @@ SuiError:
     108:
       RpcError:
         NEWTYPE: STR
-    108:
+    109:
       UnsupportedFeatureError:
         STRUCT:
           - error: STR
