@@ -5,7 +5,11 @@ use base64ct::Encoding;
 use move_binary_format::CompiledModule;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::{serde_as, DeserializeAs, SerializeAs};
-use std::{path::{PathBuf, Path}, fs::File, io::{BufReader, BufWriter}};
+use std::{
+    fs::File,
+    io::{BufReader, BufWriter},
+    path::{Path, PathBuf},
+};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::{base_types::TxContext, crypto::PublicKeyBytes, object::Object};
 use tracing::info;
@@ -37,7 +41,6 @@ impl Genesis {
     }
 
     pub fn cached_default_genesis() -> Self {
-
         if Path::new("move_lib_temp").exists() {
             let file = File::open(Path::new("move_lib_temp")).unwrap();
             let reader = BufReader::new(file);
@@ -52,7 +55,6 @@ impl Genesis {
 
         genesis
     }
-
 }
 
 struct SerdeCompiledModule;
