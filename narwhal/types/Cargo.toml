@@ -17,7 +17,6 @@ proptest = "1.0.0"
 proptest-derive = "0.3.0"
 prost = "0.10"
 rand = "0.7.3"
-scroll = { version = "0.11.0", features = ["derive"] }
 serde = { version = "1.0.136", features = ["derive"] }
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
 thiserror = "1.0.30"
