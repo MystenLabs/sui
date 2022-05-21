@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{config::Config, rpc_gateway_client::RpcGatewayClient};
+use crate::rpc_gateway_client::RpcGatewayClient;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -9,6 +9,7 @@ use std::{
     path::PathBuf,
     time::Duration,
 };
+use sui_config::Config;
 use sui_config::ValidatorInfo;
 use sui_core::{
     authority_client::NetworkAuthorityClient,

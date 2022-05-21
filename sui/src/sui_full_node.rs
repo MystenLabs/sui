@@ -5,10 +5,6 @@ use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
 use sui_storage::IndexStore;
 use sui_types::{crypto::get_key_pair, sui_serde::Base64};
 
-use crate::{
-    api::{RpcGatewayServer, TransactionBytes},
-    rpc_gateway::responses::{ObjectResponse, SuiTypeTag},
-};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
@@ -21,6 +17,10 @@ use sui_core::{
     },
 };
 use sui_core::{authority_client::NetworkAuthorityClient, gateway_state::GatewayTxSeqNumber};
+use sui_gateway::{
+    api::{RpcGatewayServer, TransactionBytes},
+    rpc_gateway::responses::{ObjectResponse, SuiTypeTag},
+};
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use tracing::info;
