@@ -1,16 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs::File;
-use std::io::Write;
-
 use clap::ArgEnum;
 use clap::Parser;
 use pretty_assertions::assert_str_eq;
 use serde::Serialize;
 use serde_json::json;
-
-use sui::api::RpcGatewayOpenRpc;
+use std::fs::File;
+use std::io::Write;
 use sui::config::SUI_WALLET_CONFIG;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui::wallet_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};

@@ -12,10 +12,10 @@ use std::{
     path::PathBuf,
 };
 use sui::{
-    api::{RpcGatewayOpenRpc, RpcGatewayServer},
     config::{sui_config_dir, FULL_NODE_DB_PATH},
     sui_full_node::SuiFullNode,
 };
+use sui_gateway::api::{RpcGatewayOpenRpc, RpcGatewayServer};
 use tracing::info;
 
 const DEFAULT_NODE_SERVER_PORT: &str = "5002";

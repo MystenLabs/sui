@@ -13,10 +13,8 @@ use jsonrpsee::{
 };
 
 use sui::{
-    api::{RpcGatewayClient, RpcGatewayServer, TransactionBytes},
     config::{PersistedConfig, WalletConfig, SUI_GATEWAY_CONFIG, SUI_WALLET_CONFIG},
     keystore::{Keystore, SuiKeystore},
-    rpc_gateway::{responses::ObjectResponse, RpcGatewayImpl},
     sui_commands::SuiNetwork,
 };
 use sui_core::gateway_state::GatewayTxSeqNumber;
@@ -24,6 +22,10 @@ use sui_core::gateway_types::{
     GetObjectInfoResponse, TransactionEffectsResponse, TransactionResponse,
 };
 use sui_framework::build_move_package_to_bytes;
+use sui_gateway::{
+    api::{RpcGatewayClient, RpcGatewayServer, TransactionBytes},
+    rpc_gateway::{responses::ObjectResponse, RpcGatewayImpl},
+};
 use sui_json::SuiJsonValue;
 use sui_types::sui_serde::Base64;
 use sui_types::{
