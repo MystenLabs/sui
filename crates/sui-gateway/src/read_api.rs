@@ -1,122 +1,33 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
-use sui_storage::IndexStore;
-use sui_types::{crypto::get_key_pair, sui_serde::Base64};
-
+use crate::{
+    api::{RpcGatewayServer, TransactionBytes},
+    rpc_gateway::responses::{ObjectResponse, SuiTypeTag},
+};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
-use sui_config::{NetworkConfig, PersistedConfig};
+use std::sync::Arc;
+use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_core::{
-    authority::{AuthorityState, AuthorityStore},
-    authority_active::{gossip::gossip_process, ActiveAuthority},
+    authority::AuthorityState,
     gateway_types::{
         GetObjectInfoResponse, SuiObjectRef, TransactionEffectsResponse, TransactionResponse,
     },
 };
-use sui_core::{authority_client::NetworkAuthorityClient, gateway_state::GatewayTxSeqNumber};
-use sui_gateway::{
-    api::{RpcGatewayServer, TransactionBytes},
-    rpc_gateway::responses::{ObjectResponse, SuiTypeTag},
-};
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
-use tracing::info;
+use sui_types::sui_serde::Base64;
 
-pub struct SuiFullNode {
+// An implementation of the read portion of the Gateway JSON-RPC interface intended for use in
+// Fullnodes.
+pub struct ReadApi {
     pub state: Arc<AuthorityState>,
 }
 
-impl SuiFullNode {
-    pub async fn start_with_genesis(
-        network_config_path: &Path,
-        db_path: &Path,
-    ) -> anyhow::Result<Self> {
-        // Network config is all we need for now
-        let config: NetworkConfig = PersistedConfig::read(network_config_path)?;
-
-        let (_addr, key_pair) = get_key_pair();
-
-        // TODO use ReplicaStore, or (more likely) get rid of ReplicaStore and
-        // use run-time configuration to determine how much state AuthorityStore
-        // keeps
-        let store = Arc::new(AuthorityStore::open(&db_path, None));
-
-        let index_path = db_path.join("indexes");
-        let indexes = Arc::new(IndexStore::open(index_path, None));
-
-        let val_config = config
-            .validator_configs()
-            .iter()
-            .next()
-            .expect("Validtor set must be non empty");
-
-        let state = Arc::new(
-            AuthorityState::new(
-                config.committee().clone(),
-                *key_pair.public_key_bytes(),
-                Arc::pin(key_pair.copy()),
-                store,
-                Some(indexes),
-                None,
-                val_config.genesis(),
-            )
-            .await,
-        );
-
-        let mut net_config = mysten_network::config::Config::new();
-        net_config.connect_timeout = Some(Duration::from_secs(5));
-        net_config.request_timeout = Some(Duration::from_secs(5));
-
-        let mut authority_clients = BTreeMap::new();
-        for validator in config
-            .validator_configs()
-            .iter()
-            .next()
-            .unwrap()
-            .committee_config()
-            .validator_set()
-        {
-            let channel = net_config
-                .connect_lazy(validator.network_address())
-                .unwrap();
-            let client = NetworkAuthorityClient::new(channel);
-            authority_clients.insert(validator.public_key(), client);
-        }
-
-        let active_authority = ActiveAuthority::new(state.clone(), authority_clients)?;
-
-        // Start following validators
-        tokio::task::spawn(async move {
-            gossip_process(
-                &active_authority,
-                // listen to all authorities (note that gossip_process caps this to total minus 1.)
-                active_authority.state.committee.voting_rights.len(),
-            )
-            .await;
-        });
-
-        // Start batch system so the full node can be followed - currently only the
-        // tests use this, in order to wait until the full node has seen a tx.
-        // However, there's no reason full nodes won't want to follow other full nodes
-        // eventually.
-        let batch_state = state.clone();
-        tokio::task::spawn(async move {
-            batch_state
-                .run_batch_service(1000, Duration::from_secs(1))
-                .await
-        });
-
-        info!("Started full node ");
-
-        Ok(Self { state })
-    }
-}
-
 #[async_trait]
-impl RpcGatewayServer for SuiFullNode {
+impl RpcGatewayServer for ReadApi {
     async fn transfer_coin(
         &self,
         _signer: SuiAddress,
