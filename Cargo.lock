@@ -5603,6 +5603,7 @@ dependencies = [
  "jsonrpsee-proc-macros",
  "move-core-types",
  "mysten-network",
+ "prometheus_exporter",
  "schemars",
  "serde 1.0.137",
  "serde_json",

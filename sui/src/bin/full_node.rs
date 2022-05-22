@@ -2,12 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
-use jsonrpsee::{
-    http_server::{AccessControlBuilder, HttpServerBuilder},
-    RpcModule,
-};
 use std::{
-    env,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
 };
@@ -16,6 +11,7 @@ use sui::{
     sui_full_node::SuiFullNode,
 };
 use sui_gateway::api::{RpcGatewayOpenRpc, RpcGatewayServer};
+use sui_gateway::json_rpc::JsonRpcServerBuilder;
 use tracing::info;
 
 const DEFAULT_NODE_SERVER_PORT: &str = "5002";
@@ -59,40 +55,16 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or(sui_config_dir()?.join("network.conf"));
     info!("Node config file path: {:?}", config_path);
 
-    let server_builder = HttpServerBuilder::default();
-    let mut ac_builder = AccessControlBuilder::default();
-
-    if let Ok(value) = env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
-        let list = value.split(',').collect::<Vec<_>>();
-        info!("Setting ACCESS_CONTROL_ALLOW_ORIGIN to : {:?}", list);
-        ac_builder = ac_builder.set_allowed_origins(list)?;
-    }
-
-    let acl = ac_builder.build();
-    info!("{:?}", acl);
-
-    let server = server_builder
-        .set_access_control(acl)
-        .build(SocketAddr::new(IpAddr::V4(options.host), options.port))
-        .await?;
-
-    let mut module = RpcModule::new(());
-    let open_rpc = RpcGatewayOpenRpc::open_rpc();
-    module.register_method("rpc.discover", move |_, _| Ok(open_rpc.clone()))?;
-    module.merge(
+    let address = SocketAddr::new(IpAddr::V4(options.host), options.port);
+    let mut server = JsonRpcServerBuilder::new()?;
+    server.register_open_rpc(RpcGatewayOpenRpc::open_rpc())?;
+    server.register_methods(
         SuiFullNode::start_with_genesis(&config_path, &db_path)
             .await?
             .into_rpc(),
     )?;
 
-    info!(
-        "Available JSON-RPC methods : {:?}",
-        module.method_names().collect::<Vec<_>>()
-    );
-
-    let addr = server.local_addr()?;
-    let server_handle = server.start(module)?;
-    info!("Sui RPC Gateway listening on local_addr:{}", addr);
+    let server_handle = server.start(address).await?;
 
     server_handle.await;
     Ok(())
