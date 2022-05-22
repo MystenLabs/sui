@@ -13,6 +13,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
@@ -34,6 +35,7 @@ pub struct NodeConfig {
     pub db_path: PathBuf,
     pub network_address: Multiaddr,
     pub metrics_address: Multiaddr,
+    pub json_rpc_address: SocketAddr,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consensus_config: Option<ConsensusConfig>,

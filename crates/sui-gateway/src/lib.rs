@@ -4,5 +4,6 @@
 pub mod api;
 pub mod config;
 pub mod json_rpc;
+pub mod read_api;
 pub mod rpc_gateway;
 pub mod rpc_gateway_client;
