@@ -7,5 +7,4 @@ pub mod config;
 pub mod keystore;
 pub mod shell;
 pub mod sui_commands;
-pub mod sui_full_node;
 pub mod wallet_commands;
