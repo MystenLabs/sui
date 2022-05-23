@@ -31,11 +31,11 @@ scopeguard = "1.1.0"
 clap = { version = "3.1.17", features = ["derive"] }
 bincode = "1.3.3"
 fdlimit = "0.2.1"
-schemars = "0.8.8"
+schemars = "0.8.10"
 multiaddr = "0.14.0"
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
 prometheus_exporter = "0.8.4"
-once_cell = "1.10.0"
+once_cell = "1.11.0"
 colored = "2.0.0"
 curve25519-dalek = { version = "3", default-features = false }
 thiserror = "1.0.30"
@@ -64,7 +64,7 @@ narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c
 narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", package = "crypto" }
 
 [dev-dependencies]
-serde-reflection = "0.3.5"
+serde-reflection = "0.3.6"
 serde_yaml = "0.8.23"
 pretty_assertions = "1.2.1"
 temp_testdir = "0.2.3"
