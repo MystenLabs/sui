@@ -49,16 +49,16 @@ const ENDPOINTS = {
 };
 
 export function getEndpoint(network: Network | string): string {
-    //Endpoint has 3 types:
+    // Endpoint has 3 types:
     // 1) An override value
     const override = tryGetRpcSetting();
     if (override) return override;
 
-    //2) A Network value
+    // 2) Default URLs to the Local RPC server and DevNet
     if (Object.keys(ENDPOINTS).includes(network)) {
         return ENDPOINTS[network as Network];
     }
 
-    //3) Some Other String
+    // 3) Custom URL provided by the user
     return network;
 }
