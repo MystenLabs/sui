@@ -5578,7 +5578,6 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-verifier",
  "move-cli",
- "move-compiler",
  "move-core-types",
  "move-package",
  "move-stdlib",
@@ -5587,6 +5586,19 @@ dependencies = [
  "move-vm-types",
  "num_enum",
  "smallvec",
+ "sui-framework-build",
+ "sui-types",
+]
+
+[[package]]
+name = "sui-framework-build"
+version = "0.0.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier",
+ "move-compiler",
+ "move-core-types",
+ "move-package",
  "sui-types",
  "sui-verifier",
 ]
