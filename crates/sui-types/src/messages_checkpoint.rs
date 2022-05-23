@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
     authority has processed and wants to include in the next checkpoint.
     Right now we just list these as transaction digests but down the line
     we will rely on more efficient ways to determine the set for parties that
-    may already have a very simlar set of digests.
+    may already have a very similar set of digests.
 
     From proposals to checkpoints:
     -----------------------------
@@ -63,7 +63,7 @@ use serde::{Deserialize, Serialize};
     - To get past checkpoints signatures, certificates and the transactions
       associated with them.
     - To get the current signed proposal. Or if there is no proposal a
-      hint about which trasnaction digests are pending processing to get
+      hint about which transaction digests are pending processing to get
       a proposal.
 
 */
@@ -177,12 +177,12 @@ pub struct SignedCheckpointProposal(pub SignedCheckpoint);
 
 pub type CheckpointDigest = [u8; 32];
 
-// The constituant parts of checkpoints, signed and certified
+// The constituent parts of checkpoints, signed and certified
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CheckpointSummary {
     pub sequence_number: CheckpointSequenceNumber,
-    pub waypoint: Box<Waypoint>, // Bigger strucure, can live on heap.
+    pub waypoint: Box<Waypoint>, // Bigger structure, can live on heap.
     digest: CheckpointDigest,
     // TODO: add digest of previous checkpoint summary
 }
