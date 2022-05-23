@@ -16,11 +16,11 @@ members = [
     "crates/sui-types",
     "crates/sui-verifier",
     "crates/sui-verifier-transactional-tests",
+    "crates/test-utils",
     "crates/x",
     "sui",
     "sui_core",
     "sui_storage",
-    "test_utils",
 ]
 
 [profile.release]
