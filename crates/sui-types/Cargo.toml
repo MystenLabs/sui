@@ -16,7 +16,7 @@ rand = "0.7.3"
 serde = { version = "1.0.137", features = ["derive"] }
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 curve25519-dalek = { version = "3", default-features = false, features = ["serde"] }
-serde-name = "0.2.0"
+serde-name = "0.2.1"
 sha3 = "0.10.1"
 thiserror = "1.0.31"
 hex = "0.4.3"
