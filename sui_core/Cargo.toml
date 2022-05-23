@@ -46,7 +46,7 @@ sui-adapter = { path = "../crates/sui-adapter" }
 sui-framework = { path = "../crates/sui-framework" }
 sui-network = { path = "../crates/sui-network" }
 sui-types = { path = "../crates/sui-types" }
-sui_storage = { path = "../sui_storage" }
+sui-storage = { path = "../crates/sui-storage" }
 sui-config = { path = "../crates/sui-config" }
 sui-json = { path = "../crates/sui-json" }
 
