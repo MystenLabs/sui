@@ -19,7 +19,7 @@ The Sui economy has five core components:
 
 * The [SUI token](../tokenomics/sui-token.md) is the Sui platform’s native asset. 
 * [Gas fees](../tokenomics/gas-pricing.md) are charged on all network operations and used to reward participants of the proof-of-stake mechanism and prevent spam and denial-of-service attacks.
-* [Sui’s storage fund](../tokenomics/gas-pricing.md) is used to shift stake rewards across time and compensate future validators for storage costs of previously stored on-chain data.
+* [Sui’s storage fund](../tokenomics/storage-fund.md) is used to shift stake rewards across time and compensate future validators for storage costs of previously stored on-chain data.
 * The [proof-of-stake mechanism](../tokenomics/proof-of-stake.md) is used to select, incentivize, and reward honest behavior by the Sui platform’s operators – i.e. validators and the SUI delegators.
 * On-chain voting is used for governance and protocol upgrades.
 
