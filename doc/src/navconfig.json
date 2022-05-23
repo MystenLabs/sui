@@ -47,6 +47,18 @@
       {
         "label": "Sui Tokenomics",
         "fileName": "learn/tokenomics/index"
+          {
+          "label": "Sui Gas Pricing",
+          "fileName": "learn/tokenomics/gas-pricing"
+          },
+          {
+          "label": "Sui Storage Fund",
+          "fileName": "learn/tokenomics/storage-fund"
+          },
+          {
+          "label": "Proof-of-Stake",
+          "fileName": "learn/tokenomics/proof-of-stake"
+          },
       },
       {
         "label": "Understand Sui Security",
