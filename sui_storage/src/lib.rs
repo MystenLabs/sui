@@ -6,3 +6,5 @@ pub use lock_service::LockService;
 
 pub mod indexes;
 pub use indexes::IndexStore;
+
+pub mod event_store;
