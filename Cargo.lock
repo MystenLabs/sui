@@ -5633,6 +5633,7 @@ dependencies = [
  "serde 1.0.137",
  "serde_json",
  "sui-adapter",
+ "sui-config",
  "sui-framework",
  "sui-types",
  "test-fuzz",

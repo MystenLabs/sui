@@ -24,3 +24,4 @@ test-fuzz = "3.0.2"
 
 sui-adapter = { path = "../sui-adapter" }
 sui-framework = { path = "../../sui_programmability/framework" }
+sui-config = { path = "../sui-config" }
