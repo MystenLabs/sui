@@ -43,12 +43,19 @@ export function useNetwork(): [
     string,
     Dispatch<SetStateAction<Network | string>>
 ] {
-    // Default network is that in storage, unless this is
-    // null or was set a long time ago, then instead use website's default value:
-    let defaultNetwork = window.localStorage.getItem(LOCALSTORE_RPC_KEY);
-    if (!defaultNetwork || wasNetworkSetLongTimeAgo()) {
-        defaultNetwork = IS_LOCAL_ENV ? Network.Local : Network.Devnet;
-        window.localStorage.setItem(LOCALSTORE_RPC_KEY, defaultNetwork);
+    let defaultNetwork: string | null;
+
+    // If running yarn start:local, ignore what is in storage and use Local network:
+    if (IS_LOCAL_ENV) {
+        defaultNetwork = Network.Local;
+    } else {
+        // Default network is that in storage, unless this is
+        // null or was set a long time ago, then instead use website's default value:
+        defaultNetwork = window.localStorage.getItem(LOCALSTORE_RPC_KEY);
+        if (!defaultNetwork || wasNetworkSetLongTimeAgo()) {
+            defaultNetwork = Network.Devnet;
+            window.localStorage.setItem(LOCALSTORE_RPC_KEY, defaultNetwork);
+        }
     }
 
     const [network, setNetwork] = useState<Network | string>(defaultNetwork);
