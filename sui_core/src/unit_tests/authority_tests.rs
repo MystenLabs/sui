@@ -11,7 +11,6 @@ use move_binary_format::{
 use move_core_types::{account_address::AccountAddress, ident_str, language_storage::TypeTag};
 use narwhal_executor::ExecutionIndices;
 use rand::{prelude::StdRng, SeedableRng};
-use sui_adapter::genesis;
 use sui_types::{
     base_types::dbg_addr,
     crypto::KeyPair,
@@ -298,7 +297,7 @@ async fn test_transfer_package() {
         .await
         .unwrap()
         .unwrap();
-    let genesis_package_objects = genesis::clone_genesis_packages();
+    let genesis_package_objects: Vec<Object> = Genesis::cached_default_genesis().objects().to_vec();
     let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, "ID");
     // We are trying to transfer the genesis package object, which is immutable.
     let transfer_transaction = init_transfer_transaction(
@@ -393,8 +392,8 @@ async fn test_publish_dependent_module_ok() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let genesis_module_objects = genesis::clone_genesis_packages();
-    let genesis_module = match &genesis_module_objects[0].data {
+    let genesis_package_objects: Vec<Object> = Genesis::cached_default_genesis().objects().to_vec();
+    let genesis_module = match &genesis_package_objects[0].data {
         Data::Package(m) => {
             CompiledModule::deserialize(m.serialized_module_map().values().next().unwrap()).unwrap()
         }
@@ -471,8 +470,8 @@ async fn test_publish_non_existing_dependent_module() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let genesis_module_objects = genesis::clone_genesis_packages();
-    let genesis_module = match &genesis_module_objects[0].data {
+    let genesis_package_objects: Vec<Object> = Genesis::cached_default_genesis().objects().to_vec();
+    let genesis_module = match &genesis_package_objects[0].data {
         Data::Package(m) => {
             CompiledModule::deserialize(m.serialized_module_map().values().next().unwrap()).unwrap()
         }
@@ -1431,7 +1430,7 @@ async fn call_framework_code(
     shared_object_arg_ids: Vec<ObjectID>,
     pure_args: Vec<Vec<u8>>,
 ) -> SuiResult<TransactionEffects> {
-    let genesis_package_objects = genesis::clone_genesis_packages();
+    let genesis_package_objects: Vec<Object> = Genesis::cached_default_genesis().objects().to_vec();
     let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
 
     call_move(
@@ -1498,7 +1497,7 @@ async fn shared_object() {
     // Make a sample transaction.
     let module = "ObjectBasics";
     let function = "create";
-    let genesis_package_objects = genesis::clone_genesis_packages();
+    let genesis_package_objects: Vec<Object> = Genesis::cached_default_genesis().objects().to_vec();
     let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
 
     let data = TransactionData::new_move_call(

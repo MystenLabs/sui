@@ -8,6 +8,7 @@ use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, value::MoveTypeLayout,
 };
 use serde_json::{json, Value};
+use sui_config::genesis::Genesis;
 use test_fuzz::runtime::num_traits::ToPrimitive;
 
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
@@ -395,8 +396,8 @@ fn test_basic_args_linter_top_level() {
     assert!(resolve_move_function_args(example_package, module, function, args).is_err());
 
     // Test with vecu8 as address
-    let genesis_objs = sui_adapter::genesis::clone_genesis_packages();
-    let framework_pkg = genesis_objs
+    let genesis_package_objects: Vec<Object> = Genesis::cached_default_genesis().objects().to_vec();
+    let framework_pkg = genesis_package_objects
         .iter()
         .find(|q| q.id() == ObjectID::from(SUI_FRAMEWORK_ADDRESS))
         .expect("Unable to find framework object")

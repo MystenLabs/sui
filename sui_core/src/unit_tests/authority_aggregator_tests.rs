@@ -7,7 +7,6 @@ use move_core_types::{account_address::AccountAddress, ident_str};
 use once_cell::sync::Lazy;
 use signature::Signer;
 
-use sui_adapter::genesis;
 use sui_config::genesis::Genesis;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::Signature;
@@ -474,7 +473,7 @@ async fn test_get_all_owned_objects() {
     let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
 
     // Make a schedule of transactions
-    let framework_obj_ref = genesis::get_framework_object_ref();
+    let framework_obj_ref = *Genesis::cached_default_genesis().framework_ref();
     let create1 =
         crate_object_move_transaction(addr1, &key1, addr1, 100, framework_obj_ref, gas_ref_1);
 
@@ -561,7 +560,7 @@ async fn test_sync_all_owned_objects() {
     let (authorities, _) = init_local_authorities(genesis_objects).await;
     let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
 
-    let framework_obj_ref = genesis::get_framework_object_ref();
+    let framework_obj_ref = *Genesis::cached_default_genesis().framework_ref();
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(authority_clients[0], gas_object1.id()).await;
     let create1 =
@@ -672,7 +671,7 @@ async fn test_process_transaction1() {
     let (authorities, _) = init_local_authorities(genesis_objects).await;
     let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
 
-    let framework_obj_ref = genesis::get_framework_object_ref();
+    let framework_obj_ref = *Genesis::cached_default_genesis().framework_ref();
 
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(authority_clients[0], gas_object1.id()).await;
@@ -733,7 +732,7 @@ async fn test_process_certificate() {
     let (authorities, _) = init_local_authorities(genesis_objects).await;
     let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
 
-    let framework_obj_ref = genesis::get_framework_object_ref();
+    let framework_obj_ref = *Genesis::cached_default_genesis().framework_ref();
 
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(authority_clients[0], gas_object1.id()).await;

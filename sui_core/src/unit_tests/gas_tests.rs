@@ -9,7 +9,6 @@ use super::authority_tests::{init_state_with_ids, send_and_confirm_transaction};
 use super::move_integration_tests::build_and_try_publish_test_package;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
-use sui_adapter::genesis;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
 use sui_types::{
@@ -208,7 +207,7 @@ async fn test_publish_gas() -> SuiResult {
         expected_gas_balance,
     );
     // genesis objects are read during transaction since they are direct dependencies.
-    let genesis_objects = genesis::clone_genesis_packages();
+    let genesis_package_objects: Vec<Object> = Genesis::cached_default_genesis().objects().to_vec();
     // We need the original package bytes in order to reproduce the publish computation cost.
     let publish_bytes = match response
         .certified_transaction
@@ -228,7 +227,7 @@ async fn test_publish_gas() -> SuiResult {
     let mut gas_status = SuiGasStatus::new_with_budget(*MAX_GAS_BUDGET, 1, 1);
     gas_status.charge_min_tx_gas()?;
     gas_status.charge_storage_read(
-        genesis_objects
+        genesis_package_objects
             .iter()
             .map(|o| o.object_size_for_gas_metering())
             .sum(),
@@ -313,7 +312,7 @@ async fn test_move_call_gas() -> SuiResult {
     let (sender, sender_key) = get_key_pair();
     let gas_object_id = ObjectID::random();
     // find the function Object::create and call it to create a new object
-    let genesis_package_objects = genesis::clone_genesis_packages();
+    let genesis_package_objects: Vec<Object> = Genesis::cached_default_genesis().objects().to_vec();
     let package_object_ref =
         get_genesis_package_by_module(&genesis_package_objects, "ObjectBasics");
 

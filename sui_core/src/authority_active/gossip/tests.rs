@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use sui_adapter::genesis;
+use sui_config::genesis::Genesis;
 use sui_types::{base_types::SequenceNumber, crypto::get_key_pair, object::Object};
 
 use super::*;
@@ -23,7 +23,7 @@ pub async fn test_gossip_plain() {
     let clients = aggregator.authority_clients.clone();
 
     let authority_clients: Vec<_> = aggregator.authority_clients.values().collect();
-    let framework_obj_ref = genesis::get_framework_object_ref();
+    let framework_obj_ref = *Genesis::cached_default_genesis().framework_ref();
 
     // Start batch processes, and active processes.
     for state in states {

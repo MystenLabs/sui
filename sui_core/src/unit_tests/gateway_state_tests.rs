@@ -6,6 +6,7 @@ use std::{collections::HashSet, path::Path};
 
 use signature::Signer;
 
+use sui_config::genesis::Genesis;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::crypto::KeyPair;
 use sui_types::{crypto::get_key_pair, object::Owner};
@@ -103,7 +104,7 @@ async fn test_move_call() {
     let genesis_objects = authority_genesis_objects(4, vec![gas_object.clone()]);
     let gateway = create_gateway_state(genesis_objects).await;
 
-    let framework_obj_ref = gateway.get_framework_object_ref().await.unwrap();
+    let framework_obj_ref = *Genesis::cached_default_genesis().framework_ref();
     let tx = crate_object_move_transaction(
         addr1,
         &key1,

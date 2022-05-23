@@ -36,7 +36,8 @@ use std::{
     path::Path,
     sync::Arc,
 };
-use sui_adapter::{adapter::new_move_vm, genesis};
+use sui_adapter::adapter::new_move_vm;
+use sui_config::genesis::Genesis;
 use sui_core::{authority::AuthorityTemporaryStore, execution_engine};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::{
@@ -146,7 +147,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
 
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-        let mut objects = genesis::clone_genesis_packages();
+        let mut objects: Vec<Object> = Genesis::cached_default_genesis().objects().to_vec();
+
         let mut account_objects = BTreeMap::new();
         for (account, (addr, _)) in &accounts {
             let obj = Object::with_id_owner_for_testing(ObjectID::new(rng.gen()), *addr);

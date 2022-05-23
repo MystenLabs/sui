@@ -10,7 +10,7 @@ use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};
-use sui_adapter::genesis;
+use sui_config::genesis::Genesis;
 use sui_network::tonic;
 use sui_types::{
     base_types::{ObjectID, TransactionDigest},
@@ -53,7 +53,8 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
         // Make a sample transaction.
         let module = "ObjectBasics";
         let function = "create";
-        let genesis_package_objects = genesis::clone_genesis_packages();
+        let genesis_package_objects: Vec<Object> =
+            Genesis::cached_default_genesis().objects().to_vec();
         let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
 
         let data = TransactionData::new_move_call(

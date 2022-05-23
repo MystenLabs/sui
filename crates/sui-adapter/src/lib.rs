@@ -3,4 +3,3 @@
 
 pub mod adapter;
 pub mod bytecode_rewriter;
-pub mod genesis;

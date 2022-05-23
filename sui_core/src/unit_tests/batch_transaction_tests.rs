@@ -9,7 +9,6 @@ use authority_tests::{
 };
 use move_binary_format::file_format;
 use move_core_types::{account_address::AccountAddress, ident_str};
-use sui_adapter::genesis;
 use sui_types::{
     crypto::{get_key_pair, Signature},
     messages::Transaction,
@@ -38,7 +37,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
                 .compute_object_reference(),
         }));
     }
-    let genesis_package_objects = genesis::clone_genesis_packages();
+    let genesis_package_objects: Vec<Object> = Genesis::cached_default_genesis().objects().to_vec();
     let package_object_ref =
         get_genesis_package_by_module(&genesis_package_objects, "ObjectBasics");
     for _ in 0..N {
@@ -108,7 +107,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
                 .compute_object_reference(),
         }));
     }
-    let genesis_package_objects = genesis::clone_genesis_packages();
+    let genesis_package_objects: Vec<Object> = Genesis::cached_default_genesis().objects().to_vec();
     let package_object_ref =
         get_genesis_package_by_module(&genesis_package_objects, "ObjectBasics");
     transactions.push(SingleTransactionKind::Call(MoveCall {
@@ -188,7 +187,7 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
         .insert_genesis_object(gas_object.clone())
         .await;
 
-    let genesis_package_objects = genesis::clone_genesis_packages();
+    let genesis_package_objects: Vec<Object> = Genesis::cached_default_genesis().objects().to_vec();
     let package_object_ref =
         get_genesis_package_by_module(&genesis_package_objects, "ObjectBasics");
     const N: usize = 100;

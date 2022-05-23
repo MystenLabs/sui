@@ -5719,6 +5719,7 @@ dependencies = [
  "rayon",
  "regex",
  "sui-adapter",
+ "sui-config",
  "sui-framework",
  "sui-types",
  "sui-verifier",

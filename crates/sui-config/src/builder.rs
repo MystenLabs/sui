@@ -111,7 +111,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             .unwrap();
         // It is important that we create a single genesis ctx, and use it to generate
         // modules and objects from now on. This ensures all object IDs created are unique.
-        let mut genesis_ctx = sui_adapter::genesis::get_genesis_context();
+        let mut genesis_ctx = crate::genesis::get_genesis_context();
         let custom_modules = initial_accounts_config
             .generate_custom_move_modules(&mut genesis_ctx)
             .unwrap();

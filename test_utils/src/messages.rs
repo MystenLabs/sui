@@ -8,7 +8,7 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_package::BuildConfig;
 use std::path::PathBuf;
-use sui_adapter::genesis;
+use sui_config::genesis::Genesis;
 use sui_types::base_types::ObjectRef;
 use sui_types::crypto::Signature;
 use sui_types::messages::{CallArg, TransactionEffects};
@@ -48,7 +48,8 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
     for gas_object in test_gas_objects() {
         let module = "ObjectBasics";
         let function = "create";
-        let genesis_package_objects = genesis::clone_genesis_packages();
+        let genesis_package_objects: Vec<Object> =
+            Genesis::cached_default_genesis().objects().to_vec();
         let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
 
         let data = TransactionData::new_move_call(

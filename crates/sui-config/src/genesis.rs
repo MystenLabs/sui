@@ -11,8 +11,16 @@ use std::{
     path::{Path, PathBuf},
 };
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_types::{base_types::TxContext, crypto::PublicKeyBytes, object::Object};
+use sui_types::{
+    base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
+    crypto::PublicKeyBytes,
+    object::Object,
+};
 use tracing::info;
+
+pub fn get_genesis_context() -> TxContext {
+    TxContext::new(&SuiAddress::default(), &TransactionDigest::genesis())
+}
 
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -21,6 +29,7 @@ pub struct Genesis {
     modules: Vec<Vec<CompiledModule>>,
     objects: Vec<Object>,
     genesis_ctx: TxContext,
+    framework_ref: ObjectRef,
 }
 
 impl Genesis {
@@ -36,19 +45,24 @@ impl Genesis {
         &self.genesis_ctx
     }
 
+    pub fn framework_ref(&self) -> &ObjectRef {
+        &self.framework_ref
+    }
+
     pub fn get_default_genesis() -> Self {
-        Builder::new(sui_adapter::genesis::get_genesis_context()).build()
+        Builder::new(get_genesis_context()).build()
     }
 
     pub fn cached_default_genesis() -> Self {
         if Path::new("move_lib_temp").exists() {
             let file = File::open(Path::new("move_lib_temp")).unwrap();
             let reader = BufReader::new(file);
-            let genesis = bincode::deserialize_from(reader).unwrap();
+            let genesis =
+                bincode::deserialize_from(reader).expect("Error deserializing move_lib_temp.");
             return genesis;
         }
 
-        let genesis = Builder::new(sui_adapter::genesis::get_genesis_context()).build();
+        let genesis = Builder::new(get_genesis_context()).build();
         let file = File::create(Path::new("move_lib_temp")).unwrap();
         let writer = BufWriter::new(file);
         bincode::serialize_into(writer, &genesis).unwrap();
@@ -160,22 +174,23 @@ impl Builder {
 
     pub fn build(self) -> Genesis {
         let mut modules = Vec::new();
-        let objects = self.objects;
+        let mut objects = self.objects;
 
         // Load Move Framework
         info!("Loading Move framework lib from {:?}", self.move_framework);
         let move_modules = sui_framework::get_move_stdlib_modules(&self.move_framework).unwrap();
-        // let move_framework =
-        //     Object::new_package(move_modules.clone(), TransactionDigest::genesis());
+        let move_framework =
+            Object::new_package(move_modules.clone(), TransactionDigest::genesis());
         modules.push(move_modules);
-        // objects.push(move_framework);
+        objects.push(move_framework);
 
         // Load Sui Framework
         info!("Loading Sui framework lib from {:?}", self.sui_framework);
         let sui_modules = sui_framework::get_sui_framework_modules(&self.sui_framework).unwrap();
-        // let sui_framework = Object::new_package(sui_modules.clone(), TransactionDigest::genesis());
+        let sui_framework = Object::new_package(sui_modules.clone(), TransactionDigest::genesis());
+        let framework_ref = sui_framework.compute_object_reference();
         modules.push(sui_modules);
-        // objects.push(sui_framework);
+        objects.push(sui_framework);
 
         // add custom modules
         modules.extend(self.move_modules);
@@ -184,6 +199,7 @@ impl Builder {
             modules,
             objects,
             genesis_ctx: self.genesis_ctx,
+            framework_ref,
         }
     }
 }
@@ -191,18 +207,23 @@ impl Builder {
 #[cfg(test)]
 mod test {
     use sui_framework::DEFAULT_FRAMEWORK_PATH;
+    use sui_types::{base_types::TransactionDigest, object::Object};
 
-    use super::Genesis;
+    use super::{get_genesis_context, Genesis};
 
     #[test]
     fn roundtrip() {
         let sui_lib =
             sui_framework::get_sui_framework_modules(DEFAULT_FRAMEWORK_PATH.as_ref()).unwrap();
 
+        let sui_framework = Object::new_package(sui_lib.clone(), TransactionDigest::genesis());
+        let framework_ref = sui_framework.compute_object_reference();
+
         let genesis = Genesis {
             modules: vec![sui_lib],
             objects: vec![],
-            genesis_ctx: sui_adapter::genesis::get_genesis_context(),
+            genesis_ctx: get_genesis_context(),
+            framework_ref,
         };
 
         let s = serde_json::to_string_pretty(&genesis).unwrap();
