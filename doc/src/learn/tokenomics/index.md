@@ -17,19 +17,13 @@ The Sui economy is characterized by three main sets of participants:
 
 The Sui economy has five core components:
 
-* The SUI token is the Sui platform’s native asset. 
-* Gas fees are charged on all network operations and used to reward participants of the proof-of-stake mechanism and prevent spam and denial-of-service attacks.
-* Sui’s storage fund is used to shift stake rewards across time and compensate future validators for storage costs of previously stored on-chain data.
-* The proof-of-stake mechanism is used to select, incentivize, and reward honest behavior by the Sui platform’s operators – i.e. validators and the SUI delegators.
+* The [SUI token](../tokenomics/sui-token.md) is the Sui platform’s native asset. 
+* [Gas fees](../tokenomics/gas-pricing.md) are charged on all network operations and used to reward participants of the proof-of-stake mechanism and prevent spam and denial-of-service attacks.
+* [Sui’s storage fund](../tokenomics/gas-pricing.md) is used to shift stake rewards across time and compensate future validators for storage costs of previously stored on-chain data.
+* The [proof-of-stake mechanism](../tokenomics/proof-of-stake.md) is used to select, incentivize, and reward honest behavior by the Sui platform’s operators – i.e. validators and the SUI delegators.
 * On-chain voting is used for governance and protocol upgrades.
 
 Throughout, we use the visual representation in the following figure to aid the discussion. 
 
 ![Sui tokenomics flow](../../../static/sui-tokenomics-flow.png "See staking and tokenomics in Sui")
 *Visualize staking and tokenomics in Sui*
-
-Continue learning about Sui tokenomics with our:
-1. [Sui token](../tokenomics/sui-token.md).
-1. [Gas-pricing mechanism](../tokenomics/gas-pricing.md).
-1. [Sui storage fund](../tokenomics/storage-fund.md).
-2. [Delegated proof-of-stake system](../tokenomics/proof-of-stake.md).
