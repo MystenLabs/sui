@@ -16,9 +16,9 @@ The gas functions $ComputationUnits[\tau]$ and $StorageUnits[\tau]$ measure the 
 
 The computation gas price $ComputationPrice[\tau]$ captures the cost of one unit of computation in SUI units. This price is set at the transaction level and submitted by the user in two parts:
 
-$$ComputationPrice[\tau] \ \ = \ \ ReferencePrice \ \ + \ \ Tip[\tau],\quad\text{ with }\quad Tip[\tau] \ > \ -ReferencePrice$$
+$$ComputationPrice[\tau] \ \ = \ \ ReferencePrice \ \ + \ \ Tip[\tau],\quad\text{ with }\quad ComputationPrice[\tau] \ > \ PriceFloor$$
 
-The $ReferencePrice$ is fixed at the network level for the duration of the epoch, while the tip is at the user’s discretion. Since the tip can be negative, in practice the user can submit any gas price – as long as the overall price is positive. 
+The $ReferencePrice$ is fixed at the network level for the duration of the epoch, while the tip is at the user’s discretion. Since the tip can be negative, in practice the user can submit any gas price – as long as the overall price is higher than the $PriceFloor$. Note that the $PriceFloor$ will be updated periodically, with $ReferencePrice \ > \ PriceFloor$, and exists mainly to prevent a flood of network spamming.
 
 Sui’s gas price mechanism is intended to make the $ReferencePrice$ a credible anchor for users to use when submitting transactions to the network, thereby providing reasonable confidence that transactions submitted with gas prices at or close to the reference price will be executed in a timely manner. This is achieved through three core steps:
 
