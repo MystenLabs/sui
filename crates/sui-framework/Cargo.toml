@@ -13,13 +13,12 @@ base64 = "0.13.0"
 smallvec = "1.8.0"
 num_enum = "0.5.7"
 
-sui-types = { path = "../../crates/sui-types" }
-sui-verifier = { path = "../../crates/sui-verifier" }
+sui-types = { path = "../sui-types" }
+sui-framework-build = { path = "../sui-framework-build" }
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
 move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
 move-cli = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
-move-compiler = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
 move-core-types = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b", features = ["address20"] }
 move-package = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
 move-stdlib = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
