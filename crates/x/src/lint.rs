@@ -35,13 +35,14 @@ pub fn run(args: Args) -> crate::Result<()> {
     ];
 
     let package_linters: &[&dyn PackageLinter] = &[
-        // &CrateNamesPaths,
+        &CrateNamesPaths,
         &IrrelevantBuildDeps,
         // This one seems to be broken
         //&UnpublishedPackagesOnlyUsePathDependencies::new(),
         &PublishedPackagesDontDependOnUnpublishedPackages,
         &OnlyPublishToCratesIo,
         &CratesInCratesDirectory,
+        &CratesOnlyInCratesDirectory,
     ];
 
     let file_path_linters: &[&dyn FilePathLinter] = &[
