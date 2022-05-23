@@ -23,8 +23,22 @@ fn main() {
     serialize_modules_to_file(move_stdlib, &out_dir.join("move-stdlib")).unwrap();
 
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed={}", sui_framwork_path.display());
-    println!("cargo:rerun-if-changed={}", move_stdlib_path.display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        sui_framwork_path.join("Move.toml").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        sui_framwork_path.join("sources").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        move_stdlib_path.join("Move.toml").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        move_stdlib_path.join("sources").display()
+    );
 }
 
 fn serialize_modules_to_file(modules: Vec<CompiledModule>, file: &Path) -> Result<()> {
