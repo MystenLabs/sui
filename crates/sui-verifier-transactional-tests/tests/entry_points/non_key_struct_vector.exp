@@ -1,0 +1,4 @@
+processed 1 task
+
+task 0 'publish'. lines 6-17:
+Error: Failed to verify the Move module, reason: "Invalid entry point parameter type. Expected primitive or object type. Got: vector<_::M::S>".
