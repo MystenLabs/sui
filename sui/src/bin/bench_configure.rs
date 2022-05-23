@@ -62,9 +62,8 @@ fn main() {
         committee_size: bch.host_port_stake_triplets.len(),
         accounts: accounts.clone(),
         move_packages: vec![],
-        sui_framework_lib_path: Path::new("../../sui_programmability/framework").to_path_buf(),
-        move_framework_lib_path: Path::new("../../sui_programmability/framework/deps/move-stdlib")
-            .to_path_buf(),
+        sui_framework_lib_path: None,
+        move_framework_lib_path: None,
     };
 
     let path_str = "distributed_bench_genesis.conf";
