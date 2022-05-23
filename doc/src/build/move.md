@@ -386,18 +386,18 @@ to facilitate [package publishing](wallet.md#publish-packages).
 
 ```
 [package]
-name = "Sui"
+name = "MyFirstPackage"
 version = "0.0.1"
 
 [dependencies]
-# Using a local dep for the Move stdlib instead of a git dep to avoid the overhead of fetching the git dep in
-# CI. The local dep is an unmodified version of the upstream stdlib
-MoveStdlib = { local = "deps/move-stdlib" }
-#MoveStdlib = { git = "https://github.com/diem/diem.git", subdir="language/move-stdlib", rev = "346301f33b3489bb4e486ae6c0aa5e030223b492" }
+Sui = { local = "../../crates/sui-framework" }
 
 [addresses]
-Sui = "0x2"
+MyFirstPackage = "0x0"
 ```
+
+See the [Move.toml](https://github.com/MystenLabs/sui/blob/main/sui_programmability/tutorial/Move.toml)
+file used in our [end-to-end tutorial](../explore/tutorials.md) for an example.
 
 Ensure you are in the `my_move_package` directory containing your package and build it:
 
