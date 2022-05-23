@@ -5,6 +5,7 @@ members = [
     "crates/sui-config",
     "crates/sui-faucet",
     "crates/sui-framework",
+    "crates/sui-framework-build",
     "crates/sui-gateway",
     "crates/sui-json",
     "crates/sui-network",
