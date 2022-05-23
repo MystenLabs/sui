@@ -1,20 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::{env, path::PathBuf};
 use tonic_build::manual::{Builder, Method, Service};
 
 type Result<T> = ::std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
-#[test]
-fn bootstrap() {
-    let out_dir = PathBuf::from(std::env!("CARGO_MANIFEST_DIR"))
-        .join("src")
-        .join("generated");
+fn main() -> Result<()> {
+    let out_dir = if env::var("DUMP_GENERATED_GRPC").is_ok() {
+        PathBuf::from("")
+    } else {
+        PathBuf::from(env::var("OUT_DIR")?)
+    };
+
     let codec_path = "mysten_network::codec::BincodeCodec";
 
     let validator_service = Service::builder()
@@ -100,40 +98,8 @@ fn bootstrap() {
         .out_dir(&out_dir)
         .compile(&[validator_service]);
 
-    prepend_license(&out_dir).unwrap();
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-env-changed=DUMP_GENERATED_GRPC");
 
-    let status = Command::new("git")
-        .arg("diff")
-        .arg("--exit-code")
-        .arg("--")
-        .arg(format!("{}", out_dir.display()))
-        .status()
-        .unwrap();
-
-    if !status.success() {
-        panic!("You should commit the protobuf files");
-    }
-}
-
-fn prepend_license(directory: &Path) -> Result<()> {
-    for entry in fs::read_dir(directory)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_file() {
-            prepend_license_to_file(&path)?;
-        }
-    }
-    Ok(())
-}
-
-const LICENSE_HEADER: &str = "\
-// Copyright (c) 2022, Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-";
-
-fn prepend_license_to_file(file: &Path) -> Result<()> {
-    let mut contents = fs::read_to_string(file)?;
-    contents.insert_str(0, LICENSE_HEADER);
-    fs::write(file, &contents)?;
     Ok(())
 }
