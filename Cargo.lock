@@ -5575,6 +5575,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64",
+ "bcs",
  "move-binary-format",
  "move-bytecode-verifier",
  "move-cli",
@@ -5585,6 +5586,7 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-types",
  "num_enum",
+ "once_cell",
  "smallvec",
  "sui-framework-build",
  "sui-types",
