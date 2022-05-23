@@ -1,5 +1,5 @@
 [package]
-name = "sui_core"
+name = "sui-core"
 version = "0.1.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
@@ -42,13 +42,13 @@ thiserror = "1.0.30"
 arc-swap = "1.5.0"
 
 
-sui-adapter = { path = "../crates/sui-adapter" }
-sui-framework = { path = "../crates/sui-framework" }
-sui-network = { path = "../crates/sui-network" }
-sui-types = { path = "../crates/sui-types" }
-sui-storage = { path = "../crates/sui-storage" }
-sui-config = { path = "../crates/sui-config" }
-sui-json = { path = "../crates/sui-json" }
+sui-adapter = { path = "../sui-adapter" }
+sui-framework = { path = "../sui-framework" }
+sui-network = { path = "../sui-network" }
+sui-types = { path = "../sui-types" }
+sui-storage = { path = "../sui-storage" }
+sui-config = { path = "../sui-config" }
+sui-json = { path = "../sui-json" }
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
@@ -74,7 +74,7 @@ tracing-test = "0.2.1"
 tracing-subscriber = "^0.3"
 
 test-fuzz = "3.0.2"
-test-utils = { path = "../crates/test-utils" }
+test-utils = { path = "../test-utils" }
 
 [[example]]
 name = "generate-format"

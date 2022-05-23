@@ -22,7 +22,7 @@ tower = { version = "0.4.12", features = ["util", "timeout", "load-shed", "limit
 
 sui = { path = "../../sui" }
 sui-types = { path = "../sui-types" }
-sui_core = { path = "../../sui_core" }
+sui-core = { path = "../sui-core" }
 
 [dev-dependencies]
 tempfile = "3.3.0"

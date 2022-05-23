@@ -22,7 +22,7 @@ futures = "0.3.21"
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 prometheus_exporter = "0.8.4"
 
-sui_core = { path = "../../sui_core" }
+sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
