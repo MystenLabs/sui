@@ -1,0 +1,35 @@
+name: TypeScript SDK PR checks
+on: pull_request
+jobs:
+  diff:
+    runs-on: [ubuntu-latest]
+    outputs:
+      isTypescriptSDK: ${{ steps.diff.outputs.isTypescriptSDK }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Detect Changes
+        uses: "./.github/actions/diffs"
+        id: diff
+  client_checks:
+    name: Test & Build
+    needs: diff
+    if: needs.diff.outputs.isTypescriptSDK == 'true'
+    runs-on: [ubuntu-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install Nodejs
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+          cache: "yarn"
+          cache-dependency-path: ./sdk/typescript/yarn.lock
+      - name: Install dependencies
+        working-directory: ./sdk/typescript
+        run: yarn install
+      - name: Test
+        working-directory: ./sdk/typescript
+        run: yarn test
+      - name: Build
+        working-directory: ./sdk/typescript
+        run: yarn build
