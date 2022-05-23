@@ -48,12 +48,4 @@ On net, this design encourages validators to operate with low gas price quotes �
 
 ## Sui tokenomics conclusion
 
-Sui’s economic model bestows Sui users with an important monitoring role. On the one hand, users want their transactions to be processed as quickly and efficiently as possible. User clients such as wallets encourage this by prioritizing communication with the most responsive validators. Such efficient operations are compensated with boosted rewards relative to less responsive validators. On the other hand, SUI token delegators receive the same boosted or penalized rewards as their delegate validator. An unresponsive validator is thus doubly exposed to Sui’s incentives: they lose directly through slashed rewards and indirectly through reduced delegated stake in future epochs as stakers move their tokens to more responsive validators. 
-
-<!-- Footnotes themselves at the bottom. -->
-
-## Notes
-
-[^1]:
-
-     This should not be confused with deleting past transactions. Activity on Sui is finalized at each epoch boundary and thus past transactions are immutable and can never be reversed. The type of data that can be deleted is, for example, data corresponding to objects that are no longer live such as an NFT’s metadata, tickets that have been redeemed, auctions that have concluded, etc.
+Sui’s economic model bestows Sui users with an important monitoring role. On the one hand, users want their transactions to be processed as quickly and efficiently as possible. User clients such as wallets encourage this by prioritizing communication with the most responsive validators. Such efficient operations are compensated with boosted rewards relative to less responsive validators. On the other hand, SUI token delegators receive the same boosted or penalized rewards as their delegate validator. An unresponsive validator is thus doubly exposed to Sui’s incentives: they lose directly through slashed rewards and indirectly through reduced delegated stake in future epochs as stakers move their tokens to more responsive validators.
