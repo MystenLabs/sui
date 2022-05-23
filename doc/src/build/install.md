@@ -48,7 +48,6 @@ To run Sui, you will need:
 
 In addition, to conduct advanced work such as altering Sui itself, also obtain:
 1. The [`git` command line interface](https://git-scm.com/download/).
-1. A [GitHub account](https://github.com/signup) if you don't have one already.
 1. The [Sui source code](#source-code); for simplicity, we recommend installing in `~/sui` or using an environment variable
 
 ## Binaries
