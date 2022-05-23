@@ -30,4 +30,4 @@ sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 sui-core = { path = "../sui-core" }
 sui-network = { path = "../sui-network" }
-sui = { path = "../../sui" }
+sui = { path = "../sui" }

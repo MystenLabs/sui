@@ -37,12 +37,13 @@ struct Options {
     action: Action,
 }
 
-const FILE_PATH: &str = "crates/sui-open-rpc/spec/openrpc.json";
-const OBJECT_SAMPLE_FILE_PATH: &str = "crates/sui-open-rpc/samples/objects.json";
-const TRANSACTION_SAMPLE_FILE_PATH: &str = "crates/sui-open-rpc/samples/transactions.json";
+const FILE_PATH: &str = "sui-open-rpc/spec/openrpc.json";
+const OBJECT_SAMPLE_FILE_PATH: &str = "sui-open-rpc/samples/objects.json";
+const TRANSACTION_SAMPLE_FILE_PATH: &str = "sui-open-rpc/samples/transactions.json";
 
 #[tokio::main]
 async fn main() {
+    println!("{}", std::env::current_dir().unwrap().display());
     let options = Options::parse();
     let open_rpc = RpcGatewayOpenRpc::open_rpc();
     match options.action {

@@ -20,7 +20,7 @@ serde = { version = "1.0.137", features = ["derive"] }
 serde_json = "1.0.80"
 tower = { version = "0.4.12", features = ["util", "timeout", "load-shed", "limit"] }
 
-sui = { path = "../../sui" }
+sui = { path = "../sui" }
 sui-types = { path = "../sui-types" }
 sui-core = { path = "../sui-core" }
 
