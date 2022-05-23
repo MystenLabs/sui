@@ -39,10 +39,7 @@ You should see the path to the command. Otherwise, reinstall.
 
 > **Tip:** To reliably test DevNet with the latest Sui binaries, re-install them at least weekly.
 
-In addition, to conduct advanced work such as publishing a Move module or making a Move call, also obtain:
-
-1. a [GitHub account](https://github.com/signup) if you don't have one already.
-1. the [Sui source code](../build/install.md#source-code); for simplicity, we recommend installing in `~/sui` or using an environment variable.
+In addition, to conduct advanced work such as publishing a Move module or making a Move call, also obtain the [Sui source code](../build/install.md#source-code); for simplicity, we recommend installing in `~/sui` or using an environment variable.
 
 ### Set up wallet, connect to gateway
 
