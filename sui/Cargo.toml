@@ -79,7 +79,7 @@ pretty_assertions = "1.2.0"
 tokio-util = { version = "0.7.2", features = ["codec"] }
 sui-node = { path = "../crates/sui-node" }
 
-test_utils = { path = "../test_utils" }
+test-utils = { path = "../crates/test-utils" }
 
 [features]
 benchmark = ["narwhal-node/benchmark"]
