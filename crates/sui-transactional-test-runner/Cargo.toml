@@ -38,4 +38,4 @@ sui-framework = { path = "../sui-framework" }
 sui-verifier = { path = "../sui-verifier" }
 sui-types = { path = "../sui-types" }
 sui-adapter = { path = "../sui-adapter" }
-sui_core = { path = "../../sui_core" }
+sui-core = { path = "../sui-core" }
