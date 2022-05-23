@@ -45,9 +45,11 @@ Since the SUI token is available in finite supply, SUI may face deflationary pre
 
 # Sui’s Gas Pricing Mechanism
 
-Sui’s gas pricing mechanism achieves the triple outcomes of delivering users with low, predictable transaction fees, of incentivizing validators to optimize their transaction processing operations, and of preventing denial of service attacks. This delivers good user experience to Sui users, who can focus on using the Sui network without worrying about having to forecast the current market price of gas fees. Moreover, by rewarding good validator behavior, the gas mechanism aligns incentives between SUI token holders, the network’s operators (i.e. the validators), and its users.
+Sui’s gas pricing mechanism achieves the triple outcomes of delivering users with low, predictable transaction fees, of incentivizing validators to optimize their transaction processing operations, and of preventing denial of service attacks. 
 
-A uniquekey feature of Sui’s gas price mechanism is that users pay separate fees for transaction execution and for storing the data associated with each transaction. The gas fees associated with an arbitrary transaction $\tau$ equal:
+This delivers good user experience to Sui users, who can focus on using the Sui network without worrying about having to forecast the current market price of gas fees. Since validators agree on a network-wide reference price at the start of each epoch, Sui users use the reference price as a credible anchor when submitting their transactions. Moreover, the price setting mechanism is designed to reward good validator behavior, thus aligning incentives between SUI token holders, the network’s operators (i.e. the validators), and its users.
+
+A unique feature of Sui’s gas price mechanism is that users pay separate fees for transaction execution and for storing the data associated with each transaction. The gas fees associated with an arbitrary transaction $\tau$ equal:
 
 $GasFees[\tau] \ \ = \ \ ComputationUnits[\tau] \ \times \ ComputationPrice[\tau] \ \ + \ \ StorageUnits[\tau] \ \times \ StoragePrice$
 
@@ -114,7 +116,7 @@ More specifically, the storage fund has three key features:
 The storage fund’s size is fixed throughout each epoch with its size changing at the epoch boundary according to the net inflows accumulated throughout the epoch. Inflows and outflows correspond to:
 
 * Inflows from the storage fees paid for transactions executed during the current epoch.
-* Inflows from reinvestments of the fund’s returns into new principal. Specifically, the share $(1-\gamma)\%$ of stake rewards accrued to the storage fund that is not paid out to validators.
+* Inflows from reinvestments of the fund’s returns into new principal. Specifically, the share $(1-\gamma)$ of stake rewards accrued to the storage fund that is not paid out to validators.
 * Outflows from storage fee rebates paid to users who delete the data associated with past transactions.
 
 The key property of the rebate function is that it limits storage fund outflows to be always less than the original storage flow, at the individual transaction level. This mechanism guarantees that the storage fund is never depleted and that its size moves in line with the amount of data held in storage.
@@ -148,12 +150,12 @@ The Sui economic model works as follows:
     1. The reference gas prices are set as described in Sui’s gas price mechanism.
     1. The storage fund’s size is adjusted using the previous epoch’s net inflow.
 
-    Following these actions, the protocol computes the total amount of stake as the sum of delegated stake plus the storage fund. Call the share of delegated stake alpha%.
+    Following these actions, the protocol computes the total amount of stake as the sum of delegated stake plus the storage fund. Call the share of delegated stake $\alpha$.
 
 1. During each epoch: Users submit transactions to the Sui platform and validators process them. For each transaction, users pay the associated computation and storage gas fees. In cases where users delete previous transaction data, users obtain a partial rebate of their storage fees. Validators observe the behavior of other validators and evaluate each other’s performance.
 1. At the end of each epoch: The protocol distributes stake rewards to participants of the proof-of-stake mechanism. This occurs through two main steps:
     1. The total amount of stake rewards is calculated as the sum of computation fees accrued throughout the epoch plus the epoch’s stake reward subsidies. The latter component is optional in that it will disappear in the long run as the amount of SUI in circulation reaches its total supply.
-    1. The total amount of stake rewards is distributed across various entities. Importantly, remember that the storage fund is taken into account in the calculation of the epoch’s total stake. However, the storage fund is not owned by any entities in the way that delegated SUI is. Instead, Sui’s economic model distributes the stake rewards accruing to the storage fund  – a share (1-alpha)% of the total stake rewards – to validators in order to compensate them for their storage costs. Of these rewards, a share gamma% is paid out to validators while the remaining (1-gamma)% is used to reinvest in the fund’s capital. Finally, assume that validators charge a commission delta% on SUI token holders as a fee for delegation. The split of stake rewards across participants is given by: 
+    1. The total amount of stake rewards is distributed across various entities. Importantly, remember that the storage fund is taken into account in the calculation of the epoch’s total stake. However, the storage fund is not owned by any entities in the way that delegated SUI is. Instead, Sui’s economic model distributes the stake rewards accruing to the storage fund  – a share $(1-\alpha)$ of the total stake rewards – to validators in order to compensate them for their storage costs. Of these rewards, a share $\gamma$ is paid out to validators while the remaining $(1-\gamma)$ is used to reinvest in the fund’s capital. Finally, assume that validators charge a commission delta% on SUI token holders as a fee for delegation. The split of stake rewards across participants is given by: 
 
     	$$ DelegatorRewards \ \ = \ \ (  1 - \delta ) \ \times \  \alpha \ \times \ StakeRewards $$
 
