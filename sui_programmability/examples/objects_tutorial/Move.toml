@@ -3,8 +3,8 @@ name = "Tutorial"
 version = "0.0.1"
 
 [dependencies]
-MoveStdlib = { local = "../../../sui_programmability/framework/deps/move-stdlib/" }
-Sui = { local = "../../../sui_programmability/framework/" }
+MoveStdlib = { local = "../../../crates/sui-framework/deps/move-stdlib/" }
+Sui = { local = "../../../crates/sui-framework/" }
 
 [addresses]
 Tutorial = "0x0"
