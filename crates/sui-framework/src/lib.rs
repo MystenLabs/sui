@@ -251,7 +251,7 @@ fn run_examples_move_unit_tests() {
     ];
     for example in examples {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../examples")
+            .join("../../sui_programmability/examples")
             .join(example);
         build_and_verify_user_package(&path).unwrap();
         run_move_unit_tests(&path, None).unwrap();

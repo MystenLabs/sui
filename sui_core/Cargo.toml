@@ -43,7 +43,7 @@ arc-swap = "1.5.0"
 
 
 sui-adapter = { path = "../crates/sui-adapter" }
-sui-framework = { path = "../sui_programmability/framework" }
+sui-framework = { path = "../crates/sui-framework" }
 sui-network = { path = "../crates/sui-network" }
 sui-types = { path = "../crates/sui-types" }
 sui_storage = { path = "../sui_storage" }

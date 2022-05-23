@@ -3,7 +3,7 @@ name = "DeFi"
 version = "0.0.1"
 
 [dependencies]
-Sui = { local = "../../framework" }
+Sui = { local = "../../../crates/sui-framework" }
 
 [addresses]
 DeFi = "0x0"
