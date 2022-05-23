@@ -32,7 +32,7 @@ sha2 = "0.10.2"
 zeroize = "1.5.4"
 hkdf = "0.12.3"
 digest = "0.10.3"
-schemars ="0.8.8"
+schemars ="0.8.10"
 tonic = "0.7"
 
 name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
