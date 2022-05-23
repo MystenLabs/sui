@@ -5478,10 +5478,10 @@ dependencies = [
  "sui-node",
  "sui-open-rpc",
  "sui-open-rpc-macros",
+ "sui-storage",
  "sui-types",
  "sui-verifier",
  "sui_core",
- "sui_storage",
  "telemetry-subscribers",
  "tempfile",
  "test-utils",
@@ -5679,8 +5679,8 @@ dependencies = [
  "prometheus_exporter",
  "sui-config",
  "sui-gateway",
+ "sui-storage",
  "sui_core",
- "sui_storage",
  "telemetry-subscribers",
  "tokio",
  "tracing",
@@ -5703,6 +5703,23 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "sui-storage"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "pretty_assertions",
+ "rocksdb",
+ "serde 1.0.137",
+ "serde_json",
+ "sui-types",
+ "tokio",
+ "tracing",
+ "tracing-subscriber 0.3.11",
+ "typed-store",
 ]
 
 [[package]]
@@ -5850,8 +5867,8 @@ dependencies = [
  "sui-framework",
  "sui-json",
  "sui-network",
+ "sui-storage",
  "sui-types",
- "sui_storage",
  "temp_testdir",
  "tempfile",
  "test-fuzz",
@@ -5865,23 +5882,6 @@ dependencies = [
  "tracing-test",
  "typed-store",
  "types",
-]
-
-[[package]]
-name = "sui_storage"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "futures",
- "pretty_assertions",
- "rocksdb",
- "serde 1.0.137",
- "serde_json",
- "sui-types",
- "tokio",
- "tracing",
- "tracing-subscriber 0.3.11",
- "typed-store",
 ]
 
 [[package]]
