@@ -45,6 +45,10 @@
         "fileName": "learn/architecture/consensus"
       },
       {
+        "label": "Sui Tokenomics",
+        "fileName": "learn/tokenomics/index"
+      },
+      {
         "label": "Understand Sui Security",
         "fileName": "learn/sui-security"
       },
