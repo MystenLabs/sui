@@ -34,7 +34,7 @@ move-vm-runtime = { git = "https://github.com/move-language/move", rev = "1b2d3b
 move-vm-types = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
 
 
-sui-framework = { path = "../../sui_programmability/framework" }
+sui-framework = { path = "../sui-framework" }
 sui-verifier = { path = "../sui-verifier" }
 sui-types = { path = "../sui-types" }
 sui-adapter = { path = "../sui-adapter" }

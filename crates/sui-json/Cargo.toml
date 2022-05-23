@@ -23,4 +23,4 @@ move-core-types = { git = "https://github.com/move-language/move", rev = "1b2d3b
 test-fuzz = "3.0.2"
 
 sui-adapter = { path = "../sui-adapter" }
-sui-framework = { path = "../../sui_programmability/framework" }
+sui-framework = { path = "../sui-framework" }
