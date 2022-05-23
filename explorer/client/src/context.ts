@@ -12,23 +12,46 @@ import {
 import { Network } from './utils/api/DefaultRpcClient';
 import { IS_LOCAL_ENV } from './utils/envUtil';
 
+const LOCALSTORE_RPC_KEY = 'sui-explorer-rpc';
+const LOCALSTORE_RPC_TIME_KEY = 'sui-explorer-rpc-lastset';
+// Below is 3 hours in milliseconds:
+const LOCALSTORE_RPC_VALID_MS = 60000 * 60 * 3;
+
 export const NetworkContext = createContext<
     [Network | string, Dispatch<SetStateAction<Network | string>>]
 >(['', () => null]);
 
-const LOCALSTORE_RPC_KEY = 'sui-explorer-rpc';
+const wasNetworkSetLongTimeAgo = (): boolean => {
+    const lastEpoch = Number(
+        window.localStorage.getItem(LOCALSTORE_RPC_TIME_KEY)
+    );
+
+    const nowEpoch = Date.now().valueOf();
+
+    if (nowEpoch - lastEpoch >= LOCALSTORE_RPC_VALID_MS) {
+        window.localStorage.setItem(
+            LOCALSTORE_RPC_TIME_KEY,
+            nowEpoch.toString()
+        );
+        return true;
+    } else {
+        return false;
+    }
+};
 
 export function useNetwork(): [
     string,
     Dispatch<SetStateAction<Network | string>>
 ] {
-    //Get storage network from browser:
-    const storageNetwork = window.localStorage.getItem(LOCALSTORE_RPC_KEY);
+    // Default network is that in storage, unless this is
+    // null or was set a long time ago, then instead use website's default value:
+    let defaultNetwork = window.localStorage.getItem(LOCALSTORE_RPC_KEY);
+    if (!defaultNetwork || wasNetworkSetLongTimeAgo()) {
+        defaultNetwork = IS_LOCAL_ENV ? Network.Local : Network.Devnet;
+        window.localStorage.setItem(LOCALSTORE_RPC_KEY, defaultNetwork);
+    }
 
-    // Start value is that in storage or, if null, the website's default:
-    const [network, setNetwork] = useState<Network | string>(
-        storageNetwork || (IS_LOCAL_ENV ? Network.Local : Network.Devnet)
-    );
+    const [network, setNetwork] = useState<Network | string>(defaultNetwork);
 
     useEffect(() => {
         // If network in UI changes, change network in storage:
