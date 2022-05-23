@@ -15,7 +15,7 @@ We now discuss how the different components of the Sui economy interact with eac
 The Sui economic model works as follows:
 
 1. At the beginning of each epoch: Three important things happen:
-    1. SUI holders delegate (some) of their tokens to validators and a new [committee](https://docs.sui.io/learn/architecture/validators#committees) is formed.
+    1. SUI holders delegate (some) of their tokens to validators and a new [committee](../architecture/validators.md#quorums) is formed. 
     1. The reference gas prices are set as described in Sui’s [gas price mechanism](gas-pricing.md)
     1. The [storage fund’s](storage-fund.md) size is adjusted using the previous epoch’s net inflow.
 
