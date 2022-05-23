@@ -65,7 +65,7 @@ narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c
 narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", package = "crypto" }
 
 [dev-dependencies]
-serde-reflection = "0.3.5"
+serde-reflection = "0.3.6"
 serde_yaml = "0.8.23"
 pretty_assertions = "1.2.1"
 temp_testdir = "0.2.3"
