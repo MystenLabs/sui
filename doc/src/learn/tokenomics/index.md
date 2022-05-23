@@ -67,7 +67,7 @@ Sui’s gas price mechanism is intended to make the $ReferencePrice$ a credible 
 
 * _Gas Price Survey_ - A validatory-wide survey is conducted at the beginning of each epoch, and every validator submits their reservation price. That is, each validator states the minimum gas price at which they are willing to process transactions. The protocol orders these quotes and chooses the 2/3's percentile by stake as the reference price. The gas price survey’s goal is to set a reference price under which a quorum of validators are willing to promptly process transactions.
 * _Tallying Rule_ - Throughout the epoch, validators obtain signals over the operations of other validators. Each validator uses these signals to build a (subjective) evaluation over the performance of every other validator. Specifically, each validator constructs a multiplier for the stake rewards of every other validator such that validators who behave well receive boosted rewards, and validators who do not receive reduced rewards. Good behavior is proxied by the share of transactions above a validator’s self-declared reservation price that the validator processed in a timely manner. The tallying rule’s goal is to create a community-enforced mechanism for encouraging validators to honor the quotes submitted during the gas survey.
-* _Incentivized Stake Reward Distribution Rule_ - At the end of the epoch, the distribution of stake rewards across validators is adjusted using information from the gas price survey and tallying rule. Specifically, a global multiplier is built for every validator using the median value – weighted by stake – out of the set of individual multipliers constructed during the tallying rule. The incentivized stake reward distribution then sets the share of stake rewards distributed to each validator v as:
+* _Incentivized Stake Reward Distribution Rule_ - At the end of the epoch, the distribution of stake rewards across validators is adjusted using information from the gas price survey and tallying rule. Specifically, a global multiplier is built for every validator using the median value – weighted by stake – out of the set of individual multipliers constructed during the tallying rule. The incentivized stake reward distribution then sets the share of stake rewards distributed to each validator $v$ as:
 
     $$ RewardShare(v) \ \ = \ \ Constant \ \times \ (\ 1 \ + \ GasSurveyBoost \) \ \times \ Multiplier(v) \ \times \ StakeShare(v) $$
 
@@ -139,9 +139,7 @@ Within each epoch, operations are processed by a fixed set of validators, each w
 
 ## Economic model
 
-We now discuss how the different components of the Sui economy interact with each other in order to introduce Sui’s delegated proof-of-stake system. Throughout, we use the visual representation in the following figure to aid the discussion. 
-
-See the staking and tokenomics diagram in the [Sui Tokenomics](index.md) overview.
+We now discuss how the different components of the Sui economy interact with each other in order to introduce Sui’s delegated proof-of-stake system. As a complementary reference, see the staking and tokenomics diagram in the [Sui Tokenomics](index.md) overview.
 
 The Sui economic model works as follows:
 
@@ -165,11 +163,11 @@ The Sui economic model works as follows:
 
 ## Stake reward distribution and incentives
 
-Sui’s gas pricing mechanism together with its delegated proof-of-stake mechanism jointly deliver an efficient economic model whereby validators are encouraged to operate smoothly with low but sustainable gas fees. A specific validator v receives stake rewards equal to:
+Sui’s gas pricing mechanism together with its delegated proof-of-stake mechanism jointly deliver an efficient economic model whereby validators are encouraged to operate smoothly with low but sustainable gas fees. A specific validator $v$ receives stake rewards equal to:
 
 $$ ValidatorRewards(v) \ \ = \ \ RewardShare(v) \ \times \ ValidatorRewards $$
 
-Where the RewardShare(v) is determined in the gas price mechanism. Note that SUI token holders receive the same share of stake rewards as their delegate validator. Specifically, SUI token holders delegating at a validator v obtain rewards equal to:
+Where the RewardShare(v) is determined in the gas price mechanism. Note that SUI token holders receive the same share of stake rewards as their delegate validator. Specifically, SUI token holders delegating at a validator $v$ obtain rewards equal to:
 
 $$ DelegatorRewards(v) \ \ = \ \ RewardShare(v) \ \times \ DelegatorRewards $$
 
