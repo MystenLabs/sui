@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/sui",
     "crates/sui-adapter",
     "crates/sui-adapter-transactional-tests",
     "crates/sui-config",
@@ -20,7 +21,6 @@ members = [
     "crates/sui-verifier-transactional-tests",
     "crates/test-utils",
     "crates/x",
-    "sui",
 ]
 
 [profile.release]
