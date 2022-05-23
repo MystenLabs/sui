@@ -83,10 +83,10 @@ user-defined coin types, which are custom assets defined in the Move
 language. Sui framework code contains the `Coin` module supporting
 creation and management of custom coins. The `Coin` module is
 located in the
-[sui_programmability/framework/sources/Coin.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/Coin.move)
+[Coin.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Coin.move)
 file. As you would expect, the manifest file describing how to build the
 package containing the `Coin` module is located in the corresponding
-[sui_programmability/framework/Move.toml](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/Move.toml)
+[Move.toml](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/Move.toml)
 file.
 
 Let's see how module definition appears in the `Coin` module file:
@@ -152,7 +152,7 @@ in the Move book.
 In order for a Move struct type to define a Sui object type such as
 `Coin`, its first field must be `id: VersionedID`, which is a
 struct type defined in the
-[ID module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/ID.move). The
+[ID module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/ID.move). The
 Move struct type must
 also have the `key` ability, which allows the object to be persisted
 in Sui's global storage. Abilities of a Move struct are listed after
@@ -180,7 +180,7 @@ In particular, one type of custom coin already defined in Sui is
 `Coin<SUI>`, which represents a token used to pay for Sui
 computations (more generally known as _gas_) - in this case, the concrete type used to parameterize the
 `Coin` struct is the `SUI` struct in the
-[SUI module](https://github.com/MystenLabs/sui/blob/main/sui_programmability/framework/sources/SUI.move):
+[SUI module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/SUI.move):
 
 ``` rust
 struct SUI has drop {}
@@ -195,7 +195,7 @@ section describing how to
 Similarly to other popular programming languages, the main unit of
 computation in Move is a function. Let us look at one of the simplest
 functions defined in the
-[Coin module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/Coin.move), that is
+[Coin module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Coin.move), that is
 the `value` function.
 
 ``` rust
@@ -237,7 +237,7 @@ One of the basic operations in Sui is transfer of gas objects between
 [addresses](https://github.com/move-language/move/blob/main/language/documentation/book/src/address.md)
 representing individual users. And one of the
 simplest entry functions is defined in the
-[SUI module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/SUI.move)
+[SUI module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/SUI.move)
 to implement gas object transfer:
 
 ```rust
@@ -255,7 +255,7 @@ In general, an entry function, must satisfy the following properties:
 - have `public(script)` visibility modifier
 - have no return value
 - have a mutable reference to an instance of the `TxContext` struct
-  defined in the [TxContext module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/TxContext.move) as the last parameter
+  defined in the [TxContext module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/TxContext.move) as the last parameter
 
 More concretely, the `transfer` function is public, has no return
 value, and has three parameters:
@@ -356,7 +356,7 @@ Since we are developing a fantasy game, in addition to the mandatory
 `Coin` struct), our asset has both `magic` and `strength` fields
 describing its respective attribute values. Please note that we need
 to import the
-[ID package](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/ID.move) from
+[ID package](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/ID.move) from
 Sui framework to gain access to the `VersionedID` struct type defined
 in this package.
 
@@ -390,16 +390,14 @@ name = "MyFirstPackage"
 version = "0.0.1"
 
 [dependencies]
-# Using a local dep for the Move stdlib instead of a git dep to avoid the overhead of fetching the git dep in
-# CI. The local dep is an unmodified version of the upstream stdlib
-# Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="sui_programmability/framework", rev="44b5702712c15df365989a3b3f80038b7bf6c2ef"}
-
-# Assuming the `sui` repository is at the same level as the package parent directory
-Sui = { local = "../sui/sui_programmability/framework/" }
+Sui = { local = "../../crates/sui-framework" }
 
 [addresses]
 MyFirstPackage = "0x0"
 ```
+
+See the [Move.toml](https://github.com/MystenLabs/sui/blob/main/sui_programmability/tutorial/Move.toml)
+file used in our [end-to-end tutorial](../explore/tutorials.md) for an example.
 
 Ensure you are in the `my_move_package` directory containing your package and build it:
 
@@ -590,7 +588,7 @@ transactions within a single test (e.g. one transaction creating an
 object and the other one transferring it).
 
 Sui-specific testing is supported via the
-[TestScenario module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/TestScenario.move)
+[TestScenario module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/TestScenario.move)
 that provides Sui-related testing functionality otherwise unavailable
 in *pure Move* and its
 [testing framework](https://github.com/move-language/move/blob/main/language/documentation/book/src/unit-testing.md).
@@ -901,7 +899,7 @@ Objects in Sui can have different ownership types. Specifically, they are:
 - Shared and mutable (work-in-progress).
 
 #### Transfer to address
-The [`Transfer`](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/Transfer.move) module provides all the APIs needed to manipuate the ownership of objects.
+The [`Transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Transfer.move) module provides all the APIs needed to manipuate the ownership of objects.
 
 The most common case is to transfer an object to an account address. For example, when a new object is created, it is typically transferred to an account address so that the address owns the object. To transfer an object `obj` to an account address `recipient`:
 ```
