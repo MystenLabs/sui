@@ -9,5 +9,5 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-schemars = "0.8.8"
+schemars = "0.8.10"
 serde = "1.0.136"
