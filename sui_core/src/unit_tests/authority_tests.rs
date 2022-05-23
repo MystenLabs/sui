@@ -1373,11 +1373,11 @@ pub async fn call_move(
     // TODO improve API here
     let args = object_args
         .into_iter()
-        .map(CallArg::ImmOrOwnedObject)
+        .map(CallArg::Object(CallArgObject::ImmOrOwnedObject))
         .chain(
             shared_object_args_ids
                 .into_iter()
-                .map(CallArg::SharedObject),
+                .map(CallArg::Object(CallArgObject::SharedObject)),
         )
         .chain(pure_args.into_iter().map(CallArg::Pure))
         .collect();
@@ -1490,7 +1490,7 @@ async fn shared_object() {
         gas_object_ref,
         /* args */
         vec![
-            CallArg::SharedObject(shared_object_id),
+            CallArg::Object(CallArgObject::SharedObject(shared_object_id)),
             CallArg::Pure(16u64.to_le_bytes().to_vec()),
             CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
         ],

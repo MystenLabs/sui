@@ -90,10 +90,10 @@ impl SuiValue {
                     None => panic!("Could not load object argument {}", id),
                 };
                 if obj.is_shared() {
-                    CallArg::SharedObject(id)
+                    CallArg::Object(CallArgObject::SharedObject(id))
                 } else {
                     let obj_ref = obj.compute_object_reference();
-                    CallArg::ImmOrOwnedObject(obj_ref)
+                    CallArg::Object(CallArgObject::ImmOrOwnedObject(obj_ref))
                 }
             }
             SuiValue::MoveValue(v) => CallArg::Pure(v.simple_serialize().unwrap()),

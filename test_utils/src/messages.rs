@@ -60,7 +60,7 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
             gas_object.compute_object_reference(),
             /* args */
             vec![
-                CallArg::SharedObject(shared_object_id),
+                CallArg::Object(CallArgObject::SharedObject(shared_object_id),
                 CallArg::Pure(16u64.to_le_bytes().to_vec()),
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
             ],

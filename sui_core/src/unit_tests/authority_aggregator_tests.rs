@@ -102,7 +102,7 @@ fn transfer_object_move_transaction(
     gas_object_ref: ObjectRef,
 ) -> Transaction {
     let args = vec![
-        CallArg::ImmOrOwnedObject(object_ref),
+        CallArg::Object(CallArgObject::ImmOrOwnedObject(object_ref)),
         CallArg::Pure(bcs::to_bytes(&AccountAddress::from(dest)).unwrap()),
     ];
 
@@ -165,7 +165,7 @@ pub fn delete_object_move_transaction(
             ident_str!("delete").to_owned(),
             Vec::new(),
             gas_object_ref,
-            vec![CallArg::ImmOrOwnedObject(object_ref)],
+            vec![CallArg::Object(CallArgObject::ImmOrOwnedObject(object_ref))],
             GAS_VALUE_FOR_TESTING / 2,
         ),
         secret,
@@ -181,7 +181,7 @@ pub fn set_object_move_transaction(
     gas_object_ref: ObjectRef,
 ) -> Transaction {
     let args = vec![
-        CallArg::ImmOrOwnedObject(object_ref),
+        CallArg::Object(CallArgObject::ImmOrOwnedObject(object_ref)),
         CallArg::Pure(bcs::to_bytes(&value).unwrap()),
     ];
 

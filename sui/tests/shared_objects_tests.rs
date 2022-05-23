@@ -183,7 +183,7 @@ async fn call_shared_object_contract() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(counter_id),
+            CallArg::Object(CallArgObject::SharedObject(counter_id)),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
@@ -202,7 +202,7 @@ async fn call_shared_object_contract() {
         "Counter",
         "increment",
         package_ref,
-        vec![CallArg::SharedObject(counter_id)],
+        vec![CallArg::Object(CallArgObject::SharedObject(counter_id))],
     );
     let reply = submit_shared_object_transaction(transaction, &configs[0..1])
         .await
@@ -220,7 +220,7 @@ async fn call_shared_object_contract() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(counter_id),
+            CallArg::Object(CallArgObject::SharedObject(counter_id)),
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
@@ -275,7 +275,7 @@ async fn shared_object_flood() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(counter_id),
+            CallArg::Object(CallArgObject::SharedObject(counter_id),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
@@ -297,7 +297,7 @@ async fn shared_object_flood() {
         "Counter",
         "increment",
         package_ref,
-        vec![CallArg::SharedObject(counter_id)],
+        vec![CallArg::Object(CallArgObject::SharedObject(counter_id)],
     );
     let replies = submit_shared_object_transaction(transaction, &configs).await;
     for reply in replies {
@@ -318,7 +318,7 @@ async fn shared_object_flood() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(counter_id),
+            CallArg::Object(CallArgObject::SharedObject(counter_id),
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
@@ -370,7 +370,7 @@ async fn shared_object_sync() {
         "Counter",
         "increment",
         package_ref,
-        vec![CallArg::SharedObject(counter_id)],
+        vec![CallArg::Object(CallArgObject::SharedObject(counter_id)],
     );
 
     // Let's submit the transaction to the first authority (the only one up-to-date).

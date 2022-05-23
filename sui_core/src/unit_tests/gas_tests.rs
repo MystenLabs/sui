@@ -392,7 +392,7 @@ async fn test_move_call_gas() -> SuiResult {
         ident_str!("delete").to_owned(),
         vec![],
         gas_object.compute_object_reference(),
-        vec![CallArg::ImmOrOwnedObject(created_object_ref)],
+        vec![CallArg::Object(CallArgObject::ImmOrOwnedObject(created_object_ref))],
         expected_gas_balance,
     );
     let signature = Signature::new(&data, &sender_key);

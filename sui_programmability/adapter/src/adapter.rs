@@ -17,7 +17,7 @@ use sui_types::{
     fp_ensure,
     gas::SuiGasStatus,
     id::VersionedID,
-    messages::{CallArg, InputObjectKind},
+    messages::{CallArg, InputObjectKind, CallArgObject},
     object::{self, Data, MoveObject, Object, Owner},
     storage::{DeleteKind, Storage},
 };
@@ -67,13 +67,15 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     gas_status: &mut SuiGasStatus,
     ctx: &mut TxContext,
 ) -> SuiResult<()> {
+
+
+    // These are all objects including those in the vectors of objects
     let objects = args
         .iter()
-        .filter_map(|arg| match arg {
-            CallArg::Pure(_) => None,
-            CallArg::ImmOrOwnedObject((id, _, _)) | CallArg::SharedObject(id) => {
-                Some((*id, state_view.read_object(id)?))
-            }
+        // TODO: remove unwrap
+        .flat_map(|arg| {
+            arg.object_ids()
+                .map(|id| (id, state_view.read_object(&id).unwrap()))
         })
         .collect();
     let module = vm.load_module(&module_id, state_view)?;
@@ -661,6 +663,7 @@ pub fn resolve_and_type_check(
         });
     }
 
+    // TODO: not true anymore
     // total number of args is (|objects| + |pure_args|) + 1 for the the `TxContext` object
     let num_args = args.len() + 1;
     let parameters = &module.signature_at(fhandle.parameters).0;
@@ -702,8 +705,11 @@ pub fn resolve_and_type_check(
                     }
                     return Ok(arg);
                 }
-                CallArg::ImmOrOwnedObject(ref_) => InputObjectKind::ImmOrOwnedMoveObject(ref_),
-                CallArg::SharedObject(id) => InputObjectKind::SharedMoveObject(id),
+                CallArg::Object(CallArgObject::ImmOrOwnedObject(ref_)) => InputObjectKind::ImmOrOwnedMoveObject(ref_),
+                CallArg::Object(CallArgObject::SharedObject(id)) => InputObjectKind::SharedMoveObject(id),
+                
+                // Handle the vector of objects case
+                CallArg::VecObject(_) => todo!(),
             };
 
             let id = object_kind.object_id();

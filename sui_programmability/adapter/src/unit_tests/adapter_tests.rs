@@ -198,8 +198,8 @@ fn call(
     let args = object_args
         .into_iter()
         .map(|obj| match obj.owner {
-            Owner::Shared => CallArg::SharedObject(obj.id()),
-            _ => CallArg::ImmOrOwnedObject(obj.compute_object_reference()),
+            Owner::Shared => CallArg::Object(CallArgObject::SharedObject(obj.id())),
+            _ => CallArg::Object(CallArgObject::ImmOrOwnedObject(obj.compute_object_reference())),
         })
         .chain(pure_args.into_iter().map(CallArg::Pure))
         .collect();

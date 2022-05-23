@@ -39,14 +39,91 @@ use std::{
 mod messages_tests;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
-pub enum CallArg {
-    // contains no structs or objects
-    Pure(Vec<u8>),
+pub enum CallArgObject {
     // TODO support more than one object (object vector of some sort)
     // A Move object, either immutable, or owned mutable.
     ImmOrOwnedObject(ObjectRef),
     // A Move object that's shared and mutable.
     SharedObject(ObjectID),
+}
+impl CallArgObject {
+    pub fn object_id(&self) -> ObjectID {
+        match &self {
+            CallArgObject::ImmOrOwnedObject(i) => i.0,
+            CallArgObject::SharedObject(s) => *s,
+        }
+    }
+
+    pub fn object_id_by_ownership(&self, shared: bool) -> Option<ObjectID> {
+        match &self {
+            CallArgObject::ImmOrOwnedObject(i) => {
+                if shared {
+                    None
+                } else {
+                    Some(i.0)
+                }
+            }
+            CallArgObject::SharedObject(s) => {
+                if shared {
+                    Some(*s)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    pub fn object_id_by_ownership_iter(&self, shared: bool) -> impl Iterator<Item = ObjectID> {
+        std::iter::once(self.object_id_by_ownership(shared)).flatten()
+    }
+
+    pub fn input_object_kind(&self) -> InputObjectKind {
+        match &self {
+            CallArgObject::ImmOrOwnedObject(i) => InputObjectKind::ImmOrOwnedMoveObject(*i),
+            CallArgObject::SharedObject(s) => InputObjectKind::SharedMoveObject(*s),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
+pub enum CallArg {
+    // contains no structs or objects
+    Pure(Vec<u8>),
+
+    Object(CallArgObject),
+
+    VecObject(Vec<CallArgObject>),
+}
+
+impl CallArg {
+    pub fn object_id_by_ownership(&self, shared: bool) -> Box<dyn Iterator<Item = ObjectID> + '_> {
+        match self {
+            CallArg::Pure(_) => Box::new(std::iter::empty::<ObjectID>()),
+            CallArg::Object(q) => Box::new(q.object_id_by_ownership_iter(shared)),
+            CallArg::VecObject(v) => Box::new(
+                v.iter()
+                    .flat_map(move |x| x.object_id_by_ownership_iter(shared)),
+            ),
+        }
+    }
+
+    pub fn input_object_kinds(&self) -> Box<dyn Iterator<Item = InputObjectKind> + '_> {
+        match &self {
+            CallArg::Pure(_) => Box::new(std::iter::empty::<InputObjectKind>()),
+            CallArg::Object(q) => Box::new(std::iter::once(q.input_object_kind())),
+            CallArg::VecObject(v) => Box::new(v.iter().map(|x| x.input_object_kind())),
+        }
+    }
+
+    pub fn object_ids(&self) -> Box<dyn Iterator<Item = ObjectID> + '_> {
+        match self {
+            CallArg::Pure(_) => Box::new(std::iter::empty::<ObjectID>()),
+            CallArg::Object(q) => Box::new(std::iter::once(q.object_id())),
+            CallArg::VecObject(v) => {
+                Box::new(v.iter().flat_map(move |x| std::iter::once(x.object_id())))
+            }
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
@@ -96,14 +173,14 @@ impl SingleTransactionKind {
         self.shared_input_objects().next().is_some()
     }
 
-    pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
+    pub fn shared_input_objects(&self) -> impl Iterator<Item = ObjectID> + '_ {
         match &self {
-            Self::Call(MoveCall { arguments, .. }) => {
-                Either::Left(arguments.iter().filter_map(|arg| match arg {
-                    CallArg::Pure(_) | CallArg::ImmOrOwnedObject(_) => None,
-                    CallArg::SharedObject(id) => Some(id),
-                }))
-            }
+            Self::Call(MoveCall { arguments, .. }) => Either::Left(
+                arguments
+                    .iter()
+                    .flat_map(|w| w.object_id_by_ownership(true)),
+            ),
+
             _ => Either::Right(std::iter::empty()),
         }
     }
@@ -121,13 +198,7 @@ impl SingleTransactionKind {
                 arguments, package, ..
             }) => arguments
                 .iter()
-                .filter_map(|arg| match arg {
-                    CallArg::Pure(_) => None,
-                    CallArg::ImmOrOwnedObject(object_ref) => {
-                        Some(InputObjectKind::ImmOrOwnedMoveObject(*object_ref))
-                    }
-                    CallArg::SharedObject(id) => Some(InputObjectKind::SharedMoveObject(*id)),
-                })
+                .flat_map(|arg| arg.input_object_kinds())
                 .chain([InputObjectKind::MovePackage(package.0)])
                 .collect(),
             Self::Publish(MoveModulePublish { modules }) => {
@@ -440,7 +511,7 @@ impl<S> TransactionEnvelope<S> {
         self.shared_input_objects().next().is_some()
     }
 
-    pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
+    pub fn shared_input_objects(&self) -> impl Iterator<Item = ObjectID> + '_ {
         match &self.data.kind {
             TransactionKind::Single(s) => Either::Left(s.shared_input_objects()),
             TransactionKind::Batch(b) => {
