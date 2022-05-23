@@ -11,7 +11,7 @@ anyhow = { version = "1.0.57", features = ["backtrace"] }
 bcs = "0.1.3"
 bincode = "1.3.3"
 itertools = "0.10.3"
-once_cell = "1.10.0"
+once_cell = "1.11.0"
 rand = "0.7.3"
 serde = { version = "1.0.137", features = ["derive"] }
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }

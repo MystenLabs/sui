@@ -63,7 +63,7 @@ move-unit-test = { git = "https://github.com/move-language/move", rev = "1b2d3b4
 
 narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", package = "node" }
 
-once_cell = "1.10.0"
+once_cell = "1.11.0"
 
 jsonrpsee = { version = "0.13.1", features = ["full"] }
 jsonrpsee-proc-macros = "0.13.1"
