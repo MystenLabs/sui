@@ -47,43 +47,43 @@ Since the SUI token is available in finite supply, SUI may face deflationary pre
 
 Sui’s gas pricing mechanism achieves the triple outcomes of delivering users with low, predictable transaction fees, of incentivizing validators to optimize their transaction processing operations, and of preventing denial of service attacks. This delivers good user experience to Sui users, who can focus on using the Sui network without worrying about having to forecast the current market price of gas fees. Moreover, by rewarding good validator behavior, the gas mechanism aligns incentives between SUI token holders, the network’s operators (i.e. the validators), and its users.
 
-A uniquekey feature of Sui’s gas price mechanism is that users pay separate fees for transaction execution and for storing the data associated with each transaction. The gas fees associated with an arbitrary transaction t equal:
+A uniquekey feature of Sui’s gas price mechanism is that users pay separate fees for transaction execution and for storing the data associated with each transaction. The gas fees associated with an arbitrary transaction $\tau$ equal:
 
-GasFees[t] = ComputationUnits[t] * ComputationPrice[t] + StorageUnits[t]*StoragePrice
+$GasFees[\tau] \ \ = \ \ ComputationUnits[\tau] \ \times \ ComputationPrice[\tau] \ \ + \ \ StorageUnits[\tau] \ \times \ StoragePrice$
 
-The gas functions ComputationUnits[t] and StorageUnits[t] measure the amount of computation and storage resources, respectively, required to process and store the data associated with t. The gas prices ConsumptionPrice[t] and StoragePrice translate the cost of computation and storage, respectively, into SUI units. The coupling between gas units and gas prices is useful since SUI’s market price will fluctuate over time depending on demand and supply fluctuations.
+The gas functions $ComputationUnits[\tau]$ and $StorageUnits[\tau]$ measure the amount of computation and storage resources, respectively, required to process and store the data associated with t. The gas prices $ConsumptionPrice[\tau]$ and $StoragePrice$ translate the cost of computation and storage, respectively, into SUI units. The coupling between gas units and gas prices is useful since SUI’s market price will fluctuate over time depending on demand and supply fluctuations.
 
 ## Computation gas prices
 
-The computation gas price ComputationPrice[t] captures the cost of one unit of computation in SUI units. This price is set at the transaction level and submitted by the user in two parts:
+The computation gas price $ComputationPrice[\tau]$ captures the cost of one unit of computation in SUI units. This price is set at the transaction level and submitted by the user in two parts:
 
-ComputationPrice[t] = ReferencePrice + Tip[t], with Tip[t]>-ReferencePrice
+$$ComputationPrice[\tau] \ \ = \ \ ReferencePrice \ \ + \ \ Tip[\tau],\quad\text{ with }\quad Tip[\tau] \ > \ -ReferencePrice$$
 
-The ReferencePrice is fixed at the network level for the duration of the epoch, while the tip is at the user’s discretion. Since the tip can be negative, in practice the user can submit any gas price – as long as the overall price is positive. 
+The $ReferencePrice$ is fixed at the network level for the duration of the epoch, while the tip is at the user’s discretion. Since the tip can be negative, in practice the user can submit any gas price – as long as the overall price is positive. 
 
-Sui’s gas price mechanism is intended to make the ReferencePrice a credible anchor for users to use when submitting transactions to the network, thereby providing reasonable confidence that transactions submitted with gas prices at or close to the reference price will be executed in a timely manner. This is achieved through three core steps:
+Sui’s gas price mechanism is intended to make the $ReferencePrice$ a credible anchor for users to use when submitting transactions to the network, thereby providing reasonable confidence that transactions submitted with gas prices at or close to the reference price will be executed in a timely manner. This is achieved through three core steps:
 
 * _Gas Price Survey_ - A validatory-wide survey is conducted at the beginning of each epoch, and every validator submits their reservation price. That is, each validator states the minimum gas price at which they are willing to process transactions. The protocol orders these quotes and chooses the 2/3's percentile by stake as the reference price. The gas price survey’s goal is to set a reference price under which a quorum of validators are willing to promptly process transactions.
 * _Tallying Rule_ - Throughout the epoch, validators obtain signals over the operations of other validators. Each validator uses these signals to build a (subjective) evaluation over the performance of every other validator. Specifically, each validator constructs a multiplier for the stake rewards of every other validator such that validators who behave well receive boosted rewards, and validators who do not receive reduced rewards. Good behavior is proxied by the share of transactions above a validator’s self-declared reservation price that the validator processed in a timely manner. The tallying rule’s goal is to create a community-enforced mechanism for encouraging validators to honor the quotes submitted during the gas survey.
 * _Incentivized Stake Reward Distribution Rule_ - At the end of the epoch, the distribution of stake rewards across validators is adjusted using information from the gas price survey and tallying rule. Specifically, a global multiplier is built for every validator using the median value – weighted by stake – out of the set of individual multipliers constructed during the tallying rule. The incentivized stake reward distribution then sets the share of stake rewards distributed to each validator v as:
 
-    RewardShare(v) = Constant * (1+GasSurveyBoost) * Multiplier(v) * StakeShare(v).
+    $$ RewardShare(v) \ \ = \ \ Constant \ \times \ (\ 1 \ + \ GasSurveyBoost \) \ \times \ Multiplier(v) \ \times \ StakeShare(v) $$
 
-    The Constant term is used as a normalization such that the sum of RewardShare(v) across the validator set sums up to one. If the validator submitted a price quote under the reference gas price, then GasSurveyBoost>0. If not, GasSurveyBoost&lt;0. The purpose of this booster is to encourage validators to submit low reservation prices during the gas price survey. Finally, Multiplier(v) is the global multiplier built from the subjective evaluations in the tallying rule. Note that in a symmetric equilibrium where all validators submit the same quote to the gas price survey and where all validators behave well as measured by the tallying rule, then RewardShare(v) = StakeShare(v) and each validator receives stake rewards in proportion to their share of overall stake.
+    The Constant term is used as a normalization such that the sum of RewardShare(v) across the validator set sums up to one. If the validator submitted a price quote under the reference gas price, then $GasSurveyBoost \ > \ 0$. If not, $GasSurveyBoost \ < \ 0$. The purpose of this booster is to encourage validators to submit low reservation prices during the gas price survey. Finally, $Multiplier(v)$ is the global multiplier built from the subjective evaluations in the tallying rule. Note that in a symmetric equilibrium where all validators submit the same quote to the gas price survey and where all validators behave well as measured by the tallying rule, then $ RewardShare(v) \ = \ StakeShare(v)$ and each validator receives stake rewards in proportion to their share of overall stake.
 
 In sum, the gas price mechanism has two main forces: the tallying rule incentivizes validators to honor the quotes submitted during the gas survey, while the distribution rule incentivizes validators to submit low reservations prices. The interaction of these two forces delivers a mechanism encouraging validators to set a low network-level reference gas price – but not too low since they face penalties if they cannot honor their quotes. In other words, the gas price mechanism encourages a healthy competition for fair prices.
 
 
 ## Storage gas prices
 
-The storage gas price StoragePrice captures the costs of covering one unit of storage in perpetuity, in SUI units. This price is set through governance proposals and is updated infrequently. The goal is to ensure Sui users pay for their use of on-chain data storage by depositing these fees into the storage fund and then redistributing these fees to future validators. In contrast to the computation gas price, storage prices are fixed and common for all transactions both within an epoch and across epochs until the storage price is updated.
+The storage gas price $StoragePrice$ captures the costs of covering one unit of storage in perpetuity, in SUI units. This price is set through governance proposals and is updated infrequently. The goal is to ensure Sui users pay for their use of on-chain data storage by depositing these fees into the storage fund and then redistributing these fees to future validators. In contrast to the computation gas price, storage prices are fixed and common for all transactions both within an epoch and across epochs until the storage price is updated.
 
-The StoragePrice is set exogenously through the governance proposal with the goal of targeting the off-chain dollar cost of data storage. In the long run, as the costs of storage fall due to technological improvements and the dollar price of the SUI token evolves, governance proposals will update the price in order to reflect the new dollar target price.
+The $StoragePrice$ is set exogenously through the governance proposal with the goal of targeting the off-chain dollar cost of data storage. In the long run, as the costs of storage fall due to technological improvements and the dollar price of the SUI token evolves, governance proposals will update the price in order to reflect the new dollar target price.
 
 
 ## Gas prices as a coordination mechanism
 
-Overall, users submitting transactions with computation gas prices at or close to the current epoch’s ReferencePrice and storage gas prices at the targeted StoragePrice face good user experience. Sui’s gas price mechanism provides end users with credible reference prices for submitting their transactions. By incentivizing validators to elicit their true reservation prices and honor these quotes, users can credibly assume their transactions will be processed in a timely manner. 
+Overall, users submitting transactions with computation gas prices at or close to the current epoch’s $ReferencePrice$ and storage gas prices at the targeted $StoragePrice$ face good user experience. Sui’s gas price mechanism provides end users with credible reference prices for submitting their transactions. By incentivizing validators to elicit their true reservation prices and honor these quotes, users can credibly assume their transactions will be processed in a timely manner. 
 
 When network activity increases, validators add more workers, increase their costs linearly, and are still able to process transactions at low gas prices. In cases of extreme network congestion where validators cannot scale fast enough, the tip’s presence provides a market-based congestion pricing mechanism that discourages further demand spikes by increasing the cost of transacting on the Sui platform.
 
@@ -101,20 +101,20 @@ Sui’s economic design includes a storage fund that redistributes storage fees 
 
 ## Storage fund rewards
 
-Sui’s proof-of-stake mechanism calculates total stake as the sum of delegated stake plus the SUI tokens deposited in the storage fund. Hence, the storage fund receives a proportional share of the overall stake rewards depending on its size relative to total stake. The majority of these stake rewards –  a share gamma% – are paid out to current validators to compensate for storage costs while the remaining (1-gamma)% rewards are used to reinvest in the fund. In other words, stake rewards accruing to the storage fees submitted by past transactions are paid out to current validators to compensate them for data storage costs. When on-chain storage requirements are high, validators receive substantial additional rewards to compensate for their storage costs. Vice versa when storage requirements are low. 
+Sui’s proof-of-stake mechanism calculates total stake as the sum of delegated stake plus the SUI tokens deposited in the storage fund. Hence, the storage fund receives a proportional share of the overall stake rewards depending on its size relative to total stake. The majority of these stake rewards –  a share $\gamma$ – are paid out to current validators to compensate for storage costs while the remaining $(1-\gamma)$ rewards are used to reinvest in the fund. In other words, stake rewards accruing to the storage fees submitted by past transactions are paid out to current validators to compensate them for data storage costs. When on-chain storage requirements are high, validators receive substantial additional rewards to compensate for their storage costs. Vice versa when storage requirements are low. 
 
-More specifically, the storage fund has three key features:
+More specifically, the storage fund has three key features: 
 
-* It is funded by past transactions and functions as a tool for shifting gas fees across different epochs. This ensures that future validators are compensated for their storage costs by the past users who created those storage requirements in the first place.
-* It pays out only the returns on its capital and does not distribute its principal. That is, in practice, it is as if validators were able to borrow the storage fund’s SUI as additional stake and keep the majority of stake rewards (a gamma%). But note that validators do not receive funds directly from the storage fund. This guarantees the fund never loses its capitalization and can survive indefinitely. This feature is further buttressed by the (1-gamma%) of stake rewards reinvested in the fund.
-* It includes a _deletion option_ by which users obtain a storage fee rebate whenever they delete previously stored on-chain data.[^1] Note that, if a user deletes data, they obtain a partial refund of the storage fees paid originally. This feature is justified by the fact that storage fees exist to pay for storage throughout the data’s lifecycle. There is no reason to keep charging for storage once data is deleted, and so these fees are rebated.
+- It is funded by past transactions and functions as a tool for shifting gas fees across different epochs. This ensures that future validators are compensated for their storage costs by the past users who created those storage requirements in the first place.
+- It pays out only the returns on its capital and does not distribute its principal. That is, in practice, it is as if validators were able to borrow the storage fund’s SUI as additional stake and keep the majority of stake rewards (a $\gamma$). But note that validators do not receive funds directly from the storage fund. This guarantees the fund never loses its capitalization and can survive indefinitely. This feature is further buttressed by the $(1-\gamma)$ of stake rewards reinvested in the fund.
+- It includes a _deletion option_ by which users obtain a storage fee rebate whenever they delete previously stored on-chain data.[^1] Note that, if a user deletes data, they obtain a partial refund of the storage fees paid originally. This feature is justified by the fact that storage fees exist to pay for storage throughout the data’s lifecycle. There is no reason to keep charging for storage once data is deleted, and so these fees are rebated.
 
 ## Storage fund mechanics
 
 The storage fund’s size is fixed throughout each epoch with its size changing at the epoch boundary according to the net inflows accumulated throughout the epoch. Inflows and outflows correspond to:
 
 * Inflows from the storage fees paid for transactions executed during the current epoch.
-* Inflows from reinvestments of the fund’s returns into new principal. Specifically, the share (1-gamma)% of stake rewards accrued to the storage fund that is not paid out to validators.
+* Inflows from reinvestments of the fund’s returns into new principal. Specifically, the share $(1-\gamma)\%$ of stake rewards accrued to the storage fund that is not paid out to validators.
 * Outflows from storage fee rebates paid to users who delete the data associated with past transactions.
 
 The key property of the rebate function is that it limits storage fund outflows to be always less than the original storage flow, at the individual transaction level. This mechanism guarantees that the storage fund is never depleted and that its size moves in line with the amount of data held in storage.
@@ -155,21 +155,21 @@ The Sui economic model works as follows:
     1. The total amount of stake rewards is calculated as the sum of computation fees accrued throughout the epoch plus the epoch’s stake reward subsidies. The latter component is optional in that it will disappear in the long run as the amount of SUI in circulation reaches its total supply.
     1. The total amount of stake rewards is distributed across various entities. Importantly, remember that the storage fund is taken into account in the calculation of the epoch’s total stake. However, the storage fund is not owned by any entities in the way that delegated SUI is. Instead, Sui’s economic model distributes the stake rewards accruing to the storage fund  – a share (1-alpha)% of the total stake rewards – to validators in order to compensate them for their storage costs. Of these rewards, a share gamma% is paid out to validators while the remaining (1-gamma)% is used to reinvest in the fund’s capital. Finally, assume that validators charge a commission delta% on SUI token holders as a fee for delegation. The split of stake rewards across participants is given by: 
 
-    	DelegatorRewards = (1-delta)*alpha*StakeRewards
+    	$$ DelegatorRewards \ \ = \ \ (  1 - \delta ) \ \times \  \alpha \ \times \ StakeRewards $$
 
-    	ValidatorRewards = (delta*alpha + gamma*(1-alpha))*StakeRewards
+    	$$ ValidatorRewards \ \ = \ \ ( \ \delta\alpha \ + \ \gamma (1 - \alpha) \ ) \ \times \ StakeRewards $$
 
-    	Reinvestment = (1-gamma)*(1-alpha)*StakeRewards
+    	$$ Reinvestment \ \ = \ \ ( 1 - \gamma ) \ \times \ ( 1 - \alpha ) \ \times \ StakeRewards $$
 
 ## Stake reward distribution and incentives
 
 Sui’s gas pricing mechanism together with its delegated proof-of-stake mechanism jointly deliver an efficient economic model whereby validators are encouraged to operate smoothly with low but sustainable gas fees. A specific validator v receives stake rewards equal to:
 
-ValidatorRewards(v) = RewardShare(v) * ValidatorRewards
+$$ ValidatorRewards(v) \ \ = \ \ RewardShare(v) \ \times \ ValidatorRewards $$
 
 Where the RewardShare(v) is determined in the gas price mechanism. Note that SUI token holders receive the same share of stake rewards as their delegate validator. Specifically, SUI token holders delegating at a validator v obtain rewards equal to:
 
-DelegatorRewards(v) = RewardShare(v) * DelegatorRewards
+$$ DelegatorRewards(v) \ \ = \ \ RewardShare(v) \ \times \ DelegatorRewards $$
 
 On net, this design encourages validators to operate with low gas price quotes – but not too low or else they receive slashed stake rewards. Consequently, Sui’s gas price mechanism and delegated proof-of-stake system encourages a healthy competition for fair prices where validators set low gas fees while operating with viable business models.
 
