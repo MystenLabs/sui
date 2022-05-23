@@ -418,7 +418,7 @@ mod tests {
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
         let (certificates, _next_parents) =
-            test_utils::make_optimal_certificates(1, rounds, &genesis, &keys);
+            test_utils::make_optimal_certificates(1..=rounds, &genesis, &keys);
         let committee = mock_committee(&keys);
 
         let store_path = test_utils::temp_dir();
@@ -469,7 +469,7 @@ mod tests {
             .collect::<BTreeSet<_>>();
         // TODO: evidence that this test fails when `failure_probability` parameter >= 1/3
         let (certificates, _next_parents) =
-            test_utils::make_certificates(1, rounds, &genesis, &keys, 0.333);
+            test_utils::make_certificates(1..=rounds, &genesis, &keys, 0.333);
         let committee = mock_committee(&keys);
 
         let store_path = test_utils::temp_dir();

@@ -152,7 +152,7 @@ async fn test_rounds_return_successful_response() {
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (mut certificates, _next_parents) = make_optimal_certificates(1, 4, &genesis, &keys);
+    let (mut certificates, _next_parents) = make_optimal_certificates(1..=4, &genesis, &keys);
 
     // Feed the certificates to the Dag
     while let Some(certificate) = genesis_certs.pop() {

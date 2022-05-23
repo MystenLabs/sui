@@ -79,7 +79,7 @@ async fn commit_one() {
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
     let (mut certificates, next_parents) =
-        test_utils::make_optimal_certificates(1, 4, &genesis, &keys);
+        test_utils::make_optimal_certificates(1..=4, &genesis, &keys);
 
     // Make one certificate with round 5 to trigger the commits.
     let (_, certificate) = test_utils::mock_certificate(keys[0].clone(), 5, next_parents);
@@ -133,7 +133,7 @@ async fn dead_node() {
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
 
-    let (mut certificates, _) = test_utils::make_optimal_certificates(1, 9, &genesis, &keys);
+    let (mut certificates, _) = test_utils::make_optimal_certificates(1..=9, &genesis, &keys);
 
     // Spawn the consensus engine and sink the primary channel.
     let (tx_waiter, rx_waiter) = channel(1);
@@ -186,7 +186,7 @@ async fn not_enough_support() {
 
     // Round 1: Fully connected graph.
     let nodes: Vec<_> = keys.iter().take(3).cloned().collect();
-    let (out, parents) = test_utils::make_optimal_certificates(1, 1, &genesis, &nodes);
+    let (out, parents) = test_utils::make_optimal_certificates(1..=1, &genesis, &nodes);
     certificates.extend(out);
 
     // Round 2: Fully connect graph. But remember the digest of the leader. Note that this
@@ -196,7 +196,7 @@ async fn not_enough_support() {
     certificates.push_back(certificate);
 
     let nodes: Vec<_> = keys.iter().skip(1).cloned().collect();
-    let (out, mut parents) = test_utils::make_optimal_certificates(2, 2, &parents, &nodes);
+    let (out, mut parents) = test_utils::make_optimal_certificates(2..=2, &parents, &nodes);
     certificates.extend(out);
 
     // Round 3: Only node 0 links to the leader of round 2.
@@ -222,7 +222,7 @@ async fn not_enough_support() {
 
     // Rounds 4, 5, and 6: Fully connected graph.
     let nodes: Vec<_> = keys.iter().take(3).cloned().collect();
-    let (out, parents) = test_utils::make_optimal_certificates(4, 6, &parents, &nodes);
+    let (out, parents) = test_utils::make_optimal_certificates(4..=6, &parents, &nodes);
     certificates.extend(out);
 
     // Round 7: Send a single certificate to trigger the commits.
@@ -286,11 +286,11 @@ async fn missing_leader() {
 
     // Remove the leader for rounds 1 and 2.
     let nodes: Vec<_> = keys.iter().skip(1).cloned().collect();
-    let (out, parents) = test_utils::make_optimal_certificates(1, 2, &genesis, &nodes);
+    let (out, parents) = test_utils::make_optimal_certificates(1..=2, &genesis, &nodes);
     certificates.extend(out);
 
     // Add back the leader for rounds 3, 4, 5 and 6.
-    let (out, parents) = test_utils::make_optimal_certificates(3, 6, &parents, &keys);
+    let (out, parents) = test_utils::make_optimal_certificates(3..=6, &parents, &keys);
     certificates.extend(out);
 
     // Add a certificate of round 7 to commit the leader of round 4.
