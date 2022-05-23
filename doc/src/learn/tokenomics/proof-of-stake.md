@@ -10,9 +10,7 @@ Within each epoch, operations are processed by a fixed set of validators, each w
 
 ## Economic model
 
-We now discuss how the different components of the Sui economy interact with each other in order to introduce Sui’s delegated proof-of-stake system. Throughout, we use the visual representation in the following figure to aid the discussion. 
-
-See the staking and tokenomics diagram in the [Sui Tokenomics](index.md) overview.
+We now discuss how the different components of the Sui economy interact with each other in order to introduce Sui’s delegated proof-of-stake system. As a complementary reference, see the staking and tokenomics diagram in the [Sui Tokenomics](index.md) overview.
 
 The Sui economic model works as follows:
 
@@ -36,11 +34,11 @@ The Sui economic model works as follows:
 
 ## Stake reward distribution and incentives
 
-Sui’s gas pricing mechanism together with its delegated proof-of-stake mechanism jointly deliver an efficient economic model whereby validators are encouraged to operate smoothly with low but sustainable gas fees. A specific validator v receives stake rewards equal to:
+Sui’s gas pricing mechanism together with its delegated proof-of-stake mechanism jointly deliver an efficient economic model whereby validators are encouraged to operate smoothly with low but sustainable gas fees. A specific validator $v$ receives stake rewards equal to:
 
 $$ ValidatorRewards(v) \ \ = \ \ RewardShare(v) \ \times \ ValidatorRewards $$
 
-Where the RewardShare(v) is determined in the gas price mechanism. Note that SUI token holders receive the same share of stake rewards as their delegate validator. Specifically, SUI token holders delegating at a validator v obtain rewards equal to:
+Where the RewardShare(v) is determined in the gas price mechanism. Note that SUI token holders receive the same share of stake rewards as their delegate validator. Specifically, SUI token holders delegating at a validator $v$ obtain rewards equal to:
 
 $$ DelegatorRewards(v) \ \ = \ \ RewardShare(v) \ \times \ DelegatorRewards $$
 
