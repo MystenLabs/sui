@@ -531,7 +531,7 @@ problem is to transfer ownership of the sword.
 
 In order to get our test to work, we then add the following line to
 the beginning of our testing function to import the
-[Transfer module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/Transfer.move):
+[Transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Transfer.move):
 
 ``` rust
         use Sui::Transfer;
