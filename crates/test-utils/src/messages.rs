@@ -76,7 +76,7 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
 pub fn publish_move_package_transaction(gas_object: Object) -> Transaction {
     let build_config = BuildConfig::default();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("../sui_programmability/examples/basics");
+    path.push("../../sui_programmability/examples/basics");
     let modules = sui_framework::build_move_package(&path, build_config, false).unwrap();
 
     let all_module_bytes = modules

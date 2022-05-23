@@ -5484,7 +5484,7 @@ dependencies = [
  "sui_storage",
  "telemetry-subscribers",
  "tempfile",
- "test_utils",
+ "test-utils",
  "tokio",
  "tokio-util 0.7.2",
  "toml",
@@ -5561,7 +5561,7 @@ dependencies = [
  "sui-types",
  "sui_core",
  "tempfile",
- "test_utils",
+ "test-utils",
  "thiserror",
  "tokio",
  "tower",
@@ -5855,7 +5855,7 @@ dependencies = [
  "temp_testdir",
  "tempfile",
  "test-fuzz",
- "test_utils",
+ "test-utils",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -6053,7 +6053,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "test_utils"
+name = "test-utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",

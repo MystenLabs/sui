@@ -74,7 +74,7 @@ tracing-test = "0.2.1"
 tracing-subscriber = "^0.3"
 
 test-fuzz = "3.0.2"
-test_utils = { path = "../test_utils" }
+test-utils = { path = "../crates/test-utils" }
 
 [[example]]
 name = "generate-format"
