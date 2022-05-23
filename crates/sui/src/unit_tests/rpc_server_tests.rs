@@ -97,7 +97,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let gas = objects.first().unwrap();
 
     let compiled_modules = build_move_package_to_bytes(
-        Path::new("../sui_programmability/examples/fungible_tokens"),
+        Path::new("../../sui_programmability/examples/fungible_tokens"),
         false,
     )?
     .iter()

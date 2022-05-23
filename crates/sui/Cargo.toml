@@ -38,18 +38,18 @@ multiaddr = "0.14.0"
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
 
 bcs = "0.1.3"
-sui-core = { path = "../crates/sui-core" }
-sui-storage = { path = "../crates/sui-storage" }
-sui-adapter = { path = "../crates/sui-adapter" }
-sui-framework = { path = "../crates/sui-framework" }
-sui-network = { path = "../crates/sui-network" }
-sui-config = { path = "../crates/sui-config" }
-sui-types = { path = "../crates/sui-types" }
-sui-verifier = { path = "../crates/sui-verifier" }
-sui-open-rpc = { path = "../crates/sui-open-rpc" }
-sui-open-rpc-macros = { path = "../crates/sui-open-rpc-macros" }
-sui-json = { path = "../crates/sui-json" }
-sui-gateway = { path = "../crates/sui-gateway" }
+sui-core = { path = "../sui-core" }
+sui-storage = { path = "../sui-storage" }
+sui-adapter = { path = "../sui-adapter" }
+sui-framework = { path = "../sui-framework" }
+sui-network = { path = "../sui-network" }
+sui-config = { path = "../sui-config" }
+sui-types = { path = "../sui-types" }
+sui-verifier = { path = "../sui-verifier" }
+sui-open-rpc = { path = "../sui-open-rpc" }
+sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
+sui-json = { path = "../sui-json" }
+sui-gateway = { path = "../sui-gateway" }
 
 rustyline = "9.1.2"
 rustyline-derive = "0.6.0"
@@ -77,9 +77,9 @@ shell-words = "1.1.0"
 tracing-test = "0.2.1"
 pretty_assertions = "1.2.0"
 tokio-util = { version = "0.7.2", features = ["codec"] }
-sui-node = { path = "../crates/sui-node" }
+sui-node = { path = "../sui-node" }
 
-test-utils = { path = "../crates/test-utils" }
+test-utils = { path = "../test-utils" }
 
 [features]
 benchmark = ["narwhal-node/benchmark"]
