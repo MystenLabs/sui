@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
+use crate::epoch::EpochInfoLocals;
 use crate::gateway_state::GatewayTxSeqNumber;
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
@@ -11,6 +12,7 @@ use std::path::Path;
 use sui_storage::LockService;
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
+use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use sui_types::object::OBJECT_START_VERSION;
 use tracing::{debug, error, trace};
@@ -105,6 +107,9 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
     /// by a single process acting as consensus (light) client. It is used to ensure the authority processes
     /// every message output by consensus (and in the right order).
     last_consensus_index: DBMap<u64, ExecutionIndices>,
+
+    /// Map from each epoch ID to the epoch information.
+    epochs: DBMap<EpochId, EpochInfoLocals>,
 }
 
 impl<
@@ -153,6 +158,7 @@ impl<
                 ("executed_sequence", &options),
                 ("batches", &options),
                 ("last_consensus_index", &options),
+                ("epochs", &options),
             ];
             typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
         }
@@ -173,6 +179,7 @@ impl<
             schedule,
             batches,
             last_consensus_index,
+            epochs,
         ) = reopen! (
             &db,
             "objects";<ObjectKey, Object>,
@@ -185,7 +192,8 @@ impl<
             "sequenced";<(TransactionDigest, ObjectID), SequenceNumber>,
             "schedule";<ObjectID, SequenceNumber>,
             "batches";<TxSequenceNumber, SignedBatch>,
-            "last_consensus_index";<u64, ExecutionIndices>
+            "last_consensus_index";<u64, ExecutionIndices>,
+            "epochs";<EpochId, EpochInfoLocals>
         );
 
         // For now, create one LockService for each SuiDataStore, and we use a specific
@@ -212,6 +220,7 @@ impl<
             executed_sequence,
             batches,
             last_consensus_index,
+            epochs,
         }
     }
 
@@ -268,10 +277,10 @@ impl<
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
-    async fn acquire_locks(
-        &self,
-        input_objects: &[ObjectRef],
-    ) -> Vec<tokio::sync::MutexGuard<'_, ()>> {
+    async fn acquire_locks<'a, 'b>(
+        &'a self,
+        input_objects: &'b [ObjectRef],
+    ) -> Vec<tokio::sync::MutexGuard<'a, ()>> {
         if !USE_LOCKS {
             return vec![];
         }
@@ -1052,6 +1061,17 @@ impl<
     ) -> SuiResult<Option<CertifiedTransaction>> {
         let transaction = self.certificates.get(transaction_digest)?;
         Ok(transaction)
+    }
+
+    pub fn insert_new_epoch_info(&self, epoch_info: EpochInfoLocals) -> SuiResult {
+        self.epochs
+            .insert(&epoch_info.committee.epoch(), &epoch_info)?;
+        Ok(())
+    }
+
+    pub fn get_last_epoch_info(&self) -> SuiResult<EpochInfoLocals> {
+        // unwrap safe since we guarantee to insert an epoch entry at genesis.
+        Ok(self.epochs.iter().skip_to_last().next().unwrap().1)
     }
 
     #[cfg(test)]

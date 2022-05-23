@@ -5,6 +5,7 @@
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
     checkpoints::CheckpointStore,
+    epoch::EpochInfoLocals,
     execution_engine,
     gateway_types::TransactionEffectsResponse,
     transaction_input_checker,
@@ -31,7 +32,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     pin::Pin,
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
     },
 };
@@ -186,10 +187,14 @@ pub struct AuthorityState {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
     pub name: AuthorityName,
-    /// Committee of this Sui instance.
-    pub committee: Committee,
     /// The signature key of the authority.
     pub secret: StableSyncAuthoritySigner,
+
+    /// Committee of this Sui instance.
+    pub committee: Committee,
+    /// A global lock to halt all transaction/cert processing.
+    #[allow(dead_code)]
+    halted: AtomicBool,
 
     /// Move native functions that are available to invoke
     _native_functions: NativeFunctionTable,
@@ -704,12 +709,23 @@ impl AuthorityState {
             generate_genesis_system_object(&store, &move_vm, &committee, &mut genesis_ctx)
                 .await
                 .expect("Cannot generate genesis system object");
+
+            store
+                .insert_new_epoch_info(EpochInfoLocals {
+                    committee,
+                    validator_halted: false,
+                })
+                .expect("Cannot initialize the first epoch entry");
         }
+        let current_epoch_info = store
+            .get_last_epoch_info()
+            .expect("Fail to load the current epoch info");
 
         let mut state = AuthorityState {
-            committee: committee.clone(),
             name,
             secret,
+            committee: current_epoch_info.committee,
+            halted: AtomicBool::new(current_epoch_info.validator_halted),
             _native_functions: native_functions,
             move_vm,
             database: store.clone(),
