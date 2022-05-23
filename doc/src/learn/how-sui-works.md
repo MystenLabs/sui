@@ -112,6 +112,6 @@ Sui smart contracts are written in the [Move language](https://github.com/Mysten
 
 Find a more thorough explanation of Move’s features in:
 
-* the [Move Programming Language book](https://github.com/diem/move/blob/main/language/documentation/book/src/introduction.md)
+* the [Move Programming Language book](https://github.com/move-language/move/blob/main/language/documentation/book/src/introduction.md)
 * Sui-specific [Move instructions](../build/move.md) and [differences](sui-move-diffs.md) on this site
 * the [Sui whitepaper](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) and its formal description of Move in the context of Sui
