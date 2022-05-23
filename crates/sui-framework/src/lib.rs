@@ -5,6 +5,7 @@ use move_binary_format::CompiledModule;
 use move_package::BuildConfig;
 use move_unit_test::UnitTestingConfig;
 use num_enum::TryFromPrimitive;
+use once_cell::sync::Lazy;
 use std::path::Path;
 use sui_types::error::{SuiError, SuiResult};
 
@@ -16,6 +17,36 @@ pub use sui_framework_build::{build_framework, build_move_package, verify_module
 
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
 const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 100_000;
+
+static SUI_FRAMEWORK: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
+    const SUI_FRAMEWORK_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sui-framework"));
+
+    let serialized_modules: Vec<Vec<u8>> = bcs::from_bytes(SUI_FRAMEWORK_BYTES).unwrap();
+
+    serialized_modules
+        .into_iter()
+        .map(|module| CompiledModule::deserialize(&module).unwrap())
+        .collect()
+});
+
+static MOVE_STDLIB: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
+    const MOVE_STDLIB_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/move-stdlib"));
+
+    let serialized_modules: Vec<Vec<u8>> = bcs::from_bytes(MOVE_STDLIB_BYTES).unwrap();
+
+    serialized_modules
+        .into_iter()
+        .map(|module| CompiledModule::deserialize(&module).unwrap())
+        .collect()
+});
+
+pub fn get_sui_framework() -> Vec<CompiledModule> {
+    Lazy::force(&SUI_FRAMEWORK).to_owned()
+}
+
+pub fn get_move_stdlib() -> Vec<CompiledModule> {
+    Lazy::force(&MOVE_STDLIB).to_owned()
+}
 
 pub const DEFAULT_FRAMEWORK_PATH: &str = env!("CARGO_MANIFEST_DIR");
 
@@ -126,6 +157,8 @@ mod tests {
 
     #[test]
     fn run_framework_move_unit_tests() {
+        get_sui_framework();
+        get_move_stdlib();
         get_sui_framework_modules(&PathBuf::from(DEFAULT_FRAMEWORK_PATH)).unwrap();
         run_move_unit_tests(Path::new(env!("CARGO_MANIFEST_DIR")), None).unwrap();
     }
