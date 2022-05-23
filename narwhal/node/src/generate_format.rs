@@ -23,7 +23,7 @@ fn get_registry() -> Result<Registry> {
     // We want to call
     // tracer.trace_value(&mut samples, ...)?;
     // with all the base types contained in messages, especially the ones with custom serializers;
-    // or involving generics (see [serde_reflection documentation](https://novifinancial.github.io/serde-reflection/serde_reflection/index.html)).
+    // or involving generics (see [serde_reflection documentation](https://docs.rs/serde-reflection/latest/serde_reflection/)).
     let mut rng = StdRng::from_seed([0; 32]);
     let kp = Ed25519KeyPair::generate(&mut rng);
     let pk = kp.public().clone();
@@ -123,7 +123,7 @@ fn get_registry() -> Result<Registry> {
     // Caveat: the following (trace_type) won't work, but not because of generics.
     //
     // Generic types instantiated multiple times in the same tracing session requires a work around.
-    // https://novifinancial.github.io/serde-reflection/serde_reflection/index.html#features-and-limitations
+    // https://docs.rs/serde-reflection/latest/serde_reflection/#features-and-limitations
     // but here we should be fine.
     //
     // This doesn't work because of the custom ser/de in PublicKey, which carries through to most top-level messages

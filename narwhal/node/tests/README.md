@@ -7,12 +7,12 @@ It does this by running a manifest generator from the code (using serde-reflecti
 If it has in a legitimate fashion (e.g. we update one of our main types), all that's left to do is to re-run the generator and check in the change.
 
 Here are the references to the software above:
-https://github.com/diem/bcs
-https://github.com/novifinancial/serde-reflection
+* https://github.com/diem/bcs
+* https://github.com/zefchain/serde-reflection
 
 ## Examples
 
-In this example, we will update one of our core types (SuiError), and then update the manifest:
+In this example, we will update one of our core types (DeleteBatches), and then update the manifest:
 
 ```
 narwhal/node(main)» ruplacer --subvert 'DeleteBatches' 'RemoveBatches' --go                                                                                       [14:12:34]
