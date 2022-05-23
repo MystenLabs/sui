@@ -45,7 +45,9 @@ Since the SUI token is available in finite supply, SUI may face deflationary pre
 
 # Sui’s Gas Pricing Mechanism
 
-Sui’s gas pricing mechanism achieves the triple outcomes of delivering users with low, predictable transaction fees, of incentivizing validators to optimize their transaction processing operations, and of preventing denial of service attacks. This delivers good user experience to Sui users, who can focus on using the Sui network without worrying about having to forecast the current market price of gas fees. Moreover, by rewarding good validator behavior, the gas mechanism aligns incentives between SUI token holders, the network’s operators (i.e. the validators), and its users.
+Sui’s gas pricing mechanism achieves the triple outcomes of delivering users with low, predictable transaction fees, of incentivizing validators to optimize their transaction processing operations, and of preventing denial of service attacks. 
+
+This delivers good user experience to Sui users, who can focus on using the Sui network without worrying about having to forecast the current market price of gas fees. Since validators agree on a network-wide reference price at the start of each epoch, Sui users use the reference price as a credible anchor when submitting their transactions. Moreover, the price setting mechanism is designed to reward good validator behavior, thus aligning incentives between SUI token holders, the network’s operators (i.e. the validators), and its users.
 
 A unique feature of Sui’s gas price mechanism is that users pay separate fees for transaction execution and for storing the data associated with each transaction. The gas fees associated with an arbitrary transaction $\tau$ equal:
 
