@@ -583,7 +583,7 @@ We will explore how to transfer coins using the wallet in this section.
 
 ```shell
 USAGE:
-    transfer-coin [FLAGS] [OPTIONS] --gas-budget <gas-budget> --coin-object-id <coin-object-id> --to <to>
+    transfer-coin [OPTIONS] --to <TO> --coin-object-id <COIN_OBJECT_ID> --gas-budget <GAS_BUDGET>
 
 FLAGS:
     -h, --help       Prints help information
@@ -591,7 +591,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-        --gas <gas>                             ID of the coin object for gas payment, in 20 bytes Hex string If not provided, a coin
+        --gas <gas>                             ID of the gas object for gas payment, in 20 bytes Hex string If not provided, a gas
                                                 object with at least gas_budget value will be selected
         --gas-budget <gas-budget>               Gas budget for this transfer
         --coin-object-id <coin-object-id>       Coin to transfer, in 20 bytes Hex string
