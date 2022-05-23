@@ -3,6 +3,7 @@ members = [
     "crates/sui-adapter",
     "crates/sui-adapter-transactional-tests",
     "crates/sui-config",
+    "crates/sui-core",
     "crates/sui-faucet",
     "crates/sui-framework",
     "crates/sui-framework-build",
@@ -20,7 +21,6 @@ members = [
     "crates/test-utils",
     "crates/x",
     "sui",
-    "sui_core",
 ]
 
 [profile.release]

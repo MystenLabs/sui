@@ -90,7 +90,7 @@ struct Options {
     action: Action,
 }
 
-const FILE_PATH: &str = "sui_core/tests/staged/sui.yaml";
+const FILE_PATH: &str = "sui-core/tests/staged/sui.yaml";
 
 fn main() {
     let options = Options::parse();
