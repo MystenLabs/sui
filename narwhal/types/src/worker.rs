@@ -32,7 +32,7 @@ pub type SerializedBatchMessage = Vec<u8>;
 /// identical to hashing a serialized batch.
 ///
 /// TODO: remove the expects in the below, making this return a `Result` and correspondingly
-/// doing error management at the callers.
+/// doing error management at the callers. See #268
 /// TODO: update batch hashing to reflect hashing fixed sequences of transactions, see #87.
 pub fn serialized_batch_digest<K: AsRef<[u8]>>(sbm: K) -> BatchDigest {
     let sbm = sbm.as_ref();
