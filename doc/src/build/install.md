@@ -32,7 +32,7 @@ code development.
 Sui is written in Rust, and we are using Cargo to build and manage the
 dependencies. You will need Cargo to build and install Sui on your machine.
 
-To run Sui, you will need:
+To run Sui, you will need to install:
 1. A command line interface, as virtually everything done here is done by CLI.
 1. The `curl` command to download other tools, which you can confirm with:
    ```shell
@@ -41,7 +41,7 @@ To run Sui, you will need:
    ```shell
    $ rustup update stable
    ```
-1. The `cmake` command installed.
+1. The `cmake` command.
 1. The Sui [binaries](#binaries).
 
 ### Advanced
