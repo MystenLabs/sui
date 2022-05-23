@@ -6,8 +6,9 @@ use anyhow::Result;
 use crate::bytecode_rewriter::ModuleHandleRewriter;
 use move_binary_format::{
     access::ModuleAccess,
+    binary_views::BinaryIndexedView,
     errors::PartialVMResult,
-    file_format::{CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
+    file_format::{CompiledModule, LocalIndex, SignatureToken, StructHandleIndex, Visibility},
 };
 use sui_framework::EventType;
 use sui_types::{
@@ -73,13 +74,14 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         })
         .collect();
     let module = vm.load_module(&module_id, state_view)?;
+    let is_genesis = ctx.digest() == TransactionDigest::genesis();
     let TypeCheckSuccess {
         module_id,
         args,
         object_data,
         by_value_objects,
         mutable_ref_objects,
-    } = resolve_and_type_check(&objects, &module, function, &type_args, args)?;
+    } = resolve_and_type_check(&objects, &module, function, &type_args, args, is_genesis)?;
 
     let mut args = args;
     args.push(ctx.to_vec());
@@ -626,6 +628,7 @@ pub fn resolve_and_type_check(
     function: &Identifier,
     type_args: &[TypeTag],
     args: Vec<CallArg>,
+    is_genesis: bool,
 ) -> Result<TypeCheckSuccess, SuiError> {
     // Resolve the function we are calling
     let function_str = function.as_ident_str();
@@ -644,6 +647,16 @@ pub fn resolve_and_type_check(
             })
         }
     };
+    // Check for script visibility, but ignore for genesis.
+    // Genesis calls private functions, and bypasses this rule. This is helpful for ensuring the
+    // functions are not called again later.
+    // In other words, this is an implementation detail that we are using `execute` for genesis
+    // functions, and as such need to bypass this check.
+    if fdef.visibility != Visibility::Script && !is_genesis {
+        return Err(SuiError::InvalidFunctionVisibility {
+            error: "Can only call functions with 'public(script)' visibility".to_string(),
+        });
+    }
     let fhandle = module.function_handle_at(fdef.function);
 
     // check arity of type and value arguments
@@ -922,7 +935,10 @@ fn type_check_struct(
         Err(SuiError::TypeError {
             error: format!(
                 "Expected argument of type {}, but found type {}",
-                sui_verifier::format_signature_token(module, param_type),
+                sui_verifier::format_signature_token(
+                    &BinaryIndexedView::Module(module),
+                    param_type
+                ),
                 arg_type
             ),
         })
@@ -994,7 +1010,8 @@ fn struct_tag_equals_struct_inst(
     param_type: StructHandleIndex,
     param_type_arguments: &[SignatureToken],
 ) -> bool {
-    let (address, module_name, struct_name) = sui_verifier::resolve_struct(module, param_type);
+    let view = BinaryIndexedView::Module(module);
+    let (address, module_name, struct_name) = sui_verifier::resolve_struct(&view, param_type);
 
     // same address, module, name, and type parameters
     &arg_type.address == address

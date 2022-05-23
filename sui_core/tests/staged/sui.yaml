@@ -455,20 +455,24 @@ SuiError:
         STRUCT:
           - error: STR
     66:
-      TypeError:
+      InvalidFunctionVisibility:
         STRUCT:
           - error: STR
     67:
-      AbortedExecution:
+      TypeError:
         STRUCT:
           - error: STR
     68:
-      InvalidMoveEvent:
+      AbortedExecution:
         STRUCT:
           - error: STR
     69:
-      CircularObjectOwnership: UNIT
+      InvalidMoveEvent:
+        STRUCT:
+          - error: STR
     70:
+      CircularObjectOwnership: UNIT
+    71:
       InvalidSharedChildUse:
         STRUCT:
           - child:
@@ -478,17 +482,17 @@ SuiError:
               TYPENAME: ObjectID
           - ancestor_module: STR
           - current_module: STR
-    71:
+    72:
       GasBudgetTooHigh:
         STRUCT:
           - error: STR
-    72:
+    73:
       InsufficientGas:
         STRUCT:
           - error: STR
-    73:
-      InvalidTxUpdate: UNIT
     74:
+      InvalidTxUpdate: UNIT
+    75:
       TransactionLockExists:
         STRUCT:
           - refs:
@@ -497,21 +501,21 @@ SuiError:
                   - TYPENAME: ObjectID
                   - TYPENAME: SequenceNumber
                   - TYPENAME: ObjectDigest
-    75:
-      TransactionLockDoesNotExist: UNIT
     76:
-      TransactionLockReset: UNIT
+      TransactionLockDoesNotExist: UNIT
     77:
+      TransactionLockReset: UNIT
+    78:
       TransactionNotFound:
         STRUCT:
           - digest:
               TYPENAME: TransactionDigest
-    78:
+    79:
       ObjectNotFound:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
-    79:
+    80:
       ObjectDeleted:
         STRUCT:
           - object_ref:
@@ -519,26 +523,26 @@ SuiError:
                 - TYPENAME: ObjectID
                 - TYPENAME: SequenceNumber
                 - TYPENAME: ObjectDigest
-    80:
+    81:
       BadObjectType:
         STRUCT:
           - error: STR
-    81:
-      MoveExecutionFailure: UNIT
     82:
-      ObjectInputArityViolation: UNIT
+      MoveExecutionFailure: UNIT
     83:
-      ExecutionInvariantViolation: UNIT
+      ObjectInputArityViolation: UNIT
     84:
-      AuthorityInformationUnavailable: UNIT
+      ExecutionInvariantViolation: UNIT
     85:
-      AuthorityUpdateFailure: UNIT
+      AuthorityInformationUnavailable: UNIT
     86:
+      AuthorityUpdateFailure: UNIT
+    87:
       ByzantineAuthoritySuspicion:
         STRUCT:
           - authority:
               TYPENAME: PublicKeyBytes
-    87:
+    88:
       PairwiseSyncFailed:
         STRUCT:
           - xsource:
@@ -549,31 +553,31 @@ SuiError:
               TYPENAME: TransactionDigest
           - error:
               TYPENAME: SuiError
-    88:
+    89:
       StorageError:
         NEWTYPE:
           TYPENAME: TypedStoreError
-    89:
-      BatchErrorSender: UNIT
     90:
+      BatchErrorSender: UNIT
+    91:
       GenericAuthorityError:
         STRUCT:
           - error: STR
-    91:
+    92:
       QuorumNotReached:
         STRUCT:
           - errors:
               SEQ:
                 TYPENAME: SuiError
-    92:
+    93:
       ObjectSerializationError:
         STRUCT:
           - error: STR
-    93:
-      ConcurrentTransactionError: UNIT
     94:
-      IncorrectRecipientError: UNIT
+      ConcurrentTransactionError: UNIT
     95:
+      IncorrectRecipientError: UNIT
+    96:
       TooManyIncorrectAuthorities:
         STRUCT:
           - errors:
@@ -581,45 +585,45 @@ SuiError:
                 TUPLE:
                   - TYPENAME: PublicKeyBytes
                   - TYPENAME: SuiError
-    96:
+    97:
       InconsistentGatewayResult:
         STRUCT:
           - error: STR
-    97:
+    98:
       GatewayInvalidTxRangeQuery:
         STRUCT:
           - error: STR
-    98:
-      OnlyOneConsensusClientPermitted: UNIT
     99:
+      OnlyOneConsensusClientPermitted: UNIT
+    100:
       ConsensusConnectionBroken:
         NEWTYPE: STR
-    100:
+    101:
       FailedToHearBackFromConsensus:
         NEWTYPE: STR
-    101:
+    102:
       SharedObjectLockingFailure:
         NEWTYPE: STR
-    102:
-      ListenerCapacityExceeded: UNIT
     103:
+      ListenerCapacityExceeded: UNIT
+    104:
       ConsensusSuiSerializationError:
         NEWTYPE: STR
-    104:
-      NotASharedObjectTransaction: UNIT
     105:
+      NotASharedObjectTransaction: UNIT
+    106:
       SignatureSeedInvalidLength:
         NEWTYPE: U64
-    106:
+    107:
       HkdfError:
         NEWTYPE: STR
-    107:
+    108:
       SignatureKeyGenError:
         NEWTYPE: STR
-    108:
+    109:
       RpcError:
         NEWTYPE: STR
-    109:
+    110:
       UnsupportedFeatureError:
         STRUCT:
           - error: STR

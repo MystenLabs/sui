@@ -971,6 +971,7 @@ where
             .await?;
 
         // Pass in the objects for a deeper check
+        let is_genesis = false;
         let compiled_module = package_obj
             .data
             .try_as_package()
@@ -982,6 +983,7 @@ where
             &function,
             &type_arguments,
             args.clone(),
+            is_genesis,
         )?;
 
         let data = TransactionData::new_move_call(

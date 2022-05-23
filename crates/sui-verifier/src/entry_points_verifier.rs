@@ -57,7 +57,7 @@ pub fn verify_module(module: &CompiledModule) -> SuiResult {
 
 /// Checks if this module has a conformant `init`
 fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> Result<(), String> {
-    let view = BinaryIndexedView::Module(module);
+    let view = &BinaryIndexedView::Module(module);
 
     if fdef.visibility != Visibility::Private {
         return Err(format!(
@@ -88,7 +88,7 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
     match parameters.len() {
         0 => Ok(()),
         1 => {
-            if is_tx_context(&view, &parameters[0]) {
+            if is_tx_context(view, &parameters[0]) {
                 Ok(())
             } else {
                 Err(format!(
@@ -98,7 +98,7 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
                     SUI_FRAMEWORK_ADDRESS,
                     TX_CONTEXT_MODULE_NAME,
                     TX_CONTEXT_STRUCT_NAME,
-                    format_signature_token(module, &parameters[0]),
+                    format_signature_token(view, &parameters[0]),
                 ))
             }
         }
@@ -113,7 +113,7 @@ fn verify_entry_function_impl(
     module: &CompiledModule,
     func_def: &FunctionDefinition,
 ) -> Result<(), String> {
-    let view = BinaryIndexedView::Module(module);
+    let view = &BinaryIndexedView::Module(module);
     let handle = view.function_handle_at(func_def.function);
     let params = view.signature_at(handle.parameters);
 
@@ -124,8 +124,10 @@ fn verify_entry_function_impl(
             view.identifier_at(handle.name)
         ));
     }
+
     let last_param = params.0.last().unwrap();
-    if !is_tx_context(&view, last_param) {
+    let last_param_idx = params.0.len() - 1;
+    if !is_tx_context(view, last_param) {
         return Err(format!(
             "{}::{}. Expected last parameter of function signature to be &mut {}::{}::{}, but \
             found {}",
@@ -134,8 +136,12 @@ fn verify_entry_function_impl(
             SUI_FRAMEWORK_ADDRESS,
             TX_CONTEXT_MODULE_NAME,
             TX_CONTEXT_STRUCT_NAME,
-            format_signature_token(module, last_param),
+            format_signature_token(view, last_param),
         ));
+    }
+
+    for param in &params.0[0..last_param_idx] {
+        verify_param_type(view, &handle.type_parameters, param)?;
     }
 
     let return_ = view.signature_at(handle.return_);
@@ -147,6 +153,43 @@ fn verify_entry_function_impl(
     }
 
     Ok(())
+}
+
+fn verify_param_type(
+    view: &BinaryIndexedView,
+    function_type_args: &[AbilitySet],
+    param: &SignatureToken,
+) -> Result<(), String> {
+    if is_primitive(param) {
+        return Ok(());
+    }
+
+    if is_object(view, function_type_args, param)? {
+        Ok(())
+    } else {
+        Err(format!(
+            "Invalid entry point parameter type. Expected primitive or object type. Got: {}",
+            format_signature_token(view, param)
+        ))
+    }
+}
+
+fn is_primitive(s: &SignatureToken) -> bool {
+    match s {
+        SignatureToken::Bool
+        | SignatureToken::U8
+        | SignatureToken::U64
+        | SignatureToken::U128
+        | SignatureToken::Address => true,
+        // optimistic
+        SignatureToken::TypeParameter(_) => true,
+        SignatureToken::Signer => false,
+        SignatureToken::Vector(inner) => is_primitive(inner),
+        SignatureToken::Struct(_)
+        | SignatureToken::StructInstantiation(_, _)
+        | SignatureToken::Reference(_)
+        | SignatureToken::MutableReference(_) => false,
+    }
 }
 
 fn is_tx_context(view: &BinaryIndexedView, p: &SignatureToken) -> bool {
