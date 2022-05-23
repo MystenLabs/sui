@@ -16,4 +16,4 @@ The SUI token serves four purposes on the Sui platform:
 
 * SUI token plays an important role in governance by acting as a right to participate in on-chain voting on issues such as protocol upgrades.
 
-Since the SUI token is available in finite supply, SUI may face deflationary pressure in the long run if Sui unlocks more use cases and more users migrate to the platform. In addition, the storage fund’s presence creates an additional deflationary force in that higher on-chain data requirements translate into a larger storage fund, thus reducing the amount of SUI in circulation.
+Since the SUI token is available in finite supply, the same amount of tokens will need to be used across more economic activities in the long run if Sui unlocks many use cases and millions of users migrate to the platform. In addition, the storage fund’s presence creates important monetary dynamics in that higher on-chain data requirements translate into a larger storage fund, reducing the amount of SUI in circulation.
