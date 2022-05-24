@@ -240,7 +240,7 @@ public(script) fun delete_child(child: Child, _parent: &mut Parent, _ctx: &mut T
     ID::delete(id);
 }
 ```
-If you follow the wallet interaction above and then try to call the `delete_child` function here on a child object, you will see the following error:
+If you follow the wallet interaction above and then try to call the `delete_child` function here on a child object, you will see the following runtime error:
 ```
 An object that's owned by another object cannot be deleted or wrapped.
 It must be transferred to an account address first before deletion
