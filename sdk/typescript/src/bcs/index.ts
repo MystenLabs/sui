@@ -499,34 +499,17 @@ export class BCS {
   public static registerAddressType(
     name: string,
     length: number,
-    encoding: string | void = 'hex'
+    encoding: string | undefined = 'hex'
   ): typeof BCS {
-    // todo: create a common interface?
-    // @ts-ignore
-    let proxyClass;
-
-    switch (encoding) {
-      case 'base64':
-        return this.registerType(
-          name,
-          (writer, data) =>
-            new B64(data)
-              .getData()
-              .reduce((writer, el) => writer.write8(el), writer),
-          (reader) => new B64(reader.readBytes(length)).toString()
-        );
-      case 'hex':
-        return this.registerType(
-          name,
-          (writer, data) =>
-            new HEX(data)
-              .getData()
-              .reduce((writer, el) => writer.write8(el), writer),
-          (reader) => new HEX(reader.readBytes(length)).toString()
-        );
-      default:
-        throw new Error('Unsupported encoding! Use either hex or base64');
-    }
+    return this.registerType(
+      name,
+      (writer, data) =>
+        decodeStr(data, encoding).reduce(
+          (writer, el) => writer.write8(el),
+          writer
+        ),
+      (reader) => encodeStr(reader.readBytes(length), encoding)
+    );
   }
 
   /**
@@ -536,9 +519,6 @@ export class BCS {
    * BCS.registerVectorType('vector<u8>', 'u8');
    * let array = BCS.de('vector<u8>', new Uint8Array([6,1,2,3,4,5,6])); // [1,2,3,4,5,6];
    * let again = BCS.set('vector<u8>', [1,2,3,4,5,6]).toBytes();
-   *
-   * BCS.registerVectorType('vector<u8>', 'u8', 'hex');
-   * let array =
    *
    * @param name Name of the type to register.
    * @param elementType Name of the inner type of the vector.
@@ -737,7 +717,7 @@ export class BCS {
 /**
  * Encode data with either `hex` or `base64`.
  *
- * @param {Uint8Array} data Data to encode.
+ * @param {Uint8Array} data Data to encode.q
  * @param {String} encoding Encoding to use: base64 or hex
  * @return {String} Encoded value.
  */
@@ -761,7 +741,10 @@ export function encodeStr(data: Uint8Array, encoding: string): string {
  * @param {String} encoding Encoding to use: base64 or hex
  * @return {Uint8Array} Encoded value.
  */
-export function decodeStr(data: string, encoding: string): Uint8Array {
+export function decodeStr(data: string, encoding?: string): Uint8Array {
+  if (!encoding) {
+    throw new Error('Address encoding not specified');
+  }
   switch (encoding) {
     case 'base64':
       return new B64(data).getData();
