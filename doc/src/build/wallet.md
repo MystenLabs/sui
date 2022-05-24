@@ -643,7 +643,7 @@ $ wallet objects --address 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
 
 ## Creating example NFTs
 
-You may create an [NFT-like object](https://github.com/MystenLabs/sui/blob/27dff728a4c9cb65cd5d92a574105df20cb51887/sui_programmability/framework/sources/DevNetNFT.move#L16) on Sui using the following command:
+You may create an [NFT-like object](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/DevNetNFT.move#L16) on Sui using the following command:
 
 ```shell
 $ wallet create-example-nft

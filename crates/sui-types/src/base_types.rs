@@ -56,6 +56,12 @@ mod base_types_tests;
 )]
 pub struct SequenceNumber(u64);
 
+impl fmt::Display for SequenceNumber {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:#x}", self.0)
+    }
+}
+
 pub type VersionNumber = SequenceNumber;
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
@@ -205,6 +211,9 @@ pub struct TransactionEffectsDigest(
     #[serde_as(as = "Readable<Base64, Bytes>")]
     pub [u8; TRANSACTION_DIGEST_LENGTH],
 );
+
+pub const STD_OPTION_MODULE_NAME: &IdentStr = ident_str!("Option");
+pub const STD_OPTION_STRUCT_NAME: &IdentStr = STD_OPTION_MODULE_NAME;
 
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;

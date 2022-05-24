@@ -1,0 +1,14 @@
+processed 5 tasks
+
+task 1 'publish'. lines 8-24:
+created: object(103)
+written: object(102)
+
+task 2 'run'. lines 26-26:
+Error: Function visibility is invalid for an entry point to execution: "Can only call functions with 'public(script)' visibility".
+
+task 3 'run'. lines 28-28:
+Error: Function visibility is invalid for an entry point to execution: "Can only call functions with 'public(script)' visibility".
+
+task 4 'run'. lines 30-30:
+Error: Function visibility is invalid for an entry point to execution: "Can only call functions with 'public(script)' visibility".

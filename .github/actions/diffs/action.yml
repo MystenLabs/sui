@@ -10,6 +10,9 @@ outputs:
   isExplorerClient:
     description: True when there are changes to files related to explorer client
     value: "${{ steps.diff.outputs.isExplorerClient }}"
+  isTypescriptSDK:
+    description: True when there are changes to files related to TypeScript SDK
+    value: "${{ steps.diff.outputs.isTypescriptSDK }}"
 runs:
   using: composite
   steps:
@@ -27,6 +30,10 @@ runs:
         isExplorerClient:
           - 'explorer/client/**'
           - '.github/workflows/explorer-client-prs.yml'
+        isTypescriptSDK:
+          - 'sdk/typescript/**'
+          - 'sui/open_rpc/samples/**'
+          - '.github/workflows/ts-sdk.yml'
         isDoc:
           - 'doc/**'
           - '*.md'

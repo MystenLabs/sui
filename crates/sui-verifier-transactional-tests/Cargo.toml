@@ -8,7 +8,7 @@ publish = false
 edition = "2021"
 
 [dev-dependencies]
-datatest-stable = "0.1.1"
+datatest-stable = "0.1.2"
 sui-transactional-test-runner = { path = "../sui-transactional-test-runner" }
 
 [[test]]

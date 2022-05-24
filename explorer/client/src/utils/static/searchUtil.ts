@@ -5,7 +5,11 @@ import latestTxData from './latest_transactions.json';
 import mockData from './mock_data.json';
 import mockOwnedObjectData from './owned_object.json';
 
-const navigateWithUnknown = async (input: string, navigate: Function) => {
+const navigateWithUnknown = async (
+    input: string,
+    navigate: Function,
+    network: string
+) => {
     const data = findDataFromID(input, false);
     const ownedObjects = findOwnedObjectsfromID(input);
 

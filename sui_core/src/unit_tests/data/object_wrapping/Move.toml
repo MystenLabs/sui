@@ -1,9 +1,0 @@
-[package]
-name = "ObjectWrapping"
-version = "0.0.1"
-
-[dependencies]
-Sui = { local = "../../../../../sui_programmability/framework" }
-
-[addresses]
-ObjectWrapping = "0x0"

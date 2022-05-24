@@ -20,7 +20,5 @@ select.categorydropdown > option {
     @apply border-r-2 border-y-0 border-l-0 rounded-l-md
     font-mono leading-8
     flex-1 ml-[1vw] sm:ml-[5vw] w-[5rem]
-    text-xs mr-0 bg-offwhite;
-
-    padding-left: 1rem;
+    text-xs mr-0 bg-offwhite pl-[1vw];
 }

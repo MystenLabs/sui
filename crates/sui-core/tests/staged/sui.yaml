@@ -1,0 +1,699 @@
+---
+AccountAddress:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 20
+AuthorityBatch:
+  STRUCT:
+    - next_sequence_number: U64
+    - initial_sequence_number: U64
+    - size: U64
+    - previous_digest:
+        OPTION:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 32
+    - transactions_digest:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 32
+AuthoritySignature:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 64
+CallArg:
+  ENUM:
+    0:
+      Pure:
+        NEWTYPE:
+          SEQ: U8
+    1:
+      ImmOrOwnedObject:
+        NEWTYPE:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    2:
+      SharedObject:
+        NEWTYPE:
+          TYPENAME: ObjectID
+Data:
+  ENUM:
+    0:
+      Move:
+        NEWTYPE:
+          TYPENAME: MoveObject
+    1:
+      Package:
+        NEWTYPE:
+          TYPENAME: MovePackage
+ExecutionStatus:
+  ENUM:
+    0:
+      Success:
+        STRUCT:
+          - gas_cost:
+              TYPENAME: GasCostSummary
+    1:
+      Failure:
+        STRUCT:
+          - gas_cost:
+              TYPENAME: GasCostSummary
+          - error:
+              TYPENAME: SuiError
+GasCostSummary:
+  STRUCT:
+    - computation_cost: U64
+    - storage_cost: U64
+    - storage_rebate: U64
+Identifier:
+  NEWTYPESTRUCT: STR
+MoveCall:
+  STRUCT:
+    - package:
+        TUPLE:
+          - TYPENAME: ObjectID
+          - TYPENAME: SequenceNumber
+          - TYPENAME: ObjectDigest
+    - module:
+        TYPENAME: Identifier
+    - function:
+        TYPENAME: Identifier
+    - type_arguments:
+        SEQ:
+          TYPENAME: TypeTag
+    - arguments:
+        SEQ:
+          TYPENAME: CallArg
+MoveFieldLayout:
+  STRUCT:
+    - name:
+        TYPENAME: Identifier
+    - layout:
+        TYPENAME: MoveTypeLayout
+MoveModulePublish:
+  STRUCT:
+    - modules:
+        SEQ: BYTES
+MoveObject:
+  STRUCT:
+    - type_:
+        TYPENAME: StructTag
+    - contents: BYTES
+MovePackage:
+  STRUCT:
+    - id:
+        TYPENAME: ObjectID
+    - module_map:
+        MAP:
+          KEY: STR
+          VALUE: BYTES
+MoveStructLayout:
+  ENUM:
+    0:
+      Runtime:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: MoveTypeLayout
+    1:
+      WithFields:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: MoveFieldLayout
+    2:
+      WithTypes:
+        STRUCT:
+          - type_:
+              TYPENAME: StructTag
+          - fields:
+              SEQ:
+                TYPENAME: MoveFieldLayout
+MoveTypeLayout:
+  ENUM:
+    0:
+      bool: UNIT
+    1:
+      u8: UNIT
+    2:
+      u64: UNIT
+    3:
+      u128: UNIT
+    4:
+      address: UNIT
+    5:
+      vector:
+        NEWTYPE:
+          TYPENAME: MoveTypeLayout
+    6:
+      struct:
+        NEWTYPE:
+          TYPENAME: MoveStructLayout
+    7:
+      signer: UNIT
+ObjectDigest:
+  NEWTYPESTRUCT: BYTES
+ObjectFormatOptions:
+  STRUCT:
+    - include_types: BOOL
+ObjectID:
+  NEWTYPESTRUCT:
+    TYPENAME: AccountAddress
+ObjectInfoRequestKind:
+  ENUM:
+    0:
+      LatestObjectInfo:
+        NEWTYPE:
+          OPTION:
+            TYPENAME: ObjectFormatOptions
+    1:
+      PastObjectInfo:
+        NEWTYPE:
+          TYPENAME: SequenceNumber
+Owner:
+  ENUM:
+    0:
+      AddressOwner:
+        NEWTYPE:
+          TYPENAME: SuiAddress
+    1:
+      ObjectOwner:
+        NEWTYPE:
+          TYPENAME: SuiAddress
+    2:
+      Shared: UNIT
+    3:
+      Immutable: UNIT
+PublicKeyBytes:
+  NEWTYPESTRUCT: BYTES
+SequenceNumber:
+  NEWTYPESTRUCT: U64
+Signature:
+  NEWTYPESTRUCT: BYTES
+SignedBatch:
+  STRUCT:
+    - batch:
+        TYPENAME: AuthorityBatch
+    - authority:
+        TYPENAME: PublicKeyBytes
+    - signature:
+        TYPENAME: AuthoritySignature
+SingleTransactionKind:
+  ENUM:
+    0:
+      TransferCoin:
+        NEWTYPE:
+          TYPENAME: TransferCoin
+    1:
+      Publish:
+        NEWTYPE:
+          TYPENAME: MoveModulePublish
+    2:
+      Call:
+        NEWTYPE:
+          TYPENAME: MoveCall
+StructTag:
+  STRUCT:
+    - address:
+        TYPENAME: AccountAddress
+    - module:
+        TYPENAME: Identifier
+    - name:
+        TYPENAME: Identifier
+    - type_args:
+        SEQ:
+          TYPENAME: TypeTag
+SuiAddress:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 20
+SuiError:
+  ENUM:
+    0:
+      LockErrors:
+        STRUCT:
+          - errors:
+              SEQ:
+                TYPENAME: SuiError
+    1:
+      TransferUnownedError: UNIT
+    2:
+      TransferNonCoinError: UNIT
+    3:
+      MoveObjectAsPackage:
+        STRUCT:
+          - object_id:
+              TYPENAME: ObjectID
+    4:
+      MovePackageAsObject:
+        STRUCT:
+          - object_id:
+              TYPENAME: ObjectID
+    5:
+      UnexpectedOwnerType: UNIT
+    6:
+      UnsupportedSharedObjectError: UNIT
+    7:
+      NotSharedObjectError: UNIT
+    8:
+      DeleteObjectOwnedObject: UNIT
+    9:
+      SharedObjectLockNotSetObject: UNIT
+    10:
+      InvalidBatchTransaction:
+        STRUCT:
+          - error: STR
+    11:
+      MissingObjectOwner:
+        STRUCT:
+          - child_id:
+              TYPENAME: ObjectID
+          - parent_id:
+              TYPENAME: ObjectID
+    12:
+      InvalidSignature:
+        STRUCT:
+          - error: STR
+    13:
+      IncorrectSigner:
+        STRUCT:
+          - error: STR
+    14:
+      UnknownSigner: UNIT
+    15:
+      WrongEpoch:
+        STRUCT:
+          - expected_epoch: U64
+    16:
+      CertificateRequiresQuorum: UNIT
+    17:
+      UnexpectedSequenceNumber:
+        STRUCT:
+          - object_id:
+              TYPENAME: ObjectID
+          - expected_sequence:
+              TYPENAME: SequenceNumber
+          - given_sequence:
+              TYPENAME: SequenceNumber
+    18:
+      ConflictingTransaction:
+        STRUCT:
+          - pending_transaction:
+              TYPENAME: TransactionDigest
+    19:
+      ErrorWhileProcessingTransaction: UNIT
+    20:
+      ErrorWhileProcessingTransactionTransaction:
+        STRUCT:
+          - err: STR
+    21:
+      ErrorWhileProcessingConfirmationTransaction:
+        STRUCT:
+          - err: STR
+    22:
+      ErrorWhileRequestingCertificate: UNIT
+    23:
+      ErrorWhileProcessingPublish:
+        STRUCT:
+          - err: STR
+    24:
+      ErrorWhileProcessingMoveCall:
+        STRUCT:
+          - err: STR
+    25:
+      ErrorWhileRequestingInformation: UNIT
+    26:
+      ObjectFetchFailed:
+        STRUCT:
+          - object_id:
+              TYPENAME: ObjectID
+          - err: STR
+    27:
+      MissingEarlierConfirmations:
+        STRUCT:
+          - object_id:
+              TYPENAME: ObjectID
+          - current_sequence_number:
+              TYPENAME: SequenceNumber
+    28:
+      UnexpectedTransactionIndex: UNIT
+    29:
+      ConcurrentIteratorError: UNIT
+    30:
+      ClosedNotifierError: UNIT
+    31:
+      CertificateNotfound:
+        STRUCT:
+          - certificate_digest:
+              TYPENAME: TransactionDigest
+    32:
+      ParentNotfound:
+        STRUCT:
+          - object_id:
+              TYPENAME: ObjectID
+          - sequence:
+              TYPENAME: SequenceNumber
+    33:
+      UnknownSenderAccount: UNIT
+    34:
+      CertificateAuthorityReuse: UNIT
+    35:
+      InvalidSequenceNumber: UNIT
+    36:
+      SequenceOverflow: UNIT
+    37:
+      SequenceUnderflow: UNIT
+    38:
+      WrongShard: UNIT
+    39:
+      InvalidCrossShardUpdate: UNIT
+    40:
+      InvalidAuthenticator: UNIT
+    41:
+      InvalidAddress: UNIT
+    42:
+      InvalidTransactionDigest: UNIT
+    43:
+      InvalidObjectDigest:
+        STRUCT:
+          - object_id:
+              TYPENAME: ObjectID
+          - expected_digest:
+              TYPENAME: ObjectDigest
+    44:
+      InvalidDecoding: UNIT
+    45:
+      UnexpectedMessage: UNIT
+    46:
+      DuplicateObjectRefInput: UNIT
+    47:
+      ClientIoError:
+        STRUCT:
+          - error: STR
+    48:
+      TransferImmutableError: UNIT
+    49:
+      TooManyItemsError:
+        NEWTYPE: U64
+    50:
+      InvalidSequenceRangeError: UNIT
+    51:
+      NoBatchesFoundError: UNIT
+    52:
+      CannotSendClientMessageError: UNIT
+    53:
+      SubscriptionItemsDroppedError:
+        NEWTYPE: U64
+    54:
+      SubscriptionServiceClosed: UNIT
+    55:
+      CheckpointingError:
+        STRUCT:
+          - error: STR
+    56:
+      ModuleLoadFailure:
+        STRUCT:
+          - error: STR
+    57:
+      ModuleVerificationFailure:
+        STRUCT:
+          - error: STR
+    58:
+      ModuleDeserializationFailure:
+        STRUCT:
+          - error: STR
+    59:
+      ModulePublishFailure:
+        STRUCT:
+          - error: STR
+    60:
+      ModuleBuildFailure:
+        STRUCT:
+          - error: STR
+    61:
+      DependentPackageNotFound:
+        STRUCT:
+          - package_id:
+              TYPENAME: ObjectID
+    62:
+      MoveUnitTestFailure:
+        STRUCT:
+          - error: STR
+    63:
+      FunctionNotFound:
+        STRUCT:
+          - error: STR
+    64:
+      ModuleNotFound:
+        STRUCT:
+          - module_name: STR
+    65:
+      InvalidFunctionSignature:
+        STRUCT:
+          - error: STR
+    66:
+      InvalidFunctionVisibility:
+        STRUCT:
+          - error: STR
+    67:
+      TypeError:
+        STRUCT:
+          - error: STR
+    68:
+      AbortedExecution:
+        STRUCT:
+          - error: STR
+    69:
+      InvalidMoveEvent:
+        STRUCT:
+          - error: STR
+    70:
+      CircularObjectOwnership: UNIT
+    71:
+      InvalidSharedChildUse:
+        STRUCT:
+          - child:
+              TYPENAME: ObjectID
+          - child_module: STR
+          - ancestor:
+              TYPENAME: ObjectID
+          - ancestor_module: STR
+          - current_module: STR
+    72:
+      GasBudgetTooHigh:
+        STRUCT:
+          - error: STR
+    73:
+      InsufficientGas:
+        STRUCT:
+          - error: STR
+    74:
+      InvalidTxUpdate: UNIT
+    75:
+      TransactionLockExists:
+        STRUCT:
+          - refs:
+              SEQ:
+                TUPLE:
+                  - TYPENAME: ObjectID
+                  - TYPENAME: SequenceNumber
+                  - TYPENAME: ObjectDigest
+    76:
+      TransactionLockDoesNotExist: UNIT
+    77:
+      TransactionLockReset: UNIT
+    78:
+      TransactionNotFound:
+        STRUCT:
+          - digest:
+              TYPENAME: TransactionDigest
+    79:
+      ObjectNotFound:
+        STRUCT:
+          - object_id:
+              TYPENAME: ObjectID
+    80:
+      ObjectDeleted:
+        STRUCT:
+          - object_ref:
+              TUPLE:
+                - TYPENAME: ObjectID
+                - TYPENAME: SequenceNumber
+                - TYPENAME: ObjectDigest
+    81:
+      BadObjectType:
+        STRUCT:
+          - error: STR
+    82:
+      MoveExecutionFailure: UNIT
+    83:
+      ObjectInputArityViolation: UNIT
+    84:
+      ExecutionInvariantViolation: UNIT
+    85:
+      AuthorityInformationUnavailable: UNIT
+    86:
+      AuthorityUpdateFailure: UNIT
+    87:
+      ByzantineAuthoritySuspicion:
+        STRUCT:
+          - authority:
+              TYPENAME: PublicKeyBytes
+    88:
+      PairwiseSyncFailed:
+        STRUCT:
+          - xsource:
+              TYPENAME: PublicKeyBytes
+          - destination:
+              TYPENAME: PublicKeyBytes
+          - tx_digest:
+              TYPENAME: TransactionDigest
+          - error:
+              TYPENAME: SuiError
+    89:
+      StorageError:
+        NEWTYPE:
+          TYPENAME: TypedStoreError
+    90:
+      BatchErrorSender: UNIT
+    91:
+      GenericAuthorityError:
+        STRUCT:
+          - error: STR
+    92:
+      QuorumNotReached:
+        STRUCT:
+          - errors:
+              SEQ:
+                TYPENAME: SuiError
+    93:
+      ObjectSerializationError:
+        STRUCT:
+          - error: STR
+    94:
+      ConcurrentTransactionError: UNIT
+    95:
+      IncorrectRecipientError: UNIT
+    96:
+      TooManyIncorrectAuthorities:
+        STRUCT:
+          - errors:
+              SEQ:
+                TUPLE:
+                  - TYPENAME: PublicKeyBytes
+                  - TYPENAME: SuiError
+    97:
+      InconsistentGatewayResult:
+        STRUCT:
+          - error: STR
+    98:
+      GatewayInvalidTxRangeQuery:
+        STRUCT:
+          - error: STR
+    99:
+      OnlyOneConsensusClientPermitted: UNIT
+    100:
+      ConsensusConnectionBroken:
+        NEWTYPE: STR
+    101:
+      FailedToHearBackFromConsensus:
+        NEWTYPE: STR
+    102:
+      SharedObjectLockingFailure:
+        NEWTYPE: STR
+    103:
+      ListenerCapacityExceeded: UNIT
+    104:
+      ConsensusSuiSerializationError:
+        NEWTYPE: STR
+    105:
+      NotASharedObjectTransaction: UNIT
+    106:
+      SignatureSeedInvalidLength:
+        NEWTYPE: U64
+    107:
+      HkdfError:
+        NEWTYPE: STR
+    108:
+      SignatureKeyGenError:
+        NEWTYPE: STR
+    109:
+      RpcError:
+        NEWTYPE: STR
+    110:
+      UnsupportedFeatureError:
+        STRUCT:
+          - error: STR
+TransactionDigest:
+  NEWTYPESTRUCT: BYTES
+TransactionKind:
+  ENUM:
+    0:
+      Single:
+        NEWTYPE:
+          TYPENAME: SingleTransactionKind
+    1:
+      Batch:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: SingleTransactionKind
+TransferCoin:
+  STRUCT:
+    - recipient:
+        TYPENAME: SuiAddress
+    - object_ref:
+        TUPLE:
+          - TYPENAME: ObjectID
+          - TYPENAME: SequenceNumber
+          - TYPENAME: ObjectDigest
+TypeTag:
+  ENUM:
+    0:
+      bool: UNIT
+    1:
+      u8: UNIT
+    2:
+      u64: UNIT
+    3:
+      u128: UNIT
+    4:
+      address: UNIT
+    5:
+      signer: UNIT
+    6:
+      vector:
+        NEWTYPE:
+          TYPENAME: TypeTag
+    7:
+      struct:
+        NEWTYPE:
+          TYPENAME: StructTag
+TypedStoreError:
+  ENUM:
+    0:
+      RocksDBError:
+        NEWTYPE: STR
+    1:
+      SerializationError:
+        NEWTYPE: STR
+    2:
+      UnregisteredColumn:
+        NEWTYPE: STR
+    3:
+      CrossDBBatch: UNIT
+UpdateItem:
+  ENUM:
+    0:
+      Transaction:
+        NEWTYPE:
+          TUPLE:
+            - U64
+            - TYPENAME: TransactionDigest
+    1:
+      Batch:
+        NEWTYPE:
+          TYPENAME: SignedBatch
+

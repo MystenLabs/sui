@@ -13,9 +13,9 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
-use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::base_types::{ObjectID, SuiAddress, TxContext};
 use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::{get_key_pair_from_rng, KeyPair, PublicKeyBytes};
@@ -29,21 +29,23 @@ pub mod utils;
 const DEFAULT_STAKE: usize = 1;
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct ValidatorConfig {
-    key_pair: KeyPair,
-    db_path: PathBuf,
-    network_address: Multiaddr,
-    metrics_address: Multiaddr,
+pub struct NodeConfig {
+    pub key_pair: KeyPair,
+    pub db_path: PathBuf,
+    pub network_address: Multiaddr,
+    pub metrics_address: Multiaddr,
+    pub json_rpc_address: SocketAddr,
 
-    pub consensus_config: ConsensuseConfig,
-    committee_config: CommitteeConfig,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub consensus_config: Option<ConsensusConfig>,
+    pub committee_config: CommitteeConfig,
 
     genesis: genesis::Genesis,
 }
 
-impl Config for ValidatorConfig {}
+impl Config for NodeConfig {}
 
-impl ValidatorConfig {
+impl NodeConfig {
     pub fn key_pair(&self) -> &KeyPair {
         &self.key_pair
     }
@@ -64,8 +66,8 @@ impl ValidatorConfig {
         &self.network_address
     }
 
-    pub fn consensus_config(&self) -> &ConsensuseConfig {
-        &self.consensus_config
+    pub fn consensus_config(&self) -> Option<&ConsensusConfig> {
+        self.consensus_config.as_ref()
     }
 
     pub fn committee_config(&self) -> &CommitteeConfig {
@@ -78,7 +80,7 @@ impl ValidatorConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ConsensuseConfig {
+pub struct ConsensusConfig {
     consensus_address: Multiaddr,
     consensus_db_path: PathBuf,
 
@@ -88,7 +90,7 @@ pub struct ConsensuseConfig {
     pub narwhal_config: DebugIgnore<ConsensusParameters>,
 }
 
-impl ConsensuseConfig {
+impl ConsensusConfig {
     pub fn address(&self) -> &Multiaddr {
         &self.consensus_address
     }
@@ -164,7 +166,7 @@ impl ValidatorInfo {
 /// all validators
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NetworkConfig {
-    pub validator_configs: Vec<ValidatorConfig>,
+    pub validator_configs: Vec<NodeConfig>,
     loaded_move_packages: Vec<(PathBuf, ObjectID)>,
     genesis: genesis::Genesis,
     pub account_keys: Vec<KeyPair>,
@@ -173,7 +175,7 @@ pub struct NetworkConfig {
 impl Config for NetworkConfig {}
 
 impl NetworkConfig {
-    pub fn validator_configs(&self) -> &[ValidatorConfig] {
+    pub fn validator_configs(&self) -> &[NodeConfig] {
         &self.validator_configs
     }
 
@@ -195,7 +197,7 @@ impl NetworkConfig {
         self.validator_configs()[0].committee_config().committee()
     }
 
-    pub fn into_validator_configs(self) -> Vec<ValidatorConfig> {
+    pub fn into_validator_configs(self) -> Vec<NodeConfig> {
         self.validator_configs
     }
 
@@ -250,11 +252,12 @@ pub fn sui_config_dir() -> Result<PathBuf, anyhow::Error> {
 
 #[derive(Serialize, Deserialize)]
 pub struct GenesisConfig {
+    pub validator_genesis_info: Option<Vec<ValidatorGenesisInfo>>,
     pub committee_size: usize,
     pub accounts: Vec<AccountConfig>,
     pub move_packages: Vec<PathBuf>,
-    pub sui_framework_lib_path: PathBuf,
-    pub move_framework_lib_path: PathBuf,
+    pub sui_framework_lib_path: Option<PathBuf>,
+    pub move_framework_lib_path: Option<PathBuf>,
 }
 
 impl Config for GenesisConfig {}
@@ -351,6 +354,18 @@ impl GenesisConfig {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ValidatorGenesisInfo {
+    pub key_pair: KeyPair,
+    pub network_address: Multiaddr,
+    pub stake: usize,
+    pub narwhal_primary_to_primary: Multiaddr,
+    pub narwhal_worker_to_primary: Multiaddr,
+    pub narwhal_primary_to_worker: Multiaddr,
+    pub narwhal_worker_to_worker: Multiaddr,
+    pub narwhal_consensus_address: Multiaddr,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AccountConfig {
     #[serde(
@@ -435,13 +450,12 @@ impl GenesisConfig {
 impl Default for GenesisConfig {
     fn default() -> Self {
         Self {
+            validator_genesis_info: None,
             committee_size: DEFAULT_NUMBER_OF_AUTHORITIES,
             accounts: vec![],
             move_packages: vec![],
-            sui_framework_lib_path: PathBuf::from(DEFAULT_FRAMEWORK_PATH),
-            move_framework_lib_path: PathBuf::from(DEFAULT_FRAMEWORK_PATH)
-                .join("deps")
-                .join("move-stdlib"),
+            sui_framework_lib_path: None,
+            move_framework_lib_path: None,
         }
     }
 }
@@ -478,6 +492,10 @@ where
         let config = serde_json::to_string_pretty(&self.inner)?;
         fs::write(&self.path, config)?;
         Ok(())
+    }
+
+    pub fn into_inner(self) -> C {
+        self.inner
     }
 }
 

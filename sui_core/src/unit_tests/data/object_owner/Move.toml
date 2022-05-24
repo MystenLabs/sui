@@ -1,9 +1,0 @@
-[package]
-name = "ObjectOwner"
-version = "0.0.1"
-
-[dependencies]
-Sui = { local = "../../../../../sui_programmability/framework" }
-
-[addresses]
-ObjectOwner = "0x0"
