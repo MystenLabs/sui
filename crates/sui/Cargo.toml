@@ -83,8 +83,3 @@ test-utils = { path = "../test-utils" }
 
 [features]
 benchmark = ["narwhal-node/benchmark"]
-
-[[example]]
-name = "generate-json-rpc-spec"
-path = "src/generate_json_rpc_spec.rs"
-test = false
