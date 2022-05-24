@@ -14,3 +14,6 @@ sui-transactional-test-runner = { path = "../sui-transactional-test-runner" }
 [[test]]
 name = "tests"
 harness = false
+
+[dependencies]
+workspace-hack = { path = "../workspace-hack"}
