@@ -5764,7 +5764,6 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-gateway",
- "sui-open-rpc",
  "sui-storage",
  "telemetry-subscribers",
  "tokio",

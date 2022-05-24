@@ -59,7 +59,6 @@ async fn main() -> anyhow::Result<()> {
 
     let address = SocketAddr::new(IpAddr::V4(options.host), options.port);
     let mut server = JsonRpcServerBuilder::new()?;
-    //server.register_open_rpc(RpcGatewayApiOpenRpc::open_rpc())?;
     server.register_module(RpcGatewayImpl::new(client.clone()))?;
     server.register_module(GatewayReadApiImpl::new(client.clone()))?;
     server.register_module(TransactionBuilderImpl::new(client))?;

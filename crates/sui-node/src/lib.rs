@@ -34,7 +34,6 @@ impl SuiNode {
             let fullnode = FullNode::start(config).await?;
 
             let mut server = JsonRpcServerBuilder::new()?;
-            //server.register_open_rpc(RpcGatewayApiOpenRpc::open_rpc())?;
             server.register_module(ReadApi::new(fullnode.state.clone()))?;
             server.register_module(FullNodeApi::new(fullnode.state))?;
 

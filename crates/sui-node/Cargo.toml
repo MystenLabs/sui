@@ -18,7 +18,6 @@ sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }
 sui-storage = { path = "../sui-storage" }
 sui-gateway = { path = "../sui-gateway" }
-sui-open-rpc = { path = "../sui-open-rpc" }
 
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
