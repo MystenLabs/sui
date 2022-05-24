@@ -67,18 +67,18 @@ This function takes `child` by value, calls `transfer_to_object` to transfer the
 After that, we can fill the `child` field of `parent` with `child_ref`.
 If we comment out the second line, the Move compiler will complain that we cannot drop `child_ref`.
 At the end of the `add_child` call, we have the following ownership relationship:
-1. Sender account address owns a `Parent` object
+1. Sender account address owns a `Parent` object.
 2. The `Parent` object owns a `Child` object.
 
 #### transfer_to_object_id
-In the above example, `Parent` has an optional child field. What if the field is not optional? We will have to construct `Parent` with a `ChildRef`. However in order to have a `ChildRef`, we have to transfer the child object to the parent object first. This creates a paradox. We cannot create parent unless we have a `ChildRef`, and we cannot have a `ChildRef` unless we already have the parent object. To solve this exact problem and be able to construct a non-optional `ChildRef` field, we provide another API that allows you to transfer an object to object ID, instead of to object:
+In the above example, `Parent` has an optional child field. What if the field is not optional? We must construct `Parent` with a `ChildRef`. However, in order to have a `ChildRef`, we have to transfer the child object to the parent object first. This creates a paradox. We cannot create the parent unless we have a `ChildRef`, and we cannot have a `ChildRef` unless we already have the parent object. To solve this exact problem and be able to construct a non-optional `ChildRef` field, we provide another API that allows you to transfer an object to object ID, instead of to object:
 ```rust
 public fun transfer_to_object_id<T: key>(
     obj: T,
     owner_id: VersionedID,
 ): (VersionedID, ChildRef<T>);
 ```
-To use this API, we don't need to create a parent object yet, but we only need the object ID of the parent object, which can be created in advance through `TxContext::new_id(ctx)`. The function returns a tuple: it will return the `owner_id` that was passed in, along with the `ChildRef` representing a reference to the child object `obj`. It may seem strange that we require passing in `owner_id` by-value only to return it. This is to ensure that the caller of the function does indeed own a `VersionedID` that hasn't been used in any object yet. Without this it can be easy to make mistakes.
+To use this API, we don't need to create a parent object yet; we need only the object ID of the parent object, which can be created in advance through `TxContext::new_id(ctx)`. The function returns a tuple: it will return the `owner_id` that was passed in, along with the `ChildRef` representing a reference to the child object `obj`. It may seem strange that we require passing in `owner_id` by value only to return it. This is to ensure that the caller of the function does indeed own a `VersionedID` that hasn't been used in any object yet. Without this, it can be easy to make mistakes.
 Let's see how this is used in action. First we define another object type that has a non-optional child field:
 ```rust
 struct AnotherParent has key {
@@ -98,7 +98,7 @@ public(script) fun create_another_parent(child: Child, ctx: &mut TxContext) {
     Transfer::transfer(parent, TxContext::sender(ctx));
 }
 ```
-In the above function, we need to first create the ID of the new parent object. With the ID, we can then transfer the child object to it by calling `transfer_to_object_id`, obtaining a reference `child_ref`. With both `id` and `child_ref`, we can create an object of `AnotherParent`, which we would eventually transfer it to the sender's account.
+In the above function, we need to first create the ID of the new parent object. With the ID, we can then transfer the child object to it by calling `transfer_to_object_id`, thereby obtaining a reference `child_ref`. With both `id` and `child_ref`, we can create an object of `AnotherParent`, which we would eventually transfer to the sender's account.
 
 ### Use Child Objects
 We have explained in the first chapter that, in order to use an owned object, the object owner must be the transaction sender. What about objects owned by objects? We require that the object's owner object must also be passed as an argument in the Move call. For example, if object A owns object B, and object B owns object C, to be able to use C when calling a Move entry function, one must also pass B in the argument; and since B is in the argument, A must also be in the argument. This essentially mean that to use an object, its entire ownership ancestor chain must be included, and the account owner of the root ancestor must match the sender of the transaction.
