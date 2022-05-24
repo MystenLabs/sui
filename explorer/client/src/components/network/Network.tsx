@@ -4,7 +4,7 @@
 import { useCallback, useContext, useState } from 'react';
 
 import { NetworkContext } from '../../context';
-import { Network } from '../../utils/api/DefaultRpcClient';
+import { Network, getEndpoint } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV, IS_LOCAL_ENV } from '../../utils/envUtil';
 
 import styles from './Network.module.css';
@@ -22,7 +22,7 @@ export default function NetworkSelect() {
 
     const openInput = useCallback(() => {
         setIsOpenInput(true);
-        setNetwork('http://127.0.0.1:5001');
+        setNetwork(getEndpoint(Network.Local));
     }, [setIsOpenInput, setNetwork]);
 
     const chooseNetwork = useCallback(
@@ -41,9 +41,9 @@ export default function NetworkSelect() {
         [setNetwork]
     );
     const networkStyle = (iconNetwork: Network | 'other') =>
-        //Button text matches network or
+        // Button text matches network or
         network === iconNetwork ||
-        //network is not one of options and button text is other
+        // network is not one of options and button text is other
         (iconNetwork === 'other' &&
             !Object.values(Network).includes(network as Network))
             ? styles.active

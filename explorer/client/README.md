@@ -33,32 +33,46 @@ Before running any of the following scripts `yarn` must run in order to install 
 
 # How to Switch Environment
 
-## Connecting to Remote Gateway server(e.g., DevNet)
+## Connecting to the DevNet Remote Gateway Server
 
-The Sui Explorer frontend will use the DevNet Gateway server by default: https://explorer.devnet.sui.io
+The Sui Explorer frontend will use the DevNet Gateway server by default: https://gateway.devnet.sui.io:443
 
 ```bash
 yarn start
 
 ```
 
-## Connecting to local RPC server
+## Connecting to a Local RPC Server
 
-Refer to [Local RPC Server & JSON-RPC API Quick Start](../../doc/src/build/json-rpc.md) on setting up a local RPC Server
+Refer to [Local RPC Server & JSON-RPC API Quick Start](../../doc/src/build/json-rpc.md) on setting up a Local RPC Server. If we wish to locally run the website using a Local RPC Server, then run the following:
 
 ```bash
 yarn start:local
 
 ```
 
-## Connecting to static data
+Alternatively, having run `yarn start`, click the green button at the top of the page and select the option 'Local'.
 
-The Sui Explorer can also connect to a local, static JSON dataset that can be found at `./src/utils/static/mock_data.json`.
+## Connecting to a Custom RPC URL
+
+First run the following:
+
+```bash
+yarn start
+
+```
+
+Then, click the green button at the top and select the option 'Custom RPC URL'. Type the Custom RPC URL into the input box that emerges.
+
+## Connecting to the Static Data
+
+The Sui Explorer can also connect to a local, static JSON dataset that can be found at `./src/utils/static/mock_data.json` and `./src/utils/static/owned_object.json`.
 
 For example, suppose we wish to locally run the website using the static JSON dataset and not the API, then we could run the following:
 
 ```bash
 yarn start:static
+
 ```
 
 # Other Yarn commands
