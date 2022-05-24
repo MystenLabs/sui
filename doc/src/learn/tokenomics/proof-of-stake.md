@@ -26,21 +26,21 @@ The Sui economic model works as follows:
     1. The total amount of stake rewards is calculated as the sum of computation fees accrued throughout the epoch plus the epoch’s stake reward subsidies. The latter component is optional in that it will disappear in the long run as the amount of SUI in circulation reaches its total supply.
     1. The total amount of stake rewards is distributed across various entities. Importantly, remember that the storage fund is taken into account in the calculation of the epoch’s total stake. However, the storage fund is not owned by any entities in the way that delegated SUI is. Instead, Sui’s economic model distributes the stake rewards accruing to the storage fund  – a share $(1-\alpha)$ of the total stake rewards – to validators in order to compensate them for their storage costs. Of these rewards, a share $\gamma$ is paid out to validators while the remaining $(1-\gamma)$ is used to reinvest in the fund’s capital. Finally, assume that validators charge a commission $\delta\\%$ on SUI token holders as a fee for delegation. The split of stake rewards across participants is given by: 
 
-    	$$ DelegatorRewards \ \ = \ \ (  1 - \delta ) \ \times \  \alpha \ \times \ StakeRewards $$
+    	$$ DelegatorRewards \ = \ (  1 - \delta ) \ \times \  \alpha \ \times \ StakeRewards $$
 
-    	$$ ValidatorRewards \ \ = \ \ ( \ \delta\alpha \ + \ \gamma (1 - \alpha) \ ) \ \times \ StakeRewards $$
+    	$$ ValidatorRewards \ = \ ( \ \delta\alpha \ + \ \gamma (1 - \alpha) \ ) \ \times \ StakeRewards $$
 
-    	$$ Reinvestment \ \ = \ \ ( 1 - \gamma ) \ \times \ ( 1 - \alpha ) \ \times \ StakeRewards $$
+    	$$ Reinvestment \ = \ ( 1 - \gamma ) \ \times \ ( 1 - \alpha ) \ \times \ StakeRewards $$
 
 ## Stake reward distribution
 
 Sui’s gas pricing mechanism together with its delegated proof-of-stake mechanism jointly deliver an efficient economic model whereby validators are encouraged to operate smoothly with low but sustainable gas fees. A specific validator $v$ receives stake rewards equal to:
 
-$$ ValidatorRewards(v) \ \ = \ \ RewardShare(v) \ \times \ ValidatorRewards $$
+$$ ValidatorRewards(v) \ = \ RewardShare(v) \ \times \ ValidatorRewards $$
 
 Where the $RewardShare(v)$ is determined in the [gas price mechanism](gas-pricing.md). Note that SUI token holders receive the same share of stake rewards as their delegate validator. Specifically, SUI token holders delegating at a validator $v$ obtain rewards equal to:
 
-$$ DelegatorRewards(v) \ \ = \ \ RewardShare(v) \ \times \ DelegatorRewards $$
+$$ DelegatorRewards(v) \ = \ RewardShare(v) \ \times \ DelegatorRewards $$
 
 On net, this design encourages validators to operate with low gas price quotes – but not too low or else they receive slashed stake rewards. Consequently, Sui’s gas price mechanism and delegated proof-of-stake system encourages a healthy competition for fair prices where validators set low gas fees while operating with viable business models.
 
