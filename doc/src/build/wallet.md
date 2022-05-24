@@ -693,7 +693,7 @@ Usage of `merge-coin`:
 
 ```shell
 USAGE:
-    merge-coin [FLAGS] [OPTIONS] --coin-to-merge <coin-to-merge> --gas-budget <gas-budget> --primary-coin <primary-coin>
+    merge-coin [FLAGS] [OPTIONS] --primary-coin <PRIMARY_COIN> --coin-to-merge <COIN_TO_MERGE> --gas-budget <GAS_BUDGET>
 
 FLAGS:
     -h, --help       Prints help information
@@ -897,7 +897,7 @@ parameters one-by-one:
   the function is located. (Remember
   that the ID of the genesis Sui package containing the GAS module is
   defined in its manifest file, and is equal to `0x2`.)
-* `args` - a list of function arguments formatted as
+* `--args` - a list of function arguments formatted as
   [SuiJSON](sui-json.md) values (hence the preceding `0x` in address
   and object ID):
   * ID of the gas object representing the `c` parameter of the `transfer`
