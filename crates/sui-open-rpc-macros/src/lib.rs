@@ -30,6 +30,14 @@ pub fn open_rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let mut trait_data: syn::ItemTrait = syn::parse(item).unwrap();
     let rpc_definition = parse_rpc_method(&mut trait_data).unwrap();
+
+    let namespace = attr
+        .find_attr("namespace")
+        .map(|str| str.value())
+        .unwrap_or_default();
+
+    let tag = attr.find_attr("tag").to_quote();
+
     let mut methods = Vec::new();
     for method in rpc_definition.methods {
         let name = method.name;
@@ -53,44 +61,17 @@ pub fn open_rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
             let mut inputs: Vec<sui_open_rpc::ContentDescriptor> = Vec::new();
             #(#inputs)*
             let result = #returns_ty
-            builder.add_method(#name, inputs, result, #doc);
+            builder.add_method(#namespace, #name, inputs, result, #doc, #tag);
         })
     }
     let open_rpc_name = quote::format_ident!("{}OpenRpc", &rpc_definition.name);
-
-    let url = attr.find_attr("license_url").to_quote();
-
-    let license = attr
-        .find_attr("license")
-        .unwrap_quote(|license| quote! (builder.set_license(#license, #url);));
-
-    let contact_url = attr.find_attr("contact_url").to_quote();
-    let contact_email = attr.find_attr("contact_email").to_quote();
-    let contact = attr.find_attr("contact_name").unwrap_quote(
-        |contact| quote! (builder.set_contact(#contact, #contact_url, #contact_email);),
-    );
-    let description = attr
-        .find_attr("description")
-        .unwrap_quote(|description| quote! (builder.set_description(#description);));
-
-    let proj_name = attr
-        .find_attr("name")
-        .map(|str| str.value())
-        .unwrap_or_default();
-    let namespace = attr
-        .find_attr("namespace")
-        .map(|str| str.value())
-        .unwrap_or_default();
 
     quote! {
         #trait_data
         pub struct #open_rpc_name;
         impl #open_rpc_name {
-            pub fn open_rpc() -> sui_open_rpc::Project{
-                let mut builder = sui_open_rpc::ProjectBuilder::new(#proj_name, #namespace);
-                #license
-                #contact
-                #description
+            pub fn module_doc() -> Module{
+                let mut builder = sui_open_rpc::RpcModuleDocBuilder::new();
                 #(#methods)*
                 builder.build()
             }

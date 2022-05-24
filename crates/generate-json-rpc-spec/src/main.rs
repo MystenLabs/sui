@@ -15,7 +15,10 @@ use sui::wallet_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NF
 use sui_core::gateway_types::{
     GetObjectInfoResponse, SuiObjectRef, TransactionEffectsResponse, TransactionResponse,
 };
-use sui_gateway::api::RpcGatewayApiOpenRpc;
+use sui_gateway::api::SuiRpcModule;
+use sui_gateway::json_rpc::sui_rpc_doc;
+use sui_gateway::read_api::{FullNodeApi, ReadApi};
+use sui_gateway::rpc_gateway::{GatewayReadApiImpl, RpcGatewayImpl, TransactionBuilderImpl};
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
@@ -56,7 +59,14 @@ const TRANSACTION_SAMPLE_FILE_PATH: &str = concat!(
 #[tokio::main]
 async fn main() {
     let options = Options::parse();
-    let open_rpc = RpcGatewayApiOpenRpc::open_rpc();
+
+    let mut open_rpc = sui_rpc_doc();
+    open_rpc.add_module(TransactionBuilderImpl::rpc_doc_module());
+    open_rpc.add_module(RpcGatewayImpl::rpc_doc_module());
+    open_rpc.add_module(GatewayReadApiImpl::rpc_doc_module());
+    open_rpc.add_module(ReadApi::rpc_doc_module());
+    open_rpc.add_module(FullNodeApi::rpc_doc_module());
+
     match options.action {
         Action::Print => {
             let content = serde_json::to_string_pretty(&open_rpc).unwrap();

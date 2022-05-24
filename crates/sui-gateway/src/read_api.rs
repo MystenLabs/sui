@@ -1,16 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::RpcFullNodeReadApiServer;
 use crate::api::RpcReadApiServer;
+use crate::api::{RpcFullNodeReadApiServer, SuiRpcModule};
 use crate::rpc_gateway::responses::ObjectResponse;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
+use jsonrpsee_core::server::rpc_module::RpcModule;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_core::gateway_types::{GetObjectInfoResponse, SuiObjectRef, TransactionEffectsResponse};
+use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 
 // An implementation of the read portion of the Gateway JSON-RPC interface intended for use in
@@ -19,11 +21,11 @@ pub struct ReadApi {
     pub state: Arc<AuthorityState>,
 }
 
-pub struct SuiFullNode {
+pub struct FullNodeApi {
     pub state: Arc<AuthorityState>,
 }
 
-impl SuiFullNode {
+impl FullNodeApi {
     pub fn new(state: Arc<AuthorityState>) -> Self {
         Self { state }
     }
@@ -88,8 +90,18 @@ impl RpcReadApiServer for ReadApi {
     }
 }
 
+impl SuiRpcModule for ReadApi {
+    fn rpc(self) -> RpcModule<Self> {
+        self.into_rpc()
+    }
+
+    fn rpc_doc_module() -> Module {
+        crate::api::RpcReadApiOpenRpc::module_doc()
+    }
+}
+
 #[async_trait]
-impl RpcFullNodeReadApiServer for SuiFullNode {
+impl RpcFullNodeReadApiServer for FullNodeApi {
     async fn get_transactions_by_input_object(
         &self,
         object: ObjectID,
@@ -119,5 +131,15 @@ impl RpcFullNodeReadApiServer for SuiFullNode {
         addr: SuiAddress,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
         Ok(self.state.get_transactions_to_addr(addr).await?)
+    }
+}
+
+impl SuiRpcModule for FullNodeApi {
+    fn rpc(self) -> RpcModule<Self> {
+        self.into_rpc()
+    }
+
+    fn rpc_doc_module() -> Module {
+        crate::api::RpcFullNodeReadApiOpenRpc::module_doc()
     }
 }

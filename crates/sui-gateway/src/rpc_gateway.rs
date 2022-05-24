@@ -4,13 +4,14 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::api::RpcGatewayApiServer;
+use crate::api::{RpcGatewayApiServer, SuiRpcModule};
 use crate::rpc_gateway::responses::SuiTypeTag;
 use crate::{api::TransactionBytes, config::GatewayConfig, rpc_gateway::responses::ObjectResponse};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use ed25519_dalek::ed25519::signature::Signature;
 use jsonrpsee::core::RpcResult;
+use jsonrpsee_core::server::rpc_module::RpcModule;
 use tracing::debug;
 
 use sui_config::PersistedConfig;
@@ -18,6 +19,7 @@ use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
 use sui_core::gateway_types::GetObjectInfoResponse;
 use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
 use sui_json::SuiJsonValue;
+use sui_open_rpc::Module;
 use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
@@ -102,6 +104,16 @@ impl RpcGatewayApiServer for RpcGatewayImpl {
     }
 }
 
+impl SuiRpcModule for RpcGatewayImpl {
+    fn rpc(self) -> RpcModule<Self> {
+        self.into_rpc()
+    }
+
+    fn rpc_doc_module() -> Module {
+        crate::api::RpcGatewayApiOpenRpc::module_doc()
+    }
+}
+
 #[async_trait]
 impl RpcReadApiServer for GatewayReadApiImpl {
     async fn get_owned_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse> {
@@ -138,6 +150,16 @@ impl RpcReadApiServer for GatewayReadApiImpl {
         end: GatewayTxSeqNumber,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
         Ok(self.client.get_transactions_in_range(start, end)?)
+    }
+}
+
+impl SuiRpcModule for GatewayReadApiImpl {
+    fn rpc(self) -> RpcModule<Self> {
+        self.into_rpc()
+    }
+
+    fn rpc_doc_module() -> Module {
+        crate::api::RpcReadApiOpenRpc::module_doc()
     }
 }
 
@@ -237,5 +259,15 @@ impl RpcTransactionBuilderServer for TransactionBuilderImpl {
         }
         .await?;
         Ok(TransactionBytes::from_data(data)?)
+    }
+}
+
+impl SuiRpcModule for TransactionBuilderImpl {
+    fn rpc(self) -> RpcModule<Self> {
+        self.into_rpc()
+    }
+
+    fn rpc_doc_module() -> Module {
+        crate::api::RpcTransactionBuilderOpenRpc::module_doc()
     }
 }

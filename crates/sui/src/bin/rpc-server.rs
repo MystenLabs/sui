@@ -7,14 +7,8 @@ use std::{
     path::PathBuf,
 };
 use sui_config::sui_config_dir;
-use sui_gateway::api::RpcReadApiServer;
-use sui_gateway::api::RpcTransactionBuilderServer;
 use sui_gateway::rpc_gateway::{create_client, GatewayReadApiImpl, TransactionBuilderImpl};
-use sui_gateway::{
-    api::{RpcGatewayApiOpenRpc, RpcGatewayApiServer},
-    json_rpc::JsonRpcServerBuilder,
-    rpc_gateway::RpcGatewayImpl,
-};
+use sui_gateway::{json_rpc::JsonRpcServerBuilder, rpc_gateway::RpcGatewayImpl};
 use tracing::info;
 const DEFAULT_RPC_SERVER_PORT: &str = "5001";
 const DEFAULT_RPC_SERVER_ADDR_IPV4: &str = "127.0.0.1";
@@ -65,10 +59,10 @@ async fn main() -> anyhow::Result<()> {
 
     let address = SocketAddr::new(IpAddr::V4(options.host), options.port);
     let mut server = JsonRpcServerBuilder::new()?;
-    server.register_open_rpc(RpcGatewayApiOpenRpc::open_rpc())?;
-    server.register_methods(RpcGatewayImpl::new(client.clone()).into_rpc())?;
-    server.register_methods(GatewayReadApiImpl::new(client.clone()).into_rpc())?;
-    server.register_methods(TransactionBuilderImpl::new(client).into_rpc())?;
+    //server.register_open_rpc(RpcGatewayApiOpenRpc::open_rpc())?;
+    server.register_module(RpcGatewayImpl::new(client.clone()))?;
+    server.register_module(GatewayReadApiImpl::new(client.clone()))?;
+    server.register_module(TransactionBuilderImpl::new(client))?;
 
     let server_handle = server.start(address).await?;
 
