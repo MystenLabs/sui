@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isValidTransactionDigest, isValidSuiAddress } from '@mysten/sui.js';
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { NetworkContext } from '../../context';
 import { isGenesisLibAddress } from '../../utils/api/searchUtil';
 import {
     navigateWithUnknown,
@@ -47,6 +48,7 @@ function isInputValid(category: SearchCategory, input: string): boolean {
 function Search() {
     const [input, setInput] = useState('');
     const [category, setCategory] = useState('all' as SearchCategory);
+    const [network] = useContext(NetworkContext);
     const navigate = useNavigate();
 
     const [pleaseWaitMode, setPleaseWaitMode] = useState(false);
@@ -68,7 +70,8 @@ function Search() {
             }
 
             if (category === 'all') {
-                navigateWithUnknown(query, navigate).then(() => {
+                // remove empty char from input
+                navigateWithUnknown(query, navigate, network).then(() => {
                     setInput('');
                     setPleaseWaitMode(false);
                 });
@@ -79,7 +82,7 @@ function Search() {
                 setCategory('all');
             }
         },
-        [input, navigate, category, setInput]
+        [input, navigate, category, setInput, network]
     );
 
     const handleTextChange = useCallback(
