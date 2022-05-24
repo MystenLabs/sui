@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/generate-json-rpc-spec",
     "crates/sui",
     "crates/sui-adapter",
     "crates/sui-adapter-transactional-tests",
