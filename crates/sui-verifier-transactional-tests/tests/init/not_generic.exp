@@ -1,0 +1,4 @@
+processed 1 task
+
+task 0 'publish'. lines 4-11:
+Error: Failed to verify the Move module, reason: "_::M. 'init' function cannot have type parameters".

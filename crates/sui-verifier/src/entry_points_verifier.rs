@@ -4,7 +4,7 @@
 use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
-    file_format::{AbilitySet, FunctionDefinition, SignatureToken, Visibility},
+    file_format::{AbilitySet, Bytecode, FunctionDefinition, SignatureToken, Visibility},
     CompiledModule,
 };
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
@@ -38,6 +38,9 @@ pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
 /// - The function cannot have any return values
 pub fn verify_module(module: &CompiledModule) -> SuiResult {
     for func_def in &module.function_defs {
+        verify_init_not_called(module, func_def)
+            .map_err(|error| SuiError::ModuleVerificationFailure { error })?;
+
         let handle = module.function_handle_at(func_def.function);
         let name = module.identifier_at(handle.name);
         if name == INIT_FN_NAME {
@@ -59,13 +62,48 @@ pub fn verify_module(module: &CompiledModule) -> SuiResult {
     Ok(())
 }
 
+fn verify_init_not_called(
+    module: &CompiledModule,
+    fdef: &FunctionDefinition,
+) -> Result<(), String> {
+    let code = match &fdef.code {
+        None => return Ok(()),
+        Some(code) => code,
+    };
+    code.code
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, instr)| match instr {
+            Bytecode::Call(fhandle_idx) => Some((idx, module.function_handle_at(*fhandle_idx))),
+            Bytecode::CallGeneric(finst_idx) => {
+                let finst = module.function_instantiation_at(*finst_idx);
+                Some((idx, module.function_handle_at(finst.handle)))
+            }
+            _ => None,
+        })
+        .try_for_each(|(idx, fhandle)| {
+            let name = module.identifier_at(fhandle.name);
+            if name == INIT_FN_NAME {
+                Err(format!(
+                    "{}::{} at offset {}. Cannot call a module's '{}' function from another Move function",
+                    module.self_id(),
+                    name,
+                    idx,
+                    INIT_FN_NAME
+                ))
+            } else {
+                Ok(())
+            }
+        })
+}
+
 /// Checks if this module has a conformant `init`
 fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> Result<(), String> {
     let view = &BinaryIndexedView::Module(module);
 
     if fdef.visibility != Visibility::Private {
         return Err(format!(
-            "{}. '{}' function cannot be public",
+            "{}. '{}' function must be private",
             module.self_id(),
             INIT_FN_NAME
         ));
