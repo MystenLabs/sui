@@ -61,6 +61,16 @@ async fn test_rounds_errors() {
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
     let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
 
+    // AND create a committee passed exclusively to the DAG that does not include the name public key
+    // In this way, the genesis certificate is not run for that authority and is absent when we try to fetch it
+    let no_name_committee = config::Committee {
+        authorities: {
+            let mut no_name_authorities = committee.clone().authorities;
+            no_name_authorities.retain(|pk, _a| *pk != name);
+            no_name_authorities
+        },
+    };
+
     Primary::spawn(
         name.clone(),
         keypair,
@@ -71,7 +81,10 @@ async fn test_rounds_errors() {
         store_primary.payload_store,
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
-        /* external_consensus */ Some(Arc::new(Dag::new(&committee, rx_new_certificates).1)),
+        /* external_consensus */
+        Some(Arc::new(
+            Dag::new(&no_name_committee, rx_new_certificates).1,
+        )),
     );
 
     // AND Wait for tasks to start
