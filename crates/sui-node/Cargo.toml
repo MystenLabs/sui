@@ -21,3 +21,4 @@ sui-gateway = { path = "../sui-gateway" }
 
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
+workspace-hack = { path = "../workspace-hack"}

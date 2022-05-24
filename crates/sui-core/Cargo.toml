@@ -62,6 +62,7 @@ narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8
 narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", package = "types" }
 narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", package = "node" }
 narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", package = "crypto" }
+workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 serde-reflection = "0.3.6"

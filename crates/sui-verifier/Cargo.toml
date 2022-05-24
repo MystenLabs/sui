@@ -15,3 +15,4 @@ move-disassembler = { git = "https://github.com/move-language/move", rev = "1b2d
 move-ir-types = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
 
 sui-types = { path = "../sui-types" }
+workspace-hack = { path = "../workspace-hack"}

@@ -21,3 +21,4 @@ sui-gateway = { path = "../sui-gateway" }
 sui-json = { path = "../sui-json" }
 sui-types = { path = "../sui-types" }
 test-utils = { path = "../test-utils" }
+workspace-hack = { path = "../workspace-hack"}
