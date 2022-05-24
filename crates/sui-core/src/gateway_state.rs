@@ -417,28 +417,11 @@ where
         Ok(())
     }
 
-    /// Execute (or retry) a transaction and execute the Confirmation Transaction.
-    /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
-    async fn execute_transaction_impl(
+    async fn execute_transaction_impl_inner(
         &self,
+        all_objects: Vec<(InputObjectKind, Object)>,
         transaction: Transaction,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        transaction.verify_signature()?;
-
-        self.sync_input_objects_with_authorities(&transaction)
-            .await?;
-
-        let (_gas_status, all_objects) = transaction_input_checker::check_transaction_input(
-            &self.store,
-            &transaction,
-            &self.metrics.shared_obj_tx,
-        )
-        .await?;
-
-        let owned_objects = transaction_input_checker::filter_owned_objects(&all_objects);
-        self.set_transaction_lock(&owned_objects, transaction.clone())
-            .instrument(tracing::trace_span!("db_set_transaction_lock"))
-            .await?;
         // If execute_transaction ever fails due to panic, we should fix the panic and make sure it doesn't.
         // If execute_transaction fails, we should retry the same transaction, and it will
         // properly unlock the objects used in this transaction. In the short term, we will ask the wallet to retry failed transactions.
@@ -493,6 +476,41 @@ where
             .await?;
 
         Ok((new_certificate, effects))
+    }
+
+    /// Execute (or retry) a transaction and execute the Confirmation Transaction.
+    /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
+    async fn execute_transaction_impl(
+        &self,
+        transaction: Transaction,
+        is_last_retry: bool,
+    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+        transaction.verify_signature()?;
+
+        self.sync_input_objects_with_authorities(&transaction)
+            .await?;
+
+        let (_gas_status, all_objects) = transaction_input_checker::check_transaction_input(
+            &self.store,
+            &transaction,
+            &self.metrics.shared_obj_tx,
+        )
+        .await?;
+
+        let owned_objects = transaction_input_checker::filter_owned_objects(&all_objects);
+        self.set_transaction_lock(&owned_objects, transaction.clone())
+            .instrument(tracing::trace_span!("db_set_transaction_lock"))
+            .await?;
+
+        let exec_result = self
+            .execute_transaction_impl_inner(all_objects, transaction)
+            .await;
+        if exec_result.is_err() && is_last_retry {
+            // If we cannot successfully execute this transaction, even after all the retries,
+            // we have to give up. Here we reset all transaction locks for each input object.
+            self.store.reset_transaction_lock(&owned_objects).await?;
+        }
+        exec_result
     }
 
     async fn download_object_from_authorities(&self, object_id: ObjectID) -> SuiResult<ObjectRead> {
@@ -811,7 +829,7 @@ where
         // Use start_coarse_time() if the below turns out to have a perf impact
         let timer = self.metrics.transaction_latency.start_timer();
         let mut res = self
-            .execute_transaction_impl(tx.clone())
+            .execute_transaction_impl(tx.clone(), false)
             .instrument(span.clone())
             .await;
         // NOTE: below only records latency if this completes.
@@ -839,7 +857,7 @@ where
             );
 
             res = self
-                .execute_transaction_impl(tx.clone())
+                .execute_transaction_impl(tx.clone(), remaining_retries == 0)
                 .instrument(span.clone())
                 .await;
         }
