@@ -11,6 +11,7 @@
 //! Events are also archived into checkpoints so this API should support that as well.
 //!
 
+use move_core_types::language_storage::ModuleId;
 use sui_types::base_types::TransactionDigest;
 use sui_types::event::EventEnvelope;
 
@@ -77,6 +78,16 @@ where
         &self,
         start_checkpoint: u64,
         end_checkpoint: u64,
+    ) -> Result<EventIt, EventStoreError>;
+
+    /// Queries all Move events belonging to a certain Module ID within a given time window.
+    /// Will return at most limit of the most recent events within the window, sorted in ascending time.
+    fn events_by_module_id(
+        &self,
+        start_time: u64,
+        end_time: u64,
+        module: ModuleId,
+        limit: usize,
     ) -> Result<EventIt, EventStoreError>;
 }
 

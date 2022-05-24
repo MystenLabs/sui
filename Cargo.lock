@@ -5787,6 +5787,7 @@ dependencies = [
  "anyhow",
  "flexstr",
  "futures",
+ "move-core-types",
  "pretty_assertions",
  "rocksdb",
  "serde 1.0.137",
