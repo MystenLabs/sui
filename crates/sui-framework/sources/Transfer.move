@@ -115,22 +115,20 @@ module Sui::Transfer {
     /// Transfer a child object to an account address. This is one of the two ways that can
     /// consume a ChildRef. No new ChildRef will be created, as the object is no longer
     /// owned by an object.
-    // TODO: Figure out a way to make it easier to destroy a child object in one call.
-    // Currently one has to first transfer it to an address, and then delete it.
     public fun transfer_child_to_address<T: key>(child: T, child_ref: ChildRef<T>, recipient: address) {
         let ChildRef { child_id } = child_ref;
         assert!(&child_id == ID::id(&child), EChildIDMismatch);
         transfer(child, recipient)
     }
 
-    /// Delete the child object along with a ownership reference that shows this object
-    /// is owned by another object. Deleting both the child object and the reference
-    /// is safe because the ownership will also be destroyed, and hence there won't
-    /// be dangling reference to the child object through ownership.
-    public fun delete_child_object<T: key>(child: T, child_ref: ChildRef<T>) {
-        let ChildRef { child_id } = child_ref;
-        assert!(&child_id == ID::id(&child), EChildIDMismatch);
-        delete_child_object_internal(child);
+    /// Delete `child_ref`, which must point at `child_id`.
+    /// This is the second way to consume a `ChildRef`.
+    /// Passing ownership of `child_id` to this function implies that the child object
+    /// has been unpacked, so it is now safe to delete `child_ref`.
+    public fun delete_child_object<T: key>(child_id: VersionedID, child_ref: ChildRef<T>) {
+        let ChildRef { child_id: child_ref_id } = child_ref;
+        assert!(&child_ref_id == ID::inner(&child_id), EChildIDMismatch);
+        delete_child_object_internal(ID::id_address(&child_ref_id), child_id)
     }
 
     /// Freeze `obj`. After freezing `obj` becomes immutable and can no
@@ -150,5 +148,6 @@ module Sui::Transfer {
 
     native fun transfer_internal<T: key>(obj: T, recipient: address, to_object: bool);
 
-    native fun delete_child_object_internal<T: key>(child: T);
+    // delete `child_id`, emit a system `DeleteChildObject(child)` event
+    native fun delete_child_object_internal(child: address, child_id: VersionedID);
 }

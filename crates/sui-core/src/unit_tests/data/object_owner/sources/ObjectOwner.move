@@ -74,7 +74,8 @@ module ObjectOwner::ObjectOwner {
         let Parent { id, child: child_ref_opt } = parent;
         let child_ref = Option::extract(&mut child_ref_opt);
         Option::destroy_none(child_ref_opt);
-        Transfer::delete_child_object(child, child_ref);
+        let Child { id: child_id } = child;
+        Transfer::delete_child_object(child_id, child_ref);
         ID::delete(id);
     }
 }
