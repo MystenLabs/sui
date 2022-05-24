@@ -216,7 +216,7 @@ public fun transfer_child_to_object<T: key, R: key>(
 ```
 After this call, the object `child` will become a child object of the object `owner`.
 Comparing to the previous API, there are two primary differences:
-1. Instead of transferring the object to an recipient address, here we need to provide a mutable reference to the new parent objecet `owner`. Although we are not mutating the new parent objeect in practice, we require `mut` to make sure the new owner is not an immutable object: immutable objects cannot have child objects.
+1. Instead of transferring the object to an recipient address, here we need to provide a mutable reference to the new parent object `owner`. Although we are not mutating the new parent object in practice, we require `mut` to make sure the new owner is not an immutable object: child objects cannot be added to an immutable object.
 2. The function returns a new `ChildRef`. This is because we are transferring this object to a new parent, and hence a new reference is created to represent this child relationship, which will be different from the old child reference.
 
 To see how to use this API, let's define a function that could transfer a child object to a new parent:
