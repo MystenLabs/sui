@@ -4,7 +4,7 @@ title: Learning Sui Tokenomics
 
 Sui’s tokenomics are designed at the frontier of economic blockchain research, aiming to deliver an economic ecosystem and financial plumbing at par with Sui’s leading engineering design. 
 
-This page includes a high-level overview of Sui’s economic model. For further details, refer to the tokenomics white paper: [The Sui Smart Contracts Platform: Economics and Incentives](https://github.com/MystenLabs/sui/blob/main/doc/paper/tokenomics.pdf).
+This page includes a high-level overview of Sui’s economic model.
 
 
 ## The Sui economy
