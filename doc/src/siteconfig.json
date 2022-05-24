@@ -129,11 +129,11 @@
             "url": "/learn/index"
           },
           {
-            "name": "Explore Sui DevNet!",
-            "url": "/explore/devnet"
+            "name": "View Sui 0.2.0 updates",
+            "url": "/learn/index"
           },
           {
-            "name": "Interact with local network",
+            "name": "Explore Sui DevNet!",
             "url": "/build/json-rpc"
           }
         ]
