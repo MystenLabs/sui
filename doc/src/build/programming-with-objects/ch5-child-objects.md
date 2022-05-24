@@ -203,7 +203,7 @@ public(script) fun remove_child(parent: &mut Parent, child: Child, ctx: &mut TxC
     Transfer::transfer_child_to_address(child, child_ref, TxContext::sender(ctx));
 }
 ```
-In the above function, the reference to the child is extracted from the `parent` object, which is then passed together with the `child` object to the `transfer_child_to_address`, with recipient as the sender of the transaction. It is important to note that this function must also take the `child` object as an argument. Move is not able to obtain the child object only from the reference. An object must always be explicitly provided in the transaction to make the transfer work. As we explaiend earlier, the fact that `transfer_child_to_address` requires the child reference as an argument helps guarantees that the `parent` object no longer holds a reference to the child object.
+In the above function, the reference to the child is extracted from the `parent` object, which is then passed together with the `child` object to the `transfer_child_to_address`, with recipient as the sender of the transaction. It is important to note that this function must also take the `child` object as an argument. Move is not able to obtain the child object only from the reference. An object must always be explicitly provided in the transaction to make the transfer work. As we explained earlier, the fact that `transfer_child_to_address` requires the child reference as an argument guarantees that the `parent` object no longer holds a reference to the child object.
 
 #### transfer_child_to_object
 Another way to transfer a child object is to transfer it to another parent. The API is also defined in the Transfer library:
