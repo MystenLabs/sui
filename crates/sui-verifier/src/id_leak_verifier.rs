@@ -163,18 +163,31 @@ impl<'a> TransferFunctions for IDLeakAnalysis<'a> {
 
 impl<'a> AbstractInterpreter for IDLeakAnalysis<'a> {}
 
-/// Sui::ID::delete function is allowed to take an ID by value.
+/// Certain Sui Framework functions can safely take a `VersionedID` by value
 fn is_call_safe_to_leak(verifier: &IDLeakAnalysis, function_handle: &FunctionHandle) -> bool {
     let m = verifier
         .binary_view
         .module_handle_at(function_handle.module);
-    verifier.binary_view.address_identifier_at(m.address) == &SUI_FRAMEWORK_ADDRESS
-        && verifier.binary_view.identifier_at(m.name).as_str() == "ID"
+    let is_framework =
+        verifier.binary_view.address_identifier_at(m.address) == &SUI_FRAMEWORK_ADDRESS;
+    if !is_framework {
+        return false;
+    }
+
+    // Sui::ID::delete
+    (verifier.binary_view.identifier_at(m.name).as_str() == "ID"
         && verifier
             .binary_view
             .identifier_at(function_handle.name)
             .as_str()
-            == "delete"
+            == "delete") ||
+    // Sui::Transfer::delete_child_object
+    (verifier.binary_view.identifier_at(m.name).as_str() == "Transfer"
+            && verifier
+                .binary_view
+                .identifier_at(function_handle.name)
+                .as_str()
+                == "delete_child_object")
 }
 
 fn call(verifier: &mut IDLeakAnalysis, function_handle: &FunctionHandle) -> SuiResult {

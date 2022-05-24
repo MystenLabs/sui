@@ -99,7 +99,6 @@ async fn test_object_wrapping_unwrapping() {
     assert_eq!(parent_object_ref.1, OBJECT_START_VERSION);
 
     // Extract the child out of the parent.
-    println!("before this call");
     let effects = call_move(
         &authority,
         &gas,
