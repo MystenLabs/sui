@@ -222,8 +222,8 @@ module Sui::SuiSystem {
         computation_charge: u64,
         ctx: &mut TxContext,
     ) {
-        // Only an active validator can make a call to this function.
-        assert!(ValidatorSet::is_active_validator(&self.validators, TxContext::sender(ctx)), 0);
+        // Validator will make a special system call with sender set as 0x0.
+        assert!(TxContext::sender(ctx) == @0x0, 0);
 
         let storage_reward = Balance::create_with_value(storage_charge);
         let computation_reward = Balance::create_with_value(computation_charge);

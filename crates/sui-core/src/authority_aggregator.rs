@@ -1154,7 +1154,7 @@ where
         Err(SuiError::ErrorWhileRequestingCertificate)
     }
 
-    /// Find the highest sequence number that is known to a quorum of authorities.
+    /// Find the higgest sequence number that is known to a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
     async fn get_latest_sequence_number(&self, object_id: ObjectID) -> SequenceNumber {

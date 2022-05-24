@@ -11,6 +11,7 @@ use crate::crypto::{
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::CheckpointFragment;
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
+use crate::SUI_SYSTEM_STATE_OBJECT_ID;
 use base64ct::Encoding;
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
@@ -74,6 +75,16 @@ pub struct MoveModulePublish {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ChangeEpoch {
+    /// The next (to become) epoch ID.
+    pub epoch: EpochId,
+    /// The total amount of gas charged for staroge during the epoch.
+    pub storage_charge: u64,
+    /// The total amount of gas charged for computation during the epoch.
+    pub computation_charge: u64,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum SingleTransactionKind {
     /// Initiate a coin transfer between addresses
     TransferCoin(TransferCoin),
@@ -81,6 +92,15 @@ pub enum SingleTransactionKind {
     Publish(MoveModulePublish),
     /// Call a function in a published Move module
     Call(MoveCall),
+    /// A system transaction that will update epoch information on-chain.
+    /// It will only ever be executed once in an epoch.
+    /// The argument is the next epoch number, which is critical
+    /// because it ensures that this transaction has a unique digest.
+    /// This will eventually be translated to a Move call during execution.
+    /// It also doesn't require/use a gas object.
+    /// A validator will not sign a transaction of this kind from outside. It only
+    /// signs internally during epoch changes.
+    ChangeEpoch(ChangeEpoch),
     // .. more transaction types go here
 }
 
@@ -141,6 +161,11 @@ impl SingleTransactionKind {
                     .collect::<Vec<_>>();
                 Transaction::input_objects_in_compiled_modules(&compiled_modules)
             }
+            Self::ChangeEpoch(_) => {
+                vec![InputObjectKind::SharedMoveObject(
+                    SUI_SYSTEM_STATE_OBJECT_ID,
+                )]
+            }
         };
         // Ensure that there are no duplicate inputs. This cannot be removed because:
         // In [`AuthorityState::check_locks`], we check that there are no duplicate mutable
@@ -180,6 +205,12 @@ impl Display for SingleTransactionKind {
                 writeln!(writer, "Arguments : {:?}", c.arguments)?;
                 writeln!(writer, "Type Arguments : {:?}", c.type_arguments)?;
             }
+            Self::ChangeEpoch(e) => {
+                writeln!(writer, "Transaction Kind: Epoch Change")?;
+                writeln!(writer, "New epoch ID: {}", e.epoch)?;
+                writeln!(writer, "Storage gas reward: {}", e.storage_charge)?;
+                writeln!(writer, "Computation gas reward: {}", e.computation_charge)?;
+            }
         }
         write!(f, "{}", writer)
     }
@@ -216,6 +247,13 @@ impl TransactionKind {
             TransactionKind::Single(_) => 1,
             TransactionKind::Batch(batch) => batch.len(),
         }
+    }
+
+    pub fn is_system_tx(&self) -> bool {
+        matches!(
+            self,
+            TransactionKind::Single(SingleTransactionKind::ChangeEpoch(_))
+        )
     }
 }
 
@@ -356,9 +394,11 @@ where
                 result
             }
         };
-        inputs.push(InputObjectKind::ImmOrOwnedMoveObject(
-            *self.gas_payment_object_ref(),
-        ));
+        if !self.kind.is_system_tx() {
+            inputs.push(InputObjectKind::ImmOrOwnedMoveObject(
+                *self.gas_payment_object_ref(),
+            ));
+        }
         Ok(inputs)
     }
 }
@@ -392,14 +432,6 @@ pub struct TransactionEnvelope<S> {
 
 impl<S> TransactionEnvelope<S> {
     pub fn verify_signature(&self) -> Result<(), SuiError> {
-        // We use this flag to see if someone has checked this before
-        // and therefore we can skip the check. Note that the flag has
-        // to be set to true manually, and is not set by calling this
-        // "check" function.
-        if self.is_verified {
-            return Ok(());
-        }
-
         let mut obligation = VerificationObligation::default();
         self.add_tx_sig_to_verification_obligation(&mut obligation)?;
         obligation.verify_all().map(|_| ())
@@ -409,6 +441,14 @@ impl<S> TransactionEnvelope<S> {
         &self,
         obligation: &mut VerificationObligation,
     ) -> SuiResult<()> {
+        // We use this flag to see if someone has checked this before
+        // and therefore we can skip the check. Note that the flag has
+        // to be set to true manually, and is not set by calling this
+        // "check" function.
+        if self.is_verified || self.data.kind.is_system_tx() {
+            return Ok(());
+        }
+
         let (message, signature, public_key) = self
             .tx_signature
             .get_verification_inputs(&self.data, self.data.sender)?;
@@ -451,11 +491,11 @@ impl<S> TransactionEnvelope<S> {
     pub fn input_objects_in_compiled_modules(
         compiled_modules: &[CompiledModule],
     ) -> Vec<InputObjectKind> {
-        let to_be_publised: BTreeSet<_> = compiled_modules.iter().map(|m| m.self_id()).collect();
+        let to_be_published: BTreeSet<_> = compiled_modules.iter().map(|m| m.self_id()).collect();
         let mut dependent_packages = BTreeSet::new();
         for module in compiled_modules {
             for handle in &module.module_handles {
-                if !to_be_publised.contains(&module.module_id_for_handle(handle)) {
+                if !to_be_published.contains(&module.module_id_for_handle(handle)) {
                     let address = ObjectID::from(*module.address_identifier_at(handle.address));
                     dependent_packages.insert(address);
                 }
@@ -561,6 +601,39 @@ impl SignedTransaction {
             tx_signature: transaction.tx_signature,
             auth_sign_info: AuthoritySignInfo {
                 epoch,
+                authority,
+                signature,
+            },
+        }
+    }
+
+    pub fn new_change_epoch(
+        cur_epoch: EpochId,
+        storage_charge: u64,
+        computation_charge: u64,
+        authority: AuthorityName,
+        secret: &dyn signature::Signer<AuthoritySignature>,
+    ) -> Self {
+        let kind = TransactionKind::Single(SingleTransactionKind::ChangeEpoch(ChangeEpoch {
+            epoch: cur_epoch + 1,
+            storage_charge,
+            computation_charge,
+        }));
+        // For the ChangeEpoch transaction, we do not care about the sender and the gas.
+        let data = TransactionData::new(
+            kind,
+            SuiAddress::default(),
+            (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
+            0,
+        );
+        let signature = AuthoritySignature::new(&data, secret);
+        Self {
+            transaction_digest: OnceCell::new(),
+            is_verified: false,
+            data,
+            tx_signature: Signature::new_empty(),
+            auth_sign_info: AuthoritySignInfo {
+                epoch: cur_epoch,
                 authority,
                 signature,
             },
