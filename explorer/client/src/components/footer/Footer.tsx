@@ -3,6 +3,7 @@
 
 import { Link } from 'react-router-dom';
 
+import { CookiesConsent } from '../cookies-consent/CookiesConsent';
 import ExternalLink from '../external-link/ExternalLink';
 
 import styles from './Footer.module.css';
@@ -24,6 +25,7 @@ function Footer() {
                     label="Developer Hub"
                 />
             </nav>
+            <CookiesConsent />
         </footer>
     );
 }
