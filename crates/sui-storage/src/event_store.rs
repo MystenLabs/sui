@@ -46,7 +46,6 @@ where
 {
     /// Adds events to the EventStore.
     /// Semantics: events are appended, no deduplication is done.
-    /// All events input must belong to the same checkpoint number.
     fn add_events(
         &self,
         events: &[EventEnvelope],

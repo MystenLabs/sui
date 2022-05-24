@@ -1,7 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::language_storage::{ModuleId, StructTag};
+use move_bytecode_utils::{layout::TypeLayoutBuilder, module_cache::GetModule};
+use move_core_types::{
+    language_storage::{ModuleId, StructTag, TypeTag},
+    value::{MoveStruct, MoveTypeLayout},
+};
 use name_variant::NamedVariant;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
@@ -9,6 +13,7 @@ use serde_with::{serde_as, Bytes};
 use crate::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest},
     committee::EpochId,
+    error::SuiError,
     messages_checkpoint::CheckpointSequenceNumber,
 };
 
@@ -73,6 +78,38 @@ impl SuiEvent {
                 type_: struct_tag, ..
             } => Some(struct_tag.module_id()),
             _ => None,
+        }
+    }
+
+    /// Extracts a MoveStruct, if possible, from the event
+    pub fn extract_move_struct(
+        &self,
+        resolver: &impl GetModule,
+    ) -> Result<Option<MoveStruct>, SuiError> {
+        match self {
+            SuiEvent::MoveEvent { type_, contents } => {
+                let typestruct = TypeTag::Struct(type_.clone());
+                let layout =
+                    TypeLayoutBuilder::build_with_fields(&typestruct, resolver).map_err(|e| {
+                        SuiError::ObjectSerializationError {
+                            error: e.to_string(),
+                        }
+                    })?;
+                match layout {
+                    MoveTypeLayout::Struct(l) => {
+                        let s = MoveStruct::simple_deserialize(contents, &l).map_err(|e| {
+                            SuiError::ObjectSerializationError {
+                                error: e.to_string(),
+                            }
+                        })?;
+                        Ok(Some(s))
+                    }
+                    _ => unreachable!(
+                        "We called build_with_types on Struct type, should get a struct layout"
+                    ),
+                }
+            }
+            _ => Ok(None),
         }
     }
 }
