@@ -948,7 +948,7 @@ This call also requires to have the `child_ref` as proof of original ownership.
 After this transfer, the object will be owned by `recipient`.
 
 More examples of how objects can be transferred and owned can be found in
-[ObjectOwner.move](https://github.com/MystenLabs/sui/tree/main/sui_core/src/unit_tests/data/object_owner/sources/ObjectOwner.move).
+[ObjectOwner.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/unit_tests/data/object_owner/sources/ObjectOwner.move).
 
 #### Freeze an object
 To make an object `obj` shared and immutable, one can call:
