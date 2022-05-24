@@ -125,8 +125,8 @@
         "name": "See what's New",
         "sublist": [
           {
-            "name": "View Sui 0.2.0 updates",
-            "url": "/learn/index"
+            "name": "Learn Sui Tokenomics",
+            "url": "/learn/tokenomics/index"
           },
           {
             "name": "View Sui 0.2.0 updates",
@@ -134,7 +134,7 @@
           },
           {
             "name": "Explore Sui DevNet!",
-            "url": "/build/json-rpc"
+            "url": "/explore/devnet"
           }
         ]
       },
