@@ -41,7 +41,7 @@ async fn test_new_network_info() {
         store.payload_store.clone(),
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
-        /* dag */ Some(Arc::new(Dag::new(rx_new_certificates).1)),
+        /* dag */ Some(Arc::new(Dag::new(&committee, rx_new_certificates).1)),
     );
 
     // Wait for tasks to start

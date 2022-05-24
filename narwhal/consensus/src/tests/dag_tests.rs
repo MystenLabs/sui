@@ -20,7 +20,8 @@ async fn inner_dag_insert_one() {
         .into_iter()
         .map(|kp| kp.public().clone())
         .collect();
-    let mut genesis_certs = Certificate::genesis(&mock_committee(&keys.clone()[..]));
+    let committee = mock_committee(&keys.clone()[..]);
+    let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
@@ -29,14 +30,34 @@ async fn inner_dag_insert_one() {
 
     // set up a Dag
     let (tx_cert, rx_cert) = channel(1);
-    Dag::new(rx_cert);
+    Dag::new(&committee, rx_cert);
 
     // Feed the certificates to the Dag
-    while let Some(certificate) = genesis_certs.pop() {
-        tx_cert.send(certificate).await.unwrap();
-    }
     while let Some(certificate) = certificates.pop_front() {
         tx_cert.send(certificate).await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn test_dag_new_has_genesis() {
+    // Make certificates for rounds 1 to 4.
+    let keys: Vec<_> = test_utils::keys(None)
+        .into_iter()
+        .map(|kp| kp.public().clone())
+        .collect();
+    let committee = mock_committee(&keys.clone()[..]);
+    let genesis_certs = Certificate::genesis(&committee);
+    let genesis = genesis_certs
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+
+    // set up a Dag
+    let (_tx_cert, rx_cert) = channel(1);
+    let (_, dag) = Dag::new(&committee, rx_cert);
+
+    for certificate in genesis {
+        assert!(dag.contains(certificate).await)
     }
 }
 
@@ -47,7 +68,8 @@ async fn dag_mutation_failures() {
         .into_iter()
         .map(|kp| kp.public().clone())
         .collect();
-    let mut genesis_certs = Certificate::genesis(&mock_committee(&keys.clone()[..]));
+    let committee = mock_committee(&keys.clone()[..]);
+    let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
@@ -56,7 +78,7 @@ async fn dag_mutation_failures() {
 
     // set up a Dag
     let (_tx_cert, rx_cert) = channel(1);
-    let (_handle, dag) = Dag::new(rx_cert);
+    let (_handle, dag) = Dag::new(&committee, rx_cert);
     let mut certs_to_insert = certificates.clone();
     let mut certs_to_insert_in_reverse = certs_to_insert.clone();
     let mut certs_to_remove_before_insert = certs_to_insert.clone();
@@ -71,28 +93,24 @@ async fn dag_mutation_failures() {
         ))
     }
 
-    // Feed the certificates to the Dag in reverse order, triggering missing parent errors.
+    // Feed the certificates to the Dag in reverse order, triggering missing parent errors for all but the last round
     while let Some(certificate) = certs_to_insert_in_reverse.pop_back() {
-        assert!(matches!(
-            dag.insert(certificate).await,
-            Err(ValidatorDagError::DagInvariantViolation(
-                NodeDagError::UnknownDigests(_)
+        if certificate.round() != 1 {
+            assert!(matches!(
+                dag.insert(certificate).await,
+                Err(ValidatorDagError::DagInvariantViolation(
+                    NodeDagError::UnknownDigests(_)
+                ))
             ))
-        ))
+        }
     }
 
-    // Check no authority has live vertexes
+    // Check no authority has live vertexes beyond 1
     for authority in keys.clone() {
-        assert!(matches!(
-            dag.rounds(authority.clone()).await,
-            Err(ValidatorDagError::OutOfCertificates(_))
-        ))
+        assert_eq!(dag.rounds(authority.clone()).await.unwrap(), 0..=0)
     }
 
     // Feed the certificates to the Dag in order
-    while let Some(certificate) = genesis_certs.pop() {
-        dag.insert(certificate).await.unwrap();
-    }
     while let Some(certificate) = certs_to_insert.pop_front() {
         dag.insert(certificate).await.unwrap();
     }
@@ -118,7 +136,8 @@ async fn dag_insert_one_and_rounds_node_read() {
         .into_iter()
         .map(|kp| kp.public().clone())
         .collect();
-    let mut genesis_certs = Certificate::genesis(&mock_committee(&keys.clone()[..]));
+    let committee = mock_committee(&keys.clone()[..]);
+    let mut genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
@@ -127,7 +146,7 @@ async fn dag_insert_one_and_rounds_node_read() {
 
     // set up a Dag
     let (_tx_cert, rx_cert) = channel(1);
-    let (_handle, dag) = Dag::new(rx_cert);
+    let (_handle, dag) = Dag::new(&committee, rx_cert);
     let mut certs_to_insert = certificates.clone();
 
     // Feed the certificates to the Dag
@@ -166,7 +185,8 @@ async fn dag_insert_and_remove_reads() {
         .into_iter()
         .map(|kp| kp.public().clone())
         .collect();
-    let mut genesis_certs = Certificate::genesis(&mock_committee(&keys.clone()[..]));
+    let committee = mock_committee(&keys.clone()[..]);
+    let mut genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
@@ -175,13 +195,9 @@ async fn dag_insert_and_remove_reads() {
 
     // set up a Dag
     let (_tx_cert, rx_cert) = channel(1);
-    let (_handle, dag) = Dag::new(rx_cert);
-    let mut genesis_certs_to_insert = genesis_certs.clone();
+    let (_handle, dag) = Dag::new(&committee, rx_cert);
 
     // Feed the certificates to the Dag
-    while let Some(certificate) = genesis_certs_to_insert.pop() {
-        dag.insert(certificate).await.unwrap();
-    }
     while let Some(certificate) = certificates.pop_front() {
         dag.insert(certificate).await.unwrap();
     }

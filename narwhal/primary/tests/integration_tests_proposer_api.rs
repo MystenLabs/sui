@@ -71,7 +71,7 @@ async fn test_rounds_errors() {
         store_primary.payload_store,
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
-        /* external_consensus */ Some(Arc::new(Dag::new(rx_new_certificates).1)),
+        /* external_consensus */ Some(Arc::new(Dag::new(&committee, rx_new_certificates).1)),
     );
 
     // AND Wait for tasks to start
@@ -123,7 +123,7 @@ async fn test_rounds_return_successful_response() {
     let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
 
     // AND setup the DAG
-    let dag = Arc::new(Dag::new(rx_new_certificates).1);
+    let dag = Arc::new(Dag::new(&committee, rx_new_certificates).1);
 
     Primary::spawn(
         name.clone(),

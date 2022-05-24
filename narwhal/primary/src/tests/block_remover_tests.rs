@@ -41,7 +41,7 @@ async fn test_successful_blocks_delete() {
     // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
     // AND a Dag with genesis populated
-    let dag = Arc::new(Dag::new(rx_consensus).1);
+    let dag = Arc::new(Dag::new(&committee, rx_consensus).1);
     populate_genesis(&dag, &committee).await;
 
     BlockRemover::spawn(
@@ -191,7 +191,7 @@ async fn test_timeout() {
     // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
     // AND a Dag with genesis populated
-    let dag = Arc::new(Dag::new(rx_consensus).1);
+    let dag = Arc::new(Dag::new(&committee, rx_consensus).1);
     populate_genesis(&dag, &committee).await;
 
     BlockRemover::spawn(
@@ -322,7 +322,7 @@ async fn test_unlocking_pending_requests() {
     // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
     // AND a Dag with genesis populated
-    let dag = Arc::new(Dag::new(rx_consensus).1);
+    let dag = Arc::new(Dag::new(&committee, rx_consensus).1);
     populate_genesis(&dag, &committee).await;
 
     let mut remover = BlockRemover {

@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use config::Committee;
 use crypto::{traits::VerifyingKey, Hash};
 use dag::node_dag::{NodeDag, NodeDagError};
 use std::{
@@ -90,6 +91,27 @@ enum DagCommand<PublicKey: VerifyingKey> {
 }
 
 impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
+    fn new(
+        committee: &Committee<PublicKey>,
+        rx_primary: Receiver<Certificate<PublicKey>>,
+        rx_commands: Receiver<DagCommand<PublicKey>>,
+        dag: NodeDag<Certificate<PublicKey>>,
+        vertices: RwLock<BTreeMap<(PublicKey, Round), CertificateDigest>>,
+    ) -> Self {
+        let mut idg = InnerDag {
+            rx_primary,
+            rx_commands,
+            dag,
+            vertices,
+        };
+        let genesis = Certificate::genesis(committee);
+        for cert in genesis.into_iter() {
+            idg.insert(cert)
+                .expect("Insertion of the certificates produced by genesis should be leaves!");
+        }
+        idg
+    }
+
     async fn run(&mut self) {
         loop {
             tokio::select! {
@@ -251,19 +273,20 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
 }
 
 impl<PublicKey: VerifyingKey> Dag<PublicKey> {
-    pub fn new(rx_primary: Receiver<Certificate<PublicKey>>) -> (JoinHandle<()>, Self) {
+    pub fn new(
+        committee: &Committee<PublicKey>,
+        rx_primary: Receiver<Certificate<PublicKey>>,
+    ) -> (JoinHandle<()>, Self) {
         let (tx_commands, rx_commands) = tokio::sync::mpsc::channel(DEFAULT_CHANNEL_SIZE);
+        let mut idg = InnerDag::new(
+            committee,
+            rx_primary,
+            rx_commands,
+            /* dag */ NodeDag::new(),
+            /* vertices */ RwLock::new(BTreeMap::new()),
+        );
 
-        let handle = tokio::spawn(async move {
-            InnerDag {
-                rx_primary,
-                rx_commands,
-                dag: NodeDag::new(),
-                vertices: RwLock::new(BTreeMap::new()),
-            }
-            .run()
-            .await
-        });
+        let handle = tokio::spawn(async move { idg.run().await });
         let dag = Dag { tx_commands };
         (handle, dag)
     }

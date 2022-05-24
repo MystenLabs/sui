@@ -122,7 +122,7 @@ impl Node {
 
         let dag = if !internal_consensus {
             debug!("Consensus is disabled: the primary will run w/o Tusk");
-            let (_handle, dag) = Dag::new(rx_new_certificates);
+            let (_handle, dag) = Dag::new(&committee, rx_new_certificates);
             Some(Arc::new(dag))
         } else {
             Self::spawn_consensus(

@@ -112,7 +112,7 @@ async fn test_get_collections() {
         store.payload_store.clone(),
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
-        /* dag */ Some(Arc::new(Dag::new(rx_new_certificates).1)),
+        /* dag */ Some(Arc::new(Dag::new(&committee, rx_new_certificates).1)),
     );
 
     // Spawn a `Worker` instance.
@@ -216,7 +216,7 @@ async fn test_remove_collections() {
 
     // Make the Dag
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
-    let dag = Arc::new(Dag::new(rx_new_certificates).1);
+    let dag = Arc::new(Dag::new(&committee, rx_new_certificates).1);
     // Populate genesis in the Dag
     assert!(join_all(
         Certificate::genesis(&committee)
@@ -402,7 +402,7 @@ async fn test_read_causal_signed_certificates() {
 
     // Make the Dag
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
-    let dag = Arc::new(Dag::new(rx_new_certificates).1);
+    let dag = Arc::new(Dag::new(&committee, rx_new_certificates).1);
 
     // Populate genesis in the Dag
     let genesis_certs = Certificate::genesis(&committee);
@@ -511,7 +511,8 @@ async fn test_read_causal_signed_certificates() {
         primary_store_2.payload_store,
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
-        /* external_consensus */ Some(Arc::new(Dag::new(rx_new_certificates_2).1)),
+        /* external_consensus */
+        Some(Arc::new(Dag::new(&committee, rx_new_certificates_2).1)),
     );
 
     // Wait for tasks to start
@@ -589,7 +590,7 @@ async fn test_read_causal_unsigned_certificates() {
 
     // Make the Dag
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
-    let dag = Arc::new(Dag::new(rx_new_certificates).1);
+    let dag = Arc::new(Dag::new(&committee, rx_new_certificates).1);
 
     // Populate genesis in the Dag
     let genesis_certs = Certificate::genesis(&committee);
@@ -692,7 +693,8 @@ async fn test_read_causal_unsigned_certificates() {
         primary_store_2.payload_store,
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
-        /* external_consensus */ Some(Arc::new(Dag::new(rx_new_certificates_2).1)),
+        /* external_consensus */
+        Some(Arc::new(Dag::new(&committee, rx_new_certificates_2).1)),
     );
 
     // Wait for tasks to start
@@ -828,7 +830,8 @@ async fn test_get_collections_with_missing_certificates() {
         store_primary_1.payload_store,
         /* tx_consensus */ tx_new_certificates_1,
         /* rx_consensus */ rx_feedback_1,
-        /* external_consensus */ Some(Arc::new(Dag::new(rx_new_certificates_1).1)),
+        /* external_consensus */
+        Some(Arc::new(Dag::new(&committee, rx_new_certificates_1).1)),
     );
 
     // Spawn a `Worker` instance for primary 1.
@@ -854,7 +857,8 @@ async fn test_get_collections_with_missing_certificates() {
         store_primary_2.payload_store,
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
-        /* external_consensus */ Some(Arc::new(Dag::new(rx_new_certificates_2).1)),
+        /* external_consensus */
+        Some(Arc::new(Dag::new(&committee, rx_new_certificates_2).1)),
     );
 
     // Spawn a `Worker` instance for primary 2.
