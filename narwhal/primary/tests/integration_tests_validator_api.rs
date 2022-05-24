@@ -12,22 +12,23 @@ use futures::future::join_all;
 use node::NodeStorage;
 use primary::{PayloadToken, Primary, CHANNEL_CAPACITY};
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
     time::Duration,
 };
 use store::Store;
 use test_utils::{
-    certificate, committee, fixture_batch_with_transactions, fixture_header_builder, keys, temp_dir,
+    certificate, committee, committee_from_keys, fixture_batch_with_transactions,
+    fixture_header_builder, keys, make_optimal_certificates, make_optimal_signed_certificates,
+    temp_dir,
 };
 use tokio::sync::mpsc::channel;
 use tonic::transport::Channel;
 use types::{
     serialized_batch_digest, Batch, BatchDigest, Certificate, CertificateDigest,
-    CertificateDigestProto, CollectionRetrievalResult, ConfigurationClient, Empty,
-    GetCollectionsRequest, Header, HeaderDigest, MultiAddrProto, NewNetworkInfoRequest,
-    PublicKeyProto, RemoveCollectionsRequest, RetrievalResult, SerializedBatchMessage,
-    ValidatorClient, ValidatorData,
+    CertificateDigestProto, CollectionRetrievalResult, Empty, GetCollectionsRequest, Header,
+    HeaderDigest, ReadCausalRequest, RemoveCollectionsRequest, RetrievalResult,
+    SerializedBatchMessage, ValidatorClient,
 };
 use worker::{Worker, WorkerMessage};
 
@@ -388,62 +389,362 @@ async fn test_remove_collections() {
 }
 
 #[tokio::test]
-async fn test_new_network_info() {
-    let parameters = Parameters {
+async fn test_read_causal_signed_certificates() {
+    let mut k = keys(None);
+
+    let committee = committee_from_keys(&k);
+
+    // Make the data store.
+    let primary_store_1 = NodeStorage::reopen(temp_dir());
+    let primary_store_2: NodeStorage<Ed25519PublicKey> = NodeStorage::reopen(temp_dir());
+
+    let mut collection_ids: Vec<CertificateDigest> = Vec::new();
+
+    // Make the Dag
+    let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
+    let dag = Arc::new(Dag::new(rx_new_certificates).1);
+
+    // Populate genesis in the Dag
+    let genesis_certs = Certificate::genesis(&committee);
+    assert!(join_all(
+        genesis_certs
+            .iter()
+            .map(|cert| { dag.insert(cert.clone()) }),
+    )
+    .await
+    .iter()
+    .all(|r| r.is_ok()));
+
+    // Write genesis certs to primary 1 & 2
+    primary_store_1
+        .certificate_store
+        .write_all(genesis_certs.clone().into_iter().map(|c| (c.digest(), c)))
+        .await
+        .unwrap();
+    primary_store_2
+        .certificate_store
+        .write_all(genesis_certs.clone().into_iter().map(|c| (c.digest(), c)))
+        .await
+        .unwrap();
+
+    let genesis = genesis_certs
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+
+    let (certificates, _next_parents) = make_optimal_signed_certificates(1..=4, &genesis, &k);
+
+    collection_ids.extend(
+        certificates
+            .iter()
+            .map(|c| c.digest())
+            .collect::<Vec<CertificateDigest>>(),
+    );
+
+    // Feed the certificates to the Dag
+    for certificate in certificates.clone() {
+        dag.insert(certificate).await.unwrap();
+    }
+
+    // Write the certificates to Primary 1 but intentionally miss one certificate.
+    primary_store_1
+        .certificate_store
+        .write_all(
+            certificates
+                .clone()
+                .into_iter()
+                .skip(1)
+                .map(|c| (c.digest(), c)),
+        )
+        .await
+        .unwrap();
+
+    // Write all certificates to Primary 2, so Primary 1 has a place to retrieve
+    // missing certificate from.
+    primary_store_2
+        .certificate_store
+        .write_all(certificates.clone().into_iter().map(|c| (c.digest(), c)))
+        .await
+        .unwrap();
+
+    let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+
+    let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
     };
-    let keypair = keys(None).pop().unwrap();
-    let name = keypair.public().clone();
-    let signer = keypair;
-    let committee = committee(None);
+    let keypair_1 = k.pop().unwrap();
+    let name_1 = keypair_1.public().clone();
 
-    // Make the data store.
-    let store = NodeStorage::reopen(temp_dir());
-
-    let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
-    let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
-
+    // Spawn Primary 1 that we will be interacting with.
     Primary::spawn(
-        name.clone(),
-        signer,
+        name_1.clone(),
+        keypair_1,
         committee.clone(),
-        parameters.clone(),
-        store.header_store.clone(),
-        store.certificate_store.clone(),
-        store.payload_store.clone(),
+        primary_1_parameters.clone(),
+        primary_store_1.header_store.clone(),
+        primary_store_1.certificate_store.clone(),
+        primary_store_1.payload_store.clone(),
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
-        /* dag */ Some(Arc::new(Dag::new(rx_new_certificates).1)),
+        /* dag */ Some(dag.clone()),
+    );
+
+    let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
+    let (_tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
+
+    let primary_2_parameters = Parameters {
+        batch_size: 200, // Two transactions.
+        ..Parameters::default()
+    };
+    let keypair_2 = k.pop().unwrap();
+    let name_2 = keypair_2.public().clone();
+
+    // Spawn Primary 2
+    Primary::spawn(
+        name_2.clone(),
+        keypair_2,
+        committee.clone(),
+        primary_2_parameters.clone(),
+        primary_store_2.header_store,
+        primary_store_2.certificate_store,
+        primary_store_2.payload_store,
+        /* tx_consensus */ tx_new_certificates_2,
+        /* rx_consensus */ rx_feedback_2,
+        /* external_consensus */ Some(Arc::new(Dag::new(rx_new_certificates_2).1)),
     );
 
     // Wait for tasks to start
     tokio::time::sleep(Duration::from_secs(1)).await;
 
     // Test gRPC server with client call
-    let mut client = connect_to_configuration_client(parameters.clone());
+    let mut client = connect_to_validator_client(primary_1_parameters.clone());
 
-    let public_key = PublicKeyProto::from(name);
-    let stake_weight = 1;
-    let address = MultiAddrProto {
-        address: "/ip4/127.0.0.1".to_string(),
-    };
-
-    let request = tonic::Request::new(NewNetworkInfoRequest {
-        epoch_number: 0,
-        validators: vec![ValidatorData {
-            public_key: Some(public_key),
-            stake_weight,
-            address: Some(address),
-        }],
+    // Test read causal for existing collection in Primary 1
+    // Collection is from genesis aka round 0 so we expect BFT 1 + 0 * 4 vertices
+    let request = tonic::Request::new(ReadCausalRequest {
+        collection_id: Some(genesis_certs[0].digest().into()),
     });
 
-    let status = client.new_network_info(request).await.unwrap_err();
+    let response = client.read_causal(request).await.unwrap();
+    assert_eq!(1, response.into_inner().collection_ids.len());
 
-    println!("message: {:?}", status.message());
+    // Test read causal for existing collection in Primary 1
+    // Collection is from round 1 so we expect BFT 1 + 1 * 4 vertices
+    let request = tonic::Request::new(ReadCausalRequest {
+        collection_id: Some(collection_ids[1].into()),
+    });
 
-    // Not fully implemented but a 'Not Implemented!' message indicates no parsing errors.
-    assert!(status.message().contains("Not Implemented!"));
+    let response = client.read_causal(request).await.unwrap();
+    assert_eq!(5, response.into_inner().collection_ids.len());
+
+    // Test read causal for existing optimal certificates (we ack all of the prior round),
+    // we expect BFT 1 + 4 * 4 vertices
+    for certificate in certificates {
+        if certificate.round() == 4 {
+            let request = tonic::Request::new(ReadCausalRequest {
+                collection_id: Some(certificate.digest().into()),
+            });
+
+            let response = client.read_causal(request).await.unwrap();
+            assert_eq!(17, response.into_inner().collection_ids.len());
+        }
+    }
+
+    // Test read causal for missing collection from Primary 1. Expect block synchronizer
+    // to handle retrieving the missing collections from Primary 2 before completing the
+    // request for read causal.
+    let request = tonic::Request::new(ReadCausalRequest {
+        collection_id: Some(collection_ids[0].into()),
+    });
+
+    let response = client.read_causal(request).await.unwrap();
+    assert_eq!(5, response.into_inner().collection_ids.len());
+}
+
+#[tokio::test]
+async fn test_read_causal_unsigned_certificates() {
+    let mut k = keys(None);
+    let committee = committee(None);
+
+    let primary_1_parameters = Parameters {
+        batch_size: 200, // Two transactions.
+        ..Parameters::default()
+    };
+    let keypair_1 = k.pop().unwrap();
+    let name_1 = keypair_1.public().clone();
+
+    let primary_2_parameters = Parameters {
+        batch_size: 200, // Two transactions.
+        ..Parameters::default()
+    };
+    let keypair_2 = k.pop().unwrap();
+    let name_2 = keypair_2.public().clone();
+
+    // Make the data store.
+    let primary_store_1 = NodeStorage::reopen(temp_dir());
+    let primary_store_2: NodeStorage<Ed25519PublicKey> = NodeStorage::reopen(temp_dir());
+
+    let mut collection_ids: Vec<CertificateDigest> = Vec::new();
+
+    // Make the Dag
+    let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
+    let dag = Arc::new(Dag::new(rx_new_certificates).1);
+
+    // Populate genesis in the Dag
+    let genesis_certs = Certificate::genesis(&committee);
+    assert!(join_all(
+        genesis_certs
+            .iter()
+            .map(|cert| { dag.insert(cert.clone()) }),
+    )
+    .await
+    .iter()
+    .all(|r| r.is_ok()));
+
+    // Write genesis certs to primary 1 & 2
+    primary_store_1
+        .certificate_store
+        .write_all(genesis_certs.clone().into_iter().map(|c| (c.digest(), c)))
+        .await
+        .unwrap();
+    primary_store_2
+        .certificate_store
+        .write_all(genesis_certs.clone().into_iter().map(|c| (c.digest(), c)))
+        .await
+        .unwrap();
+
+    let genesis = genesis_certs
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+
+    let (certificates, _next_parents) = make_optimal_certificates(
+        1..=4,
+        &genesis,
+        &committee
+            .authorities
+            .keys()
+            .cloned()
+            .collect::<Vec<Ed25519PublicKey>>(),
+    );
+
+    collection_ids.extend(
+        certificates
+            .iter()
+            .map(|c| c.digest())
+            .collect::<Vec<CertificateDigest>>(),
+    );
+
+    // Feed the certificates to the Dag
+    for certificate in certificates.clone() {
+        dag.insert(certificate).await.unwrap();
+    }
+
+    // Write the certificates to Primary 1 but intentionally miss one certificate.
+    primary_store_1
+        .certificate_store
+        .write_all(
+            certificates
+                .clone()
+                .into_iter()
+                .skip(1)
+                .map(|c| (c.digest(), c)),
+        )
+        .await
+        .unwrap();
+
+    // Write all certificates to Primary 2, so Primary 1 has a place to retrieve
+    // missing certificate from.
+    primary_store_2
+        .certificate_store
+        .write_all(certificates.clone().into_iter().map(|c| (c.digest(), c)))
+        .await
+        .unwrap();
+
+    let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+
+    // Spawn Primary 1 that we will be interacting with.
+    Primary::spawn(
+        name_1.clone(),
+        keypair_1,
+        committee.clone(),
+        primary_1_parameters.clone(),
+        primary_store_1.header_store.clone(),
+        primary_store_1.certificate_store.clone(),
+        primary_store_1.payload_store.clone(),
+        /* tx_consensus */ tx_new_certificates,
+        /* rx_consensus */ rx_feedback,
+        /* dag */ Some(dag.clone()),
+    );
+
+    let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
+    let (_tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
+
+    // Spawn Primary 2
+    Primary::spawn(
+        name_2.clone(),
+        keypair_2,
+        committee.clone(),
+        primary_2_parameters.clone(),
+        primary_store_2.header_store,
+        primary_store_2.certificate_store,
+        primary_store_2.payload_store,
+        /* tx_consensus */ tx_new_certificates_2,
+        /* rx_consensus */ rx_feedback_2,
+        /* external_consensus */ Some(Arc::new(Dag::new(rx_new_certificates_2).1)),
+    );
+
+    // Wait for tasks to start
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // Test gRPC server with client call
+    let mut client = connect_to_validator_client(primary_1_parameters.clone());
+
+    // Test read causal for existing collection in Primary 1
+    // Collection is from genesis aka round 0 so we expect BFT 1 + 0 * 4 vertices
+    let request = tonic::Request::new(ReadCausalRequest {
+        collection_id: Some(genesis_certs[0].digest().into()),
+    });
+
+    let response = client.read_causal(request).await.unwrap();
+    assert_eq!(1, response.into_inner().collection_ids.len());
+
+    // Test read causal for existing collection in Primary 1
+    // Collection is from round 1 so we expect BFT 1 + 1 * 4 vertices
+    let request = tonic::Request::new(ReadCausalRequest {
+        collection_id: Some(collection_ids[1].into()),
+    });
+
+    let response = client.read_causal(request).await.unwrap();
+    assert_eq!(5, response.into_inner().collection_ids.len());
+
+    // Test read causal for existing optimal certificates (we ack all of the prior round),
+    // we expect BFT 1 + 4 * 4 vertices
+    for certificate in certificates {
+        if certificate.round() == 4 {
+            let request = tonic::Request::new(ReadCausalRequest {
+                collection_id: Some(certificate.digest().into()),
+            });
+
+            let response = client.read_causal(request).await.unwrap();
+            assert_eq!(17, response.into_inner().collection_ids.len());
+        }
+    }
+
+    // Test read causal for missing collection from Primary 1. Expect block synchronizer
+    // to handle retrieving the missing collections from Primary 2 before completing the
+    // request for read causal. However because these certificates were not signed
+    // they will not pass validation during fetch.
+    let request = tonic::Request::new(ReadCausalRequest {
+        collection_id: Some(collection_ids[0].into()),
+    });
+
+    let status = client.read_causal(request).await.unwrap_err();
+
+    assert!(status
+        .message()
+        .contains("Error when trying to synchronize block headers: BlockNotFound"));
 }
 
 /// Here we test the ability on our code to synchronize missing certificates
@@ -673,12 +974,4 @@ fn connect_to_validator_client(parameters: Parameters) -> ValidatorClient<Channe
         .connect_lazy(&parameters.consensus_api_grpc.socket_addr)
         .unwrap();
     ValidatorClient::new(channel)
-}
-
-fn connect_to_configuration_client(parameters: Parameters) -> ConfigurationClient<Channel> {
-    let config = mysten_network::config::Config::new();
-    let channel = config
-        .connect_lazy(&parameters.consensus_api_grpc.socket_addr)
-        .unwrap();
-    ConfigurationClient::new(channel)
 }

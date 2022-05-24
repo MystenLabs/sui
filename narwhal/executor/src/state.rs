@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use consensus::SequenceNumber;
 use serde::{Deserialize, Serialize};
+use types::SequenceNumber;
 
 #[cfg(test)]
 #[path = "tests/state_tests.rs"]

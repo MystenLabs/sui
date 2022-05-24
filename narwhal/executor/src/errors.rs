@@ -1,9 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::WorkerId;
-use consensus::SequenceNumber;
 use store::StoreError;
 use thiserror::Error;
+use types::SequenceNumber;
 
 #[macro_export]
 macro_rules! bail {

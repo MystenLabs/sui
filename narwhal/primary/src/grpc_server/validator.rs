@@ -1,8 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
-use crate::{block_waiter::GetBlockResponse, BlockCommand, BlockRemoverCommand};
+use crate::{
+    block_synchronizer::handler::Handler, block_waiter::GetBlockResponse, BlockCommand,
+    BlockRemoverCommand,
+};
+use consensus::dag::Dag;
+use crypto::traits::VerifyingKey;
 use tokio::{
     sync::{
         mpsc::{channel, Sender},
@@ -14,35 +19,84 @@ use tonic::{Request, Response, Status};
 use types::{
     BatchMessageProto, BlockError, BlockRemoverErrorKind, CertificateDigest,
     CertificateDigestProto, CollectionRetrievalResult, Empty, GetCollectionsRequest,
-    GetCollectionsResponse, RemoveCollectionsRequest, Validator,
+    GetCollectionsResponse, ReadCausalRequest, ReadCausalResponse, RemoveCollectionsRequest,
+    Validator,
 };
 
-#[derive(Debug)]
-pub struct NarwhalValidator {
+pub struct NarwhalValidator<
+    PublicKey: VerifyingKey,
+    SynchronizerHandler: Handler<PublicKey> + Send + Sync + 'static,
+> {
     tx_get_block_commands: Sender<BlockCommand>,
     tx_block_removal_commands: Sender<BlockRemoverCommand>,
     get_collections_timeout: Duration,
     remove_collections_timeout: Duration,
+    block_synchronizer_handler: Arc<SynchronizerHandler>,
+    dag: Option<Arc<Dag<PublicKey>>>,
 }
 
-impl NarwhalValidator {
+impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + Sync + 'static>
+    NarwhalValidator<PublicKey, SynchronizerHandler>
+{
     pub fn new(
         tx_get_block_commands: Sender<BlockCommand>,
         tx_block_removal_commands: Sender<BlockRemoverCommand>,
         get_collections_timeout: Duration,
         remove_collections_timeout: Duration,
+        block_synchronizer_handler: Arc<SynchronizerHandler>,
+        dag: Option<Arc<Dag<PublicKey>>>,
     ) -> Self {
         Self {
             tx_get_block_commands,
             tx_block_removal_commands,
             get_collections_timeout,
             remove_collections_timeout,
+            block_synchronizer_handler,
+            dag,
         }
     }
 }
 
 #[tonic::async_trait]
-impl Validator for NarwhalValidator {
+impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + Sync + 'static>
+    Validator for NarwhalValidator<PublicKey, SynchronizerHandler>
+{
+    async fn read_causal(
+        &self,
+        request: Request<ReadCausalRequest>,
+    ) -> Result<Response<ReadCausalResponse>, Status> {
+        let collection_id = request
+            .into_inner()
+            .collection_id
+            .ok_or_else(|| Status::invalid_argument("No collection id has been provided"))?;
+        let ids = parse_certificate_digests(vec![collection_id])?;
+
+        let block_header_results = self
+            .block_synchronizer_handler
+            .get_and_synchronize_block_headers(ids.clone())
+            .await;
+
+        for result in block_header_results {
+            if let Err(err) = result {
+                return Err(Status::internal(format!(
+                    "Error when trying to synchronize block headers: {:?}",
+                    err
+                )));
+            }
+        }
+
+        if let Some(dag) = &self.dag {
+            let result = match dag.read_causal(ids[0]).await {
+                Ok(digests) => Ok(ReadCausalResponse {
+                    collection_ids: digests.into_iter().map(Into::into).collect(),
+                }),
+                Err(err) => Err(Status::internal(format!("Couldn't read causal: {err}"))),
+            };
+            return result.map(Response::new);
+        }
+        Err(Status::internal("Dag does not exist"))
+    }
+
     async fn remove_collections(
         &self,
         request: Request<RemoveCollectionsRequest>,

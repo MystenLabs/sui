@@ -1,10 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use consensus::{ConsensusOutput, ConsensusSyncRequest, SequenceNumber};
+use consensus::{ConsensusOutput, ConsensusSyncRequest};
 use crypto::traits::VerifyingKey;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::warn;
-use types::Certificate;
+use types::{Certificate, SequenceNumber};
 
 pub struct MockSequencer<PublicKey: VerifyingKey> {
     rx_sequence: Receiver<Certificate<PublicKey>>,

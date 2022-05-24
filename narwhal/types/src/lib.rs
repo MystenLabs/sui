@@ -4,6 +4,9 @@
 #[macro_use]
 pub mod error;
 
+mod consensus;
+pub use consensus::*;
+
 mod primary;
 pub use primary::*;
 

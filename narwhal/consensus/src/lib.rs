@@ -8,22 +8,18 @@
 )]
 
 pub mod dag;
-mod store;
 pub mod subscriber;
 pub mod tusk;
 
-pub use crate::{store::ConsensusStore, subscriber::SubscriberHandler, tusk::Consensus};
+pub use crate::{subscriber::SubscriberHandler, tusk::Consensus};
 
 use crypto::traits::VerifyingKey;
 use serde::{Deserialize, Serialize};
 use std::ops::RangeInclusive;
-use types::Certificate;
+use types::{Certificate, SequenceNumber};
 
 /// The default channel size used in the consensus and subscriber logic.
 pub const DEFAULT_CHANNEL_SIZE: usize = 1_000;
-
-/// A global sequence number assigned to every certificate.
-pub type SequenceNumber = u64;
 
 /// The output format of the consensus.
 #[derive(Serialize, Deserialize, Clone, Debug)]

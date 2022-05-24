@@ -74,6 +74,16 @@ message RemoveCollectionsRequest {
     repeated CertificateDigest collection_ids = 1;
 }
 
+message ReadCausalRequest {
+    // A collection for which a sequence of related collections are to be retrieved.
+    CertificateDigest collection_id = 1;
+}
+
+message ReadCausalResponse {
+    // Resulting sequence of collections from DAG walk.
+    repeated CertificateDigest collection_ids = 1;
+}
+
 message NewNetworkInfoRequest {
     uint32 epoch_number = 1;
     repeated ValidatorData validators = 2;
@@ -91,10 +101,12 @@ message Empty {
 
 // The consensus to mempool interface for validator actions.
 service Validator {
-    // Returns the collection contents for each requested collection
+    // Returns collection contents for each requested collection.
     rpc GetCollections (GetCollectionsRequest) returns (GetCollectionsResponse);
-    // Removes each provided collection.
+    // Expunges collections from the mempool.
     rpc RemoveCollections (RemoveCollectionsRequest) returns (Empty);
+    // Returns collections along a DAG walk with a well-defined starting point.
+    rpc ReadCausal (ReadCausalRequest) returns (ReadCausalResponse);
 }
 
 message RoundsRequest {

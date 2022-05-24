@@ -1,10 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    store::{ConsensusStore, StoreResult},
-    ConsensusOutput, SequenceNumber,
-};
+use crate::{ConsensusOutput, SequenceNumber};
 use config::{Committee, Stake};
 use crypto::{
     traits::{EncodeDecodeBase64, VerifyingKey},
@@ -20,9 +17,9 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::{debug, warn};
-use types::{Certificate, CertificateDigest, Round};
+use types::{Certificate, CertificateDigest, ConsensusStore, Round, StoreResult};
 
-#[cfg(any(test, feature = "benchmark"))]
+#[cfg(any(test))]
 #[path = "tests/consensus_tests.rs"]
 pub mod consensus_tests;
 
@@ -396,10 +393,11 @@ impl<PublicKey: VerifyingKey> Consensus<PublicKey> {
 
 #[cfg(test)]
 mod tests {
-    use super::{consensus_tests::*, *};
+    use super::*;
     use crypto::traits::KeyPair;
     use rand::Rng;
     use std::collections::BTreeSet;
+    use test_utils::{make_consensus_store, mock_committee};
     use types::Certificate;
 
     #[test]

@@ -9,7 +9,7 @@ use test_utils::make_optimal_certificates;
 use tokio::sync::mpsc::channel;
 use types::Certificate;
 
-use crate::tusk::consensus_tests::mock_committee;
+use test_utils::mock_committee;
 
 use super::{Dag, ValidatorDagError};
 

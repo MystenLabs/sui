@@ -204,6 +204,15 @@ impl Primary {
             /* rx_workers */ rx_others_digests,
         );
 
+        let block_synchronizer_handler = Arc::new(BlockSynchronizerHandler::new(
+            tx_block_synchronizer_commands,
+            tx_primary_messages,
+            certificate_store.clone(),
+            parameters
+                .block_synchronizer
+                .handler_certificate_deliver_timeout,
+        ));
+
         // Retrieves a block's data by contacting the worker nodes that contain the
         // underlying batches and their transactions.
         BlockWaiter::spawn(
@@ -211,14 +220,7 @@ impl Primary {
             committee.clone(),
             rx_get_block_commands,
             rx_batches,
-            BlockSynchronizerHandler::new(
-                tx_block_synchronizer_commands,
-                tx_primary_messages,
-                certificate_store.clone(),
-                parameters
-                    .block_synchronizer
-                    .handler_certificate_deliver_timeout,
-            ),
+            block_synchronizer_handler.clone(),
         );
 
         // Indicator variable for the gRPC server
@@ -308,6 +310,7 @@ impl Primary {
                 tx_block_removal_commands,
                 parameters.consensus_api_grpc.get_collections_timeout,
                 parameters.consensus_api_grpc.remove_collections_timeout,
+                block_synchronizer_handler,
                 dag,
                 committee.clone(),
             );

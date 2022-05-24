@@ -4,7 +4,7 @@ use crate::{
     bail,
     errors::{SubscriberError, SubscriberResult},
 };
-use consensus::{ConsensusOutput, ConsensusSyncRequest, SequenceNumber};
+use consensus::{ConsensusOutput, ConsensusSyncRequest};
 use crypto::traits::VerifyingKey;
 use futures::{
     future::try_join_all,
@@ -17,7 +17,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::debug;
-use types::{BatchDigest, SerializedBatchMessage};
+use types::{BatchDigest, SequenceNumber, SerializedBatchMessage};
 
 #[cfg(test)]
 #[path = "tests/subscriber_tests.rs"]

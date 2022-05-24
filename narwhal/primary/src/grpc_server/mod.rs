@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use self::{configuration::NarwhalConfiguration, validator::NarwhalValidator};
-use crate::{grpc_server::proposer::NarwhalProposer, BlockCommand, BlockRemoverCommand};
+use crate::{
+    block_synchronizer::handler::Handler, grpc_server::proposer::NarwhalProposer, BlockCommand,
+    BlockRemoverCommand,
+};
 use config::Committee;
 use consensus::dag::Dag;
 use crypto::traits::VerifyingKey;
@@ -16,23 +19,30 @@ mod configuration;
 mod proposer;
 mod validator;
 
-pub struct ConsensusAPIGrpc<PublicKey: VerifyingKey> {
+pub struct ConsensusAPIGrpc<
+    PublicKey: VerifyingKey,
+    SynchronizerHandler: Handler<PublicKey> + Send + Sync + 'static,
+> {
     socket_addr: Multiaddr,
     tx_get_block_commands: Sender<BlockCommand>,
     tx_block_removal_commands: Sender<BlockRemoverCommand>,
     get_collections_timeout: Duration,
     remove_collections_timeout: Duration,
+    block_synchronizer_handler: Arc<SynchronizerHandler>,
     dag: Option<Arc<Dag<PublicKey>>>,
     committee: Committee<PublicKey>,
 }
 
-impl<PublicKey: VerifyingKey> ConsensusAPIGrpc<PublicKey> {
+impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + Sync + 'static>
+    ConsensusAPIGrpc<PublicKey, SynchronizerHandler>
+{
     pub fn spawn(
         socket_addr: Multiaddr,
         tx_get_block_commands: Sender<BlockCommand>,
         tx_block_removal_commands: Sender<BlockRemoverCommand>,
         get_collections_timeout: Duration,
         remove_collections_timeout: Duration,
+        block_synchronizer_handler: Arc<SynchronizerHandler>,
         dag: Option<Arc<Dag<PublicKey>>>,
         committee: Committee<PublicKey>,
     ) {
@@ -43,6 +53,7 @@ impl<PublicKey: VerifyingKey> ConsensusAPIGrpc<PublicKey> {
                 tx_block_removal_commands,
                 get_collections_timeout,
                 remove_collections_timeout,
+                block_synchronizer_handler,
                 dag,
                 committee,
             }
@@ -58,6 +69,8 @@ impl<PublicKey: VerifyingKey> ConsensusAPIGrpc<PublicKey> {
             self.tx_block_removal_commands.to_owned(),
             self.get_collections_timeout,
             self.remove_collections_timeout,
+            self.block_synchronizer_handler.clone(),
+            self.dag.clone(),
         );
 
         let narwhal_proposer = NarwhalProposer::new(self.dag.clone(), self.committee.clone());

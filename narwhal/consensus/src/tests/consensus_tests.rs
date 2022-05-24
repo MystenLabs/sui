@@ -2,53 +2,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use config::{Authority, PrimaryAddresses};
 use crypto::ed25519::Ed25519PublicKey;
 #[allow(unused_imports)] // WT*?
 use crypto::traits::KeyPair;
 #[cfg(test)]
 use std::collections::{BTreeSet, VecDeque};
 use store::{reopen, rocks, rocks::DBMap};
+use test_utils::{make_consensus_store, mock_committee};
 #[allow(unused_imports)] // WT*?
 use tokio::sync::mpsc::channel;
-use types::CertificateDigest;
-
-// Fixture
-pub fn mock_committee(keys: &[Ed25519PublicKey]) -> Committee<Ed25519PublicKey> {
-    Committee {
-        authorities: keys
-            .iter()
-            .map(|id| {
-                (
-                    id.clone(),
-                    Authority {
-                        stake: 1,
-                        primary: PrimaryAddresses {
-                            primary_to_primary: "/ip4/0.0.0.0/tcp/0/http".parse().unwrap(),
-                            worker_to_primary: "/ip4/0.0.0.0/tcp/0/http".parse().unwrap(),
-                        },
-                        workers: HashMap::default(),
-                    },
-                )
-            })
-            .collect(),
-    }
-}
-
-pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore<Ed25519PublicKey>> {
-    const LAST_COMMITTED_CF: &str = "last_committed";
-    const SEQUENCE_CF: &str = "sequence";
-
-    let rocksdb = rocks::open_cf(store_path, None, &[LAST_COMMITTED_CF, SEQUENCE_CF])
-        .expect("Failed creating database");
-
-    let (last_committed_map, sequence_map) = reopen!(&rocksdb,
-        LAST_COMMITTED_CF;<Ed25519PublicKey, Round>,
-        SEQUENCE_CF;<SequenceNumber, CertificateDigest>
-    );
-
-    Arc::new(ConsensusStore::new(last_committed_map, sequence_map))
-}
 
 pub fn make_certificate_store(
     store_path: &std::path::Path,

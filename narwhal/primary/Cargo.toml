@@ -17,34 +17,34 @@ config = { path = "../config" }
 derive_builder = "0.11.2"
 ed25519-dalek = "1.0.1"
 futures = "0.3.21"
+itertools = "0.10.3"
+multiaddr = "0.14.0"
+prost = "0.10.1"
+rand = { version = "0.7.3", features = ["small_rng"] }
 serde = { version = "1.0.136", features = ["derive"] }
 thiserror = "1.0.30"
 tokio = { version = "1.17.0", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.1", features = ["codec"] }
-tracing = "0.1.34"
 tonic = "0.7"
-prost = "0.10.1"
-rand = { version = "0.7.3", features = ["small_rng"] }
-multiaddr = "0.14.0"
 tower = "0.4.12"
+tracing = "0.1.34"
 
 consensus = { path = "../consensus" }
 crypto = { path = "../crypto" }
 network = { path = "../network" }
 types = { path = "../types" }
 
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
 mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
-itertools = "0.10.3"
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
 
 [dev-dependencies]
 itertools = "0.10.3"
+mockall = "0.11.0"
 node = { path = "../node" }
 tempfile = "3.3.0"
-test_utils = { path = "../test_utils"}
+test_utils = { path = "../test_utils" }
 tracing-test = { version = "0.2.1" }
 worker = { path = "../worker" }
-mockall = "0.11.0"
 
 [features]
 benchmark = []

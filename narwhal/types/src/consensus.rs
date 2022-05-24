@@ -1,13 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::SequenceNumber;
+use crate::{CertificateDigest, Round};
 use crypto::traits::VerifyingKey;
 use std::{collections::HashMap, ops::RangeInclusive};
 use store::{
     rocks::{DBMap, TypedStoreError},
     traits::Map,
 };
-use types::{CertificateDigest, Round};
+
+/// A global sequence number assigned to every certificate.
+pub type SequenceNumber = u64;
 
 /// Convenience type to propagate store errors.
 pub type StoreResult<T> = Result<T, TypedStoreError>;

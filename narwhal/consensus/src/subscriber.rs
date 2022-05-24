@@ -1,9 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    store::{ConsensusStore, StoreResult},
-    ConsensusOutput, ConsensusSyncRequest,
-};
+use crate::{ConsensusOutput, ConsensusSyncRequest};
 use crypto::traits::VerifyingKey;
 use std::sync::Arc;
 use tokio::{
@@ -11,7 +8,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::{debug, error};
-use types::{Certificate, CertificateDigest};
+use types::{Certificate, CertificateDigest, ConsensusStore, StoreResult};
 
 #[cfg(test)]
 #[path = "tests/subscriber_tests.rs"]

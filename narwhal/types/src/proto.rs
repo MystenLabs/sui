@@ -35,8 +35,8 @@ pub use narwhal::{
     BincodeEncodedPayload, CertificateDigest as CertificateDigestProto, CollectionError,
     CollectionErrorType, CollectionRetrievalResult, Empty, GetCollectionsRequest,
     GetCollectionsResponse, MultiAddr as MultiAddrProto, NewNetworkInfoRequest,
-    PublicKey as PublicKeyProto, RemoveCollectionsRequest, RoundsRequest, RoundsResponse,
-    Transaction as TransactionProto, ValidatorData,
+    PublicKey as PublicKeyProto, ReadCausalRequest, ReadCausalResponse, RemoveCollectionsRequest,
+    RoundsRequest, RoundsResponse, Transaction as TransactionProto, ValidatorData,
 };
 
 impl<PublicKey: VerifyingKey> From<PublicKey> for PublicKeyProto {
