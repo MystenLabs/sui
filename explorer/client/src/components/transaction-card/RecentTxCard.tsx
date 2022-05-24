@@ -67,9 +67,11 @@ async function getRecentTransactions(txNum: number): Promise<TxnData[]> {
                     // TODO: handle multiple transactions
                     const txns = getTransactions(res);
                     if (txns.length > 1) {
-                        throw new Error(
-                            `Handling multiple transactions is not yet supported`
+                        console.error(
+                            'Handling multiple transactions is not yet supported',
+                            txEff
                         );
+                        return null;
                     }
                     const txn = txns[0];
                     const txKind = getTransactionKindName(txn);
