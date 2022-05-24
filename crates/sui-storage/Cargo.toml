@@ -19,6 +19,7 @@ tracing = { version = "0.1.31", features = ["log"] }
 sui-types = { path = "../sui-types" }
 
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe"}
+workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 pretty_assertions = "1.2.0"

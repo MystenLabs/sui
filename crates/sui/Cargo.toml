@@ -72,6 +72,7 @@ jsonrpsee-proc-macros = "0.13.1"
 jsonrpsee-core = "0.13.1"
 schemars = "0.8.10"
 shell-words = "1.1.0"
+workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 tracing-test = "0.2.1"

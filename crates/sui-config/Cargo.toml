@@ -27,3 +27,4 @@ sui-framework = { path = "../sui-framework" }
 
 sui-adapter = { path = "../sui-adapter" }
 sui-types = { path = "../sui-types" }
+workspace-hack = { path = "../workspace-hack"}
