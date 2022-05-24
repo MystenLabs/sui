@@ -4,7 +4,7 @@ In the previous chapter, we walked through various ways of wrapping an object in
 2. An object can become very large if it wraps several other objects. Larger objects can lead to higher gas fee in transactions. In addition, there is an upper bound on object size.
 3. As we will see in future chapters when we introduce the `Bag` library, there will be use cases where we need to store a collection of objects of heterogeneous types. Since the Move `vector` type must be templated on one single type `T`, it is not suitable for this.
 
-Sui provides another way to represent object relationships: object can own obejcts. In the first chapter, we introduced libraries for tranferring objects to an account address. In this chapter, we will introduce libraries that allow you transfer objects to other objects.
+Fortunately, Sui provides another way to represent object relationships: *an object can own other objects*. In the first chapter, we introduced libraries for transferring objects to an account address. In this chapter, we will introduce libraries that allow you transfer objects to other objects.
 
 ### Create Child Objects
 #### transfer_to_object
