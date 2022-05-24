@@ -1,0 +1,21 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// valid, ID is allowed
+
+//# publish
+module 0x0.M {
+    import 0x2.TxContext;
+    import 0x2.ID;
+
+    public(script) yes<T>(
+        l0: ID.ID,
+        l1: vector<ID.ID>,
+        l2: vector<vector<ID.ID>>,
+        ctx: &mut TxContext.TxContext,
+    ) {
+        label l0:
+        abort 0;
+    }
+
+}
