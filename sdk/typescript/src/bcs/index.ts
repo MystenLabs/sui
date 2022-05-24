@@ -522,7 +522,6 @@ export class BCS {
    *
    * @param name Name of the type to register.
    * @param elementType Name of the inner type of the vector.
-   * @param encoding Either 'base64' or 'hex' to enable string<->vector conversions
    * @return Returns self for chaining.
    */
   public static registerVectorType(
