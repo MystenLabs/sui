@@ -1,25 +1,27 @@
 ## Chapter 5: Child Objects
 In the previous chapter, we walked through various ways of wrapping an object in another object. There are a few limitations in object wrapping:
-1. A wrapped object can only be accessed via its wrapper. It cannot be used directly in a transaction or queried by its ID (e.g., in the explorer).
-2. An object can become very large if it wraps several other objects. Larger objects can lead to higher gas fee in transactions. In addition, there is an upper bound on object size.
+1. A wrapped object can be accessed only via its wrapper. It cannot be used directly in a transaction or queried by its ID (e.g., in the explorer).
+2. An object can become very large if it wraps several other objects. Larger objects can lead to higher gas fees in transactions. In addition, there is an upper bound on object size.
 3. As we will see in future chapters when we introduce the `Bag` library, there will be use cases where we need to store a collection of objects of heterogeneous types. Since the Move `vector` type must be templated on one single type `T`, it is not suitable for this.
 
 Fortunately, Sui provides another way to represent object relationships: *an object can own other objects*. In the first chapter, we introduced libraries for transferring objects to an account address. In this chapter, we will introduce libraries that allow you transfer objects to other objects.
 
-### Create Child Objects
+### Create hild objects
 #### transfer_to_object
-Assume we own two objects in our account address. To make one object own the other object, we can use the following API in the `Transfer` library:
+Assume we own two objects in our account address. To make one object own the other object, we can use the following API in the [`Transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Transfer.move) library:
 ```rust
 public fun transfer_to_object<T: key, R: key>(
     obj: T,
     owner: &mut R,
 ): ChildRef<T>;
 ```
-The first argument `obj` will become a child object of the second argument `owner`. `obj` must be passed by-value, i.e. it will be fully consumed, and cannot be accessed again within the same transaction (similar to `transfer` function). After calling this function, the on-chain owner metatada of `obj` will change to the ID of the `owner` object.
+The first argument `obj` will become a child object of the second argument `owner`. `obj` must be passed by value, i.e. it will be fully consumed and cannot be accessed again within the same transaction (similar to `transfer` function). After calling this function, the on-chain owner metadata of `obj` will change to the ID of the `owner` object.
 
-The function returns a special struct `ChildRef<T>` where `T` matches the type of the child object. It represents a reference to the child object. Since `ChildRef` is a struct type without `drop` ability, Move ensures that the return value cannot be dropped. This ensures that the caller of the function must put the reference somewhere and cannot forget about it. This is very important because latter on if we attempt to delete the parent object, the existence of the child references force us to take care of them. Otherwise we may end up in a situation where we deleted the parent object, but there are still some child objects, and these child objects will be locked forever (as we will explain in latter sections). In the last section, we will also see how this reference is used to move around child objects and prevent making mistakes.
+The function returns a special struct `ChildRef<T>` where `T` matches the type of the child object. It represents a reference to the child object. Since `ChildRef` is a struct type without `drop` ability, Move ensures the return value cannot be dropped. This ensures the caller of the function must put the reference somewhere and cannot forget about it.
 
-Let's look at some code. The full source code can be found in [ObjectOwner.move](https://github.com/MystenLabs/sui/tree/main/sui_core/src/unit_tests/data/object_owner/sources/ObjectOwner.move).
+This is very important because later on if we attempt to delete the parent object, the existence of the child references force us to take care of them. Otherwise, we may end up in a situation where we deleted the parent object, but there are still some child objects; and these child objects will be locked forever, as we will explain in latter sections. In the last section, we will also see how this reference is used to move around child objects and prevent making mistakes.
+
+Let's look at some code. The full source code can be found in [ObjectOwner.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/unit_tests/data/object_owner/sources/ObjectOwner.move).
 
 First we define two object types for the parent and the child:
 ```rust
@@ -42,7 +44,7 @@ public(script) fun create_child(ctx: &mut TxContext) {
     );
 }
 ```
-The above function creates a new object of `Child` type and transfer it to the sender account address of the transaction, i.e. after this call, the sender account owns the object.
+The above function creates a new object of `Child` type and transfers it to the sender account address of the transaction, i.e. after this call, the sender account owns the object.
 Similarly, we can define an API to create an object of `Parent` type:
 ```rust
 public(script) fun create_parent(ctx: &mut TxContext) {
@@ -54,16 +56,16 @@ public(script) fun create_parent(ctx: &mut TxContext) {
 }
 ```
 Since the `child` field is `Option` type, we can start with `Option::none()`.
-Now we can define an API that make an object of `Child` a child of an object of `Parent`:
+Now we can define an API that makes an object of `Child` a child of an object of `Parent`:
 ```rust
 public(script) fun add_child(parent: &mut Parent, child: Child, _ctx: &mut TxContext) {
     let child_ref = Transfer::transfer_to_object(child, parent);
     Option::fill(&mut parent.child, child_ref);
 }
 ```
-This function takes `child` by-value, calls `transfer_to_object` to transfer the `child` object to the `parent`, and returns a `child_ref`.
+This function takes `child` by value, calls `transfer_to_object` to transfer the `child` object to the `parent`, and returns a `child_ref`.
 After that, we can fill the `child` field of `parent` with `child_ref`.
-If we comment out the second line, Move compiler will complain that we cannot drop `child_ref`.
+If we comment out the second line, the Move compiler will complain that we cannot drop `child_ref`.
 At the end of the `add_child` call, we have the following ownership relationship:
 1. Sender account address owns a `Parent` object
 2. The `Parent` object owns a `Child` object.
@@ -230,7 +232,7 @@ public(script) fun transfer_child(parent: &mut Parent, child: Child, new_parent:
 Similar to `remove_child`, the `child` object must be passed explicitly by-value in the arguments. First of all we extract the existing child reference, and pass it to `transfer_child_to_object` along with `child`, and a mutable reference to `new_parent`. This call will return a new child reference. We then fill the `new_parent`'s `child` field with this new reference. Since `ChildRef` type is not droppable, `Option::fill` will fail if `new_parent.child` already contains an existing `ChildRef`. This ensures that we never accidentally drop a `ChildRef` without properly transferring the child.
 
 ### Delete Child Objects
-For the same reasons that transferring a child object requires both the child object and the `CildRef`, deleting child objects directly without taking care of the child reference will lead to a stale reference pointing to a non-existing object after the deletion.
+For the same reasons that transferring a child object requires both the child object and the `ChildRef`, deleting child objects directly without taking care of the child reference will lead to a stale reference pointing to a non-existing object after the deletion.
 In order to delete a child object, we must first transfer this child object to an account address, which makes this object a regular account-owned object instead of a child object, and hence can be deleted normally.
 
 What happens if we try to delete a child directly using what we learned in the first chapter, without taking the child reference? Let's find out. We can define a simple `delete_child` method like this:
