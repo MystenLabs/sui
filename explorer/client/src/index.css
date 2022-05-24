@@ -1,3 +1,4 @@
+@import 'vanilla-cookieconsent/dist/cookieconsent.css';
 @font-face {
     font-family: Inter;
     src: url('./assets/Fonts/Inter-VariableFont_slnt,wght.ttf')
