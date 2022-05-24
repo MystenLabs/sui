@@ -27,7 +27,7 @@ There are some interesting consequences of wrapping an Sui object into another. 
 
 >:bulb: The fact that you can no longer use a wrapped Sui object means that it's impossible to create circular wrapping behavior, where A wraps B, B wraps C, and C also wraps A.
 
-At some point, you can then take out the wrapped object and transfer it to an address. This process is called **unwrapping**. When an object is **unwrapped**, it will become an independent object again, and can be accessed directly on-chain. There is also an important property about wrapping and unwrapping: *The object's ID stays the same across wrapping and unwrapping*!
+At some point, you can then take out the wrapped object and transfer it to an address. This process is called **unwrapping**. When an object is **unwrapped**, it will become an independent object again, and can be accessed directly on-chain. There is also an important property about wrapping and unwrapping: *the object's ID stays the same across wrapping and unwrapping*!
 
 There are a few common ways to wrap a Sui object into another Sui object, and their use cases are typically different. In the following, we will walk through three different ways to wrap a Sui object and their typical use cases.
 
@@ -200,7 +200,7 @@ You can also find a more complex example in [Hero.move](https://github.com/Myste
 ### Wrapping through `vector`
 The concept of wrapping objects in a vector field of another Sui object is very similar to wrapping through `Option`: an object may contain 0, 1 or many of the wrapped objects of the same type.
 
-We won't use a full example to demonstrate this use case, but wrapping through vector can look like this following:
+We won't use a full example to demonstrate this use case, but wrapping through vector may resemble:
 ```rust
 struct Pet has key, store {
     id: VersionedID,
@@ -212,4 +212,4 @@ struct Farm has key {
     pets: vector<Pet>,
 }
 ```
-In the above example, a vector of `Pet`s are wrapped in `Farm`, and can only be accessed through the `Farm` object.
+In the above example, a vector of `Pet`s are wrapped in `Farm` and can be accessed only through the `Farm` object.
