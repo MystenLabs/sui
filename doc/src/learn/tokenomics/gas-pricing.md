@@ -16,9 +16,9 @@ The gas functions $ComputationUnits[\tau]$ and $StorageUnits[\tau]$ measure the 
 
 The computation gas price $ComputationPrice[\tau]$ captures the cost of one unit of computation in SUI units. This price is set at the transaction level and submitted by the user in two parts:
 
-$ComputationPrice[\tau] \ = \ ReferencePrice \ + \ Tip[\tau],$  
+$ComputationPrice[\tau] \ = \ ReferencePrice \ + \ Tip[\tau]$  
 
-$\text{ with } \ ComputationPrice[\tau] > PriceFloor.$
+$\text{with } \ ComputationPrice[\tau] > PriceFloor$
 
 The $ReferencePrice$ is fixed at the network level for the duration of the epoch, while the tip is at the user’s discretion. Since the tip can be negative, in practice the user can submit any gas price – as long as the overall price is higher than the $PriceFloor$. Note that the $PriceFloor$ will be updated periodically, with $ReferencePrice > PriceFloor$, and exists mainly to prevent a flood of network spamming.
 
@@ -27,7 +27,7 @@ Sui’s gas price mechanism is intended to make the $ReferencePrice$ a credible 
 * _Tallying Rule_ - Throughout the epoch, validators obtain signals over the operations of other validators. Each validator uses these signals to build a (subjective) evaluation over the performance of every other validator. Specifically, each validator constructs a multiplier for the stake rewards of every other validator such that validators who behave well receive boosted rewards, and validators who do not receive reduced rewards. Good behavior is proxied by the share of transactions above a validator’s self-declared reservation price that the validator processed in a timely manner. The tallying rule’s goal is to create a community-enforced mechanism for encouraging validators to honor the quotes submitted during the gas survey.
 * _Incentivized Stake Reward Distribution Rule_ - At the end of the epoch, the distribution of stake rewards across validators is adjusted using information from the gas price survey and tallying rule. Specifically, a global multiplier is built for every validator using the median value – weighted by stake – out of the set of individual multipliers constructed during the tallying rule. The incentivized stake reward distribution then sets the share of stake rewards distributed to each validator $v$ as:
 
-$ RewardShare(v) \ = \ Constant \ \times \ (1 + GasSurveyBoost) \ \times \ Multiplier(v) \ \times \ StakeShare(v) $
+$ RewardShare(v) = Constant \times (1 + GasSurveyBoost) \times Multiplier(v) \times StakeShare(v) $
 
 The $Constant$ term is used as a normalization such that the sum of $RewardShare(v)$ across the validator set sums up to one. If the validator submitted a price quote under the $ReferencePrice$, then $GasSurveyBoost > 0$. If not, $GasSurveyBoost < 0$. The purpose of this booster is to encourage validators to submit low reservation prices during the gas price survey. Finally, $Multiplier(v)$ is the global multiplier built from the subjective evaluations in the tallying rule. Note that in a symmetric equilibrium where all validators submit the same quote to the gas price survey and where all validators behave well as measured by the tallying rule, then $ RewardShare(v) = StakeShare(v)$ and each validator receives stake rewards in proportion to their share of overall stake.
 
