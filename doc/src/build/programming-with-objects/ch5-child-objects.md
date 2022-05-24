@@ -230,7 +230,7 @@ public(script) fun transfer_child(parent: &mut Parent, child: Child, new_parent:
 Similar to `remove_child`, the `child` object must be passed explicitly by-value in the arguments. First of all we extract the existing child reference, and pass it to `transfer_child_to_object` along with `child`, and a mutable reference to `new_parent`. This call will return a new child reference. We then fill the `new_parent`'s `child` field with this new reference. Since `ChildRef` type is not droppable, `Option::fill` will fail if `new_parent.child` already contains an existing `ChildRef`. This ensures that we never accidentally drop a `ChildRef` without properly transferring the child.
 
 ### Delete Child Objects
-For the same reasons that transferring child objects require both the child object and the reference, deleting child objects directly without taking care of the child reference will lead to a stale reference pointing to a non-existing object after the deletion.
+For the same reasons that transferring a child object requires both the child object and the `CildRef`, deleting child objects directly without taking care of the child reference will lead to a stale reference pointing to a non-existing object after the deletion.
 In order to delete a child object, we must first transfer this child object to an account address, which makes this object a regular account-owned object instead of a child object, and hence can be deleted normally.
 
 What happens if we try to delete a child directly using what we learned in the first chapter, without taking the child reference? Let's find out. We can define a simple `delete_child` method like this:
