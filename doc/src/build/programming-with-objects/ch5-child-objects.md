@@ -1,6 +1,6 @@
 ## Chapter 5: Child Objects
 In the previous chapter, we walked through various ways of wrapping an object in another object. There are a few limitations in object wrapping:
-1. An wrapped object no longer exists independently on-chain. One cannot access it directly, not can view it directly in the explorer.
+1. A wrapped object can only be accessed via its wrapper. It cannot be used directly in a transaction or queried by its ID (e.g., in the explorer).
 2. Objects can become very large if it wraps several objects inside. Larger objects can lead to higher gas fee in transactions. More importantly, there is an upper bound on object size.
 3. As we will see in future chapters when we introduce the `Bag` library, there will be use cases where we need to store a vector of objects of heterogeneous types. Since the Move `vector` type must be templated on one single type `T`, there is no way to wrap them into a single vector.
 
