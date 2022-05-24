@@ -1,57 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import puppeteer from 'puppeteer';
+import puppeteer, { type Page, type Browser } from 'puppeteer';
 
 //Global values:
-let browser: any;
-let page: any;
+let browser: Browser;
+let page: Page;
 const BASE_URL = 'http://localhost:8080';
-
-//Global functions:
-
-const checkID = async (page: any, element: string, expected: string) => {
-    const id = await page.$eval(element, (el: any) => el.getAttribute('id'));
-    expect(id).toBe(expected);
-};
-
-const checkDataTestID = async (
-    page: any,
-    element: string,
-    expected: string
-) => {
-    const id = await page.$eval(element, (el: any) =>
-        el.getAttribute('data-testid')
-    );
-    expect(id).toBe(expected);
-};
-
-const checkIsDisabled = async (page: any, element: string) => {
-    const id = await page.$eval(element, (el: any) =>
-        el.getAttribute('disabled')
-    );
-    expect(id).toBe('');
-};
-
-const checkIsNotDisabled = async (page: any, element: string) => {
-    const id = await page.$eval(element, (el: any) =>
-        el.getAttribute('disabled')
-    );
-    expect(id).toBeNull();
-};
-
-const expectHome = async (page: any) => {
-    await checkDataTestID(page, 'main > div', 'home-page');
-};
-
-const expectErrorResult = async (page: any) => {
-    await checkID(page, 'main > div', 'errorResult');
-};
-
-const searchText = async (page: any, text: string) => {
-    await page.type('#searchText', text);
-    await page.click('#searchBtn');
-};
 
 //Standardized CSS Selectors
 
@@ -64,7 +19,52 @@ const coinGroup = (num: number) => {
     };
 };
 
+const mainBodyCSS = 'main > div:nth-child(2)';
+
 const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num})`;
+
+//Standardized Expectations
+const cssInteract = (page: Page) => ({
+    with: (cssValue: string) => ({
+        get: {
+            attribute: async (attr: string): Promise<string> => {
+                const result = await page.$eval(
+                    cssValue,
+                    (el, attr) => el.getAttribute(attr as string),
+                    attr
+                );
+                return result === null ? '' : (result as string);
+            },
+            textContent: async (): Promise<string> => {
+                const text = await page.$eval(cssValue, (el) => el.textContent);
+                return text === null ? '' : (text as string);
+            },
+            isDisabled: async (): Promise<boolean> =>
+                page.$eval(cssValue, (el) => el.hasAttribute('disabled')),
+        },
+        click: async (): Promise<void> =>
+            page.$eval(cssValue, (el) => (el as HTMLElement).click()),
+    }),
+});
+
+const expectHome = async (page: Page) => {
+    const result = await cssInteract(page)
+        .with(mainBodyCSS)
+        .get.attribute('data-testid');
+    expect(result).toBe('home-page');
+};
+
+const expectErrorResult = async (page: Page) => {
+    const result = await cssInteract(page)
+        .with(mainBodyCSS)
+        .get.attribute('id');
+    expect(result).toBe('errorResult');
+};
+
+const searchText = async (page: Page, text: string) => {
+    await page.type('#searchText', text);
+    await cssInteract(page).with('#searchBtn').click();
+};
 
 describe('End-to-end Tests', () => {
     beforeAll(async () => {
@@ -89,7 +89,7 @@ describe('End-to-end Tests', () => {
 
         it('has a go home button', async () => {
             await page.goto(`${BASE_URL}/apples`);
-            await page.$eval('#homeBtn', (form: any) => form.click());
+            await cssInteract(page).with('#homeBtn').click();
             await expectHome(page);
         });
     });
@@ -109,16 +109,18 @@ describe('End-to-end Tests', () => {
         it('can be searched', async () => {
             await page.goto(BASE_URL);
             await searchText(page, successObjectID);
-            const el = await page.$('#objectID');
-            const value = await page.evaluate((el: any) => el.textContent, el);
+            const value = await cssInteract(page)
+                .with('#objectID')
+                .get.textContent();
             expect(value.trim()).toBe(successObjectID);
         });
 
         it('can be reached through URL', async () => {
             await page.goto(BASE_URL);
             await page.goto(`${BASE_URL}/objects/${successObjectID}`);
-            const el = await page.$('#objectID');
-            const value = await page.evaluate((el: any) => el.textContent, el);
+            const value = await cssInteract(page)
+                .with('#objectID')
+                .get.textContent();
             expect(value.trim()).toBe(successObjectID);
         });
 
@@ -134,15 +136,17 @@ describe('End-to-end Tests', () => {
         it('can be searched', async () => {
             await page.goto(BASE_URL);
             await searchText(page, successAddressID);
-            const el = await page.$('#addressID');
-            const value = await page.evaluate((el: any) => el.textContent, el);
+            const value = await cssInteract(page)
+                .with('#addressID')
+                .get.textContent();
             expect(value.trim()).toBe(successAddressID);
         });
 
         it('can be reached through URL', async () => {
             await page.goto(`${BASE_URL}/addresses/${successAddressID}`);
-            const el = await page.$('#addressID');
-            const value = await page.evaluate((el: any) => el.textContent, el);
+            const value = await cssInteract(page)
+                .with('#addressID')
+                .get.textContent();
             expect(value.trim()).toBe(successAddressID);
         });
         it('displays error when no objects', async () => {
@@ -193,7 +197,7 @@ describe('End-to-end Tests', () => {
 
     describe('Owned Objects have links that enable', () => {
         const navigationTemplate = async (
-            page: any,
+            page: Page,
             parentValue: string,
             parentIsA: 'addresses' | 'objects',
             childValue: string,
@@ -202,31 +206,27 @@ describe('End-to-end Tests', () => {
             await page.goto(`${BASE_URL}/${parentIsA}/${parentValue}`);
 
             //Click on child in Owned Objects List:
-            const objectLink = await page.$(nftObject(parentToChildNo));
-            await objectLink.click();
+            await cssInteract(page).with(nftObject(parentToChildNo)).click();
 
             //Check ID of child object:
-            const childIDEl = await page.$('#objectID');
-            const childText = await page.evaluate(
-                (el: any) => el.textContent,
-                childIDEl
-            );
+            const childText = await cssInteract(page)
+                .with('#objectID')
+                .get.textContent();
             expect(childText.trim()).toBe(childValue);
 
             //Click on Owner text:
-            const ownerLink = await page.$('div#owner > span:first-child');
-            await ownerLink.click();
+            await cssInteract(page)
+                .with('div#owner > span:first-child')
+                .click();
 
             //Looking for object or address?
             const lookingFor =
                 parentIsA === 'addresses' ? '#addressID' : '#objectID';
 
             //Check ID of parent:
-            const parentIDEl = await page.$(lookingFor);
-            const parentText = await page.evaluate(
-                (el: any) => el.textContent,
-                parentIDEl
-            );
+            const parentText = await cssInteract(page)
+                .with(lookingFor)
+                .get.textContent();
             expect(parentText.trim()).toBe(parentValue);
         };
         it('going from address to object and back', async () => {
@@ -246,43 +246,43 @@ describe('End-to-end Tests', () => {
             await page.goto(`${BASE_URL}/objects/${parentValue}`);
 
             //Click on child in Owned Objects List:
-            const objectLink = await page.$(nftObject(1));
-            await objectLink.click();
+            await cssInteract(page).with(nftObject(1)).click();
+
+            const noImageCSS = `${mainBodyCSS} > div:first-child > div > div`;
 
             // First see Please Wait Message:
-            await checkID(
-                page,
-                'main > div > div:first-child > div > div',
-                'pleaseWaitImage'
-            );
+            expect(
+                await cssInteract(page).with(noImageCSS).get.attribute('id')
+            ).toBe('pleaseWaitImage');
+
             await page.waitForFunction(
                 () => !document.querySelector('#pleaseWaitImage')
             );
 
             //Then see No Image Warning:
-            await checkID(
-                page,
-                'main > div > div:first-child > div > div',
-                'noImage'
-            );
+            expect(
+                await cssInteract(page).with(noImageCSS).get.attribute('id')
+            ).toBe('noImage');
 
             //Parent Object contains an image:
-            const ownerLink = await page.$('div#owner > span:first-child');
-            await ownerLink.click();
+            await page.click('div#owner > span:first-child');
             await page.waitForFunction(
                 () => !document.querySelector('#pleaseWaitImage')
             );
-            await checkID(
-                page,
-                'main > div > div:first-child > div > img',
-                'loadedImage'
-            );
+            expect(
+                await cssInteract(page)
+                    .with(`${mainBodyCSS} > div:first-child > div > img`)
+                    .get.attribute('id')
+            ).toBe('loadedImage');
 
             //And no No Image / Please Wait message:
             await expect(
-                page.$eval('main > div > div:first-child > div > div')
+                page.$eval(
+                    `${mainBodyCSS} > div:first-child > div > div`,
+                    () => {}
+                )
             ).rejects.toThrow(
-                'Error: failed to find element matching selector "main > div > div:first-child > div > div"'
+                'Error: failed to find element matching selector "main > div:nth-child(2) > div:first-child > div > div"'
             );
         });
     });
@@ -290,106 +290,86 @@ describe('End-to-end Tests', () => {
         it('to go to the next page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            const btn = await page.$('#nextBtn');
-            await btn.click();
-            const objectLink = await page.$(nftObject(1));
-            await objectLink.click();
-
-            const objectIDEl = await page.$('#objectID');
-
-            const objectValue = await page.evaluate(
-                (el: any) => el.textContent,
-                objectIDEl
-            );
-            expect(objectValue.trim()).toBe('player0');
+            await cssInteract(page).with('#nextBtn').click();
+            await cssInteract(page).with(nftObject(1)).click();
+            const value = await cssInteract(page)
+                .with('#objectID')
+                .get.textContent();
+            expect(value.trim()).toBe('player0');
         });
         it('to go to the last page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-
-            const btn = await page.$('#lastBtn');
-            await btn.click();
-            const objectLink = await page.$(nftObject(1));
-            await objectLink.click();
-
-            const objectIDEl = await page.$('#objectID');
-
-            const objectValue = await page.evaluate(
-                (el: any) => el.textContent,
-                objectIDEl
-            );
-            expect(objectValue.trim()).toBe(
+            await cssInteract(page).with('#lastBtn').click();
+            await cssInteract(page).with(nftObject(1)).click();
+            const value = await cssInteract(page)
+                .with('#objectID')
+                .get.textContent();
+            expect(value.trim()).toBe(
                 '7bc832ec31709638cd8d9323e90edf332gff4389'
             );
         });
+
         it('where last and next disappear in final page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-
-            const btn = await page.$('#lastBtn');
-            await btn.click();
+            await cssInteract(page).with('#lastBtn').click();
 
             //Back and First buttons are not disabled:
-            await checkIsNotDisabled(page, '#backBtn');
-            await checkIsNotDisabled(page, '#firstBtn');
+            for (const cssValue of ['#backBtn', '#firstBtn']) {
+                expect(
+                    await cssInteract(page).with(cssValue).get.isDisabled()
+                ).toBeFalsy();
+            }
             //Next and Last buttons are disabled:
-            await checkIsDisabled(page, '#nextBtn');
-            await checkIsDisabled(page, '#lastBtn');
+            for (const cssValue of ['#nextBtn', '#lastBtn']) {
+                expect(
+                    await cssInteract(page).with(cssValue).get.isDisabled()
+                ).toBeTruthy();
+            }
         });
 
         it('to go back a page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
 
-            await page.$('#lastBtn').then((btn: any) => btn.click());
-
-            await page.$('#backBtn').then((btn: any) => btn.click());
-
-            const objectLink = await page.$(nftObject(1));
-            await objectLink.click();
-
-            const objectIDEl = await page.$('#objectID');
-
-            const objectValue = await page.evaluate(
-                (el: any) => el.textContent,
-                objectIDEl
-            );
-            expect(objectValue.trim()).toBe('player0');
+            await cssInteract(page).with('#lastBtn').click();
+            await cssInteract(page).with('#backBtn').click();
+            await cssInteract(page).with(nftObject(1)).click();
+            const value = await cssInteract(page)
+                .with('#objectID')
+                .get.textContent();
+            expect(value.trim()).toBe('player0');
         });
 
         it('to go to first page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-
-            await page.$('#lastBtn').then((btn: any) => btn.click());
-
-            await page.$('#backBtn').then((btn: any) => btn.click());
-
-            await page.$('#firstBtn').then((btn: any) => btn.click());
-
-            const objectLink = await page.$(nftObject(1));
-            await objectLink.click();
-
-            const objectIDEl = await page.$('#objectID');
-
-            const objectValue = await page.evaluate(
-                (el: any) => el.textContent,
-                objectIDEl
-            );
-            expect(objectValue.trim()).toBe('ChildObjectWBrokenImage');
+            await cssInteract(page).with('#lastBtn').click();
+            await cssInteract(page).with('#backBtn').click();
+            await cssInteract(page).with('#firstBtn').click();
+            await cssInteract(page).with(nftObject(1)).click();
+            const value = await cssInteract(page)
+                .with('#objectID')
+                .get.textContent();
+            expect(value.trim()).toBe('ChildObjectWBrokenImage');
         });
+
         it('where first and back disappear in first page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            const btn1 = await page.$(coinGroup(1).base());
-            await btn1.click();
-
+            //Back and First buttons are disabled:
+            for (const cssValue of ['#backBtn', '#firstBtn']) {
+                expect(
+                    await cssInteract(page).with(cssValue).get.isDisabled()
+                ).toBeTruthy();
+            }
             //Next and Last buttons are not disabled:
-            await checkIsNotDisabled(page, '#nextBtn');
-            await checkIsNotDisabled(page, '#lastBtn');
-            //First and Back buttons are disabled:
-            await checkIsDisabled(page, '#firstBtn');
-            await checkIsDisabled(page, '#backBtn');
+            for (const cssValue of ['#nextBtn', '#lastBtn']) {
+                expect(
+                    await cssInteract(page).with(cssValue).get.isDisabled()
+                ).toBeFalsy();
+            }
         });
     });
     describe('Group View', () => {
@@ -398,31 +378,27 @@ describe('End-to-end Tests', () => {
             await page.goto(`${BASE_URL}/addresses/${address}`);
 
             expect(
-                await page.$eval(
-                    coinGroup(1).field(1),
-                    (el: any) => el.textContent
-                )
+                await cssInteract(page)
+                    .with(coinGroup(1).field(1))
+                    .get.textContent()
             ).toBe('Type0x2::USD::USD');
 
             expect(
-                await page.$eval(
-                    coinGroup(1).field(2),
-                    (el: any) => el.textContent
-                )
+                await cssInteract(page)
+                    .with(coinGroup(1).field(2))
+                    .get.textContent()
             ).toBe('Balance300');
 
             expect(
-                await page.$eval(
-                    coinGroup(2).field(1),
-                    (el: any) => el.textContent
-                )
+                await cssInteract(page)
+                    .with(coinGroup(2).field(1))
+                    .get.textContent()
             ).toBe('TypeSUI');
 
             expect(
-                await page.$eval(
-                    coinGroup(2).field(2),
-                    (el: any) => el.textContent
-                )
+                await cssInteract(page)
+                    .with(coinGroup(2).field(2))
+                    .get.textContent()
             ).toBe('Balance200');
         });
     });
