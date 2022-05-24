@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import mockObjectData from '../../../../sui/open_rpc/samples/objects.json';
+import mockObjectData from '../../../../crates/sui-open-rpc/samples/objects.json';
 import { Coin, GetObjectInfoResponse } from '../../src';
 
 import BN from 'bn.js';
