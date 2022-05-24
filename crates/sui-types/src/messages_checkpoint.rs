@@ -208,6 +208,10 @@ impl CheckpointSummary {
     pub fn sequence_number(&self) -> &CheckpointSequenceNumber {
         &self.sequence_number
     }
+
+    pub fn digest(&self) -> [u8; 32] {
+        sha3_hash(self)
+    }
 }
 
 impl BcsSignable for CheckpointSummary {}

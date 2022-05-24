@@ -36,7 +36,6 @@ use std::{
 };
 use sui_types::{base_types::AuthorityName, error::SuiResult};
 use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
 
 use crate::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,

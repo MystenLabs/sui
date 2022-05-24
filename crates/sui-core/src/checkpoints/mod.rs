@@ -803,7 +803,7 @@ impl CheckpointStore {
     // Helper write functions
 
     /// Set the next checkpoint proposal.
-    fn set_proposal(&mut self) -> Result<CheckpointProposal, SuiError> {
+    pub(crate) fn set_proposal(&mut self) -> Result<CheckpointProposal, SuiError> {
         // Check that:
         // - there is no current proposal.
         // - there are no unprocessed transactions.
@@ -825,9 +825,19 @@ impl CheckpointStore {
             return Err(SuiError::from("Cannot propose an empty set."));
         }
 
+        let sequence_number = self.next_checkpoint();
+
+        // Only move to propose when we have the full checkpoint certificate
+        if sequence_number > 0 {
+            // Check that we have the full certificate for the previous checkpoint
+            if !matches!(self.checkpoints.get(&(sequence_number - 1)), Ok(Some(AuthenticatedCheckpoint::Certified(..)))) {
+                return Err(SuiError::from("Cannot propose before having a certificate"));
+            }
+        }
+
         // Include the sequence number of all extra transactions not already in a
         // checkpoint. And make a list of the transactions.
-        let sequence_number = self.next_checkpoint();
+        
         let next_local_tx_sequence = self.extra_transactions.values().max().unwrap() + 1;
 
         let transactions = CheckpointContents::new(self.extra_transactions.keys());

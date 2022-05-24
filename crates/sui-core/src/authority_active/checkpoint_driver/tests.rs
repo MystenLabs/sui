@@ -1,7 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::checkpoints::{checkpoint_tests::TestSetup, proposal::CheckpointProposal};
+use crate::{
+    authority_active::ActiveAuthority,
+    checkpoints::{checkpoint_tests::TestSetup, proposal::CheckpointProposal},
+};
 
 use std::{collections::HashSet, time::Duration};
 use sui_types::{
@@ -17,14 +20,24 @@ use crate::authority_client::AuthorityAPI;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn checkpoint_active_flow() {
-    let setup = checkpoint_tests_setup(100, Duration::from_millis(200)).await;
+    let setup = checkpoint_tests_setup(500, Duration::from_millis(200)).await;
 
     let TestSetup {
         committee,
-        authorities: _authorities,
+        authorities,
         mut transactions,
         aggregator,
     } = setup;
+
+    // Start active part of authority.
+    for inner_state in authorities {
+        let clients = aggregator.authority_clients.clone();
+        let _active_handle = tokio::task::spawn(async move {
+            let active_state =
+                ActiveAuthority::new(inner_state.authority.clone(), clients).unwrap();
+            active_state.spawn_all_active_processes().await
+        });
+    }
 
     let sender_aggregator = aggregator.clone();
     let _end_of_sending_join = tokio::task::spawn(async move {
@@ -49,6 +62,7 @@ async fn checkpoint_active_flow() {
 
     // Happy path checkpoint flow
 
+    /*
     // Step 1 -- get a bunch of proposals
     let mut proposals = Vec::new();
     for (auth, client) in &aggregator.authority_clients {
@@ -112,6 +126,10 @@ async fn checkpoint_active_flow() {
             AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Signed(checkpoint)) => {
                 signed_checkpoint.push(checkpoint.clone());
                 contents = response.detail.clone();
+            },
+            AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Certified(checkpoint)) => {
+                // signed_checkpoint.push(checkpoint.clone());
+                contents = response.detail.clone();
             }
             _ => {
                 failed_authorities.insert(*auth);
@@ -139,6 +157,8 @@ async fn checkpoint_active_flow() {
         let response = client.handle_checkpoint(request).await.expect("No issues");
         assert!(matches!(response.info, AuthorityCheckpointInfo::Success));
     }
+
+    */
 
     // Wait for all the sending to happen.
     _end_of_sending_join.await.expect("all ok");
