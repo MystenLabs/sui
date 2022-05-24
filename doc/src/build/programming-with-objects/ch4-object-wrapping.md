@@ -27,7 +27,7 @@ There are some interesting consequences of wrapping an Sui object into another. 
 
 >:bulb: The fact that you can no longer use a wrapped Sui object means that it's impossible to create circular wrapping behavior, where A wraps B, B wraps C, and C also wraps A.
 
-At some point, you can then take out the wrapped object and transfer it to your account again. This process is called **unwrapping**. When an object is **unwrapped**, it will become an independent object again, and can be accessed directly on-chain. There is also an important property about wrapping and unwrapping: *The object's ID stays the same after wrapped and then unwrapped*!
+At some point, you can then take out the wrapped object and transfer it to an address. This process is called **unwrapping**. When an object is **unwrapped**, it will become an independent object again, and can be accessed directly on-chain. There is also an important property about wrapping and unwrapping: *The object's ID stays the same across wrapping and unwrapping*!
 
 There are a few common ways to wrap a Sui object into another Sui object, and their use cases are typically different. In the following, we will walk through three different ways to wrap a Sui object and their typical use cases.
 
