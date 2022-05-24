@@ -1,0 +1,23 @@
+[package]
+name = "generate-json-rpc-spec"
+version = "0.0.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow = { version = "1.0.57", features = ["backtrace"] }
+clap = { version = "3.1.17", features = ["derive"] }
+pretty_assertions = "1.2.0"
+serde = { version = "1.0.137", features = ["derive"] }
+serde_json = "1.0.80"
+tempfile = "3.3.0"
+tokio = { version = "1.18.2", features = ["full"] }
+
+sui = { path = "../sui" }
+sui-core = { path = "../sui-core" }
+sui-gateway = { path = "../sui-gateway" }
+sui-json = { path = "../sui-json" }
+sui-types = { path = "../sui-types" }
+test-utils = { path = "../test-utils" }
