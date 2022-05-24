@@ -2,7 +2,7 @@
 In the previous chapter, we walked through various ways of wrapping an object in another object. There are a few limitations in object wrapping:
 1. A wrapped object can only be accessed via its wrapper. It cannot be used directly in a transaction or queried by its ID (e.g., in the explorer).
 2. An object can become very large if it wraps several other objects. Larger objects can lead to higher gas fee in transactions. In addition, there is an upper bound on object size.
-3. As we will see in future chapters when we introduce the `Bag` library, there will be use cases where we need to store a vector of objects of heterogeneous types. Since the Move `vector` type must be templated on one single type `T`, there is no way to wrap them into a single vector.
+3. As we will see in future chapters when we introduce the `Bag` library, there will be use cases where we need to store a collection of objects of heterogeneous types. Since the Move `vector` type must be templated on one single type `T`, it is not suitable for this.
 
 Sui provides another way to represent object relationships: object can own obejcts. In the first chapter, we introduced libraries for tranferring objects to an account address. In this chapter, we will introduce libraries that allow you transfer objects to other objects.
 
