@@ -85,7 +85,7 @@ fn verify_init_not_called(
             let name = module.identifier_at(fhandle.name);
             if name == INIT_FN_NAME {
                 Err(format!(
-                    "{}::{} at offset {}. Cannot call a module's '{}' function",
+                    "{}::{} at offset {}. Cannot call a module's '{}' function from another Move function",
                     module.self_id(),
                     name,
                     idx,
