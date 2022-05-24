@@ -122,7 +122,7 @@ pub struct DeleteBatchMessage {
 ///     let committee = Committee{ authorities: BTreeMap::new() };
 ///     // A dag with genesis for the committee
 ///     let (tx_new_certificates, rx_new_certificates) = channel(1);
-///     let dag = Arc::new(Dag::new(rx_new_certificates).1);
+///     let dag = Arc::new(Dag::new(&committee, rx_new_certificates).1);
 ///     // Populate genesis in the Dag
 ///     join_all(
 ///       Certificate::genesis(&committee)
