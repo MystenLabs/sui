@@ -22,7 +22,10 @@ use sui_types::{
     object::{self, Data, MoveObject, Object, Owner},
     storage::{DeleteKind, Storage},
 };
-use sui_verifier::{entry_points_verifier::INIT_FN_NAME, verifier};
+use sui_verifier::{
+    entry_points_verifier::{INIT_FN_NAME, RESOLVED_STD_OPTION, RESOLVED_SUI_ID},
+    verifier,
+};
 
 use move_core_types::{
     account_address::AccountAddress,
@@ -692,7 +695,7 @@ pub fn resolve_and_type_check(
     // Track the mapping from each input object to its Move type.
     // This will be needed latter in `check_child_object_of_shared_object`.
     let mut object_type_map = BTreeMap::new();
-
+    let view = &BinaryIndexedView::Module(module);
     let bcs_args = args
         .into_iter()
         .enumerate()
@@ -700,7 +703,7 @@ pub fn resolve_and_type_check(
             let param_type = &parameters[idx];
             let object_kind = match arg {
                 CallArg::Pure(arg) => {
-                    if !is_primitive(module, type_args, param_type) {
+                    if !is_primitive(view, type_args, param_type) {
                         return Err(SuiError::TypeError {
                             error: format!(
                                 "Non-primitive argument at index {}. If it is an object, it must \
@@ -799,7 +802,7 @@ pub fn resolve_and_type_check(
                     })
                 }
             };
-            type_check_struct(module, type_args, &move_object.type_, inner_param_type)?;
+            type_check_struct(view, type_args, &move_object.type_, inner_param_type)?;
             object_type_map.insert(id, move_object.type_.module_id());
             Ok(object_arg)
         })
@@ -891,7 +894,7 @@ fn check_child_object_of_shared_object(
 }
 
 fn is_primitive(
-    _module: &CompiledModule,
+    view: &BinaryIndexedView,
     function_type_arguments: &[TypeTag],
     t: &SignatureToken,
 ) -> bool {
@@ -902,7 +905,20 @@ fn is_primitive(
         | SignatureToken::U128
         | SignatureToken::Address => true,
 
-        SignatureToken::Vector(inner) => is_primitive(_module, function_type_arguments, inner),
+        SignatureToken::Struct(idx) => {
+            let resolved_struct = sui_verifier::resolve_struct(view, *idx);
+            // is ID
+            resolved_struct == RESOLVED_SUI_ID
+        }
+
+        SignatureToken::StructInstantiation(idx, targs) => {
+            let resolved_struct = sui_verifier::resolve_struct(view, *idx);
+            // is option of a primitive
+            resolved_struct == RESOLVED_STD_OPTION
+                && targs.len() == 1
+                && is_primitive(view, function_type_arguments, &targs[0])
+        }
+        SignatureToken::Vector(inner) => is_primitive(view, function_type_arguments, inner),
 
         SignatureToken::TypeParameter(idx) => function_type_arguments
             .get(*idx as usize)
@@ -910,8 +926,6 @@ fn is_primitive(
             .unwrap_or(false),
 
         SignatureToken::Signer
-        | SignatureToken::Struct(_)
-        | SignatureToken::StructInstantiation(_, _)
         | SignatureToken::Reference(_)
         | SignatureToken::MutableReference(_) => false,
     }
@@ -921,24 +935,37 @@ fn is_primitive_type_tag(t: &TypeTag) -> bool {
     match t {
         TypeTag::Bool | TypeTag::U8 | TypeTag::U64 | TypeTag::U128 | TypeTag::Address => true,
         TypeTag::Vector(inner) => is_primitive_type_tag(inner),
-        TypeTag::Signer | TypeTag::Struct(_) => false,
+        TypeTag::Struct(StructTag {
+            address,
+            module,
+            name,
+            type_params: type_args,
+        }) => {
+            let resolved_struct = (address, module.as_ident_str(), name.as_ident_str());
+            // is id or..
+            if resolved_struct == RESOLVED_SUI_ID {
+                return true;
+            }
+            // is option of a primitive
+            resolved_struct == RESOLVED_STD_OPTION
+                && type_args.len() == 1
+                && is_primitive_type_tag(&type_args[0])
+        }
+        TypeTag::Signer => false,
     }
 }
 
 fn type_check_struct(
-    module: &CompiledModule,
+    view: &BinaryIndexedView,
     function_type_arguments: &[TypeTag],
     arg_type: &StructTag,
     param_type: &SignatureToken,
 ) -> Result<(), SuiError> {
-    if !struct_tag_equals_sig_token(module, function_type_arguments, arg_type, param_type) {
+    if !struct_tag_equals_sig_token(view, function_type_arguments, arg_type, param_type) {
         Err(SuiError::TypeError {
             error: format!(
                 "Expected argument of type {}, but found type {}",
-                sui_verifier::format_signature_token(
-                    &BinaryIndexedView::Module(module),
-                    param_type
-                ),
+                sui_verifier::format_signature_token(view, param_type),
                 arg_type
             ),
         })
@@ -948,7 +975,7 @@ fn type_check_struct(
 }
 
 fn type_tag_equals_sig_token(
-    module: &CompiledModule,
+    view: &BinaryIndexedView,
     function_type_arguments: &[TypeTag],
     arg_type: &TypeTag,
     param_type: &SignatureToken,
@@ -963,7 +990,7 @@ fn type_tag_equals_sig_token(
 
         (TypeTag::Vector(inner_arg_type), SignatureToken::Vector(inner_param_type)) => {
             type_tag_equals_sig_token(
-                module,
+                view,
                 function_type_arguments,
                 inner_arg_type,
                 inner_param_type,
@@ -972,7 +999,7 @@ fn type_tag_equals_sig_token(
 
         (TypeTag::Struct(arg_struct), SignatureToken::Struct(_))
         | (TypeTag::Struct(arg_struct), SignatureToken::StructInstantiation(_, _)) => {
-            struct_tag_equals_sig_token(module, function_type_arguments, arg_struct, param_type)
+            struct_tag_equals_sig_token(view, function_type_arguments, arg_struct, param_type)
         }
 
         (_, SignatureToken::TypeParameter(idx)) => {
@@ -983,17 +1010,17 @@ fn type_tag_equals_sig_token(
 }
 
 fn struct_tag_equals_sig_token(
-    module: &CompiledModule,
+    view: &BinaryIndexedView,
     function_type_arguments: &[TypeTag],
     arg_type: &StructTag,
     param_type: &SignatureToken,
 ) -> bool {
     match param_type {
         SignatureToken::Struct(idx) => {
-            struct_tag_equals_struct_inst(module, function_type_arguments, arg_type, *idx, &[])
+            struct_tag_equals_struct_inst(view, function_type_arguments, arg_type, *idx, &[])
         }
         SignatureToken::StructInstantiation(idx, args) => {
-            struct_tag_equals_struct_inst(module, function_type_arguments, arg_type, *idx, args)
+            struct_tag_equals_struct_inst(view, function_type_arguments, arg_type, *idx, args)
         }
         SignatureToken::TypeParameter(idx) => match &function_type_arguments[*idx as usize] {
             TypeTag::Struct(s) => arg_type == s,
@@ -1004,14 +1031,13 @@ fn struct_tag_equals_sig_token(
 }
 
 fn struct_tag_equals_struct_inst(
-    module: &CompiledModule,
+    view: &BinaryIndexedView,
     function_type_arguments: &[TypeTag],
     arg_type: &StructTag,
     param_type: StructHandleIndex,
     param_type_arguments: &[SignatureToken],
 ) -> bool {
-    let view = BinaryIndexedView::Module(module);
-    let (address, module_name, struct_name) = sui_verifier::resolve_struct(&view, param_type);
+    let (address, module_name, struct_name) = sui_verifier::resolve_struct(view, param_type);
 
     // same address, module, name, and type parameters
     &arg_type.address == address
@@ -1021,7 +1047,7 @@ fn struct_tag_equals_struct_inst(
         && arg_type.type_params.iter().zip(param_type_arguments).all(
             |(arg_type_arg, param_type_arg)| {
                 type_tag_equals_sig_token(
-                    module,
+                    view,
                     function_type_arguments,
                     arg_type_arg,
                     param_type_arg,

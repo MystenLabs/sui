@@ -212,6 +212,9 @@ pub struct TransactionEffectsDigest(
     pub [u8; TRANSACTION_DIGEST_LENGTH],
 );
 
+pub const STD_OPTION_MODULE_NAME: &IdentStr = ident_str!("Option");
+pub const STD_OPTION_STRUCT_NAME: &IdentStr = STD_OPTION_MODULE_NAME;
+
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
 
