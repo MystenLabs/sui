@@ -4,6 +4,9 @@
 module Sui::Proposal{
     use Std::Vector;
 
+
+
+    /// Generic data structure to collect vote and check on quorum
     struct Proposal has store {
 
         // the epoch this proposal is about

@@ -7,6 +7,7 @@ module Sui::ValidatorSet {
 
     use Sui::Balance::{Self, Balance};
     use Sui::EpochRewardRecord;
+    use Sui::Proposal::{Self, Proposal};
     use Sui::SUI::SUI;
     use Sui::TxContext::{Self, TxContext};
     use Sui::Validator::{Self, Validator};
@@ -198,6 +199,25 @@ module Sui::ValidatorSet {
         self.validator_stake = validator_stake;
         self.delegation_stake = delegation_stake;
         self.quorum_stake_threshold = quorum_stake_threshold;
+    }
+
+    public(friend) fun create_proposal(self: &ValidatorSet, epoch: u64): Proposal {
+        let allowed_voters = Vector::empty();
+        let length = Vector::length(&self.active_validators);
+        let i = 0;
+        while (i < length) {
+            let v = Vector::borrow(&self.active_validators, i);
+            Vector::push_back(&mut allowed_voters, Validator::sui_address(v));
+            i = i + 1;
+        };
+        Proposal::new(epoch, self.quorum_stake_threshold, allowed_voters)
+    }
+
+    public(friend) fun get_validator(self: &ValidatorSet, validator_address: address): &Validator {
+        let validator_index_opt = find_validator(&self.active_validators, validator_address);
+        assert!(Option::is_some(&validator_index_opt), 0);
+        let validator_index = Option::extract(&mut validator_index_opt);
+        Vector::borrow(&self.active_validators, validator_index)
     }
 
     public fun validator_stake(self: &ValidatorSet): u64 {

@@ -2,11 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Sui::SuiSystem {
+    use Std::Option::{Self, Option};
+
     use Sui::Balance::{Self, Balance};
     use Sui::Coin::{Self, Coin, TreasuryCap};
     use Sui::Delegation::{Self, Delegation};
     use Sui::EpochRewardRecord::{Self, EpochRewardRecord};
     use Sui::ID::{Self, VersionedID};
+    use Sui::Proposal::{Self, Proposal};
     use Sui::SUI::SUI;
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
@@ -47,6 +50,11 @@ module Sui::SuiSystem {
         /// The delegation reward pool. All delegation reward goes into this.
         /// Delegation reward claims withdraw from this.
         delegation_reward: Balance<SUI>,
+
+        /// The active proposal
+        /// We can have more proposal types and index them like (proposal type -> Option<Proposal>)
+        /// Replace x with actual proposal content like "Change Storage Fee"
+        active_proposal_for_x: Option<Proposal>,
     }
 
     // ==== functions that can only be called by Genesis ====
@@ -75,6 +83,7 @@ module Sui::SuiSystem {
                 max_validator_candidate_count,
             },
             delegation_reward: Balance::zero(),
+            active_proposal_for_x: Option::none(),
         };
         Transfer::share_object(state);
     }
@@ -257,6 +266,41 @@ module Sui::SuiSystem {
         // Because of precision issues with integer divisions, we expect that there will be some
         // remaining balance in `computation_reward`. All of these go to the storage fund.
         Balance::join(&mut self.storage_fund, computation_reward)
+    }
+
+    /// Creating a proposal for doing x
+    public(script) fun create_proposal_for_x(
+        self: &mut SuiSystemState,
+        ctx: &mut TxContext,
+    ) {
+        let sender =  TxContext::sender(ctx);
+        // Only an active validator can make a call to this function.
+        assert!(ValidatorSet::is_active_validator(&self.validators, sender), 0);
+        let new_proposal = ValidatorSet::create_proposal(&self.validators, self.epoch);
+        
+        Option::fill(&mut self.active_proposal_for_x, new_proposal);
+    }
+
+    public(script) fun vote_for_x(
+        self: &mut SuiSystemState,
+        ctx: &mut TxContext,
+    ) {
+        let proposal = Option::borrow_mut(&mut self.active_proposal_for_x);
+        let sender =  TxContext::sender(ctx);
+        let validator = ValidatorSet::get_validator(&self.validators, sender);
+        
+        Proposal::vote(proposal, Validator::stake_amount(validator), Validator::sui_address(validator))
+    }
+
+    public(script) fun process_proposal_for_x(self: &mut SuiSystemState, ctx: &mut TxContext,){
+        let sender =  TxContext::sender(ctx);
+        // Only an active validator can make a call to this function.
+        assert!(ValidatorSet::is_active_validator(&self.validators, sender), 0);
+        let proposal = Option::extract(&mut self.active_proposal_for_x);
+        if(Proposal::has_reach_quorum(&proposal)) {
+            // TODO do processing
+        };
+        Proposal::destroy(proposal)
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
