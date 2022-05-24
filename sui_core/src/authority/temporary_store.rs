@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use move_core_types::account_address::AccountAddress;
-use sui_types::{event::Event, gas::SuiGasStatus};
+use sui_types::{event::SuiEvent, gas::SuiGasStatus};
 
 use super::*;
 
@@ -10,7 +10,7 @@ pub type InnerTemporaryStore = (
     Vec<ObjectRef>,
     BTreeMap<ObjectID, (ObjectRef, Object)>,
     BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
-    Vec<Event>,
+    Vec<SuiEvent>,
 );
 
 pub struct AuthorityTemporaryStore<S> {
@@ -25,7 +25,7 @@ pub struct AuthorityTemporaryStore<S> {
     /// Objects actively deleted.
     deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     /// Ordered sequence of events emitted by execution
-    events: Vec<Event>,
+    events: Vec<SuiEvent>,
     // New object IDs created during the transaction, needed for
     // telling apart unwrapped objects.
     created_object_ids: HashSet<ObjectID>,
@@ -340,7 +340,7 @@ impl<S> Storage for AuthorityTemporaryStore<S> {
         self.deleted.insert(*id, (version.increment(), kind));
     }
 
-    fn log_event(&mut self, event: Event) {
+    fn log_event(&mut self, event: SuiEvent) {
         self.events.push(event)
     }
 }

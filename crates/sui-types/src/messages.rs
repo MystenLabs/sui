@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
+use super::{base_types::*, batch::*, committee::Committee, error::*, event::SuiEvent};
 use crate::committee::EpochId;
 use crate::crypto::{
     sha3_hash, AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignature, BcsSignable,
@@ -850,7 +850,7 @@ pub struct TransactionEffects {
     // It's also included in mutated.
     pub gas_object: (ObjectRef, Owner),
     /// The events emitted during execution. Note that only successful transactions emit events
-    pub events: Vec<Event>,
+    pub events: Vec<SuiEvent>,
     /// The set of transaction digests this transaction depends on.
     pub dependencies: Vec<TransactionDigest>,
 }

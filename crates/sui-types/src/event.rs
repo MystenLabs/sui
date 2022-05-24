@@ -1,29 +1,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::{ModuleId, StructTag};
 use name_variant::NamedVariant;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
 
-use crate::{base_types::{SuiAddress, ObjectID, SequenceNumber, TransactionDigest}, committee::EpochId, messages::Transaction};
-
-/// User-defined event emitted by executing Move code.
-/// Executing a transaction produces an ordered log of these
-#[serde_as]
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
-pub struct Event {
-    pub type_: StructTag,
-    #[serde_as(as = "Bytes")]
-    pub contents: Vec<u8>,
-}
-
-impl Event {
-    pub fn new(type_: StructTag, contents: Vec<u8>) -> Self {
-        Event { type_, contents }
-    }
-}
-
+use crate::{
+    base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest},
+    committee::EpochId,
+    messages_checkpoint::CheckpointSequenceNumber,
+};
 
 /// A universal Sui event type encapsulating different types of events
 #[derive(Debug, Clone, PartialEq)]
@@ -39,7 +26,9 @@ pub struct EventEnvelope {
 impl EventEnvelope {
     pub fn new(timestamp: u64, tx_digest: Option<TransactionDigest>, event: SuiEvent) -> Self {
         Self {
-            timestamp, tx_digest, event
+            timestamp,
+            tx_digest,
+            event,
         }
     }
 
@@ -49,14 +38,41 @@ impl EventEnvelope {
 }
 
 /// Specific type of event
-#[derive(Debug, Clone, PartialEq, NamedVariant)]
+#[serde_as]
+#[derive(Eq, Debug, Clone, PartialEq, NamedVariant, Deserialize, Serialize, Hash)]
 pub enum SuiEvent {
     /// Move-specific event
-    MoveEvent(Event),
+    MoveEvent {
+        type_: StructTag,
+        #[serde_as(as = "Bytes")]
+        contents: Vec<u8>,
+    },
     /// Module published
-    Publish { package_name: String, package_object_id: SuiAddress },
-    /// Transfer
-    Transfer { object_id: ObjectID, version: SequenceNumber, from: SuiAddress, to: SuiAddress },
+    Publish { package_id: ObjectID },
+    /// Transfer coin
+    TransferCoin {
+        object_id: ObjectID,
+        version: SequenceNumber,
+        destination_addr: SuiAddress,
+    },
     /// Epooch change
     EpochChange(EpochId),
+    /// New checkpoint
+    Checkpoint(CheckpointSequenceNumber),
+}
+
+impl SuiEvent {
+    pub fn move_event(type_: StructTag, contents: Vec<u8>) -> Self {
+        SuiEvent::MoveEvent { type_, contents }
+    }
+
+    /// Extract a module ID, if available, from a SuiEvent
+    pub fn module_id(&self) -> Option<ModuleId> {
+        match self {
+            SuiEvent::MoveEvent {
+                type_: struct_tag, ..
+            } => Some(struct_tag.module_id()),
+            _ => None,
+        }
+    }
 }

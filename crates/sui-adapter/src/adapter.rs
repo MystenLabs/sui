@@ -13,7 +13,7 @@ use sui_framework::EventType;
 use sui_types::{
     base_types::*,
     error::{SuiError, SuiResult},
-    event::Event,
+    event::SuiEvent,
     fp_ensure,
     gas::SuiGasStatus,
     id::VersionedID,
@@ -223,6 +223,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 
     let package_id = generate_package_id(&mut modules, ctx)?;
     let vm = verify_and_link(state_view, &modules, package_id, natives, gas_status)?;
+    state_view.log_event(SuiEvent::Publish { package_id });
     store_package_and_init_modules(state_view, &vm, modules, ctx, gas_status)
 }
 
@@ -502,7 +503,9 @@ fn process_successful_execution<
             }
             EventType::User => {
                 match type_ {
-                    TypeTag::Struct(s) => state_view.log_event(Event::new(s, event_bytes)),
+                    TypeTag::Struct(s) => {
+                        state_view.log_event(SuiEvent::move_event(s, event_bytes))
+                    }
                     _ => unreachable!(
                         "Native function emit_event<T> ensures that T is always bound to structs"
                     ),

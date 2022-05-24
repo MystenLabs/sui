@@ -46,7 +46,7 @@ use sui_types::{
     },
     crypto::{get_key_pair_from_rng, KeyPair, Signature},
     error::SuiError,
-    event::Event,
+    event::SuiEvent,
     gas,
     messages::{
         ExecutionStatus, InputObjectKind, Transaction, TransactionData, TransactionEffects,
@@ -81,7 +81,7 @@ struct TxnSummary {
     created: Vec<ObjectID>,
     written: Vec<ObjectID>,
     deleted: Vec<ObjectID>,
-    events: Vec<Event>,
+    events: Vec<SuiEvent>,
 }
 
 impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
@@ -591,16 +591,10 @@ impl<'a> SuiTestAdapter<'a> {
         }
     }
 
-    fn list_events(&self, events: &[Event]) -> String {
+    fn list_events(&self, events: &[SuiEvent]) -> String {
         events
             .iter()
-            .map(|event| {
-                self.stabilize_str(format!(
-                    "event<{}>(\"{}\")",
-                    event.type_,
-                    String::from_utf8_lossy(&event.contents)
-                ))
-            })
+            .map(|event| self.stabilize_str(format!("{:?}", event)))
             .collect::<Vec<_>>()
             .join(", ")
     }
