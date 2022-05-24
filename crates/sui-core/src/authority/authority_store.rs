@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::BTreeSet;
 use std::path::Path;
-use sui_storage::LockService;
+use sui_storage::{default_db_options, LockService};
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::committee::EpochId;
@@ -120,27 +120,7 @@ impl<
 {
     /// Open an authority store by directory path
     pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Self {
-        let mut options = db_options.unwrap_or_default();
-
-        // One common issue when running tests on Mac is that the default ulimit is too low,
-        // leading to I/O errors such as "Too many open files". Raising fdlimit to bypass it.
-        options.set_max_open_files((fdlimit::raise_fd_limit().unwrap() / 8) as i32);
-
-        /* The table cache is locked for updates and this determines the number
-           of shareds, ie 2^10. Increase in case of lock contentions.
-        */
-        let row_cache = rocksdb::Cache::new_lru_cache(1_000_000).expect("Cache is ok");
-        options.set_row_cache(&row_cache);
-        options.set_table_cache_num_shard_bits(10);
-        options.set_compression_type(rocksdb::DBCompressionType::None);
-
-        let mut point_lookup = options.clone();
-        point_lookup.optimize_for_point_lookup(1024 * 1024);
-        point_lookup.set_memtable_whole_key_filtering(true);
-
-        let transform = rocksdb::SliceTransform::create("bytes_8_to_16", |key| &key[8..16], None);
-        point_lookup.set_prefix_extractor(transform);
-        point_lookup.set_memtable_prefix_bloom_ratio(0.2);
+        let (options, point_lookup) = default_db_options(db_options);
 
         let db = {
             let path = &path;
