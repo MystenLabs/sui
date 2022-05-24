@@ -20,7 +20,7 @@ use tracing::debug;
 
 use sui_config::PersistedConfig;
 use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
-use sui_core::gateway_types::GetObjectInfoResponse;
+use sui_core::gateway_types::{GetObjectDataResponse, SuiObjectInfo};
 use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
 use sui_json::SuiJsonValue;
 use sui_open_rpc::Module;
@@ -129,12 +129,15 @@ impl RpcReadApiServer for GatewayReadApiImpl {
     async fn get_objects_owned_by_address(
         &self,
         address: SuiAddress,
-    ) -> RpcResult<Vec<ObjectInfo>> {
+    ) -> RpcResult<Vec<SuiObjectInfo>> {
         debug!("get_objects_own_by_address : {}", address);
         Ok(self.gateway.get_objects_owned_by_address(address).await?)
     }
 
-    async fn get_objects_owned_by_object(&self, object_id: ObjectID) -> RpcResult<Vec<ObjectInfo>> {
+    async fn get_objects_owned_by_object(
+        &self,
+        object_id: ObjectID,
+    ) -> RpcResult<Vec<SuiObjectInfo>> {
         debug!("get_objects_own_by_object : {}", object_id);
         Ok(self.gateway.get_objects_owned_by_object(object_id).await?)
     }

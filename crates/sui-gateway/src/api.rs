@@ -9,12 +9,13 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 use sui_core::gateway_state::GatewayTxSeqNumber;
-use sui_core::gateway_types::{GetObjectInfoResponse, SuiInputObjectKind, SuiObjectRef};
+use sui_core::gateway_types::{
+    GetObjectDataResponse, SuiInputObjectKind, SuiObjectInfo, SuiObjectRef,
+};
 use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
 use sui_json::SuiJsonValue;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
-use sui_types::base_types::ObjectInfo;
 use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
@@ -46,11 +47,16 @@ pub trait RpcGatewayApi {
 pub trait RpcReadApi {
     /// Return the list of objects owned by an address.
     #[method(name = "getObjectsOwnedByAddress")]
-    async fn get_objects_owned_by_address(&self, address: SuiAddress)
-        -> RpcResult<Vec<ObjectInfo>>;
+    async fn get_objects_owned_by_address(
+        &self,
+        address: SuiAddress,
+    ) -> RpcResult<Vec<SuiObjectInfo>>;
 
     #[method(name = "getObjectsOwnedByObject")]
-    async fn get_objects_owned_by_object(&self, object_id: ObjectID) -> RpcResult<Vec<ObjectInfo>>;
+    async fn get_objects_owned_by_object(
+        &self,
+        object_id: ObjectID,
+    ) -> RpcResult<Vec<SuiObjectInfo>>;
 
     #[method(name = "getTotalTransactionNumber")]
     async fn get_total_transaction_number(&self) -> RpcResult<u64>;

@@ -199,7 +199,7 @@ async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
     .await?;
 
     match result {
-        WalletCommandResult::CreateExampleNFT(GetObjectInfoResponse::Exists(obj)) => {
+        WalletCommandResult::CreateExampleNFT(GetObjectDataResponse::Exists(obj)) => {
             assert_eq!(obj.owner, address);
             assert_eq!(obj.data.type_().unwrap(), "0x2::DevNetNFT::DevNetNFT");
             Ok(obj)
@@ -503,7 +503,7 @@ async fn get_move_object(
 
     match obj {
         WalletCommandResult::Object(obj) => match obj {
-            GetObjectInfoResponse::Exists(obj) => Ok(serde_json::to_value(obj)?),
+            GetObjectDataResponse::Exists(obj) => Ok(serde_json::to_value(obj)?),
             _ => panic!("WalletCommands::Object returns wrong type"),
         },
         _ => panic!("WalletCommands::Object returns wrong type {obj}"),
@@ -739,7 +739,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     .await?;
     assert!(matches!(
         resp,
-        WalletCommandResult::Object(GetObjectInfoResponse::Exists(..))
+        WalletCommandResult::Object(GetObjectDataResponse::Exists(..))
     ));
 
     let resp = WalletCommands::Object {
@@ -749,7 +749,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     .await?;
     assert!(matches!(
         resp,
-        WalletCommandResult::Object(GetObjectInfoResponse::Exists(..))
+        WalletCommandResult::Object(GetObjectDataResponse::Exists(..))
     ));
 
     Ok(())
@@ -822,7 +822,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let resp = WalletCommands::Object { id: mut_obj1 }
         .execute(&mut context)
         .await?;
-    let mut_obj1 = if let WalletCommandResult::Object(GetObjectInfoResponse::Exists(object)) = resp
+    let mut_obj1 = if let WalletCommandResult::Object(GetObjectDataResponse::Exists(object)) = resp
     {
         object
     } else {
@@ -834,7 +834,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let resp = WalletCommands::Object { id: mut_obj2 }
         .execute(&mut context)
         .await?;
-    let mut_obj2 = if let WalletCommandResult::Object(GetObjectInfoResponse::Exists(object)) = resp
+    let mut_obj2 = if let WalletCommandResult::Object(GetObjectDataResponse::Exists(object)) = resp
     {
         object
     } else {
@@ -907,7 +907,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 #[test]
 // Test for issue https://github.com/MystenLabs/sui/issues/1078
 fn test_bug_1078() {
-    let read = WalletCommandResult::Object(GetObjectInfoResponse::NotExists(ObjectID::random()));
+    let read = WalletCommandResult::Object(GetObjectDataResponse::NotExists(ObjectID::random()));
     let mut writer = String::new();
     // fmt ObjectRead should not fail.
     write!(writer, "{}", read).unwrap();
@@ -1071,7 +1071,7 @@ fn get_gas_value(o: &SuiObject) -> u64 {
 }
 
 async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<SuiObject> {
-    if let GetObjectInfoResponse::Exists(o) = context.gateway.get_object_info(id).await.unwrap() {
+    if let GetObjectDataResponse::Exists(o) = context.gateway.get_object(id).await.unwrap() {
         Some(o)
     } else {
         None

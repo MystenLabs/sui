@@ -463,10 +463,13 @@ impl<
         self.objects.insert(&object_ref.into(), object)?;
 
         // Update the index
-        self.owner_index.insert(
-            &(object.owner, object_ref.0),
-            &ObjectInfo::new(&object_ref, object),
-        )?;
+        if object.get_single_owner().is_some() {
+            self.owner_index.insert(
+                &(object.owner, object_ref.0),
+                &ObjectInfo::new(&object_ref, object),
+            )?;
+        }
+
         // Update the parent
         self.parent_sync
             .insert(&object_ref, &object.previous_transaction)?;

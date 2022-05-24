@@ -18,7 +18,7 @@ use sui::{
 };
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_core::gateway_types::{
-    GetObjectInfoResponse, TransactionEffectsResponse, TransactionResponse,
+    GetObjectDataResponse, TransactionEffectsResponse, TransactionResponse,
 };
 use sui_framework::build_move_package_to_bytes;
 use sui_gateway::rpc_gateway::{create_client, GatewayReadApiImpl, TransactionBuilderImpl};
@@ -181,9 +181,9 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
     let objects = http_client.get_objects_owned_by_address(*address).await?;
 
     for oref in objects {
-        let result: GetObjectInfoResponse = http_client.get_object_info(oref.object_id).await?;
+        let result: GetObjectDataResponse = http_client.get_object_info(oref.object_id).await?;
         assert!(
-            matches!(result, GetObjectInfoResponse::Exists(object) if oref.object_id == object.id() && &object.owner.get_owner_address()? == address)
+            matches!(result, GetObjectDataResponse::Exists(object) if oref.object_id == object.id() && &object.owner.get_owner_address()? == address)
         );
     }
     Ok(())

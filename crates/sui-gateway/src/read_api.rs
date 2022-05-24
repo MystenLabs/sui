@@ -15,13 +15,14 @@ use jsonrpsee_core::server::rpc_module::RpcModule;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_core::gateway_state::GatewayTxSeqNumber;
+use sui_core::gateway_types::SuiObjectInfo;
 use sui_core::gateway_types::{GetObjectInfoResponse, SuiObjectRef, TransactionEffectsResponse};
 use sui_core::{
     authority::AuthorityState,
-    gateway_types::{GetObjectInfoResponse, TransactionEffectsResponse, TransactionResponse},
+    gateway_types::{GetObjectDataResponse, TransactionEffectsResponse, TransactionResponse},
 };
 use sui_json::SuiJsonValue;
-use sui_types::base_types::{ObjectID, ObjectInfo, SuiAddress, TransactionDigest};
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::object::Owner;
 use sui_types::sui_serde::Base64;
 use sui_open_rpc::Module;
@@ -54,21 +55,30 @@ impl RpcReadApiServer for ReadApi {
     async fn get_objects_owned_by_address(
         &self,
         address: SuiAddress,
-    ) -> RpcResult<Vec<ObjectInfo>> {
+    ) -> RpcResult<Vec<SuiObjectInfo>> {
         Ok(self
             .state
             .get_owner_objects(Owner::AddressOwner(address))
-            .map_err(|e| anyhow!("{e}"))?)
+            .map_err(|e| anyhow!("{e}"))?
+            .into_iter()
+            .map(SuiObjectInfo::from)
+            .collect())
     }
 
-    async fn get_objects_owned_by_object(&self, object_id: ObjectID) -> RpcResult<Vec<ObjectInfo>> {
+    async fn get_objects_owned_by_object(
+        &self,
+        object_id: ObjectID,
+    ) -> RpcResult<Vec<SuiObjectInfo>> {
         Ok(self
             .state
             .get_owner_objects(Owner::ObjectOwner(object_id.into()))
-            .map_err(|e| anyhow!("{e}"))?)
+            .map_err(|e| anyhow!("{e}"))?
+            .into_iter()
+            .map(SuiObjectInfo::from)
+            .collect())
     }
 
-    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse> {
+    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
         Ok(self
             .state
             .get_object_info(&object_id)

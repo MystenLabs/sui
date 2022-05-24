@@ -302,22 +302,20 @@ pub trait GatewayAPI {
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
-    /// Get the object information
-    async fn get_object_info(
-        &self,
-        object_id: ObjectID,
-    ) -> Result<GetObjectInfoResponse, anyhow::Error>;
+    /// Get the object data
+    async fn get_object(&self, object_id: ObjectID)
+        -> Result<GetObjectDataResponse, anyhow::Error>;
 
     /// Get refs of all objects we own from local cache.
     async fn get_objects_owned_by_address(
         &self,
         account_addr: SuiAddress,
-    ) -> Result<Vec<ObjectInfo>, anyhow::Error>;
+    ) -> Result<Vec<SuiObjectInfo>, anyhow::Error>;
 
     async fn get_objects_owned_by_object(
         &self,
         object_id: ObjectID,
-    ) -> Result<Vec<ObjectInfo>, anyhow::Error>;
+    ) -> Result<Vec<SuiObjectInfo>, anyhow::Error>;
 
     /// Get the total number of transactions ever happened in history.
     fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error>;
@@ -354,7 +352,7 @@ where
     }
 
     // Get object locally, try get from the network if not found.
-    async fn get_object(&self, object_id: &ObjectID) -> SuiResult<Object> {
+    async fn get_object_internal(&self, object_id: &ObjectID) -> SuiResult<Object> {
         Ok(if let Some(object) = self.store.get_object(object_id)? {
             debug!(?object_id, ?object, "Fetched object from local store");
             object
@@ -369,7 +367,7 @@ where
     }
 
     async fn get_sui_object(&self, object_id: &ObjectID) -> Result<SuiObject, anyhow::Error> {
-        let object = self.get_object(object_id).await?;
+        let object = self.get_object_internal(object_id).await?;
         self.to_sui_object(object)
     }
 
@@ -380,7 +378,7 @@ where
     }
 
     async fn get_object_ref(&self, object_id: &ObjectID) -> SuiResult<ObjectRef> {
-        let object = self.get_object(object_id).await?;
+        let object = self.get_object_internal(object_id).await?;
         Ok(object.compute_object_reference())
     }
 
@@ -726,8 +724,8 @@ where
             }
             .into()
         );
-        let updated_coin = self.get_object_info(*primary_coin).await?.into_object()?;
-        let updated_gas = self.get_object_info(gas_payment).await?.into_object()?;
+        let updated_coin = self.get_object(*primary_coin).await?.into_object()?;
+        let updated_gas = self.get_object(gas_payment).await?.into_object()?;
 
         debug!(
             ?updated_coin,
@@ -764,7 +762,10 @@ where
         used_coins: Vec<ObjectID>,
     ) -> Result<ObjectRef, anyhow::Error> {
         if let Some(id) = gas {
-            Ok(self.get_object(&id).await?.compute_object_reference())
+            Ok(self
+                .get_object_internal(&id)
+                .await?
+                .compute_object_reference())
         } else {
             let used_coins = used_coins.into_iter().collect::<BTreeSet<_>>();
             for (id, balance) in self.get_owned_coins(address).await.unwrap() {
@@ -786,7 +787,7 @@ where
         let mut coins = Vec::new();
         for info in self.store.get_owner_objects(Owner::AddressOwner(address))? {
             if info.type_ == GasCoin::type_().to_string() {
-                let object = self.get_object(&info.object_id).await?;
+                let object = self.get_object_internal(&info.object_id).await?;
                 let gas_coin = GasCoin::try_from(object.data.try_as_move().unwrap())?;
                 coins.push((info.into(), gas_coin.value()));
             }
@@ -915,7 +916,7 @@ where
         let gas_payment = self
             .choose_gas_for_address(signer, gas_budget, gas, vec![object_id])
             .await?;
-        let object = self.get_object(&object_id).await?;
+        let object = self.get_object_internal(&object_id).await?;
         let object_ref = object.compute_object_reference();
         let data =
             TransactionData::new_transfer(recipient, object_ref, signer, gas_payment, gas_budget);
@@ -959,7 +960,7 @@ where
     ) -> Result<TransactionData, anyhow::Error> {
         let module = Identifier::new(module)?;
         let function = Identifier::new(function)?;
-        let package_obj = self.get_object(&package_object_id).await?;
+        let package_obj = self.get_object_internal(&package_object_id).await?;
         let package_obj_ref = package_obj.compute_object_reference();
         let json_args = resolve_move_function_args(
             package_obj.data.try_as_package().unwrap(),
@@ -975,7 +976,7 @@ where
         for json_arg in json_args {
             args.push(match json_arg {
                 SuiJsonCallArg::Object(id) => {
-                    let obj = self.get_object(&id).await?;
+                    let obj = self.get_object_internal(&id).await?;
                     let arg = if obj.is_shared() {
                         CallArg::SharedObject(id)
                     } else {
@@ -1049,7 +1050,7 @@ where
         let gas = self
             .choose_gas_for_address(signer, gas_budget, gas, vec![coin_object_id])
             .await?;
-        let coin_object = self.get_object(&coin_object_id).await?;
+        let coin_object = self.get_object_internal(&coin_object_id).await?;
         let coin_object_ref = coin_object.compute_object_reference();
         let coin_type = coin_object.get_move_template_type()?;
         let data = TransactionData::new_move_call(
@@ -1081,7 +1082,7 @@ where
             .choose_gas_for_address(signer, gas_budget, gas, vec![coin_to_merge, primary_coin])
             .await?;
         let primary_coin_ref = self.get_object_ref(&primary_coin).await?;
-        let coin_to_merge = self.get_object(&coin_to_merge).await?;
+        let coin_to_merge = self.get_object_internal(&coin_to_merge).await?;
         let coin_to_merge_ref = coin_to_merge.compute_object_reference();
 
         let coin_type = coin_to_merge.get_move_template_type()?;
@@ -1102,10 +1103,10 @@ where
         Ok(data)
     }
 
-    async fn get_object_info(
+    async fn get_object(
         &self,
         object_id: ObjectID,
-    ) -> Result<GetObjectInfoResponse, anyhow::Error> {
+    ) -> Result<GetObjectDataResponse, anyhow::Error> {
         let result = self.download_object_from_authorities(object_id).await?;
         Ok(result.try_into()?)
     }
@@ -1113,20 +1114,26 @@ where
     async fn get_objects_owned_by_address(
         &self,
         account_addr: SuiAddress,
-    ) -> Result<Vec<ObjectInfo>, anyhow::Error> {
-        let refs: Vec<ObjectInfo> = self
+    ) -> Result<Vec<SuiObjectInfo>, anyhow::Error> {
+        let refs: Vec<SuiObjectInfo> = self
             .store
-            .get_owner_objects(Owner::AddressOwner(account_addr))?;
+            .get_owner_objects(Owner::AddressOwner(account_addr))?
+            .into_iter()
+            .map(SuiObjectInfo::from)
+            .collect();
         Ok(refs)
     }
 
     async fn get_objects_owned_by_object(
         &self,
         object_id: ObjectID,
-    ) -> Result<Vec<ObjectInfo>, anyhow::Error> {
-        let refs: Vec<ObjectInfo> = self
+    ) -> Result<Vec<SuiObjectInfo>, anyhow::Error> {
+        let refs: Vec<SuiObjectInfo> = self
             .store
-            .get_owner_objects(Owner::ObjectOwner(object_id.into()))?;
+            .get_owner_objects(Owner::ObjectOwner(object_id.into()))?
+            .into_iter()
+            .map(SuiObjectInfo::from)
+            .collect();
         Ok(refs)
     }
 

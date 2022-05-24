@@ -9,10 +9,10 @@ use tokio::runtime::Handle;
 
 use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
 use sui_core::gateway_types::{
-    GetObjectInfoResponse, TransactionEffectsResponse, TransactionResponse,
+    GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
 };
 use sui_json::SuiJsonValue;
-use sui_types::base_types::{ObjectID, ObjectInfo, SuiAddress, TransactionDigest};
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::sui_serde::Base64;
 
@@ -143,21 +143,21 @@ impl GatewayAPI for RpcGatewayClient {
         bytes.to_data()
     }
 
-    async fn get_object_info(&self, object_id: ObjectID) -> Result<GetObjectInfoResponse, Error> {
+    async fn get_object(&self, object_id: ObjectID) -> Result<GetObjectDataResponse, Error> {
         Ok(self.client.get_object_info(object_id).await?)
     }
 
     async fn get_objects_owned_by_address(
         &self,
         address: SuiAddress,
-    ) -> Result<Vec<ObjectInfo>, Error> {
+    ) -> Result<Vec<SuiObjectInfo>, Error> {
         Ok(self.client.get_objects_owned_by_address(address).await?)
     }
 
     async fn get_objects_owned_by_object(
         &self,
         object_id: ObjectID,
-    ) -> Result<Vec<ObjectInfo>, Error> {
+    ) -> Result<Vec<SuiObjectInfo>, Error> {
         Ok(self.client.get_objects_owned_by_object(object_id).await?)
     }
 

@@ -74,13 +74,11 @@ pub struct ObjectID(
 
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
-#[derive(Clone, Serialize, Deserialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Debug)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub struct ObjectInfo {
     pub object_id: ObjectID,
     pub version: SequenceNumber,
     pub digest: ObjectDigest,
-    #[serde(rename = "type")]
     pub type_: String,
     pub owner: Owner,
     pub previous_transaction: TransactionDigest,
