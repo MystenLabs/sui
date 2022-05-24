@@ -12,7 +12,7 @@ This library implements [Binary Canonical Serialization (BCS)](https://github.co
 
 ### Working with primitive types
 
-To deserialize data, use a `MoveBCS.de(type: string, data: string)`. Type parameter is a name of the type; data is a BCS encoded as hex. 
+To deserialize data, use a `MoveBCS.de(type: string, data: string)`. Type parameter is a name of the type; data is a BCS encoded as hex.
 
 ```js
 // MoveBCS has a set of built ins:
@@ -62,27 +62,28 @@ TBD
 // }
 
 MoveBCS.registerStructType('Coin', {
-    value: MoveBCS.U64,
-    owner: MoveBCS.STRING,
-    is_locked: MoveBCS.BOOL
+  value: MoveBCS.U64,
+  owner: MoveBCS.STRING,
+  is_locked: MoveBCS.BOOL,
 });
 
-
-
-// Created in Rust with diem/bcs 
+// Created in Rust with diem/bcs
 let rust_bcs_str = '80d1b105600000000e4269672057616c6c65742047757900';
 
 console.log(MoveBCS.de('Coin', MoveBCS.util.fromHex(rust_bcs_str)));
 
 // Let's encode the value as well
 let test_ser = MoveBCS.ser('Coin', {
-    owner: 'Big Wallet Guy',
-    value: '412412400000',
-    is_locked: false
+  owner: 'Big Wallet Guy',
+  value: '412412400000',
+  is_locked: false,
 });
 
 console.log(test_ser.toBytes());
-console.assert(MoveBCS.util.toHex(test_ser.toBytes()) === rust_bcs_str, 'Whoopsie, result mismatch');
+console.assert(
+  MoveBCS.util.toHex(test_ser.toBytes()) === rust_bcs_str,
+  'Whoopsie, result mismatch'
+);
 ```
 
 ## TODO

@@ -8,7 +8,7 @@ export class HexDataBuffer {
 
   constructor(data: Uint8Array | string) {
     if (typeof data === 'string') {
-      this._data = new Uint8Array(Buffer.from(data, 'hex'));
+      this._data = new Uint8Array(Buffer.from(data.replace('0x', ''), 'hex'));
     } else {
       this._data = data;
     }
