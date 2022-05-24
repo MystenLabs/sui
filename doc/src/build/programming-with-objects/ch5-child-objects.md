@@ -15,7 +15,7 @@ public fun transfer_to_object<T: key, R: key>(
     owner: &mut R,
 ): ChildRef<T>;
 ```
-The first argument `obj` will become a child object of the second argument `owner`. `obj` must be passed by-value, i.e. it will be fully consumed, and cannot be accessed again within the same transaction (similar to `transfer` function). After calling this function, the owner of `obj` on-chain will change from the account address, to the object ID of the `owner` object.
+The first argument `obj` will become a child object of the second argument `owner`. `obj` must be passed by-value, i.e. it will be fully consumed, and cannot be accessed again within the same transaction (similar to `transfer` function). After calling this function, the on-chain owner metatada of `obj` will change to the ID of the `owner` object.
 
 The function returns a special struct `ChildRef<T>` where `T` matches the type of the child object. It represents a reference to the child object. Since `ChildRef` is a struct type without `drop` ability, Move ensures that the return value cannot be dropped. This ensures that the caller of the function must put the reference somewhere and cannot forget about it. This is very important because latter on if we attempt to delete the parent object, the existence of the child references force us to take care of them. Otherwise we may end up in a situation where we deleted the parent object, but there are still some child objects, and these child objects will be locked forever (as we will explain in latter sections). In the last section, we will also see how this reference is used to move around child objects and prevent making mistakes.
 
