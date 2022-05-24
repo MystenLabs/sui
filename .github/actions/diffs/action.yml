@@ -32,7 +32,7 @@ runs:
           - '.github/workflows/explorer-client-prs.yml'
         isTypescriptSDK:
           - 'sdk/typescript/**'
-          - 'sui/open_rpc/samples/**'
+          - 'crates/sui-open-rpc/samples/**'
           - '.github/workflows/ts-sdk.yml'
         isDoc:
           - 'doc/**'
