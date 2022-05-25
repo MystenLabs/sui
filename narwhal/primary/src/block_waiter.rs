@@ -114,6 +114,7 @@ type RequestKey = Vec<u8>;
 /// ```rust
 /// # use tokio::sync::mpsc::{channel};
 /// # use tokio::sync::oneshot;
+/// # use arc_swap::ArcSwap;
 /// # use crypto::Hash;
 /// # use std::env::temp_dir;
 /// # use crypto::ed25519::Ed25519PublicKey;
@@ -154,7 +155,7 @@ type RequestKey = Vec<u8>;
 ///     let (tx_get_block, mut rx_get_block) = oneshot::channel();
 ///
 ///     let name = Ed25519PublicKey::default();
-///     let committee = Committee{ authorities: BTreeMap::new() };
+///     let committee = Arc::new(Committee{ authorities: ArcSwap::from_pointee(BTreeMap::new()) });
 ///
 ///     // A dummy certificate
 ///     let certificate = Certificate::<Ed25519PublicKey>::default();

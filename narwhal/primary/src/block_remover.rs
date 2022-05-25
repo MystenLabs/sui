@@ -80,6 +80,7 @@ pub struct DeleteBatchMessage {
 /// # use store::{reopen, rocks, rocks::DBMap, Store};
 /// # use network::PrimaryToWorkerNetwork;
 /// # use tokio::sync::mpsc::{channel};
+/// # use arc_swap::ArcSwap;
 /// # use crypto::Hash;
 /// # use std::env::temp_dir;
 /// # use crypto::Digest;
@@ -119,7 +120,7 @@ pub struct DeleteBatchMessage {
 ///     let (tx_delete_block_result, mut rx_delete_block_result) = channel(1);
 ///
 ///     let name = Ed25519PublicKey::default();
-///     let committee = Committee{ authorities: BTreeMap::new() };
+///     let committee = Arc::new(Committee{ authorities: ArcSwap::from_pointee(BTreeMap::new()) });
 ///     // A dag with genesis for the committee
 ///     let (tx_new_certificates, rx_new_certificates) = channel(1);
 ///     let dag = Arc::new(Dag::new(&committee, rx_new_certificates).1);
