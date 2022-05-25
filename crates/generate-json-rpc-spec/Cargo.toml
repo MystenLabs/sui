@@ -21,5 +21,6 @@ sui-config = { path = "../sui-config" }
 sui-gateway = { path = "../sui-gateway" }
 sui-json = { path = "../sui-json" }
 sui-types = { path = "../sui-types" }
+sui-config = { path = "../sui-config" }
 test-utils = { path = "../test-utils" }
 workspace-hack = { path = "../workspace-hack"}

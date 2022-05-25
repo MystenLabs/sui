@@ -104,7 +104,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
 
         let initial_accounts_config = self
             .initial_accounts_config
-            .unwrap_or_else(|| GenesisConfig::for_local_testing().unwrap());
+            .unwrap_or_else(GenesisConfig::for_local_testing);
         let (account_keys, objects) = initial_accounts_config
             .generate_accounts(&mut self.rng)
             .unwrap();
