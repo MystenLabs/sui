@@ -7,7 +7,7 @@ use crate::{
     synchronizer::Synchronizer,
 };
 use async_recursion::async_recursion;
-use config::Committee;
+use config::SharedCommittee;
 use crypto::{traits::VerifyingKey, Hash as _, SignatureService};
 use network::{CancelHandler, PrimaryNetwork};
 use std::{
@@ -37,7 +37,7 @@ pub struct Core<PublicKey: VerifyingKey> {
     /// The public key of this primary.
     name: PublicKey,
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: SharedCommittee<PublicKey>,
     /// The persistent storage keyed to headers.
     header_store: Store<HeaderDigest, Header<PublicKey>>,
     /// The persistent storage keyed to certificates.
@@ -85,7 +85,7 @@ pub struct Core<PublicKey: VerifyingKey> {
 impl<PublicKey: VerifyingKey> Core<PublicKey> {
     pub fn spawn(
         name: PublicKey,
-        committee: Committee<PublicKey>,
+        committee: SharedCommittee<PublicKey>,
         header_store: Store<HeaderDigest, Header<PublicKey>>,
         certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
         synchronizer: Synchronizer<PublicKey>,

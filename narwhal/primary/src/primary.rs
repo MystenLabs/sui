@@ -17,7 +17,7 @@ use crate::{
     BlockRemover, CertificatesResponse, DeleteBatchMessage, PayloadAvailabilityResponse,
 };
 use async_trait::async_trait;
-use config::{Committee, Parameters, WorkerId};
+use config::{Parameters, SharedCommittee, WorkerId};
 use consensus::dag::Dag;
 use crypto::{
     traits::{EncodeDecodeBase64, Signer, VerifyingKey},
@@ -86,7 +86,7 @@ impl Primary {
     pub fn spawn<PublicKey: VerifyingKey, Signatory: Signer<PublicKey::Sig> + Send + 'static>(
         name: PublicKey,
         signer: Signatory,
-        committee: Committee<PublicKey>,
+        committee: SharedCommittee<PublicKey>,
         parameters: Parameters,
         header_store: Store<HeaderDigest, Header<PublicKey>>,
         certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,

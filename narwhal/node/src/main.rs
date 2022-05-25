@@ -123,8 +123,9 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
 
     // Read the committee and node's keypair from file.
     let keypair = Ed25519KeyPair::import(key_file).context("Failed to load the node's keypair")?;
-    let committee =
-        Committee::import(committee_file).context("Failed to load the committee information")?;
+    let committee = Arc::new(
+        Committee::import(committee_file).context("Failed to load the committee information")?,
+    );
 
     // Load default parameters if none are specified.
     let parameters = match parameters_file {

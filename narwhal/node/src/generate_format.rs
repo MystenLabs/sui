@@ -37,45 +37,46 @@ fn get_registry() -> Result<Registry> {
     // Trace the correspondng header
     let keys: Vec<_> = (0..4).map(|_| Ed25519KeyPair::generate(&mut rng)).collect();
     let committee = Committee {
-        authorities: keys
-            .iter()
-            .enumerate()
-            .map(|(i, kp)| {
-                let id = kp.public();
-                let primary = PrimaryAddresses {
-                    primary_to_primary: format!("/ip4/127.0.0.1/tcp/{}/http", 100 + i)
-                        .parse()
-                        .unwrap(),
-                    worker_to_primary: format!("/ip4/127.0.0.1/tcp/{}/http", 200 + i)
-                        .parse()
-                        .unwrap(),
-                };
-                let workers = vec![(
-                    0,
-                    WorkerAddresses {
-                        primary_to_worker: format!("/ip4/127.0.0.1/tcp/{}/http", 300 + i)
+        authorities: arc_swap::ArcSwap::from_pointee(
+            keys.iter()
+                .enumerate()
+                .map(|(i, kp)| {
+                    let id = kp.public();
+                    let primary = PrimaryAddresses {
+                        primary_to_primary: format!("/ip4/127.0.0.1/tcp/{}/http", 100 + i)
                             .parse()
                             .unwrap(),
-                        transactions: format!("/ip4/127.0.0.1/tcp/{}/http", 400 + i)
+                        worker_to_primary: format!("/ip4/127.0.0.1/tcp/{}/http", 200 + i)
                             .parse()
                             .unwrap(),
-                        worker_to_worker: format!("/ip4/127.0.0.1/tcp/{}/http", 500 + i)
-                            .parse()
-                            .unwrap(),
-                    },
-                )]
-                .into_iter()
-                .collect();
-                (
-                    id.clone(),
-                    Authority {
-                        stake: 1,
-                        primary,
-                        workers,
-                    },
-                )
-            })
-            .collect(),
+                    };
+                    let workers = vec![(
+                        0,
+                        WorkerAddresses {
+                            primary_to_worker: format!("/ip4/127.0.0.1/tcp/{}/http", 300 + i)
+                                .parse()
+                                .unwrap(),
+                            transactions: format!("/ip4/127.0.0.1/tcp/{}/http", 400 + i)
+                                .parse()
+                                .unwrap(),
+                            worker_to_worker: format!("/ip4/127.0.0.1/tcp/{}/http", 500 + i)
+                                .parse()
+                                .unwrap(),
+                        },
+                    )]
+                    .into_iter()
+                    .collect();
+                    (
+                        id.clone(),
+                        Authority {
+                            stake: 1,
+                            primary,
+                            workers,
+                        },
+                    )
+                })
+                .collect(),
+        ),
     };
 
     let certificates: Vec<Certificate<Ed25519PublicKey>> = Certificate::genesis(&committee);

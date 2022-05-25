@@ -11,6 +11,7 @@ use crypto::{
 use futures::future::join_all;
 use node::NodeStorage;
 use primary::{Primary, CHANNEL_CAPACITY};
+use std::collections::BTreeMap;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use test_utils::{
     committee, committee_from_keys, keys, make_optimal_certificates,
@@ -72,9 +73,20 @@ async fn test_rounds_errors() {
     // In this way, the genesis certificate is not run for that authority and is absent when we try to fetch it
     let no_name_committee = config::Committee {
         authorities: {
-            let mut no_name_authorities = committee.clone().authorities;
-            no_name_authorities.retain(|pk, _a| *pk != name);
-            no_name_authorities
+            let no_name_authorities = committee
+                .authorities
+                .load()
+                .iter()
+                .filter_map(|(pk, a)| {
+                    if *pk != name {
+                        Some((pk.clone(), a.clone()))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<BTreeMap<_, _>>();
+
+            arc_swap::ArcSwap::from_pointee(no_name_authorities)
         },
     };
 

@@ -23,7 +23,7 @@ pub use state::ExecutionIndices;
 
 use crate::{batch_loader::BatchLoader, core::Core, subscriber::Subscriber};
 use async_trait::async_trait;
-use config::Committee;
+use config::SharedCommittee;
 use consensus::{ConsensusOutput, ConsensusSyncRequest};
 use crypto::traits::VerifyingKey;
 use serde::de::DeserializeOwned;
@@ -81,7 +81,7 @@ impl Executor {
     /// Spawn a new client subscriber.
     pub async fn spawn<State, PublicKey>(
         name: PublicKey,
-        committee: Committee<PublicKey>,
+        committee: SharedCommittee<PublicKey>,
         store: Store<BatchDigest, SerializedBatchMessage>,
         execution_state: Arc<State>,
         rx_consensus: Receiver<ConsensusOutput<PublicKey>>,
@@ -130,6 +130,7 @@ impl Executor {
         // Spawn the batch loader.
         let worker_addresses = committee
             .authorities
+            .load()
             .iter()
             .find(|(x, _)| *x == &name)
             .map(|(_, authority)| authority)

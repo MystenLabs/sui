@@ -8,6 +8,7 @@
     rust_2021_compatibility
 )]
 
+use arc_swap::ArcSwap;
 use crypto::traits::{EncodeDecodeBase64, VerifyingKey};
 use multiaddr::Multiaddr;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -16,6 +17,7 @@ use std::{
     fs::{self, OpenOptions},
     io::{BufWriter, Write as _},
     ops::Deref,
+    sync::Arc,
     time::Duration,
 };
 use thiserror::Error;
@@ -279,21 +281,27 @@ pub struct Authority {
     pub workers: HashMap<WorkerId, WorkerAddresses>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(bound(deserialize = "PublicKey: DeserializeOwned"))]
-pub struct Committee<PublicKey: VerifyingKey> {
-    pub authorities: BTreeMap<PublicKey, Authority>,
+pub type SharedCommittee<PK> = Arc<Committee<PK>>;
+
+#[derive(Serialize, Deserialize)]
+pub struct Committee<PublicKey> {
+    #[serde(bound(
+        serialize = "PublicKey:Ord + Serialize",
+        deserialize = "PublicKey:Ord + DeserializeOwned"
+    ))]
+    pub authorities: ArcSwap<BTreeMap<PublicKey, Authority>>,
 }
 
 impl<PublicKey: VerifyingKey> Committee<PublicKey> {
     /// Returns the number of authorities.
     pub fn size(&self) -> usize {
-        self.authorities.len()
+        self.authorities.load().len()
     }
 
     /// Return the stake of a specific authority.
     pub fn stake(&self, name: &PublicKey) -> Stake {
         self.authorities
+            .load()
             .get(&name.clone())
             .map_or_else(|| 0, |x| x.stake)
     }
@@ -302,7 +310,7 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
     pub fn quorum_threshold(&self) -> Stake {
         // If N = 3f + 1 + k (0 <= k < 3)
         // then (2 N + 3) / 3 = 2f + 1 + (2k + 2)/3 = 2f + 1 + k = N - f
-        let total_votes: Stake = self.authorities.values().map(|x| x.stake).sum();
+        let total_votes: Stake = self.authorities.load().values().map(|x| x.stake).sum();
         2 * total_votes / 3 + 1
     }
 
@@ -310,13 +318,14 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
     pub fn validity_threshold(&self) -> Stake {
         // If N = 3f + 1 + k (0 <= k < 3)
         // then (N + 2) / 3 = f + 1 + k/3 = f + 1
-        let total_votes: Stake = self.authorities.values().map(|x| x.stake).sum();
+        let total_votes: Stake = self.authorities.load().values().map(|x| x.stake).sum();
         (total_votes + 2) / 3
     }
 
     /// Returns the primary addresses of the target primary.
     pub fn primary(&self, to: &PublicKey) -> Result<PrimaryAddresses, ConfigError> {
         self.authorities
+            .load()
             .get(&to.clone())
             .map(|x| x.primary.clone())
             .ok_or_else(|| ConfigError::NotInCommittee((*to).encode_base64()))
@@ -325,6 +334,7 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
     /// Returns the addresses of all primaries except `myself`.
     pub fn others_primaries(&self, myself: &PublicKey) -> Vec<(PublicKey, PrimaryAddresses)> {
         self.authorities
+            .load()
             .iter()
             .filter(|(name, _)| *name != myself)
             .map(|(name, authority)| (name.deref().clone(), authority.primary.clone()))
@@ -334,6 +344,7 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
     /// Returns the addresses of a specific worker (`id`) of a specific authority (`to`).
     pub fn worker(&self, to: &PublicKey, id: &WorkerId) -> Result<WorkerAddresses, ConfigError> {
         self.authorities
+            .load()
             .iter()
             .find(|(name, _)| *name == to)
             .map(|(_, authority)| authority)
@@ -351,6 +362,7 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
     pub fn our_workers(&self, myself: &PublicKey) -> Result<Vec<WorkerAddresses>, ConfigError> {
         let res = self
             .authorities
+            .load()
             .iter()
             .find(|(name, _)| *name == myself)
             .map(|(_, authority)| authority)
@@ -370,6 +382,7 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
         id: &WorkerId,
     ) -> Vec<(PublicKey, WorkerAddresses)> {
         self.authorities
+            .load()
             .iter()
             .filter(|(name, _)| *name != myself)
             .filter_map(|(name, authority)| {

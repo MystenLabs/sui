@@ -6,7 +6,7 @@ use crate::{
     block_synchronizer::handler::Handler, grpc_server::proposer::NarwhalProposer, BlockCommand,
     BlockRemoverCommand,
 };
-use config::Committee;
+use config::SharedCommittee;
 use consensus::dag::Dag;
 use crypto::traits::VerifyingKey;
 use multiaddr::Multiaddr;
@@ -30,7 +30,7 @@ pub struct ConsensusAPIGrpc<
     remove_collections_timeout: Duration,
     block_synchronizer_handler: Arc<SynchronizerHandler>,
     dag: Option<Arc<Dag<PublicKey>>>,
-    committee: Committee<PublicKey>,
+    committee: SharedCommittee<PublicKey>,
 }
 
 impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + Sync + 'static>
@@ -44,7 +44,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
         remove_collections_timeout: Duration,
         block_synchronizer_handler: Arc<SynchronizerHandler>,
         dag: Option<Arc<Dag<PublicKey>>>,
-        committee: Committee<PublicKey>,
+        committee: SharedCommittee<PublicKey>,
     ) {
         tokio::spawn(async move {
             let _ = Self {
@@ -73,7 +73,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
             self.dag.clone(),
         );
 
-        let narwhal_proposer = NarwhalProposer::new(self.dag.clone(), self.committee.clone());
+        let narwhal_proposer = NarwhalProposer::new(self.dag.clone(), Arc::clone(&self.committee));
 
         let narwhal_configuration = NarwhalConfiguration::new();
 

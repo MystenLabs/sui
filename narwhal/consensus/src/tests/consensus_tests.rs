@@ -2,15 +2,32 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
+
 use crypto::ed25519::Ed25519PublicKey;
-#[allow(unused_imports)] // WT*?
+#[allow(unused_imports)]
 use crypto::traits::KeyPair;
 #[cfg(test)]
 use std::collections::{BTreeSet, VecDeque};
 use store::{reopen, rocks, rocks::DBMap};
-use test_utils::{make_consensus_store, mock_committee};
-#[allow(unused_imports)] // WT*?
+use test_utils::mock_committee;
+#[allow(unused_imports)]
 use tokio::sync::mpsc::channel;
+use types::CertificateDigest;
+
+pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore<Ed25519PublicKey>> {
+    const LAST_COMMITTED_CF: &str = "last_committed";
+    const SEQUENCE_CF: &str = "sequence";
+
+    let rocksdb = rocks::open_cf(store_path, None, &[LAST_COMMITTED_CF, SEQUENCE_CF])
+        .expect("Failed creating database");
+
+    let (last_committed_map, sequence_map) = reopen!(&rocksdb,
+        LAST_COMMITTED_CF;<Ed25519PublicKey, Round>,
+        SEQUENCE_CF;<SequenceNumber, CertificateDigest>
+    );
+
+    Arc::new(ConsensusStore::new(last_committed_map, sequence_map))
+}
 
 pub fn make_certificate_store(
     store_path: &std::path::Path,

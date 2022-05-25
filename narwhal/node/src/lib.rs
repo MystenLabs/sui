@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{Committee, Parameters, WorkerId};
+use config::{Parameters, SharedCommittee, WorkerId};
 use consensus::{dag::Dag, Consensus, SubscriberHandler};
 use crypto::traits::{KeyPair, Signer, VerifyingKey};
 use executor::{ExecutionState, Executor, SerializedTransaction, SubscriberResult};
@@ -93,7 +93,7 @@ impl Node {
         // The private-public key pair of this authority.
         keypair: Keys,
         // The committee information.
-        committee: Committee<PublicKey>,
+        committee: SharedCommittee<PublicKey>,
         // The node's storage.
         store: &NodeStorage<PublicKey>,
         // The configuration parameters.
@@ -159,7 +159,7 @@ impl Node {
     /// Spawn the consensus core and the client executing transactions.
     async fn spawn_consensus<PublicKey, State>(
         name: PublicKey,
-        committee: Committee<PublicKey>,
+        committee: SharedCommittee<PublicKey>,
         store: &NodeStorage<PublicKey>,
         parameters: Parameters,
         execution_state: Arc<State>,
@@ -219,7 +219,7 @@ impl Node {
         // The ids of the validators to spawn.
         ids: Vec<WorkerId>,
         // The committee information.
-        committee: Committee<PublicKey>,
+        committee: SharedCommittee<PublicKey>,
         // The node's storage,
         store: &NodeStorage<PublicKey>,
         // The configuration parameters.

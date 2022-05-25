@@ -625,6 +625,7 @@ async fn test_read_causal_unsigned_certificates() {
         &genesis,
         &committee
             .authorities
+            .load()
             .keys()
             .cloned()
             .collect::<Vec<Ed25519PublicKey>>(),

@@ -9,7 +9,7 @@ use crate::{
     primary::PrimaryMessage,
     utils, PayloadToken, PrimaryWorkerMessage,
 };
-use config::{BlockSynchronizerParameters, Committee, WorkerId};
+use config::{BlockSynchronizerParameters, SharedCommittee, WorkerId};
 use crypto::{traits::VerifyingKey, Hash};
 use futures::{
     future::{join_all, BoxFuture},
@@ -146,7 +146,7 @@ pub struct BlockSynchronizer<PublicKey: VerifyingKey> {
     name: PublicKey,
 
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: SharedCommittee<PublicKey>,
 
     /// Receive the commands for the synchronizer
     rx_commands: Receiver<Command<PublicKey>>,
@@ -191,7 +191,7 @@ pub struct BlockSynchronizer<PublicKey: VerifyingKey> {
 impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     pub fn spawn(
         name: PublicKey,
-        committee: Committee<PublicKey>,
+        committee: SharedCommittee<PublicKey>,
         rx_commands: Receiver<Command<PublicKey>>,
         rx_certificate_responses: Receiver<CertificatesResponse<PublicKey>>,
         rx_payload_availability_responses: Receiver<PayloadAvailabilityResponse<PublicKey>>,
@@ -708,7 +708,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     async fn wait_for_certificate_responses(
         fetch_certificates_timeout: Duration,
         request_id: RequestID,
-        committee: Committee<PublicKey>,
+        committee: SharedCommittee<PublicKey>,
         block_ids: Vec<CertificateDigest>,
         primaries_sent_requests_to: Vec<PublicKey>,
         mut receiver: Receiver<CertificatesResponse<PublicKey>>,

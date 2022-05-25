@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{Committee, WorkerId};
+use config::{SharedCommittee, WorkerId};
 use crypto::traits::VerifyingKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::WorkerNetwork;
@@ -32,7 +32,7 @@ pub struct Synchronizer<PublicKey: VerifyingKey> {
     /// The id of this worker.
     id: WorkerId,
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: SharedCommittee<PublicKey>,
     // The persistent storage.
     store: Store<BatchDigest, SerializedBatchMessage>,
     /// The depth of the garbage collection.
@@ -60,7 +60,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
     pub fn spawn(
         name: PublicKey,
         id: WorkerId,
-        committee: Committee<PublicKey>,
+        committee: SharedCommittee<PublicKey>,
         store: Store<BatchDigest, SerializedBatchMessage>,
         gc_depth: Round,
         sync_retry_delay: Duration,

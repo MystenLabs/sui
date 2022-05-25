@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::Committee;
+use config::SharedCommittee;
 use consensus::dag::Dag;
 use crypto::traits::VerifyingKey;
 use std::sync::Arc;
@@ -15,11 +15,11 @@ pub struct NarwhalProposer<PublicKey: VerifyingKey> {
     dag: Option<Arc<Dag<PublicKey>>>,
 
     /// The committee
-    committee: Committee<PublicKey>,
+    committee: SharedCommittee<PublicKey>,
 }
 
 impl<PublicKey: VerifyingKey> NarwhalProposer<PublicKey> {
-    pub fn new(dag: Option<Arc<Dag<PublicKey>>>, committee: Committee<PublicKey>) -> Self {
+    pub fn new(dag: Option<Arc<Dag<PublicKey>>>, committee: SharedCommittee<PublicKey>) -> Self {
         Self { dag, committee }
     }
 

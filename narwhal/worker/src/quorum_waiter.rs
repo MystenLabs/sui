@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{Committee, Stake};
+use config::{SharedCommittee, Stake};
 use crypto::traits::VerifyingKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::CancelHandler;
@@ -23,7 +23,7 @@ pub struct QuorumWaiterMessage<PublicKey> {
 /// The QuorumWaiter waits for 2f authorities to acknowledge reception of a batch.
 pub struct QuorumWaiter<PublicKey: VerifyingKey> {
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: SharedCommittee<PublicKey>,
     /// The stake of this authority.
     stake: Stake,
     /// Input Channel to receive commands.
@@ -35,7 +35,7 @@ pub struct QuorumWaiter<PublicKey: VerifyingKey> {
 impl<PublicKey: VerifyingKey> QuorumWaiter<PublicKey> {
     /// Spawn a new QuorumWaiter.
     pub fn spawn(
-        committee: Committee<PublicKey>,
+        committee: SharedCommittee<PublicKey>,
         stake: Stake,
         rx_message: Receiver<QuorumWaiterMessage<PublicKey>>,
         tx_batch: Sender<Vec<u8>>,

@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
-use config::{Committee, WorkerId};
+use config::{SharedCommittee, WorkerId};
 use crypto::traits::VerifyingKey;
 use network::WorkerNetwork;
 use store::Store;
@@ -19,7 +19,7 @@ pub struct Helper<PublicKey: VerifyingKey> {
     /// The id of this worker.
     id: WorkerId,
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: SharedCommittee<PublicKey>,
     /// The persistent storage.
     store: Store<BatchDigest, SerializedBatchMessage>,
     /// Input channel to receive batch requests from workers.
@@ -33,7 +33,7 @@ pub struct Helper<PublicKey: VerifyingKey> {
 impl<PublicKey: VerifyingKey> Helper<PublicKey> {
     pub fn spawn(
         id: WorkerId,
-        committee: Committee<PublicKey>,
+        committee: SharedCommittee<PublicKey>,
         store: Store<BatchDigest, SerializedBatchMessage>,
         rx_worker_request: Receiver<(Vec<BatchDigest>, PublicKey)>,
         rx_client_request: Receiver<(Vec<BatchDigest>, Sender<SerializedBatchMessage>)>,

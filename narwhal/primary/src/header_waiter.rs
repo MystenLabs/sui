@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::primary::{PayloadToken, PrimaryMessage, PrimaryWorkerMessage};
-use config::{Committee, WorkerId};
+use config::{SharedCommittee, WorkerId};
 use crypto::traits::VerifyingKey;
 use futures::{
     future::{try_join_all, BoxFuture},
@@ -45,7 +45,7 @@ pub struct HeaderWaiter<PublicKey: VerifyingKey> {
     /// The name of this authority.
     name: PublicKey,
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: SharedCommittee<PublicKey>,
     /// The persistent storage for parent Certificates.
     certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
     /// The persistent storage for payload markers from workers.
@@ -81,7 +81,7 @@ pub struct HeaderWaiter<PublicKey: VerifyingKey> {
 impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
     pub fn spawn(
         name: PublicKey,
-        committee: Committee<PublicKey>,
+        committee: SharedCommittee<PublicKey>,
         certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         consensus_round: Arc<AtomicU64>,

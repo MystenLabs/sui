@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{primary::PrimaryMessage, PayloadToken};
-use config::{Committee, WorkerId};
+use config::{SharedCommittee, WorkerId};
 use crypto::traits::{EncodeDecodeBase64, VerifyingKey};
 use network::PrimaryNetwork;
 use store::{Store, StoreError};
@@ -33,7 +33,7 @@ pub struct Helper<PublicKey: VerifyingKey> {
     /// The node's name
     name: PublicKey,
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: SharedCommittee<PublicKey>,
     /// The certificate persistent storage.
     certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
     /// The payloads (batches) persistent storage.
@@ -47,7 +47,7 @@ pub struct Helper<PublicKey: VerifyingKey> {
 impl<PublicKey: VerifyingKey> Helper<PublicKey> {
     pub fn spawn(
         name: PublicKey,
-        committee: Committee<PublicKey>,
+        committee: SharedCommittee<PublicKey>,
         certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         rx_primaries: Receiver<PrimaryMessage<PublicKey>>,

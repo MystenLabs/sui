@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{ConsensusOutput, SequenceNumber};
-use config::{Committee, Stake};
+use config::{Committee, SharedCommittee, Stake};
 use crypto::{
     traits::{EncodeDecodeBase64, VerifyingKey},
     Hash,
@@ -85,7 +85,7 @@ impl<PublicKey: VerifyingKey> State<PublicKey> {
 
 pub struct Consensus<PublicKey: VerifyingKey> {
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: SharedCommittee<PublicKey>,
     /// Persistent storage to safe ensure crash-recovery.
     store: Arc<ConsensusStore<PublicKey>>,
     /// The depth of the garbage collector.
@@ -108,7 +108,7 @@ pub struct Consensus<PublicKey: VerifyingKey> {
 
 impl<PublicKey: VerifyingKey> Consensus<PublicKey> {
     pub fn spawn(
-        committee: Committee<PublicKey>,
+        committee: SharedCommittee<PublicKey>,
         store: Arc<ConsensusStore<PublicKey>>,
         gc_depth: Round,
         rx_primary: Receiver<Certificate<PublicKey>>,
@@ -117,14 +117,15 @@ impl<PublicKey: VerifyingKey> Consensus<PublicKey> {
     ) -> JoinHandle<StoreResult<()>> {
         tokio::spawn(async move {
             let consensus_index = store.read_last_consensus_index()?;
+            let genesis = Certificate::genesis(&committee);
             Self {
-                committee: committee.clone(),
+                committee,
                 store,
                 gc_depth,
                 rx_primary,
                 tx_primary,
                 tx_output,
-                genesis: Certificate::genesis(&committee),
+                genesis,
                 consensus_index,
             }
             .run()
@@ -289,7 +290,7 @@ impl<PublicKey: VerifyingKey> Consensus<PublicKey> {
         let coin = round;
 
         // Elect the leader.
-        let mut keys: Vec<_> = committee.authorities.keys().cloned().collect();
+        let mut keys: Vec<_> = committee.authorities.load().keys().cloned().collect();
         keys.sort();
         let leader = &keys[coin as usize % committee.size()];
 

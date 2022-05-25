@@ -7,7 +7,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use bytes::Bytes;
-use config::{Committee, Parameters, WorkerId};
+use config::{Parameters, SharedCommittee, WorkerId};
 use crypto::traits::VerifyingKey;
 use futures::{Stream, StreamExt};
 use multiaddr::{Multiaddr, Protocol};
@@ -41,8 +41,8 @@ pub struct Worker<PublicKey: VerifyingKey> {
     /// The id of this worker.
     id: WorkerId,
     /// The committee information.
-    committee: Committee<PublicKey>,
-    /// The configuration parameters.
+    committee: SharedCommittee<PublicKey>,
+    /// The configuration parameters
     parameters: Parameters,
     /// The persistent storage.
     store: Store<BatchDigest, SerializedBatchMessage>,
@@ -54,7 +54,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
     pub fn spawn(
         name: PublicKey,
         id: WorkerId,
-        committee: Committee<PublicKey>,
+        committee: SharedCommittee<PublicKey>,
         parameters: Parameters,
         store: Store<BatchDigest, SerializedBatchMessage>,
     ) -> JoinHandle<()> {

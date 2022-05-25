@@ -38,6 +38,7 @@ mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev =
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
 
 [dev-dependencies]
+arc-swap = { version = "1.5.0", features = ["serde"] }
 itertools = "0.10.3"
 mockall = "0.11.0"
 node = { path = "../node" }
