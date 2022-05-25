@@ -64,11 +64,9 @@ where
         // while we do sync. We are in any case not in a position to make valuable
         // proposals.
         if let Some(checkpoint) = checkpoint {
-
             // Check if there are more historic checkpoints to catch up with
             let next_checkpoint = state_checkpoints.lock().next_checkpoint();
             if next_checkpoint < checkpoint.checkpoint.sequence_number {
-
                 // TODO log error
                 let _ = sync_to_checkpoint(
                     _active_authority,
@@ -83,26 +81,25 @@ where
 
             // Check if the checkpoint is the one we are expecting next!
             // if next_checkpoint == checkpoint.checkpoint.sequence_number {
-                // Try to upgrade the signed checkpoint to a certified one if possible
-                if state_checkpoints
-                    .lock()
-                    .handle_checkpoint_certificate(&checkpoint, &None).is_err() {
-
-                        // One of the errors may be due to the fact that we do not have 
-                        // the full contents of the checkpoint. So we try to download it.
-                        // TODO: clean up the errors to get here only when the error is
-                        //       "No checkpoint set at this sequence."
-                        if let Ok(contents) = get_checkpoint_contents(_active_authority, &checkpoint).await {
-                            // Retry with contents
-                            let _ = state_checkpoints
-                                .lock()
-                                .handle_checkpoint_certificate(&checkpoint, &Some(contents));
-                        }
-
-
-                    }
+            // Try to upgrade the signed checkpoint to a certified one if possible
+            if state_checkpoints
+                .lock()
+                .handle_checkpoint_certificate(&checkpoint, &None)
+                .is_err()
+            {
+                // One of the errors may be due to the fact that we do not have
+                // the full contents of the checkpoint. So we try to download it.
+                // TODO: clean up the errors to get here only when the error is
+                //       "No checkpoint set at this sequence."
+                if let Ok(contents) = get_checkpoint_contents(_active_authority, &checkpoint).await
+                {
+                    // Retry with contents
+                    let _ = state_checkpoints
+                        .lock()
+                        .handle_checkpoint_certificate(&checkpoint, &Some(contents));
+                }
+            }
             // }
-
         }
 
         // Check if we need to advance to the next checkpoint, in case >2/3
@@ -354,14 +351,14 @@ where
         // NOTE: should we ignore the error here?
         if let Err(err) = checkpoint_db
             .lock()
-            .handle_checkpoint_certificate(&past, &_contents){
-                println!("Sync Err: {:?}", err);
-            }
+            .handle_checkpoint_certificate(&past, &_contents)
+        {
+            println!("Sync Err: {:?}", err);
+        }
     }
 
     Ok(())
 }
-
 
 /// Gets one checkpoint certificate and optionally its contents. Note this must be
 /// given a checkpoint number that the validator knows exists, for examples because
@@ -376,43 +373,42 @@ pub async fn get_one_checkpoint<A>(
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-
-    let mut available_authorities =available_authorities.clone();
+    let mut available_authorities = available_authorities.clone();
     while !available_authorities.is_empty() {
-        
         // Get a random authority by stake
         let sample_authority = _active_authority.state.committee.sample();
         if !available_authorities.contains(sample_authority) {
             // We want to pick an authority that has the checkpoint and its full history.
             continue;
         }
-        
-        available_authorities.remove(&sample_authority);
+
+        available_authorities.remove(sample_authority);
 
         // Note: safe to do lookup since authority comes from the committee sample
         //       so this should not panic.
         let client = _active_authority.net.authority_clients[sample_authority].clone();
         match client
-        .handle_checkpoint(CheckpointRequest::past(sequence_number, contents))
-        .await {
+            .handle_checkpoint(CheckpointRequest::past(sequence_number, contents))
+            .await
+        {
             Ok(CheckpointResponse {
                 info: AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Certified(past)),
                 detail,
             }) => {
                 return Ok((past, detail));
-            },
+            }
             Ok(resp) => {
                 println!("Sync Error: Unexpected answer: {:?}", resp);
-            },
+            }
             Err(err) => {
                 println!("Sync Error: peer error: {:?}", err);
-            }, 
+            }
         }
-
     }
 
-    Err(SuiError::GenericAuthorityError { error: "Ran out of authorities.".to_string() })
-
+    Err(SuiError::GenericAuthorityError {
+        error: "Ran out of authorities.".to_string(),
+    })
 }
 
 /// Given a checkpoint certificate we sample validators and try to download the certificate contents.
@@ -424,7 +420,7 @@ pub async fn get_checkpoint_contents<A>(
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    let available_authorities : BTreeSet<_> = checkpoint.signatory_authorities().cloned().collect();
+    let available_authorities: BTreeSet<_> = checkpoint.signatory_authorities().cloned().collect();
     loop {
         // Get a random authority by stake
         let sample_authority = _active_authority.state.committee.sample();
@@ -437,8 +433,12 @@ where
         //       so this should not panic.
         let client = _active_authority.net.authority_clients[sample_authority].clone();
         match client
-        .handle_checkpoint(CheckpointRequest::past(checkpoint.checkpoint.sequence_number, true))
-        .await {
+            .handle_checkpoint(CheckpointRequest::past(
+                checkpoint.checkpoint.sequence_number,
+                true,
+            ))
+            .await
+        {
             Ok(CheckpointResponse {
                 info: _info,
                 detail: Some(contents),
@@ -447,22 +447,20 @@ where
                 if contents.digest() != checkpoint.checkpoint.digest {
                     // A byzantine authority!
                     println!("Sync Error: Incorrect contents returned");
-                    continue
+                    continue;
                 }
 
                 return Ok(contents);
-            },
+            }
             Ok(resp) => {
                 println!("Sync Error: Unexpected answer: {:?}", resp);
-            },
+            }
             Err(err) => {
                 println!("Sync Error: peer error: {:?}", err);
-            }, 
+            }
         }
-
     }
 }
-
 
 /// Picks other authorities at random and constructs checkpoint fragments
 /// that are submitted to consensus. The process terminates when a future
@@ -521,10 +519,12 @@ pub async fn diff_proposals<A>(
                     }
 
                     // TODO: check the proposal is also for the same checkpoint sequence number?
-                    if current.as_ref().unwrap().0.checkpoint.sequence_number() != _my_proposal.sequence_number() {
+                    if current.as_ref().unwrap().0.checkpoint.sequence_number()
+                        != _my_proposal.sequence_number()
+                    {
                         return;
                     }
-                    
+
                     let other_proposal = CheckpointProposal::new(
                         current.as_ref().unwrap().clone(),
                         response.detail.unwrap(),
@@ -540,13 +540,11 @@ pub async fn diff_proposals<A>(
                     if fragments_num > 2 {
                         tokio::time::sleep(Duration::from_secs(3 * fragments_num)).await;
                     }
-
                 }
             } else {
                 continue;
             }
-        }
-        else {
+        } else {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }

@@ -306,7 +306,7 @@ impl CertifiedCheckpoint {
         Ok(certified_checkpoint)
     }
 
-    pub fn signatory_authorities(&self) -> impl Iterator<Item=&AuthorityName> {
+    pub fn signatory_authorities(&self) -> impl Iterator<Item = &AuthorityName> {
         self.signatures.iter().map(|(name, _)| name)
     }
 
