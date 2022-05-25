@@ -79,7 +79,7 @@ pub async fn test_gossip_error() {
 
             //assert!(result1.is_ok());
             let result = result1.unwrap();
-            let found_cert = result.certified_transaction.is_some();
+            let _found_cert = result.certified_transaction.is_some();
             //assert!(found_cert); // todo this should not fail
         }
     }
