@@ -10,6 +10,8 @@ programming language, you should familiarize yourself with it and use this conte
 
 For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper. Find answers to common questions about our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md) and more in our [FAQ](../contribute/faq.md).
 
+> **Important:** This site is built from the upstream `main` branch and therefore will contain updates not yet found in `devnet`.
+
 ## See what's new
 
 Find the latest updates to these contents in this section:
@@ -27,8 +29,6 @@ https://github.com/MystenLabs/sui/commits/devnet
 
 For upstream updates in the `main` branch, see:
 https://github.com/MystenLabs/sui/commits/main
-
-> **Note:** This site is built from the `main` branch and therefore will contain updates not yet found in `devnet`.
 
 See the Sui `doc/src` [history](https://github.com/MystenLabs/sui/commits/main/doc/src) for a complete changelog of updates to this site. 
 
