@@ -10,7 +10,7 @@ use crate::checkpoints::checkpoint_tests::checkpoint_tests_setup;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn checkpoint_active_flow() {
-    let setup = checkpoint_tests_setup(500, Duration::from_millis(200)).await;
+    let setup = checkpoint_tests_setup(200, Duration::from_millis(200)).await;
 
     let TestSetup {
         committee: _committee,
@@ -46,10 +46,10 @@ async fn checkpoint_active_flow() {
         }
     });
 
+    // Wait for all the sending to happen.
+    _end_of_sending_join.await.expect("all ok");
+
     // Wait for a batch to go through
     // (We do not really wait, we jump there since real-time is not running).
     tokio::time::sleep(Duration::from_millis(500)).await;
-
-    // Wait for all the sending to happen.
-    _end_of_sending_join.await.expect("all ok");
 }

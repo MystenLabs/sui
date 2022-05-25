@@ -306,6 +306,10 @@ impl CertifiedCheckpoint {
         Ok(certified_checkpoint)
     }
 
+    pub fn signatory_authorities(&self) -> impl Iterator<Item=&AuthorityName> {
+        self.signatures.iter().map(|(name, _)| name)
+    }
+
     /// Check that a certificate is valid, and signed by a quorum of authorities
     pub fn verify(&self, committee: &Committee) -> Result<(), SuiError> {
         // Note: this code is nearly the same as the code that checks

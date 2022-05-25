@@ -820,6 +820,18 @@ impl CheckpointStore {
         self.set_proposal()
     }
 
+    /// Get the latest stored checkpoint if there is one
+    pub fn latest_stored_checkpoint(
+        &mut self,
+    ) -> Result<Option<AuthenticatedCheckpoint>, SuiError> {
+        Ok(self
+            .checkpoints
+            .iter()
+            .skip_to_last()
+            .next()
+            .map(|(_, ckp)| ckp))
+    }
+
     // Helper write functions
 
     /// Set the next checkpoint proposal.

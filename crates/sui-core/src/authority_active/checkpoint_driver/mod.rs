@@ -12,8 +12,9 @@ use sui_types::{
     base_types::AuthorityName,
     error::SuiError,
     messages_checkpoint::{
-        AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpoint, CheckpointRequest,
-        CheckpointResponse, CheckpointSequenceNumber, SignedCheckpoint, SignedCheckpointProposal,
+        AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpoint, CheckpointContents,
+        CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber, SignedCheckpoint,
+        SignedCheckpointProposal,
     },
 };
 
@@ -33,7 +34,7 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     println!("START ACTIVE CHECKPOINT PROCESS!");
-    if _active_authority.state._checkpoints.is_none() {
+    if _active_authority.state.checkpoints.is_none() {
         // If the checkpointing database is not present, do not
         // operate the active checkpointing logic.
         return;
@@ -42,15 +43,14 @@ where
     // Safe to unwrap due to check above
     let state_checkpoints = _active_authority
         .state
-        ._checkpoints
+        .checkpoints
         .as_ref()
         .unwrap()
         .clone();
 
-    loop {
-        // Wait for a long long time.
-        tokio::time::sleep(Duration::from_millis(1220)).await;
+    tokio::time::sleep(Duration::from_millis(1220)).await;
 
+    loop {
         // First, get the latest summaries and proposals
         let (checkpoint, proposals) = get_latest_proposal_and_checkpoint_from_all(
             _active_authority,
@@ -65,13 +65,25 @@ where
         // proposals.
         if let Some(checkpoint) = checkpoint {
             // Check if there are more historic checkpoints to catch up with
-            if state_checkpoints.lock().next_checkpoint() <= checkpoint.checkpoint.sequence_number {
-                sync_to_checkpoint(_active_authority, checkpoint.clone()).await;
+            let next_checkpoint = state_checkpoints.lock().next_checkpoint();
+            if next_checkpoint < checkpoint.checkpoint.sequence_number {
+                println!(
+                    "Sync? {:?} < {:?}",
+                    next_checkpoint, checkpoint.checkpoint.sequence_number
+                );
+
+                // TODO log error
+                let _ = sync_to_checkpoint(
+                    _active_authority,
+                    state_checkpoints.clone(),
+                    checkpoint.clone(),
+                )
+                .await;
                 // And start from the beginning, when done
                 continue;
             }
 
-            // Try to updgrade the signed checkpoint to a certified one if possible
+            // Try to upgrade the signed checkpoint to a certified one if possible
             let _ = state_checkpoints
                 .lock()
                 .handle_checkpoint_certificate(&checkpoint, &None);
@@ -97,9 +109,18 @@ where
             )
             .await;
         }
+
+        // Wait for a long long time.
+        let name = state_checkpoints.lock().name;
+        let next_checkpoint = state_checkpoints.lock().next_checkpoint();
+
+        println!("{:?} at checkpoint {:?}", name, next_checkpoint);
+        tokio::time::sleep(Duration::from_millis(1220)).await;
     }
 }
 
+/// Reads the latest checkpoint / proposal info from all validators
+/// and extracts the latest checkpoint as well as the set of proposals
 pub async fn get_latest_proposal_and_checkpoint_from_all<A>(
     _active_authority: &ActiveAuthority<A>,
     timeout_after_quorum: Duration,
@@ -239,7 +260,6 @@ where
                 }
             }
         });
-
     println!(
         "HIGHEST CHK: {:?}",
         highest_certificate_cert
@@ -250,7 +270,6 @@ where
     if highest_certificate_cert.is_none() {
         println!("{:?}", final_state.responses);
     }
-
     // Examine whether we should start the next checkpoint by looking at whether we have
     // >2/3 of validators proposing a new checkpoint.
     let next_proposal_sequence_number = highest_certificate_cert
@@ -271,7 +290,6 @@ where
             None
         })
         .collect();
-
     // Weight the proposals
     let weight: usize = proposals
         .iter()
@@ -282,19 +300,109 @@ where
         "Make checkpoint at {}: {}",
         next_proposal_sequence_number, start_checkpoint_making
     );
-
     Ok((highest_certificate_cert, proposals))
 }
 
+/// Download all checkpoints that are not known to us
 pub async fn sync_to_checkpoint<A>(
     _active_authority: &ActiveAuthority<A>,
-    _checkpoint: CertifiedCheckpoint,
-) where
+    checkpoint_db: Arc<Mutex<CheckpointStore>>,
+    latest_known_checkpoint: CertifiedCheckpoint,
+) -> Result<(), SuiError>
+where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    // TODO
+    // Get out last checkpoint
+    let latest_checkpoint = checkpoint_db.lock().latest_stored_checkpoint()?;
+    let available_authorities: BTreeSet<_> = latest_known_checkpoint
+        .signatory_authorities()
+        .cloned()
+        .collect();
+
+    // Check if the latest checkpoint is merely a signed checkpoint, and if
+    // so download a full certificate for it.
+    if let Some(AuthenticatedCheckpoint::Signed(signed)) = &latest_checkpoint {
+        println!(
+            "Partial Sync ({:?}): {:?}",
+            _active_authority.state.name,
+            *signed.checkpoint.sequence_number()
+        );
+        let (past, _contents) = get_one_checkpoint(
+            _active_authority,
+            *signed.checkpoint.sequence_number(),
+            false,
+            &available_authorities,
+        )
+        .await?;
+
+        // NOTE: should we ignore the error here?
+        let _ = checkpoint_db
+            .lock()
+            .handle_checkpoint_certificate(&past, &None);
+    }
+
+    let full_sync_start = latest_checkpoint
+        .map(|chk| match chk {
+            AuthenticatedCheckpoint::Signed(signed) => signed.checkpoint.sequence_number + 1,
+            AuthenticatedCheckpoint::Certified(cert) => cert.checkpoint.sequence_number + 1,
+            AuthenticatedCheckpoint::None => unreachable!(),
+        })
+        .unwrap_or(0);
+
+    for seq in full_sync_start..latest_known_checkpoint.checkpoint.sequence_number {
+        println!("Full Sync ({:?}): {:?}", _active_authority.state.name, seq);
+        let (past, _contents) =
+            get_one_checkpoint(_active_authority, seq, true, &available_authorities).await?;
+        // NOTE: should we ignore the error here?
+        let _ = checkpoint_db
+            .lock()
+            .handle_checkpoint_certificate(&past, &_contents);
+    }
+
+    Ok(())
 }
 
+#[allow(clippy::collapsible_match)]
+pub async fn get_one_checkpoint<A>(
+    _active_authority: &ActiveAuthority<A>,
+    sequence_number: CheckpointSequenceNumber,
+    contents: bool,
+    available_authorities: &BTreeSet<AuthorityName>,
+) -> Result<(CertifiedCheckpoint, Option<CheckpointContents>), SuiError>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    loop {
+        // Get a random authority by stake
+        let sample_authority = _active_authority.state.committee.sample();
+        if !available_authorities.contains(sample_authority) {
+            // We want to pick an authority that has the checkpoint and its full history.
+            continue;
+        }
+
+        // Note: safe to do lookup since authority comes from the committee sample
+        //       so this should not panic.
+        let client = _active_authority.net.authority_clients[sample_authority].clone();
+        if let Ok(response) = client
+            .handle_checkpoint(CheckpointRequest::past(sequence_number, contents))
+            .await
+        {
+            if let CheckpointResponse {
+                info: AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Certified(past)),
+                detail,
+            } = response
+            {
+                return Ok((past, detail));
+            }
+        } else {
+            // TODO: log error
+        }
+    }
+}
+
+/// Picks other authorities at random and constructs checkpoint fragments
+/// that are submitted to consensus. The process terminates when a future
+/// checkpoint is downloaded
 pub async fn diff_proposals<A>(
     _active_authority: &ActiveAuthority<A>,
     checkpoint_db: Arc<Mutex<CheckpointStore>>,
@@ -312,13 +420,15 @@ pub async fn diff_proposals<A>(
     loop {
         let next_checkpoint_sequence_number: u64 = checkpoint_db.lock().next_checkpoint();
         if next_checkpoint_sequence_number > *_my_proposal.proposal.0.checkpoint.sequence_number() {
-            // Our work here is done, we have progressed past the checkpoint for which we were
-            // given a proposal.
+            // Our work here is done, we have progressed past the checkpoint for which we were given a proposal.
+            // Our DB has been updated (presumably by consensus) with the sought information (a checkpoint
+            // for this sequence number)
             break;
         }
 
         // We have ran out of authorities?
         if available_authorities.is_empty() {
+            // We have created as many fragments as possible, so exit.
             break;
         }
 
@@ -338,6 +448,11 @@ pub async fn diff_proposals<A>(
                             // We are now way behind, return
                             return;
                         }
+                    }
+
+                    // For some reason the proposal is empty?
+                    if current.is_none() || response.detail.is_none() {
+                        continue;
                     }
 
                     let other_proposal = CheckpointProposal::new(

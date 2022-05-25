@@ -187,7 +187,7 @@ where
             checkpoint_process(&checkpoint_locals).await;
         });
 
-        _gossip_join.await;
-        _checkpoint_join.await;
+        let _ = _gossip_join.await;
+        let _ = _checkpoint_join.await;
     }
 }
