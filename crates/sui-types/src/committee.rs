@@ -7,17 +7,19 @@ use ed25519_dalek::PublicKey;
 use itertools::Itertools;
 use rand::distributions::{Distribution, Uniform};
 use rand::rngs::OsRng;
+use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashMap};
 
 pub type EpochId = u64;
 
-#[derive(Eq, PartialEq, Clone, Debug)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct Committee {
     pub epoch: EpochId,
     pub voting_rights: BTreeMap<AuthorityName, usize>,
     pub total_votes: usize,
     // Note: this is a derived structure, no need to store.
+    #[serde(skip)]
     pub expanded_keys: HashMap<AuthorityName, PublicKey>,
 }
 

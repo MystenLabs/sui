@@ -22,7 +22,7 @@ Fetch objects owned by the address `0xbff6ccc8707aa517b4f1b95750a2a8c666012df3`
 
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
-const provider = new JsonRpcProvider('https://gateway.devnet.sui.io:9000/');
+const provider = new JsonRpcProvider('https://gateway.devnet.sui.io:443');
 const objects = await provider.getOwnedObjectRefs(
   '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
 );
@@ -32,7 +32,7 @@ Fetch transaction details from a transaction digest:
 
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
-const provider = new JsonRpcProvider('https://gateway.devnet.sui.io:9000/');
+const provider = new JsonRpcProvider('https://gateway.devnet.sui.io:443');
 const txn = await provider.getTransaction(
   '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME='
 );
@@ -48,7 +48,7 @@ import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 const keypair = new Ed25519Keypair();
 const signer = new RawSigner(
   keypair,
-  new JsonRpcProvider('https://gateway.devnet.sui.io:9000/')
+  new JsonRpcProvider('https://gateway.devnet.sui.io:443')
 );
 const txn = await signer.transferCoin({
   signer: keypair.getPublicKey().toSuiAddress(),

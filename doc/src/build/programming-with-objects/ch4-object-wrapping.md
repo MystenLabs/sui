@@ -27,6 +27,8 @@ There are some interesting consequences of wrapping an Sui object into another. 
 
 >:bulb: The fact that you can no longer use a wrapped Sui object means that it's impossible to create circular wrapping behavior, where A wraps B, B wraps C, and C also wraps A.
 
+At some point, you can then take out the wrapped object and transfer it to an address. This process is called **unwrapping**. When an object is **unwrapped**, it will become an independent object again, and can be accessed directly on-chain. There is also an important property about wrapping and unwrapping: *the object's ID stays the same across wrapping and unwrapping*!
+
 There are a few common ways to wrap a Sui object into another Sui object, and their use cases are typically different. In the following, we will walk through three different ways to wrap a Sui object and their typical use cases.
 
 ### Direct wrapping
@@ -103,7 +105,7 @@ We first check that the swap is indeed legit:
 assert!(wrapper1.to_swap.scarcity == wrapper2.to_swap.scarcity, 0);
 assert!(wrapper1.to_swap.style != wrapper2.to_swap.style, 0);
 ```
-It checks that the two objects have identical scarcity, but have different style, perfect pair for a swap. Next we unpack the two objects to obtain the inner fields:
+It checks that the two objects have identical scarcity, but have different style, perfect pair for a swap. Next we unpack the two objects to obtain the inner fields. By doing so, we unwrap the objects:
 ```rust
 let ObjectWrapper {
     id: id1,
@@ -198,4 +200,16 @@ You can also find a more complex example in [Hero.move](https://github.com/Myste
 ### Wrapping through `vector`
 The concept of wrapping objects in a vector field of another Sui object is very similar to wrapping through `Option`: an object may contain 0, 1 or many of the wrapped objects of the same type.
 
-To be finished.
+We won't use a full example to demonstrate this use case, but wrapping through vector may resemble:
+```rust
+struct Pet has key, store {
+    id: VersionedID,
+    cuteness: u64,
+}
+
+struct Farm has key {
+    id: VersionedID,
+    pets: vector<Pet>,
+}
+```
+In the above example, a vector of `Pet`s are wrapped in `Farm` and can be accessed only through the `Farm` object.

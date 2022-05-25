@@ -11,12 +11,12 @@ anyhow = { version = "1.0.57", features = ["backtrace"] }
 bcs = "0.1.3"
 bincode = "1.3.3"
 itertools = "0.10.3"
-once_cell = "1.10.0"
+once_cell = "1.11.0"
 rand = "0.7.3"
 serde = { version = "1.0.137", features = ["derive"] }
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 curve25519-dalek = { version = "3", default-features = false, features = ["serde"] }
-serde-name = "0.2.0"
+serde-name = "0.2.1"
 sha3 = "0.10.1"
 thiserror = "1.0.31"
 hex = "0.4.3"
@@ -32,7 +32,7 @@ sha2 = "0.10.2"
 zeroize = "1.5.4"
 hkdf = "0.12.3"
 digest = "0.10.3"
-schemars ="0.8.8"
+schemars ="0.8.10"
 tonic = "0.7"
 
 name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
@@ -47,3 +47,4 @@ move-vm-types = { git = "https://github.com/move-language/move", rev = "1b2d3b42
 
 narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", package = "executor" }
 narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", package = "crypto" }
+workspace-hack = { path = "../workspace-hack"}

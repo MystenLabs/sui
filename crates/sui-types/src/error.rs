@@ -67,6 +67,11 @@ pub enum SuiError {
     SharedObjectLockNotSetObject,
     #[error("Invalid Batch Transaction: {}", error)]
     InvalidBatchTransaction { error: String },
+    #[error("Object {child_id:?} is owned by object {parent_id:?}, which is not in the input")]
+    MissingObjectOwner {
+        child_id: ObjectID,
+        parent_id: ObjectID,
+    },
 
     // Signature verification
     #[error("Signature is not valid: {}", error)]
@@ -208,6 +213,8 @@ pub enum SuiError {
     ModuleNotFound { module_name: String },
     #[error("Function signature is invalid: {error:?}.")]
     InvalidFunctionSignature { error: String },
+    #[error("Function visibility is invalid for an entry point to execution: {error:?}.")]
+    InvalidFunctionVisibility { error: String },
     #[error("Type error while binding function arguments: {error:?}.")]
     TypeError { error: String },
     #[error("Execution aborted: {error:?}.")]
@@ -334,6 +341,9 @@ pub enum SuiError {
     // Tonic::Status
     #[error("{0}")]
     RpcError(String),
+
+    #[error("Use of disabled feature: {:?}", error)]
+    UnsupportedFeatureError { error: String },
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

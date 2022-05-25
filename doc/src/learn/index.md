@@ -14,20 +14,19 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](http
 
 Find the latest updates to these contents in this section:
 
+* [Sui tokenomics](../learn/tokenomics/index.md) are now fully explained and cover:
+  * [Sui token](../learn/tokenomics/sui-token.md).
+  * [Gas-pricing mechanism](../learn/tokenomics/gas-pricing.md).
+  * [Sui storage fund](../learn/tokenomics/storage-fund.md).
+  * [Delegated proof-of-stake system](../learn/tokenomics/proof-of-stake.md).
 * New [`sui-setup.sh`](https://github.com/MystenLabs/sui/blob/main/doc/utils/sui-setup.sh) script enables full environment setup in a [single set of commands](../build/install.md).
-* Sui version 0.2.0 released to DevNet!
-* DevNet data will be wiped along with this release. If you have requested test SUI tokens via faucet, please do so again via the [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) channel on Discord.
-* Added rustdoc output for [sui](https://mystenlabs.github.io/sui/), [narwhal](https://mystenlabs.github.io/narwhal/), and [mysten-infra](https://mystenlabs.github.io/mysten-infra/) projects available from both [Install Sui](../build/install.md#source-code) and [Contribute to Sui](../contribute/index.md#download-sui).
-* Added persistent storage across releases. This will greatly reduce the frequency to wipe data during upgrades. 
-* Internal network interfaces are now described using the MultiAddr format.
-* Internal gRPC network interfaces now use a bincode codec instead of protobuf.
-* Narwhal updates relevant to Sui:
-    * Updated the Narwhal release to a188b87.
-    * Narwhal interfaces now use gRPC.
-    * Narwhal configuration uses the MultiAddr format to refer to endpoints.
-    * Bugfix: shared-objects: correct an off-by-one error in numbering in the output of consensus.
-    * Bugfix: avoid sending empty sync requests to upstream peers.
-    * Feature: output the full transaction data out of consensus, rather than Digests.
+* Sui version 0.2.0 released to DevNet:
+  * DevNet data will be wiped along with this release. If you have requested test SUI tokens via faucet, please do so again via the [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) channel on Discord.
+  * Added rustdoc output for [sui](https://mystenlabs.github.io/sui/), [narwhal](https://mystenlabs.github.io/narwhal/), and [mysten-infra](https://mystenlabs.github.io/mysten-infra/) projects available from both [Install Sui](../build/install.md#source-code) and [Contribute to Sui](../contribute/index.md#download-sui).
+  * Added persistent storage across releases. This will greatly reduce the frequency to wipe data during upgrades. 
+  * Internal network interfaces are now described using the MultiAddr format.
+  * Internal gRPC network interfaces now use a bincode codec instead of protobuf.
+  * And many Narwhal updates relevant to Sui.
 
 For a complete view of all changes in Sui 0.2.0, see:
 https://github.com/MystenLabs/sui/commits/devnet
@@ -60,9 +59,9 @@ Take note of these related repositories of information to make best use of the k
 
 * [Move & Sui podcast](https://zeroknowledge.fm/228-2/) on Zero Knowledge where programmable objects are described in detail.
 * Original [Move Book](https://move-book.com/index.html) written by a member of the Sui team.
-* [Core Move](https://github.com/diem/move/tree/main/language/documentation) documentation, including:
-  * [Tutorial](https://github.com/diem/move/blob/main/language/documentation/tutorial/README.md) - A step-by-step guide through writing a Move module.
-  * [Book](https://github.com/diem/move/blob/main/language/documentation/book/src/introduction.md) - A summary with pages on [various topics](https://github.com/diem/move/tree/main/language/documentation/book/src).
-  * [Examples](https://github.com/diem/move/tree/main/language/documentation/examples/experimental) - A set of samples, such as for [defining a coin](https://github.com/diem/move/tree/main/language/documentation/examples/experimental/basic-coin) and [swapping it](https://github.com/diem/move/tree/main/language/documentation/examples/experimental/coin-swap).
+* [Core Move](https://github.com/move-language/move/tree/main/language/documentation) documentation, including:
+  * [Tutorial](https://github.com/move-language/move/blob/main/language/documentation/tutorial/README.md) - A step-by-step guide through writing a Move module.
+  * [Book](https://github.com/move-language/move/blob/main/language/documentation/book/src/introduction.md) - A summary with pages on [various topics](https://github.com/move-language/move/tree/main/language/documentation/book/src).
+  * [Examples](https://github.com/move-language/move/tree/main/language/documentation/examples/experimental) - A set of samples, such as for [defining a coin](https://github.com/move-language/move/tree/main/language/documentation/examples/experimental/basic-coin) and [swapping it](https://github.com/move-language/move/tree/main/language/documentation/examples/experimental/coin-swap).
 * [Awesome Move](https://github.com/MystenLabs/awesome-move/blob/main/README.md) - A summary of resources related to Move, from blockchains through code samples.
 * [Sui API Reference](https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/sui/open_rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false) - The reference files for the [Sui JSON-RPC API](../build/json-rpc.md).

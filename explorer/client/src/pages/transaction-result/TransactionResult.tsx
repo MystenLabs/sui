@@ -7,12 +7,16 @@ import {
     getExecutionStatusError,
 } from '@mysten/sui.js';
 import cl from 'classnames';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useContext } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
+import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
-import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
+import {
+    DefaultRpcClient as rpc,
+    type Network,
+} from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { findDataFromID } from '../../utils/static/searchUtil';
 import { type DataType } from './TransactionResultType';
@@ -62,13 +66,14 @@ const initState: TxnState = {
 };
 
 function fetchTransactionData(
-    txId: string | undefined
+    txId: string | undefined,
+    network: Network | string
 ): Promise<TransactionEffectsResponse> {
     try {
         if (!txId) {
             throw new Error('No Txid found');
         }
-        return rpc
+        return rpc(network)
             .getTransactionWithEffects(txId)
             .then((txEff: TransactionEffectsResponse) => txEff);
     } catch (error) {
@@ -114,11 +119,12 @@ const transformTransactionResponse = (
 
 const TransactionResultAPI = ({ id }: { id: string }) => {
     const [showTxState, setTxState] = useState(initState);
+    const [network] = useContext(NetworkContext);
     useEffect(() => {
         if (id == null) {
             return;
         }
-        fetchTransactionData(id)
+        fetchTransactionData(id, network)
             .then((txObj) => {
                 setTxState(transformTransactionResponse(txObj, id));
             })
@@ -129,7 +135,7 @@ const TransactionResultAPI = ({ id }: { id: string }) => {
                     loadState: 'fail',
                 });
             });
-    }, [id]);
+    }, [id, network]);
 
     // TODO update Loading screen
     if (showTxState.loadState === 'pending') {

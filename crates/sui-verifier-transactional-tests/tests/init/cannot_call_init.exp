@@ -1,0 +1,4 @@
+processed 1 task
+
+task 0 'publish'. lines 4-17:
+Error: Failed to verify the Move module, reason: "_::M::init at offset 1. Cannot call a module's 'init' function from another Move function".

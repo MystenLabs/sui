@@ -10,7 +10,7 @@ struct Color {
 }
 ```
 The above `struct` defines a data structure that can represent RGB color. `struct`s like this can be used to organize data with complicated semantics. However, instances of `struct`s like `Color` are not Sui objects yet.
-To define a struct that represents a Sui object type, we must add a `key` capability to the definition, and the first field of the struct must be the `id` of the object with type `VersionedID` from the [ID library](https://github.com/MystenLabs/sui/blob/main/sui_programmability/framework/sources/ID.move):
+To define a struct that represents a Sui object type, we must add a `key` capability to the definition, and the first field of the struct must be the `id` of the object with type `VersionedID` from the [ID library](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/ID.move):
 ```rust
 use Sui::ID::VersionedID;
 
@@ -22,7 +22,7 @@ struct ColorObject has key {
 }
 ```
 Now `ColorObject` represents a Sui object type and can be used to create Sui objects that can be eventually stored on the Sui chain.
-> :books: In both core Move and Sui Move, the [key ability](https://github.com/diem/move/blob/main/language/documentation/book/src/abilities.md#key) denotes a type that can appear as a key in global storage. However, the structure of global storage is a bit different: core Move uses a (type, `address`)-indexed map, whereas Sui Move uses a map keyed by object IDs.
+> :books: In both core Move and Sui Move, the [key ability](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#key) denotes a type that can appear as a key in global storage. However, the structure of global storage is a bit different: core Move uses a (type, `address`)-indexed map, whereas Sui Move uses a map keyed by object IDs.
 
 > :bulb: The `VersionedID` type is internal to Sui, and you most likely won't need to deal with it directly. For curious readers, it contains the unique `ID` of the object and the version of the object. Each time a mutable object is used in a transaction, its version will increase by 1.
 
@@ -48,13 +48,13 @@ fun new(red: u8, green: u8, blue: u8, ctx: &mut TxContext): ColorObject {
 ### Store Sui object
 We have defined a constructor for the `ColorObject`. Calling this constructor will put the value in a local variable where it can be returned from the current function, passed to other functions, or stored inside another struct. And of course, the object can be placed in persistent global storage so it can be read by the outside world and accessed in subsequent transactions.
 
-All of the APIs for adding objects to persistent storage live in the [`Transfer`](https://github.com/MystenLabs/sui/blob/main/sui_programmability/framework/sources/Transfer.move) module. One key API is:
+All of the APIs for adding objects to persistent storage live in the [`Transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Transfer.move) module. One key API is:
 ```rust
 public fun transfer<T: key>(obj: T, recipient: address)
 ```
 This places `obj` in global storage along with metadata that records `recipient` as the owner of the object. In Sui, every object must have an owner, which can be either an account address, another object, or "shared"--see [object ownership](../objects.md#object-ownership) for more details.
 
-> :bulb: In core Move, we would call `move_to<T>(a: address, t: T)` to add the entry `(a, T) -> t` to the global storage. But because (as explained above) the schema of Sui Move's global storage is different, we use the `Transfer` APIs instead of `move_to` or the other [global storage operators](https://github.com/diem/move/blob/main/language/documentation/book/src/global-storage-operators.md) in core Move. These operators cannot be used in Sui Move.
+> :bulb: In core Move, we would call `move_to<T>(a: address, t: T)` to add the entry `(a, T) -> t` to the global storage. But because (as explained above) the schema of Sui Move's global storage is different, we use the `Transfer` APIs instead of `move_to` or the other [global storage operators](https://github.com/move-language/move/blob/main/language/documentation/book/src/global-storage-operators.md) in core Move. These operators cannot be used in Sui Move.
 
 A common use of this API is to transfer the object to the sender/signer of the current transaction (e.g., mint an NFT owned by you). The only way to obtain the sender of the current transaction is to rely on the transaction context passed in from an entry function. The last argument to an entry function must be the current transaction context, defined as `ctx: &mut TxContext`.
 To obtain the current signer's address, one can call `TxContext::sender(ctx)`.
@@ -88,7 +88,7 @@ sui-move build
 ### Writing unit tests
 After defining the `create` function, we want to test this function in Move using unit tests, without having to go all the way through sending Sui transactions. Since [Sui manages global storage separately outside of Move](../../learn/sui-move-diffs.md#object-centric-global-storage), there is no direct way to retrieve objects from global storage within Move. This poses a question: after calling the `create` function, how do we check that the object is properly transferred?
 
-To assist easy testing in Move, we provide a comprehensive testing framework in the [TestScenario](https://github.com/MystenLabs/sui/blob/main/sui_programmability/framework/sources/TestScenario.move) module that allows us to interact with objects put into the global storage. This allows us to test the behavior of any function directly in Move unit tests. A lot of this is also covered in our [Move testing doc](../move.md#sui-specific-testing).
+To assist easy testing in Move, we provide a comprehensive testing framework in the [TestScenario](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/TestScenario.move) module that allows us to interact with objects put into the global storage. This allows us to test the behavior of any function directly in Move unit tests. A lot of this is also covered in our [Move testing doc](../move.md#sui-specific-testing).
 
 The idea of `TestScenario` is to emulate a series of Sui transactions, each sent from a particular address. A developer writing a test starts the first transaction using the `TestScenario::begin` function that takes the address of the user sending this transaction as an argument and returns an instance of the `Scenario` struct representing a test scenario.
 

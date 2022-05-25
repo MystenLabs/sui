@@ -1,0 +1,13 @@
+processed 4 tasks
+
+task 0 'publish'. lines 4-11:
+Error: Failed to verify the Move module, reason: "Expected parameter for _::M::init to be &mut mut Sui::TxContext::TxContext, but found u64".
+
+task 1 'publish'. lines 13-20:
+Error: Failed to verify the Move module, reason: "Expected parameter for _::TxContext::init to be &mut mut Sui::TxContext::TxContext, but found _::TxContext::TxContext".
+
+task 2 'publish'. lines 22-29:
+Error: Failed to verify the Move module, reason: "Expected parameter for _::M::init to be &mut mut Sui::TxContext::TxContext, but found &Sui::TxContext::TxContext".
+
+task 3 'publish'. lines 32-39:
+Error: Failed to verify the Move module, reason: "Expected parameter for _::M::init to be &mut mut Sui::TxContext::TxContext, but found Sui::TxContext::TxContext".

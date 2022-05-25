@@ -1,0 +1,18 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// valid, T has store, thus Obj has key
+
+//# publish
+module 0x0.M {
+    import 0x2.TxContext;
+    import 0x2.ID;
+
+    struct Obj<T> has key { id: ID.VersionedID }
+
+    public(script) no<T: store>(s: Self.Obj<T>, ctx: &mut TxContext.TxContext) {
+        label l0:
+        abort 0;
+    }
+
+}
