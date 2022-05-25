@@ -791,6 +791,14 @@ impl AuthorityState {
         self.database.get_object(object_id)
     }
 
+    pub async fn get_framework_object_ref(&self) -> SuiResult<ObjectRef> {
+        Ok(self
+            .get_object(&SUI_FRAMEWORK_ADDRESS.into())
+            .await?
+            .expect("framework object should always exist")
+            .compute_object_reference())
+    }
+
     pub async fn get_object_info(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
         match self.database.get_latest_parent_entry(*object_id)? {
             None => Ok(ObjectRead::NotExists(*object_id)),
