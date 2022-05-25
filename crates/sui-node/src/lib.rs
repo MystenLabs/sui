@@ -9,9 +9,8 @@ use sui_core::{
     authority_active::{gossip::gossip_process, ActiveAuthority},
     authority_client::NetworkAuthorityClient,
 };
-use sui_gateway::api::{RpcGatewayOpenRpc, RpcGatewayServer};
 use sui_gateway::json_rpc::JsonRpcServerBuilder;
-use sui_gateway::read_api::ReadApi;
+use sui_gateway::read_api::{FullNodeApi, ReadApi};
 use sui_storage::IndexStore;
 use tracing::info;
 
@@ -35,13 +34,8 @@ impl SuiNode {
             let fullnode = FullNode::start(config).await?;
 
             let mut server = JsonRpcServerBuilder::new()?;
-            server.register_open_rpc(RpcGatewayOpenRpc::open_rpc())?;
-            server.register_methods(
-                ReadApi {
-                    state: fullnode.state,
-                }
-                .into_rpc(),
-            )?;
+            server.register_module(ReadApi::new(fullnode.state.clone()))?;
+            server.register_module(FullNodeApi::new(fullnode.state))?;
 
             let server_handle = server.start(config.json_rpc_address).await?;
 

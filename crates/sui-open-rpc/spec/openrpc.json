@@ -16,8 +16,573 @@
   },
   "methods": [
     {
-      "name": "sui_transferCoin",
-      "description": "Create a transaction to transfer a Sui coin from one address to another.",
+      "name": "sui_executeTransaction",
+      "tags": [
+        {
+          "name": "Gateway API"
+        }
+      ],
+      "description": "Execute the transaction using the transaction data, signature and public key.",
+      "params": [
+        {
+          "name": "tx_bytes",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Base64"
+          }
+        },
+        {
+          "name": "signature",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Base64"
+          }
+        },
+        {
+          "name": "pub_key",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Base64"
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionResponse"
+        }
+      }
+    },
+    {
+      "name": "sui_getObjectInfo",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return the object information for a specified object",
+      "params": [
+        {
+          "name": "object_id",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      ],
+      "result": {
+        "name": "GetObjectInfoResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ObjectRead"
+        }
+      }
+    },
+    {
+      "name": "sui_getObjectInfo",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return the object information for a specified object",
+      "params": [
+        {
+          "name": "object_id",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      ],
+      "result": {
+        "name": "GetObjectInfoResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ObjectRead"
+        }
+      }
+    },
+    {
+      "name": "sui_getOwnedObjects",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return the list of objects owned by an address.",
+      "params": [
+        {
+          "name": "owner",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "ObjectResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ObjectResponse"
+        }
+      }
+    },
+    {
+      "name": "sui_getOwnedObjects",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return the list of objects owned by an address.",
+      "params": [
+        {
+          "name": "owner",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "ObjectResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ObjectResponse"
+        }
+      }
+    },
+    {
+      "name": "sui_getRecentTransactions",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "count",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getRecentTransactions",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "count",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getTotalTransactionNumber",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "params": [],
+      "result": {
+        "name": "u64",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
+      "name": "sui_getTotalTransactionNumber",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "params": [],
+      "result": {
+        "name": "u64",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
+      "name": "sui_getTransaction",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "digest",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionEffectsResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionEffectsResponse"
+        }
+      }
+    },
+    {
+      "name": "sui_getTransaction",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "digest",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionEffectsResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionEffectsResponse"
+        }
+      }
+    },
+    {
+      "name": "sui_getTransactionsByInputObject",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "params": [
+        {
+          "name": "object",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getTransactionsByMutatedObject",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "params": [
+        {
+          "name": "object",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getTransactionsFromAddress",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "params": [
+        {
+          "name": "addr",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getTransactionsInRange",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "start",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "end",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getTransactionsInRange",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "start",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "end",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getTransactionsToAddress",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "params": [
+        {
+          "name": "addr",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_mergeCoins",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
       "params": [
         {
           "name": "signer",
@@ -27,7 +592,14 @@
           }
         },
         {
-          "name": "object_id",
+          "name": "primary_coin",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "coin_to_merge",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -47,13 +619,6 @@
             "format": "uint64",
             "minimum": 0.0
           }
-        },
-        {
-          "name": "recipient",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
         }
       ],
       "result": {
@@ -66,6 +631,11 @@
     },
     {
       "name": "sui_moveCall",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
       "description": "Execute a Move call transaction by calling the specified function in the module of a given package.",
       "params": [
         {
@@ -142,6 +712,11 @@
     },
     {
       "name": "sui_publish",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
       "description": "Publish Move module.",
       "params": [
         {
@@ -187,7 +762,11 @@
     },
     {
       "name": "sui_splitCoin",
-      "description": "",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
       "params": [
         {
           "name": "signer",
@@ -240,90 +819,12 @@
       }
     },
     {
-      "name": "sui_mergeCoins",
-      "description": "",
-      "params": [
-        {
-          "name": "signer",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "primary_coin",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "coin_to_merge",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "gas",
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "gas_budget",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "TransactionBytes",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
-        }
-      }
-    },
-    {
-      "name": "sui_executeTransaction",
-      "description": "Execute the transaction using the transaction data, signature and public key.",
-      "params": [
-        {
-          "name": "tx_bytes",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/Base64"
-          }
-        },
-        {
-          "name": "signature",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/Base64"
-          }
-        },
-        {
-          "name": "pub_key",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/Base64"
-          }
-        }
-      ],
-      "result": {
-        "name": "TransactionResponse",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/TransactionResponse"
-        }
-      }
-    },
-    {
       "name": "sui_syncAccountState",
+      "tags": [
+        {
+          "name": "Gateway API"
+        }
+      ],
       "description": "Synchronize client state with validators.",
       "params": [
         {
@@ -343,45 +844,36 @@
       }
     },
     {
-      "name": "sui_getOwnedObjects",
-      "description": "Return the list of objects owned by an address.",
+      "name": "sui_transferCoin",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "description": "Create a transaction to transfer a Sui coin from one address to another.",
       "params": [
         {
-          "name": "owner",
+          "name": "signer",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
           }
-        }
-      ],
-      "result": {
-        "name": "ObjectResponse",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/ObjectResponse"
-        }
-      }
-    },
-    {
-      "name": "sui_getTotalTransactionNumber",
-      "description": "",
-      "params": [],
-      "result": {
-        "name": "u64",
-        "required": true,
-        "schema": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
-        }
-      }
-    },
-    {
-      "name": "sui_getTransactionsInRange",
-      "description": "",
-      "params": [
+        },
         {
-          "name": "start",
+          "name": "object_id",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
           "required": true,
           "schema": {
             "type": "integer",
@@ -390,171 +882,7 @@
           }
         },
         {
-          "name": "end",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getRecentTransactions",
-      "description": "",
-      "params": [
-        {
-          "name": "count",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getTransaction",
-      "description": "",
-      "params": [
-        {
-          "name": "digest",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/TransactionDigest"
-          }
-        }
-      ],
-      "result": {
-        "name": "TransactionEffectsResponse",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/TransactionEffectsResponse"
-        }
-      }
-    },
-    {
-      "name": "sui_getTransactionsByInputObject",
-      "description": "",
-      "params": [
-        {
-          "name": "object",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getTransactionsByMutatedObject",
-      "description": "",
-      "params": [
-        {
-          "name": "object",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getTransactionsFromAddress",
-      "description": "",
-      "params": [
-        {
-          "name": "addr",
+          "name": "recipient",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -562,86 +890,15 @@
         }
       ],
       "result": {
-        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "name": "TransactionBytes",
         "required": true,
         "schema": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getTransactionsToAddress",
-      "description": "",
-      "params": [
-        {
-          "name": "addr",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getObjectInfo",
-      "description": "Return the object information for a specified object",
-      "params": [
-        {
-          "name": "object_id",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        }
-      ],
-      "result": {
-        "name": "GetObjectInfoResponse",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/ObjectRead"
+          "$ref": "#/components/schemas/TransactionBytes"
         }
       }
     }
   ],
   "components": {
-    "contentDescriptors": {},
     "schemas": {
       "AuthorityQuorumSignInfo": {
         "description": "Represents at least a quorum (could be more) of authority signatures.",
