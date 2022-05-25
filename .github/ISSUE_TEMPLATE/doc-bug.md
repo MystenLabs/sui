@@ -1,7 +1,7 @@
 ---
 name: Sui Doc Bug
 about: Create a new documentation bug for contents found on docs.sui.io
-title: '<title>'
+title: 'Sui Doc Bug or Feature Request'
 labels: bug
 assignees: 'Clay-Mysten'
 ---
