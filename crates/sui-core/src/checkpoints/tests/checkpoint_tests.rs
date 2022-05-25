@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::{
-    authority::{authority_tests::max_files_authority_tests, AuthorityState, AuthorityStore},
+    authority::{AuthorityState, AuthorityStore},
     authority_aggregator::{
         authority_aggregator_tests::transfer_coin_transaction, AuthorityAggregator,
     },
@@ -38,12 +38,9 @@ fn random_ckpoint_store_num(num: usize) -> Vec<(PathBuf, CheckpointStore)> {
             fs::create_dir(&path).unwrap();
 
             // Create an authority
-            let mut opts = rocksdb::Options::default();
-            opts.set_max_open_files(max_files_authority_tests());
-
             let cps = CheckpointStore::open(
                 path.clone(),
-                Some(opts),
+                None,
                 *k.public_key_bytes(),
                 committee.clone(),
                 Arc::pin(k.copy()),
@@ -66,14 +63,11 @@ fn crash_recovery() {
     fs::create_dir(&path).unwrap();
 
     // Create an authority
-    let mut opts = rocksdb::Options::default();
-    opts.set_max_open_files(max_files_authority_tests());
-
     // Open store first time
 
     let mut cps = CheckpointStore::open(
         path.clone(),
-        Some(opts.clone()),
+        None,
         *k.public_key_bytes(),
         committee.clone(),
         Arc::pin(k.copy()),
@@ -117,7 +111,7 @@ fn crash_recovery() {
 
     let mut cps_new = CheckpointStore::open(
         path,
-        Some(opts),
+        None,
         *k.public_key_bytes(),
         committee,
         Arc::pin(k.copy()),
@@ -633,14 +627,11 @@ fn checkpoint_integration() {
     fs::create_dir(&path).unwrap();
 
     // Create an authority
-    let mut opts = rocksdb::Options::default();
-    opts.set_max_open_files(max_files_authority_tests());
-
     // Make a checkpoint store:
 
     let mut cps = CheckpointStore::open(
         path,
-        Some(opts.clone()),
+        None,
         *k.public_key_bytes(),
         committee,
         Arc::pin(k.copy()),
@@ -714,9 +705,6 @@ async fn test_batch_to_checkpointing() {
     fs::create_dir(&path).unwrap();
 
     // Create an authority
-    let mut opts = rocksdb::Options::default();
-    opts.set_max_open_files(max_files_authority_tests());
-
     // Make a test key pair
     let seed = [1u8; 32];
     let (committee, _, authority_key) =
@@ -724,7 +712,7 @@ async fn test_batch_to_checkpointing() {
 
     let mut store_path = path.clone();
     store_path.push("store");
-    let store = Arc::new(AuthorityStore::open(&store_path, Some(opts)));
+    let store = Arc::new(AuthorityStore::open(&store_path, None));
 
     let mut checkpoints_path = path.clone();
     checkpoints_path.push("checkpoints");
@@ -812,10 +800,6 @@ async fn test_batch_to_checkpointing_init_crash() {
     let path = dir.join(format!("DB_{:?}", ObjectID::random()));
     fs::create_dir(&path).unwrap();
 
-    // Create an authority
-    let mut opts = rocksdb::Options::default();
-    opts.set_max_open_files(max_files_authority_tests());
-
     // Make a test key pair
     let seed = [1u8; 32];
     let (committee, _, authority_key) =
@@ -831,7 +815,7 @@ async fn test_batch_to_checkpointing_init_crash() {
 
     // Scope to ensure all variables are dropped
     {
-        let store = Arc::new(AuthorityStore::open(&store_path, Some(opts.clone())));
+        let store = Arc::new(AuthorityStore::open(&store_path, None));
 
         let state = AuthorityState::new(
             committee.clone(),
@@ -898,7 +882,7 @@ async fn test_batch_to_checkpointing_init_crash() {
 
     // Scope to ensure all variables are dropped
     {
-        let store = Arc::new(AuthorityStore::open(&store_path, Some(opts)));
+        let store = Arc::new(AuthorityStore::open(&store_path, None));
 
         let checkpoints = Arc::new(Mutex::new(
             CheckpointStore::open(
@@ -1337,17 +1321,13 @@ async fn checkpoint_tests_setup() -> TestSetup {
 
         let secret = Arc::pin(k.copy());
 
-        // Create an authority
-        let mut opts = rocksdb::Options::default();
-        opts.set_max_open_files(max_files_authority_tests());
-
         // Make a checkpoint store:
 
-        let store = Arc::new(AuthorityStore::open(&store_path, Some(opts.clone())));
+        let store = Arc::new(AuthorityStore::open(&store_path, None));
 
         let mut checkpoint = CheckpointStore::open(
             &checkpoints_path,
-            Some(opts.clone()),
+            None,
             *secret.public_key_bytes(),
             committee.clone(),
             secret.clone(),
