@@ -362,6 +362,10 @@ where
     Ok(())
 }
 
+
+/// Gets one checkpoint certificate and optionally its contents. Note this must be
+/// given a checkpoint number that the validator knows exists, for examples because
+/// they have seen a subsequent certificate.
 #[allow(clippy::collapsible_match)]
 pub async fn get_one_checkpoint<A>(
     _active_authority: &ActiveAuthority<A>,
@@ -411,7 +415,7 @@ where
 
 }
 
-
+/// Given a checkpoint certificate we sample validators and try to download the certificate contents.
 #[allow(clippy::collapsible_match)]
 pub async fn get_checkpoint_contents<A>(
     _active_authority: &ActiveAuthority<A>,
