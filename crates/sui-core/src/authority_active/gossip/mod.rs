@@ -8,6 +8,7 @@ use crate::{
     safe_client::SafeClient,
 };
 use async_trait::async_trait;
+use futures::stream::FuturesOrdered;
 use futures::{stream::FuturesUnordered, StreamExt};
 use std::{collections::HashSet, sync::Arc, time::Duration};
 use sui_types::{
@@ -35,6 +36,7 @@ struct PeerGossip<A> {
     aggregator: Arc<AuthorityAggregator<A>>,
 }
 
+const EACH_ITEM_DELAY_MS: u64 = 1_000;
 const REQUEST_FOLLOW_NUM_DIGESTS: u64 = 100_000;
 const REFRESH_FOLLOWER_PERIOD_SECS: u64 = 60;
 
@@ -156,23 +158,21 @@ where
     // Make sure we exit loop by limiting the number of tries to choose peer
     // where n is the total number of committee members.
     let mut tries_remaining = active_authority.state.committee.voting_rights.len();
-    loop {
+    while tries_remaining > 0 {
         let name = active_authority.state.committee.sample();
         if peer_names.contains(name)
             || *name == my_name
             || !active_authority.can_contact(*name).await
         {
             tries_remaining -= 1;
-            if tries_remaining == 0 {
-                return Err(SuiError::GenericAuthorityError {
-                    error: "Could not connect to any peer".to_string(),
-                });
-            }
             tokio::time::sleep(Duration::from_millis(10)).await;
             continue;
         }
         return Ok(*name);
     }
+    Err(SuiError::GenericAuthorityError {
+        error: "Could not connect to any peer".to_string(),
+    })
 }
 
 impl<A> PeerGossip<A>
@@ -194,21 +194,22 @@ where
         let result =
             tokio::task::spawn(async move { self.peer_gossip_for_duration(duration).await }).await;
 
-        if result.is_err() {
-            return (
+        // todo: log e
+        match result {
+            Err(_e) => (
                 peer_name,
                 Err(SuiError::GenericAuthorityError {
                     error: "Gossip Join Error".to_string(),
                 }),
-            );
-        };
-
-        (peer_name, result.unwrap())
+            ),
+            Ok(r) => (peer_name, r),
+        }
     }
 
     async fn peer_gossip_for_duration(&mut self, duration: Duration) -> Result<(), SuiError> {
         // Global timeout, we do not exceed this time in this task.
         let mut timeout = Box::pin(tokio::time::sleep(duration));
+        let mut queue = FuturesOrdered::new();
 
         let req = BatchInfoRequest {
             start: self.max_seq,
@@ -231,9 +232,10 @@ where
                         // Upon receiving a transaction digest, store it if it is not processed already.
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest))))) => {
                             if !self.state.database.effects_exists(&digest)? {
-                                // Download the certificate
-                                let response = self.client.handle_transaction_info_request(TransactionInfoRequest::from(digest)).await?;
-                                self.process_response(response).await?;
+                                queue.push(async move {
+                                    tokio::time::sleep(Duration::from_millis(EACH_ITEM_DELAY_MS)).await;
+                                    digest
+                                });
 
                             }
                             self.max_seq = Some(seq + 1);
@@ -255,6 +257,14 @@ where
                         },
                     }
                 },
+                digest = &mut queue.next() , if !queue.is_empty() => {
+                    let digest = digest.unwrap();
+                    if !self.state.database.effects_exists(&digest)? {
+                        // Download the certificate
+                        let response = self.client.handle_transaction_info_request(TransactionInfoRequest::from(digest)).await?;
+                        self.process_response(response).await?;
+                    }
+                }
             };
         }
         Ok(())

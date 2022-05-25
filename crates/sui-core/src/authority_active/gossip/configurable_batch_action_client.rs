@@ -149,7 +149,7 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         let name = self.state.name;
         let mut items: Vec<Result<BatchInfoResponseItem, SuiError>> = Vec::new();
         let mut seq = 0;
-        let _ = actions.into_iter().for_each(|action| {
+        let _ = actions.iter().for_each(|action| {
             match action {
                 BatchActionInternal::EmitUpdateItem(test_batch) => {
                     let mut temp_items: Vec<Result<BatchInfoResponseItem, SuiError>> = Vec::new();
@@ -255,7 +255,7 @@ pub async fn init_configurable_authorities(
                 digests: vec![*transaction.digest()],
             };
             batch_action_internal.push(BatchActionInternal::EmitUpdateItem(t_b));
-            executed_digests.push(transaction.digest().clone());
+            executed_digests.push(*transaction.digest());
         }
         if let BatchAction::EmitError() = action {
             batch_action_internal.push(BatchActionInternal::EmitError());
