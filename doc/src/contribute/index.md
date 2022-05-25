@@ -26,14 +26,13 @@ Send ideas to:
 doc@mystenlabs.com
 
 And file documentation fixes or requests for improvement at:
-https://github.com/MystenLabs/sui/issues/new
+https://github.com/MystenLabs/sui/issues/new/choose
 
-Using the DOC-ISSUES template:
-https://github.com/MystenLabs/sui/blob/main/DOC-ISSUES.md
+Select the **Sui Doc Bug** template, adjust fields, and describe the issue.
 
 You may also make changes to the docs directly in GitHub right here using the **Source Code** link below.
 
-< **Important:** Make sure you are in the `main` rather than `devnet` branch in the URL.
+> **Important:** Make sure you are in the `main` rather than `devnet` branch in the URL.
 
 Simply edit the file in question and generate a pull request. We will get back to you shortly.
 
