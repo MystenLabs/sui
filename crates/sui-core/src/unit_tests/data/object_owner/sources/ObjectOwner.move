@@ -16,6 +16,11 @@ module ObjectOwner::ObjectOwner {
         id: VersionedID,
     }
 
+    struct AnotherParent has key {
+        id: VersionedID,
+        child: ChildRef<Child>,
+    }
+
     public(script) fun create_child(ctx: &mut TxContext) {
         Transfer::transfer(
             Child { id: TxContext::new_id(ctx) },
@@ -24,10 +29,11 @@ module ObjectOwner::ObjectOwner {
     }
 
     public(script) fun create_parent(ctx: &mut TxContext) {
-        Transfer::transfer(
-            Parent { id: TxContext::new_id(ctx), child: Option::none() },
-            TxContext::sender(ctx),
-        );
+        let parent = Parent {
+            id: TxContext::new_id(ctx),
+            child: Option::none(),
+        };
+        Transfer::transfer(parent, TxContext::sender(ctx));
     }
 
     public(script) fun create_parent_and_child(ctx: &mut TxContext) {
@@ -77,5 +83,15 @@ module ObjectOwner::ObjectOwner {
         let Child { id: child_id } = child;
         Transfer::delete_child_object(child_id, child_ref);
         ID::delete(id);
+    }
+
+    public(script) fun create_another_parent(child: Child, ctx: &mut TxContext) {
+        let id = TxContext::new_id(ctx);
+        let (id, child_ref) = Transfer::transfer_to_object_id(child, id);
+        let parent = AnotherParent {
+            id,
+            child: child_ref,
+        };
+        Transfer::transfer(parent, TxContext::sender(ctx));
     }
 }
