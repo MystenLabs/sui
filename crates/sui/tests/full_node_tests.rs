@@ -128,8 +128,8 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     wait_for_tx(digest, node.state().clone()).await;
 
     // verify that the node has seen the transfer
-    let object_info = node.state().get_object_info(&transfered_object).await?;
-    let object = object_info.into_object()?;
+    let object_read = node.state().get_object_read(&transfered_object).await?;
+    let object = object_read.into_object()?;
 
     assert_eq!(object.owner.get_owner_address().unwrap(), receiver);
 

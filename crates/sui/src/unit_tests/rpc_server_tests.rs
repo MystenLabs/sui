@@ -181,7 +181,7 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
     let objects = http_client.get_objects_owned_by_address(*address).await?;
 
     for oref in objects {
-        let result: GetObjectDataResponse = http_client.get_object_info(oref.object_id).await?;
+        let result: GetObjectDataResponse = http_client.get_object(oref.object_id).await?;
         assert!(
             matches!(result, GetObjectDataResponse::Exists(object) if oref.object_id == object.id() && &object.owner.get_owner_address()? == address)
         );

@@ -72,7 +72,7 @@
         }
       ],
       "result": {
-        "name": "GetObjectInfoResponse",
+        "name": "GetObjectDataResponse",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/ObjectRead"
@@ -97,7 +97,7 @@
         }
       ],
       "result": {
-        "name": "GetObjectInfoResponse",
+        "name": "GetObjectDataResponse",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/ObjectRead"
@@ -105,7 +105,7 @@
       }
     },
     {
-      "name": "sui_getOwnedObjects",
+      "name": "sui_getObjectsOwnedByAddress",
       "tags": [
         {
           "name": "Read API"
@@ -114,7 +114,7 @@
       "description": "Return the list of objects owned by an address.",
       "params": [
         {
-          "name": "owner",
+          "name": "address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -122,15 +122,18 @@
         }
       ],
       "result": {
-        "name": "ObjectResponse",
+        "name": "Vec<SuiObjectInfo>",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/ObjectResponse"
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ObjectInfo"
+          }
         }
       }
     },
     {
-      "name": "sui_getOwnedObjects",
+      "name": "sui_getObjectsOwnedByAddress",
       "tags": [
         {
           "name": "Read API"
@@ -139,7 +142,7 @@
       "description": "Return the list of objects owned by an address.",
       "params": [
         {
-          "name": "owner",
+          "name": "address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -147,10 +150,67 @@
         }
       ],
       "result": {
-        "name": "ObjectResponse",
+        "name": "Vec<SuiObjectInfo>",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/ObjectResponse"
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ObjectInfo"
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getObjectsOwnedByObject",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "object_id",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiObjectInfo>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ObjectInfo"
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getObjectsOwnedByObject",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "object_id",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiObjectInfo>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ObjectInfo"
+          }
         }
       }
     },
@@ -173,7 +233,7 @@
         }
       ],
       "result": {
-        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
         "required": true,
         "schema": {
           "type": "array",
@@ -214,7 +274,7 @@
         }
       ],
       "result": {
-        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
         "required": true,
         "schema": {
           "type": "array",
@@ -337,7 +397,7 @@
         }
       ],
       "result": {
-        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
         "required": true,
         "schema": {
           "type": "array",
@@ -376,7 +436,7 @@
         }
       ],
       "result": {
-        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
         "required": true,
         "schema": {
           "type": "array",
@@ -415,7 +475,7 @@
         }
       ],
       "result": {
-        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
         "required": true,
         "schema": {
           "type": "array",
@@ -465,7 +525,7 @@
         }
       ],
       "result": {
-        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
         "required": true,
         "schema": {
           "type": "array",
@@ -515,7 +575,7 @@
         }
       ],
       "result": {
-        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
         "required": true,
         "schema": {
           "type": "array",
@@ -554,7 +614,7 @@
         }
       ],
       "result": {
-        "name": "Vec < (GatewayTxSeqNumber, TransactionDigest) >",
+        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
         "required": true,
         "schema": {
           "type": "array",
@@ -1371,6 +1431,37 @@
       "ObjectID": {
         "$ref": "#/components/schemas/Hex"
       },
+      "ObjectInfo": {
+        "type": "object",
+        "required": [
+          "digest",
+          "objectId",
+          "owner",
+          "previousTransaction",
+          "type",
+          "version"
+        ],
+        "properties": {
+          "digest": {
+            "$ref": "#/components/schemas/ObjectDigest"
+          },
+          "objectId": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/Owner"
+          },
+          "previousTransaction": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          },
+          "type": {
+            "type": "string"
+          },
+          "version": {
+            "$ref": "#/components/schemas/SequenceNumber"
+          }
+        }
+      },
       "ObjectRead": {
         "oneOf": [
           {
@@ -1460,20 +1551,6 @@
                 "$ref": "#/components/schemas/SequenceNumber"
               }
             ]
-          }
-        }
-      },
-      "ObjectResponse": {
-        "type": "object",
-        "required": [
-          "objects"
-        ],
-        "properties": {
-          "objects": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ObjectRef"
-            }
           }
         }
       },

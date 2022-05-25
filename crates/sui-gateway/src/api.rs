@@ -81,8 +81,8 @@ pub trait RpcReadApi {
     ) -> RpcResult<TransactionEffectsResponse>;
 
     /// Return the object information for a specified object
-    #[method(name = "getObjectInfo")]
-    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse>;
+    #[method(name = "getObject")]
+    async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse>;
 }
 
 #[open_rpc(namespace = "sui", tag = "Full Node API")]

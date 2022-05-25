@@ -828,7 +828,7 @@ impl AuthorityState {
             .compute_object_reference())
     }
 
-    pub async fn get_object_info(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
+    pub async fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
         match self.database.get_latest_parent_entry(*object_id)? {
             None => Ok(ObjectRead::NotExists(*object_id)),
             Some((obj_ref, _)) => {

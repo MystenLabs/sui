@@ -144,7 +144,7 @@ impl GatewayAPI for RpcGatewayClient {
     }
 
     async fn get_object(&self, object_id: ObjectID) -> Result<GetObjectDataResponse, Error> {
-        Ok(self.client.get_object_info(object_id).await?)
+        Ok(self.client.get_object(object_id).await?)
     }
 
     async fn get_objects_owned_by_address(

@@ -3,30 +3,20 @@
 
 use crate::api::RpcReadApiServer;
 use crate::api::{RpcFullNodeReadApiServer, SuiRpcModule};
-use crate::rpc_gateway::responses::ObjectResponse;
-use crate::{
-    api::{RpcGatewayServer, TransactionBytes},
-    rpc_gateway::responses::SuiTypeTag,
-};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use std::sync::Arc;
-use sui_core::authority::AuthorityState;
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_core::gateway_types::SuiObjectInfo;
-use sui_core::gateway_types::{GetObjectInfoResponse, SuiObjectRef, TransactionEffectsResponse};
 use sui_core::{
     authority::AuthorityState,
-    gateway_types::{GetObjectDataResponse, TransactionEffectsResponse, TransactionResponse},
+    gateway_types::{GetObjectDataResponse, TransactionEffectsResponse},
 };
-use sui_json::SuiJsonValue;
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
-use sui_types::object::Owner;
-use sui_types::sui_serde::Base64;
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::object::Owner;
 
 // An implementation of the read portion of the Gateway JSON-RPC interface intended for use in
 // Fullnodes.
@@ -78,14 +68,13 @@ impl RpcReadApiServer for ReadApi {
             .collect())
     }
 
-    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
+    async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
         Ok(self
             .state
-            .get_object_info(&object_id)
+            .get_object_read(&object_id)
             .await
-            .map_err(|e| anyhow!("{}", e))?
-            .try_into()
-            .map_err(|e| anyhow!("{}", e))?)
+            .map_err(|e| anyhow!("{e}"))?
+            .try_into()?)
     }
 
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {

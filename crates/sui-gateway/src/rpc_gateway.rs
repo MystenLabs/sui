@@ -2,29 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::Path;
-
-use std::path::Path;
 use std::sync::Arc;
 
-use crate::api::{RpcGatewayApiServer, SuiRpcModule};
-use crate::rpc_gateway::responses::SuiTypeTag;
-use crate::{api::TransactionBytes, config::GatewayConfig, rpc_gateway::responses::ObjectResponse};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use ed25519_dalek::ed25519::signature::Signature;
 use jsonrpsee::core::RpcResult;
-use tracing::debug;
-
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use tracing::debug;
 
 use sui_config::PersistedConfig;
 use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
-use sui_core::gateway_types::{GetObjectDataResponse, SuiObjectInfo};
-use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
+use sui_core::gateway_types::{
+    GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
+};
 use sui_json::SuiJsonValue;
 use sui_open_rpc::Module;
-use sui_types::base_types::ObjectInfo;
 use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
@@ -33,11 +26,12 @@ use sui_types::{
     messages::{Transaction, TransactionData},
 };
 
-use crate::api::RpcReadApiServer;
-use crate::api::RpcTransactionBuilderServer;
 use crate::rpc_gateway::responses::SuiTypeTag;
 use crate::{
-    api::{RpcGatewayServer, TransactionBytes},
+    api::{
+        RpcGatewayApiServer, RpcReadApiServer, RpcTransactionBuilderServer, SuiRpcModule,
+        TransactionBytes,
+    },
     config::GatewayConfig,
 };
 
@@ -131,7 +125,7 @@ impl RpcReadApiServer for GatewayReadApiImpl {
         address: SuiAddress,
     ) -> RpcResult<Vec<SuiObjectInfo>> {
         debug!("get_objects_own_by_address : {}", address);
-        Ok(self.gateway.get_objects_owned_by_address(address).await?)
+        Ok(self.client.get_objects_owned_by_address(address).await?)
     }
 
     async fn get_objects_owned_by_object(
@@ -139,11 +133,11 @@ impl RpcReadApiServer for GatewayReadApiImpl {
         object_id: ObjectID,
     ) -> RpcResult<Vec<SuiObjectInfo>> {
         debug!("get_objects_own_by_object : {}", object_id);
-        Ok(self.gateway.get_objects_owned_by_object(object_id).await?)
+        Ok(self.client.get_objects_owned_by_object(object_id).await?)
     }
 
-    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse> {
-        Ok(self.client.get_object_info(object_id).await?)
+    async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
+        Ok(self.client.get_object(object_id).await?)
     }
 
     async fn get_recent_transactions(
