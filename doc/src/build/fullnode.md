@@ -40,6 +40,151 @@ Today a full node is expected to maintain the full history of the chain, althoug
 
 Conversely, a validator needs to store only the latest transactions on the *frontier* of the object graph (e.g., txes with >0 unspent output objects).
 
+<!-- Output copied to clipboard! -->
+
+<!-----
+
+Yay, no errors, warnings, or alerts!
+
+Conversion time: 0.64 seconds.
+
+
+Using this Markdown file:
+
+1. Paste this output into your source file.
+2. See the notes and action items below regarding this conversion run.
+3. Check the rendered output (headings, lists, code blocks, tables) for proper
+   formatting and use a linkchecker before you publish this page.
+
+Conversion notes:
+
+* Docs to Markdown version 1.0β33
+* Wed May 25 2022 15:57:49 GMT-0700 (PDT)
+* Source doc: Sui Full Node Setup - go/fullnode-setup 
+----->
+
+
+
+## Sui Full Node Setup
+
+
+### [go/fullnode-setup](https://app.golinks.io/fullnode-setup) 
+
+Authors: Clay, Brandon, (ad yourself for credit and love)
+
+**Contents**
+
+
+[TOC]
+
+
+_© 2022 Mysten Labs_
+
+
+## Purpose {#purpose}
+
+Follow the instructions here to run your own Sui full node.
+
+
+## System requirements {#system-requirements}
+
+
+### Hardware {#hardware}
+
+This is the minimum recommended hardware for running a Sui full node. In Amazon Web Services (AWS), this is known as a t2.large:
+
+
+
+* CPUs: 2
+* RAM: 8GB
+* Disk: 32GB SSD
+* Cost/hr: $0.09
+* Cost/month: $65
+
+### Software {#software}
+
+Take the normal steps to [install Sui](https://docs.sui.io/build/install) and its prerequisite packages.
+
+Ensure your system can run a Docker image with `docker` or `containerd`. 
+
+
+### Network {#network}
+
+TODO: Figure out if we need specs and port forwarding instructions per:
+
+[https://docs.solana.com/running-validator/validator-reqs#networking](https://docs.solana.com/running-validator/validator-reqs#networking) 
+
+Ex. “we recommend at least 1Gbps, and 5Gbps is better.” from:
+
+[https://docs.onflow.org/node-operation/node-setup/#networking-requirements](https://docs.onflow.org/node-operation/node-setup/#networking-requirements) 
+
+TODO: Do we recommend using domain names? How?
+
+TODO: Explain how network keys are managed.
+
+TODO: Can they run more than one node at a time and if so how?
+
+
+### Sui {#sui}
+
+TODO: Cover staking. Work with Ryan. Determine if they must have tokens to participate and if so how to obtain them.
+
+ \
+Incorporate contents from [Ecosystem Enablement Partners Token Round Participation Framework presentation](https://docs.google.com/presentation/d/1ITD1Ne-Pc4j_jVnda2kFbfGXBqUg_F7utHJmm-uUBkM/edit#slide=id.g12733b8ff97_2_45).
+
+TODO: Emulate? \
+[https://ethereum.org/en/run-a-node/](https://ethereum.org/en/run-a-node/) (see Why run a node?) \
+Add a diagram. Ryan has ideas and mad preso skilz. :-)
+
+TODO: Link to Tokenomics docs for storage fund. Explain here.
+
+
+## Startup
+
+TODO: Incorporate use of Dockerfile if we have it.
+
+To run a local Sui full node, first [install Sui](https://docs.sui.io/build/install).
+
+Ensure the system has the correct date and time set (recommend UTC).
+
+Then issue these commands in one terminal:
+
+```
+$ sui genesis -f
+$ sui start & 
+```
+
+Followed by this command in a new terminal, run:
+
+```
+$ full_node & 
+```
+
+This starts a full node at:
+http://127.0.0.1:5002
+
+## Use
+
+Now you can use the standard RPC read endpoints to request data. You will do all of this in a third terminal.
+
+To make this easier, set the following environment variable:
+
+```
+$ export SUI_RPC_HOST=http://127.0.0.1:5002 
+```
+
+Then follow the instructions to employ the [Sui JSON-RPC API](https://docs.sui.io/build/json-rpc#sui-json-rpc-api) using the [SuiJSON format](https://docs.sui.io/build/sui-json).
+
+
+## Verification
+
+To troubleshoot/test connectivity directly to a validator on TCP port 8080, thereby emulating the full-node-to-validator connection, use the gRPC endpoint that supports the standard grpc health check service to probe the endpoint:
+https://github.com/grpc-ecosystem/grpc-health-probe
+
+
+## Monitoring
+
+Monitor your full node using the instructions at [Logging, Tracing, Metrics, and Observability](https://docs.sui.io/contribute/observability).
 
 ## Future plans
 
@@ -55,6 +200,6 @@ We are *not* providing archival nodes containing full history.
 
 Should be similar storage requirements to validator nodes.
 
-it's also about transactions, full nodes don't necessarily require to store txs
+it's also about transactions, full nodes don't necessarily require to store txs.
 
-also we need a single valid copy of data for archiving, we can do a lot of neat tricks on coding theory as well as build incentives such that the actual network acts as a massive archive
+Also we need a single valid copy of data for archiving, we can do a lot of neat tricks on coding theory as well as build incentives such that the actual network acts as a massive archive.
