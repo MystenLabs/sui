@@ -25,14 +25,6 @@ use sui_types::{
 use std::fs;
 use std::{convert::TryInto, env};
 
-pub fn system_maxfiles() -> usize {
-    fdlimit::raise_fd_limit().unwrap_or(256u64) as usize
-}
-
-pub fn max_files_authority_tests() -> i32 {
-    (system_maxfiles() / 8).try_into().unwrap()
-}
-
 const MAX_GAS: u64 = 10000;
 
 // Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
@@ -1156,9 +1148,7 @@ async fn test_authority_persist() {
     fs::create_dir(&path).unwrap();
 
     // Create an authority
-    let mut opts = rocksdb::Options::default();
-    opts.set_max_open_files(max_files_authority_tests());
-    let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
+    let store = Arc::new(AuthorityStore::open(&path, None));
     let authority =
         crate::authority_batch::batch_tests::init_state(committee, authority_key, store).await;
 
@@ -1174,14 +1164,12 @@ async fn test_authority_persist() {
     drop(authority);
 
     // Reopen the same authority with the same path
-    let mut opts = rocksdb::Options::default();
-    opts.set_max_open_files(max_files_authority_tests());
     let seed = [1u8; 32];
     let (committee, _, authority_key) =
         crate::authority_batch::batch_tests::init_state_parameters_from_rng(
             &mut StdRng::from_seed(seed),
         );
-    let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
+    let store = Arc::new(AuthorityStore::open(&path, None));
     let authority2 =
         crate::authority_batch::batch_tests::init_state(committee, authority_key, store).await;
     let obj2 = authority2.get_object(&object_id).await.unwrap().unwrap();
@@ -1262,11 +1250,7 @@ fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStor
     let path = dir.join(format!("DB_{:?}", ObjectID::random()));
     fs::create_dir(&path).unwrap();
 
-    let mut opts = rocksdb::Options::default();
-    opts.set_max_open_files(max_files_authority_tests());
-    opts.set_manual_wal_flush(true);
-
-    let store = Arc::new(AuthorityStore::open(path, Some(opts)));
+    let store = Arc::new(AuthorityStore::open(path, None));
     (committee, authority_address, authority_key, store)
 }
 

@@ -26,6 +26,8 @@ use typed_store::{reopen, traits::Map};
 use sui_types::base_types::{ObjectRef, TransactionDigest};
 use sui_types::error::{SuiError, SuiResult};
 
+use crate::default_db_options;
+
 /// Commands to send to the LockService (for mutating lock state)
 // TODO: use smallvec as an optimization
 #[derive(Debug)]
@@ -79,27 +81,11 @@ struct LockServiceImpl {
 impl LockServiceImpl {
     /// Open or create a new LockService database
     fn try_open_db<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Result<Self, SuiError> {
-        let mut options = db_options.unwrap_or_default();
-
-        /* The table cache is locked for updates and this determines the number
-           of shareds, ie 2^10. Increase in case of lock contentions.
-        */
-        let row_cache = rocksdb::Cache::new_lru_cache(300_000).expect("Cache is ok");
-        options.set_row_cache(&row_cache);
-        options.set_table_cache_num_shard_bits(10);
-        options.set_compression_type(rocksdb::DBCompressionType::None);
-
-        let mut point_lookup = options.clone();
-        point_lookup.optimize_for_point_lookup(1024 * 1024);
-        point_lookup.set_memtable_whole_key_filtering(true);
-
-        let transform = rocksdb::SliceTransform::create("bytes_8_to_16", |key| &key[8..16], None);
-        point_lookup.set_prefix_extractor(transform);
-        point_lookup.set_memtable_prefix_bloom_ratio(0.2);
+        let (options, point_lookup) = default_db_options(db_options);
 
         let db = {
             let path = &path;
-            let db_options = Some(options.clone());
+            let db_options = Some(options);
             let opt_cfs: &[(&str, &rocksdb::Options)] = &[("transaction_lock", &point_lookup)];
             typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
         }
