@@ -682,7 +682,10 @@ pub fn resolve_and_type_check(
 
     // total number of args is (|objects| + |pure_args|) + 1 for the the `TxContext` object
     let parameters = &module.signature_at(fhandle.parameters).0;
-    let has_ctx_arg = is_tx_context(view, &parameters[0]);
+    let has_ctx_arg = parameters
+        .last()
+        .map(|t| is_tx_context(view, t))
+        .unwrap_or(false);
     let num_args = if has_ctx_arg {
         args.len() + 1
     } else {
