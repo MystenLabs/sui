@@ -42,6 +42,18 @@ pub enum ConfigError {
     ExportError { file: String, message: String },
 }
 
+#[derive(Error, Debug)]
+pub enum ComitteeUpdateError {
+    #[error("Node {0} is not in the committee")]
+    NotInCommittee(String),
+
+    #[error("Node {0} was not in the update")]
+    MissingFromUpdate(String),
+
+    #[error("Node {0} has a different stake than expected")]
+    DifferentStake(String),
+}
+
 pub trait Import: DeserializeOwned {
     fn import(path: &str) -> Result<Self, ConfigError> {
         let reader = || -> Result<Self, std::io::Error> {
@@ -393,6 +405,75 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
                     .map(|(_, addresses)| (name.deref().clone(), addresses.clone()))
             })
             .collect()
+    }
+
+    /// Update the networking information of some of the primaries. The arguments are a full vector of
+    /// authorities which Public key and Stake must match the one stored in the current Comitttee. Any discrepancy
+    /// will generate no update and return a vector of errors.
+    pub fn update_primary_network_info(
+        &self,
+        mut new_info: BTreeMap<PublicKey, (Stake, PrimaryAddresses)>,
+    ) -> Result<(), Vec<ComitteeUpdateError>> {
+        let mut errors = None;
+
+        self.authorities.rcu(|table| {
+            let push_error_and_return = |acc, error| {
+                let mut error_table = if let Err(errors) = acc {
+                    errors
+                } else {
+                    Vec::new()
+                };
+                error_table.push(error);
+                Err(error_table)
+            };
+
+            let res = table
+                .iter()
+                .fold(Ok(BTreeMap::new()), |acc, (pk, authority)| {
+                    if let Some((stake, addresses)) = new_info.remove(pk) {
+                        if stake == authority.stake {
+                            match acc {
+                                // No error met yet, update the accumulator
+                                Ok(mut bmap) => {
+                                    let mut res = authority.clone();
+                                    res.primary = addresses;
+                                    bmap.insert(pk.clone(), res);
+                                    Ok(bmap)
+                                }
+                                // in error mode, continue
+                                _ => acc,
+                            }
+                        } else {
+                            // Stake does not match: create or append error
+                            push_error_and_return(
+                                acc,
+                                ComitteeUpdateError::DifferentStake(pk.to_string()),
+                            )
+                        }
+                    } else {
+                        // This key is absent from new information
+                        push_error_and_return(
+                            acc,
+                            ComitteeUpdateError::MissingFromUpdate(pk.to_string()),
+                        )
+                    }
+                });
+
+            // If there are elements left in new_info, they are not in the original table
+            // If new_info is empty, this is a no-op.
+            let res = new_info.iter().fold(res, |acc, (pk, _)| {
+                push_error_and_return(acc, ComitteeUpdateError::NotInCommittee(pk.to_string()))
+            });
+
+            match res {
+                Ok(new_table) => Arc::new(new_table),
+                Err(errs) => {
+                    errors = Some(errs);
+                    table.clone()
+                }
+            }
+        });
+        errors.map(Err).unwrap_or(Ok(()))
     }
 }
 
