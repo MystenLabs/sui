@@ -1,35 +1,17 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use jsonrpsee::{
-    http_client::{HttpClient, HttpClientBuilder},
-    http_server::{HttpServerBuilder, HttpServerHandle},
-};
-use jsonrpsee_core::server::rpc_module::RpcModule;
-use std::{
-    net::SocketAddr,
-    path::{Path, PathBuf},
-    str::FromStr,
-};
 use std::{path::Path, str::FromStr};
 use sui::keystore::{Keystore, SuiKeystore};
-use sui::{
-    config::{PersistedConfig, WalletConfig},
-    keystore::{Keystore, SuiKeystore},
-};
-use sui_config::{SUI_GATEWAY_CONFIG, SUI_WALLET_CONFIG};
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_core::gateway_types::{
     GetObjectDataResponse, TransactionEffectsResponse, TransactionResponse,
 };
 use sui_framework::build_move_package_to_bytes;
-use sui_gateway::{
-    api::{RpcGatewayApiClient, RpcReadApiClient, RpcTransactionBuilderClient, TransactionBytes},
-    rpc_gateway::responses::ObjectResponse,
-    rpc_gateway::RpcGatewayImpl,
+use sui_gateway::api::{
+    RpcGatewayApiClient, RpcReadApiClient, RpcTransactionBuilderClient, TransactionBytes,
 };
 use sui_json::SuiJsonValue;
-use sui_swarm::memory::Swarm;
 use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, TransactionDigest},
@@ -68,7 +50,7 @@ async fn test_transfer_coin() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;
+    let keystore = SuiKeystore::load_or_create(&test_network.network.dir().join("wallet.key"))?;
     let tx_bytes = tx_data.tx_bytes.to_vec()?;
     let signature = keystore.sign(address, &tx_bytes)?;
 
@@ -107,7 +89,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         .publish(*address, compiled_modules, Some(gas.object_id), 10000)
         .await?;
 
-    let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;
+    let keystore = SuiKeystore::load_or_create(&test_network.network.dir().join("wallet.key"))?;
     let tx_bytes = tx_data.tx_bytes.to_vec()?;
     let signature = keystore.sign(address, &tx_bytes)?;
 
@@ -155,7 +137,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;
+    let keystore = SuiKeystore::load_or_create(&test_network.network.dir().join("wallet.key"))?;
     let tx_bytes = tx_data.tx_bytes.to_vec()?;
     let signature = keystore.sign(address, &tx_bytes)?;
 
@@ -207,7 +189,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
             .transfer_coin(*address, oref.object_id, Some(gas_id), 1000, *address)
             .await?;
 
-        let keystore = SuiKeystore::load_or_create(&test_network.working_dir.join("wallet.key"))?;
+        let keystore = SuiKeystore::load_or_create(&test_network.network.dir().join("wallet.key"))?;
         let tx_bytes = tx_data.tx_bytes.to_vec()?;
         let signature = keystore.sign(address, &tx_bytes)?;
 

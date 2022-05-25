@@ -58,7 +58,6 @@ rustyline = "9.1.2"
 rustyline-derive = "0.6.0"
 colored = "2.0.0"
 unescape = "0.1.0"
-regex = "1.5.5"
 
 move-package = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
 move-core-types = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b", features = ["address20"] }

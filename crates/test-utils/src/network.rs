@@ -5,14 +5,14 @@ use jsonrpsee_http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee_http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
-use std::path::PathBuf;
+use std::path::Path;
 use sui::{
     config::{GatewayConfig, GatewayType, WalletConfig},
     keystore::{KeystoreType, SuiKeystore},
     wallet_commands::{WalletCommands, WalletContext},
 };
 use sui_config::genesis_config::GenesisConfig;
-use sui_config::{builder::ConfigBuilder, GenesisConfig, PersistedConfig};
+use sui_config::PersistedConfig;
 use sui_config::{Config, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use sui_gateway::api::RpcGatewayApiServer;
 use sui_gateway::api::RpcReadApiServer;
@@ -121,8 +121,8 @@ async fn start_rpc_gateway(
 pub async fn start_rpc_test_network(
     genesis_config: Option<GenesisConfig>,
 ) -> Result<TestNetwork, anyhow::Error> {
-    let working_dir = tempfile::tempdir()?.path().to_path_buf();
-    let _network = start_test_network(&working_dir, genesis_config).await?;
+    let network = start_test_network(genesis_config).await?;
+    let working_dir = network.dir();
     let (server_addr, rpc_server_handle) =
         start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;
     let mut wallet_conf: WalletConfig =
@@ -136,20 +136,18 @@ pub async fn start_rpc_test_network(
 
     let http_client = HttpClientBuilder::default().build(rpc_url.clone())?;
     Ok(TestNetwork {
-        _network,
+        network,
         _rpc_server: rpc_server_handle,
         accounts,
         http_client,
-        working_dir,
         rpc_url,
     })
 }
 
 pub struct TestNetwork {
-    _network: SuiNetwork,
+    pub network: Swarm,
     _rpc_server: HttpServerHandle,
     pub accounts: Vec<SuiAddress>,
     pub http_client: HttpClient,
-    pub working_dir: PathBuf,
     pub rpc_url: String,
 }
