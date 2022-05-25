@@ -215,6 +215,27 @@ impl NetworkConfig {
     pub fn generate(config_dir: &Path, quorum_size: usize) -> Self {
         Self::generate_with_rng(config_dir, quorum_size, OsRng)
     }
+
+    pub fn generate_fullnode_config(&self) -> NodeConfig {
+        let key_pair = get_key_pair_from_rng(&mut OsRng).1;
+        let validator_config = &self.validator_configs[0];
+
+        let mut db_path = validator_config.db_path.clone();
+        db_path.pop();
+
+        NodeConfig {
+            key_pair,
+            db_path: db_path.join("fullnode"),
+            network_address: new_network_address(),
+            metrics_address: new_network_address(),
+            json_rpc_address: validator_config.json_rpc_address,
+
+            consensus_config: None,
+            committee_config: validator_config.committee_config.clone(),
+
+            genesis: validator_config.genesis.clone(),
+        }
+    }
 }
 
 fn new_network_address() -> Multiaddr {

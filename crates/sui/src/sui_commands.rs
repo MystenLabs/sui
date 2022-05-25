@@ -242,6 +242,11 @@ impl SuiCommand {
                 wallet_config.save()?;
                 info!("Wallet config file is stored in {:?}.", wallet_path);
 
+                let fullnode_config = network_config
+                    .generate_fullnode_config()
+                    .persisted(&sui_config_dir.join("fullnode.conf"));
+                fullnode_config.save()?;
+
                 for (i, validator) in network_config
                     .into_inner()
                     .into_validator_configs()
