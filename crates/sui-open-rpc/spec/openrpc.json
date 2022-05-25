@@ -55,7 +55,7 @@
       }
     },
     {
-      "name": "sui_getObjectInfo",
+      "name": "sui_getObject",
       "tags": [
         {
           "name": "Read API"
@@ -80,7 +80,7 @@
       }
     },
     {
-      "name": "sui_getObjectInfo",
+      "name": "sui_getObject",
       "tags": [
         {
           "name": "Read API"

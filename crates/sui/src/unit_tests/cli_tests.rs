@@ -18,7 +18,7 @@ use sui::{
     wallet_commands::{WalletCommandResult, WalletCommands, WalletContext},
 };
 use sui_config::{AccountConfig, GenesisConfig, NetworkConfig, ObjectConfig, SUI_FULLNODE_CONFIG};
-use sui_core::gateway_types::{GetObjectInfoResponse, SuiObject, SuiTransactionEffects};
+use sui_core::gateway_types::{GetObjectDataResponse, SuiObject, SuiTransactionEffects};
 use sui_json::SuiJsonValue;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
