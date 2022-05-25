@@ -260,16 +260,7 @@ where
                 }
             }
         });
-    println!(
-        "HIGHEST CHK: {:?}",
-        highest_certificate_cert
-            .as_ref()
-            .map(|x| x.checkpoint.sequence_number)
-    );
 
-    if highest_certificate_cert.is_none() {
-        println!("{:?}", final_state.responses);
-    }
     // Examine whether we should start the next checkpoint by looking at whether we have
     // >2/3 of validators proposing a new checkpoint.
     let next_proposal_sequence_number = highest_certificate_cert
@@ -290,16 +281,7 @@ where
             None
         })
         .collect();
-    // Weight the proposals
-    let weight: usize = proposals
-        .iter()
-        .map(|(auth, _)| _active_authority.state.committee.weight(auth))
-        .sum();
-    let start_checkpoint_making = weight > _active_authority.state.committee.quorum_threshold();
-    println!(
-        "Make checkpoint at {}: {}",
-        next_proposal_sequence_number, start_checkpoint_making
-    );
+
     Ok((highest_certificate_cert, proposals))
 }
 
