@@ -19,17 +19,64 @@ pub struct Project {
     components: Components,
 }
 
-pub struct ProjectBuilder {
-    proj_name: String,
-    namespace: String,
-    version: String,
-    openrpc: String,
-    schema_generator: SchemaGenerator,
+impl Project {
+    pub fn new(
+        title: &str,
+        description: &str,
+        contact_name: &str,
+        url: &str,
+        email: &str,
+        license: &str,
+        license_url: &str,
+    ) -> Self {
+        let version = env!("CARGO_PKG_VERSION").to_owned();
+        let openrpc = "1.2.6".to_string();
+        Self {
+            openrpc,
+            info: Info {
+                title: title.to_string(),
+                description: Some(description.to_string()),
+                contact: Some(Contact {
+                    name: contact_name.to_string(),
+                    url: Some(url.to_string()),
+                    email: Some(email.to_string()),
+                }),
+                license: Some(License {
+                    name: license.to_string(),
+                    url: Some(license_url.to_string()),
+                }),
+                version,
+                ..Default::default()
+            },
+            methods: vec![],
+            components: Components {
+                content_descriptors: Default::default(),
+                schemas: Default::default(),
+            },
+        }
+    }
+
+    pub fn add_module(&mut self, module: Module) {
+        self.methods.extend(module.methods);
+
+        self.methods.sort_by(|m, n| m.name.cmp(&n.name));
+
+        self.components.schemas.extend(module.components.schemas);
+        self.components
+            .content_descriptors
+            .extend(module.components.content_descriptors);
+    }
+}
+
+pub struct Module {
     methods: Vec<Method>,
+    components: Components,
+}
+
+pub struct RpcModuleDocBuilder {
+    schema_generator: SchemaGenerator,
+    methods: BTreeMap<String, Method>,
     content_descriptors: BTreeMap<String, ContentDescriptor>,
-    license: Option<License>,
-    contact: Option<Contact>,
-    description: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -49,11 +96,22 @@ pub struct ContentDescriptor {
 #[derive(Serialize, Deserialize, Default, Clone)]
 struct Method {
     name: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    tags: Vec<Tag>,
     #[serde(skip_serializing_if = "Option::is_none")]
     description: Option<String>,
     params: Vec<ContentDescriptor>,
     #[serde(skip_serializing_if = "Option::is_none")]
     result: Option<ContentDescriptor>,
+}
+
+#[derive(Serialize, Deserialize, Default, Clone)]
+struct Tag {
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    summery: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -93,8 +151,14 @@ struct License {
     url: Option<String>,
 }
 
-impl ProjectBuilder {
-    pub fn new(proj_name: &str, namespace: &str) -> Self {
+impl Default for RpcModuleDocBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RpcModuleDocBuilder {
+    pub fn new() -> Self {
         let schema_generator = SchemaSettings::default()
             .with(|s| {
                 s.definitions_path = "#/components/schemas/".to_string();
@@ -102,31 +166,15 @@ impl ProjectBuilder {
             .into_generator();
 
         Self {
-            proj_name: proj_name.to_string(),
-            namespace: namespace.to_string(),
-            version: env!("CARGO_PKG_VERSION").to_owned(),
-            openrpc: "1.2.6".to_string(),
             schema_generator,
-            methods: vec![],
+            methods: BTreeMap::new(),
             content_descriptors: BTreeMap::new(),
-            license: None,
-            contact: None,
-            description: None,
         }
     }
 
-    pub fn build(mut self) -> Project {
-        Project {
-            openrpc: self.openrpc,
-            info: Info {
-                title: self.proj_name,
-                version: self.version,
-                license: self.license,
-                contact: self.contact,
-                description: self.description,
-                ..Default::default()
-            },
-            methods: self.methods,
+    pub fn build(mut self) -> Module {
+        Module {
+            methods: self.methods.into_values().collect(),
             components: Components {
                 content_descriptors: self.content_descriptors,
                 schemas: self
@@ -140,38 +188,38 @@ impl ProjectBuilder {
         }
     }
 
-    pub fn set_description(&mut self, description: &str) {
-        self.description = Some(description.to_string());
-    }
-
-    pub fn set_contact(&mut self, name: &str, url: Option<String>, email: Option<String>) {
-        self.contact = Some(Contact {
-            name: name.to_string(),
-            url,
-            email,
-        });
-    }
-
-    pub fn set_license(&mut self, license: &str, url: Option<String>) {
-        self.license = Some(License {
-            name: license.to_string(),
-            url,
-        });
-    }
-
     pub fn add_method(
         &mut self,
+        namespace: &str,
         name: &str,
         params: Vec<ContentDescriptor>,
         result: Option<ContentDescriptor>,
         doc: &str,
+        tag: Option<String>,
     ) {
-        self.methods.push(Method {
-            name: format!("{}_{}", self.namespace, name),
-            description: Some(doc.to_string()),
-            params,
-            result,
-        })
+        let description = if doc.trim().is_empty() {
+            None
+        } else {
+            Some(doc.trim().to_string())
+        };
+        let name = format!("{}_{}", namespace, name);
+        self.methods.insert(
+            name.clone(),
+            Method {
+                name,
+                description,
+                params,
+                result,
+                tags: tag
+                    .map(|t| Tag {
+                        name: t,
+                        summery: None,
+                        description: None,
+                    })
+                    .into_iter()
+                    .collect(),
+            },
+        );
     }
 
     pub fn create_content_descriptor<T: JsonSchema>(
@@ -196,6 +244,8 @@ impl ProjectBuilder {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct Components {
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     content_descriptors: BTreeMap<String, ContentDescriptor>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     schemas: BTreeMap<String, SchemaObject>,
 }

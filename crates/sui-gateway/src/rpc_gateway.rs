@@ -1,22 +1,25 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::Path;
+use std::sync::Arc;
+
+use crate::api::{RpcGatewayApiServer, SuiRpcModule};
 use crate::rpc_gateway::responses::SuiTypeTag;
-use crate::{
-    api::{RpcGatewayServer, TransactionBytes},
-    config::GatewayConfig,
-    rpc_gateway::responses::ObjectResponse,
-};
+use crate::{api::TransactionBytes, config::GatewayConfig, rpc_gateway::responses::ObjectResponse};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use ed25519_dalek::ed25519::signature::Signature;
 use jsonrpsee::core::RpcResult;
-use std::path::Path;
+use jsonrpsee_core::server::rpc_module::RpcModule;
+use tracing::debug;
+
 use sui_config::PersistedConfig;
 use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
 use sui_core::gateway_types::GetObjectInfoResponse;
 use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
 use sui_json::SuiJsonValue;
+use sui_open_rpc::Module;
 use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
@@ -24,36 +27,144 @@ use sui_types::{
     crypto::SignableBytes,
     messages::{Transaction, TransactionData},
 };
-use tracing::debug;
+
+use crate::api::RpcReadApiServer;
+use crate::api::RpcTransactionBuilderServer;
 
 pub mod responses;
 
 pub struct RpcGatewayImpl {
-    gateway: GatewayClient,
+    client: GatewayClient,
+}
+
+pub struct GatewayReadApiImpl {
+    client: GatewayClient,
+}
+
+pub struct TransactionBuilderImpl {
+    client: GatewayClient,
 }
 
 impl RpcGatewayImpl {
-    pub fn new(config_path: &Path) -> anyhow::Result<Self> {
-        let config: GatewayConfig = PersistedConfig::read(config_path).map_err(|e| {
-            anyhow!(
-                "Failed to read config file at {:?}: {}. Have you run `sui genesis` first?",
-                config_path,
-                e
-            )
-        })?;
-        let committee = config.make_committee();
-        let authority_clients = config.make_authority_clients();
-        let gateway = Box::new(GatewayState::new(
-            config.db_folder_path,
-            committee,
-            authority_clients,
-        )?);
-        Ok(Self { gateway })
+    pub fn new(client: GatewayClient) -> Self {
+        Self { client }
+    }
+}
+impl GatewayReadApiImpl {
+    pub fn new(client: GatewayClient) -> Self {
+        Self { client }
+    }
+}
+impl TransactionBuilderImpl {
+    pub fn new(client: GatewayClient) -> Self {
+        Self { client }
+    }
+}
+
+pub fn create_client(config_path: &Path) -> Result<GatewayClient, anyhow::Error> {
+    let config: GatewayConfig = PersistedConfig::read(config_path).map_err(|e| {
+        anyhow!(
+            "Failed to read config file at {:?}: {}. Have you run `sui genesis` first?",
+            config_path,
+            e
+        )
+    })?;
+    let committee = config.make_committee();
+    let authority_clients = config.make_authority_clients();
+    Ok(Arc::new(GatewayState::new(
+        config.db_folder_path,
+        committee,
+        authority_clients,
+    )?))
+}
+
+#[async_trait]
+impl RpcGatewayApiServer for RpcGatewayImpl {
+    async fn execute_transaction(
+        &self,
+        tx_bytes: Base64,
+        signature: Base64,
+        pub_key: Base64,
+    ) -> RpcResult<TransactionResponse> {
+        let data = TransactionData::from_signable_bytes(&tx_bytes.to_vec()?)?;
+        let signature =
+            crypto::Signature::from_bytes(&[&*signature.to_vec()?, &*pub_key.to_vec()?].concat())
+                .map_err(|e| anyhow!(e))?;
+        let result = self
+            .client
+            .execute_transaction(Transaction::new(data, signature))
+            .await;
+        Ok(result?)
+    }
+
+    async fn sync_account_state(&self, address: SuiAddress) -> RpcResult<()> {
+        debug!("sync_account_state : {}", address);
+        self.client.sync_account_state(address).await?;
+        Ok(())
+    }
+}
+
+impl SuiRpcModule for RpcGatewayImpl {
+    fn rpc(self) -> RpcModule<Self> {
+        self.into_rpc()
+    }
+
+    fn rpc_doc_module() -> Module {
+        crate::api::RpcGatewayApiOpenRpc::module_doc()
     }
 }
 
 #[async_trait]
-impl RpcGatewayServer for RpcGatewayImpl {
+impl RpcReadApiServer for GatewayReadApiImpl {
+    async fn get_owned_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse> {
+        debug!("get_objects : {}", owner);
+        let objects = self.client.get_owned_objects(owner).await?;
+        Ok(ObjectResponse { objects })
+    }
+
+    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse> {
+        Ok(self.client.get_object_info(object_id).await?)
+    }
+
+    async fn get_recent_transactions(
+        &self,
+        count: u64,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        Ok(self.client.get_recent_transactions(count)?)
+    }
+
+    async fn get_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> RpcResult<TransactionEffectsResponse> {
+        Ok(self.client.get_transaction(digest).await?)
+    }
+
+    async fn get_total_transaction_number(&self) -> RpcResult<u64> {
+        Ok(self.client.get_total_transaction_number()?)
+    }
+
+    async fn get_transactions_in_range(
+        &self,
+        start: GatewayTxSeqNumber,
+        end: GatewayTxSeqNumber,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        Ok(self.client.get_transactions_in_range(start, end)?)
+    }
+}
+
+impl SuiRpcModule for GatewayReadApiImpl {
+    fn rpc(self) -> RpcModule<Self> {
+        self.into_rpc()
+    }
+
+    fn rpc_doc_module() -> Module {
+        crate::api::RpcReadApiOpenRpc::module_doc()
+    }
+}
+
+#[async_trait]
+impl RpcTransactionBuilderServer for TransactionBuilderImpl {
     async fn transfer_coin(
         &self,
         signer: SuiAddress,
@@ -63,7 +174,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
         recipient: SuiAddress,
     ) -> RpcResult<TransactionBytes> {
         let data = self
-            .gateway
+            .client
             .transfer_coin(signer, object_id, gas, gas_budget, recipient)
             .await?;
         Ok(TransactionBytes::from_data(data)?)
@@ -81,7 +192,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
             .map(|data| data.to_vec())
             .collect::<Result<Vec<_>, _>>()?;
         let data = self
-            .gateway
+            .client
             .publish(sender, compiled_modules, gas, gas_budget)
             .await?;
 
@@ -97,7 +208,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         let data = self
-            .gateway
+            .client
             .split_coin(signer, coin_object_id, split_amounts, gas, gas_budget)
             .await?;
         Ok(TransactionBytes::from_data(data)?)
@@ -112,37 +223,10 @@ impl RpcGatewayServer for RpcGatewayImpl {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         let data = self
-            .gateway
+            .client
             .merge_coins(signer, primary_coin, coin_to_merge, gas, gas_budget)
             .await?;
         Ok(TransactionBytes::from_data(data)?)
-    }
-
-    async fn get_owned_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse> {
-        debug!("get_objects : {}", owner);
-        let objects = self.gateway.get_owned_objects(owner).await?;
-        Ok(ObjectResponse { objects })
-    }
-
-    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse> {
-        Ok(self.gateway.get_object_info(object_id).await?)
-    }
-
-    async fn execute_transaction(
-        &self,
-        tx_bytes: Base64,
-        signature: Base64,
-        pub_key: Base64,
-    ) -> RpcResult<TransactionResponse> {
-        let data = TransactionData::from_signable_bytes(&tx_bytes.to_vec()?)?;
-        let signature =
-            crypto::Signature::from_bytes(&[&*signature.to_vec()?, &*pub_key.to_vec()?].concat())
-                .map_err(|e| anyhow!(e))?;
-        let result = self
-            .gateway
-            .execute_transaction(Transaction::new(data, signature))
-            .await;
-        Ok(result?)
     }
 
     async fn move_call(
@@ -157,7 +241,7 @@ impl RpcGatewayServer for RpcGatewayImpl {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         let data = async {
-            self.gateway
+            self.client
                 .move_call(
                     signer,
                     package_object_id,
@@ -176,64 +260,14 @@ impl RpcGatewayServer for RpcGatewayImpl {
         .await?;
         Ok(TransactionBytes::from_data(data)?)
     }
+}
 
-    async fn sync_account_state(&self, address: SuiAddress) -> RpcResult<()> {
-        debug!("sync_account_state : {}", address);
-        self.gateway.sync_account_state(address).await?;
-        Ok(())
+impl SuiRpcModule for TransactionBuilderImpl {
+    fn rpc(self) -> RpcModule<Self> {
+        self.into_rpc()
     }
 
-    async fn get_total_transaction_number(&self) -> RpcResult<u64> {
-        Ok(self.gateway.get_total_transaction_number()?)
-    }
-
-    async fn get_transactions_in_range(
-        &self,
-        start: GatewayTxSeqNumber,
-        end: GatewayTxSeqNumber,
-    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(self.gateway.get_transactions_in_range(start, end)?)
-    }
-
-    async fn get_recent_transactions(
-        &self,
-        count: u64,
-    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(self.gateway.get_recent_transactions(count)?)
-    }
-
-    async fn get_transaction(
-        &self,
-        digest: TransactionDigest,
-    ) -> RpcResult<TransactionEffectsResponse> {
-        Ok(self.gateway.get_transaction(digest).await?)
-    }
-
-    async fn get_transactions_by_input_object(
-        &self,
-        _object: ObjectID,
-    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Err(anyhow!("Method not supported on gateway. (query a fullnode instead)").into())
-    }
-
-    async fn get_transactions_by_mutated_object(
-        &self,
-        _object: ObjectID,
-    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Err(anyhow!("Method not supported on gateway. (query a fullnode instead)").into())
-    }
-
-    async fn get_transactions_to_addr(
-        &self,
-        _addr: SuiAddress,
-    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Err(anyhow!("Method not supported on gateway. (query a fullnode instead)").into())
-    }
-
-    async fn get_transactions_from_addr(
-        &self,
-        _addr: SuiAddress,
-    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Err(anyhow!("Method not supported on gateway. (query a fullnode instead)").into())
+    fn rpc_doc_module() -> Module {
+        crate::api::RpcTransactionBuilderOpenRpc::module_doc()
     }
 }
