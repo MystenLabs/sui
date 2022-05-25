@@ -240,7 +240,7 @@ The following commands are supported by the wallet:
     objects               Obtain all objects owned by the address
     publish               Publish Move modules
     split-coin            Split a coin object into multiple coins
-    switch                Switch active address
+    switch                Switch active address and network(e.g., devnet, local rpc server)
     sync                  Synchronize client state with authorities
     transfer-coin         Transfer coin object
 
@@ -461,8 +461,8 @@ USAGE:
 
 FLAGS:
     -h, --help       Prints help information
+    -i               Start interactive wallet
         --json       Returns command outputs in JSON format
-    -V, --version    Prints version information
 
 OPTIONS:
         --address <address>    Address owning the objects
@@ -496,8 +496,8 @@ USAGE:
 
 FLAGS:
     -h, --help       Prints help information
+    -i               Start interactive wallet
         --json       Returns command outputs in JSON format
-    -V, --version    Prints version information
 
 OPTIONS:
         --id <id>    Object ID of the object to fetch
@@ -585,19 +585,19 @@ We will explore how to transfer coins using the wallet in this section.
 
 ```shell
 USAGE:
-    transfer-coin [FLAGS] [OPTIONS] --gas-budget <gas-budget> --coin-object-id <coin-object-id> --to <to>
+    transfer-coin [FLAGS] [OPTIONS] --to <TO> --coin-object-id <COIN_OBJECT_ID> --gas-budget <GAS_BUDGET>
 
 FLAGS:
     -h, --help       Prints help information
+    -i               Start interactive wallet
         --json       Returns command outputs in JSON format
-    -V, --version    Prints version information
 
 OPTIONS:
-        --gas <gas>                             ID of the coin object for gas payment, in 20 bytes Hex string If not provided, a coin
+        --gas <GAS>                             ID of the coin object for gas payment, in 20 bytes Hex string If not provided, a coin
                                                 object with at least gas_budget value will be selected
-        --gas-budget <gas-budget>               Gas budget for this transfer
+        --gas-budget <GAS_BUDGET>               Gas budget for this transfer
         --coin-object-id <coin-object-id>       Coin to transfer, in 20 bytes Hex string
-        --to <to>                               Recipient address
+        --to <TO>                               Recipient address
 ```
 
 To transfer a coin object to a recipient, you will need the recipient's address,
@@ -695,19 +695,19 @@ Usage of `merge-coin`:
 
 ```shell
 USAGE:
-    merge-coin [FLAGS] [OPTIONS] --coin-to-merge <coin-to-merge> --gas-budget <gas-budget> --primary-coin <primary-coin>
+    merge-coin [OPTIONS] --primary-coin <PRIMARY_COIN> --coin-to-merge <COIN_TO_MERGE> --gas-budget <GAS_BUDGET>
 
 FLAGS:
     -h, --help       Prints help information
+    -i               Start interactive wallet
         --json       Returns command outputs in JSON format
-    -V, --version    Prints version information
 
 OPTIONS:
-        --coin-to-merge <coin-to-merge>    Coin to be merged, in 20 bytes Hex string
-        --gas <gas>                        ID of the gas object for gas payment, in 20 bytes Hex string If not provided,
+        --coin-to-merge <COIN_TO_MERGE>    Coin to be merged, in 20 bytes Hex string
+        --gas <GAS>                        ID of the gas object for gas payment, in 20 bytes Hex string If not provided,
                                            a gas object with at least gas_budget value will be selected
-        --gas-budget <gas-budget>          Gas budget for this call
-        --primary-coin <primary-coin>      Coin to merge into, in 20 bytes Hex string
+        --gas-budget <GAS_BUDGET>          Gas budget for this call
+        --primary-coin <PRIMARY_COIN>      Coin to merge into, in 20 bytes Hex string
 ```
 
 Here is an example of how to merge coins. To merge coins, you will need at lease three coin objects -
@@ -762,19 +762,19 @@ Usage of `split-coin`:
 
 ```shell
 USAGE:
-    split-coin [FLAGS] [OPTIONS] --coin-id <coin-id> --gas-budget <gas-budget>
+    split-coin [FLAGS] [OPTIONS] --coin-id <COIN_ID> --gas-budget <GAS_BUDGET>
 
 FLAGS:
     -h, --help       Prints help information
+    -i               Start interactive wallet
         --json       Returns command outputs in JSON format
-    -V, --version    Prints version information
 
 OPTIONS:
-        --amounts <amounts>...       Amount to split out from the coin
-        --coin-id <coin-id>          Coin to Split, in 20 bytes Hex string
-        --gas <gas>                  ID of the gas object for gas payment, in 20 bytes Hex string If not provided, a gas
+        --amounts <AMOUNTS>...       Amount to split out from the coin
+        --coin-id <COIN_ID>          Coin to Split, in 20 bytes Hex string
+        --gas <GAS>                  ID of the gas object for gas payment, in 20 bytes Hex string If not provided, a gas
                                      object with at least gas_budget value will be selected
-        --gas-budget <gas-budget>    Gas budget for this call
+        --gas-budget <GAS_BUDGET>    Gas budget for this call
 ```
 
 For splitting coins, you will need at lease two coins to execute the `split-coin` command,
@@ -899,7 +899,7 @@ parameters one-by-one:
   the function is located. (Remember
   that the ID of the genesis Sui package containing the GAS module is
   defined in its manifest file, and is equal to `0x2`.)
-* `args` - a list of function arguments formatted as
+* `--args` - a list of function arguments formatted as
   [SuiJSON](sui-json.md) values (hence the preceding `0x` in address
   and object ID):
   * ID of the gas object representing the `c` parameter of the `transfer`
