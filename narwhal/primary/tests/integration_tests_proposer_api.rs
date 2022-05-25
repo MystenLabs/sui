@@ -8,13 +8,20 @@ use crypto::{
     traits::{KeyPair, ToFromBytes},
     Hash,
 };
+use futures::future::join_all;
 use node::NodeStorage;
 use primary::{Primary, CHANNEL_CAPACITY};
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
-use test_utils::{committee, keys, make_optimal_certificates, temp_dir};
+use test_utils::{
+    committee, committee_from_keys, keys, make_optimal_certificates,
+    make_optimal_signed_certificates, temp_dir,
+};
 use tokio::sync::mpsc::channel;
 use tonic::transport::Channel;
-use types::{Certificate, ProposerClient, PublicKeyProto, RoundsRequest};
+use types::{
+    Certificate, CertificateDigest, NodeReadCausalRequest, ProposerClient, PublicKeyProto,
+    RoundsRequest,
+};
 
 #[tokio::test]
 async fn test_rounds_errors() {
@@ -189,6 +196,221 @@ async fn test_rounds_return_successful_response() {
 
     assert_eq!(0, r.oldest_round);
     assert_eq!(4, r.newest_round);
+}
+
+#[tokio::test]
+async fn test_node_read_causal_signed_certificates() {
+    let mut k = keys(None);
+
+    let committee = committee_from_keys(&k);
+
+    // Make the data store.
+    let primary_store_1 = NodeStorage::reopen(temp_dir());
+    let primary_store_2: NodeStorage<Ed25519PublicKey> = NodeStorage::reopen(temp_dir());
+
+    let mut collection_ids: Vec<CertificateDigest> = Vec::new();
+
+    // Make the Dag
+    let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
+    let dag = Arc::new(Dag::new(&committee, rx_new_certificates).1);
+
+    // Populate genesis in the Dag
+    let mut genesis_certs = Certificate::genesis(&committee);
+    assert!(join_all(
+        genesis_certs
+            .iter()
+            .map(|cert| { dag.insert(cert.clone()) }),
+    )
+    .await
+    .iter()
+    .all(|r| r.is_ok()));
+
+    // Write genesis certs to primary 1 & 2
+    primary_store_1
+        .certificate_store
+        .write_all(genesis_certs.clone().into_iter().map(|c| (c.digest(), c)))
+        .await
+        .unwrap();
+    primary_store_2
+        .certificate_store
+        .write_all(genesis_certs.clone().into_iter().map(|c| (c.digest(), c)))
+        .await
+        .unwrap();
+
+    let genesis = genesis_certs
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+
+    let (certificates, _next_parents) = make_optimal_signed_certificates(1..=4, &genesis, &k);
+
+    collection_ids.extend(
+        certificates
+            .iter()
+            .map(|c| c.digest())
+            .collect::<Vec<CertificateDigest>>(),
+    );
+
+    // Feed the certificates to the Dag
+    for certificate in certificates.clone() {
+        dag.insert(certificate).await.unwrap();
+    }
+
+    // Write the certificates to Primary 1 but intentionally miss one certificate.
+    primary_store_1
+        .certificate_store
+        .write_all(
+            certificates
+                .clone()
+                .into_iter()
+                .skip(1)
+                .map(|c| (c.digest(), c)),
+        )
+        .await
+        .unwrap();
+
+    // Write all certificates to Primary 2, so Primary 1 has a place to retrieve
+    // missing certificate from.
+    primary_store_2
+        .certificate_store
+        .write_all(certificates.clone().into_iter().map(|c| (c.digest(), c)))
+        .await
+        .unwrap();
+
+    let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+
+    let primary_1_parameters = Parameters {
+        batch_size: 200, // Two transactions.
+        ..Parameters::default()
+    };
+    let keypair_1 = k.pop().unwrap();
+    let name_1 = keypair_1.public().clone();
+
+    // Spawn Primary 1 that we will be interacting with.
+    Primary::spawn(
+        name_1.clone(),
+        keypair_1,
+        committee.clone(),
+        primary_1_parameters.clone(),
+        primary_store_1.header_store.clone(),
+        primary_store_1.certificate_store.clone(),
+        primary_store_1.payload_store.clone(),
+        /* tx_consensus */ tx_new_certificates,
+        /* rx_consensus */ rx_feedback,
+        /* dag */ Some(dag.clone()),
+    );
+
+    let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
+    let (_tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
+
+    let primary_2_parameters = Parameters {
+        batch_size: 200, // Two transactions.
+        ..Parameters::default()
+    };
+    let keypair_2 = k.pop().unwrap();
+    let name_2 = keypair_2.public().clone();
+
+    // Spawn Primary 2
+    Primary::spawn(
+        name_2.clone(),
+        keypair_2,
+        committee.clone(),
+        primary_2_parameters.clone(),
+        primary_store_2.header_store,
+        primary_store_2.certificate_store,
+        primary_store_2.payload_store,
+        /* tx_consensus */ tx_new_certificates_2,
+        /* rx_consensus */ rx_feedback_2,
+        /* external_consensus */
+        Some(Arc::new(Dag::new(&committee, rx_new_certificates_2).1)),
+    );
+
+    // Wait for tasks to start
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // Test gRPC server with client call
+    let mut client = connect_to_proposer_client(primary_1_parameters.clone());
+
+    // Test node read causal for existing round in Primary 1
+    // Genesis aka round 0 so we expect BFT 1 + 0 * 4 vertices
+    let request = tonic::Request::new(NodeReadCausalRequest {
+        public_key: Some(PublicKeyProto::from(name_1.clone())),
+        round: 0,
+    });
+
+    let response = client.node_read_causal(request).await.unwrap();
+    assert_eq!(1, response.into_inner().collection_ids.len());
+
+    // Test node read causal for existing round in Primary 1
+    // Round 1 so we expect BFT 1 + 1 * 4 vertices
+    let request = tonic::Request::new(NodeReadCausalRequest {
+        public_key: Some(PublicKeyProto::from(name_1.clone())),
+        round: 1,
+    });
+
+    let response = client.node_read_causal(request).await.unwrap();
+    assert_eq!(5, response.into_inner().collection_ids.len());
+
+    // Test node read causal for round 4 (we ack all of the prior round),
+    // we expect BFT 1 + 4 * 4 vertices
+    let request = tonic::Request::new(NodeReadCausalRequest {
+        public_key: Some(PublicKeyProto::from(name_1.clone())),
+        round: 4,
+    });
+
+    let response = client.node_read_causal(request).await.unwrap();
+    assert_eq!(17, response.into_inner().collection_ids.len());
+
+    // remove round 0
+    while let Some(genesis_cert) = genesis_certs.pop() {
+        dag.remove(vec![genesis_cert.digest()]).await.unwrap();
+    }
+
+    // Test node read causal for removed round
+    let request = tonic::Request::new(NodeReadCausalRequest {
+        public_key: Some(PublicKeyProto::from(name_1.clone())),
+        round: 0,
+    });
+
+    let status = client.node_read_causal(request).await.unwrap_err();
+    assert!(status.message().contains(
+        "Couldn't read causal for provided key & round: No known certificates for this authority"
+    ));
+
+    // Test node read causal for round 4 (we ack all of the prior round),
+    // we expect BFT 1 + 3 * 4 vertices with round 0 removed.
+    let request = tonic::Request::new(NodeReadCausalRequest {
+        public_key: Some(PublicKeyProto::from(name_1.clone())),
+        round: 4,
+    });
+
+    let response = client.node_read_causal(request).await.unwrap();
+    assert_eq!(13, response.into_inner().collection_ids.len());
+
+    // Test node read causal for round 5 which does not exist.
+    let request = tonic::Request::new(NodeReadCausalRequest {
+        public_key: Some(PublicKeyProto::from(name_1.clone())),
+        round: 5,
+    });
+
+    let status = client.node_read_causal(request).await.unwrap_err();
+    assert!(status.message().contains(
+        "Couldn't read causal for provided key & round: No known certificates for this authority"
+    ));
+
+    // Test node read causal for key that is not an authority of the mempool.
+    let unknown_keypair = keys(1).pop().unwrap();
+    let unknown_name = unknown_keypair.public().clone();
+
+    let request = tonic::Request::new(NodeReadCausalRequest {
+        public_key: Some(PublicKeyProto::from(unknown_name.clone())),
+        round: 4,
+    });
+
+    let status = client.node_read_causal(request).await.unwrap_err();
+    assert!(status
+        .message()
+        .contains("Invalid public key: unknown authority"));
 }
 
 fn connect_to_proposer_client(parameters: Parameters) -> ProposerClient<Channel> {

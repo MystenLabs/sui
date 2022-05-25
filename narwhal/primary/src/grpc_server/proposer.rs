@@ -5,7 +5,10 @@ use consensus::dag::Dag;
 use crypto::traits::VerifyingKey;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
-use types::{Proposer, RoundsRequest, RoundsResponse};
+use types::{
+    NodeReadCausalRequest, NodeReadCausalResponse, Proposer, PublicKeyProto, RoundsRequest,
+    RoundsResponse,
+};
 
 pub struct NarwhalProposer<PublicKey: VerifyingKey> {
     /// The dag that holds the available certificates to propose
@@ -24,9 +27,8 @@ impl<PublicKey: VerifyingKey> NarwhalProposer<PublicKey> {
     /// The method will return a result where the OK() will hold the
     /// parsed public key. The Err() will hold a Status message with the
     /// specific error description.
-    fn get_public_key(&self, request: RoundsRequest) -> Result<PublicKey, Status> {
+    fn get_public_key(&self, request: Option<PublicKeyProto>) -> Result<PublicKey, Status> {
         let proto_key = request
-            .public_key
             .ok_or_else(|| Status::invalid_argument("Invalid public key: no key provided"))?;
         let key = PublicKey::from_bytes(proto_key.bytes.as_ref())
             .map_err(|_| Status::invalid_argument("Invalid public key: couldn't parse"))?;
@@ -51,7 +53,7 @@ impl<PublicKey: VerifyingKey> Proposer for NarwhalProposer<PublicKey> {
         &self,
         request: Request<RoundsRequest>,
     ) -> Result<Response<RoundsResponse>, Status> {
-        let key = self.get_public_key(request.into_inner())?;
+        let key = self.get_public_key(request.into_inner().public_key)?;
 
         // call the dag to retrieve the rounds
         if let Some(dag) = &self.dag {
@@ -66,5 +68,28 @@ impl<PublicKey: VerifyingKey> Proposer for NarwhalProposer<PublicKey> {
         }
 
         Err(Status::internal("Can not serve request"))
+    }
+
+    async fn node_read_causal(
+        &self,
+        request: Request<NodeReadCausalRequest>,
+    ) -> Result<Response<NodeReadCausalResponse>, Status> {
+        let node_read_causal_request = request.into_inner();
+
+        let key = self.get_public_key(node_read_causal_request.public_key)?;
+        let round = node_read_causal_request.round;
+
+        if let Some(dag) = &self.dag {
+            let result = match dag.node_read_causal(key, round).await {
+                Ok(digests) => Ok(NodeReadCausalResponse {
+                    collection_ids: digests.into_iter().map(Into::into).collect(),
+                }),
+                Err(err) => Err(Status::internal(format!(
+                    "Couldn't read causal for provided key & round: {err}"
+                ))),
+            };
+            return result.map(Response::new);
+        }
+        Err(Status::internal("Dag does not exist"))
     }
 }

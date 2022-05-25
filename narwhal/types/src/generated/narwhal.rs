@@ -100,24 +100,6 @@ pub struct ReadCausalResponse {
     pub collection_ids: ::prost::alloc::vec::Vec<CertificateDigest>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct NewNetworkInfoRequest {
-    #[prost(uint32, tag="1")]
-    pub epoch_number: u32,
-    #[prost(message, repeated, tag="2")]
-    pub validators: ::prost::alloc::vec::Vec<ValidatorData>,
-}
-/// A bincode encoded payload. This is intended to be used in the short-term
-/// while we don't have good protobuf definitions for Narwhal types
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct BincodeEncodedPayload {
-    #[prost(bytes="bytes", tag="1")]
-    pub payload: ::prost::bytes::Bytes,
-}
-/// Empty message for when we don't have anything to return
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Empty {
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RoundsRequest {
     //// The validator's key for which we want to retrieve
     //// the available rounds.
@@ -134,6 +116,37 @@ pub struct RoundsResponse {
     //// blocks to propose for the defined validator.
     #[prost(uint64, tag="2")]
     pub newest_round: u64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct NodeReadCausalRequest {
+    #[prost(message, optional, tag="1")]
+    pub public_key: ::core::option::Option<PublicKey>,
+    #[prost(uint64, tag="2")]
+    pub round: u64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct NodeReadCausalResponse {
+    /// Resulting sequence of collections from DAG walk.
+    #[prost(message, repeated, tag="1")]
+    pub collection_ids: ::prost::alloc::vec::Vec<CertificateDigest>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct NewNetworkInfoRequest {
+    #[prost(uint32, tag="1")]
+    pub epoch_number: u32,
+    #[prost(message, repeated, tag="2")]
+    pub validators: ::prost::alloc::vec::Vec<ValidatorData>,
+}
+/// A bincode encoded payload. This is intended to be used in the short-term
+/// while we don't have good protobuf definitions for Narwhal types
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BincodeEncodedPayload {
+    #[prost(bytes="bytes", tag="1")]
+    pub payload: ::prost::bytes::Bytes,
+}
+/// Empty message for when we don't have anything to return
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Empty {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -350,6 +363,27 @@ pub mod proposer_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static("/narwhal.Proposer/Rounds");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        /// Returns the read_causal obtained by starting the DAG walk at the collection
+        /// proposed by the input authority (as indicated by their public key) at the input round
+        pub async fn node_read_causal(
+            &mut self,
+            request: impl tonic::IntoRequest<super::NodeReadCausalRequest>,
+        ) -> Result<tonic::Response<super::NodeReadCausalResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/narwhal.Proposer/NodeReadCausal",
+            );
             self.inner.unary(request.into_request(), path, codec).await
         }
     }
@@ -1158,6 +1192,12 @@ pub mod proposer_server {
             &self,
             request: tonic::Request<super::RoundsRequest>,
         ) -> Result<tonic::Response<super::RoundsResponse>, tonic::Status>;
+        /// Returns the read_causal obtained by starting the DAG walk at the collection
+        /// proposed by the input authority (as indicated by their public key) at the input round
+        async fn node_read_causal(
+            &self,
+            request: tonic::Request<super::NodeReadCausalRequest>,
+        ) -> Result<tonic::Response<super::NodeReadCausalResponse>, tonic::Status>;
     }
     //// The API that hosts the endpoints that should be used to help
     //// proposing a block.
@@ -1233,6 +1273,46 @@ pub mod proposer_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = RoundsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/narwhal.Proposer/NodeReadCausal" => {
+                    #[allow(non_camel_case_types)]
+                    struct NodeReadCausalSvc<T: Proposer>(pub Arc<T>);
+                    impl<
+                        T: Proposer,
+                    > tonic::server::UnaryService<super::NodeReadCausalRequest>
+                    for NodeReadCausalSvc<T> {
+                        type Response = super::NodeReadCausalResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::NodeReadCausalRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move {
+                                (*inner).node_read_causal(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = NodeReadCausalSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

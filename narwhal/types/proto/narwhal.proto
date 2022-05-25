@@ -84,6 +84,32 @@ message ReadCausalResponse {
     repeated CertificateDigest collection_ids = 1;
 }
 
+message RoundsRequest {
+    /// The validator's key for which we want to retrieve
+    /// the available rounds.
+    PublicKey public_key = 1;
+}
+
+message RoundsResponse {
+    /// The oldest round for which the node has available
+    /// blocks to propose for the defined validator.
+    uint64 oldest_round = 1;
+
+    /// The newest (latest) round for which the node has available
+    /// blocks to propose for the defined validator.
+    uint64 newest_round = 2;
+}
+
+message NodeReadCausalRequest {
+    PublicKey public_key = 1;
+    uint64 round = 2;
+}
+
+message NodeReadCausalResponse {
+    // Resulting sequence of collections from DAG walk.
+    repeated CertificateDigest collection_ids = 1;
+}
+
 message NewNetworkInfoRequest {
     uint32 epoch_number = 1;
     repeated ValidatorData validators = 2;
@@ -109,26 +135,13 @@ service Validator {
     rpc ReadCausal (ReadCausalRequest) returns (ReadCausalResponse);
 }
 
-message RoundsRequest {
-    /// The validator's key for which we want to retrieve
-    /// the available rounds.
-    PublicKey public_key = 1;
-}
-
-message RoundsResponse {
-    /// The oldest round for which the node has available
-    /// blocks to propose for the defined validator.
-    uint64 oldest_round = 1;
-
-    /// The newest (latest) round for which the node has available
-    /// blocks to propose for the defined validator.
-    uint64 newest_round = 2;
-}
-
 /// The API that hosts the endpoints that should be used to help
 /// proposing a block.
 service Proposer {
   rpc Rounds (RoundsRequest) returns (RoundsResponse);
+  // Returns the read_causal obtained by starting the DAG walk at the collection 
+  // proposed by the input authority (as indicated by their public key) at the input round
+  rpc NodeReadCausal (NodeReadCausalRequest) returns (NodeReadCausalResponse);
 }
 
 service Configuration {
