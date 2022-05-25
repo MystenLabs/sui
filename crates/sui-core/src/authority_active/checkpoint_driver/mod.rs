@@ -85,7 +85,7 @@ where
         let _start_checkpoint_making =
             weight > _active_authority.state.committee.quorum_threshold();
 
-        let proposal = state_checkpoints.lock().set_proposal().clone();
+        let proposal = state_checkpoints.lock().new_proposal().clone();
         if let Ok(my_proposal) = proposal {
             diff_proposals(
                 _active_authority,

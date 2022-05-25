@@ -292,7 +292,7 @@ impl CheckpointStore {
         // Set a proposal if there is not one, and one could be set
         // TODO: check some minimum time passed since the last one
         //       and only set after that time.
-        let _ = self.set_proposal();
+        let _ = self.new_proposal();
 
         // Try to load any latest proposal
         let locals = self.get_locals();
@@ -431,7 +431,7 @@ impl CheckpointStore {
         self.update_new_checkpoint_inner(checkpoint_sequence_number, &transactions, batch)?;
 
         // Try to set a fresh proposal, and ignore errors if this fails.
-        let _ = self.set_proposal();
+        let _ = self.new_proposal();
 
         Ok(())
     }
@@ -800,10 +800,29 @@ impl CheckpointStore {
         self.get_locals().next_transaction_sequence
     }
 
+    /// Creates a new proposal, but only if the previous checkpoint certificate
+    /// is known and stored. This ensures that any validator in checkpoint round
+    /// X can serve certificates for all rounds < X.
+    pub fn new_proposal(&mut self) -> Result<CheckpointProposal, SuiError> {
+    
+        let sequence_number = self.next_checkpoint();
+
+        // Only move to propose when we have the full checkpoint certificate
+        if sequence_number > 0 {
+            // Check that we have the full certificate for the previous checkpoint
+            if !matches!(self.checkpoints.get(&(sequence_number - 1)), Ok(Some(AuthenticatedCheckpoint::Certified(..)))) {
+                return Err(SuiError::from("Cannot propose before having a certificate"));
+            }
+        }
+
+        self.set_proposal()
+    }
+
+
     // Helper write functions
 
     /// Set the next checkpoint proposal.
-    pub(crate) fn set_proposal(&mut self) -> Result<CheckpointProposal, SuiError> {
+    fn set_proposal(&mut self) -> Result<CheckpointProposal, SuiError> {
         // Check that:
         // - there is no current proposal.
         // - there are no unprocessed transactions.
@@ -825,19 +844,9 @@ impl CheckpointStore {
             return Err(SuiError::from("Cannot propose an empty set."));
         }
 
-        let sequence_number = self.next_checkpoint();
-
-        // Only move to propose when we have the full checkpoint certificate
-        if sequence_number > 0 {
-            // Check that we have the full certificate for the previous checkpoint
-            if !matches!(self.checkpoints.get(&(sequence_number - 1)), Ok(Some(AuthenticatedCheckpoint::Certified(..)))) {
-                return Err(SuiError::from("Cannot propose before having a certificate"));
-            }
-        }
-
         // Include the sequence number of all extra transactions not already in a
         // checkpoint. And make a list of the transactions.
-        
+        let sequence_number = self.next_checkpoint();
         let next_local_tx_sequence = self.extra_transactions.values().max().unwrap() + 1;
 
         let transactions = CheckpointContents::new(self.extra_transactions.keys());
