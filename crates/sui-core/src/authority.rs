@@ -1131,7 +1131,7 @@ impl ExecutionState for AuthorityState {
                     // thus ok to only persist now (despite this function may have returned earlier).
                     // In the worst case, the synchronizer of the consensus client will catch up.
                     self.database.persist_certificate_and_lock_shared_objects(
-                        certificate,
+                        *certificate,
                         execution_indices,
                     )?;
                 }

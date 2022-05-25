@@ -167,7 +167,7 @@ impl ConsensusAdapter {
             match certificate {
                 ConsensusTransaction::UserTransaction(certificate) => {
                     let confirmation = ConfirmationTransaction {
-                        certificate: certificate.clone(),
+                        certificate: *certificate.clone(),
                     };
                     self.state
                         .handle_confirmation_transaction(confirmation)

@@ -231,7 +231,7 @@ impl Validator for AuthorityServer {
         // we can thus try to re-execute it now.
         let info = match self
             .state
-            .try_skip_consensus(certificate)
+            .try_skip_consensus(*certificate)
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?
         {
