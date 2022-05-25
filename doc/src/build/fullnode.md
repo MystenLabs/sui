@@ -6,7 +6,7 @@ We welcome you to run your own Sui full node! Sui full nodes run a service that 
 
 This role enables [validators](https://docs.sui.io/learn/architecture/validators) (or miners in other networks) to focus on servicing the write path and processing transactions as fast as possible. Once a validator has committed a new set of transactions (or a block of transactions), the validator will push that block to a full node (potentially a number of full nodes) who will then in turn disseminate it to the rest of the network.
 
-**Important**: For potential validators, running a Sui full node is an absolute prerequisite. We encourage auditors, bridges, state mirrors and other interested parties to join us. We offer no guarantees on performance or stability. We’re seeking feedback in the form of issues filed in GitHub?. (Use Todd’s ISSUES.md template.)
+**Important**: For potential validators, running a Sui full node is an absolute prerequisite. We encourage auditors, bridges, state mirrors and other interested parties to join us. We offer no guarantees on performance or stability. We’re seeking feedback in the form of [issues filed in GitHub](https://github.com/MystenLabs/sui/issues/new/choose).
 
 ## Features
 
