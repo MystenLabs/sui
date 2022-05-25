@@ -3,12 +3,13 @@
 
 use clap::ArgEnum;
 use clap::Parser;
+use hyper::body::Buf;
+use hyper::{Body, Client, Method, Request};
 use pretty_assertions::assert_str_eq;
 use serde::Serialize;
-use serde_json::json;
+use serde_json::{json, Map, Value};
 use std::fs::File;
 use std::io::Write;
-
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui::wallet_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
 use sui_config::GenesisConfig;
@@ -16,16 +17,17 @@ use sui_config::SUI_WALLET_CONFIG;
 use sui_core::gateway_types::{
     GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
 };
-use sui_gateway::api::SuiRpcModule;
+use sui_gateway::api::RpcTransactionBuilderClient;
+use sui_gateway::api::{SuiRpcModule, TransactionBytes};
 use sui_gateway::bcs_api::BcsApiImpl;
 use sui_gateway::json_rpc::sui_rpc_doc;
 use sui_gateway::read_api::{FullNodeApi, ReadApi};
 use sui_gateway::rpc_gateway::{GatewayReadApiImpl, RpcGatewayImpl, TransactionBuilderImpl};
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-use test_utils::network::start_rpc_test_network;
-
+use test_utils::network::{start_rpc_test_network, TestNetwork};
 #[derive(Debug, Parser, Clone, Copy, ArgEnum)]
 enum Action {
     Print,
@@ -101,7 +103,7 @@ async fn main() {
 async fn create_response_sample(
 ) -> Result<(ObjectResponseSample, TransactionResponseSample), anyhow::Error> {
     let network = start_rpc_test_network(Some(GenesisConfig::custom_genesis(1, 4, 30))).await?;
-    let working_dir = network.working_dir;
+    let working_dir = network.working_dir.clone();
     let config = working_dir.join(SUI_WALLET_CONFIG);
 
     let mut context = WalletContext::new(&config)?;
@@ -121,9 +123,11 @@ async fn create_response_sample(
 
     let (example_nft_tx, example_nft) = get_nft_response(&mut context).await?;
     let (move_package, publish) = create_package_object_response(&mut context).await?;
-    let hero = create_hero_response(&mut context, &coins).await?;
+    let (hero_package, hero) = create_hero_response(&mut context, &coins).await?;
     let transfer = create_transfer_response(&mut context, address, &coins).await?;
     let coin_split = create_coin_split_response(&mut context, &coins).await?;
+    let error = create_error_response(address, hero_package, context, network).await?;
+
     let objects = ObjectResponseSample {
         example_nft,
         coin,
@@ -136,6 +140,7 @@ async fn create_response_sample(
         transfer,
         coin_split,
         publish,
+        error,
     };
 
     Ok((objects, txs))
@@ -192,7 +197,7 @@ async fn create_transfer_response(
 async fn create_hero_response(
     context: &mut WalletContext,
     coins: &[SuiObjectInfo],
-) -> Result<GetObjectDataResponse, anyhow::Error> {
+) -> Result<(ObjectID, GetObjectDataResponse), anyhow::Error> {
     // Create hero response
     let result = WalletCommands::Publish {
         path: "sui_programmability/examples/games".to_string(),
@@ -225,13 +230,63 @@ async fn create_hero_response(
 
         if let WalletCommandResult::Call(_, effect) = result {
             let hero = effect.created.first().unwrap();
-            Ok(context.gateway.get_object(hero.reference.object_id).await?)
+            Ok((
+                package_id,
+                context.gateway.get_object(hero.reference.object_id).await?,
+            ))
         } else {
             panic!()
         }
     } else {
         panic!()
     }
+}
+
+async fn create_error_response(
+    address: SuiAddress,
+    hero_package: ObjectID,
+    context: WalletContext,
+    network: TestNetwork,
+) -> Result<Value, anyhow::Error> {
+    // Cannot use wallet command as it will return Err if tx status is Error
+    // Using hyper to get the raw response instead
+    let response: TransactionBytes = network
+        .http_client
+        .move_call(
+            address,
+            hero_package,
+            "Hero".to_string(),
+            "new_game".to_string(),
+            vec![],
+            vec![],
+            None,
+            100,
+        )
+        .await?;
+
+    let signature = context
+        .keystore
+        .sign(&address, &response.tx_bytes.to_vec()?)?;
+    let signature_byte = Base64::encode(signature.signature_bytes());
+    let pub_key = Base64::encode(signature.public_key_bytes());
+    let tx_data = response.tx_bytes.encoded();
+
+    let client = Client::new();
+    let request = Request::builder()
+        .uri(network.rpc_url)
+        .method(Method::POST)
+        .header("Content-Type", "application/json")
+        .body(Body::from(format!(
+            "{{ \"jsonrpc\": \"2.0\",\"method\": \"sui_executeTransaction\",\"params\": [\"{}\", \"{}\", \"{}\"],\"id\": 1 }}",
+            tx_data,
+            signature_byte,
+            pub_key
+        )))?;
+
+    let res = client.request(request).await?;
+    let body = hyper::body::aggregate(res).await?;
+    let result: Map<String, Value> = serde_json::from_reader(body.reader())?;
+    Ok(result["result"].clone())
 }
 
 async fn create_coin_split_response(
@@ -309,4 +364,5 @@ struct TransactionResponseSample {
     pub transfer: TransactionResponse,
     pub coin_split: TransactionResponse,
     pub publish: TransactionResponse,
+    pub error: Value,
 }

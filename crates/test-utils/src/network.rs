@@ -134,13 +134,14 @@ pub async fn start_rpc_test_network(
         .persisted(&working_dir.join(SUI_WALLET_CONFIG))
         .save()?;
 
-    let http_client = HttpClientBuilder::default().build(rpc_url)?;
+    let http_client = HttpClientBuilder::default().build(rpc_url.clone())?;
     Ok(TestNetwork {
         _network,
         _rpc_server: rpc_server_handle,
         accounts,
         http_client,
         working_dir,
+        rpc_url,
     })
 }
 
@@ -150,4 +151,5 @@ pub struct TestNetwork {
     pub accounts: Vec<SuiAddress>,
     pub http_client: HttpClient,
     pub working_dir: PathBuf,
+    pub rpc_url: String,
 }
