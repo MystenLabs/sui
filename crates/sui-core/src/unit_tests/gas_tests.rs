@@ -1,8 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_tests::get_genesis_package_by_module;
-
 use super::*;
 
 use super::authority_tests::{init_state_with_ids, send_and_confirm_transaction};
@@ -312,12 +310,8 @@ async fn test_publish_gas() -> SuiResult {
 async fn test_move_call_gas() -> SuiResult {
     let (sender, sender_key) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    // find the function Object::create and call it to create a new object
-    let genesis_package_objects = genesis::clone_genesis_packages();
-    let package_object_ref =
-        get_genesis_package_by_module(&genesis_package_objects, "ObjectBasics");
-
     let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+    let package_object_ref = authority_state.get_framework_object_ref().await?;
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
 
     let module = ident_str!("ObjectBasics").to_owned();

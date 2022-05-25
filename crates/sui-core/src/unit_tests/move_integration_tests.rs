@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::authority::authority_tests::{
-    call_move, init_state_with_ids, send_and_confirm_transaction,
+    call_move, init_state_with_ids, send_and_confirm_transaction, TestCallArg,
 };
 
 use move_package::BuildConfig;
@@ -41,8 +41,6 @@ async fn test_object_wrapping_unwrapping() {
         "create_child",
         vec![],
         vec![],
-        vec![],
-        vec![],
     )
     .await
     .unwrap();
@@ -64,9 +62,7 @@ async fn test_object_wrapping_unwrapping() {
         "ObjectWrapping",
         "create_parent",
         vec![],
-        vec![child_object_ref.0],
-        vec![],
-        vec![],
+        vec![TestCallArg::Object(child_object_ref.0)],
     )
     .await
     .unwrap();
@@ -108,9 +104,7 @@ async fn test_object_wrapping_unwrapping() {
         "ObjectWrapping",
         "extract_child",
         vec![],
-        vec![parent_object_ref.0],
-        vec![],
-        vec![],
+        vec![TestCallArg::Object(parent_object_ref.0)],
     )
     .await
     .unwrap();
@@ -144,9 +138,10 @@ async fn test_object_wrapping_unwrapping() {
         "ObjectWrapping",
         "set_child",
         vec![],
-        vec![parent_object_ref.0, child_object_ref.0],
-        vec![],
-        vec![],
+        vec![
+            TestCallArg::Object(parent_object_ref.0),
+            TestCallArg::Object(child_object_ref.0),
+        ],
     )
     .await
     .unwrap();
@@ -178,9 +173,7 @@ async fn test_object_wrapping_unwrapping() {
         "ObjectWrapping",
         "delete_parent",
         vec![],
-        vec![parent_object_ref.0],
-        vec![],
-        vec![],
+        vec![TestCallArg::Object(parent_object_ref.0)],
     )
     .await
     .unwrap();
@@ -228,8 +221,6 @@ async fn test_object_owning_another_object() {
         "create_parent",
         vec![],
         vec![],
-        vec![],
-        vec![],
     )
     .await
     .unwrap();
@@ -245,8 +236,6 @@ async fn test_object_owning_another_object() {
         &package,
         "ObjectOwner",
         "create_child",
-        vec![],
-        vec![],
         vec![],
         vec![],
     )
@@ -265,9 +254,7 @@ async fn test_object_owning_another_object() {
         "ObjectOwner",
         "mutate_child",
         vec![],
-        vec![child.0],
-        vec![],
-        vec![],
+        vec![TestCallArg::Object(child.0)],
     )
     .await
     .unwrap();
@@ -283,9 +270,7 @@ async fn test_object_owning_another_object() {
         "ObjectOwner",
         "add_child",
         vec![],
-        vec![parent.0, child.0],
-        vec![],
-        vec![],
+        vec![TestCallArg::Object(parent.0), TestCallArg::Object(child.0)],
     )
     .await
     .unwrap();
@@ -308,9 +293,7 @@ async fn test_object_owning_another_object() {
         "ObjectOwner",
         "mutate_child",
         vec![],
-        vec![child.0],
-        vec![],
-        vec![],
+        vec![TestCallArg::Object(child.0)],
     )
     .await;
     assert!(result.is_err());
@@ -325,9 +308,7 @@ async fn test_object_owning_another_object() {
         "ObjectOwner",
         "mutate_child_with_parent",
         vec![],
-        vec![child.0, parent.0],
-        vec![],
-        vec![],
+        vec![TestCallArg::Object(child.0), TestCallArg::Object(parent.0)],
     )
     .await
     .unwrap();
@@ -342,8 +323,6 @@ async fn test_object_owning_another_object() {
         &package,
         "ObjectOwner",
         "create_parent",
-        vec![],
-        vec![],
         vec![],
         vec![],
     )
@@ -362,9 +341,11 @@ async fn test_object_owning_another_object() {
         "ObjectOwner",
         "transfer_child",
         vec![],
-        vec![parent.0, child.0, new_parent.0],
-        vec![],
-        vec![],
+        vec![
+            TestCallArg::Object(parent.0),
+            TestCallArg::Object(child.0),
+            TestCallArg::Object(new_parent.0),
+        ],
     )
     .await
     .unwrap();
@@ -388,9 +369,10 @@ async fn test_object_owning_another_object() {
         "ObjectOwner",
         "delete_child",
         vec![],
-        vec![child.0, new_parent.0],
-        vec![],
-        vec![],
+        vec![
+            TestCallArg::Object(child.0),
+            TestCallArg::Object(new_parent.0),
+        ],
     )
     .await
     .unwrap();
@@ -409,9 +391,10 @@ async fn test_object_owning_another_object() {
         "ObjectOwner",
         "remove_child",
         vec![],
-        vec![new_parent.0, child.0],
-        vec![],
-        vec![],
+        vec![
+            TestCallArg::Object(new_parent.0),
+            TestCallArg::Object(child.0),
+        ],
     )
     .await
     .unwrap();
@@ -427,9 +410,10 @@ async fn test_object_owning_another_object() {
         "ObjectOwner",
         "delete_child",
         vec![],
-        vec![child.0, new_parent.0],
-        vec![],
-        vec![],
+        vec![
+            TestCallArg::Object(child.0),
+            TestCallArg::Object(new_parent.0),
+        ],
     )
     .await
     .unwrap();
@@ -445,8 +429,6 @@ async fn test_object_owning_another_object() {
         &package,
         "ObjectOwner",
         "create_parent_and_child",
-        vec![],
-        vec![],
         vec![],
         vec![],
     )
@@ -473,9 +455,7 @@ async fn test_object_owning_another_object() {
         "ObjectOwner",
         "delete_parent_and_child",
         vec![],
-        vec![parent.0, child.0],
-        vec![],
-        vec![],
+        vec![TestCallArg::Object(parent.0), TestCallArg::Object(child.0)],
     )
     .await
     .unwrap();

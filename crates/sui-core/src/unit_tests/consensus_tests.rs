@@ -1,16 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::authority::{
-    authority_tests::{get_genesis_package_by_module, init_state_with_objects},
-    AuthorityState,
-};
+use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use move_core_types::{account_address::AccountAddress, ident_str};
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};
-use sui_adapter::genesis;
 use sui_network::tonic;
 use sui_types::{
     base_types::{ObjectID, TransactionDigest},
@@ -53,8 +49,7 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
         // Make a sample transaction.
         let module = "ObjectBasics";
         let function = "create";
-        let genesis_package_objects = genesis::clone_genesis_packages();
-        let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
+        let package_object_ref = authority.get_framework_object_ref().await.unwrap();
 
         let data = TransactionData::new_move_call(
             sender,

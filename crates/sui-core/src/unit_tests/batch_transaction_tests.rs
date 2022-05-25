@@ -4,12 +4,9 @@
 use super::*;
 use bcs;
 
-use authority_tests::{
-    get_genesis_package_by_module, init_state_with_ids, send_and_confirm_transaction,
-};
+use authority_tests::{init_state_with_ids, send_and_confirm_transaction};
 use move_binary_format::file_format;
 use move_core_types::{account_address::AccountAddress, ident_str};
-use sui_adapter::genesis;
 use sui_types::{
     crypto::{get_key_pair, Signature},
     messages::Transaction,
@@ -38,9 +35,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
                 .compute_object_reference(),
         }));
     }
-    let genesis_package_objects = genesis::clone_genesis_packages();
-    let package_object_ref =
-        get_genesis_package_by_module(&genesis_package_objects, "ObjectBasics");
+    let package_object_ref = authority_state.get_framework_object_ref().await?;
     for _ in 0..N {
         transactions.push(SingleTransactionKind::Call(MoveCall {
             package: package_object_ref,
@@ -108,9 +103,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
                 .compute_object_reference(),
         }));
     }
-    let genesis_package_objects = genesis::clone_genesis_packages();
-    let package_object_ref =
-        get_genesis_package_by_module(&genesis_package_objects, "ObjectBasics");
+    let package_object_ref = authority_state.get_framework_object_ref().await?;
     transactions.push(SingleTransactionKind::Call(MoveCall {
         package: package_object_ref,
         module: ident_str!("ObjectBasics").to_owned(),
@@ -188,9 +181,7 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
         .insert_genesis_object(gas_object.clone())
         .await;
 
-    let genesis_package_objects = genesis::clone_genesis_packages();
-    let package_object_ref =
-        get_genesis_package_by_module(&genesis_package_objects, "ObjectBasics");
+    let package_object_ref = authority_state.get_framework_object_ref().await?;
     const N: usize = 100;
     let mut transactions = vec![];
     for _ in 0..N {
