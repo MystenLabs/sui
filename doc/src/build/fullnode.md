@@ -40,60 +40,16 @@ Today a full node is expected to maintain the full history of the chain, althoug
 
 Conversely, a validator needs to store only the latest transactions on the *frontier* of the object graph (e.g., txes with >0 unspent output objects).
 
-<!-- Output copied to clipboard! -->
-
-<!-----
-
-Yay, no errors, warnings, or alerts!
-
-Conversion time: 0.64 seconds.
-
-
-Using this Markdown file:
-
-1. Paste this output into your source file.
-2. See the notes and action items below regarding this conversion run.
-3. Check the rendered output (headings, lists, code blocks, tables) for proper
-   formatting and use a linkchecker before you publish this page.
-
-Conversion notes:
-
-* Docs to Markdown version 1.0β33
-* Wed May 25 2022 15:57:49 GMT-0700 (PDT)
-* Source doc: Sui Full Node Setup - go/fullnode-setup 
------>
-
-
-
-## Sui Full Node Setup
-
-
-### [go/fullnode-setup](https://app.golinks.io/fullnode-setup) 
-
-Authors: Clay, Brandon, (ad yourself for credit and love)
-
-**Contents**
-
-
-[TOC]
-
-
-_© 2022 Mysten Labs_
-
-
-## Purpose {#purpose}
+## Full node setup
 
 Follow the instructions here to run your own Sui full node.
 
+### System requirements
 
-## System requirements {#system-requirements}
 
-
-### Hardware {#hardware}
+#### Hardware
 
 This is the minimum recommended hardware for running a Sui full node. In Amazon Web Services (AWS), this is known as a t2.large:
-
-
 
 * CPUs: 2
 * RAM: 8GB
@@ -101,47 +57,13 @@ This is the minimum recommended hardware for running a Sui full node. In Amazon 
 * Cost/hr: $0.09
 * Cost/month: $65
 
-### Software {#software}
+#### Software
 
 Take the normal steps to [install Sui](https://docs.sui.io/build/install) and its prerequisite packages.
 
-Ensure your system can run a Docker image with `docker` or `containerd`. 
-
-
-### Network {#network}
-
-TODO: Figure out if we need specs and port forwarding instructions per:
-
-[https://docs.solana.com/running-validator/validator-reqs#networking](https://docs.solana.com/running-validator/validator-reqs#networking) 
-
-Ex. “we recommend at least 1Gbps, and 5Gbps is better.” from:
-
-[https://docs.onflow.org/node-operation/node-setup/#networking-requirements](https://docs.onflow.org/node-operation/node-setup/#networking-requirements) 
-
-TODO: Do we recommend using domain names? How?
-
-TODO: Explain how network keys are managed.
-
-TODO: Can they run more than one node at a time and if so how?
-
-
-### Sui {#sui}
-
-TODO: Cover staking. Work with Ryan. Determine if they must have tokens to participate and if so how to obtain them.
-
- \
-Incorporate contents from [Ecosystem Enablement Partners Token Round Participation Framework presentation](https://docs.google.com/presentation/d/1ITD1Ne-Pc4j_jVnda2kFbfGXBqUg_F7utHJmm-uUBkM/edit#slide=id.g12733b8ff97_2_45).
-
-TODO: Emulate? \
-[https://ethereum.org/en/run-a-node/](https://ethereum.org/en/run-a-node/) (see Why run a node?) \
-Add a diagram. Ryan has ideas and mad preso skilz. :-)
-
-TODO: Link to Tokenomics docs for storage fund. Explain here.
-
+Ensure your system can run a Docker image with `docker` or `containerd`.
 
 ## Startup
-
-TODO: Incorporate use of Dockerfile if we have it.
 
 To run a local Sui full node, first [install Sui](https://docs.sui.io/build/install).
 
