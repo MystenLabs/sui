@@ -56,12 +56,12 @@ async fn checkpoint_active_flow() {
     let mut value_set = BTreeSet::new();
     for a in authorities {
         let next_checkpoint_sequence = a.authority._checkpoints.as_ref().unwrap().lock().next_checkpoint();
-        assert!(next_checkpoint_sequence >= 2);
+        assert!(next_checkpoint_sequence >= 2, "Expected {} > 2", next_checkpoint_sequence);
         value_set.insert(next_checkpoint_sequence);
     }
 
     // After the end all authorities are the same
-    assert!(value_set.len() == 1);
+    assert!(value_set.len() == 1, "Got set {:?}", value_set);
 
 
 }

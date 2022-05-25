@@ -77,6 +77,7 @@ where
                 )
                 .await;
                 // And start from the beginning, when done
+                tokio::time::sleep(Duration::from_millis(100)).await;
                 continue;
             }
 
@@ -371,13 +372,18 @@ pub async fn get_one_checkpoint<A>(
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    loop {
+
+    let mut available_authorities =available_authorities.clone();
+    while !available_authorities.is_empty() {
+        
         // Get a random authority by stake
         let sample_authority = _active_authority.state.committee.sample();
         if !available_authorities.contains(sample_authority) {
             // We want to pick an authority that has the checkpoint and its full history.
             continue;
         }
+        
+        available_authorities.remove(&sample_authority);
 
         // Note: safe to do lookup since authority comes from the committee sample
         //       so this should not panic.
@@ -400,6 +406,9 @@ where
         }
 
     }
+
+    Err(SuiError::GenericAuthorityError { error: "Ran out of authorities.".to_string() })
+
 }
 
 
@@ -467,6 +476,7 @@ pub async fn diff_proposals<A>(
 
     let mut available_authorities: BTreeSet<_> = _proposals.iter().map(|(auth, _)| *auth).collect();
     available_authorities.remove(&_active_authority.state.name); // remove ourselves
+    let mut fragments_num = 0;
 
     loop {
         let next_checkpoint_sequence_number: u64 = checkpoint_db.lock().next_checkpoint();
@@ -506,19 +516,34 @@ pub async fn diff_proposals<A>(
                         continue;
                     }
 
+                    // TODO: check the proposal is also for the same checkpoint sequence number?
+                    if current.as_ref().unwrap().0.checkpoint.sequence_number() != _my_proposal.sequence_number() {
+                        return;
+                    }
+                    
                     let other_proposal = CheckpointProposal::new(
                         current.as_ref().unwrap().clone(),
                         response.detail.unwrap(),
                     );
 
-                    // TODO: check the proposal is also for the same checkpoint sequence number?
                     let fragment = _my_proposal.fragment_with(&other_proposal);
                     let _ = checkpoint_db.lock().handle_receive_fragment(&fragment);
+
+                    // TODO: here we should really wait until the fragment is sequenced, otherwise
+                    //       we would be going ahead and sequencing more fragments that may not be
+                    //       needed. For the moment we just linearly back-off.
+                    fragments_num += 1;
+                    if fragments_num > 2 {
+                        tokio::time::sleep(Duration::from_secs(3 * fragments_num)).await;
+                    }
+
                 }
             } else {
                 continue;
             }
         }
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        else {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
     }
 }
