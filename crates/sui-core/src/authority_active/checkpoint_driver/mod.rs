@@ -64,13 +64,10 @@ where
         // while we do sync. We are in any case not in a position to make valuable
         // proposals.
         if let Some(checkpoint) = checkpoint {
+
             // Check if there are more historic checkpoints to catch up with
             let next_checkpoint = state_checkpoints.lock().next_checkpoint();
             if next_checkpoint < checkpoint.checkpoint.sequence_number {
-                println!(
-                    "Sync? {:?} < {:?}",
-                    next_checkpoint, checkpoint.checkpoint.sequence_number
-                );
 
                 // TODO log error
                 let _ = sync_to_checkpoint(
@@ -83,10 +80,28 @@ where
                 continue;
             }
 
-            // Try to upgrade the signed checkpoint to a certified one if possible
-            let _ = state_checkpoints
-                .lock()
-                .handle_checkpoint_certificate(&checkpoint, &None);
+            // Check if the checkpoint is the one we are expecting next!
+            // if next_checkpoint == checkpoint.checkpoint.sequence_number {
+                // Try to upgrade the signed checkpoint to a certified one if possible
+                if state_checkpoints
+                    .lock()
+                    .handle_checkpoint_certificate(&checkpoint, &None).is_err() {
+
+                        // One of the errors may be due to the fact that we do not have 
+                        // the full contents of the checkpoint. So we try to download it.
+                        // TODO: clean up the errors to get here only when the error is
+                        //       "No checkpoint set at this sequence."
+                        if let Ok(contents) = get_checkpoint_contents(_active_authority, &checkpoint).await {
+                            // Retry with contents
+                            let _ = state_checkpoints
+                                .lock()
+                                .handle_checkpoint_certificate(&checkpoint, &Some(contents));
+                        }
+
+
+                    }
+            // }
+
         }
 
         // Check if we need to advance to the next checkpoint, in case >2/3
@@ -336,9 +351,11 @@ where
         let (past, _contents) =
             get_one_checkpoint(_active_authority, seq, true, &available_authorities).await?;
         // NOTE: should we ignore the error here?
-        let _ = checkpoint_db
+        if let Err(err) = checkpoint_db
             .lock()
-            .handle_checkpoint_certificate(&past, &_contents);
+            .handle_checkpoint_certificate(&past, &_contents){
+                println!("Sync Err: {:?}", err);
+            }
     }
 
     Ok(())
@@ -365,22 +382,74 @@ where
         // Note: safe to do lookup since authority comes from the committee sample
         //       so this should not panic.
         let client = _active_authority.net.authority_clients[sample_authority].clone();
-        if let Ok(response) = client
-            .handle_checkpoint(CheckpointRequest::past(sequence_number, contents))
-            .await
-        {
-            if let CheckpointResponse {
+        match client
+        .handle_checkpoint(CheckpointRequest::past(sequence_number, contents))
+        .await {
+            Ok(CheckpointResponse {
                 info: AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Certified(past)),
                 detail,
-            } = response
-            {
+            }) => {
                 return Ok((past, detail));
-            }
-        } else {
-            // TODO: log error
+            },
+            Ok(resp) => {
+                println!("Sync Error: Unexpected answer: {:?}", resp);
+            },
+            Err(err) => {
+                println!("Sync Error: peer error: {:?}", err);
+            }, 
         }
+
     }
 }
+
+
+#[allow(clippy::collapsible_match)]
+pub async fn get_checkpoint_contents<A>(
+    _active_authority: &ActiveAuthority<A>,
+    checkpoint: &CertifiedCheckpoint,
+) -> Result<CheckpointContents, SuiError>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    let available_authorities : BTreeSet<_> = checkpoint.signatory_authorities().cloned().collect();
+    loop {
+        // Get a random authority by stake
+        let sample_authority = _active_authority.state.committee.sample();
+        if !available_authorities.contains(sample_authority) {
+            // We want to pick an authority that has the checkpoint and its full history.
+            continue;
+        }
+
+        // Note: safe to do lookup since authority comes from the committee sample
+        //       so this should not panic.
+        let client = _active_authority.net.authority_clients[sample_authority].clone();
+        match client
+        .handle_checkpoint(CheckpointRequest::past(checkpoint.checkpoint.sequence_number, true))
+        .await {
+            Ok(CheckpointResponse {
+                info: _info,
+                detail: Some(contents),
+            }) => {
+                // TODO: check here that the digest of contents matches
+                if contents.digest() != checkpoint.checkpoint.digest {
+                    // A byzantine authority!
+                    println!("Sync Error: Incorrect contents returned");
+                    continue
+                }
+
+                return Ok(contents);
+            },
+            Ok(resp) => {
+                println!("Sync Error: Unexpected answer: {:?}", resp);
+            },
+            Err(err) => {
+                println!("Sync Error: peer error: {:?}", err);
+            }, 
+        }
+
+    }
+}
+
 
 /// Picks other authorities at random and constructs checkpoint fragments
 /// that are submitted to consensus. The process terminates when a future

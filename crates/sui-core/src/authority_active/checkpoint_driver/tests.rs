@@ -3,14 +3,14 @@
 
 use crate::{authority_active::ActiveAuthority, checkpoints::checkpoint_tests::TestSetup};
 
-use std::time::Duration;
+use std::{time::Duration, collections::BTreeSet};
 use sui_types::messages::ExecutionStatus;
 
 use crate::checkpoints::checkpoint_tests::checkpoint_tests_setup;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn checkpoint_active_flow() {
-    let setup = checkpoint_tests_setup(200, Duration::from_millis(200)).await;
+    let setup = checkpoint_tests_setup(20, Duration::from_millis(200)).await;
 
     let TestSetup {
         committee: _committee,
@@ -20,7 +20,7 @@ async fn checkpoint_active_flow() {
     } = setup;
 
     // Start active part of authority.
-    for inner_state in authorities {
+    for inner_state in authorities.clone() {
         let clients = aggregator.authority_clients.clone();
         let _active_handle = tokio::task::spawn(async move {
             let active_state =
@@ -42,7 +42,7 @@ async fn checkpoint_active_flow() {
             println!("Execute at {:?}", tokio::time::Instant::now());
 
             // Add some delay between transactions
-            tokio::time::sleep(Duration::from_millis(49)).await;
+            tokio::time::sleep(Duration::from_millis(412)).await;
         }
     });
 
@@ -51,5 +51,17 @@ async fn checkpoint_active_flow() {
 
     // Wait for a batch to go through
     // (We do not really wait, we jump there since real-time is not running).
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    tokio::time::sleep(Duration::from_secs(10)).await;
+
+    let mut value_set = BTreeSet::new();
+    for a in authorities {
+        let next_checkpoint_sequence = a.authority._checkpoints.as_ref().unwrap().lock().next_checkpoint();
+        assert!(next_checkpoint_sequence >= 2);
+        value_set.insert(next_checkpoint_sequence);
+    }
+
+    // After the end all authorities are the same
+    assert!(value_set.len() == 1);
+
+
 }

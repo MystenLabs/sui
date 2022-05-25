@@ -1264,6 +1264,7 @@ impl AsyncTestConsensus {
     }
 }
 
+#[derive(Clone)]
 #[allow(dead_code)]
 pub struct TestAuthority {
     pub store: Arc<AuthorityStore>,

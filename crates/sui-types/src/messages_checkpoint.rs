@@ -182,7 +182,7 @@ pub type CheckpointDigest = [u8; 32];
 pub struct CheckpointSummary {
     pub sequence_number: CheckpointSequenceNumber,
     pub waypoint: Box<Waypoint>, // Bigger structure, can live on heap.
-    digest: CheckpointDigest,
+    pub digest: CheckpointDigest,
     // TODO: add digest of previous checkpoint summary
 }
 
