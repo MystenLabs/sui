@@ -1503,7 +1503,7 @@ async fn shared_object() {
     authority
         .handle_consensus_transaction(
             /* last_consensus_index */ ExecutionIndices::default(),
-            ConsensusTransaction::UserTransaction(certificate),
+            ConsensusTransaction::UserTransaction(Box::new(certificate)),
         )
         .await
         .unwrap();

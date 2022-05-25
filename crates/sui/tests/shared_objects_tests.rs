@@ -57,7 +57,7 @@ async fn submit_shared_object_transaction(
     configs: &[ValidatorInfo],
 ) -> Vec<SuiResult<TransactionInfoResponse>> {
     let certificate = make_certificates(vec![transaction]).pop().unwrap();
-    let message = ConsensusTransaction::UserTransaction(certificate);
+    let message = ConsensusTransaction::UserTransaction(Box::new(certificate));
 
     loop {
         let futures: Vec<_> = configs
