@@ -298,15 +298,6 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
             .map_or_else(|| 0, |x| x.stake)
     }
 
-    /// Returns the stake of all authorities except `myself`.
-    pub fn others_stake(&self, myself: &PublicKey) -> Vec<(PublicKey, Stake)> {
-        self.authorities
-            .iter()
-            .filter(|(name, _)| *name != myself)
-            .map(|(name, authority)| (name.deref().clone(), authority.stake))
-            .collect()
-    }
-
     /// Returns the stake required to reach a quorum (2f+1).
     pub fn quorum_threshold(&self) -> Stake {
         // If N = 3f + 1 + k (0 <= k < 3)
