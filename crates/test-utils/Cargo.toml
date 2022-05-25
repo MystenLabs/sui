@@ -15,7 +15,7 @@ futures = "0.3.21"
 async-trait = "0.1.53"
 rand = "0.7.3"
 rocksdb = "0.18.0"
-tracing = { version = "0.1.34", features = ["log"] }
+tracing = "0.1.34"
 tempfile = "3.3.0"
 bcs = "0.1.3"
 
