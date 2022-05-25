@@ -580,7 +580,7 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
         committee.clone(),
         rx_commands,
         rx_batch_messages,
-        mock_handler,
+        Arc::new(mock_handler),
     );
 
     // WHEN we send a request to get a block
