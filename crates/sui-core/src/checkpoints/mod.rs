@@ -804,20 +804,21 @@ impl CheckpointStore {
     /// is known and stored. This ensures that any validator in checkpoint round
     /// X can serve certificates for all rounds < X.
     pub fn new_proposal(&mut self) -> Result<CheckpointProposal, SuiError> {
-    
         let sequence_number = self.next_checkpoint();
 
         // Only move to propose when we have the full checkpoint certificate
         if sequence_number > 0 {
             // Check that we have the full certificate for the previous checkpoint
-            if !matches!(self.checkpoints.get(&(sequence_number - 1)), Ok(Some(AuthenticatedCheckpoint::Certified(..)))) {
+            if !matches!(
+                self.checkpoints.get(&(sequence_number - 1)),
+                Ok(Some(AuthenticatedCheckpoint::Certified(..)))
+            ) {
                 return Err(SuiError::from("Cannot propose before having a certificate"));
             }
         }
 
         self.set_proposal()
     }
-
 
     // Helper write functions
 

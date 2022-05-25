@@ -3,7 +3,8 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    time::Duration, sync::Arc,
+    sync::Arc,
+    time::Duration,
 };
 
 use parking_lot::Mutex;
@@ -17,7 +18,8 @@ use sui_types::{
 };
 
 use crate::{
-    authority_aggregator::ReduceOutput, authority_client::AuthorityAPI,
+    authority_aggregator::ReduceOutput,
+    authority_client::AuthorityAPI,
     checkpoints::{proposal::CheckpointProposal, CheckpointStore},
 };
 
@@ -187,6 +189,7 @@ where
     }
 
     // Attempt to construct a newer checkpoint from signed summaries.
+    #[allow(clippy::type_complexity)]
     let mut partial_checkpoints: BTreeMap<
         (CheckpointSequenceNumber, [u8; 32]),
         Vec<(AuthorityName, SignedCheckpoint)>,
@@ -211,7 +214,7 @@ where
                         signed.checkpoint.sequence_number,
                         signed.checkpoint.digest(),
                     ))
-                    .or_insert_with(|| Vec::new())
+                    .or_insert_with(Vec::new)
                     .push((*auth, signed.clone()));
             }
         });
@@ -244,7 +247,7 @@ where
             .map(|x| x.checkpoint.sequence_number)
     );
 
-    if highest_certificate_cert.is_none(){ 
+    if highest_certificate_cert.is_none() {
         println!("{:?}", final_state.responses);
     }
 
@@ -329,26 +332,23 @@ pub async fn diff_proposals<A>(
                 .await
             {
                 if let AuthorityCheckpointInfo::Proposal { current, previous } = &response.info {
-                    
                     // Check if there is a latest checkpoint
                     if let AuthenticatedCheckpoint::Certified(prev) = previous {
                         if prev.checkpoint.sequence_number > next_checkpoint_sequence_number {
                             // We are now way behind, return
-                            return
+                            return;
                         }
                     }
 
-                    let other_proposal =
-                        CheckpointProposal::new(
-                            current.as_ref().unwrap().clone(),
-                            response.detail.unwrap(),
-                        );
+                    let other_proposal = CheckpointProposal::new(
+                        current.as_ref().unwrap().clone(),
+                        response.detail.unwrap(),
+                    );
 
                     // TODO: check the proposal is also for the same checkpoint sequence number?
                     let fragment = _my_proposal.fragment_with(&other_proposal);
                     let _ = checkpoint_db.lock().handle_receive_fragment(&fragment);
                 }
-                
             } else {
                 continue;
             }
