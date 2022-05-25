@@ -545,6 +545,72 @@ async fn test_return_error_when_certificate_is_missing() {
     }
 }
 
+#[tokio::test]
+async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
+    // GIVEN
+    let (name, committee) = resolve_name_and_committee();
+
+    // AND create a certificate but don't store it
+    let certificate = Certificate::<Ed25519PublicKey>::default();
+    let block_id = certificate.digest();
+
+    // AND spawn a new blocks waiter
+    let (tx_commands, rx_commands) = channel(1);
+    let (tx_get_blocks, rx_get_blocks) = oneshot::channel();
+    let (_, rx_batch_messages) = channel(10);
+
+    // AND mock the responses of the BlockSynchronizer
+    let mut mock_handler = MockHandler::<Ed25519PublicKey>::new();
+    mock_handler
+        .expect_get_and_synchronize_block_headers()
+        .with(predicate::eq(vec![block_id]))
+        .times(1)
+        .return_const(vec![Err(handler::Error::BlockNotFound { block_id })]);
+
+    // AND mock the response when we request to synchronise the payloads for non
+    // found certificates
+    mock_handler
+        .expect_synchronize_block_payloads()
+        .with(predicate::eq(vec![]))
+        .times(1)
+        .return_const(vec![]);
+
+    BlockWaiter::spawn(
+        name.clone(),
+        committee.clone(),
+        rx_commands,
+        rx_batch_messages,
+        mock_handler,
+    );
+
+    // WHEN we send a request to get a block
+    tx_commands
+        .send(BlockCommand::GetBlocks {
+            ids: vec![block_id],
+            sender: tx_get_blocks,
+        })
+        .await
+        .unwrap();
+
+    // THEN we should expect to get back the error
+    let timer = sleep(Duration::from_millis(5_000));
+    tokio::pin!(timer);
+
+    tokio::select! {
+        Ok(result) = rx_get_blocks => {
+            let results = result.unwrap();
+            let r = results.blocks.get(0).unwrap().to_owned();
+            let block_error = r.err().unwrap();
+
+            assert_eq!(block_error.id, block_id.clone());
+            assert_eq!(block_error.error, BlockErrorKind::BlockNotFound);
+        },
+        () = &mut timer => {
+            panic!("Timeout, no result has been received in time")
+        }
+    }
+}
+
 // worker_listener listens to TCP requests. The worker responds to the
 // RequestBatch requests for the provided expected_batches.
 pub fn worker_listener<PublicKey: VerifyingKey>(

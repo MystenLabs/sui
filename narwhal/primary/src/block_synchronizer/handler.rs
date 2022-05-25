@@ -175,6 +175,11 @@ impl<PublicKey: VerifyingKey> Handler<PublicKey> for BlockSynchronizerHandler<Pu
         &self,
         block_ids: Vec<CertificateDigest>,
     ) -> Vec<Result<Certificate<PublicKey>, Error>> {
+        if block_ids.is_empty() {
+            trace!("No blocks were provided, will now return an empty list");
+            return vec![];
+        }
+
         let sync_results = self.get_block_headers(block_ids).await;
         let mut results: Vec<Result<Certificate<PublicKey>, Error>> = Vec::new();
 
@@ -235,6 +240,11 @@ impl<PublicKey: VerifyingKey> Handler<PublicKey> for BlockSynchronizerHandler<Pu
         &self,
         block_ids: Vec<CertificateDigest>,
     ) -> Vec<BlockSynchronizeResult<BlockHeader<PublicKey>>> {
+        if block_ids.is_empty() {
+            trace!("No blocks were provided, will now return an empty list");
+            return vec![];
+        }
+
         let (tx, mut rx) = channel(block_ids.len());
 
         self.tx_block_synchronizer
@@ -267,6 +277,11 @@ impl<PublicKey: VerifyingKey> Handler<PublicKey> for BlockSynchronizerHandler<Pu
         &self,
         certificates: Vec<Certificate<PublicKey>>,
     ) -> Vec<Result<Certificate<PublicKey>, Error>> {
+        if certificates.is_empty() {
+            trace!("No certificates were provided, will now return an empty list");
+            return vec![];
+        }
+
         let (tx, mut rx) = channel(certificates.len());
 
         self.tx_block_synchronizer

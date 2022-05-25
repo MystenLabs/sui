@@ -607,14 +607,12 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
     ) -> BlocksResult {
         let result = try_join_all(get_block_receivers).await;
 
-        if result.is_err() {
+        if let Ok(res) = result {
+            Ok(GetBlocksResponse { blocks: res })
+        } else {
             Err(BlocksError {
                 ids,
                 error: BlocksErrorType::Error,
-            })
-        } else {
-            Ok(GetBlocksResponse {
-                blocks: result.unwrap(),
             })
         }
     }

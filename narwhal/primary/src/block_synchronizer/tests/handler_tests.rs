@@ -286,3 +286,24 @@ async fn test_synchronize_block_payload() {
     // AND
     mock_synchronizer.assert_expectations().await;
 }
+
+#[tokio::test]
+async fn test_call_methods_with_empty_input() {
+    // GIVEN
+    let (_, certificate_store, _) = create_db_stores();
+    let (tx_block_synchronizer, _) = channel(1);
+    let (tx_core, _rx_core) = channel(1);
+
+    let synchronizer = BlockSynchronizerHandler {
+        tx_block_synchronizer,
+        tx_core,
+        certificate_store: certificate_store.clone(),
+        certificate_deliver_timeout: Duration::from_millis(2_000),
+    };
+
+    let result = synchronizer.synchronize_block_payloads(vec![]).await;
+    assert!(result.is_empty());
+
+    let result = synchronizer.get_and_synchronize_block_headers(vec![]).await;
+    assert!(result.is_empty());
+}
