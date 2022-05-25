@@ -14,8 +14,10 @@ multiaddr = "0.14.0"
 
 crypto = { path = "../crypto" }
 arc-swap = { version = "1.5.0", features = ["serde"] }
-itertools = "0.10.3"
 
 [dev-dependencies]
+rand = "0.7.3"
 tempfile = "3.3.0"
 tracing-test = { version = "0.2.1" }
+
+test_utils = { path = "../test_utils"}
