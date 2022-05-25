@@ -14,8 +14,8 @@ use clap::*;
 use std::fs;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
-use sui_config::GenesisConfig;
 use sui_config::{builder::ConfigBuilder, NetworkConfig};
+use sui_config::{GenesisConfig, SUI_FULLNODE_CONFIG};
 use sui_types::base_types::decode_bytes_hex;
 use sui_types::base_types::SuiAddress;
 use tracing::info;
@@ -244,7 +244,7 @@ impl SuiCommand {
 
                 let fullnode_config = network_config
                     .generate_fullnode_config()
-                    .persisted(&sui_config_dir.join("fullnode.conf"));
+                    .persisted(&sui_config_dir.join(SUI_FULLNODE_CONFIG));
                 fullnode_config.save()?;
 
                 for (i, validator) in network_config

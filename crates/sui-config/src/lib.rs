@@ -216,6 +216,8 @@ impl NetworkConfig {
         Self::generate_with_rng(config_dir, quorum_size, OsRng)
     }
 
+    /// Generate a fullnode config based on this `NetworkConfig`. This is useful if you want to run
+    /// a fullnode and have it connect to a network defined by this `NetworkConfig`.
     pub fn generate_fullnode_config(&self) -> NodeConfig {
         let key_pair = get_key_pair_from_rng(&mut OsRng).1;
         let validator_config = &self.validator_configs[0];
@@ -247,6 +249,7 @@ fn new_network_address() -> Multiaddr {
 const SUI_DIR: &str = ".sui";
 const SUI_CONFIG_DIR: &str = "sui_config";
 pub const SUI_NETWORK_CONFIG: &str = "network.conf";
+pub const SUI_FULLNODE_CONFIG: &str = "fullnode.conf";
 pub const SUI_WALLET_CONFIG: &str = "wallet.conf";
 pub const SUI_GATEWAY_CONFIG: &str = "gateway.conf";
 pub const SUI_DEV_NET_URL: &str = "https://gateway.devnet.sui.io:443";
