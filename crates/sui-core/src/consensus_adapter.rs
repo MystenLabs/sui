@@ -1,7 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::AuthorityState;
+use crate::checkpoints::CheckpointLocals;
 use crate::checkpoints::ConsensusSender;
+use arc_swap::ArcSwapOption;
 use bytes::Bytes;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
@@ -17,6 +19,7 @@ use std::{
 };
 use sui_types::messages::ConfirmationTransaction;
 use sui_types::messages_checkpoint::CheckpointFragment;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::{
     committee::Committee,
     error::{SuiError, SuiResult},
@@ -47,14 +50,6 @@ type SerializedTransactionInfoResponse = Vec<u8>;
 
 /// Channel to notify the caller when the Sui certificate has been sequenced.
 type TxSequencedNotifier = oneshot::Sender<SuiResult<SerializedTransactionInfoResponse>>;
-
-/// Hash serialized consensus transactions. We do not need specific cryptographic properties except
-/// only collision resistance.
-pub fn hash_transaction(serialized: &SerializedConsensusTransaction) -> ConsensusTransactionDigest {
-    let mut hasher = DefaultHasher::new();
-    serialized.hash(&mut hasher);
-    hasher.finish()
-}
 
 /// Message to notify the consensus listener that a new transaction has been sent to consensus
 /// or that the caller timed out on a specific transaction.
@@ -222,6 +217,16 @@ impl ConsensusListener {
         })
     }
 
+    /// Hash serialized consensus transactions. We do not need specific cryptographic properties except
+    /// only collision resistance.
+    pub fn hash_serialized_transaction(
+        serialized: &SerializedConsensusTransaction,
+    ) -> ConsensusTransactionDigest {
+        let mut hasher = DefaultHasher::new();
+        serialized.hash(&mut hasher);
+        hasher.finish()
+    }
+
     /// Main loop receiving messages input to consensus and notifying the caller once the inputs
     /// are sequenced (of if an error happened).
     async fn run(&mut self) {
@@ -232,7 +237,7 @@ impl ConsensusListener {
                     match message {
                         // Keep track of this certificates so we can notify the user later.
                         ConsensusListenerMessage::New(transaction, replier) => {
-                            let digest = hash_transaction(&transaction);
+                            let digest = Self::hash_serialized_transaction(&transaction);
                             if self.pending.len() < self.max_pending_transactions {
                                 self.pending.entry(digest).or_insert_with(Vec::new).push(replier);
                             } else if replier.send(Err(SuiError::ListenerCapacityExceeded)).is_err() {
@@ -242,7 +247,7 @@ impl ConsensusListener {
 
                         // Stop waiting for a consensus transaction.
                         ConsensusListenerMessage::Cleanup(transaction) => {
-                            let digest = hash_transaction(&transaction);
+                            let digest = Self::hash_serialized_transaction(&transaction);
                             let _ = self.pending.get_mut(&digest).and_then(|x| x.pop());
                             if self.pending.get(&digest).map_or_else(|| false, |x| x.is_empty()) {
                                 self.pending.remove(&digest);
@@ -254,7 +259,7 @@ impl ConsensusListener {
                 // Notify the caller that the transaction has been sequenced (if there is a caller).
                 Some((result, serialized)) = self.rx_consensus_output.recv() => {
                     let outcome = result.map_err(SuiError::from);
-                    let digest = hash_transaction(&serialized);
+                    let digest = Self::hash_serialized_transaction(&serialized);
                     if let Some(repliers) = self.pending.remove(&digest) {
                         for replier in repliers {
                             if replier.send(outcome.clone()).is_err() {
@@ -270,14 +275,13 @@ impl ConsensusListener {
 
 /// Send checkpoint fragments through consensus.
 pub struct CheckpointSender {
-    tx_checkpoint_consensus_adapter: Sender<ConsensusTransaction>,
+    tx_checkpoint_consensus_adapter: Sender<CheckpointFragment>,
 }
 
 impl ConsensusSender for CheckpointSender {
     fn send_to_consensus(&self, fragment: CheckpointFragment) -> SuiResult {
-        let transaction = ConsensusTransaction::Checkpoint(Box::new(fragment));
         self.tx_checkpoint_consensus_adapter
-            .try_send(transaction)
+            .try_send(fragment)
             .map_err(|e| SuiError::from(&e.to_string()[..]))
     }
 }
@@ -289,13 +293,15 @@ pub struct CheckpointConsensusAdapter {
     /// Channel to request to be notified when a given consensus transaction is sequenced.
     tx_consensus_listener: Sender<ConsensusListenerMessage>,
     /// Receive new checkpoint fragments to sequence.
-    rx_checkpoint_consensus_adapter: Receiver<ConsensusTransaction>,
+    rx_checkpoint_consensus_adapter: Receiver<CheckpointFragment>,
+    /// A pointer to the checkpoints local store.
+    checkpoint_locals: ArcSwapOption<CheckpointLocals>,
     /// The initial delay to wait before re-attempting a connection with consensus (in ms).
     retry_delay: Duration,
     /// The maximum number of checkpoint fragment pending sequencing.
     max_pending_transactions: usize,
     /// Keep all checkpoint fragment waiting to be sequenced.
-    buffer: VecDeque<SerializedConsensusTransaction>,
+    buffer: VecDeque<(SerializedConsensusTransaction, CheckpointSequenceNumber)>,
 }
 
 impl CheckpointConsensusAdapter {
@@ -303,7 +309,8 @@ impl CheckpointConsensusAdapter {
     pub fn new(
         consensus_address: Multiaddr,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
-        rx_checkpoint_consensus_adapter: Receiver<ConsensusTransaction>,
+        rx_checkpoint_consensus_adapter: Receiver<CheckpointFragment>,
+        checkpoint_locals: ArcSwapOption<CheckpointLocals>,
         retry_delay: Duration,
         max_pending_transactions: usize,
     ) -> Self {
@@ -317,6 +324,7 @@ impl CheckpointConsensusAdapter {
             consensus_client,
             tx_consensus_listener,
             rx_checkpoint_consensus_adapter,
+            checkpoint_locals,
             retry_delay,
             max_pending_transactions,
             buffer: VecDeque::with_capacity(max_pending_transactions),
@@ -360,7 +368,7 @@ impl CheckpointConsensusAdapter {
         // Continuously listen to checkpoint fragments and re-attempt sequencing if needed.
         loop {
             // Try to submit all pending checkpoint fragments to consensus.
-            while let Some(serialized) = self.buffer.pop_back() {
+            while let Some((serialized, sequence_number)) = self.buffer.pop_back() {
                 match self.submit(serialized.clone()).await {
                     Ok(_) => {
                         // Notify the consensus listener that we wish to be notified once our
@@ -375,11 +383,12 @@ impl CheckpointConsensusAdapter {
 
                         // Add the receiver to the waiter. So we can retransmit if the
                         // connection fails.
-                        let future = Self::waiter(receiver, self.retry_delay, serialized);
+                        let deliver = (serialized, sequence_number);
+                        let future = Self::waiter(receiver, self.retry_delay, deliver);
                         waiting.push(future);
                     }
                     Err(_) => {
-                        self.buffer.push_back(serialized);
+                        self.buffer.push_back((serialized, sequence_number));
                         break;
                     }
                 }
@@ -388,21 +397,32 @@ impl CheckpointConsensusAdapter {
             // Process new events.
             tokio::select! {
                 // Listen to new checkpoint fragments.
-                Some(transaction) = self.rx_checkpoint_consensus_adapter.recv() => {
+                Some(fragment) = self.rx_checkpoint_consensus_adapter.recv() => {
+                    let sequence_number = *fragment.proposer_sequence_number();
+
+                    // Cleanup the buffer.
                     if self.buffer.len() >= self.max_pending_transactions {
                         // Drop the earliest fragments. They are not needed for liveness.
-                        let _ = self.buffer.pop_back();
+                        let locals = self.checkpoint_locals.load_full();
+                        if let Some(proposal) = &locals.as_ref().unwrap().current_proposal {
+                            let current_sequence_number = proposal.sequence_number();
+                            self.buffer.retain(|(_, s)| s >= current_sequence_number);
+                        }
                     }
+
+                    // Add the fragment to the buffer.
+                    let transaction = ConsensusTransaction::Checkpoint(Box::new(fragment));
                     let serialized = bincode::serialize(&transaction)
                         .expect("Failed to serialize consensus tx");
-                    self.buffer.push_front(serialized);
+                    self.buffer.push_front((serialized, sequence_number));
                 },
 
                 // Listen to checkpoint fragments who failed to be sequenced and need reties.
-                Some((outcome, serialized_transaction)) = waiting.next() => {
+                Some((outcome, identifier)) = waiting.next() => {
                    if let Err(error) = outcome {
                        tracing::debug!("Failed to sequence transaction: {error}");
-                       self.buffer.push_back(serialized_transaction);
+                       let (serialized_transaction, checkpoint_sequence_number) = identifier;
+                       self.buffer.push_back((serialized_transaction, checkpoint_sequence_number));
                    }
                 },
             }

@@ -442,6 +442,10 @@ impl CheckpointFragment {
 
         Ok(())
     }
+
+    pub fn proposer_sequence_number(&self) -> &CheckpointSequenceNumber {
+        self.proposer.0.checkpoint.sequence_number()
+    }
 }
 
 #[cfg(test)]
