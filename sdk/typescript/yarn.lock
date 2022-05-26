@@ -5341,6 +5341,11 @@ loose-envify@^1.4.0:
   dependencies:
     js-tokens "^3.0.0 || ^4.0.0"
 
+lossless-json@^1.0.5:
+  version "1.0.5"
+  resolved "https://registry.yarnpkg.com/lossless-json/-/lossless-json-1.0.5.tgz#26df1d7d52543a994df07f1b174cf5576fb1482b"
+  integrity sha512-RicKUuLwZVNZ6ZdJHgIZnSeA05p8qWc5NW0uR96mpPIjN9WDLUg9+kj1esQU1GkPn9iLZVKatSQK5gyiaFHgJA==
+
 lower-case@^2.0.2:
   version "2.0.2"
   resolved "https://registry.npmjs.org/lower-case/-/lower-case-2.0.2.tgz"

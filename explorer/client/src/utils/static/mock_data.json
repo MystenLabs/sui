@@ -427,12 +427,12 @@
                 "tx_digest": "Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4=",
                 "contents": {
                     "id": {},
-                    "balance": 100
+                    "balance": "9007199254740991"
                 }
             }
         },
         {
-            "id": "standaloneObject200",
+            "id": "standaloneObject2",
             "category": "object",
             "owner": "SingleOwner(k#player2)",
             "version": "87",
@@ -441,7 +441,7 @@
             "data": {
                 "contents": {
                     "id": {},
-                    "balance": 200
+                    "balance": "2"
                 }
             }
         },
@@ -455,7 +455,7 @@
             "data": {
                 "contents": {
                     "id": {},
-                    "balance": 50
+                    "balance": "50"
                 }
             }
         },
@@ -469,7 +469,7 @@
             "data": {
                 "contents": {
                     "id": {},
-                    "balance": 150
+                    "balance": "150"
                 }
             }
         },

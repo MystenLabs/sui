@@ -387,7 +387,7 @@ describe('End-to-end Tests', () => {
                 await cssInteract(page)
                     .with(coinGroup(1).field(2))
                     .get.textContent()
-            ).toBe('Balance300');
+            ).toBe('Balance9007199254740993');
 
             expect(
                 await cssInteract(page)
