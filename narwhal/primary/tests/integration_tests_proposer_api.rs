@@ -11,8 +11,11 @@ use crypto::{
 use futures::future::join_all;
 use node::NodeStorage;
 use primary::{Primary, CHANNEL_CAPACITY};
-use std::collections::BTreeMap;
-use std::{collections::BTreeSet, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+    time::Duration,
+};
 use test_utils::{
     committee, committee_from_keys, keys, make_optimal_certificates,
     make_optimal_signed_certificates, temp_dir,
