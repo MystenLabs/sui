@@ -23,7 +23,7 @@ pub struct CheckpointProposal {
 }
 
 impl CheckpointProposal {
-    /// Create a proposal for a checkpoint at a partiular height
+    /// Create a proposal for a checkpoint at a particular height
     /// This contains a sequence number, waypoint and a list of
     /// proposed transactions.
     /// TODO: Add an identifier for the proposer, probably
@@ -72,7 +72,7 @@ impl CheckpointProposal {
         let my_transactions = self.transactions().collect();
         let iter_missing_me = all_elements.difference(&my_transactions).map(|x| **x);
         let other_transactions = other_proposal.transactions().collect();
-        let iter_missing_ot = all_elements.difference(&other_transactions).map(|x| **x);
+        let iter_missing_other = all_elements.difference(&other_transactions).map(|x| **x);
 
         let diff = WaypointDiff::new(
             *self.name(),
@@ -80,7 +80,7 @@ impl CheckpointProposal {
             iter_missing_me,
             *other_proposal.name(),
             *other_proposal.checkpoint().waypoint.clone(),
-            iter_missing_ot,
+            iter_missing_other,
         );
 
         CheckpointFragment {

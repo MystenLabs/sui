@@ -537,7 +537,7 @@ impl CheckpointStore {
         })
     }
 
-    /// This function should be called by the conseusus output, it is idempotent,
+    /// This function should be called by the consensus output, it is idempotent,
     /// and if called again with the same sequence number will do nothing. However,
     /// fragments should be provided in seq increasing order.
     pub fn handle_internal_fragment(
@@ -756,7 +756,7 @@ impl CheckpointStore {
                     return Err(SuiError::from("No checkpoint set at this sequence."));
                 }
             }
-            // In this case we have an internal signed checkpoint so we propote it to a
+            // In this case we have an internal signed checkpoint so we promote it to a
             // full certificate.
             Some(AuthenticatedCheckpoint::Signed(_)) => {
                 checkpoint.verify(&self.committee)?;
@@ -974,40 +974,31 @@ impl CheckpointStore {
 
         let batch = self.transactions_to_checkpoint.batch();
 
+        let already_in_checkpoint_tx =
+            transactions
+                .iter()
+                .zip(&in_checkpoint)
+                .filter_map(
+                    |((_seq, tx), in_chk)| {
+                        if in_chk.is_some() {
+                            Some(tx)
+                        } else {
+                            None
+                        }
+                    },
+                );
+
         // If the transactions were in a checkpoint but we had not processed them yet, then
         // we delete them from the unprocessed transaction set.
         let batch = batch.delete_batch(
             &self.unprocessed_transactions,
-            transactions
-                .iter()
-                .zip(&in_checkpoint)
-                .filter_map(
-                    |((_seq, tx), in_chk)| {
-                        if in_chk.is_some() {
-                            Some(tx)
-                        } else {
-                            None
-                        }
-                    },
-                ),
+            already_in_checkpoint_tx.clone(),
         )?;
 
-        // Delete the entries with the old sequence numbers
-        let batch = batch.delete_batch(
-            &self.transactions_to_checkpoint,
-            transactions
-                .iter()
-                .zip(&in_checkpoint)
-                .filter_map(
-                    |((_seq, tx), in_chk)| {
-                        if in_chk.is_some() {
-                            Some(tx)
-                        } else {
-                            None
-                        }
-                    },
-                ),
-        )?;
+        // Delete the entries with the old sequence numbers.
+        // They will be updated with the new sequence numbers latter.
+        let batch =
+            batch.delete_batch(&self.transactions_to_checkpoint, already_in_checkpoint_tx)?;
 
         let batch = batch.delete_batch(
             &self.checkpoint_contents,
