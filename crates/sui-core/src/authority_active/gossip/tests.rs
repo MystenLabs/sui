@@ -5,11 +5,16 @@ use super::*;
 use crate::authority_active::gossip::configurable_batch_action_client::{
     init_configurable_authorities, BatchAction,
 };
+use crate::authority_active::MAX_RETRY_DELAY_MS;
 use std::time::Duration;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 pub async fn test_gossip() {
-    let action_sequence = vec![BatchAction::EmitUpdateItem()];
+    let action_sequence = vec![
+        BatchAction::EmitUpdateItem(),
+        BatchAction::EmitUpdateItem(),
+        BatchAction::EmitUpdateItem(),
+    ];
 
     let (clients, states, digests) = init_configurable_authorities(action_sequence).await;
 
@@ -26,7 +31,7 @@ pub async fn test_gossip() {
 
         active_authorities.push(handle);
     }
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    tokio::time::sleep(Duration::from_secs(20)).await;
 
     // Expected outcome of gossip: each digest's tx signature and cert is now on every authority.
     let clients_final: Vec<_> = clients.values().collect();
@@ -53,6 +58,7 @@ pub async fn test_gossip_error() {
     let (clients, states, digests) = init_configurable_authorities(action_sequence).await;
 
     let mut active_authorities = Vec::new();
+
     // Start active processes.
     for state in states.clone() {
         let inner_state = state.clone();
@@ -62,12 +68,11 @@ pub async fn test_gossip_error() {
             let active_state = ActiveAuthority::new(inner_state, inner_clients).unwrap();
             active_state.spawn_all_active_processes().await;
         });
-
         active_authorities.push(handle);
     }
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    // failure back-offs were set from the errors
+    tokio::time::sleep(Duration::from_millis(MAX_RETRY_DELAY_MS)).await;
 
-    // Expected outcome of gossip: each digest's tx signature and cert is now on every authority.
     let clients_final: Vec<_> = clients.values().collect();
     for client in clients_final.iter() {
         for digest in &digests {
@@ -77,10 +82,10 @@ pub async fn test_gossip_error() {
                 })
                 .await;
 
-            //assert!(result1.is_ok());
+            assert!(result1.is_ok());
             let result = result1.unwrap();
-            let _found_cert = result.certified_transaction.is_some();
-            //assert!(found_cert); // todo this should not fail
+            let found_cert = result.certified_transaction.is_some();
+            assert!(found_cert);
         }
     }
 }
