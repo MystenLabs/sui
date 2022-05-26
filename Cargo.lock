@@ -5606,7 +5606,7 @@ dependencies = [
  "sui-storage",
  "sui-types",
  "sui-verifier",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
  "tempfile",
  "test-utils",
  "tokio",
@@ -5880,7 +5880,7 @@ dependencies = [
  "sui-core",
  "sui-gateway",
  "sui-storage",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
  "tokio",
  "tracing",
  "workspace-hack",
@@ -5919,6 +5919,7 @@ dependencies = [
  "serde 1.0.137",
  "serde_json",
  "sui-types",
+ "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=2de1a39)",
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.11",
@@ -6082,6 +6083,21 @@ dependencies = [
  "guppy-workspace-hack",
  "serde 1.0.137",
  "target-lexicon",
+]
+
+[[package]]
+name = "telemetry-subscribers"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/mysten-infra?rev=2de1a39#2de1a391654a7ee09d867de2f16627b915ad21f0"
+dependencies = [
+ "once_cell",
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-opentelemetry",
+ "tracing-subscriber 0.3.11",
 ]
 
 [[package]]
@@ -7811,7 +7827,7 @@ dependencies = [
  "tabular",
  "target-lexicon",
  "target-spec",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
  "temp_testdir",
  "tempfile",
  "tera",

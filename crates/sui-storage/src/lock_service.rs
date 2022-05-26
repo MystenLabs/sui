@@ -18,6 +18,7 @@
 use futures::channel::oneshot;
 use rocksdb::Options;
 use std::path::Path;
+use std::sync::Arc;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::{debug, info, trace, warn};
 use typed_store::rocks::DBMap;
@@ -76,6 +77,14 @@ struct LockServiceImpl {
     transaction_lock: DBMap<ObjectRef, Option<TransactionDigest>>,
 }
 
+impl Drop for LockServiceImpl {
+    fn drop(&mut self) {
+        info!("Dropping LockServiceImpl and the transaction_lock table!");
+        // This sleep seems to help prevent RocksDB from throwing SIGABRT when process exits in tests
+        std::thread::sleep(std::time::Duration::from_secs(2));
+    }
+}
+
 // TODO: Create method needs to make sure only one instance or thread of this is running per authority
 // If not for multiple authorities per process, it should really be one per process.
 impl LockServiceImpl {
@@ -94,6 +103,7 @@ impl LockServiceImpl {
         let transaction_lock =
             reopen!(&db, "transaction_lock";<ObjectRef, Option<TransactionDigest>>);
 
+        info!(path =? path.as_ref(), "Opening LockService DB...");
         Ok(Self { transaction_lock })
     }
 
@@ -280,6 +290,8 @@ impl LockService {
     /// namely each SuiDataStore creates its own LockService.
     pub fn new<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Result<Self, SuiError> {
         let inner_service = LockServiceImpl::try_open_db(path, db_options)?;
+        // Don't need to clone the DB; and just drop it one time
+        let inner_service = Arc::new(inner_service);
 
         // Now, create a sync channel and spawn a thread
         let (sender, receiver) = channel(LOCKSERVICE_QUEUE_LEN);
@@ -509,8 +521,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_lockservice_conc_acquire_init() {
+        telemetry_subscribers::init_for_testing();
         let ls = init_lockservice();
-        tracing_subscriber::fmt::init();
 
         let ref1: ObjectRef = (ObjectID::random(), 1.into(), ObjectDigest::random());
         let ref2: ObjectRef = (ObjectID::random(), 1.into(), ObjectDigest::random());
