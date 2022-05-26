@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Coin, getObjectFields, getObjectId } from '@mysten/sui.js';
+import BN from 'bn.js';
 import React, {
     useCallback,
     useEffect,
@@ -35,7 +36,7 @@ type resultType = {
     _isCoin: boolean;
     Version?: string;
     display?: string;
-    balance?: number;
+    balance?: BN;
 }[];
 
 const DATATYPE_DEFAULT: resultType = [
@@ -71,14 +72,15 @@ function OwnedObjectStatic({ id }: { id: string }) {
     const objects = findOwnedObjectsfromID(id);
 
     if (objects) {
-        const results = objects?.map(({ objectId }) => {
+        const results = objects.map(({ objectId }) => {
             const entry = findDataFromID(objectId, undefined);
+            const convertToBN = (balance: string): BN => new BN.BN(balance, 10);
             return {
                 id: entry?.id,
                 Type: entry?.objType,
                 Version: entry?.version,
                 display: entry?.data?.contents?.display,
-                balance: entry?.data?.contents?.balance,
+                balance: convertToBN(entry?.data?.contents?.balance),
                 _isCoin: entry?.data?.contents?.balance !== undefined,
             };
         });
@@ -122,10 +124,8 @@ function OwnedObjectAPI({ id }: { id: string }) {
                                         const contents = getObjectFields(resp);
                                         const url = parseImageURL(contents);
                                         const objType = parseObjectType(resp);
-                                        // TODO: handle big number by making the balance field
-                                        // in resultType a string
                                         const balanceValue =
-                                            Coin.getBalance(resp)?.toNumber();
+                                            Coin.getBalance(resp);
                                         return {
                                             id: getObjectId(resp),
                                             Type: objType,
@@ -232,9 +232,10 @@ function GroupView({ results }: { results: resultType }) {
                                         )
                                             ? `${subObjList.reduce(
                                                   (prev, current) =>
-                                                      // TODO: handle number overflow
-                                                      prev + current.balance!,
-                                                  0
+                                                      prev.add(
+                                                          current.balance!
+                                                      ),
+                                                  Coin.getZero()
                                               )}`
                                             : ''}
                                     </span>
@@ -422,7 +423,7 @@ function OwnedObjectView({ results }: { results: resultType }) {
                                         return (
                                             <div>
                                                 <span>{key}</span>
-                                                <span>{value}</span>
+                                                <span>{String(value)}</span>
                                             </div>
                                         );
                                 }

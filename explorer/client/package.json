@@ -6,6 +6,7 @@
         "@testing-library/jest-dom": "^5.16.2",
         "@testing-library/react": "^12.1.2",
         "@testing-library/user-event": "^13.5.0",
+        "@types/bn.js": "^5.1.0",
         "@types/jest": "^27.4.0",
         "@types/jest-environment-puppeteer": "^5.0.0",
         "@types/node": "^16.11.24",
@@ -35,7 +36,8 @@
         "react-ga4": "^1.4.1",
         "react-router-dom": "^6.2.1",
         "vanilla-cookieconsent": "^2.8.0",
-        "web-vitals": "^2.1.4"
+        "web-vitals": "^2.1.4",
+        "bn.js": "^5.2.0"
     },
     "scripts": {
         "start": "react-scripts start",
