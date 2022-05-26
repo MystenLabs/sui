@@ -158,4 +158,21 @@ module NFTs::AuctionLib {
     fun send_balance(balance: Balance<SUI>, to: address, ctx: &mut TxContext) {
         Transfer::transfer(Coin::from_balance(balance, ctx), to)
     }
+
+    /// exposes Transfer::transfer
+    public fun transfer<T: key + store>(obj: Auction<T>, recipient: address) {
+        Transfer::transfer(obj, recipient)
+    }
+
+    /// exposes Transfer::transfer_to_object_id
+    public fun transfer_to_object_id<T: key + store>(
+        obj: Auction<T>,
+        owner_id: VersionedID,
+    ): (VersionedID, Transfer::ChildRef<Auction<T>>) {
+        Transfer::transfer_to_object_id(obj, owner_id)
+    }
+
+    public fun share_object<T: key + store>(obj: Auction<T>) {
+        Transfer::share_object(obj)
+    }
 }

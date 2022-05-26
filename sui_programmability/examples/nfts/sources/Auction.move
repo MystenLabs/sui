@@ -69,7 +69,7 @@ module NFTs::Auction {
         to_sell: T, id: VersionedID, auctioneer: address, ctx: &mut TxContext
     ) {
         let auction = AuctionLib::create_auction(id, to_sell, ctx);
-        Transfer::transfer(auction, auctioneer);
+        AuctionLib::transfer(auction, auctioneer);
     }
 
     /// Creates a bid a and send it to the auctioneer along with the

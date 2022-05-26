@@ -9,7 +9,7 @@ module Sui::Coin {
     use Std::Vector;
 
     /// A coin of type `T` worth `value`. Transferable but not storable
-    struct Coin<phantom T> has key {
+    struct Coin<phantom T> has key, store {
         id: VersionedID,
         balance: Balance<T>
     }
