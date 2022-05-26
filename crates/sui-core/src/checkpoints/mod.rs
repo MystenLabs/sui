@@ -8,10 +8,11 @@ pub mod reconstruction;
 #[path = "./tests/checkpoint_tests.rs"]
 mod checkpoint_tests;
 
-use std::{collections::HashSet, path::Path, sync::Arc};
-
+use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
+use std::{collections::HashSet, path::Path, sync::Arc};
+use sui_storage::default_db_options;
 use sui_types::{
     base_types::{AuthorityName, TransactionDigest},
     batch::TxSequenceNumber,
@@ -117,7 +118,7 @@ pub struct CheckpointStore {
     /// to allow us to provide a list in order they were received. We only store
     /// the fragments that are relevant to the next checkpoints. Past checkpoints
     /// already contain all relevant information from previous checkpoints.
-    pub fragments: DBMap<u64, CheckpointFragment>,
+    pub fragments: DBMap<ExecutionIndices, CheckpointFragment>,
 
     /// The local sequence at which the proposal for the next checkpoint is created
     /// This is a sequence number containing all unprocessed transactions lower than
@@ -205,19 +206,7 @@ impl CheckpointStore {
         committee: Committee,
         secret: StableSyncAuthoritySigner,
     ) -> Result<CheckpointStore, SuiError> {
-        let mut options = db_options.unwrap_or_default();
-
-        /* The table cache is locked for updates and this determines the number
-           of shards, ie 2^10. Increase in case of lock contentions.
-        */
-        let row_cache = rocksdb::Cache::new_lru_cache(1_000_000).expect("Cache is ok");
-        options.set_row_cache(&row_cache);
-        options.set_table_cache_num_shard_bits(10);
-        options.set_compression_type(rocksdb::DBCompressionType::None);
-
-        let mut point_lookup = options.clone();
-        point_lookup.optimize_for_point_lookup(1024 * 1024);
-        point_lookup.set_memtable_whole_key_filtering(true);
+        let (options, point_lookup) = default_db_options(db_options);
 
         let db = open_cf_opts(
             &path,
@@ -252,7 +241,7 @@ impl CheckpointStore {
             "extra_transactions";<TransactionDigest,TxSequenceNumber>,
             "checkpoints";<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
             "local_fragments";<AuthorityName, CheckpointFragment>,
-            "fragments";<u64, CheckpointFragment>,
+            "fragments";<ExecutionIndices, CheckpointFragment>,
             "locals";<DBLabel, CheckpointLocals>
         );
 
@@ -527,7 +516,7 @@ impl CheckpointStore {
         } else {
             // Maybe the fragment we received allows us to complete the current checkpoint?
             // Since we seem to be missing information to complete it (ie there is a checkpoint
-            // but we are not inlcuded in it.)
+            // but we are not included in it.)
             loop {
                 let construct = self.attempt_to_construct_checkpoint();
                 // Exit if checkpoint construction leads to an error or returns false
@@ -553,7 +542,7 @@ impl CheckpointStore {
     /// fragments should be provided in seq increasing order.
     pub fn handle_internal_fragment(
         &mut self,
-        _seq: u64,
+        _seq: ExecutionIndices,
         _fragment: CheckpointFragment,
     ) -> Result<(), FragmentInternalError> {
         // Ensure we have not already processed this fragment.
@@ -693,8 +682,8 @@ impl CheckpointStore {
             }
 
             // TODO: here define what we do if we do not have enough info
-            //       to reconstruct the checkpoint. We can stroe the global waypoints
-            //       and activelly wait for someone else to give us the data?
+            //       to reconstruct the checkpoint. We can store the global waypoints
+            //       and actively wait for someone else to give us the data?
 
             let locals = self.get_locals();
             let mut new_locals = locals.as_ref().clone();
@@ -1066,7 +1055,7 @@ impl CheckpointStore {
         )?;
 
         // If the transactions processed did not belong to a checkpoint yet, we add them to the list
-        // of `extra` transactions, that we should be activelly propagating to others.
+        // of `extra` transactions, that we should be actively propagating to others.
         let batch = batch.insert_batch(
             &self.extra_transactions,
             transactions

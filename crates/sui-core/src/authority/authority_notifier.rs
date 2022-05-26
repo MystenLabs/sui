@@ -219,17 +219,13 @@ mod tests {
     use std::time::Duration;
     use tokio::time::timeout;
 
-    use crate::authority::authority_tests::max_files_authority_tests;
-
     #[tokio::test]
     async fn test_notifier() {
         let dir = env::temp_dir();
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
-        let mut opts = rocksdb::Options::default();
-        opts.set_max_open_files(max_files_authority_tests());
-        let store = Arc::new(AuthorityStore::open(path, Some(opts)));
+        let store = Arc::new(AuthorityStore::open(path, None));
 
         let notifier = Arc::new(TransactionNotifier::new(store.clone()).unwrap());
 

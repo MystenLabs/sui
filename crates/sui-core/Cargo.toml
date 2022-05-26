@@ -24,13 +24,12 @@ parking_lot = "0.12.0"
 itertools = "0.10.3"
 async-trait = "0.1.53"
 tempfile = "3.3.0"
-tracing = { version = "0.1.34", features = ["log"] }
+tracing = "0.1.34"
 signature = "1.5.0"
 ed25519-dalek = "1.0.1"
 scopeguard = "1.1.0"
 clap = { version = "3.1.17", features = ["derive"] }
 bincode = "1.3.3"
-fdlimit = "0.2.1"
 schemars = "0.8.10"
 multiaddr = "0.14.0"
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
@@ -63,6 +62,7 @@ narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8
 narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", package = "types" }
 narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", package = "node" }
 narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", package = "crypto" }
+workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 serde-reflection = "0.3.6"

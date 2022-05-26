@@ -8,7 +8,9 @@ use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
 };
-use move_core_types::{account_address::AccountAddress, ident_str, language_storage::TypeTag};
+use move_core_types::{
+    account_address::AccountAddress, ident_str, identifier::Identifier, language_storage::TypeTag,
+};
 use narwhal_executor::ExecutionIndices;
 use rand::{prelude::StdRng, SeedableRng};
 use sui_adapter::genesis;
@@ -25,12 +27,29 @@ use sui_types::{
 use std::fs;
 use std::{convert::TryInto, env};
 
-pub fn system_maxfiles() -> usize {
-    fdlimit::raise_fd_limit().unwrap_or(256u64) as usize
+pub enum TestCallArg {
+    Object(ObjectID),
+    U64(u64),
+    Address(SuiAddress),
 }
 
-pub fn max_files_authority_tests() -> i32 {
-    (system_maxfiles() / 8).try_into().unwrap()
+impl TestCallArg {
+    pub async fn to_call_arg(self, state: &AuthorityState) -> CallArg {
+        match self {
+            Self::Object(object_id) => {
+                let object = state.get_object(&object_id).await.unwrap().unwrap();
+                if object.is_shared() {
+                    CallArg::SharedObject(object_id)
+                } else {
+                    CallArg::ImmOrOwnedObject(object.compute_object_reference())
+                }
+            }
+            Self::U64(value) => CallArg::Pure(bcs::to_bytes(&value).unwrap()),
+            Self::Address(addr) => {
+                CallArg::Pure(bcs::to_bytes(&AccountAddress::from(addr)).unwrap())
+            }
+        }
+    }
 }
 
 const MAX_GAS: u64 = 10000;
@@ -298,8 +317,7 @@ async fn test_transfer_package() {
         .await
         .unwrap()
         .unwrap();
-    let genesis_package_objects = genesis::clone_genesis_packages();
-    let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, "ID");
+    let package_object_ref = authority_state.get_framework_object_ref().await.unwrap();
     // We are trying to transfer the genesis package object, which is immutable.
     let transfer_transaction = init_transfer_transaction(
         sender,
@@ -505,9 +523,7 @@ async fn test_publish_non_existing_dependent_module() {
     let transaction = Transaction::new(data, signature);
 
     let response = authority.handle_transaction(transaction).await;
-    assert!(response
-        .unwrap_err()
-        .to_string()
+    assert!(std::string::ToString::to_string(&response.unwrap_err())
         .contains("DependentPackageNotFound"));
     // Check that gas was not charged.
     assert_eq!(
@@ -932,9 +948,10 @@ async fn test_move_call_mutable_object_not_mutated() {
         "ObjectBasics",
         "update",
         vec![],
-        vec![new_object_id1, new_object_id2],
-        vec![],
-        vec![],
+        vec![
+            TestCallArg::Object(new_object_id1),
+            TestCallArg::Object(new_object_id2),
+        ],
     )
     .await
     .unwrap();
@@ -989,9 +1006,10 @@ async fn test_move_call_delete() {
         "ObjectBasics",
         "update",
         vec![],
-        vec![new_object_id1, new_object_id2],
-        vec![],
-        vec![],
+        vec![
+            TestCallArg::Object(new_object_id1),
+            TestCallArg::Object(new_object_id2),
+        ],
     )
     .await
     .unwrap();
@@ -1008,9 +1026,7 @@ async fn test_move_call_delete() {
         "ObjectBasics",
         "delete",
         vec![],
-        vec![new_object_id1],
-        vec![],
-        vec![],
+        vec![TestCallArg::Object(new_object_id1)],
     )
     .await
     .unwrap();
@@ -1042,9 +1058,10 @@ async fn test_get_latest_parent_entry() {
         "ObjectBasics",
         "update",
         vec![],
-        vec![new_object_id1, new_object_id2],
-        vec![],
-        vec![],
+        vec![
+            TestCallArg::Object(new_object_id1),
+            TestCallArg::Object(new_object_id2),
+        ],
     )
     .await
     .unwrap();
@@ -1067,9 +1084,7 @@ async fn test_get_latest_parent_entry() {
         "ObjectBasics",
         "delete",
         vec![],
-        vec![new_object_id1],
-        vec![],
-        vec![],
+        vec![TestCallArg::Object(new_object_id1)],
     )
     .await
     .unwrap();
@@ -1156,9 +1171,7 @@ async fn test_authority_persist() {
     fs::create_dir(&path).unwrap();
 
     // Create an authority
-    let mut opts = rocksdb::Options::default();
-    opts.set_max_open_files(max_files_authority_tests());
-    let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
+    let store = Arc::new(AuthorityStore::open(&path, None));
     let authority =
         crate::authority_batch::batch_tests::init_state(committee, authority_key, store).await;
 
@@ -1174,14 +1187,12 @@ async fn test_authority_persist() {
     drop(authority);
 
     // Reopen the same authority with the same path
-    let mut opts = rocksdb::Options::default();
-    opts.set_max_open_files(max_files_authority_tests());
     let seed = [1u8; 32];
     let (committee, _, authority_key) =
         crate::authority_batch::batch_tests::init_state_parameters_from_rng(
             &mut StdRng::from_seed(seed),
         );
-    let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
+    let store = Arc::new(AuthorityStore::open(&path, None));
     let authority2 =
         crate::authority_batch::batch_tests::init_state(committee, authority_key, store).await;
     let obj2 = authority2.get_object(&object_id).await.unwrap().unwrap();
@@ -1262,11 +1273,7 @@ fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStor
     let path = dir.join(format!("DB_{:?}", ObjectID::random()));
     fs::create_dir(&path).unwrap();
 
-    let mut opts = rocksdb::Options::default();
-    opts.set_max_open_files(max_files_authority_tests());
-    opts.set_manual_wal_flush(true);
-
-    let store = Arc::new(AuthorityStore::open(path, Some(opts)));
+    let store = Arc::new(AuthorityStore::open(path, None));
     (committee, authority_address, authority_key, store)
 }
 
@@ -1348,64 +1355,28 @@ fn init_certified_transfer_transaction(
         .unwrap()
 }
 
-pub fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> ObjectRef {
-    genesis_objects
-        .iter()
-        .find_map(|o| match o.data.try_as_package() {
-            Some(p) => {
-                if p.serialized_module_map().keys().any(|name| name == module) {
-                    Some(o.compute_object_reference())
-                } else {
-                    None
-                }
-            }
-            None => None,
-        })
-        .unwrap()
-}
-
 pub async fn call_move(
     authority: &AuthorityState,
     gas_object_id: &ObjectID,
     sender: &SuiAddress,
     sender_key: &KeyPair,
     package: &ObjectRef,
-    module: &'static str,
-    function: &'static str,
+    module: &'_ str,
+    function: &'_ str,
     type_args: Vec<TypeTag>,
-    object_arg_ids: Vec<ObjectID>,
-    shared_object_args_ids: Vec<ObjectID>,
-    pure_args: Vec<Vec<u8>>,
+    test_args: Vec<TestCallArg>,
 ) -> SuiResult<TransactionEffects> {
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
-    let mut object_args = vec![];
-    for id in object_arg_ids {
-        object_args.push(
-            authority
-                .get_object(&id)
-                .await
-                .unwrap()
-                .unwrap()
-                .compute_object_reference(),
-        );
+    let mut args = vec![];
+    for arg in test_args.into_iter() {
+        args.push(arg.to_call_arg(authority).await);
     }
-    // TODO improve API here
-    let args = object_args
-        .into_iter()
-        .map(CallArg::ImmOrOwnedObject)
-        .chain(
-            shared_object_args_ids
-                .into_iter()
-                .map(CallArg::SharedObject),
-        )
-        .chain(pure_args.into_iter().map(CallArg::Pure))
-        .collect();
     let data = TransactionData::new_move_call(
         *sender,
         *package,
-        ident_str!(module).to_owned(),
-        ident_str!(function).to_owned(),
+        Identifier::new(module).unwrap(),
+        Identifier::new(function).unwrap(),
         type_args,
         gas_object_ref,
         args,
@@ -1424,15 +1395,12 @@ async fn call_framework_code(
     gas_object_id: &ObjectID,
     sender: &SuiAddress,
     sender_key: &KeyPair,
-    module: &'static str,
-    function: &'static str,
+    module: &'_ str,
+    function: &'_ str,
     type_args: Vec<TypeTag>,
-    object_arg_ids: Vec<ObjectID>,
-    shared_object_arg_ids: Vec<ObjectID>,
-    pure_args: Vec<Vec<u8>>,
+    args: Vec<TestCallArg>,
 ) -> SuiResult<TransactionEffects> {
-    let genesis_package_objects = genesis::clone_genesis_packages();
-    let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
+    let package_object_ref = authority.get_framework_object_ref().await?;
 
     call_move(
         authority,
@@ -1443,9 +1411,7 @@ async fn call_framework_code(
         module,
         function,
         type_args,
-        object_arg_ids,
-        shared_object_arg_ids,
-        pure_args,
+        args,
     )
     .await
 }
@@ -1464,12 +1430,7 @@ pub async fn create_move_object(
         "ObjectBasics",
         "create",
         vec![],
-        vec![],
-        vec![],
-        vec![
-            16u64.to_le_bytes().to_vec(),
-            bcs::to_bytes(&AccountAddress::from(*sender)).unwrap(),
-        ],
+        vec![TestCallArg::U64(16), TestCallArg::Address(*sender)],
     )
     .await
 }
@@ -1498,8 +1459,7 @@ async fn shared_object() {
     // Make a sample transaction.
     let module = "ObjectBasics";
     let function = "create";
-    let genesis_package_objects = genesis::clone_genesis_packages();
-    let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
+    let package_object_ref = authority.get_framework_object_ref().await.unwrap();
 
     let data = TransactionData::new_move_call(
         sender,
@@ -1543,7 +1503,7 @@ async fn shared_object() {
     authority
         .handle_consensus_transaction(
             /* last_consensus_index */ ExecutionIndices::default(),
-            ConsensusTransaction::UserTransaction(certificate),
+            ConsensusTransaction::UserTransaction(Box::new(certificate)),
         )
         .await
         .unwrap();

@@ -9,6 +9,7 @@ use crate::crypto::{
     EmptySignInfo, Signable, Signature, VerificationObligation,
 };
 use crate::gas::GasCostSummary;
+use crate::messages_checkpoint::CheckpointFragment;
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use base64ct::Encoding;
 use itertools::Either;
@@ -620,7 +621,7 @@ pub struct AccountInfoRequest {
 /// is over the batch end marker.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct BatchInfoRequest {
-    // The sequence number at which to start the seuqence to return, or None for the latest.
+    // The sequence number at which to start the sequence to return, or None for the latest.
     pub start: Option<TxSequenceNumber>,
     // The total number of items to receive. Could receive a bit more or a bit less.
     pub length: u64,
@@ -1233,14 +1234,15 @@ pub struct ConsensusSync {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ConsensusTransaction {
-    UserTransaction(CertifiedTransaction),
-    // NOTE: Other data types (e.g., for reconfiguration) go here
+    UserTransaction(Box<CertifiedTransaction>),
+    Checkpoint(Box<CheckpointFragment>),
 }
 
 impl ConsensusTransaction {
     pub fn verify(&self, committee: &Committee) -> SuiResult<()> {
         match self {
             Self::UserTransaction(certificate) => certificate.verify(committee),
+            Self::Checkpoint(fragment) => fragment.verify(committee),
         }
     }
 }

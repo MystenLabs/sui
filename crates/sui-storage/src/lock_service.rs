@@ -26,6 +26,8 @@ use typed_store::{reopen, traits::Map};
 use sui_types::base_types::{ObjectRef, TransactionDigest};
 use sui_types::error::{SuiError, SuiResult};
 
+use crate::default_db_options;
+
 /// Commands to send to the LockService (for mutating lock state)
 // TODO: use smallvec as an optimization
 #[derive(Debug)]
@@ -37,6 +39,7 @@ enum LockServiceCommands {
     },
     Initialize {
         refs: Vec<ObjectRef>,
+        is_force_reset: bool,
         resp: oneshot::Sender<SuiResult>,
     },
     RemoveLocks {
@@ -78,27 +81,11 @@ struct LockServiceImpl {
 impl LockServiceImpl {
     /// Open or create a new LockService database
     fn try_open_db<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Result<Self, SuiError> {
-        let mut options = db_options.unwrap_or_default();
-
-        /* The table cache is locked for updates and this determines the number
-           of shareds, ie 2^10. Increase in case of lock contentions.
-        */
-        let row_cache = rocksdb::Cache::new_lru_cache(300_000).expect("Cache is ok");
-        options.set_row_cache(&row_cache);
-        options.set_table_cache_num_shard_bits(10);
-        options.set_compression_type(rocksdb::DBCompressionType::None);
-
-        let mut point_lookup = options.clone();
-        point_lookup.optimize_for_point_lookup(1024 * 1024);
-        point_lookup.set_memtable_whole_key_filtering(true);
-
-        let transform = rocksdb::SliceTransform::create("bytes_8_to_16", |key| &key[8..16], None);
-        point_lookup.set_prefix_extractor(transform);
-        point_lookup.set_memtable_prefix_bloom_ratio(0.2);
+        let (options, point_lookup) = default_db_options(db_options);
 
         let db = {
             let path = &path;
-            let db_options = Some(options.clone());
+            let db_options = Some(options);
             let opt_cfs: &[(&str, &rocksdb::Options)] = &[("transaction_lock", &point_lookup)];
             typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
         }
@@ -184,33 +171,31 @@ impl LockServiceImpl {
 
     /// Initialize a lock to None (but exists) for a given list of ObjectRefs.
     /// If the lock already exists and is locked to a transaction, then return TransactionLockExists
-    fn initialize_locks(&self, objects: &[ObjectRef]) -> SuiResult {
+    fn initialize_locks(&self, objects: &[ObjectRef], is_force_reset: bool) -> SuiResult {
         debug!(?objects, "initialize_locks");
         // Use a multiget for efficiency
         let locks = self.transaction_lock.multi_get(objects)?;
 
-        // If any locks exist and are not None, return errors for them
-        let existing_locks: Vec<ObjectRef> = locks
-            .iter()
-            .zip(objects)
-            .filter_map(|(lock_opt, objref)| lock_opt.flatten().map(|_tx_digest| *objref))
-            .collect();
-        if !existing_locks.is_empty() {
-            info!(
-                ?existing_locks,
-                "Cannot initialize locks because some exist already"
-            );
-            return Err(SuiError::TransactionLockExists {
-                refs: existing_locks,
-            });
+        if !is_force_reset {
+            // If any locks exist and are not None, return errors for them
+            let existing_locks: Vec<ObjectRef> = locks
+                .iter()
+                .zip(objects)
+                .filter_map(|(lock_opt, objref)| lock_opt.flatten().map(|_tx_digest| *objref))
+                .collect();
+            if !existing_locks.is_empty() {
+                info!(
+                    ?existing_locks,
+                    "Cannot initialize locks because some exist already"
+                );
+                return Err(SuiError::TransactionLockExists {
+                    refs: existing_locks,
+                });
+            }
         }
 
-        // Insert where locks don't exist already
-        let refs_to_insert = locks
-            .iter()
-            .zip(objects)
-            .filter_map(|(lock_opt, objref)| lock_opt.is_none().then(|| (objref, None)));
-        self.transaction_lock.multi_insert(refs_to_insert)?;
+        self.transaction_lock
+            .multi_insert(objects.iter().map(|obj_ref| (obj_ref, None)))?;
 
         Ok(())
     }
@@ -239,8 +224,12 @@ impl LockServiceImpl {
                         warn!("Could not respond to sender, sender dropped!");
                     }
                 }
-                LockServiceCommands::Initialize { refs, resp } => {
-                    if let Err(_e) = resp.send(self.initialize_locks(&refs)) {
+                LockServiceCommands::Initialize {
+                    refs,
+                    is_force_reset,
+                    resp,
+                } => {
+                    if let Err(_e) = resp.send(self.initialize_locks(&refs, is_force_reset)) {
                         warn!("Could not respond to sender, sender dropped!");
                     }
                 }
@@ -336,12 +325,15 @@ impl LockService {
     }
 
     /// Initialize a lock to None (but exists) for a given list of ObjectRefs.
-    /// If the lock already exists and is locked to a transaction, then return TransactionLockExists
-    pub async fn initialize_locks(&self, refs: Vec<ObjectRef>) -> SuiResult {
+    /// If `is_force_reset` is true, we initialize them regardless of their existing state.
+    /// Otherwise, if the lock already exists and is locked to a transaction, then return TransactionLockExists
+    /// Only the gateway could set is_force_reset to true.
+    pub async fn initialize_locks(&self, refs: &[ObjectRef], is_force_reset: bool) -> SuiResult {
         let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
         self.sender
             .send(LockServiceCommands::Initialize {
-                refs,
+                refs: Vec::from(refs),
+                is_force_reset,
                 resp: os_sender,
             })
             .await
@@ -446,7 +438,8 @@ mod tests {
         assert_eq!(ls.get_lock(ref1), Ok(None));
 
         // Initialize 2 locks
-        ls.initialize_locks(&[ref1, ref2]).unwrap();
+        ls.initialize_locks(&[ref1, ref2], false /* is_force_reset */)
+            .unwrap();
         assert_eq!(ls.get_lock(ref2), Ok(Some(None)));
         assert_eq!(ls.locks_exist(&[ref1, ref2]), Ok(()));
 
@@ -469,12 +462,13 @@ mod tests {
 
         // Should get TransactionLockExists if try to initialize already locked object
         assert!(matches!(
-            ls.initialize_locks(&[ref2, ref3]),
+            ls.initialize_locks(&[ref2, ref3], false /* is_force_reset */),
             Err(SuiError::TransactionLockExists { .. })
         ));
 
         // Should not be able to acquire lock for diff tx if already locked
-        ls.initialize_locks(&[ref3]).unwrap();
+        ls.initialize_locks(&[ref3], false /* is_force_reset */)
+            .unwrap();
         assert!(matches!(
             ls.acquire_locks(&[ref2, ref3], tx2),
             Err(SuiError::ConflictingTransaction { .. })
@@ -491,7 +485,8 @@ mod tests {
         let tx1 = TransactionDigest::random();
 
         // Initialize 2 locks
-        ls.initialize_locks(&[ref1, ref2]).unwrap();
+        ls.initialize_locks(&[ref1, ref2], false /* is_force_reset */)
+            .unwrap();
 
         // Should be able to acquire lock if all objects initialized
         ls.acquire_locks(&[ref1, ref2], tx1).unwrap();
@@ -499,7 +494,7 @@ mod tests {
 
         // Cannot initialize them again since they are locked already
         assert!(matches!(
-            ls.initialize_locks(&[ref1, ref2]),
+            ls.initialize_locks(&[ref1, ref2], false /* is_force_reset */),
             Err(SuiError::TransactionLockExists { .. })
         ));
 
@@ -508,7 +503,8 @@ mod tests {
         assert_eq!(ls.get_lock(ref2), Ok(None));
 
         // Now initialization should succeed
-        ls.initialize_locks(&[ref1, ref2]).unwrap();
+        ls.initialize_locks(&[ref1, ref2], false /* is_force_reset */)
+            .unwrap();
     }
 
     #[tokio::test]
@@ -524,7 +520,10 @@ mod tests {
         // Should be able to concurrently initialize locks for same objects, all should succeed
         let futures = (0..10).map(|_n| {
             let ls = ls.clone();
-            tokio::spawn(async move { ls.initialize_locks(vec![ref1, ref2]).await })
+            tokio::spawn(async move {
+                ls.initialize_locks(&[ref1, ref2], false /* is_force_reset */)
+                    .await
+            })
         });
         let results = join_all(futures).await;
         assert!(results.iter().all(|res| res.is_ok()));

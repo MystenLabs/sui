@@ -5,5 +5,10 @@ import { combineReducers } from '@reduxjs/toolkit';
 
 import account from './slices/account';
 import app from './slices/app';
+import suiObjects from './slices/sui-objects';
 
-export default combineReducers({ account, app });
+const rootReducer = combineReducers({ account, app, suiObjects });
+
+export type RootState = ReturnType<typeof rootReducer>;
+
+export default rootReducer;

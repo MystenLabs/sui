@@ -435,9 +435,12 @@ async fn test_transfer_coin_with_retry() {
     .await
     .is_err());
 
-    // The tx is stuck in the gateway, with objects locked to this tx.
+    // Since we never finished executing the transaction, the transaction is still in the
+    // transactions table.
+    // However objects in the transaction should no longer be locked since we reset
+    // them at the last failed retry.
     assert_eq!(gateway.store().pending_transactions().iter().count(), 1);
-    let (tx_digest, tx) = gateway
+    let (tx_digest, _tx) = gateway
         .store()
         .pending_transactions()
         .iter()
@@ -449,7 +452,7 @@ async fn test_transfer_coin_with_retry() {
             .get_transaction_envelope(&coin_object.compute_object_reference())
             .await
             .unwrap(),
-        Some(tx)
+        None,
     );
 
     // Recover one of the authorities.
@@ -474,7 +477,6 @@ async fn test_transfer_coin_with_retry() {
     let new_owner = &oref.owner;
     assert_eq!(new_owner, &Owner::AddressOwner(addr2));
 
-    // The tx is no longer stuck after the retry.
     assert_eq!(gateway.store().pending_transactions().iter().count(), 0);
     assert!(gateway
         .store()

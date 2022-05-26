@@ -313,7 +313,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         let state = self.state.clone();
 
         let result = state
-            ._checkpoints
+            .checkpoints
             .as_ref()
             .unwrap()
             .lock()

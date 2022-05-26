@@ -1,16 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::authority::{
-    authority_tests::{get_genesis_package_by_module, init_state_with_objects},
-    AuthorityState,
-};
+use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use move_core_types::{account_address::AccountAddress, ident_str};
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};
-use sui_adapter::genesis;
 use sui_network::tonic;
 use sui_types::{
     base_types::{ObjectID, TransactionDigest},
@@ -53,8 +49,7 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
         // Make a sample transaction.
         let module = "ObjectBasics";
         let function = "create";
-        let genesis_package_objects = genesis::clone_genesis_packages();
-        let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
+        let package_object_ref = authority.get_framework_object_ref().await.unwrap();
 
         let data = TransactionData::new_move_call(
             sender,
@@ -101,7 +96,7 @@ async fn listen_to_sequenced_transaction() {
     let state = init_state_with_objects(objects).await;
 
     // Make a sample (serialized) consensus transaction.
-    let certificate = test_certificates(&state).await.pop().unwrap();
+    let certificate = Box::new(test_certificates(&state).await.pop().unwrap());
     let message = ConsensusTransaction::UserTransaction(certificate.clone());
     let serialized = bincode::serialize(&message).unwrap();
 
@@ -172,7 +167,10 @@ async fn submit_transaction_to_consensus() {
         };
         let message =
             bincode::deserialize(&serialized).expect("Failed to deserialize consensus tx");
-        let ConsensusTransaction::UserTransaction(certificate) = message;
+        let certificate = match message {
+            ConsensusTransaction::UserTransaction(certificate) => certificate,
+            _ => panic!("Unexpected message {message:?}"),
+        };
 
         // Set the shared object locks.
         state_guard
@@ -190,16 +188,18 @@ async fn submit_transaction_to_consensus() {
 
     // Submit the transaction and ensure the submitter reports success to the caller.
     tokio::task::yield_now().await;
-    let consensus_transaction = ConsensusTransaction::UserTransaction(certificate);
+    let consensus_transaction = ConsensusTransaction::UserTransaction(Box::new(certificate));
     let result = submitter.submit(&consensus_transaction).await;
     assert!(result.is_ok());
 
     // Ensure the consensus node got the transaction.
     let bytes = handle.recv().await.unwrap().transaction;
-    match bincode::deserialize(&bytes).unwrap() {
+    let message = bincode::deserialize(&bytes).unwrap();
+    match message {
         ConsensusTransaction::UserTransaction(x) => {
             assert_eq!(x.to_transaction(), expected_transaction)
         }
+        _ => panic!("Unexpected message {message:?}"),
     }
 }
 

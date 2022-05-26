@@ -5,16 +5,15 @@
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use async_trait::async_trait;
 use futures::StreamExt;
+use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
 use sui_types::crypto::PublicKeyBytes;
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::{base_types::*, committee::*, fp_ensure};
-use tracing::info;
-
-use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
 use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };
+use tracing::info;
 
 #[derive(Clone)]
 pub struct SafeClient<C> {
@@ -392,8 +391,8 @@ where
         let address = self.address;
         let count: u64 = 0;
         let stream = Box::pin(batch_info_items.scan(
-            (0u64, None, count),
-            move |(seq, txs_and_last_batch, count), batch_info_item| {
+            (None, count),
+            move |(txs_and_last_batch, count), batch_info_item| {
                 let req_clone = request.clone();
                 let client = client.clone();
 
@@ -403,7 +402,6 @@ where
                     // If we exceed it return None to end stream
                     return futures::future::ready(None);
                 }
-
                 let result = match &batch_info_item {
                     Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
                         if let Err(err) = client.check_update_item_batch_response(
@@ -414,8 +412,6 @@ where
                             client.report_client_error(err.clone());
                             Some(Err(err))
                         } else {
-                            // Save the sequence number of this batch
-                            *seq = signed_batch.batch.next_sequence_number;
                             // Insert a fresh vector for the new batch of transactions
                             let _ =
                                 txs_and_last_batch.insert((Vec::new(), signed_batch.batch.clone()));
@@ -425,17 +421,19 @@ where
                     Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest)))) => {
                         // A stream always starts with a batch, so the previous should have initialized it.
                         // And here we insert the tuple into the batch.
-                        if txs_and_last_batch
-                            .as_mut()
-                            .map(|txs| txs.0.push((*seq, *digest)))
-                            .is_none()
-                        {
-                            let err = SuiError::ByzantineAuthoritySuspicion { authority: address };
-                            client.report_client_error(err.clone());
-                            Some(Err(err))
-                        } else {
-                            *count += 1;
-                            Some(batch_info_item)
+                        match txs_and_last_batch {
+                            None => {
+                                let err =
+                                    SuiError::ByzantineAuthoritySuspicion { authority: address };
+                                client.report_client_error(err.clone());
+                                Some(Err(err))
+                            }
+                            Some(txs) => {
+                                txs.0.push((*seq, *digest));
+
+                                *count += 1;
+                                Some(batch_info_item)
+                            }
                         }
                     }
                     Err(e) => Some(Err(e.clone())),

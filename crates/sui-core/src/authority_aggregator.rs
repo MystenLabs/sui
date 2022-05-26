@@ -1045,7 +1045,7 @@ where
                         // - we try to re-process the certificate and return the result.
 
                         let handle = if contains_shared_object {
-                            client.handle_consensus_transaction(ConsensusTransaction::UserTransaction(cert_ref.clone()))
+                            client.handle_consensus_transaction(ConsensusTransaction::UserTransaction(Box::new(cert_ref.clone())))
                         } else {
                             client
                             .handle_confirmation_transaction(ConfirmationTransaction::new(

@@ -24,6 +24,7 @@
             "_images/*": ["./src/ui/assets/images/*"],
             "_redux/*": ["./src/ui/app/redux/*"],
             "_store": ["./src/ui/app/redux/store/"],
+            "_store/*": ["./src/ui/app/redux/store/*"],
             "_hooks": ["./src/ui/app/hooks/"],
             "_components/*": ["./src/ui/app/components/*"]
         }
