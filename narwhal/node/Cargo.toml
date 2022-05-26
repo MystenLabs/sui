@@ -32,6 +32,7 @@ executor = { path = "../executor" }
 primary = { path = "../primary" }
 types = { path = "../types" }
 worker = { path = "../worker" }
+mirai-annotations = "1.12.0"
 
 [dev-dependencies]
 ed25519-dalek = "1.0.1"
