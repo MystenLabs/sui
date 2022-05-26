@@ -74,7 +74,7 @@ function OwnedObjectStatic({ id }: { id: string }) {
     if (objects) {
         const results = objects.map(({ objectId }) => {
             const entry = findDataFromID(objectId, undefined);
-            const convertToBN = (balance: string) => new BN.BN(balance, 10);
+            const convertToBN = (balance: string): BN => new BN.BN(balance, 10);
             return {
                 id: entry?.id,
                 Type: entry?.objType,
