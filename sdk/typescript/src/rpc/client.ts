@@ -4,7 +4,7 @@
 import RpcClient from 'jayson/lib/client/browser';
 import fetch from 'cross-fetch';
 import { isErrorResponse, isValidResponse } from './client.guard';
-import LosslessJSON from 'lossless-json';
+const LosslessJSON = require('lossless-json');
 
 /**
  * An object defining headers to be passed to the RPC server
@@ -46,7 +46,7 @@ export class JsonRpcClient {
         try {
           let res: Response = await fetch(url, options);
           const text = await res.text();
-          const result = JSON.stringify(LosslessJSON.parse(text, (key, value) => {
+          const result = JSON.stringify(LosslessJSON.parse(text, (key : string, value : any) => {
             if (key === "balance") return value.toString(); 
             if (value.isLosslessNumber) return value.valueOf();
             return value;
