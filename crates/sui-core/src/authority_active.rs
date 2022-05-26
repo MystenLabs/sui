@@ -36,6 +36,7 @@ use std::{
 };
 use sui_types::{base_types::AuthorityName, error::SuiResult};
 use tokio::sync::Mutex;
+use tracing::error;
 
 use crate::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
@@ -187,7 +188,11 @@ where
             checkpoint_process(&checkpoint_locals).await;
         });
 
-        let _ = _gossip_join.await;
-        let _ = _checkpoint_join.await;
+        if let Err(err) = _gossip_join.await {
+            error!("Join gossip task end error: {:?}", err);
+        }
+        if let Err(err) = _checkpoint_join.await{
+            error!("Join checkpoint task end error: {:?}", err);
+        }
     }
 }
