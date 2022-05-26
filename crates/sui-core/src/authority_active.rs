@@ -191,7 +191,7 @@ where
         if let Err(err) = _gossip_join.await {
             error!("Join gossip task end error: {:?}", err);
         }
-        if let Err(err) = _checkpoint_join.await{
+        if let Err(err) = _checkpoint_join.await {
             error!("Join checkpoint task end error: {:?}", err);
         }
     }
