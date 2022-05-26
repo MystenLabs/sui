@@ -77,15 +77,15 @@ Since the [Dockerfile](Dockerfile) is located under a different folder other tha
 it is important to define the context `../` and allow the Dockerfile properly COPY the source
 code to be compiled on later steps.
 
-### Access primary node gRPC endpoint
+### Access primary node public gRPC endpoints
 
 The nodes by default are running with the `Tusk` algorithm disabled, which basically allow
 to user to treat Narwhal as a pure mempool. When that happens, the gRPC server is bootstrapped
-for the primary nodes and that allow someone to interact with the node.
+for the primary nodes and that allow someone to interact with the node (ex the consensus layer).
 
 The gRPC server for a primary node is running on port `8000`. However, by default, a container's port
 is not accessible to hit by the host (local) machine unless it's exported a mapped between a host's
-machine port and the corresponding container's port (e.x for someone to use a gRPC client on their
+machine port and the corresponding container's port (ex for someone to use a gRPC client on their
 computer to hit a primary's node container gRPC server). The [docker-compose](docker-compose.yml) file is 
 exporting the gRPC port for each primary node, so they can be accessible from the host machine. 
 For the default setup of `4 primary` nodes, the gRPC servers are basically listening to the following
@@ -96,6 +96,19 @@ local (machine) ports:
 * `primary_3`: 8003
 
 For example, to send a gRPC request to `primary_1` node, the url `127.0.0.1:8001` should be used.
+
+### Access worker node public gRPC endpoints
+
+Similar to how someone can access the [public gRPC endpoints on a primary node](#access-primary-node-public-grpc-endpoints),
+**to feed transactions** to the Narwhal cluster via the `worker` nodes could be done via the gRPC server that is
+bootstrapped on the worker nodes bind to the local machine port. To send transactions the following local
+ports can be used:
+* `worker_0`: 7001
+* `worker_1`: 7002
+* `worker_2`: 7003
+* `worker_3`: 7004
+
+For example, to send a transaction to the `worker_2` node via gRPC, the url `127.0.0.1:7003` should be used.
 
 ### Folder structure
 
@@ -144,7 +157,7 @@ The following environment variables are available to be used for each service on
 * `AUTHORITY_ID` with decimal numbers, for current setup available values `0..3`. Defines the
 id of the validator that the node/service corresponds to. Basically this defines which
 configuration to use under the `validators` folder.
-* `LOG_LEVEL` the level of logging for the node defined as number of `v` parameters (e.x `-vvv`). The following
+* `LOG_LEVEL` the level of logging for the node defined as number of `v` parameters (ex `-vvv`). The following
 levels are defined according to the number of "v"s provided: `0 | 1 => "error", 2 => "warn", 3 => "info", 
 4 => "debug", 5 => "trace"`.
 * `CONSENSUS_DISABLED`, this value disables consensus (`Tusk`) for a primary node and enables the
