@@ -174,18 +174,26 @@ impl<A> ActiveAuthority<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    /// Spawn all active tasks.
     pub async fn spawn_all_active_processes(self) {
+        self.spawn_active_processes(true, true).await
+    }
+
+    /// Spawn all active tasks.
+    pub async fn spawn_active_processes(self, gossip: bool, checkpoint: bool) {
         // Spawn a task to take care of gossip
         let gossip_locals = self.clone();
         let _gossip_join = tokio::task::spawn(async move {
-            gossip_process(&gossip_locals, 4).await;
+            if gossip {
+                gossip_process(&gossip_locals, 4).await;
+            }
         });
 
         // Spawn task to take care of checkpointing
         let checkpoint_locals = self; // .clone();
         let _checkpoint_join = tokio::task::spawn(async move {
-            checkpoint_process(&checkpoint_locals).await;
+            if checkpoint {
+                checkpoint_process(&checkpoint_locals).await;
+            }
         });
 
         if let Err(err) = _gossip_join.await {

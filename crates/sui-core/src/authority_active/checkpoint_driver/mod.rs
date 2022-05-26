@@ -9,12 +9,13 @@ use std::{
 
 use parking_lot::Mutex;
 use sui_types::{
-    base_types::AuthorityName,
+    base_types::{AuthorityName, TransactionDigest},
     error::SuiError,
+    messages::{CertifiedTransaction, TransactionInfoRequest},
     messages_checkpoint::{
         AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpoint, CheckpointContents,
-        CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber, SignedCheckpoint,
-        SignedCheckpointProposal,
+        CheckpointFragment, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
+        SignedCheckpoint, SignedCheckpointProposal,
     },
 };
 
@@ -518,7 +519,7 @@ pub async fn diff_proposals<A>(
                         continue;
                     }
 
-                    // TODO: check the proposal is also for the same checkpoint sequence number?
+                    // Check the proposal is also for the same checkpoint sequence number
                     if current.as_ref().unwrap().0.checkpoint.sequence_number()
                         != _my_proposal.sequence_number()
                     {
@@ -531,7 +532,19 @@ pub async fn diff_proposals<A>(
                     );
 
                     let fragment = _my_proposal.fragment_with(&other_proposal);
-                    let _ = checkpoint_db.lock().handle_receive_fragment(&fragment);
+
+                    // We need to augment the fragment with the missing transactions
+                    match augment_fragment_with_diff_transactions(_active_authority, fragment).await
+                    {
+                        Ok(fragment) => {
+                            // On success send the fragment to consensus
+                            let _ = checkpoint_db.lock().handle_receive_fragment(&fragment);
+                        }
+                        Err(err) => {
+                            // TODO: some error occured -- log it.
+                            println!("Error augmenting the fragment: {:?}", err);
+                        }
+                    }
 
                     // TODO: here we should really wait until the fragment is sequenced, otherwise
                     //       we would be going ahead and sequencing more fragments that may not be
@@ -548,4 +561,55 @@ pub async fn diff_proposals<A>(
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
+}
+
+/// Given a fragment with this authority as the proposer and another authority as the counterpart,
+/// augment the fragment with all actual certificates corresponding to the differences. Some will
+/// come from the local database, but others will come from downloading them from the other
+/// authority.
+pub async fn augment_fragment_with_diff_transactions<A>(
+    _active_authority: &ActiveAuthority<A>,
+    mut fragment: CheckpointFragment,
+) -> Result<CheckpointFragment, SuiError>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    let mut diff_certs: BTreeMap<TransactionDigest, CertifiedTransaction> = BTreeMap::new();
+
+    // These are the trasnactions that we have that the other validator does not
+    // have, so we can read them from our local database.
+    for tx_digest in &fragment.diff.second.items {
+        let cert = _active_authority
+            .state
+            .read_certificate(tx_digest)
+            .await?
+            .ok_or(SuiError::CertificateNotfound {
+                certificate_digest: *tx_digest,
+            })?;
+        diff_certs.insert(*tx_digest, cert);
+    }
+
+    // These are the transactions that the other node has, so we have to potentially
+    // download them from the remote node.
+    let client = _active_authority.net.authority_clients[&fragment.other.0.authority].clone();
+    for tx_digest in &fragment.diff.first.items {
+        let response = client
+            .handle_transaction_info_request(TransactionInfoRequest::from(*tx_digest))
+            .await?;
+        let cert = response
+            .certified_transaction
+            .ok_or(SuiError::CertificateNotfound {
+                certificate_digest: *tx_digest,
+            })?;
+        diff_certs.insert(*tx_digest, cert);
+    }
+
+    if !diff_certs.is_empty() {
+        println!("Augment fragment with: {:?} tx", diff_certs.len());
+    }
+
+    // Augment the fragment in place.
+    fragment.certs = diff_certs;
+
+    Ok(fragment)
 }

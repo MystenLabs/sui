@@ -1177,13 +1177,22 @@ where
         &self,
         transaction: &Transaction,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+        self.execute_transaction_with_timeout(transaction, Duration::from_secs(60))
+            .await
+    }
+
+    pub async fn execute_transaction_with_timeout(
+        &self,
+        transaction: &Transaction,
+        timeout: Duration,
+    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         let new_certificate = self
-            .process_transaction(transaction.clone(), Duration::from_secs(60))
+            .process_transaction(transaction.clone(), timeout)
             .instrument(tracing::debug_span!("process_tx"))
             .await?;
         self.metrics.total_tx_certificates.inc();
         let response = self
-            .process_certificate(new_certificate.clone(), Duration::from_secs(60))
+            .process_certificate(new_certificate.clone(), timeout)
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
 
