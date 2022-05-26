@@ -18,9 +18,12 @@ jsonrpsee-proc-macros = "0.13.1"
 jsonrpsee-core = "0.13.1"
 tracing = "0.1.34"
 tokio = { version = "1.18.2", features = ["full"] }
+tokio-stream = "0.1.8"
 futures = "0.3.21"
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 prometheus_exporter = "0.8.4"
+strum = "0.24.0"
+strum_macros = "0.24.0"
 once_cell = "1.11.0"
 
 sui-core = { path = "../sui-core" }

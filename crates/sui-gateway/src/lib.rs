@@ -9,6 +9,10 @@ use sui_config::PersistedConfig;
 use sui_core::gateway_state::{GatewayClient, GatewayState};
 
 pub mod config;
+pub mod event_api;
+pub mod json_rpc;
+pub mod read_api;
+pub mod rpc_gateway;
 pub mod rpc_gateway_client;
 
 pub fn create_client(config_path: &Path) -> Result<GatewayClient, anyhow::Error> {
