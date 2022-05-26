@@ -6,7 +6,7 @@ on:
 
   ## Run this workflow automatically every week
   schedule:
-    - cron: '0 0 * * 1'
+    - cron: '0 0 * * *'
 
 jobs:
   link_checker:
