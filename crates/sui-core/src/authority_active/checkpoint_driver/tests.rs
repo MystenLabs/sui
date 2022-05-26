@@ -158,7 +158,6 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
     assert!(value_set.len() == 1, "Got set {:?}", value_set);
 }
 
-#[ignore]
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn checkpoint_active_flow_crash_client_no_gossip() {
     let setup = checkpoint_tests_setup(20, Duration::from_millis(200)).await;

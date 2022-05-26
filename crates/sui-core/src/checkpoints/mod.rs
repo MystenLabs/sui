@@ -19,6 +19,7 @@ use sui_types::{
     committee::Committee,
     error::SuiError,
     fp_ensure,
+    messages::CertifiedTransaction,
     messages_checkpoint::{
         AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpoint, CheckpointContents,
         CheckpointFragment, CheckpointRequest, CheckpointRequestType, CheckpointResponse,
@@ -98,6 +99,10 @@ pub struct CheckpointStore {
     /// The set of pending transactions that were included in the last checkpoint
     /// but that this authority has not yet processed.
     pub unprocessed_transactions: DBMap<TransactionDigest, CheckpointSequenceNumber>,
+    /// The content of transactions we have received through the checkpoint creation process,
+    /// that we should process before we move on to make a new proposal. This may be a only
+    /// a subset of the digests contained in `unprocessed_transactions.`
+    pub unprocessed_contents: DBMap<TransactionDigest, CertifiedTransaction>,
 
     /// The set of transactions this authority has processed but have not yet been
     /// included in a checkpoint, and their sequence number in the local sequence
@@ -215,6 +220,7 @@ impl CheckpointStore {
                 ("transactions_to_checkpoint", &point_lookup),
                 ("checkpoint_contents", &options),
                 ("unprocessed_transactions", &point_lookup),
+                ("unprocessed_contents", &point_lookup),
                 ("extra_transactions", &point_lookup),
                 ("checkpoints", &point_lookup),
                 ("local_fragments", &point_lookup),
@@ -228,6 +234,7 @@ impl CheckpointStore {
             transactions_to_checkpoint,
             checkpoint_contents,
             unprocessed_transactions,
+            unprocessed_contents,
             extra_transactions,
             checkpoints,
             local_fragments,
@@ -238,6 +245,7 @@ impl CheckpointStore {
             "transactions_to_checkpoint";<TransactionDigest,(CheckpointSequenceNumber, TxSequenceNumber)>,
             "checkpoint_contents";<(CheckpointSequenceNumber,TxSequenceNumber),TransactionDigest>,
             "unprocessed_transactions";<TransactionDigest,CheckpointSequenceNumber>,
+            "unprocessed_contents";<TransactionDigest, CertifiedTransaction>,
             "extra_transactions";<TransactionDigest,TxSequenceNumber>,
             "checkpoints";<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
             "local_fragments";<AuthorityName, CheckpointFragment>,
@@ -245,13 +253,14 @@ impl CheckpointStore {
             "locals";<DBLabel, CheckpointLocals>
         );
 
-        let mut check_point_db = CheckpointStore {
+        let mut checkpoint_db = CheckpointStore {
             name,
             committee,
             secret,
             transactions_to_checkpoint,
             checkpoint_contents,
             unprocessed_transactions,
+            unprocessed_contents,
             extra_transactions,
             checkpoints,
             local_fragments,
@@ -262,9 +271,9 @@ impl CheckpointStore {
         };
 
         // Initialize the locals
-        check_point_db.load_locals()?;
+        checkpoint_db.load_locals()?;
 
-        Ok(check_point_db)
+        Ok(checkpoint_db)
     }
 
     // Define handlers for request
@@ -633,9 +642,16 @@ impl CheckpointStore {
                             .clone(),
                     );
 
-                    // TODO: Take all certificates and schedule them for execution here.
-                    //       We need to at the very least save the certificates that we
-                    //       have not executed, to make sure they are available.
+                    // Take all certificates and schedule them for execution here.
+                    // We need at the very least save the certificates that we
+                    // have not executed, to make sure they are available.
+                    let mut batch = self.unprocessed_contents.batch();
+                    batch = batch
+                        .insert_batch(&self.unprocessed_contents, reconstructed.extra_transactions)
+                        .map_err(|e| FragmentInternalError::Error(e.into()))?;
+                    batch
+                        .write()
+                        .map_err(|e| FragmentInternalError::Error(e.into()))?;
 
                     // Now create the new checkpoint and move all locals forward.
                     let summary = CheckpointSummary::new(next_sequence_number, &contents);
@@ -672,6 +688,20 @@ impl CheckpointStore {
                         .global
                         .checkpoint_items(&diff, proposal.transactions.transactions.clone())
                     {
+                        // Take all certificates and schedule them for execution here.
+                        // We need to at the very least save the certificates that we
+                        // have not executed, to make sure they are available.
+                        let mut batch = self.unprocessed_contents.batch();
+                        batch = batch
+                            .insert_batch(
+                                &self.unprocessed_contents,
+                                reconstructed.extra_transactions,
+                            )
+                            .map_err(|e| FragmentInternalError::Error(e.into()))?;
+                        batch
+                            .write()
+                            .map_err(|e| FragmentInternalError::Error(e.into()))?;
+
                         let contents = CheckpointContents::new(contents.into_iter());
                         let summary = CheckpointSummary::new(next_sequence_number, &contents);
                         self.handle_internal_set_checkpoint(summary, &contents)

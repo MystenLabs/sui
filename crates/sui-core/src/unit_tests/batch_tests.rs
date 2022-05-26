@@ -93,6 +93,8 @@ async fn test_open_manager() {
             .executed_sequence
             .insert(&0, &TransactionDigest::new([0; 32]))
             .expect("no error on write");
+        drop(store);
+        drop(authority_state);
     }
     // drop all
     let (committee, _, authority_key) =
@@ -113,6 +115,8 @@ async fn test_open_manager() {
             .executed_sequence
             .insert(&2, &TransactionDigest::new([0; 32]))
             .expect("no error on write");
+        drop(store);
+        drop(authority_state);
     }
     // drop all
     let (committee, _, authority_key) =
@@ -127,6 +131,8 @@ async fn test_open_manager() {
         assert_eq!(last_block.next_sequence_number, 3);
         assert_eq!(last_block.initial_sequence_number, 2);
         assert_eq!(last_block.size, 1);
+        drop(store);
+        drop(authority_state);
     }
 }
 

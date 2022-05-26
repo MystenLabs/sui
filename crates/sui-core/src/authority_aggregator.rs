@@ -243,7 +243,7 @@ where
     /// stake, in order to bring the destination authority up to date to accept
     /// the certificate. The time devoted to each attempt is bounded by
     /// `timeout_milliseconds`.
-    async fn sync_certificate_to_authority_with_timeout(
+    pub async fn sync_certificate_to_authority_with_timeout(
         &self,
         cert: ConfirmationTransaction,
         destination_authority: AuthorityName,

@@ -1,12 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 
 use sui_types::{
     base_types::{AuthorityName, TransactionDigest},
     committee::Committee,
     error::SuiError,
+    messages::CertifiedTransaction,
     messages_checkpoint::{CheckpointFragment, CheckpointSummary},
     waypoint::{GlobalCheckpoint, WaypointError},
 };
@@ -14,6 +15,7 @@ use sui_types::{
 pub struct FragmentReconstruction {
     pub committee: Committee,
     pub global: GlobalCheckpoint<AuthorityName, TransactionDigest>,
+    pub extra_transactions: BTreeMap<TransactionDigest, CertifiedTransaction>,
 }
 
 impl FragmentReconstruction {
@@ -38,6 +40,7 @@ impl FragmentReconstruction {
         let mut span = SpanGraph::new(&committee);
         let mut fragments_used = Vec::new();
         let mut proposals: HashMap<AuthorityName, CheckpointSummary> = HashMap::new();
+        let mut extra_transactions = BTreeMap::new();
 
         for frag in fragments {
             // Double check we have only been given waypoints for the correct sequence number
@@ -80,7 +83,9 @@ impl FragmentReconstruction {
                 let mut global = GlobalCheckpoint::new();
                 while let Some(link) = active_links.pop_front() {
                     match global.insert(link.diff.clone()) {
-                        Ok(_) | Err(WaypointError::NothingToDo) => {} // Do nothing
+                        Ok(_) | Err(WaypointError::NothingToDo) => {
+                            extra_transactions.extend(link.certs.clone());
+                        }
                         Err(WaypointError::CannotConnect) => {
                             // Reinsert the fragment at the end
                             active_links.push_back(link);
@@ -95,7 +100,11 @@ impl FragmentReconstruction {
                     }
                 }
 
-                return Ok(Some(FragmentReconstruction { global, committee }));
+                return Ok(Some(FragmentReconstruction {
+                    global,
+                    committee,
+                    extra_transactions,
+                }));
             }
         }
 

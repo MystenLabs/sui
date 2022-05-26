@@ -11,19 +11,21 @@ use parking_lot::Mutex;
 use sui_types::{
     base_types::{AuthorityName, TransactionDigest},
     error::SuiError,
-    messages::{CertifiedTransaction, TransactionInfoRequest},
+    messages::{CertifiedTransaction, ConfirmationTransaction, TransactionInfoRequest},
     messages_checkpoint::{
         AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpoint, CheckpointContents,
         CheckpointFragment, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
         SignedCheckpoint, SignedCheckpointProposal,
     },
 };
+use tokio::time::timeout;
 
 use crate::{
     authority_aggregator::ReduceOutput,
     authority_client::AuthorityAPI,
     checkpoints::{proposal::CheckpointProposal, CheckpointStore},
 };
+use typed_store::Map;
 
 #[cfg(test)]
 pub(crate) mod tests;
@@ -52,7 +54,7 @@ where
     tokio::time::sleep(Duration::from_millis(1220)).await;
 
     loop {
-        // First, get the latest summaries and proposals
+        // (1) Get the latest summaries and proposals
         let (checkpoint, proposals) = get_latest_proposal_and_checkpoint_from_all(
             _active_authority,
             Duration::from_millis(200),
@@ -60,7 +62,7 @@ where
         .await
         .expect("All ok");
 
-        // Second, sync to the latest checkpoint, this might take some time.
+        // (2) Sync to the latest checkpoint, this might take some time.
         // Its ok nothing else goes on in terms of the active checkpoint logic
         // while we do sync. We are in any case not in a position to make valuable
         // proposals.
@@ -103,8 +105,20 @@ where
             // }
         }
 
-        // Check if we need to advance to the next checkpoint, in case >2/3
-        // have a proposal out.
+        // (3) Process any unprocessed transactions. We do this before trying to move to the
+        //     next proposal.
+        if let Err(err) =
+            process_unprocessed_digests(_active_authority, state_checkpoints.clone()).await
+        {
+            println!("Error processing unprocessed: {:?}", err);
+            // Nothing happens until we catch up with the unprocessed transactions of the
+            // previous checkpoint.
+            continue;
+        }
+
+        // (4) Check if we need to advance to the next checkpoint, in case >2/3
+        // have a proposal out. If so we start creating and injecting fragments
+        // into the consensus protocol to make the new checkpoint.
         let weight: usize = proposals
             .iter()
             .map(|(auth, _)| _active_authority.state.committee.weight(auth))
@@ -124,7 +138,7 @@ where
             .await;
         }
 
-        // Wait for a long long time.
+        // (5) Wait for a long long time.
         let name = state_checkpoints.lock().name;
         let next_checkpoint = state_checkpoints.lock().next_checkpoint();
 
@@ -612,4 +626,180 @@ where
     fragment.certs = diff_certs;
 
     Ok(fragment)
+}
+
+/// Looks into the unprocessed_digests and tries to process them all to allow
+/// for the creation of the next proposal. Also uses the unprocessed_content
+/// to look for transactions before going to fetch them from the network.
+pub async fn process_unprocessed_digests<A>(
+    _active_authority: &ActiveAuthority<A>,
+    checkpoint_db: Arc<Mutex<CheckpointStore>>,
+) -> Result<(), SuiError>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    let unprocessed_digests: Vec<_> = checkpoint_db
+        .lock()
+        .unprocessed_transactions
+        .iter()
+        .map(|(digest, _)| digest)
+        .collect();
+
+    let existing_certificates = checkpoint_db
+        .lock()
+        .unprocessed_contents
+        .multi_get(&unprocessed_digests)?;
+
+    // First process all certs that we have stored in the unconfirmed_contents
+    let mut processed = BTreeSet::new();
+    for (digest, cert) in unprocessed_digests
+        .iter()
+        .zip(existing_certificates.iter())
+        .filter_map(|(digest, cert_opt)| cert_opt.as_ref().map(|c| (digest, c)))
+    {
+        _active_authority
+            .net
+            .sync_certificate_to_authority_with_timeout(
+                ConfirmationTransaction::new(cert.clone()),
+                _active_authority.state.name,
+                Duration::from_secs(60),
+                3,
+            )
+            .await?;
+        processed.insert(digest);
+    }
+
+    for digest in &unprocessed_digests {
+        // If we have processed this continue with the next cert, nothing to do
+        if _active_authority.state.database.effects_exists(digest)? {
+            continue;
+        }
+
+        println!("Try sync for digest: {:?}", digest);
+        if let Err(err) = sync_digest(_active_authority, *digest, Duration::from_secs(30)).await {
+            println!("Error doing sync from digest {:?}: {}", digest, err);
+            return Err(err);
+        }
+        // Download the certificate
+    }
+
+    let cnt: usize = unprocessed_digests
+        .iter()
+        .filter(|digest| {
+            !_active_authority
+                .state
+                .database
+                .effects_exists(digest)
+                .unwrap()
+        })
+        .count();
+    println!("Remaining unprocessed: {}", cnt);
+
+    Ok(())
+}
+
+/// Sync to a transaction certificate
+pub async fn sync_digest<A>(
+    _active_authority: &ActiveAuthority<A>,
+    cert_digest: TransactionDigest,
+    timeout_period: Duration,
+) -> Result<(), SuiError>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    let mut source_authorities: BTreeSet<AuthorityName> = _active_authority
+        .net
+        .committee
+        .voting_rights
+        .keys()
+        .copied()
+        .collect();
+    source_authorities.remove(&_active_authority.state.name);
+
+    // Now try to update the destination authority sequentially using
+    // the source authorities we have sampled.
+    if source_authorities.is_empty() {
+        println!("EMPTY AUTHORITIES!");
+    }
+    debug_assert!(!source_authorities.is_empty());
+    for source_authority in source_authorities {
+        // Note: here we could improve this function by passing into the
+        //       `sync_authority_source_to_destination` call a cache of
+        //       certificates and parents to avoid re-downloading them.
+
+        let client = _active_authority.net.authority_clients[&source_authority].clone();
+        let sync_fut = async move {
+            let response = client
+                .handle_transaction_info_request(TransactionInfoRequest::from(cert_digest))
+                .await?;
+
+            // If we have cert, use that cert to sync
+            if let Some(cert) = response.certified_transaction {
+                _active_authority
+                    .net
+                    .sync_certificate_to_authority_with_timeout(
+                        ConfirmationTransaction::new(cert.clone()),
+                        _active_authority.state.name,
+                        Duration::from_secs(60),
+                        3,
+                    )
+                    .await?;
+
+                return Result::<(), SuiError>::Ok(());
+            }
+
+            // If we have a transaction, make a cert and sync
+            if let Some(transaction) = response.signed_transaction {
+                // Make a cert afresh
+                let (cert, _effects) = _active_authority
+                    .net
+                    .execute_transaction(&transaction.to_transaction())
+                    .await
+                    .map_err(|_e| SuiError::AuthorityUpdateFailure)?;
+
+                // Make sure the cert is syned with this authority
+                _active_authority
+                    .net
+                    .sync_certificate_to_authority_with_timeout(
+                        ConfirmationTransaction::new(cert.clone()),
+                        _active_authority.state.name,
+                        Duration::from_secs(60),
+                        3,
+                    )
+                    .await?;
+
+                return Result::<(), SuiError>::Ok(());
+            }
+
+            Err(SuiError::AuthorityUpdateFailure)
+        };
+
+        // Be careful.  timeout() returning OK just means the Future completed.
+        if let Ok(inner_res) = timeout(timeout_period, sync_fut).await {
+            match inner_res {
+                Ok(_) => {
+                    // If the updates succeeds we return, since there is no need
+                    // to try other sources.
+                    return Ok(());
+                }
+                // Getting here means the sync_authority_source fn finished within timeout but errored out.
+                Err(_err) => {
+                    println!("Failed sync with {:?}", source_authority);
+                }
+            }
+        } else {
+            // println!("Hit the timeout");
+        }
+
+        // If we are here it means that the update failed, either due to the
+        // source being faulty or the destination being faulty.
+        //
+        // TODO: We should probably be keeping a record of suspected faults
+        // upon failure to de-prioritize authorities that we have observed being
+        // less reliable.
+    }
+
+    // Eventually we should add more information to this error about the destination
+    // and maybe event the certificate.
+    Err(SuiError::AuthorityUpdateFailure)
 }
