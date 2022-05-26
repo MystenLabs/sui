@@ -25,6 +25,7 @@ config = { path = "../config" }
 crypto = { path = "../crypto" }
 dag = { path = "../dag" }
 types = { path = "../types" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 bincode = "1.3.3"

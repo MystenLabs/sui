@@ -30,6 +30,7 @@ types = { path = "../types" }
 
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
 mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 rand = "0.7.3"

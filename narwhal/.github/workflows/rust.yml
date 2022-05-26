@@ -32,11 +32,21 @@ env:
 
 jobs:
   license-check:
-    name: license-check
+    name: license-check & workspace-hack setup
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
+      - name: Install cargo-hakari, and cache the binary
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-hakari
+          locked: true
       - run: scripts/license_check.sh
+      - run: |
+          cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
+          cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
 
   test:
     runs-on: ubuntu-latest
@@ -107,9 +117,18 @@ jobs:
         with:
           crate: cargo-udeps
           locked: true
+      - name: Install cargo-hakari, and cache the binary
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-hakari
+          locked: true
       # Normally running cargo-udeps requires use of a nightly compiler
       # In order to have a more stable and less noisy experience, lets instead
       # opt to use the stable toolchain specified via the 'rust-toolchain' file
       # and instead enable nightly features via 'RUSTC_BOOTSTRAP'
       - name: run cargo-udeps
-        run: RUSTC_BOOTSTRAP=1 cargo udeps
+        run: |
+          # First we need to disable the workspace-hack package
+          cargo hakari disable
+          cargo hakari remove-deps -y
+          RUSTC_BOOTSTRAP=1 cargo udeps

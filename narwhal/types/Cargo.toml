@@ -27,6 +27,7 @@ tonic = { version = "0.7", features = ["tls"] }
 config = { path = "../config" }
 crypto = { path = "../crypto" }
 dag = { path = "../dag" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 
 [dev-dependencies]

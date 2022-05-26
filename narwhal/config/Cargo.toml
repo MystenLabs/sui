@@ -14,6 +14,7 @@ multiaddr = "0.14.0"
 
 crypto = { path = "../crypto" }
 arc-swap = { version = "1.5.0", features = ["serde"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 rand = "0.7.3"
