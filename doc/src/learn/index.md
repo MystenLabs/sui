@@ -10,26 +10,25 @@ programming language, you should familiarize yourself with it and use this conte
 
 For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper. Find answers to common questions about our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md) and more in our [FAQ](../contribute/faq.md).
 
+> **Important:** This site is built from the upstream `main` branch and therefore will contain updates not yet found in `devnet`.
+
 ## See what's new
 
 Find the latest updates to these contents in this section:
 
+* Sui [version 0.3.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.3.0-rc) released to DevNet. See [RELEASES](https://github.com/MystenLabs/sui/blob/main/RELEASES.md) for details on other releases.
 * [Sui tokenomics](../learn/tokenomics/index.md) are now fully explained and cover:
   * [Sui token](../learn/tokenomics/sui-token.md).
   * [Gas-pricing mechanism](../learn/tokenomics/gas-pricing.md).
   * [Sui storage fund](../learn/tokenomics/storage-fund.md).
   * [Delegated proof-of-stake system](../learn/tokenomics/proof-of-stake.md).
 * New [`sui-setup.sh`](https://github.com/MystenLabs/sui/blob/main/doc/utils/sui-setup.sh) script enables full environment setup in a [single set of commands](../build/install.md).
-* Sui version 0.2.0 released to DevNet:
-  * DevNet data will be wiped along with this release. If you have requested test SUI tokens via faucet, please do so again via the [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) channel on Discord.
-  * Added rustdoc output for [sui](https://mystenlabs.github.io/sui/), [narwhal](https://mystenlabs.github.io/narwhal/), and [mysten-infra](https://mystenlabs.github.io/mysten-infra/) projects available from both [Install Sui](../build/install.md#source-code) and [Contribute to Sui](../contribute/index.md#download-sui).
-  * Added persistent storage across releases. This will greatly reduce the frequency to wipe data during upgrades. 
-  * Internal network interfaces are now described using the MultiAddr format.
-  * Internal gRPC network interfaces now use a bincode codec instead of protobuf.
-  * And many Narwhal updates relevant to Sui.
 
-For a complete view of all changes in Sui 0.2.0, see:
+For a complete view of all changes in the Sui `devnet` branch, see:
 https://github.com/MystenLabs/sui/commits/devnet
+
+For upstream updates in the `main` branch, see:
+https://github.com/MystenLabs/sui/commits/main
 
 See the Sui `doc/src` [history](https://github.com/MystenLabs/sui/commits/main/doc/src) for a complete changelog of updates to this site. 
 
