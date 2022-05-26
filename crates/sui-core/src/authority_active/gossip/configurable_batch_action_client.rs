@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use std::borrow::Borrow;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::Once;
 use std::{env, fs};
 use sui_adapter::genesis;
 use sui_types::base_types::*;
@@ -24,6 +25,15 @@ use sui_types::messages::{
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::Object;
+
+static mut SHOULD_FAIL: bool = true;
+static FIXER: Once = Once::new();
+
+fn fix() {
+    FIXER.call_once(|| unsafe {
+        SHOULD_FAIL = false;
+    })
+}
 
 #[derive(Clone)]
 pub struct TestBatch {
@@ -149,34 +159,36 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         let name = self.state.name;
         let mut items: Vec<Result<BatchInfoResponseItem, SuiError>> = Vec::new();
         let mut seq = 0;
+        let zero_batch = SignedBatch::new(AuthorityBatch::initial(), &*secret, name);
+        items.push(Ok(BatchInfoResponseItem(UpdateItem::Batch(zero_batch))));
         let _ = actions.iter().for_each(|action| {
             match action {
                 BatchActionInternal::EmitUpdateItem(test_batch) => {
-                    let mut temp_items: Vec<Result<BatchInfoResponseItem, SuiError>> = Vec::new();
                     let mut transactions = Vec::new();
                     for digest in test_batch.digests.clone() {
                         transactions.push((seq, digest));
                         // Safe client requires batches arrive first
-                        temp_items.push(Ok(BatchInfoResponseItem(UpdateItem::Transaction((
+                        items.push(Ok(BatchInfoResponseItem(UpdateItem::Transaction((
                             seq, digest,
                         )))));
                         seq += 1;
                     }
+                    // batch size of 1
                     let new_batch = AuthorityBatch::make_next(&last_batch, &transactions).unwrap();
                     last_batch = new_batch;
                     items.push({
                         let item = SignedBatch::new(last_batch.clone(), &*secret, name);
                         Ok(BatchInfoResponseItem(UpdateItem::Batch(item)))
                     });
-                    for temp_item in temp_items {
-                        items.push(temp_item)
+                }
+                BatchActionInternal::EmitError() => unsafe {
+                    if SHOULD_FAIL {
+                        fix();
+                        items.push(Err(SuiError::GenericAuthorityError {
+                            error: "Synthetic authority error".to_string(),
+                        }))
                     }
-                }
-                BatchActionInternal::EmitError() => {
-                    items.push(Err(SuiError::GenericAuthorityError {
-                        error: "Synthetic authority error".to_string(),
-                    }))
-                }
+                },
             };
         });
 

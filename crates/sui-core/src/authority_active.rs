@@ -51,7 +51,7 @@ use gossip::gossip_process;
 const MAX_RETRIES_RECORDED: u32 = 10;
 const DELAY_FOR_1_RETRY_MS: u64 = 2_000;
 const EXPONENTIAL_DELAY_BASIS: u64 = 2;
-const MAX_RETRY_DELAY_MS: u64 = 30_000;
+pub const MAX_RETRY_DELAY_MS: u64 = 30_000;
 
 pub struct AuthorityHealth {
     // Records the number of retries
