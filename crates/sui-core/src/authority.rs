@@ -1097,7 +1097,7 @@ impl ExecutionState for AuthorityState {
 
     async fn handle_consensus_transaction(
         &self,
-        execution_indices: ExecutionIndices,
+        consensus_index: ExecutionIndices,
         transaction: Self::Transaction,
     ) -> Result<Vec<u8>, Self::Error> {
         match transaction {
@@ -1132,7 +1132,7 @@ impl ExecutionState for AuthorityState {
                     // In the worst case, the synchronizer of the consensus client will catch up.
                     self.database.persist_certificate_and_lock_shared_objects(
                         *certificate,
-                        execution_indices,
+                        consensus_index,
                     )?;
                 }
 
@@ -1140,7 +1140,7 @@ impl ExecutionState for AuthorityState {
                 Ok(Vec::default())
             }
             ConsensusTransaction::Checkpoint(fragment) => {
-                let seq = execution_indices;
+                let seq = consensus_index;
                 if let Some(checkpoint) = &self.checkpoints {
                     checkpoint
                         .lock()
@@ -1148,8 +1148,8 @@ impl ExecutionState for AuthorityState {
                         .map_err(|e| SuiError::from(&e.to_string()[..]))?;
 
                     // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
-                    // to persist the execution indices. If the validator crashes, this transaction
-                    // may be reprocessed again and the checkpoint store will simply ignore it.
+                    // to persist the consensus index. If the validator crashes, this transaction
+                    // may be resent to the checkpoint logic that will simply ignore it.
                 }
 
                 // TODO: This return time is not ideal. The authority submitting the checkpoint fragment
