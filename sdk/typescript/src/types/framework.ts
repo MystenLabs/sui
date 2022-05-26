@@ -21,7 +21,7 @@ export class Coin {
       return undefined;
     }
     const balance = getObjectFields(data)?.balance;
-    return new BN.BN(balance);
+    return new BN.BN(balance, 10);
   }
 
   static getZero(): BN {
