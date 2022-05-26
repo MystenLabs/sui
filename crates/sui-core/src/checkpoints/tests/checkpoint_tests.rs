@@ -1175,17 +1175,19 @@ fn test_fragment_full_flow() {
 
     // TEST 2 -- submit to all validators leads to reconstruction
 
-    let mut seq = 0;
+    let mut seq = ExecutionIndices::default();
     let cps0 = &mut test_objects[0].1;
     let mut all_fragments = Vec::new();
     while let Ok(fragment) = rx.try_recv() {
         all_fragments.push(fragment.clone());
-        assert!(cps0.handle_internal_fragment(seq, fragment).is_ok());
-        seq += 1;
+        assert!(cps0.handle_internal_fragment(seq.clone(), fragment).is_ok());
+        seq.next(
+            /* total_batches */ 100, /* total_transactions */ 100,
+        );
     }
 
     // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
-    assert_eq!(seq, 6);
+    assert_eq!(seq.next_transaction_index, 6);
     // Advanced to next checkpoint
     assert_eq!(cps0.next_checkpoint(), 1);
 
@@ -1198,11 +1200,13 @@ fn test_fragment_full_flow() {
     // TEST 3 -- feed the framents to the node 6 which cannot decode the
     // sequence of fragments.
 
-    let mut seq = 0;
+    let mut seq = ExecutionIndices::default();
     let cps6 = &mut test_objects[6].1;
     for fragment in &all_fragments {
-        let _ = cps6.handle_internal_fragment(seq, fragment.clone());
-        seq += 1;
+        let _ = cps6.handle_internal_fragment(seq.clone(), fragment.clone());
+        seq.next(
+            /* total_batches */ 100, /* total_transactions */ 100,
+        );
     }
 
     // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
@@ -1215,8 +1219,10 @@ fn test_fragment_full_flow() {
     // and no more fragments are recorded.
 
     for fragment in &all_fragments {
-        let _ = cps6.handle_internal_fragment(seq, fragment.clone());
-        seq += 1;
+        let _ = cps6.handle_internal_fragment(seq.clone(), fragment.clone());
+        seq.next(
+            /* total_batches */ 100, /* total_transactions */ 100,
+        );
     }
 
     // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
@@ -1373,15 +1379,20 @@ async fn checkpoint_tests_setup() -> TestSetup {
     // The fake consensus channel for testing
     let checkpoint_stores: Vec<_> = authorities.iter().map(|a| a.checkpoint.clone()).collect();
     let _join = tokio::task::spawn(async move {
-        let mut seq = 0;
+        let mut seq = ExecutionIndices::default();
         while let Some(msg) = _rx.recv().await {
-            println!("Deliver fragment seq={}", seq);
+            println!("Deliver fragment seq={:?}", seq);
             for cps in &checkpoint_stores {
-                if let Err(err) = cps.lock().handle_internal_fragment(seq, msg.clone()) {
+                if let Err(err) = cps
+                    .lock()
+                    .handle_internal_fragment(seq.clone(), msg.clone())
+                {
                     println!("Error: {:?}", err);
                 }
             }
-            seq += 1;
+            seq.next(
+                /* total_batches */ 100, /* total_transactions */ 100,
+            );
         }
     });
 

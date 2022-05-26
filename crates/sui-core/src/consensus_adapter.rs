@@ -1,17 +1,25 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::AuthorityState;
+use crate::checkpoints::CheckpointLocals;
+use crate::checkpoints::ConsensusSender;
+use arc_swap::ArcSwapOption;
 use bytes::Bytes;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use multiaddr::Multiaddr;
 use narwhal_executor::SubscriberResult;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
 };
 use sui_types::messages::ConfirmationTransaction;
+use sui_types::messages_checkpoint::CheckpointFragment;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::{
     committee::Committee,
     error::{SuiError, SuiResult},
@@ -151,11 +159,20 @@ impl ConsensusAdapter {
 
         if info.is_empty() {
             // Consensus successfully assigned shared-locks to this certificate.
-            let ConsensusTransaction::UserTransaction(certificate) = certificate.clone();
-            let confirmation_transaction = ConfirmationTransaction { certificate };
-            self.state
-                .handle_confirmation_transaction(confirmation_transaction)
-                .await
+            match certificate {
+                ConsensusTransaction::UserTransaction(certificate) => {
+                    let confirmation = ConfirmationTransaction {
+                        certificate: *certificate.clone(),
+                    };
+                    self.state
+                        .handle_confirmation_transaction(confirmation)
+                        .await
+                }
+                message => {
+                    tracing::error!("Unexpected message {message:?}");
+                    Err(SuiError::UnexpectedMessage)
+                }
+            }
         } else {
             // This certificate has already been executed.
             bincode::deserialize(&info)
@@ -200,6 +217,16 @@ impl ConsensusListener {
         })
     }
 
+    /// Hash serialized consensus transactions. We do not need specific cryptographic properties except
+    /// only collision resistance.
+    pub fn hash_serialized_transaction(
+        serialized: &SerializedConsensusTransaction,
+    ) -> ConsensusTransactionDigest {
+        let mut hasher = DefaultHasher::new();
+        serialized.hash(&mut hasher);
+        hasher.finish()
+    }
+
     /// Main loop receiving messages input to consensus and notifying the caller once the inputs
     /// are sequenced (of if an error happened).
     async fn run(&mut self) {
@@ -210,7 +237,7 @@ impl ConsensusListener {
                     match message {
                         // Keep track of this certificates so we can notify the user later.
                         ConsensusListenerMessage::New(transaction, replier) => {
-                            let digest = Self::hash(&transaction);
+                            let digest = Self::hash_serialized_transaction(&transaction);
                             if self.pending.len() < self.max_pending_transactions {
                                 self.pending.entry(digest).or_insert_with(Vec::new).push(replier);
                             } else if replier.send(Err(SuiError::ListenerCapacityExceeded)).is_err() {
@@ -220,7 +247,7 @@ impl ConsensusListener {
 
                         // Stop waiting for a consensus transaction.
                         ConsensusListenerMessage::Cleanup(transaction) => {
-                            let digest = Self::hash(&transaction);
+                            let digest = Self::hash_serialized_transaction(&transaction);
                             let _ = self.pending.get_mut(&digest).and_then(|x| x.pop());
                             if self.pending.get(&digest).map_or_else(|| false, |x| x.is_empty()) {
                                 self.pending.remove(&digest);
@@ -232,7 +259,7 @@ impl ConsensusListener {
                 // Notify the caller that the transaction has been sequenced (if there is a caller).
                 Some((result, serialized)) = self.rx_consensus_output.recv() => {
                     let outcome = result.map_err(SuiError::from);
-                    let digest = Self::hash(&serialized);
+                    let digest = Self::hash_serialized_transaction(&serialized);
                     if let Some(repliers) = self.pending.remove(&digest) {
                         for replier in repliers {
                             if replier.send(outcome.clone()).is_err() {
@@ -244,12 +271,161 @@ impl ConsensusListener {
             }
         }
     }
+}
 
-    /// Hash serialized consensus transactions. We do not need specific cryptographic properties except
-    /// only collision resistance.
-    pub fn hash(serialized: &SerializedConsensusTransaction) -> ConsensusTransactionDigest {
-        let mut hasher = DefaultHasher::new();
-        serialized.hash(&mut hasher);
-        hasher.finish()
+/// Send checkpoint fragments through consensus.
+pub struct CheckpointSender {
+    tx_checkpoint_consensus_adapter: Sender<CheckpointFragment>,
+}
+
+impl ConsensusSender for CheckpointSender {
+    fn send_to_consensus(&self, fragment: CheckpointFragment) -> SuiResult {
+        self.tx_checkpoint_consensus_adapter
+            .try_send(fragment)
+            .map_err(|e| SuiError::from(&e.to_string()[..]))
+    }
+}
+
+/// Reliably submit checkpoints fragments to consensus.
+pub struct CheckpointConsensusAdapter {
+    /// The network client connecting to the consensus node of this authority.
+    consensus_client: TransactionsClient<sui_network::tonic::transport::Channel>,
+    /// Channel to request to be notified when a given consensus transaction is sequenced.
+    tx_consensus_listener: Sender<ConsensusListenerMessage>,
+    /// Receive new checkpoint fragments to sequence.
+    rx_checkpoint_consensus_adapter: Receiver<CheckpointFragment>,
+    /// A pointer to the checkpoints local store.
+    checkpoint_locals: ArcSwapOption<CheckpointLocals>,
+    /// The initial delay to wait before re-attempting a connection with consensus (in ms).
+    retry_delay: Duration,
+    /// The maximum number of checkpoint fragment pending sequencing.
+    max_pending_transactions: usize,
+    /// Keep all checkpoint fragment waiting to be sequenced.
+    buffer: VecDeque<(SerializedConsensusTransaction, CheckpointSequenceNumber)>,
+}
+
+impl CheckpointConsensusAdapter {
+    /// Create a new `CheckpointConsensusAdapter`.
+    pub fn new(
+        consensus_address: Multiaddr,
+        tx_consensus_listener: Sender<ConsensusListenerMessage>,
+        rx_checkpoint_consensus_adapter: Receiver<CheckpointFragment>,
+        checkpoint_locals: ArcSwapOption<CheckpointLocals>,
+        retry_delay: Duration,
+        max_pending_transactions: usize,
+    ) -> Self {
+        // Create a new network client.
+        let connection = mysten_network::client::connect_lazy(&consensus_address)
+            .expect("Failed to connect to consensus");
+        let consensus_client = TransactionsClient::new(connection);
+
+        // Create the new instance.
+        Self {
+            consensus_client,
+            tx_consensus_listener,
+            rx_checkpoint_consensus_adapter,
+            checkpoint_locals,
+            retry_delay,
+            max_pending_transactions,
+            buffer: VecDeque::with_capacity(max_pending_transactions),
+        }
+    }
+
+    /// Spawn a `CheckpointConsensusAdapter` in a dedicated tokio task.
+    pub fn spawn(mut instance: Self) -> JoinHandle<()> {
+        tokio::spawn(async move { instance.run().await })
+    }
+
+    /// Submit a transaction to consensus.
+    async fn submit(&self, serialized: SerializedConsensusTransaction) -> SuiResult {
+        let transaction = Bytes::from(serialized);
+        let proto_transaction = TransactionProto { transaction };
+        self.consensus_client
+            .clone()
+            .submit_transaction(proto_transaction)
+            .await
+            .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
+            .map(|_| ())
+    }
+
+    /// Wait for a transaction to be sequenced by consensus (or to timeout).
+    async fn waiter<T>(
+        receiver: oneshot::Receiver<SuiResult<SerializedTransactionInfoResponse>>,
+        retry_delay: Duration,
+        deliver: T,
+    ) -> (SuiResult<SerializedTransactionInfoResponse>, T) {
+        let outcome = match timeout(retry_delay, receiver).await {
+            Ok(reply) => reply.expect("Failed to read back from consensus listener"),
+            Err(e) => Err(SuiError::FailedToHearBackFromConsensus(e.to_string())),
+        };
+        (outcome, deliver)
+    }
+
+    /// Main loop receiving checkpoint fragments to reliably submit to consensus.
+    async fn run(&mut self) {
+        let mut waiting = FuturesUnordered::new();
+
+        // Continuously listen to checkpoint fragments and re-attempt sequencing if needed.
+        loop {
+            // Try to submit all pending checkpoint fragments to consensus.
+            while let Some((serialized, sequence_number)) = self.buffer.pop_back() {
+                match self.submit(serialized.clone()).await {
+                    Ok(_) => {
+                        // Notify the consensus listener that we wish to be notified once our
+                        // consensus transaction is sequenced.
+                        let (sender, receiver) = oneshot::channel();
+                        let consensus_input =
+                            ConsensusListenerMessage::New(serialized.clone(), sender);
+                        self.tx_consensus_listener
+                            .send(consensus_input)
+                            .await
+                            .expect("Failed to notify consensus listener");
+
+                        // Add the receiver to the waiter. So we can retransmit if the
+                        // connection fails.
+                        let deliver = (serialized, sequence_number);
+                        let future = Self::waiter(receiver, self.retry_delay, deliver);
+                        waiting.push(future);
+                    }
+                    Err(_) => {
+                        self.buffer.push_back((serialized, sequence_number));
+                        break;
+                    }
+                }
+            }
+
+            // Process new events.
+            tokio::select! {
+                // Listen to new checkpoint fragments.
+                Some(fragment) = self.rx_checkpoint_consensus_adapter.recv() => {
+                    let sequence_number = *fragment.proposer_sequence_number();
+
+                    // Cleanup the buffer.
+                    if self.buffer.len() >= self.max_pending_transactions {
+                        // Drop the earliest fragments. They are not needed for liveness.
+                        let locals = self.checkpoint_locals.load_full();
+                        if let Some(proposal) = &locals.as_ref().unwrap().current_proposal {
+                            let current_sequence_number = proposal.sequence_number();
+                            self.buffer.retain(|(_, s)| s >= current_sequence_number);
+                        }
+                    }
+
+                    // Add the fragment to the buffer.
+                    let transaction = ConsensusTransaction::Checkpoint(Box::new(fragment));
+                    let serialized = bincode::serialize(&transaction)
+                        .expect("Failed to serialize consensus tx");
+                    self.buffer.push_front((serialized, sequence_number));
+                },
+
+                // Listen to checkpoint fragments who failed to be sequenced and need reties.
+                Some((outcome, identifier)) = waiting.next() => {
+                   if let Err(error) = outcome {
+                       tracing::debug!("Failed to sequence transaction: {error}");
+                       let (serialized_transaction, checkpoint_sequence_number) = identifier;
+                       self.buffer.push_back((serialized_transaction, checkpoint_sequence_number));
+                   }
+                },
+            }
+        }
     }
 }

@@ -423,8 +423,7 @@ async fn test_move_call_gas() -> SuiResult {
     let (gas_cost, err) = effects.status.unwrap_err();
     // We will run out of gas during VM execution.
     assert!(matches!(err, SuiError::AbortedExecution { .. }));
-    assert!(err
-        .to_string()
+    assert!(std::string::ToString::to_string(&err)
         .contains("VMError with status OUT_OF_GAS at location Module ModuleId"));
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
     let expected_gas_balance = expected_gas_balance - gas_cost.gas_used() + gas_cost.storage_rebate;

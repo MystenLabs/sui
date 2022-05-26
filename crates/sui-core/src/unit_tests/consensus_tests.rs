@@ -96,7 +96,7 @@ async fn listen_to_sequenced_transaction() {
     let state = init_state_with_objects(objects).await;
 
     // Make a sample (serialized) consensus transaction.
-    let certificate = test_certificates(&state).await.pop().unwrap();
+    let certificate = Box::new(test_certificates(&state).await.pop().unwrap());
     let message = ConsensusTransaction::UserTransaction(certificate.clone());
     let serialized = bincode::serialize(&message).unwrap();
 
@@ -167,7 +167,10 @@ async fn submit_transaction_to_consensus() {
         };
         let message =
             bincode::deserialize(&serialized).expect("Failed to deserialize consensus tx");
-        let ConsensusTransaction::UserTransaction(certificate) = message;
+        let certificate = match message {
+            ConsensusTransaction::UserTransaction(certificate) => certificate,
+            _ => panic!("Unexpected message {message:?}"),
+        };
 
         // Set the shared object locks.
         state_guard
@@ -185,16 +188,18 @@ async fn submit_transaction_to_consensus() {
 
     // Submit the transaction and ensure the submitter reports success to the caller.
     tokio::task::yield_now().await;
-    let consensus_transaction = ConsensusTransaction::UserTransaction(certificate);
+    let consensus_transaction = ConsensusTransaction::UserTransaction(Box::new(certificate));
     let result = submitter.submit(&consensus_transaction).await;
     assert!(result.is_ok());
 
     // Ensure the consensus node got the transaction.
     let bytes = handle.recv().await.unwrap().transaction;
-    match bincode::deserialize(&bytes).unwrap() {
+    let message = bincode::deserialize(&bytes).unwrap();
+    match message {
         ConsensusTransaction::UserTransaction(x) => {
             assert_eq!(x.to_transaction(), expected_transaction)
         }
+        _ => panic!("Unexpected message {message:?}"),
     }
 }
 

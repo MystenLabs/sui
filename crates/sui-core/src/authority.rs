@@ -2,6 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::checkpoints::FragmentInternalError;
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
     checkpoints::CheckpointStore,
@@ -22,6 +23,7 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use narwhal_executor::ExecutionStateError;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
@@ -206,7 +208,7 @@ pub struct AuthorityState {
     indexes: Option<Arc<IndexStore>>,
 
     /// The checkpoint store
-    pub(crate) _checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
+    pub(crate) checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
 
     // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
@@ -730,7 +732,7 @@ impl AuthorityState {
             move_vm,
             database: store.clone(),
             indexes,
-            _checkpoints: checkpoints,
+            checkpoints,
             batch_channels: tx,
             batch_notifier: Arc::new(
                 authority_notifier::TransactionNotifier::new(store.clone())
@@ -746,7 +748,7 @@ impl AuthorityState {
 
         // If a checkpoint store is present, ensure it is up-to-date with the latest
         // batches.
-        if let Some(checkpoint) = &state._checkpoints {
+        if let Some(checkpoint) = &state.checkpoints {
             let next_expected_tx = checkpoint.lock().next_transaction_sequence_expected();
 
             // Get all unprocessed checkpoints
@@ -780,7 +782,7 @@ impl AuthorityState {
     }
 
     pub(crate) fn checkpoints(&self) -> Option<Arc<Mutex<CheckpointStore>>> {
-        self._checkpoints.clone()
+        self.checkpoints.clone()
     }
 
     pub(crate) fn db(&self) -> Arc<AuthorityStore> {
@@ -1095,45 +1097,66 @@ impl ExecutionState for AuthorityState {
 
     async fn handle_consensus_transaction(
         &self,
-        execution_indices: ExecutionIndices,
+        consensus_index: ExecutionIndices,
         transaction: Self::Transaction,
     ) -> Result<Vec<u8>, Self::Error> {
-        let ConsensusTransaction::UserTransaction(certificate) = transaction;
+        match transaction {
+            ConsensusTransaction::UserTransaction(certificate) => {
+                // Ensure the input is a shared object certificate. Remember that Byzantine authorities
+                // may input anything into consensus.
+                fp_ensure!(
+                    certificate.contains_shared_object(),
+                    SuiError::NotASharedObjectTransaction
+                );
 
-        // Ensure the input is a shared object certificate. Remember that Byzantine authorities
-        // may input anything into consensus.
-        fp_ensure!(
-            certificate.contains_shared_object(),
-            SuiError::NotASharedObjectTransaction
-        );
+                // If we already executed this transaction, return the signed effects.
+                let digest = certificate.digest();
+                if self.database.effects_exists(digest)? {
+                    debug!(tx_digest =? digest, "Shared-object transaction already executed");
+                    let info = self.make_transaction_info(digest).await?;
+                    return Ok(bincode::serialize(&info).expect("Failed to serialize tx info"));
+                }
 
-        // If we already executed this transaction, return the signed effects.
-        let digest = certificate.digest();
-        if self.database.effects_exists(digest)? {
-            debug!(tx_digest =? digest, "Shared-object transaction already executed");
-            let info = self.make_transaction_info(digest).await?;
-            return Ok(bincode::serialize(&info).expect("Failed to serialize tx info"));
+                // If we didn't already assigned shared-locks to this transaction, we do it now.
+                if !self.shared_locks_exist(&certificate).await? {
+                    // Check the certificate. Remember that Byzantine authorities may input anything into
+                    // consensus.
+                    certificate.verify(&self.committee)?;
+
+                    // Persist the certificate since we are about to lock one or more shared object.
+                    // We thus need to make sure someone (if not the client) can continue the protocol.
+                    // Also atomically lock the shared objects for this particular transaction and
+                    // increment the last consensus index. Note that a single process can ever call
+                    // this function and that the last consensus index is also kept in memory. It is
+                    // thus ok to only persist now (despite this function may have returned earlier).
+                    // In the worst case, the synchronizer of the consensus client will catch up.
+                    self.database.persist_certificate_and_lock_shared_objects(
+                        *certificate,
+                        consensus_index,
+                    )?;
+                }
+
+                // TODO: This return time is not ideal.
+                Ok(Vec::default())
+            }
+            ConsensusTransaction::Checkpoint(fragment) => {
+                let seq = consensus_index;
+                if let Some(checkpoint) = &self.checkpoints {
+                    checkpoint
+                        .lock()
+                        .handle_internal_fragment(seq, *fragment)
+                        .map_err(|e| SuiError::from(&e.to_string()[..]))?;
+
+                    // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
+                    // to persist the consensus index. If the validator crashes, this transaction
+                    // may be resent to the checkpoint logic that will simply ignore it.
+                }
+
+                // TODO: This return time is not ideal. The authority submitting the checkpoint fragment
+                // is not expecting any reply.
+                Ok(Vec::default())
+            }
         }
-
-        // If we didn't already assigned shared-locks to this transaction, we do it now.
-        if !self.shared_locks_exist(&certificate).await? {
-            // Check the certificate. Remember that Byzantine authorities may input anything into
-            // consensus.
-            certificate.verify(&self.committee)?;
-
-            // Persist the certificate since we are about to lock one or more shared object.
-            // We thus need to make sure someone (if not the client) can continue the protocol.
-            // Also atomically lock the shared objects for this particular transaction and
-            // increment the last consensus index. Note that a single process can ever call
-            // this function and that the last consensus index is also kept in memory. It is
-            // thus ok to only persist now (despite this function may have returned earlier).
-            // In the worst case, the synchronizer of the consensus client will catch up.
-            self.database
-                .persist_certificate_and_lock_shared_objects(certificate, execution_indices)?;
-        }
-
-        // TODO: This return time is not ideal.
-        Ok(Vec::default())
     }
 
     fn ask_consensus_write_lock(&self) -> bool {
@@ -1146,5 +1169,25 @@ impl ExecutionState for AuthorityState {
 
     async fn load_execution_indices(&self) -> Result<ExecutionIndices, Self::Error> {
         self.database.last_consensus_index()
+    }
+}
+
+impl ExecutionStateError for FragmentInternalError {
+    fn node_error(&self) -> bool {
+        match self {
+            // Those are errors caused by the client. Every authority processing this fragment will
+            // deterministically trigger this error.
+            Self::Error(..) => false,
+            // Those are errors caused by the authority (eg. storage failure). It is not guaranteed
+            // that other validators will also trigger it and they may not be deterministic.
+            Self::Retry(..) => true,
+        }
+    }
+
+    fn to_string(&self) -> String {
+        match self {
+            Self::Error(sui_error) => format!("Failed to process checkpoint fragment {sui_error}"),
+            Self::Retry(fragment) => format!("Failed to sequence checkpoint fragment {fragment:?}"),
+        }
     }
 }
