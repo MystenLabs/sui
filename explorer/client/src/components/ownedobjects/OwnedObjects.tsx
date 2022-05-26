@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Coin, getObjectFields, getObjectId } from '@mysten/sui.js';
+import BN from 'bn.js';
 import React, {
     useCallback,
     useEffect,
@@ -35,7 +36,7 @@ type resultType = {
     _isCoin: boolean;
     Version?: string;
     display?: string;
-    balance?: any;
+    balance?: BN;
 }[];
 
 const DATATYPE_DEFAULT: resultType = [
@@ -78,7 +79,7 @@ function OwnedObjectStatic({ id }: { id: string }) {
                 Type: entry?.objType,
                 Version: entry?.version,
                 display: entry?.data?.contents?.display,
-                balance: Coin.convertToBN(entry?.data?.contents?.balance),
+                balance: new BN.BN(entry?.data?.contents?.balance),
                 _isCoin: entry?.data?.contents?.balance !== undefined,
             };
         });
