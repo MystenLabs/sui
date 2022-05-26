@@ -1,5 +1,7 @@
 # Copyright(C) Facebook, Inc. and its affiliates.
 from fabric import task
+from benchmark.seed import SeedData
+from pathlib import Path
 
 from benchmark.local import LocalBench
 from benchmark.logs import ParseError, LogParser
@@ -44,6 +46,23 @@ def local(ctx, debug=True):
     try:
         ret = LocalBench(bench_params, node_params).run(debug)
         print(ret.result())
+    except BenchError as e:
+        Print.error(e)
+
+
+@task
+def seed(ctx, committee_path):
+    ''' Run data seeder '''
+    bench_params = {
+        'faults': 0,
+        'nodes': 4,
+        'workers': 1,
+        'rate': 50_000,
+        'tx_size': 512,
+        'duration': 20,
+    }
+    try:
+        ret = SeedData(bench_params).run(Path(committee_path))
     except BenchError as e:
         Print.error(e)
 

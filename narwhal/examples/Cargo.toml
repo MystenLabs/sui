@@ -1,0 +1,17 @@
+[package]
+name = "demo"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "demo_client"
+path = "src/demo_client.rs"
+
+[dependencies]
+tonic = "0.7.2"
+prost = "0.10.4"
+tokio = { version = "1.18.2", features = ["macros", "rt-multi-thread"] }
+base64 = "0.13.0"
+
+[build-dependencies]
+tonic-build = "0.7.2"
