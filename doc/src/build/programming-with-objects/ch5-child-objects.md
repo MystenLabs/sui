@@ -233,8 +233,11 @@ Similar to `remove_child`, the `child` object must be passed explicitly by-value
 
 ### Delete Child Objects
 For the same reasons that transferring a child object requires both the child object and the `ChildRef`, deleting child objects directly without taking care of the child reference will lead to a stale reference pointing to a non-existing object after the deletion.
-In order to delete a child object, we must first transfer this child object to an account address, which makes this object a regular account-owned object instead of a child object, and hence can be deleted normally.
+There are two ways to delete a child object:
+1. First transfer this child object to an account address, which makes this object a regular account-owned object instead of a child object, and hence can be deleted normally.
+2. Use a special API to delete the child object directly along with the child reference.
 
+#### Transfer and then delete
 What happens if we try to delete a child directly using what we learned in the first chapter, without taking the child reference? Let's find out. We can define a simple `delete_child` method like this:
 ```rust
 public(script) fun delete_child(child: Child, _parent: &mut Parent, _ctx: &mut TxContext) {
@@ -247,4 +250,30 @@ If you follow the wallet interaction above and then try to call the `delete_chil
 An object that's owned by another object cannot be deleted or wrapped.
 It must be transferred to an account address first before deletion
 ```
-If we follow the suggestion, fist call `remove_child` to turn this child object to an account-owned object, and then call `delete_child` again, it will succeed!
+If we follow the suggestion, fist call `remove_child` to turn this child object to an account-owned object, and then call `delete_child` again, it will succeed! This is intuitive, but rather inconvenient: it requires two transactions to achieve the effect.
+
+#### delete_child_object
+The `Transfer` library provides a `delete_child_object` API to delete a child object directly. It is much more convenient than transfer + delete as it can be done in one transaction instead of two.
+The `delete_child_object` API is defined as following:
+```rust
+public fun delete_child_object<T: key>(
+    child_id: VersionedID,
+    child_ref: ChildRef<T>,
+);
+```
+The function takes both the ID of the child object and the child reference as arguments. As explained in chapter 1, to delete an object we must first unpack the object, and upon doing so a non-droppable `id` will need to be deleted explicitly.
+Instead of calling `ID::delete` on the `id`, for child object, here we require calling `Transfer::delete_child_object` with the `id` and the child reference.
+To demonstrate how to use this API, we define a function that can delete a parent object and a child object altogether:
+```rust
+public(script) fun delete_parent_and_child(parent: Parent, child: Child, _ctx: &mut TxContext) {
+    let Parent { id: parent_id, child: child_ref_opt } = parent;
+    let child_ref = Option::extract(&mut child_ref_opt);
+    Option::destroy_none(child_ref_opt);
+    ID::delete(parent_id);
+
+    let Child { id: child_id } = child;
+    Transfer::delete_child_object(child_id, child_ref);
+}
+```
+In the above example, after we unpacked the `parent` object we are able to extract the `child_ref`. We then also unpack the `child` object to obtain the `child_id`.
+Notice that when deleting the `parent` object, we called `ID::delete`, while when deleting the `child` object, we called `delete_child_object`.

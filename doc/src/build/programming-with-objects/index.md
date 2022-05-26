@@ -27,7 +27,7 @@ Install:
   - Freezing an object, using immutable objects.
 - [Chapter 4: Object Wrapping](../../build/programming-with-objects/ch4-object-wrapping.md)
   - Wrapping objects in another object.
-- Chapter 5: Child Objects
+- [Chapter 5: Child Objects](../../build/programming-with-objects/ch5-child-objects.md)
   - Enabling objects to own other objects, transferring objects to objects, adding child objects, removing child objects.
 - Chapter 6: Collection and Bag
   - Using Collection and Bag library.
