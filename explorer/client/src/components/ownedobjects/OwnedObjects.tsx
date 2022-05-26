@@ -74,13 +74,13 @@ function OwnedObjectStatic({ id }: { id: string }) {
     if (objects) {
         const results = objects.map(({ objectId }) => {
             const entry = findDataFromID(objectId, undefined);
-            const getBalance = (balance: string) => new BN.BN(balance, 10);
+            const convertToBN = (balance: string) => new BN.BN(balance, 10);
             return {
                 id: entry?.id,
                 Type: entry?.objType,
                 Version: entry?.version,
                 display: entry?.data?.contents?.display,
-                balance: getBalance(entry?.data?.contents?.balance),
+                balance: convertToBN(entry?.data?.contents?.balance),
                 _isCoin: entry?.data?.contents?.balance !== undefined,
             };
         });
