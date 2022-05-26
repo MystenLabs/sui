@@ -16,16 +16,12 @@ export class Coin {
     return getMoveObjectType(data)?.startsWith('0x2::Coin::Coin') ?? false;
   }
 
-  static convertToBN(balance : string) {
-    return new BN.BN(balance, 10);
-  }
-
   static getBalance(data: GetObjectInfoResponse): BN | undefined {
     if (!Coin.isCoin(data)) {
       return undefined;
     }
     const balance = getObjectFields(data)?.balance;
-    return this.convertToBN(balance);
+    return new BN.BN(balance);
   }
 
   static getZero(): BN {
