@@ -391,8 +391,8 @@ where
         let address = self.address;
         let count: u64 = 0;
         let stream = Box::pin(batch_info_items.scan(
-            (0u64, None, count),
-            move |(seq, txs_and_last_batch, count), batch_info_item| {
+            (None, count),
+            move |(txs_and_last_batch, count), batch_info_item| {
                 let req_clone = request.clone();
                 let client = client.clone();
 
@@ -412,8 +412,6 @@ where
                             client.report_client_error(err.clone());
                             Some(Err(err))
                         } else {
-                            // Save the sequence number of this batch
-                            *seq = signed_batch.batch.next_sequence_number;
                             // Insert a fresh vector for the new batch of transactions
                             let _ =
                                 txs_and_last_batch.insert((Vec::new(), signed_batch.batch.clone()));
