@@ -60,7 +60,7 @@ async fn checkpoint_active_flow_happy_path() {
     for a in authorities {
         let next_checkpoint_sequence = a
             .authority
-            ._checkpoints
+            .checkpoints
             .as_ref()
             .unwrap()
             .lock()
@@ -141,7 +141,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
     for a in authorities {
         let next_checkpoint_sequence = a
             .authority
-            ._checkpoints
+            .checkpoints
             .as_ref()
             .unwrap()
             .lock()
@@ -222,7 +222,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
     for a in authorities {
         let next_checkpoint_sequence = a
             .authority
-            ._checkpoints
+            .checkpoints
             .as_ref()
             .unwrap()
             .lock()
