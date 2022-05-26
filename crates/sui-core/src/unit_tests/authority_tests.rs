@@ -523,9 +523,7 @@ async fn test_publish_non_existing_dependent_module() {
     let transaction = Transaction::new(data, signature);
 
     let response = authority.handle_transaction(transaction).await;
-    assert!(response
-        .unwrap_err()
-        .to_string()
+    assert!(std::string::ToString::to_string(&response.unwrap_err())
         .contains("DependentPackageNotFound"));
     // Check that gas was not charged.
     assert_eq!(
@@ -1505,7 +1503,7 @@ async fn shared_object() {
     authority
         .handle_consensus_transaction(
             /* last_consensus_index */ ExecutionIndices::default(),
-            ConsensusTransaction::UserTransaction(certificate),
+            ConsensusTransaction::UserTransaction(Box::new(certificate)),
         )
         .await
         .unwrap();

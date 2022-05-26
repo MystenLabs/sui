@@ -8,10 +8,10 @@ pub mod reconstruction;
 #[path = "./tests/checkpoint_tests.rs"]
 mod checkpoint_tests;
 
-use std::{collections::HashSet, path::Path, sync::Arc};
-
+use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
+use std::{collections::HashSet, path::Path, sync::Arc};
 use sui_storage::default_db_options;
 use sui_types::{
     base_types::{AuthorityName, TransactionDigest},
@@ -118,7 +118,7 @@ pub struct CheckpointStore {
     /// to allow us to provide a list in order they were received. We only store
     /// the fragments that are relevant to the next checkpoints. Past checkpoints
     /// already contain all relevant information from previous checkpoints.
-    pub fragments: DBMap<u64, CheckpointFragment>,
+    pub fragments: DBMap<ExecutionIndices, CheckpointFragment>,
 
     /// The local sequence at which the proposal for the next checkpoint is created
     /// This is a sequence number containing all unprocessed transactions lower than
@@ -241,7 +241,7 @@ impl CheckpointStore {
             "extra_transactions";<TransactionDigest,TxSequenceNumber>,
             "checkpoints";<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
             "local_fragments";<AuthorityName, CheckpointFragment>,
-            "fragments";<u64, CheckpointFragment>,
+            "fragments";<ExecutionIndices, CheckpointFragment>,
             "locals";<DBLabel, CheckpointLocals>
         );
 
@@ -542,7 +542,7 @@ impl CheckpointStore {
     /// fragments should be provided in seq increasing order.
     pub fn handle_internal_fragment(
         &mut self,
-        _seq: u64,
+        _seq: ExecutionIndices,
         _fragment: CheckpointFragment,
     ) -> Result<(), FragmentInternalError> {
         // Ensure we have not already processed this fragment.
