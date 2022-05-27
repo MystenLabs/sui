@@ -2,7 +2,12 @@
 title: Install Sui
 ---
 
-Welcome to the Sui development environment! Get started immediately:
+Welcome to the Sui development environment! Note, this site is built from the upstream `main`
+branch and therefore will contain updates not yet found in `devnet`. The instructions here
+recommend use of `devnet` as the latest stable release. To [contribute to Sui](../contribute/index.md),
+instead use the `main` branch.
+
+To immediately get started using Sui:
 
 1. Meet the [prerequisites](#prerequisites).
 2. Install the [binaries](#binaries).
