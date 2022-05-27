@@ -24,7 +24,7 @@ use tokio::{
     task::JoinHandle,
     time::timeout,
 };
-use tracing::{debug, error, warn};
+use tracing::{debug, error, instrument, warn};
 use types::{
     BatchDigest, BlockRemoverError, BlockRemoverErrorKind, BlockRemoverResult, Certificate,
     CertificateDigest, Header, HeaderDigest,
@@ -380,6 +380,8 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
             .await
             .map_err(Either::Left)?;
 
+        debug!("Successfully cleaned up certificates: {:?}", certificates);
+
         Ok(())
     }
 
@@ -396,6 +398,7 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
         }
     }
 
+    #[instrument(level = "debug", skip_all)]
     async fn handle_command<'a>(
         &mut self,
         command: BlockRemoverCommand,
@@ -501,7 +504,15 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
             let message = PrimaryWorkerMessage::<PublicKey>::DeleteBatches(batch_ids.clone());
 
             // send the request
-            self.worker_network.send(worker_address, &message).await;
+            self.worker_network
+                .send(worker_address.clone(), &message)
+                .await;
+
+            debug!(
+                "Sending DeleteBatches request for batch ids {:?} to worker {}",
+                batch_ids.clone(),
+                worker_address
+            );
 
             // create a key based on the provided batch ids and use it as a request
             // key to identify the channel to forward the response once the delete

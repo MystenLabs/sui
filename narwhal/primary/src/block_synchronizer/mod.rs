@@ -7,7 +7,7 @@ use crate::{
         PendingIdentifier::{Header, Payload},
     },
     primary::PrimaryMessage,
-    utils, PayloadToken, PrimaryWorkerMessage,
+    utils, PayloadToken, PrimaryWorkerMessage, CHANNEL_CAPACITY,
 };
 use config::{BlockSynchronizerParameters, SharedCommittee, WorkerId};
 use crypto::{traits::VerifyingKey, Hash};
@@ -28,7 +28,7 @@ use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{sleep, timeout},
 };
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, instrument, trace, warn};
 use types::{BatchDigest, Certificate, CertificateDigest};
 
 #[cfg(test)]
@@ -335,6 +335,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     /// logic of waiting and gathering the replies from the primary nodes
     /// for the payload availability. This future is returning the next State
     /// to be executed.
+    #[instrument(level="debug", skip_all, fields(certificates = ?certificates))]
     async fn handle_synchronize_block_payload_command<'a>(
         &mut self,
         certificates: Vec<Certificate<PublicKey>>,
@@ -354,13 +355,16 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                 certificates_to_sync.push(certificate);
                 block_ids_to_sync.push(block_id);
             } else {
-                debug!("Nothing to request here, it's already in pending state");
+                trace!("Nothing to request here, it's already in pending state");
             }
         }
 
         // nothing new to sync! just return
         if certificates_to_sync.is_empty() {
+            trace!("No certificates to sync, will now exit");
             return None;
+        } else {
+            trace!("Certificate payloads need sync");
         }
 
         let key = RequestID::from_iter(certificates_to_sync.iter());
@@ -370,14 +374,13 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
             requestor: self.name.clone(),
         };
 
-        // broadcast the message to fetch  the certificates
-        let primaries = self.broadcast_batch_request(message).await;
-
-        let (sender, receiver) = channel(primaries.as_slice().len());
-
+        let (sender, receiver) = channel(CHANNEL_CAPACITY);
         // record the request key to forward the results to the dedicated sender
         self.map_payload_availability_responses_senders
             .insert(key, sender);
+
+        // broadcast the message to fetch  the certificates
+        let primaries = self.broadcast_batch_request(message).await;
 
         // now create the future that will wait to gather the responses
         Some(
@@ -514,6 +517,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     /// a reply is immediately sent to the consumer via the provided respond_to
     /// channel. For the ones that haven't been found, are returned back on the
     /// returned vector.
+    #[instrument(level = "debug", skip_all)]
     async fn reply_with_payload_already_in_storage(
         &self,
         certificates: Vec<Certificate<PublicKey>>,
@@ -526,17 +530,36 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
             let payload: Vec<(BatchDigest, WorkerId)> =
                 certificate.header.payload.clone().into_iter().collect();
 
-            let payload_available = match self.payload_store.read_all(payload).await {
-                Ok(payload_result) => payload_result.into_iter().all(|x| x.is_some()).to_owned(),
-                Err(err) => {
-                    error!("Error occurred when querying payloads: {err}");
-                    false
+            let payload_available = if certificate.header.author == self.name {
+                trace!(
+                    "Certificate with id {} is our own, no need to check in storage.",
+                    certificate.digest()
+                );
+                true
+            } else {
+                trace!(
+                    "Certificate with id {} not our own, checking in storage.",
+                    certificate.digest()
+                );
+                match self.payload_store.read_all(payload).await {
+                    Ok(payload_result) => {
+                        payload_result.into_iter().all(|x| x.is_some()).to_owned()
+                    }
+                    Err(err) => {
+                        error!("Error occurred when querying payloads: {err}");
+                        false
+                    }
                 }
             };
 
             if !payload_available {
+                trace!(
+                    "Payload not available for certificate with id {}",
+                    certificate.digest()
+                );
                 missing_payload_certs.push(certificate);
             } else {
+                trace!("Payload is available on storage for certificate with id {}, now replying back immediately", certificate.digest());
                 futures.push(respond_to.send(Ok(BlockHeader {
                     certificate,
                     fetched_from_storage: true,
@@ -555,6 +578,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
 
     // Broadcasts a message to all the other primary nodes.
     // It returns back the primary names to which we have sent the requests.
+    #[instrument(level = "debug", skip_all)]
     async fn broadcast_batch_request(
         &mut self,
         message: PrimaryMessage<PublicKey>,
@@ -575,6 +599,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         primaries_names
     }
 
+    #[instrument(level="debug", skip_all, fields(request_id = ?request_id))]
     async fn handle_synchronize_block_payloads<'a>(
         &mut self,
         request_id: RequestID,
@@ -617,6 +642,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     ///
     /// * `primary_peer_name` - The primary from which we are looking to sync the batches.
     /// * `certificates` - The certificates for which we want to sync their batches.
+    #[instrument(level = "debug", skip_all)]
     async fn send_synchronize_payload_requests(
         &mut self,
         primary_peer_name: PublicKey,
@@ -631,8 +657,14 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                 .expect("Worker id not found")
                 .primary_to_worker;
 
-            let message = PrimaryWorkerMessage::Synchronize(batch_ids, primary_peer_name.clone());
+            let message =
+                PrimaryWorkerMessage::Synchronize(batch_ids.clone(), primary_peer_name.clone());
             self.worker_network.send(worker_address, &message).await;
+
+            debug!(
+                "Sent request for batch ids {:?} to worker id {}",
+                batch_ids, worker_id
+            );
         }
     }
 
@@ -674,6 +706,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         }
     }
 
+    #[instrument(level = "debug", skip_all)]
     async fn handle_payload_availability_response(
         &mut self,
         response: PayloadAvailabilityResponse<PublicKey>,
@@ -683,6 +716,11 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
             .get(&response.request_id());
 
         if let Some(s) = sender {
+            debug!(
+                "Received response for request with id {}: {:?}",
+                response.request_id(),
+                response.clone()
+            );
             if let Err(e) = s.send(response).await {
                 error!("Could not send the response to the sender {:?}", e);
             }
@@ -691,6 +729,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         }
     }
 
+    #[instrument(level = "debug", skip_all)]
     async fn handle_certificates_response(&mut self, response: CertificatesResponse<PublicKey>) {
         let sender = self
             .map_certificate_responses_senders

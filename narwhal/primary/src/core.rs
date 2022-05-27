@@ -22,7 +22,7 @@ use tokio::{
     sync::mpsc::{Receiver, Sender},
     task::JoinHandle,
 };
-use tracing::{debug, error, warn};
+use tracing::{debug, error, instrument, warn};
 use types::{
     ensure,
     error::{DagError, DagResult},
@@ -129,6 +129,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         })
     }
 
+    #[instrument(level = "debug", skip_all)]
     async fn process_own_header(&mut self, header: Header<PublicKey>) -> DagResult<()> {
         // Reset the votes aggregator.
         self.current_header = header.clone();
@@ -153,6 +154,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     }
 
     #[async_recursion]
+    #[instrument(level = "debug", skip_all)]
     async fn process_header(&mut self, header: &Header<PublicKey>) -> DagResult<()> {
         debug!("Processing {:?}", header);
         // Indicate that we are processing this header.
@@ -237,6 +239,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     }
 
     #[async_recursion]
+    #[instrument(level = "debug", skip_all)]
     async fn process_vote(&mut self, vote: Vote<PublicKey>) -> DagResult<()> {
         debug!("Processing {:?}", vote);
 
@@ -270,6 +273,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     }
 
     #[async_recursion]
+    #[instrument(level = "debug", skip_all)]
     async fn process_certificate(&mut self, certificate: Certificate<PublicKey>) -> DagResult<()> {
         debug!("Processing {:?}", certificate);
 

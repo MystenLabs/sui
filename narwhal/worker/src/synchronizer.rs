@@ -160,6 +160,9 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                                 continue;
                             }
                         };
+
+                        debug!("Sending BatchRequest message to {} for missing batches {:?}", address, missing.clone());
+
                         let message = WorkerMessage::BatchRequest(missing, self.name.clone());
                         self.network.unreliable_send(address, &message).await;
                     },
