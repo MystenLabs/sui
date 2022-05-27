@@ -1463,6 +1463,19 @@ pub async fn checkpoint_tests_setup(num_objects: usize, batch_interval: Duration
 use crate::authority_client::AuthorityAPI;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn checkpoint_messaging_flow_bug() {
+    let mut setup = checkpoint_tests_setup(5, Duration::from_millis(500)).await;
+
+    // Check that the system is running.
+    let t = setup.transactions.pop().unwrap();
+    let (_cert, _effects) = setup
+        .aggregator
+        .execute_transaction(&t)
+        .await
+        .expect("All ok.");
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn checkpoint_messaging_flow() {
     let mut setup = checkpoint_tests_setup(5, Duration::from_millis(500)).await;
 

@@ -25,6 +25,7 @@ use crate::{
     authority_client::AuthorityAPI,
     checkpoints::{proposal::CheckpointProposal, CheckpointStore},
 };
+use tracing::{info, warn, debug};
 use typed_store::Map;
 
 #[cfg(test)]
@@ -36,12 +37,12 @@ pub async fn checkpoint_process<A>(_active_authority: &ActiveAuthority<A>)
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    println!("START ACTIVE CHECKPOINT PROCESS!");
     if _active_authority.state.checkpoints.is_none() {
         // If the checkpointing database is not present, do not
         // operate the active checkpointing logic.
         return;
     }
+    info!("Start active checkpoint process.");
 
     // Safe to unwrap due to check above
     let state_checkpoints = _active_authority
@@ -55,12 +56,21 @@ where
 
     loop {
         // (1) Get the latest summaries and proposals
-        let (checkpoint, proposals) = get_latest_proposal_and_checkpoint_from_all(
+        let state_of_world = get_latest_proposal_and_checkpoint_from_all(
             _active_authority,
             Duration::from_millis(200),
         )
-        .await
-        .expect("All ok");
+        .await;
+
+        if let Err(err) = state_of_world {
+            warn!("Cannot get a quorum of checkpoint information: {:?}", err);
+            // Sleep for 10 sec to allow the network to set itself up or the partition
+            // to go away.
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            continue;
+        }
+
+        let (checkpoint, proposals) = state_of_world.expect("Just checked that we are not Err");
 
         // (2) Sync to the latest checkpoint, this might take some time.
         // Its ok nothing else goes on in terms of the active checkpoint logic
@@ -110,7 +120,7 @@ where
         if let Err(err) =
             process_unprocessed_digests(_active_authority, state_checkpoints.clone()).await
         {
-            println!("Error processing unprocessed: {:?}", err);
+            warn!("Error processing unprocessed: {:?}", err);
             // Nothing happens until we catch up with the unprocessed transactions of the
             // previous checkpoint.
             continue;
@@ -142,7 +152,7 @@ where
         let name = state_checkpoints.lock().name;
         let next_checkpoint = state_checkpoints.lock().next_checkpoint();
 
-        println!("{:?} at checkpoint {:?}", name, next_checkpoint);
+        debug!("{:?} at checkpoint {:?}", name, next_checkpoint);
         tokio::time::sleep(Duration::from_millis(1220)).await;
     }
 }
@@ -332,7 +342,7 @@ where
     // Check if the latest checkpoint is merely a signed checkpoint, and if
     // so download a full certificate for it.
     if let Some(AuthenticatedCheckpoint::Signed(signed)) = &latest_checkpoint {
-        println!(
+        debug!(
             "Partial Sync ({:?}): {:?}",
             _active_authority.state.name,
             *signed.checkpoint.sequence_number()
@@ -360,7 +370,7 @@ where
         .unwrap_or(0);
 
     for seq in full_sync_start..latest_known_checkpoint.checkpoint.sequence_number {
-        println!("Full Sync ({:?}): {:?}", _active_authority.state.name, seq);
+        debug!("Full Sync ({:?}): {:?}", _active_authority.state.name, seq);
         let (past, _contents) =
             get_one_checkpoint(_active_authority, seq, true, &available_authorities).await?;
         // NOTE: should we ignore the error here?
@@ -368,7 +378,7 @@ where
             .lock()
             .handle_checkpoint_certificate(&past, &_contents)
         {
-            println!("Sync Err: {:?}", err);
+            warn!("Sync Err: {:?}", err);
         }
     }
 
@@ -413,10 +423,10 @@ where
                 return Ok((past, detail));
             }
             Ok(resp) => {
-                println!("Sync Error: Unexpected answer: {:?}", resp);
+                warn!("Sync Error: Unexpected answer: {:?}", resp);
             }
             Err(err) => {
-                println!("Sync Error: peer error: {:?}", err);
+                warn!("Sync Error: peer error: {:?}", err);
             }
         }
     }
@@ -461,17 +471,17 @@ where
                 // TODO: check here that the digest of contents matches
                 if contents.digest() != checkpoint.checkpoint.digest {
                     // A byzantine authority!
-                    println!("Sync Error: Incorrect contents returned");
+                    warn!("Sync Error: Incorrect contents returned");
                     continue;
                 }
 
                 return Ok(contents);
             }
             Ok(resp) => {
-                println!("Sync Error: Unexpected answer: {:?}", resp);
+                warn!("Sync Error: Unexpected answer: {:?}", resp);
             }
             Err(err) => {
-                println!("Sync Error: peer error: {:?}", err);
+                warn!("Sync Error: peer error: {:?}", err);
             }
         }
     }
@@ -552,7 +562,7 @@ pub async fn diff_proposals<A>(
                     {
                         Ok(fragment) => {
                             // On success send the fragment to consensus
-                            println!(
+                            debug!(
                                 "Send fragment: {:?} -- {:?}",
                                 &fragment.proposer.0.authority, &fragment.other.0.authority
                             );
@@ -560,7 +570,7 @@ pub async fn diff_proposals<A>(
                         }
                         Err(err) => {
                             // TODO: some error occured -- log it.
-                            println!("Error augmenting the fragment: {:?}", err);
+                            warn!("Error augmenting the fragment: {:?}", err);
                         }
                     }
 
@@ -623,7 +633,7 @@ where
     }
 
     if !diff_certs.is_empty() {
-        println!("Augment fragment with: {:?} tx", diff_certs.len());
+        debug!("Augment fragment with: {:?} tx", diff_certs.len());
     }
 
     // Augment the fragment in place.
@@ -679,9 +689,9 @@ where
             continue;
         }
 
-        println!("Try sync for digest: {:?}", digest);
+        debug!("Try sync for digest: {:?}", digest);
         if let Err(err) = sync_digest(_active_authority, *digest, Duration::from_secs(30)).await {
-            println!("Error doing sync from digest {:?}: {}", digest, err);
+            warn!("Error doing sync from digest {:?}: {}", digest, err);
             return Err(err);
         }
         // Download the certificate
@@ -697,7 +707,7 @@ where
                 .unwrap()
         })
         .count();
-    println!("Remaining unprocessed: {}", cnt);
+    debug!("Remaining unprocessed: {}", cnt);
 
     Ok(())
 }
@@ -722,9 +732,6 @@ where
 
     // Now try to update the destination authority sequentially using
     // the source authorities we have sampled.
-    if source_authorities.is_empty() {
-        println!("EMPTY AUTHORITIES!");
-    }
     debug_assert!(!source_authorities.is_empty());
     for source_authority in source_authorities {
         // Note: here we could improve this function by passing into the
@@ -788,11 +795,11 @@ where
                 }
                 // Getting here means the sync_authority_source fn finished within timeout but errored out.
                 Err(_err) => {
-                    println!("Failed sync with {:?}", source_authority);
+                    warn!("Failed sync with {:?}", source_authority);
                 }
             }
         } else {
-            // println!("Hit the timeout");
+            warn!("Timeout exceeded");
         }
 
         // If we are here it means that the update failed, either due to the
