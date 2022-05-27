@@ -55,16 +55,20 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
+      - uses: taiki-e/install-action@nextest
       # Enable caching of the 'librocksdb-sys' crate by additionally caching the
       # 'librocksdb-sys' src directory which is managed by cargo
       - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
         with:
           path: ~/.cargo/registry/src/**/librocksdb-sys-*
       - name: cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features
+        run: |
+          cargo nextest run --all-features --profile ci
+      - name: Doctests
+        run: |
+          cargo test --doc --all-features
+      # Ensure there are no uncommitted changes in the repo after running tests
+      - run: scripts/changed-files.sh
 
   clippy:
     runs-on: ubuntu-latest
