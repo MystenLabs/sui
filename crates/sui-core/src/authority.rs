@@ -1075,6 +1075,7 @@ impl AuthorityState {
         self.database.read_certificate(digest)
     }
 
+    #[cfg(test)]
     pub async fn parent(&self, object_ref: &ObjectRef) -> Option<TransactionDigest> {
         self.database
             .parent(object_ref)
@@ -1100,7 +1101,7 @@ impl AuthorityState {
         }
     }
 
-    pub async fn get_latest_parent_entry(
+    async fn get_latest_parent_entry(
         &self,
         object_id: ObjectID,
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
