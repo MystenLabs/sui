@@ -11,7 +11,7 @@
 //!
 //! To identify seconds, then the following format should be used:
 //! [number]s, for example "20s", or "10_000s".
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::time::Duration;
 
 pub fn deserialize<'de, D>(deserializer: D) -> Result<Duration, D::Error>
@@ -39,13 +39,20 @@ where
     )))
 }
 
+pub fn serialize<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    format!("{}ms", duration.as_millis()).serialize(serializer)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::duration_format;
-    use serde::Deserialize;
+    use serde::{Deserialize, Serialize};
     use std::time::Duration;
 
-    #[derive(Deserialize)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     struct MockProperties {
         #[serde(with = "duration_format")]
         property_1: Duration,
@@ -76,6 +83,26 @@ mod tests {
         assert_eq!(result.property_2.as_millis(), 2);
         assert_eq!(result.property_3.as_secs(), 8);
         assert_eq!(result.property_4.as_secs(), 5_000);
+    }
+
+    #[test]
+    fn roundtrip() {
+        // GIVEN
+        let input = r#"{
+             "property_1": "1_000ms",
+             "property_2": "2ms",
+             "property_3": "8s",
+             "property_4": "5_000s"
+          }"#;
+
+        // WHEN
+        let result: MockProperties =
+            serde_json::from_str(input).expect("Couldn't deserialize string");
+
+        // THEN
+        let serialized = serde_json::to_string(&result).unwrap();
+        let deserialized = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(result, deserialized);
     }
 
     #[test]
