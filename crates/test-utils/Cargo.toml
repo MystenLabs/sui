@@ -30,5 +30,6 @@ sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 sui-core = { path = "../sui-core" }
 sui-network = { path = "../sui-network" }
+sui-node = { path = "../sui-node" }
 sui = { path = "../sui" }
 workspace-hack = { path = "../workspace-hack"}
