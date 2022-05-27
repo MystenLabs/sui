@@ -41,7 +41,7 @@ harness = false
 # required-features = ["batch"]
 
 [features]
-default = ["celo"]
+default = []
 celo = ["ark-ec", "ark-ff", "ark-serialize", "ark-bls12-377", "ark-std", "serde_with", "celo-bls"]
 
 [dev-dependencies]
