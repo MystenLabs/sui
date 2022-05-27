@@ -943,8 +943,12 @@ where
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
                             // In case we don't get an error but also don't get a valid value
-                            _ => {
-                                state.errors.push(SuiError::ErrorWhileProcessingTransaction);
+                            ret => {
+                                state.errors.push(
+                                    SuiError::ErrorWhileProcessingTransactionTransaction {
+                                        err: format!("Unexpected: {:?}", ret),
+                                    },
+                                );
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
                         };
@@ -1003,7 +1007,9 @@ where
         // If we have some certificate return it, or return an error.
         state
             .certificate
-            .ok_or(SuiError::ErrorWhileProcessingTransaction)
+            .ok_or(SuiError::ErrorWhileProcessingTransactionTransaction {
+                err: format!("No certificate: {:?}", state.errors),
+            })
     }
 
     /// Process a certificate assuming that 2f+1 authorities already are up to date.
