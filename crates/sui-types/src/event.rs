@@ -74,6 +74,8 @@ pub enum Event {
     },
     /// Delete object
     DeleteObject(ObjectID),
+    /// New object creation
+    NewObject(ObjectID),
     /// Epooch change
     EpochChange(EpochId),
     /// New checkpoint
@@ -93,11 +95,13 @@ impl Event {
     /// Returns the object or package ID associated with the event, if available.  Specifically:
     /// - For TransferObject: the object ID being transferred (eg moving child from parent, its the child)
     /// - for Publish, the package ID (which is the object ID of the module)
+    /// - for DeleteObject and NewObject, the Object ID
     pub fn object_id(&self) -> Option<ObjectID> {
         match self {
             Event::Publish { package_id } => Some(*package_id),
             Event::TransferObject { object_id, .. } => Some(*object_id),
             Event::DeleteObject(obj_id) => Some(*obj_id),
+            Event::NewObject(obj_id) => Some(*obj_id),
             _ => None,
         }
     }

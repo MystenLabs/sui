@@ -567,7 +567,7 @@ fn handle_transfer<
             if old_object.is_none() {
                 // Newly created object
                 if newly_generated_ids.contains(&obj_id) {
-                    // TODO: log NewObject event
+                    state_view.log_event(Event::NewObject(obj_id));
                 } else {
                     // When an object was wrapped at version `v`, we added an record into `parent_sync`
                     // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
