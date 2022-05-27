@@ -101,6 +101,11 @@ pub struct AuthorityMetrics {
     num_input_objs: Histogram,
     num_shared_objects: Histogram,
     batch_size: Histogram,
+
+    pub gossip_queued_count: IntCounter,
+    pub gossip_sync_count: IntCounter,
+    pub gossip_task_success_count: IntCounter,
+    pub gossip_task_error_count: IntCounter,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -160,6 +165,26 @@ impl AuthorityMetrics {
                 "batch_size",
                 "Distribution of size of transaction batch",
                 POSITIVE_INT_BUCKETS.to_vec()
+            )
+            .unwrap(),
+            gossip_queued_count: register_int_counter!(
+                "gossip_queued_count",
+                "Number of digests queued from gossip peers",
+            )
+            .unwrap(),
+            gossip_sync_count: register_int_counter!(
+                "gossip_sync_count",
+                "Number of certificates downloaded from gossip peers"
+            )
+            .unwrap(),
+            gossip_task_success_count: register_int_counter!(
+                "gossip_task_success_count",
+                "Number of gossip tasks that completed successfully"
+            )
+            .unwrap(),
+            gossip_task_error_count: register_int_counter!(
+                "gossip_task_error_count",
+                "Number of gossip tasks that completed with errors"
             )
             .unwrap(),
         }
