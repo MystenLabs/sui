@@ -576,11 +576,10 @@ fn handle_transfer<
                     // we force incrementing its version number again to make it `v+2` before writing to the store.
                     move_obj.increment_version();
                 }
-            } else {
+            } else if let Some((_, old_obj_ver)) = old_object {
                 // Some kind of transfer since there's an old object
-                // Add an event for the transfer or new object
+                // Add an event for the transfer
 
-                let (_, old_obj_ver) = old_object.unwrap();
                 match recipient {
                     Owner::AddressOwner(addr) => state_view.log_event(SuiEvent::TransferObject {
                         object_id: obj_id,
