@@ -13,9 +13,9 @@ use std::{
 use sui_types::{base_types::encode_bytes_hex, crypto::get_key_pair_from_rng};
 
 use crate::{
-    genesis, new_network_address, CommitteeConfig, ConsensusConfig, GenesisConfig, NetworkConfig,
-    NodeConfig, ValidatorGenesisInfo, ValidatorInfo, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME,
-    DEFAULT_STAKE,
+    genesis, new_network_address, utils, CommitteeConfig, ConsensusConfig, GenesisConfig,
+    NetworkConfig, NodeConfig, ValidatorGenesisInfo, ValidatorInfo, AUTHORITIES_DB_NAME,
+    CONSENSUS_DB_NAME, DEFAULT_STAKE,
 };
 
 pub struct ConfigBuilder<R = OsRng> {
@@ -196,7 +196,9 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     db_path,
                     network_address,
                     metrics_address,
-                    json_rpc_address: "127.0.0.1:5002".parse().unwrap(),
+                    json_rpc_address: format!("127.0.0.1:{}", utils::get_available_port())
+                        .parse()
+                        .unwrap(),
                     consensus_config: Some(consensus_config),
                     committee_config: committee_config.clone(),
                     genesis: genesis.clone(),
