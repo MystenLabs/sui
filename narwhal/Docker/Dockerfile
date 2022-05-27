@@ -6,7 +6,7 @@ ARG BUILD_MODE="release"
 #################################################################
 # Stage 0
 #################################################################
-FROM lukemathwalker/cargo-chef:latest-rust-1.60.0-slim as chef
+FROM rust:1.60.0 as chef
 WORKDIR narwhal
 ARG BUILD_MODE
 
