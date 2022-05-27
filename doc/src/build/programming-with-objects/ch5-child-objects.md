@@ -1,4 +1,7 @@
-## Chapter 5: Child Objects
+---
+title: Chapter 5: Child Objects
+---
+
 In the previous chapter, we walked through various ways of wrapping an object in another object. There are a few limitations in object wrapping:
 1. A wrapped object can be accessed only via its wrapper. It cannot be used directly in a transaction or queried by its ID (e.g., in the explorer).
 2. An object can become very large if it wraps several other objects. Larger objects can lead to higher gas fees in transactions. In addition, there is an upper bound on object size.
