@@ -125,12 +125,12 @@
         "name": "See what's New",
         "sublist": [
           {
-            "name": "Learn Sui Tokenomics",
-            "url": "/learn/tokenomics/index"
+            "name": "Program Sui Objects",
+            "url": "/build/programming-with-objects/index"
           },
           {
-            "name": "View Sui 0.3.0 updates",
-            "url": "/learn/index"
+            "name": "Learn Sui Tokenomics",
+            "url": "/learn/tokenomics/index"
           },
           {
             "name": "Explore Sui DevNet!",
