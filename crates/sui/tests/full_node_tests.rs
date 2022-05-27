@@ -13,7 +13,6 @@ use sui_node::SuiNode;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     batch::UpdateItem,
-    crypto::get_key_pair,
     messages::{BatchInfoRequest, BatchInfoResponseItem},
 };
 use test_utils::network::setup_network_and_wallet_in_working_dir;
@@ -117,11 +116,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 
     let network_config_path = working_dir.path().join(SUI_NETWORK_CONFIG);
     let config: NetworkConfig = PersistedConfig::read(&network_config_path)?;
-    let (_addr, key_pair) = get_key_pair();
-    let mut config = config.into_validator_configs().remove(0);
-    config.key_pair = key_pair;
-    config.db_path = working_dir.path().join("fullnode");
-    config.consensus_config = None;
+    let config = config.generate_fullnode_config();
 
     let node = SuiNode::start(&config).await?;
 
@@ -151,11 +146,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 
     let network_config_path = working_dir.path().join(SUI_NETWORK_CONFIG);
     let config: NetworkConfig = PersistedConfig::read(&network_config_path)?;
-    let (_addr, key_pair) = get_key_pair();
-    let mut config = config.into_validator_configs().remove(0);
-    config.key_pair = key_pair;
-    config.db_path = working_dir.path().join("fullnode");
-    config.consensus_config = None;
+    let config = config.generate_fullnode_config();
 
     let node = SuiNode::start(&config).await?;
 
