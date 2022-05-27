@@ -4,6 +4,8 @@
 import { memo, useMemo } from 'react';
 import { useIntl } from 'react-intl';
 
+import { Coin } from '_redux/slices/sui-objects/Coin';
+
 import st from './CoinBalance.module.scss';
 
 export type CoinProps = {
@@ -12,16 +14,12 @@ export type CoinProps = {
 };
 
 function CoinBalance({ type, balance }: CoinProps) {
-    const symbol = useMemo(
-        () => type.substring(type.lastIndexOf(':') + 1),
-        [type]
-    );
+    const symbol = useMemo(() => Coin.getCoinSymbol(type), [type]);
     const intl = useIntl();
     const balanceFormatted = useMemo(
         () =>
             intl.formatNumber(balance, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
+                maximumFractionDigits: 0,
             }),
         [intl, balance]
     );
