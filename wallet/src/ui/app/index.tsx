@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import HomePage from './pages/home';
+import NftsPage from './pages/home/nfts';
 import TokensPage from './pages/home/tokens';
 import InitializePage from './pages/initialize';
 import BackupPage from './pages/initialize/backup';
@@ -35,7 +36,7 @@ const App = () => {
                     element={<Navigate to="/tokens" replace={true} />}
                 />
                 <Route path="tokens" element={<TokensPage />} />
-                <Route path="nfts" element={<h1>NFTs</h1>} />
+                <Route path="nfts" element={<NftsPage />} />
                 <Route path="settings" element={<h1>Settings</h1>} />
             </Route>
             <Route path="welcome" element={<WelcomePage />} />

@@ -1,0 +1,10 @@
+.container {
+    display: inline-flex;
+    flex-flow: row nowrap;
+    align-items: center;
+}
+
+.copy-icon {
+    margin-left: 6px;
+    cursor: pointer;
+}
