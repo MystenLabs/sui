@@ -22,3 +22,6 @@ storage/
 
 # Python
 .pyc
+
+# logs
+wallet.log.*
