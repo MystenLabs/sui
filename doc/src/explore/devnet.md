@@ -24,13 +24,11 @@ We provide the following tools for users to interact with the Sui Devnet:
 
 ### Set up environment
 
-To use the Sui DevNet, you will need:
+You may simply [install Sui](../build/install.md) and then request test tokens as described below. To use the Sui DevNet, you will need:
 
-1. Sui [test coins (tokens)](#request-gas-tokens) requested through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130)
-1. A command line terminal, as virtually everything done here is done by CLI
-1. the [`git` command line interface](https://git-scm.com/download/)
-1. The [Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) toolchain, updated with `rustup update stable`
-1. [Sui binaries](../build/install.md#binaries) in your PATH environment variable, particularly `wallet`
+1. Sui [test coins (tokens)](#request-gas-tokens) requested through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130).
+1. the [`git` command line interface](https://git-scm.com/download/).
+1. [Sui binaries](../build/install.md#binaries) in your PATH environment variable, particularly `wallet`.
 
 Remember, you can confirm the existence of a command in your PATH by running `which` followed by the command, for example:
 
@@ -41,10 +39,7 @@ You should see the path to the command. Otherwise, reinstall.
 
 > **Tip:** To reliably test DevNet with the latest Sui binaries, re-install them at least weekly.
 
-In addition, to conduct advanced work such as publishing a Move module or making a Move call, also obtain:
-
-1. a [GitHub account](https://github.com/signup) if you don't have one already
-1. the [Sui source code](../build/install.md#source-code); for simplicity, we recommend installing in `~/sui` or using an environment variable
+In addition, to conduct advanced work such as publishing a Move module or making a Move call, also obtain the [Sui source code](../build/install.md#source-code); for simplicity, we recommend installing in `~/sui` or using an environment variable.
 
 ### Set up wallet, connect to gateway
 
