@@ -8,7 +8,6 @@ use crypto::{
     traits::{KeyPair, ToFromBytes},
     Hash,
 };
-use futures::future::join_all;
 use node::NodeStorage;
 use primary::{Primary, CHANNEL_CAPACITY};
 use std::{
@@ -229,16 +228,8 @@ async fn test_node_read_causal_signed_certificates() {
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
     let dag = Arc::new(Dag::new(&committee, rx_new_certificates).1);
 
-    // Populate genesis in the Dag
+    // No need to populate genesis in the Dag
     let genesis_certs = Certificate::genesis(&committee);
-    assert!(join_all(
-        genesis_certs
-            .iter()
-            .map(|cert| { dag.insert(cert.clone()) }),
-    )
-    .await
-    .iter()
-    .all(|r| r.is_ok()));
 
     // Write genesis certs to primary 1 & 2
     primary_store_1
