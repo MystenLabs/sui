@@ -130,8 +130,8 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
     /// and are processed serially in a single task.
     ///
     /// sequenced contains a map form (TransactionDigest, ObjectID) to the object version number
-    /// that will be created when that Transaction is executed.
-    /// schedule contains the most recently assigned sequence number for each object id, which
+    /// that will be created when that Transaction is sequenced.
+    /// schedule contains the next sequence number to assign for each object id, which
     /// allows us to determine the proper sequence number to write into sequenced when receive
     /// another shared object tx operating on the given object.
     /// TODO: These two maps should be merged into a single one (no reason to have two).
@@ -139,7 +139,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
     schedule: DBMap<ObjectID, SequenceNumber>,
 
     /// The following table is used to store a single value (the corresponding key is a constant). The value
-    /// represents the index of the latest consensus message this authority processed. This field is written
+    /// represents the index of the latest consensus message this authority sequenced. This field is written
     /// by a single process acting as consensus (light) client. It is used to ensure the authority processes
     /// every message output by consensus (and in the right order).
     last_consensus_index: DBMap<u64, ExecutionIndices>,
