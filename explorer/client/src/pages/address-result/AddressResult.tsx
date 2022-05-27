@@ -34,6 +34,10 @@ const DATATYPE_DEFAULT = {
 function TxForAddress({ id }: { id: string }) {
     const [showData, setData] = useState(DATATYPE_DEFAULT);
     const [network] = useContext(NetworkContext);
+    const deduplicate = (results: [string, string][]) =>
+        results
+            .map((result) => result[1])
+            .filter((value, index, self) => self.indexOf(value) === index);
 
     useEffect(() => {
         rpc(network)
@@ -60,10 +64,10 @@ function TxForAddress({ id }: { id: string }) {
                 <div>
                     <div>Transactions Sent</div>
                     <div>
-                        {showData.from.map((x) => (
-                            <div key={`from-${x[0]}`}>
+                        {deduplicate(showData.from).map((x, index) => (
+                            <div key={`from-${index}`}>
                                 <Longtext
-                                    text={x[1]}
+                                    text={x}
                                     category="transactions"
                                     isLink={true}
                                 />
@@ -74,10 +78,10 @@ function TxForAddress({ id }: { id: string }) {
                 <div>
                     <div>Transactions Received</div>
                     <div>
-                        {showData.to.map((x) => (
-                            <div key={`to-${x[0]}`}>
+                        {deduplicate(showData.to).map((x, index) => (
+                            <div key={`to-${index}`}>
                                 <Longtext
-                                    text={x[1]}
+                                    text={x}
                                     category="transactions"
                                     isLink={true}
                                 />
