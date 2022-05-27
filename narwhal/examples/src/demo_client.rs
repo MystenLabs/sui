@@ -1,13 +1,13 @@
+#[allow(unused_imports)]
 use narwhal::configuration_client::ConfigurationClient;
 use narwhal::proposer_client::ProposerClient;
 use narwhal::validator_client::ValidatorClient;
+#[allow(unused_imports)]
 use narwhal::{
     CertificateDigest, GetCollectionsRequest, MultiAddr, NewNetworkInfoRequest,
     NodeReadCausalRequest, PublicKey, ReadCausalRequest, RemoveCollectionsRequest, RoundsRequest,
     ValidatorData,
 };
-
-use base64;
 
 pub mod narwhal {
     tonic::include_proto!("narwhal");
@@ -15,38 +15,7 @@ pub mod narwhal {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("\n******************************** Data Setup ********************************\n");
-
-    println!("\n---- TODO ----\n");
-
-    println!(
-        "\n******************************** Proposer Service ********************************\n"
-    );
-    let mut client = ProposerClient::connect("http://127.0.0.1:8000").await?;
-    let public_key = base64::decode("Zy82aSpF8QghKE4wWvyIoTWyLetCuUSfk2gxHEtwdbg=").unwrap();
-
-    println!("\n---- Test Rounds endpoint ----\n");
-    let request = tonic::Request::new(RoundsRequest {
-        public_key: Some(PublicKey {
-            bytes: public_key.clone(),
-        }),
-    });
-
-    let response = client.rounds(request).await;
-
-    println!("RoundsResponse={:?}", response);
-
-    println!("\n---- Test NodeReadCausal endpoint ----\n");
-    let request = tonic::Request::new(NodeReadCausalRequest {
-        public_key: Some(PublicKey {
-            bytes: public_key.clone(),
-        }),
-        round: 0,
-    });
-
-    let response = client.node_read_causal(request).await;
-
-    println!("NodeReadCausalResponse={:?}", response);
+    /*
 
     println!("\n******************************** Configuration Service ********************************\n");
     let mut client = ConfigurationClient::connect("http://127.0.0.1:8000").await?;
@@ -71,39 +40,111 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("NewNetworkInfoResponse={:?}", response);
 
+    */
+
+    println!(
+        "\n******************************** Proposer Service ********************************\n"
+    );
+    let mut client = ProposerClient::connect("http://127.0.0.1:8000").await?;
+    let public_key = base64::decode("Zy82aSpF8QghKE4wWvyIoTWyLetCuUSfk2gxHEtwdbg=").unwrap();
+    let gas_limit = 10;
+
+    println!("\n1) Retrieve the range of rounds you have a collection for\n");
+    println!("\n---- Use Rounds endpoint ----\n");
+
+    let request = tonic::Request::new(RoundsRequest {
+        public_key: Some(PublicKey {
+            bytes: public_key.clone(),
+        }),
+    });
+
+    println!("RoundsRequest={:?}\n", request);
+
+    let response = client.rounds(request).await;
+
+    println!("RoundsResponse={:?}\n", response);
+
+    let rounds_response = response.unwrap().into_inner();
+    let oldest_round = rounds_response.oldest_round;
+    let newest_round = rounds_response.newest_round;
+    let round = oldest_round + 1;
+    println!("\n2) Find collections from earliest round and continue to add collections until gas limit is hit\n");
+    println!("\n---- Use NodeReadCausal endpoint ----\n");
+
+    let mut collection_ids: Vec<CertificateDigest> = vec![];
+    while round < newest_round && collection_ids.len() < gas_limit {
+        let request = tonic::Request::new(NodeReadCausalRequest {
+            public_key: Some(PublicKey {
+                bytes: public_key.clone(),
+            }),
+            round,
+        });
+
+        println!("NodeReadCausalRequest={:?}\n", request);
+
+        let response = client.node_read_causal(request).await;
+
+        println!("NodeReadCausalResponse={:?}\n", response);
+
+        let node_read_causal_response = response.unwrap().into_inner();
+
+        if collection_ids.len() + node_read_causal_response.collection_ids.len() <= gas_limit {
+            collection_ids.extend(node_read_causal_response.collection_ids);
+        } else {
+            println!("Reached gas limit of {gas_limit}, stopping search for more collections\n");
+            break;
+        }
+    }
+
+    println!(
+        "Proposing block with {} collections!\n",
+        collection_ids.len()
+    );
+
     println!(
         "\n******************************** Validator Service ********************************\n"
     );
     let mut client = ValidatorClient::connect("http://127.0.0.1:8000").await?;
-    let collection_id = CertificateDigest {
-        digest: vec![
-            81, 117, 143, 158, 196, 159, 127, 131, 22, 151, 162, 131, 187, 140, 130, 177, 44, 127,
-            128, 53, 183, 25, 33, 177, 89, 8, 46, 93, 150, 44, 230, 9,
-        ],
-    };
 
-    println!("\n---- Test GetCollections endpoint ----\n");
+    println!("\n3) Find all causal collections from the collections found.\n");
+    println!("\n---- Use ReadCausal endpoint ----\n");
+    let node_read_causal_cids = collection_ids.clone();
+    for collection_id in node_read_causal_cids {
+        let request = tonic::Request::new(ReadCausalRequest {
+            collection_id: Some(collection_id),
+        });
+
+        println!("ReadCausalRequest={:?}\n", request);
+
+        let response = client.read_causal(request).await;
+
+        println!("ReadCausalResponse={:?}\n", response);
+
+        let read_causal_response = response.unwrap().into_inner();
+
+        collection_ids.extend(read_causal_response.collection_ids);
+    }
+
+    println!("\n4) Obtain the data payload from collections found.\n");
+    println!("\n---- Use GetCollections endpoint ----\n");
     let request = tonic::Request::new(GetCollectionsRequest {
-        collection_ids: vec![collection_id.clone()],
+        collection_ids: collection_ids.clone(),
     });
+
+    println!("GetCollectionsRequest={:?}\n", request);
 
     let response = client.get_collections(request).await;
 
-    println!("GetCollectionsResponse={:?}", response);
+    println!("GetCollectionsResponse={:?}\n", response);
 
-    println!("\n---- Test ReadCausal endpoint ----\n");
-    let request = tonic::Request::new(ReadCausalRequest {
-        collection_id: Some(collection_id.clone()),
-    });
+    let get_collection_response = response.unwrap().into_inner();
 
-    let response = client.read_causal(request).await;
+    // TODO: This doesn't work yet, figure out why workers are crashing.
+    println!("Found {} batches", get_collection_response.result.len());
 
-    println!("ReadCausalResponse={:?}", response);
-
+    println!("\n4) Remove collections that have been voted on and committed.\n");
     println!("\n---- Test RemoveCollections endpoint ----\n");
-    let request = tonic::Request::new(RemoveCollectionsRequest {
-        collection_ids: vec![collection_id.clone()],
-    });
+    let request = tonic::Request::new(RemoveCollectionsRequest { collection_ids });
 
     let response = client.remove_collections(request).await;
 

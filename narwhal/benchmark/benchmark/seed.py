@@ -37,20 +37,26 @@ class SeedData:
 
     def run(self, committee_path):
         assert isinstance(committee_path, Path)
-        Print.heading('Starting seeding data')
+        Print.heading('Start seeding data')
 
+        # TODO: Figure out how to infer worker address from "/dns/worker_2/tcp/4001/http" format
         committee_data = json.loads(open(committee_path, "r").read())
         workers_addresses = []
         transactions_address_port = 7001
         for authority in committee_data['authorities']:
             transactions_address = f'http://127.0.0.1:{transactions_address_port}/'
             transactions_address_port += 1
-            print(transactions_address)
+            Print.info(transactions_address)
             workers_addresses.append(
                 [(0, transactions_address)])
 
         try:
             nodes, rate = self.nodes[0], self.rate[0]
+
+            # Cleanup all files.
+            cmd = f'{CommandMaker.clean_logs()} ; {CommandMaker.cleanup()}'
+            subprocess.run([cmd], shell=True, stderr=subprocess.DEVNULL)
+            sleep(0.5)  # Removing the store may take time.
 
             # Run the clients (they will wait for the nodes to be ready).
             rate_share = ceil(rate / len(workers_addresses))
