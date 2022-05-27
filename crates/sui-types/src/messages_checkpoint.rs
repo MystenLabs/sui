@@ -42,7 +42,7 @@ use serde::{Deserialize, Serialize};
     evidence to ensure all authorities may recover the transactions
     included. Since all authorities need to agree on which checkpoint (out
     of the potentially many sets of 2/3 stake) constitutes the checkpoint
-    we need an agreement protocol to detemrine this.
+    we need an agreement protocol to determine this.
 
     Checkpoint confirmation:
     -----------------------
@@ -146,7 +146,7 @@ pub enum AuthorityCheckpointInfo {
         current: Option<SignedCheckpointProposal>,
         previous: AuthenticatedCheckpoint,
         // Include in all responses the local state of the sequence
-        // of trasacation to allow followers to track the latest
+        // of transaction to allow followers to track the latest
         // updates.
         // last_local_sequence: TxSequenceNumber,
     },
@@ -154,6 +154,7 @@ pub enum AuthorityCheckpointInfo {
     Past(AuthenticatedCheckpoint),
 }
 
+// TODO: Rename to AuthenticatedCheckpointSummary
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AuthenticatedCheckpoint {
     // No authentication information is available
@@ -169,9 +170,7 @@ pub enum AuthenticatedCheckpoint {
 // Proposals are signed by a single authority, and 2f+1 are collected
 // to actually form a checkpoint, so we never expect a certificate on
 // a proposal.
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CheckpointProposalSummary(pub CheckpointSummary);
+// TODO: SignedCheckpointProposal is redundant of SignedCheckpoint, should merge.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignedCheckpointProposal(pub SignedCheckpoint);
 
@@ -213,6 +212,7 @@ impl CheckpointSummary {
 
 impl BcsSignable for CheckpointSummary {}
 
+// TODO: Rename SignedCheckpoint to SignedCheckpointSummary
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignedCheckpoint {
     pub checkpoint: CheckpointSummary,
@@ -270,7 +270,7 @@ impl SignedCheckpoint {
 // content of the digest must at the very least commit to
 // the set of transactions contained in the certificate but
 // we might extend this to contain roots of merkle trees,
-// or other authenticated data strucures to support light
+// or other authenticated data structures to support light
 // clients and more efficient sync protocols.
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
