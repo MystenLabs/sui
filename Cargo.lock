@@ -6009,6 +6009,7 @@ dependencies = [
  "sha3 0.10.1",
  "signature",
  "static_assertions",
+ "strum_macros",
  "thiserror",
  "tonic",
  "typed-store",

@@ -9,6 +9,7 @@ use move_core_types::{
 use name_variant::NamedVariant;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
+use strum_macros::EnumDiscriminants;
 
 use crate::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest},
@@ -42,9 +43,19 @@ impl EventEnvelope {
     }
 }
 
+#[derive(Eq, Debug, Clone, PartialEq, Deserialize, Serialize, Hash)]
+pub enum TransferType {
+    Coin,
+    ToAddress,
+    ToObject, // wrap object in another object
+}
+
 /// Specific type of event
 #[serde_as]
-#[derive(Eq, Debug, Clone, PartialEq, NamedVariant, Deserialize, Serialize, Hash)]
+#[derive(
+    Eq, Debug, Clone, PartialEq, NamedVariant, Deserialize, Serialize, Hash, EnumDiscriminants,
+)]
+#[strum_discriminants(name(SuiEventType))]
 pub enum SuiEvent {
     /// Move-specific event
     MoveEvent {
@@ -54,11 +65,12 @@ pub enum SuiEvent {
     },
     /// Module published
     Publish { package_id: ObjectID },
-    /// Transfer coin
-    TransferCoin {
+    /// Transfer objects to new address / wrap in another object / coin
+    TransferObject {
         object_id: ObjectID,
         version: SequenceNumber,
         destination_addr: SuiAddress,
+        type_: TransferType,
     },
     /// Epooch change
     EpochChange(EpochId),

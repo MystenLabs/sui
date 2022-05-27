@@ -10,7 +10,7 @@ use sui_adapter::adapter;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
     error::SuiResult,
-    event::SuiEvent,
+    event::{SuiEvent, TransferType},
     gas::{self, SuiGasStatus},
     messages::{
         ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind, TransactionData,
@@ -201,10 +201,11 @@ fn transfer<S>(
     recipient: SuiAddress,
 ) -> SuiResult {
     object.transfer(recipient)?;
-    temporary_store.log_event(SuiEvent::TransferCoin {
+    temporary_store.log_event(SuiEvent::TransferObject {
         object_id: object.id(),
         version: object.version(),
         destination_addr: recipient,
+        type_: TransferType::Coin,
     });
     temporary_store.write_object(object);
     Ok(())

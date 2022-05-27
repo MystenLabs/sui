@@ -13,7 +13,7 @@
 
 use move_core_types::language_storage::ModuleId;
 use sui_types::base_types::TransactionDigest;
-use sui_types::event::EventEnvelope;
+use sui_types::event::{EventEnvelope, SuiEventType};
 
 use flexstr::SharedStr;
 use serde_json::Value;
@@ -59,12 +59,11 @@ where
 
     /// Queries for all events of a certain EventType within a given time window.
     /// Will return at most limit of the most recent events within the window, sorted in ascending time.
-    /// May return InvalidEventType.
     fn events_by_type(
         &self,
         start_time: u64,
         end_time: u64,
-        event_type: &str,
+        event_type: SuiEventType,
         limit: usize,
     ) -> Result<EventIt, EventStoreError>;
 
@@ -92,5 +91,4 @@ where
 
 pub enum EventStoreError {
     GenericError(Box<dyn std::error::Error>),
-    InvalidEventType(String),
 }
