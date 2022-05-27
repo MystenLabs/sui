@@ -20,7 +20,7 @@ use sui_types::base_types::decode_bytes_hex;
 use sui_types::base_types::SuiAddress;
 use tracing::info;
 
-pub use crate::make::{make_authority, make_server, SuiNetwork};
+pub use crate::make::{make_authority, SuiNetwork};
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
