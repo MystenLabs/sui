@@ -458,12 +458,22 @@ impl CheckpointFragment {
 
 #[cfg(test)]
 mod tests {
+    use rand::prelude::StdRng;
+    use rand::SeedableRng;
+
     use super::*;
     use crate::utils::make_committee_key;
 
+// TODO use the file name as a seed
+const RNG_SEED: [u8; 32] = [
+    21, 23, 199, 200, 234, 250, 252, 178, 94, 15, 202, 178, 62, 186, 88, 137, 233, 192, 130, 157,
+    179, 179, 65, 9, 31, 249, 221, 123, 225, 112, 199, 247,
+];
+
     #[test]
     fn test_signed_proposal() {
-        let (authority_key, _committee) = make_committee_key();
+        let mut rng = StdRng::from_seed(RNG_SEED);
+        let (authority_key, _committee) = make_committee_key(&mut rng);
         let name = authority_key[0].public_key_bytes();
 
         let set = [TransactionDigest::random()];
@@ -488,7 +498,8 @@ mod tests {
 
     #[test]
     fn test_certified_checkpoint() {
-        let (keys, committee) = make_committee_key();
+        let mut rng = StdRng::from_seed(RNG_SEED);
+        let (keys, committee) = make_committee_key(&mut rng);
 
         let set = [TransactionDigest::random()];
         let set = CheckpointContents::new(set.iter().cloned());

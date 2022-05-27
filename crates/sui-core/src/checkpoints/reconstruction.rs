@@ -155,9 +155,11 @@ impl SpanGraph {
         let top1 = self.top_node(name1).0;
         let top2 = self.top_node(name2).0;
         if top1 == top2 {
-            // They have been merged in the past, nothing to do.
+            // they are already merged
             return (top1, self.nodes[&top1].1);
         }
+
+        // They are not merged, so merge now
         let new_weight = self.nodes[&top1].1 + self.nodes[&top2].1;
         self.nodes.get_mut(&top1).unwrap().0 = top2;
         self.nodes.get_mut(&top2).unwrap().1 = new_weight;

@@ -552,6 +552,10 @@ pub async fn diff_proposals<A>(
                     {
                         Ok(fragment) => {
                             // On success send the fragment to consensus
+                            println!(
+                                "Send fragment: {:?} -- {:?}",
+                                &fragment.proposer.0.authority, &fragment.other.0.authority
+                            );
                             let _ = checkpoint_db.lock().handle_receive_fragment(&fragment);
                         }
                         Err(err) => {
