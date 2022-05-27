@@ -1,22 +1,20 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{env, net::SocketAddr, time::Instant};
-
+use crate::api::SuiRpcModule;
 use anyhow::Result;
 use jsonrpsee::{
     http_server::{AccessControlBuilder, HttpServerBuilder, HttpServerHandle},
     RpcModule,
 };
 use jsonrpsee_core::middleware::Middleware;
+use once_cell::sync::Lazy;
 use prometheus_exporter::prometheus::{
     register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec,
 };
-use tracing::info;
-
+use std::{env, net::SocketAddr, time::Instant};
 use sui_open_rpc::Project;
-
-use crate::api::SuiRpcModule;
+use tracing::info;
 
 pub struct JsonRpcServerBuilder {
     module: RpcModule<()>,
@@ -96,7 +94,7 @@ struct JsonRpcMetrics {
 
 impl JsonRpcMetrics {
     pub fn new() -> Self {
-        Self {
+        static METRICS: Lazy<JsonRpcMetrics> = Lazy::new(|| JsonRpcMetrics {
             requests_by_route: register_int_counter_vec!(
                 "rpc_requests_by_route",
                 "Number of requests by route",
@@ -115,7 +113,9 @@ impl JsonRpcMetrics {
                 &["route"]
             )
             .unwrap(),
-        }
+        });
+
+        Lazy::force(&METRICS).clone()
     }
 }
 
