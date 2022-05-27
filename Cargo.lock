@@ -5928,7 +5928,6 @@ dependencies = [
  "pretty_assertions",
  "rocksdb",
  "serde 1.0.137",
- "serde_json",
  "sui-types",
  "tokio",
  "tracing",
