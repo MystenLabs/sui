@@ -1,5 +1,5 @@
 ---
-title: Chapter 2: Using Objects
+title: Chapter 2 - Using Objects
 ---
 
 In [Chapter 1](./ch1-object-basics.md) we covered how to define, create and take ownership of a Sui object in Move. In this chapter we will look at how to use objects that you own in Move calls.
