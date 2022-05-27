@@ -209,10 +209,9 @@ impl LockServiceImpl {
 
     /// Loop to continuously process mutating commands in a single thread from async senders.
     /// It terminates when the sender drops, which usually is when the containing data store is dropped.
-    fn run_command_loop(&self, mut receiver: Receiver<LockServiceCommands>) {
+    async fn run_command_loop(&self, mut receiver: Receiver<LockServiceCommands>) {
         info!("LockService command processing loop started");
-        // NOTE: we use blocking_recv() as its faster than using regular async recv() with awaits in a loop
-        while let Some(msg) = receiver.blocking_recv() {
+        while let Some(msg) = receiver.recv().await {
             match msg {
                 LockServiceCommands::Acquire {
                     refs,
@@ -244,9 +243,9 @@ impl LockServiceImpl {
     }
 
     /// Loop to continuously process queries in a single thread
-    fn run_queries_loop(&self, mut receiver: Receiver<LockServiceQueries>) {
+    async fn run_queries_loop(&self, mut receiver: Receiver<LockServiceQueries>) {
         info!("LockService queries processing loop started");
-        while let Some(msg) = receiver.blocking_recv() {
+        while let Some(msg) = receiver.recv().await {
             match msg {
                 LockServiceQueries::GetLock { object, resp } => {
                     if let Err(_e) = resp.send(self.get_lock(object)) {
@@ -284,14 +283,10 @@ impl LockService {
         // Now, create a sync channel and spawn a thread
         let (sender, receiver) = channel(LOCKSERVICE_QUEUE_LEN);
         let inner2 = inner_service.clone();
-        std::thread::spawn(move || {
-            inner2.run_command_loop(receiver);
-        });
+        tokio::spawn(async move { inner2.run_command_loop(receiver).await });
 
         let (q_sender, q_receiver) = channel(LOCKSERVICE_QUEUE_LEN);
-        std::thread::spawn(move || {
-            inner_service.run_queries_loop(q_receiver);
-        });
+        tokio::spawn(async move { inner_service.run_queries_loop(q_receiver).await });
 
         Ok(Self {
             sender,
@@ -310,7 +305,6 @@ impl LockService {
         tx_digest: TransactionDigest,
     ) -> SuiResult {
         let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
-        // NOTE: below is blocking, switch to Tokio channels which are async?
         self.sender
             .send(LockServiceCommands::Acquire {
                 refs,
