@@ -1,4 +1,7 @@
-## Chapter 4: Object Wrapping
+---
+title: Chapter 4: Object Wrapping
+---
+
 In many programming languages, we organize data structures in layers by nesting complex data structures in another data structure. In Move, you may do the same by putting a field of `struct` type in another, like the following:
 ```rust
 struct Foo has key {

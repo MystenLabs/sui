@@ -1,4 +1,6 @@
-## Chapter 1: Object Basics
+---
+title: Chapter 1: Object Basics
+---
 
 ### Define Sui Object
 In Move, besides primitive data types, we can define organized data structures using `struct`. For example:
