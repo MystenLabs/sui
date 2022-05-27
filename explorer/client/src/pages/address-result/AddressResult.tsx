@@ -58,7 +58,7 @@ function TxForAddress({ id }: { id: string }) {
         return (
             <>
                 <div>
-                    <div>From</div>
+                    <div>Transactions Sent</div>
                     <div>
                         {showData.from.map((x) => (
                             <div key={`from-${x[0]}`}>{x[1]}</div>
@@ -66,7 +66,7 @@ function TxForAddress({ id }: { id: string }) {
                     </div>
                 </div>
                 <div>
-                    <div>To</div>
+                    <div>Transactions Received</div>
                     <div>
                         {showData.to.map((x) => (
                             <div key={`from-${x[0]}`}>{x[1]}</div>
