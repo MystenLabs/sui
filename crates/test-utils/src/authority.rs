@@ -3,27 +3,18 @@
 
 use crate::TEST_COMMITTEE_SIZE;
 use rand::{prelude::StdRng, SeedableRng};
+use std::collections::BTreeMap;
 use std::time::Duration;
-use std::{collections::BTreeMap, sync::Arc};
-use sui::sui_commands::make_authority;
 use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_core::{
-    authority::{AuthorityState, AuthorityStore},
-    authority_aggregator::AuthorityAggregator,
-    authority_client::NetworkAuthorityClient,
-    authority_server::AuthorityServerHandle,
+    authority_aggregator::AuthorityAggregator, authority_client::NetworkAuthorityClient,
     safe_client::SafeClient,
 };
+use sui_node::SuiNode;
 use sui_types::{committee::Committee, object::Object};
 
 /// The default network buffer size of a test authority.
 pub const NETWORK_BUFFER_SIZE: usize = 65_000;
-
-/// Make a test authority store in a temporary directory.
-pub fn test_authority_store() -> AuthorityStore {
-    let store_path = tempfile::tempdir().unwrap();
-    AuthorityStore::open(store_path, None)
-}
 
 /// Make an authority config for each of the `TEST_COMMITTEE_SIZE` authorities in the test committee.
 pub fn test_authority_configs() -> NetworkConfig {
@@ -43,38 +34,20 @@ pub fn test_authority_configs() -> NetworkConfig {
 }
 
 /// Spawn all authorities in the test committee into a separate tokio task.
-pub async fn spawn_test_authorities<I>(
-    objects: I,
-    config: &NetworkConfig,
-) -> Vec<AuthorityServerHandle>
+pub async fn spawn_test_authorities<I>(objects: I, config: &NetworkConfig) -> Vec<SuiNode>
 where
     I: IntoIterator<Item = Object> + Clone,
 {
     let mut handles = Vec::new();
-    let genesis = sui_config::genesis::Genesis::get_default_genesis();
     for validator in config.validator_configs() {
-        let state = AuthorityState::new(
-            validator.committee_config().committee(),
-            validator.public_key(),
-            Arc::pin(validator.key_pair().copy()),
-            Arc::new(test_authority_store()),
-            None,
-            None,
-            &genesis,
-        )
-        .await;
+        let node = SuiNode::start(validator).await.unwrap();
+        let state = node.state();
 
         for o in objects.clone() {
             state.insert_genesis_object(o).await
         }
 
-        let handle = make_authority(validator, state)
-            .await
-            .unwrap()
-            .spawn()
-            .await
-            .unwrap();
-        handles.push(handle);
+        handles.push(node);
     }
     handles
 }
