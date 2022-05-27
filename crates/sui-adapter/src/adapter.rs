@@ -14,7 +14,7 @@ use sui_framework::EventType;
 use sui_types::{
     base_types::*,
     error::{SuiError, SuiResult},
-    event::Event,
+    event::{Event, TransferType},
     fp_ensure,
     gas::SuiGasStatus,
     id::VersionedID,
@@ -228,6 +228,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 
     let package_id = generate_package_id(&mut modules, ctx)?;
     let vm = verify_and_link(state_view, &modules, package_id, natives, gas_status)?;
+    state_view.log_event(Event::Publish { package_id });
     store_package_and_init_modules(state_view, &vm, modules, ctx, gas_status)
 }
 
@@ -476,6 +477,7 @@ fn process_successful_execution<
                             return Err(SuiError::DeleteObjectOwnedObject);
                         }
                         Some(_) => {
+                            state_view.log_event(Event::DeleteObject(*obj_id));
                             state_view.delete_object(obj_id, id.version(), DeleteKind::Normal)
                         }
                         None => {
@@ -486,6 +488,7 @@ fn process_successful_execution<
                             // it will also have version `v+1`, leading to a violation of the invariant that any
                             // object_id and version pair must be unique. Hence for any object that's just unwrapped,
                             // we force incrementing its version number again to make it `v+2` before writing to the store.
+                            state_view.log_event(Event::DeleteObject(*obj_id));
                             state_view.delete_object(
                                 obj_id,
                                 id.version().increment(),
@@ -507,7 +510,7 @@ fn process_successful_execution<
             }
             EventType::User => {
                 match type_ {
-                    TypeTag::Struct(s) => state_view.log_event(Event::new(s, event_bytes)),
+                    TypeTag::Struct(s) => state_view.log_event(Event::move_event(s, event_bytes)),
                     _ => unreachable!(
                         "Native function emit_event<T> ensures that T is always bound to structs"
                     ),
@@ -561,13 +564,37 @@ fn handle_transfer<
             //   2. Created in this transaction (in `newly_generated_ids`)
             //   3. Unwrapped in this transaction
             // The following condition checks if this object was unwrapped in this transaction.
-            if old_object.is_none() && !newly_generated_ids.contains(&obj_id) {
-                // When an object was wrapped at version `v`, we added an record into `parent_sync`
-                // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
-                // it will also have version `v+1`, leading to a violation of the invariant that any
-                // object_id and version pair must be unique. Hence for any object that's just unwrapped,
-                // we force incrementing its version number again to make it `v+2` before writing to the store.
-                move_obj.increment_version();
+            if old_object.is_none() {
+                // Newly created object
+                if newly_generated_ids.contains(&obj_id) {
+                    state_view.log_event(Event::NewObject(obj_id));
+                } else {
+                    // When an object was wrapped at version `v`, we added an record into `parent_sync`
+                    // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
+                    // it will also have version `v+1`, leading to a violation of the invariant that any
+                    // object_id and version pair must be unique. Hence for any object that's just unwrapped,
+                    // we force incrementing its version number again to make it `v+2` before writing to the store.
+                    move_obj.increment_version();
+                }
+            } else if let Some((_, old_obj_ver)) = old_object {
+                // Some kind of transfer since there's an old object
+                // Add an event for the transfer
+
+                match recipient {
+                    Owner::AddressOwner(addr) => state_view.log_event(Event::TransferObject {
+                        object_id: obj_id,
+                        version: old_obj_ver,
+                        destination_addr: addr,
+                        type_: TransferType::ToAddress,
+                    }),
+                    Owner::ObjectOwner(new_owner) => state_view.log_event(Event::TransferObject {
+                        object_id: obj_id,
+                        version: old_obj_ver,
+                        destination_addr: new_owner,
+                        type_: TransferType::ToObject,
+                    }),
+                    _ => {}
+                }
             }
             let obj = Object::new_move(move_obj, recipient, tx_digest);
             if old_object.is_none() {

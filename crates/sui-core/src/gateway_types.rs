@@ -25,6 +25,7 @@ use sui_types::base_types::{
 };
 use sui_types::crypto::{AuthorityQuorumSignInfo, Signature};
 use sui_types::error::SuiError;
+use sui_types::event::Event;
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
@@ -997,9 +998,13 @@ impl From<TransactionEffects> for SuiTransactionEffects {
             events: effect
                 .events
                 .iter()
-                .map(|event| SuiEvent {
-                    type_: event.type_.to_string(),
-                    contents: event.contents.clone(),
+                // TODO: figure out how to map the non-Move events
+                .filter_map(|event| match event {
+                    Event::MoveEvent { type_, contents } => Some(SuiEvent {
+                        type_: type_.to_string(),
+                        contents: contents.clone(),
+                    }),
+                    _ => None,
                 })
                 .collect(),
             dependencies: effect.dependencies,
@@ -1085,6 +1090,7 @@ pub struct OwnedObjectRef {
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "Event")]
+// TODO: we need to reconstitute this for non Move events
 pub struct SuiEvent {
     pub type_: String,
     pub contents: Vec<u8>,

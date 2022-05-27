@@ -11,6 +11,7 @@ use sui_types::committee::EpochId;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
     error::SuiResult,
+    event::{Event, TransferType},
     gas::{self, SuiGasStatus},
     messages::{
         ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind, TransactionData,
@@ -202,6 +203,12 @@ fn transfer<S>(
     recipient: SuiAddress,
 ) -> SuiResult {
     object.transfer(recipient)?;
+    temporary_store.log_event(Event::TransferObject {
+        object_id: object.id(),
+        version: object.version(),
+        destination_addr: recipient,
+        type_: TransferType::Coin,
+    });
     temporary_store.write_object(object);
     Ok(())
 }

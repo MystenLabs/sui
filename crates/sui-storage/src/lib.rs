@@ -6,6 +6,9 @@ pub use lock_service::LockService;
 
 pub mod indexes;
 pub use indexes::IndexStore;
+
+pub mod event_store;
+
 use rocksdb::Options;
 
 /// Given a provided `db_options`, add a few default options.
