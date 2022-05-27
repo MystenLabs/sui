@@ -5,6 +5,7 @@
 pub mod benchmark;
 pub mod config;
 pub mod keystore;
+pub mod make;
 pub mod shell;
 pub mod sui_commands;
 pub mod wallet_commands;

@@ -5577,6 +5577,7 @@ dependencies = [
  "node",
  "num_cpus",
  "once_cell",
+ "parking_lot 0.12.0",
  "pretty_assertions",
  "prometheus_exporter",
  "rand 0.7.3",

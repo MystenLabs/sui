@@ -160,7 +160,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 #[traced_test]
 #[tokio::test]
 async fn test_objects_command() -> Result<(), anyhow::Error> {
-    let (network, mut context, address) = setup_network_and_wallet().await?;
+    let (_network, mut context, address) = setup_network_and_wallet().await?;
 
     // Print objects owned by `address`
     WalletCommands::Objects {
@@ -177,14 +177,13 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
         assert!(logs_contain(format!("{}", oref.object_id).as_str()))
     }
 
-    network.kill().await?;
     Ok(())
 }
 
 #[traced_test]
 #[tokio::test]
 async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
-    let (network, mut context, address) = setup_network_and_wallet().await?;
+    let (_network, mut context, address) = setup_network_and_wallet().await?;
 
     let result = WalletCommands::CreateExampleNFT {
         name: None,
@@ -207,7 +206,6 @@ async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
         )),
     }?;
 
-    network.kill().await?;
     Ok(())
 }
 
@@ -230,7 +228,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
         gas_object_ranges: None,
     });
 
-    let network = start_test_network(working_dir.path(), Some(config)).await?;
+    let _network = start_test_network(working_dir.path(), Some(config)).await?;
 
     // Wallet config
     let mut context = WalletContext::new(&working_dir.path().join(SUI_WALLET_CONFIG))?;
@@ -259,7 +257,6 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
         Duration::from_millis(5000)
     );
 
-    network.kill().await?;
     Ok(())
 }
 
@@ -280,7 +277,7 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
         .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_2"));
 
     // Start network
-    let network = start_test_network(working_dir, Some(config)).await?;
+    let _network = start_test_network(working_dir, Some(config)).await?;
 
     assert!(logs_contain("Loading 2 Move packages"));
     // Checks network config contains package ids
@@ -301,14 +298,13 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     let move_objects =
         get_move_objects_by_type(&mut context, SuiAddress::default(), "M1::Object").await?;
     assert_eq!(move_objects.len(), 1);
-    network.kill().await?;
     Ok(())
 }
 
 #[traced_test]
 #[tokio::test]
 async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
-    let (network, mut context, address) = setup_network_and_wallet().await?;
+    let (_network, mut context, address) = setup_network_and_wallet().await?;
 
     let object_refs = context.gateway.get_owned_objects(address).await?;
 
@@ -326,14 +322,13 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
         Duration::from_millis(5000)
     );
 
-    network.kill().await?;
     Ok(())
 }
 
 #[traced_test]
 #[tokio::test]
 async fn test_gas_command() -> Result<(), anyhow::Error> {
-    let (network, mut context, address) = setup_network_and_wallet().await?;
+    let (_network, mut context, address) = setup_network_and_wallet().await?;
     let recipient = context.config.accounts.get(1).cloned().unwrap();
 
     let object_refs = context.gateway.get_owned_objects(address).await?;
@@ -418,7 +413,6 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
         Ok(())
     });
 
-    network.kill().await?;
     Ok(())
 }
 
@@ -511,7 +505,7 @@ async fn get_move_object(
 #[traced_test]
 #[tokio::test]
 async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
-    let (network, mut context, address1) = setup_network_and_wallet().await?;
+    let (_network, mut context, address1) = setup_network_and_wallet().await?;
     let address2 = context.config.accounts.get(1).cloned().unwrap();
 
     // Sync client to retrieve objects from the network.
@@ -674,7 +668,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     );
     assert!(logs_contain("Created Objects:"));
 
-    network.kill().await?;
     Ok(())
 }
 
@@ -682,7 +675,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 #[traced_test]
 #[tokio::test]
 async fn test_package_publish_command() -> Result<(), anyhow::Error> {
-    let (network, mut context, address) = setup_network_and_wallet().await?;
+    let (_network, mut context, address) = setup_network_and_wallet().await?;
 
     let object_refs = context.gateway.get_owned_objects(address).await?;
 
@@ -744,7 +737,6 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         WalletCommandResult::Object(GetObjectInfoResponse::Exists(..))
     ));
 
-    network.kill().await?;
     Ok(())
 }
 
@@ -752,7 +744,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
 #[traced_test]
 #[tokio::test]
 async fn test_native_transfer() -> Result<(), anyhow::Error> {
-    let (network, mut context, address) = setup_network_and_wallet().await?;
+    let (_network, mut context, address) = setup_network_and_wallet().await?;
     let recipient = context.config.accounts.get(1).cloned().unwrap();
 
     let object_refs = context.gateway.get_owned_objects(address).await?;
@@ -888,7 +880,6 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         Duration::from_millis(5000)
     );
 
-    network.kill().await?;
     Ok(())
 }
 
@@ -907,7 +898,7 @@ fn test_bug_1078() {
 #[tokio::test]
 async fn test_switch_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
-    let network = start_test_network(working_dir.path(), None).await?;
+    let _network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context.
     let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
@@ -993,7 +984,6 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
             })
         )
     );
-    network.kill().await?;
     Ok(())
 }
 
@@ -1002,7 +992,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn test_active_address_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
-    let network = start_test_network(working_dir.path(), None).await?;
+    let _network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context.
     let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
@@ -1048,7 +1038,6 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
             })
         )
     );
-    network.kill().await?;
     Ok(())
 }
 
@@ -1068,7 +1057,7 @@ async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<SuiObje
 #[traced_test]
 #[tokio::test]
 async fn test_merge_coin() -> Result<(), anyhow::Error> {
-    let (network, mut context, address) = setup_network_and_wallet().await?;
+    let (_network, mut context, address) = setup_network_and_wallet().await?;
 
     let object_refs = context.gateway.get_owned_objects(address).await?;
 
@@ -1138,7 +1127,6 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     // Check that old coin is deleted
     assert_eq!(get_object(coin_to_merge, &mut context).await, None);
 
-    network.kill().await?;
     Ok(())
 }
 
@@ -1146,7 +1134,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
 #[traced_test]
 #[tokio::test]
 async fn test_split_coin() -> Result<(), anyhow::Error> {
-    let (network, mut context, address) = setup_network_and_wallet().await?;
+    let (_network, mut context, address) = setup_network_and_wallet().await?;
     let object_refs = context.gateway.get_owned_objects(address).await?;
 
     // Check log output contains all object ids.
@@ -1213,6 +1201,5 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     assert_eq!(get_gas_value(&g.updated_coin) + 1000 + 10, orig_value);
     assert!((get_gas_value(&g.new_coins[0]) == 1000) || (get_gas_value(&g.new_coins[0]) == 10));
     assert!((get_gas_value(&g.new_coins[1]) == 1000) || (get_gas_value(&g.new_coins[1]) == 10));
-    network.kill().await?;
     Ok(())
 }
