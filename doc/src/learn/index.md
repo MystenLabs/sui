@@ -16,13 +16,13 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](http
 
 Find the latest updates to these contents in this section:
 
+* [Programming with objects](../build/programming-with-objects/index.md) tutorial series offers detailed guidance on manipulating Sui objects, from creation and storage through wrapping and using child objects.
 * Sui [version 0.3.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.3.0-rc) released to DevNet. See [RELEASES](https://github.com/MystenLabs/sui/blob/main/RELEASES.md) for details on other releases.
 * [Sui tokenomics](../learn/tokenomics/index.md) are now fully explained and cover:
   * [Sui token](../learn/tokenomics/sui-token.md).
   * [Gas-pricing mechanism](../learn/tokenomics/gas-pricing.md).
   * [Sui storage fund](../learn/tokenomics/storage-fund.md).
   * [Delegated proof-of-stake system](../learn/tokenomics/proof-of-stake.md).
-* New [`sui-setup.sh`](https://github.com/MystenLabs/sui/blob/main/doc/utils/sui-setup.sh) script enables full environment setup in a [single set of commands](../build/install.md).
 
 For a complete view of all changes in the Sui `devnet` branch, see:
 https://github.com/MystenLabs/sui/commits/devnet
