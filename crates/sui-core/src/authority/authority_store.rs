@@ -45,6 +45,13 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
     ///
     /// Note that while this map can store all versions of an object, in practice it only stores
     /// the most recent version.
+    ///
+    /// Consistency requirements:
+    /// - Used to guard against regenesis (which asserts that the objects map is empty)
+    /// - Must be updated before new object locks are created so that future transactions can access
+    ///   the newly-created versions
+    /// - Read-after-write consistency for the client (after confirmation_transaction returns, this
+    ///   map is up to date).
     objects: DBMap<ObjectKey, Object>,
 
     /// Stores all history versions of all objects.
@@ -62,17 +69,36 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
     /// composite key of the SuiAddress of their owner and the object ID of the object.
     /// This composite index allows an efficient iterator to list all objected currently owned
     /// by a specific user, and their object reference.
+    ///
+    /// Consistency requirements:
+    /// - Only exists to satisfy read queries from clients, and should be moved to IndexStore
+    /// - Eventual consistency with respect to certificate processing - the owner index must
+    ///   eventually be updated after a certificate is processed.
+    /// - Read-after-write consistency can be provided if required, such that if client has a
+    ///   signed effects cert they cannot be served the old owner_index entry.
     owner_index: DBMap<(SuiAddress, ObjectID), ObjectRef>,
 
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
     /// NOTE: after a lock is deleted (after a certificate is processed) the corresponding entry here
     /// could be deleted, but right now this is only done on gateways, not done on authorities.
+    ///
+    /// Consistency requirements:
+    /// - Must never contain an entry for a TransactionDigest unless locks have been succesfully
+    ///   acquired for that tx.
+    /// - Read-after-write consistency for the client: If the Validator::transaction RPC returns
+    ///   successfully, this map must be up to date. If the RPC fails before returning, the client
+    ///   retries, which will eventually cause this map to be up to date.
     transactions: DBMap<TransactionDigest, TransactionEnvelope<S>>,
 
     /// This is a map between the transaction digest and the corresponding certificate for all
     /// certificates that have been successfully processed by this authority. This set of certificates
     /// along with the genesis allows the reconstruction of all other state, and a full sync to this
     /// authority.
+    ///
+    /// Consistency requirements:
+    /// - Read-after-write with respect to Validator::confirmation_transaction
+    /// - A certificate must be added to this map *before* the certificate's input object
+    ///   locks are deleted and the output object locks are initialized
     certificates: DBMap<TransactionDigest, CertifiedTransaction>,
 
     /// The map between the object ref of objects processed at all versions and the transaction
@@ -80,33 +106,57 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
     ///
     /// When an object is deleted we include an entry into this table for its next version and
     /// a digest of ObjectDigest::deleted(), along with a link to the transaction that deleted it.
+    ///
+    /// Consistency requirements:
+    /// - Read-after-write with respect to Validator::confirmation_transaction
     parent_sync: DBMap<ObjectRef, TransactionDigest>,
 
     /// A map between the transaction digest of a certificate that was successfully processed
     /// (ie in `certificates`) and the effects its execution has on the authority state. This
     /// structure is used to ensure we do not double process a certificate, and that we can return
     /// the same response for any call after the first (ie. make certificate processing idempotent).
+    ///
+    /// Consistency requirements:
+    /// - Same as for `certificates`
     effects: DBMap<TransactionDigest, TransactionEffectsEnvelope<S>>,
+
+    // The following three tables (sequenced, schedule, last_consensus_index) are critical for
+    // sequencing shared object txes correctly, and must be updated atomically.
 
     /// Hold the lock for shared objects. These locks are written by a single task: upon receiving a valid
     /// certified transaction from consensus, the authority assigns a lock to each shared objects of the
-    /// transaction. Note that all authorities are guaranteed to assign the same lock to these objects.
+    /// transaction. Note that all authorities are guaranteed to assign the same lock to these objects,
+    /// because shared object certs are received from narwhal in the same order by all authorities,
+    /// and are processed serially in a single task.
+    ///
+    /// sequenced contains a map form (TransactionDigest, ObjectID) to the object version number
+    /// that will be created when that Transaction is executed.
+    /// schedule contains the most recently assigned sequence number for each object id, which
+    /// allows us to determine the proper sequence number to write into sequenced when receive
+    /// another shared object tx operating on the given object.
     /// TODO: These two maps should be merged into a single one (no reason to have two).
     sequenced: DBMap<(TransactionDigest, ObjectID), SequenceNumber>,
     schedule: DBMap<ObjectID, SequenceNumber>,
-
-    // Tables used for authority batch structure
-    /// A sequence on all executed certificates and effects.
-    pub executed_sequence: DBMap<TxSequenceNumber, TransactionDigest>,
-
-    /// A sequence of batches indexing into the sequence of executed transactions.
-    pub batches: DBMap<TxSequenceNumber, SignedBatch>,
 
     /// The following table is used to store a single value (the corresponding key is a constant). The value
     /// represents the index of the latest consensus message this authority processed. This field is written
     /// by a single process acting as consensus (light) client. It is used to ensure the authority processes
     /// every message output by consensus (and in the right order).
     last_consensus_index: DBMap<u64, ExecutionIndices>,
+
+    // Tables used for authority batch structure
+    /// A sequence on all executed certificates and effects.
+    ///
+    /// Consistency requirements:
+    /// - Must be up-to-date before the input object locks for the given tx are deleted, which
+    /// ensures that all executed TXes have a sequence number assigned.
+    /// - cannot contain the same TX under two different sequence numbers. This may (depending on
+    /// implementation details) require that the same tx cannot be processed twice concurrently by
+    /// different threads.
+    pub executed_sequence: DBMap<TxSequenceNumber, TransactionDigest>,
+
+    /// A sequence of batches indexing into the sequence of executed transactions.
+    pub batches: DBMap<TxSequenceNumber, SignedBatch>,
 
     /// Map from each epoch ID to the epoch information.
     epochs: DBMap<EpochId, EpochInfoLocals>,
@@ -887,6 +937,10 @@ impl<
 
         // Make an iterator to update the locks of the transaction's shared objects.
         let ids = certificate.shared_input_objects();
+
+        // givens the set of ids (of shared input objects) that certificate is going to
+        // operate on, fetch the (optional) object version numbers that are already
+        // scheduled to be created by prior transactions.
         let versions = self.schedule.multi_get(ids)?;
 
         let ids = certificate.shared_input_objects();
@@ -910,8 +964,20 @@ impl<
         let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, consensus_index));
 
         // Atomically store all elements.
+        //
+        // certificate_to_write is written as part of this batch because it can be, not because it
+        // needs to be stored atomically with sequenced/schedule/last_consensus_index.
+        //
+        // TODO: We store certificate_to_write so that we can resume processing of this shared
+        // tx later if necessary. Therefore, instead of writing it to self.certificates (which is
+        // traditionally where we store certificates that have been fully processed), we should
+        // write this to a table/store specifically for in-progress shared-object txes, from which it will be
+        // removed when the shared object is finalized. (See comments in
+        // handle_consensus_transaction in authority.rs)
         let mut write_batch = self.sequenced.batch();
         write_batch = write_batch.insert_batch(&self.certificates, certificate_to_write)?;
+
+        // These are the writes that truly need to be atomic.
         write_batch = write_batch.insert_batch(&self.sequenced, sequenced_to_write)?;
         write_batch = write_batch.insert_batch(&self.schedule, schedule_to_write)?;
         write_batch = write_batch.insert_batch(&self.last_consensus_index, index_to_write)?;
