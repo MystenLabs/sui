@@ -337,6 +337,12 @@ pub enum SuiError {
     #[error("Signature key generation error: {0}")]
     SignatureKeyGenError(String),
 
+    // Epoch related errors.
+    #[error("Validator temporarily stopped processing transactions due to epoch change")]
+    ValidatorHaltedAtEpochEnd,
+    #[error("Inconsistent state detected during epoch change: {:?}", error)]
+    InconsistentEpochState { error: String },
+
     // These are errors that occur when an RPC fails and is simply the utf8 message sent in a
     // Tonic::Status
     #[error("{0}")]

@@ -290,9 +290,9 @@ pub fn calculate_throughput(num_items: usize, elapsed_time_us: u128) -> f64 {
 async fn send_tx_chunks_for_quorum_notif(
     notif: Arc<Notify>,
     tx_chunk: Vec<Transaction>,
-    result_chann_tx: &mut MpscSender<(u128, usize)>,
+    result_chann_tx: &mut MpscSender<(u128, u64)>,
     address: Multiaddr,
-    stake: usize,
+    stake: u64,
     conn: usize,
 ) {
     notif.notified().await;
@@ -319,9 +319,9 @@ async fn send_tx_for_quorum(
     order_chunk: Vec<Transaction>,
     conf_chunk: Vec<CertifiedTransaction>,
     result_chann_tx: &mut MpscSender<u128>,
-    net_clients: Vec<(Multiaddr, usize)>,
+    net_clients: Vec<(Multiaddr, u64)>,
     conn: usize,
-    quorum_threshold: usize,
+    quorum_threshold: u64,
 ) {
     // For receiving info back from the subtasks
     let (order_chann_tx, mut order_chann_rx) = MpscChannel(net_clients.len() * 2);
@@ -451,7 +451,7 @@ impl MultiFixedRateLoadGenerator {
 
         network_cfg: &NetworkConfig,
     ) -> Self {
-        let network_clients_stake: Vec<(Multiaddr, usize)> = network_cfg
+        let network_clients_stake: Vec<(Multiaddr, u64)> = network_cfg
             .validator_set()
             .iter()
             .map(|q| (q.network_address().to_owned(), q.stake()))

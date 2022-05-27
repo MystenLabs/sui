@@ -79,7 +79,7 @@ impl AuthorityServer {
         let consensus_adapter = ConsensusAdapter::new(
             state.clone(),
             consensus_address,
-            state.committee.clone(),
+            state.clone_committee(),
             tx_consensus_listener,
             /* max_delay */ Duration::from_millis(5_000),
         );
@@ -192,7 +192,7 @@ impl ValidatorService {
         let consensus_adapter = ConsensusAdapter::new(
             state.clone(),
             consensus_config.address().to_owned(),
-            state.committee.clone(),
+            state.clone_committee(),
             tx_sui_to_consensus,
             /* max_delay */ Duration::from_millis(5_000),
         );
@@ -249,7 +249,7 @@ impl Validator for ValidatorService {
 
         let mut obligation = VerificationObligation::default();
         transaction
-            .add_to_verification_obligation(&self.state.committee, &mut obligation)
+            .add_to_verification_obligation(&self.state.committee.load(), &mut obligation)
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
         obligation
             .verify_all()

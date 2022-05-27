@@ -629,10 +629,23 @@ SuiError:
     108:
       SignatureKeyGenError:
         NEWTYPE: STR
+<<<<<<< HEAD
     109:
       RpcError:
         NEWTYPE: STR
     110:
+=======
+    110:
+      ValidatorHaltedAtEpochEnd: UNIT
+    111:
+      InconsistentEpochState:
+        STRUCT:
+          - error: STR
+    112:
+      RpcError:
+        NEWTYPE: STR
+    113:
+>>>>>>> 8e71b892 ([epoch] Add reconfiguration logic)
       UnsupportedFeatureError:
         STRUCT:
           - error: STR

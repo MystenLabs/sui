@@ -407,7 +407,7 @@ where
     /// In case keys are authority names we can check if the set of
     /// authorities represented in this checkpoint represent a quorum
     pub fn has_quorum(&self, committee: &Committee) -> bool {
-        let authority_weights: usize = self
+        let authority_weights: u64 = self
             .authority_waypoints
             .keys()
             .map(|name| committee.weight(name))

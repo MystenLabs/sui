@@ -641,7 +641,7 @@ impl SignedTransaction {
     }
 
     /// Verify the signature and return the non-zero voting right of the authority.
-    pub fn verify(&self, committee: &Committee) -> Result<usize, SuiError> {
+    pub fn verify(&self, committee: &Committee) -> Result<u64, SuiError> {
         self.verify_signature()?;
         let weight = committee.weight(&self.auth_sign_info.authority);
         fp_ensure!(weight > 0, SuiError::UnknownSigner);
@@ -1098,7 +1098,7 @@ impl InputObjectKind {
 }
 pub struct SignatureAggregator<'a> {
     committee: &'a Committee,
-    weight: usize,
+    weight: u64,
     used_authorities: HashSet<AuthorityName>,
     partial: CertifiedTransaction,
 }

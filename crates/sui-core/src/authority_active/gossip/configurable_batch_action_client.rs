@@ -258,7 +258,11 @@ pub async fn init_configurable_authorities(
             let transaction =
                 crate_object_move_transaction(addr1, &key1, addr1, 100, framework_obj_ref, gas_ref);
 
-            for tx_client in clients.iter_mut().take(committee.quorum_threshold()) {
+            // TODO: `take` here only works when each validator has equal stake.
+            for tx_client in clients
+                .iter_mut()
+                .take(committee.quorum_threshold() as usize)
+            {
                 // Do transactions.
                 do_transaction(tx_client, &transaction).await;
             }
@@ -290,7 +294,8 @@ pub async fn init_configurable_authorities(
         // Submit the cert to 2f+1 authorities.
         for (_, cert_client) in authority_clients
             .iter_mut()
-            .take(committee.quorum_threshold())
+            // TODO: This only works when every validator has equal stake
+            .take(committee.quorum_threshold() as usize)
         {
             _ = do_cert(cert_client, &cert1).await;
 

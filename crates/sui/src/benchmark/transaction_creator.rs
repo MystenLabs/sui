@@ -64,10 +64,11 @@ fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTrans
     let mut certificate = CertifiedTransaction::new(tx.clone());
     let committee = network_config.committee();
     certificate.auth_sign_info.epoch = committee.epoch();
+    // TODO: Why iterating from 0 to quorum_threshold??
     for i in 0..committee.quorum_threshold() {
         let secx = network_config
             .validator_configs()
-            .get(i)
+            .get(i as usize)
             .unwrap()
             .key_pair();
         let pubx = secx.public_key_bytes();

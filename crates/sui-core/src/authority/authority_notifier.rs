@@ -51,6 +51,10 @@ impl TransactionNotifier {
         self.low_watermark.load(std::sync::atomic::Ordering::SeqCst)
     }
 
+    pub fn ticket_drained(&self) -> bool {
+        self.inner.lock().high_watermark == self.low_watermark.load(Ordering::SeqCst)
+    }
+
     /// Get a ticket with a sequence number
     pub fn ticket(self: &Arc<Self>) -> SuiResult<TransactionNotifierTicket> {
         if self.is_closed.load(std::sync::atomic::Ordering::SeqCst) {

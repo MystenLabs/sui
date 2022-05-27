@@ -61,7 +61,7 @@ pub async fn gossip_process_with_start_seq<A>(
 
     // Number of tasks at most "degree" and no more than committee - 1
     let target_num_tasks: usize = usize::min(
-        active_authority.state.committee.voting_rights.len() - 1,
+        active_authority.state.committee.load().voting_rights.len() - 1,
         degree,
     );
 
@@ -114,10 +114,10 @@ pub async fn gossip_process_with_start_seq<A>(
 
             // If we have already used all the good stake, then stop here and
             // wait for some node to become available.
-            let total_stake_used: usize = peer_names
+            let total_stake_used = peer_names
                 .iter()
                 .map(|name| committee.weight(name))
-                .sum::<usize>()
+                .sum::<u64>()
                 + committee.weight(&active_authority.state.name);
             if total_stake_used >= committee.quorum_threshold() {
                 break;
@@ -173,18 +173,18 @@ where
 {
     // Make sure we exit loop by limiting the number of tries to choose peer
     // where n is the total number of committee members.
-    let mut tries_remaining = active_authority.state.committee.voting_rights.len();
+    let mut tries_remaining = active_authority.state.committee.load().voting_rights.len();
     while tries_remaining > 0 {
-        let name = active_authority.state.committee.sample();
-        if peer_names.contains(name)
-            || *name == my_name
-            || !active_authority.can_contact(*name).await
+        let name = *active_authority.state.committee.load().sample();
+        if peer_names.contains(&name)
+            || name == my_name
+            || !active_authority.can_contact(name).await
         {
             tries_remaining -= 1;
             tokio::time::sleep(Duration::from_millis(10)).await;
             continue;
         }
-        return Ok(*name);
+        return Ok(name);
     }
     Err(SuiError::GenericAuthorityError {
         error: "Could not connect to any peer".to_string(),
