@@ -1,10 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
+import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
@@ -40,8 +41,10 @@ const Fail = ({ objID }: { objID: string | undefined }): JSX.Element => {
 
 const ObjectResultAPI = ({ objID }: { objID: string }): JSX.Element => {
     const [showObjectState, setObjectState] = useState(DATATYPE_DEFAULT);
+    const [network] = useContext(NetworkContext);
     useEffect(() => {
-        rpc.getObjectInfo(objID as string)
+        rpc(network)
+            .getObjectInfo(objID as string)
             .then((objState) => {
                 setObjectState({
                     ...(translate(objState) as DataType),
@@ -52,7 +55,7 @@ const ObjectResultAPI = ({ objID }: { objID: string }): JSX.Element => {
                 console.log(error);
                 setObjectState({ ...DATATYPE_DEFAULT, loadState: 'fail' });
             });
-    }, [objID]);
+    }, [objID, network]);
 
     if (showObjectState.loadState === 'loaded') {
         return <ObjectLoaded data={showObjectState as DataType} />;

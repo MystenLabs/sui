@@ -1,10 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { ReactComponent as ContentCopyIcon } from '../../assets/content_copy_black_18dp.svg';
+import { NetworkContext } from '../../context';
 import { navigateWithUnknown } from '../../utils/searchUtil';
 import ExternalLink from '../external-link/ExternalLink';
 
@@ -28,6 +29,7 @@ function Longtext({
 }) {
     const [isCopyIcon, setCopyIcon] = useState(true);
     const [pleaseWait, setPleaseWait] = useState(false);
+    const [network] = useContext(NetworkContext);
     const navigate = useNavigate();
 
     const handleCopyEvent = useCallback(() => {
@@ -52,8 +54,10 @@ function Longtext({
 
     const navigateUnknown = useCallback(() => {
         setPleaseWait(true);
-        navigateWithUnknown(text, navigate).then(() => setPleaseWait(false));
-    }, [text, navigate]);
+        navigateWithUnknown(text, navigate, network).then(() =>
+            setPleaseWait(false)
+        );
+    }, [text, navigate, network]);
 
     // temporary hack to make display of the genesis transaction clearer
     if (

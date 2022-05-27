@@ -10,12 +10,16 @@ import {
     getTransferCoinTransaction,
 } from '@mysten/sui.js';
 import cl from 'classnames';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useContext } from 'react';
 import { Link } from 'react-router-dom';
 
 import Longtext from '../../components/longtext/Longtext';
+import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
-import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
+import {
+    DefaultRpcClient as rpc,
+    type Network,
+} from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { getAllMockTransaction } from '../../utils/static/searchUtil';
 import ErrorResult from '../error-result/ErrorResult';
@@ -45,16 +49,19 @@ type TxnData = {
     From: string;
 };
 
-async function getRecentTransactions(txNum: number): Promise<TxnData[]> {
+async function getRecentTransactions(
+    network: Network | string,
+    txNum: number
+): Promise<TxnData[]> {
     try {
         // Get the latest transactions
-        const transactions = await rpc
+        const transactions = await rpc(network)
             .getRecentTransactions(txNum)
             .then((res: GetTxnDigestsResponse) => res);
 
         const digests = transactions.map((tx) => tx[1]);
 
-        const txLatest = await rpc
+        const txLatest = await rpc(network)
             .getTransactionWithEffectsBatch(digests)
             .then((txEffs: TransactionEffectsResponse[]) => {
                 return txEffs.map((txEff, i) => {
@@ -67,9 +74,11 @@ async function getRecentTransactions(txNum: number): Promise<TxnData[]> {
                     // TODO: handle multiple transactions
                     const txns = getTransactions(res);
                     if (txns.length > 1) {
-                        throw new Error(
-                            `Handling multiple transactions is not yet supported`
+                        console.error(
+                            'Handling multiple transactions is not yet supported',
+                            txEff
                         );
+                        return null;
                     }
                     const txn = txns[0];
                     const txKind = getTransactionKindName(txn);
@@ -123,10 +132,11 @@ function LatestTxView({
 }: {
     results: { loadState: string; latestTx: TxnData[] };
 }) {
+    const [network] = useContext(NetworkContext);
     return (
         <div className={styles.txlatestesults}>
             <div className={styles.txcardgrid}>
-                <h3>Latest Transactions</h3>
+                <h3>Latest Transactions on {network}</h3>
             </div>
             <div className={styles.transactioncard}>
                 <div>
@@ -214,9 +224,10 @@ function LatestTxCardStatic() {
 function LatestTxCardAPI() {
     const [isLoaded, setIsLoaded] = useState(false);
     const [results, setResults] = useState(initState);
+    const [network] = useContext(NetworkContext);
     useEffect(() => {
         let isMounted = true;
-        getRecentTransactions(15)
+        getRecentTransactions(network, 15)
             .then((resp: any) => {
                 if (isMounted) {
                     setIsLoaded(true);
@@ -237,7 +248,7 @@ function LatestTxCardAPI() {
         return () => {
             isMounted = false;
         };
-    }, []);
+    }, [network]);
     if (results.loadState === 'pending') {
         return (
             <div className={theme.textresults}>
