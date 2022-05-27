@@ -91,11 +91,11 @@ impl<S: Serialize> Export for S {}
 pub type Stake = u32;
 pub type WorkerId = u32;
 
-#[derive(Deserialize, Clone)]
 /// Holds all the node properties. An example is provided to
 /// showcase the usage and deserialization from a json file.
 /// To define a Duration on the property file can use either
 /// miliseconds or seconds (e.x 5s, 10ms , 2000ms).
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Parameters {
     /// The preferred header size. The primary creates a new header when it has enough parents and
     /// enough batches' digests to reach `header_size`. Denominated in bytes.
@@ -127,7 +127,7 @@ pub struct Parameters {
     pub max_concurrent_requests: usize,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ConsensusAPIGrpcParameters {
     /// Socket address the server should be listening to.
     pub socket_addr: Multiaddr,
@@ -151,7 +151,7 @@ impl Default for ConsensusAPIGrpcParameters {
     }
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BlockSynchronizerParameters {
     /// The timeout configuration when requesting certificates from peers.
     #[serde(with = "duration_format")]
