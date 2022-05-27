@@ -21,8 +21,8 @@ impl FragmentReconstruction {
     /// component checkpoint with weight over 2/3 of stake. Note that the minimum
     /// prefix of links is used in this process.
     ///
-    /// It is important to always use the minumum prefix since additional fragments
-    /// may be added by the consensus, but only the prexif that constructs the
+    /// It is important to always use the minimum prefix since additional fragments
+    /// may be added by the consensus, but only the prefix that constructs the
     /// checkpoint is safe to use. After that prefix different authorities will have
     /// different information to finalize the process:
     ///  - f+1 to 2f+1 honest authorities will be included in the prefix and can
@@ -134,7 +134,7 @@ impl SpanGraph {
         self.nodes[next_name]
     }
 
-    /// Add a link effectivelly merging two authorities into the same
+    /// Add a link effectively merging two authorities into the same
     /// connected components. This is done by take the top node of the
     /// first and making it point to the top node of the second, and
     /// updating the total weight of the second.
@@ -145,6 +145,10 @@ impl SpanGraph {
     ) -> (AuthorityName, usize) {
         let top1 = self.top_node(name1).0;
         let top2 = self.top_node(name2).0;
+        if top1 == top2 {
+            // They have been merged in the past, nothing to do.
+            return (top1, self.nodes[&top1].1);
+        }
         let new_weight = self.nodes[&top1].1 + self.nodes[&top2].1;
         self.nodes.get_mut(&top1).unwrap().0 = top2;
         self.nodes.get_mut(&top2).unwrap().1 = new_weight;

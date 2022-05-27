@@ -36,7 +36,7 @@ impl WaypointError {
 
 /*
    A MulHash accumulator: each element is mapped to a
-   point on an eliptic curve on which the DL problem is
+   point on an elliptic curve on which the DL problem is
    hard. The accumulator is the sum of all points.
 
     See for more information about the construction and
@@ -70,7 +70,7 @@ impl Accumulator {
     }
 }
 
-impl std::fmt::Debug for Accumulator {
+impl Debug for Accumulator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Accumulator").finish()
     }
@@ -176,7 +176,7 @@ where
         }
     }
 
-    /// Check the internal invarients: ie that adding to both
+    /// Check the internal invariants: ie that adding to both
     /// waypoints the missing elements makes them point to the
     /// accumulated same set.
     pub fn check(&self) -> bool {
@@ -243,11 +243,10 @@ where
         // connected to the graph since there is nothing to connect to.
         if self.authority_waypoints.is_empty() {
             // Add both waypoints into the checkpoint and compute root.
-            let mut root = diff.first.waypoint.clone();
-            root.insert_all(diff.first.items.iter());
-            self.reference_waypoint = root;
-
             let WaypointDiff { first, second } = diff;
+            let mut root = first.waypoint.clone();
+            root.insert_all(first.items.iter());
+            self.reference_waypoint = root;
 
             self.authority_waypoints.insert(first.key.clone(), first);
             self.authority_waypoints.insert(second.key.clone(), second);
@@ -413,6 +412,6 @@ where
             .keys()
             .map(|name| committee.weight(name))
             .sum();
-        authority_weights > committee.quorum_threshold()
+        authority_weights >= committee.quorum_threshold()
     }
 }
