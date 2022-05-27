@@ -8,7 +8,8 @@
 module Sui::DevNetNFT {
     use Sui::Url::{Self, Url};
     use Sui::UTF8;
-    use Sui::ID::{Self, VersionedID};
+    use Sui::ID::{Self, ID, VersionedID};
+    use Sui::Event;
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
 
@@ -24,6 +25,15 @@ module Sui::DevNetNFT {
         // TODO: allow custom attributes
     }
 
+    struct MintNFTEvent has copy, drop {
+        // The Object ID of the NFT
+        object_id: ID,
+        // The creator of the NFT
+        creator: address,
+        // The name of the NFT
+        name: UTF8::String,
+    }
+
     /// Create a new DevNetNFT
     public(script) fun mint(
         name: vector<u8>,
@@ -37,7 +47,13 @@ module Sui::DevNetNFT {
             description: UTF8::string_unsafe(description),
             url: Url::new_unsafe_from_bytes(url)
         };
-        Transfer::transfer(nft, TxContext::sender(ctx))
+        let sender = TxContext::sender(ctx);
+        Event::emit(MintNFTEvent {
+            object_id: *ID::inner(&nft.id),
+            creator: sender,
+            name: nft.name,
+        });
+        Transfer::transfer(nft, sender);
     }
 
     /// Transfer `nft` to `recipient`
