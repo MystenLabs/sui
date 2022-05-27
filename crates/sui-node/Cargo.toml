@@ -13,11 +13,15 @@ multiaddr = "0.14.0"
 prometheus_exporter = "0.8.4"
 tokio = { version = "1.18.2", features = ["full"] }
 tracing = "0.1.34"
+parking_lot = "0.12.0"
+futures = "0.3.21"
+jsonrpsee = { version = "0.13.1", features = ["full"] }
 
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }
 sui-storage = { path = "../sui-storage" }
 sui-gateway = { path = "../sui-gateway" }
+sui-network = { path = "../sui-network" }
 
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
