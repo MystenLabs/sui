@@ -477,6 +477,7 @@ fn process_successful_execution<
                             return Err(SuiError::DeleteObjectOwnedObject);
                         }
                         Some(_) => {
+                            state_view.log_event(Event::DeleteObject(*obj_id));
                             state_view.delete_object(obj_id, id.version(), DeleteKind::Normal)
                         }
                         None => {
@@ -487,6 +488,7 @@ fn process_successful_execution<
                             // it will also have version `v+1`, leading to a violation of the invariant that any
                             // object_id and version pair must be unique. Hence for any object that's just unwrapped,
                             // we force incrementing its version number again to make it `v+2` before writing to the store.
+                            state_view.log_event(Event::DeleteObject(*obj_id));
                             state_view.delete_object(
                                 obj_id,
                                 id.version().increment(),
@@ -508,9 +510,7 @@ fn process_successful_execution<
             }
             EventType::User => {
                 match type_ {
-                    TypeTag::Struct(s) => {
-                        state_view.log_event(Event::move_event(s, event_bytes))
-                    }
+                    TypeTag::Struct(s) => state_view.log_event(Event::move_event(s, event_bytes)),
                     _ => unreachable!(
                         "Native function emit_event<T> ensures that T is always bound to structs"
                     ),
@@ -587,14 +587,12 @@ fn handle_transfer<
                         destination_addr: addr,
                         type_: TransferType::ToAddress,
                     }),
-                    Owner::ObjectOwner(new_owner) => {
-                        state_view.log_event(Event::TransferObject {
-                            object_id: obj_id,
-                            version: old_obj_ver,
-                            destination_addr: new_owner,
-                            type_: TransferType::ToObject,
-                        })
-                    }
+                    Owner::ObjectOwner(new_owner) => state_view.log_event(Event::TransferObject {
+                        object_id: obj_id,
+                        version: old_obj_ver,
+                        destination_addr: new_owner,
+                        type_: TransferType::ToObject,
+                    }),
                     _ => {}
                 }
             }

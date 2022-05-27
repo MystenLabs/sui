@@ -72,6 +72,8 @@ pub enum Event {
         destination_addr: SuiAddress,
         type_: TransferType,
     },
+    /// Delete object
+    DeleteObject(ObjectID),
     /// Epooch change
     EpochChange(EpochId),
     /// New checkpoint
@@ -81,6 +83,23 @@ pub enum Event {
 impl Event {
     pub fn move_event(type_: StructTag, contents: Vec<u8>) -> Self {
         Event::MoveEvent { type_, contents }
+    }
+
+    /// Returns the EventType associated with an Event
+    pub fn event_type(&self) -> EventType {
+        self.into()
+    }
+
+    /// Returns the object or package ID associated with the event, if available.  Specifically:
+    /// - For TransferObject: the object ID being transferred (eg moving child from parent, its the child)
+    /// - for Publish, the package ID (which is the object ID of the module)
+    pub fn object_id(&self) -> Option<ObjectID> {
+        match self {
+            Event::Publish { package_id } => Some(*package_id),
+            Event::TransferObject { object_id, .. } => Some(*object_id),
+            Event::DeleteObject(obj_id) => Some(*obj_id),
+            _ => None,
+        }
     }
 
     /// Extract a module ID, if available, from a SuiEvent

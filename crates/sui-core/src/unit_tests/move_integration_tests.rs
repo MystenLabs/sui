@@ -356,6 +356,8 @@ async fn test_object_owning_another_object() {
     assert!(effects.status.is_ok());
     assert_eq!(effects.events.len(), 1);
     let event1 = effects.events[0].clone();
+    assert_eq!(event1.event_type(), EventType::TransferObject);
+    assert_eq!(event1.object_id(), Some(child.0));
     if let Event::TransferObject {
         object_id: _,
         version: _,
@@ -418,6 +420,11 @@ async fn test_object_owning_another_object() {
     .await
     .unwrap();
     assert!(effects.status.is_ok());
+    // Removing child from parent results in a transfer event
+    assert_eq!(effects.events.len(), 1);
+    let event1 = &effects.events[0];
+    assert_eq!(event1.event_type(), EventType::TransferObject);
+    assert_eq!(event1.object_id(), Some(child.0));
 
     // Delete the child again. This time it will succeed because it's no longer owned by a parent.
     let effects = call_move(
@@ -437,6 +444,10 @@ async fn test_object_owning_another_object() {
     .await
     .unwrap();
     assert!(effects.status.is_ok());
+    assert_eq!(effects.events.len(), 1);
+    let event1 = &effects.events[0];
+    assert_eq!(event1.event_type(), EventType::DeleteObject);
+    assert_eq!(event1.object_id(), Some(child.0));
 
     // Create a parent and a child together. This tests the
     // Transfer::transfer_to_object_id() API.
