@@ -145,6 +145,7 @@ fiat-crypto = { version = "0.1", features = ["std"] }
 fixedbitset-6f8ce4dd05d13bba = { package = "fixedbitset", version = "0.2", default-features = false }
 fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", default-features = false }
 flate2 = { version = "1", features = ["miniz_oxide", "rust_backend"] }
+flexstr = { version = "0.9", features = ["std"] }
 fnv = { version = "1", features = ["std"] }
 form_urlencoded = { version = "1", default-features = false }
 futures = { version = "0.3", features = ["alloc", "async-await", "bilock", "executor", "futures-executor", "std", "unstable"] }
@@ -643,6 +644,7 @@ fiat-crypto = { version = "0.1", features = ["std"] }
 fixedbitset-6f8ce4dd05d13bba = { package = "fixedbitset", version = "0.2", default-features = false }
 fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", default-features = false }
 flate2 = { version = "1", features = ["miniz_oxide", "rust_backend"] }
+flexstr = { version = "0.9", features = ["std"] }
 fnv = { version = "1", features = ["std"] }
 form_urlencoded = { version = "1", default-features = false }
 futures = { version = "0.3", features = ["alloc", "async-await", "bilock", "executor", "futures-executor", "std", "unstable"] }

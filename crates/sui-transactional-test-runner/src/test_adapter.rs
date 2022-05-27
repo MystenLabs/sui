@@ -596,13 +596,7 @@ impl<'a> SuiTestAdapter<'a> {
     fn list_events(&self, events: &[Event]) -> String {
         events
             .iter()
-            .map(|event| {
-                self.stabilize_str(format!(
-                    "event<{}>(\"{}\")",
-                    event.type_,
-                    String::from_utf8_lossy(&event.contents)
-                ))
-            })
+            .map(|event| self.stabilize_str(format!("{:?}", event)))
             .collect::<Vec<_>>()
             .join(", ")
     }
