@@ -98,12 +98,12 @@ export const accountBalancesSelector = createSelector(
             const coinType = Coin.getCoinTypeArg(aCoin);
             if (coinType) {
                 if (typeof acc[coinType] === 'undefined') {
-                    acc[coinType] = 0;
+                    acc[coinType] = BigInt(0);
                 }
-                acc[coinType] += aCoin.fields.balance;
+                acc[coinType] += Coin.getBalance(aCoin);
             }
             return acc;
-        }, {} as Record<string, number>);
+        }, {} as Record<string, bigint>);
     }
 );
 
