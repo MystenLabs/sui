@@ -100,15 +100,6 @@
             "external": true
           }
         ]
-      },
-      {
-        "label": "Understand Sui Security",
-        "fileName": "learn/sui-security"
-      },
-      {
-        "label": "Sui White Paper",
-        "link": "https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf",
-        "external": true
       }
     ],
     "build": [
