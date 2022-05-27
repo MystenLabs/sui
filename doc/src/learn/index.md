@@ -16,7 +16,7 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](http
 
 Find the latest updates to these contents in this section:
 
-* [Programming with objects] tutorial series offers detailed guidance on manipulating Sui objects, from creation and storage through wrapping and using child objects.
+* [Programming with objects](../build/programming-with-objects/index.md) tutorial series offers detailed guidance on manipulating Sui objects, from creation and storage through wrapping and using child objects.
 * Sui [version 0.3.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.3.0-rc) released to DevNet. See [RELEASES](https://github.com/MystenLabs/sui/blob/main/RELEASES.md) for details on other releases.
 * [Sui tokenomics](../learn/tokenomics/index.md) are now fully explained and cover:
   * [Sui token](../learn/tokenomics/sui-token.md).
