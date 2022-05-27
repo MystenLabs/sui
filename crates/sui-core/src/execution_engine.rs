@@ -7,6 +7,7 @@ use crate::authority::AuthorityTemporaryStore;
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::adapter;
+use sui_types::committee::EpochId;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
     error::SuiResult,
@@ -30,8 +31,9 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     gas_status: SuiGasStatus,
+    epoch: EpochId,
 ) -> SuiResult<TransactionEffects> {
-    let mut tx_ctx = TxContext::new(&transaction_data.signer(), &transaction_digest);
+    let mut tx_ctx = TxContext::new(&transaction_data.signer(), &transaction_digest, epoch);
 
     let gas_object_id = transaction_data.gas_payment_object_ref().0;
     let status = execute_transaction(

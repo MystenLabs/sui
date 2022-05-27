@@ -476,6 +476,8 @@ impl<'a> SuiTestAdapter<'a> {
             &self.vm,
             &self.native_functions,
             gas_status,
+            // TODO: Support different epochs in transactional tests.
+            0,
         )?;
         let (_objects, _active_inputs, written, deleted, _events) = temporary_store.into_inner();
         let created_set: BTreeSet<_> = created.iter().map(|((id, _, _), _)| *id).collect();
