@@ -1,5 +1,5 @@
 ---
-title: Chapter 5: Child Objects
+title: Chapter 5 - Child Objects
 ---
 
 In the previous chapter, we walked through various ways of wrapping an object in another object. There are a few limitations in object wrapping:
