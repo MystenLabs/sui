@@ -230,7 +230,9 @@ impl NetworkConfig {
             db_path: db_path.join("fullnode"),
             network_address: new_network_address(),
             metrics_address: new_network_address(),
-            json_rpc_address: validator_config.json_rpc_address,
+            json_rpc_address: format!("127.0.0.1:{}", utils::get_available_port())
+                .parse()
+                .unwrap(),
 
             consensus_config: None,
             committee_config: validator_config.committee_config.clone(),
