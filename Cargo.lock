@@ -6232,6 +6232,7 @@ dependencies = [
  "sui-core",
  "sui-framework",
  "sui-network",
+ "sui-node",
  "sui-types",
  "tempfile",
  "tokio",
