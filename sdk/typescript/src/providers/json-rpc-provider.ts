@@ -91,6 +91,33 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
+  //Addresses
+  async getTransactionsForAddress(addressID: string) {
+    const requests = [
+      {
+        method: 'sui_getTransactionsToAddress',
+        args: [addressID]
+      },
+      {
+        method: 'sui_getTransactionsFromAddress',
+        args: [addressID]
+      }
+    ]
+
+    try {
+      const results = await this.client.batchRequestWithType(
+        requests,
+        (_:any) : _ is object => true 
+      )
+      return {
+        "to": results[0],
+        "from": results[1]
+      }
+    } catch (err) {
+      throw new Error(`Error getting transactions for address: ${err} for id ${addressID}`)
+    }
+  }
+
   // Transactions
   async getTransactionWithEffects(
     digest: TransactionDigest
