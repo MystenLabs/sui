@@ -1,5 +1,5 @@
 ---
-title: Chapter 1: Object Basics
+title: Chapter 1 - Object Basics
 ---
 
 ### Define Sui Object
