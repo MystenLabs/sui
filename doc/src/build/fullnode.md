@@ -20,9 +20,9 @@ Sui full nodes exist to:
 
 ## State-Synchronization
 
-Today Sui full nodes sync with validators to be able to learn about newly committed transactions. 
+Today Sui full nodes sync with validators to be able to learn about newly committed transactions.
 
-The normal life of a transaction requires a few round trips to 2f+1 validators to be able to form a TxCert, at which point a transaction is guaranteed to be committed and executed. 
+The normal life of a transaction requires a few round trips to 2f+1 validators to be able to form a TxCert, at which point a transaction is guaranteed to be committed and executed.
 
 Today this synchronization process is performed by:
 
@@ -34,9 +34,9 @@ Today this synchronization process is far from ideal as it requires listening to
 
 ## Architecture
 
-The Sui full node is essentially a read-only view of the network state. Unlike validator nodes, full nodes cannot sign transactions, although they can validate the integrity of the chain by re-executing transactions that were previously committed by a quorum of validators. 
+The Sui full node is essentially a read-only view of the network state. Unlike validator nodes, full nodes cannot sign transactions, although they can validate the integrity of the chain by re-executing transactions that were previously committed by a quorum of validators.
 
-Today a full node is expected to maintain the full history of the chain, although in the future sufficiently old history may need to be pruned and offloaded to cheaper storage. 
+Today a full node is expected to maintain the full history of the chain, although in the future sufficiently old history may need to be pruned and offloaded to cheaper storage.
 
 Conversely, a validator needs to store only the latest transactions on the *frontier* of the object graph (e.g., txes with >0 unspent output objects).
 
@@ -73,13 +73,13 @@ Then issue these commands in one terminal:
 
 ```
 $ sui genesis -f
-$ sui start & 
+$ sui start &
 ```
 
 Followed by this command in a new terminal, run:
 
 ```
-$ full_node & 
+$ sui-node &
 ```
 
 This starts a full node at:
@@ -92,7 +92,7 @@ Now you can use the standard RPC read endpoints to request data. You will do all
 To make this easier, set the following environment variable:
 
 ```
-$ export SUI_RPC_HOST=http://127.0.0.1:5002 
+$ export SUI_RPC_HOST=http://127.0.0.1:5002
 ```
 
 Then follow the instructions to employ the [Sui JSON-RPC API](https://docs.sui.io/build/json-rpc#sui-json-rpc-api) using the [SuiJSON format](https://docs.sui.io/build/sui-json).
