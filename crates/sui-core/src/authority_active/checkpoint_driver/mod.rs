@@ -25,7 +25,7 @@ use crate::{
     authority_client::AuthorityAPI,
     checkpoints::{proposal::CheckpointProposal, CheckpointStore},
 };
-use tracing::{info, warn, debug};
+use tracing::{debug, info, warn};
 use typed_store::Map;
 
 #[cfg(test)]

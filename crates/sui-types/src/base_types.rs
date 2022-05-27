@@ -599,8 +599,10 @@ impl ObjectID {
     }
 
     // Random for testing
-    pub fn random_from_rng<R>(rng: &mut R) -> Self where
-    R: rand::CryptoRng + rand::RngCore, {
+    pub fn random_from_rng<R>(rng: &mut R) -> Self
+    where
+        R: rand::CryptoRng + rand::RngCore,
+    {
         let buf: [u8; Self::LENGTH] = rng.gen();
         ObjectID::new(buf)
     }

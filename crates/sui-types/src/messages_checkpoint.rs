@@ -464,11 +464,11 @@ mod tests {
     use super::*;
     use crate::utils::make_committee_key;
 
-// TODO use the file name as a seed
-const RNG_SEED: [u8; 32] = [
-    21, 23, 199, 200, 234, 250, 252, 178, 94, 15, 202, 178, 62, 186, 88, 137, 233, 192, 130, 157,
-    179, 179, 65, 9, 31, 249, 221, 123, 225, 112, 199, 247,
-];
+    // TODO use the file name as a seed
+    const RNG_SEED: [u8; 32] = [
+        21, 23, 199, 200, 234, 250, 252, 178, 94, 15, 202, 178, 62, 186, 88, 137, 233, 192, 130,
+        157, 179, 179, 65, 9, 31, 249, 221, 123, 225, 112, 199, 247,
+    ];
 
     #[test]
     fn test_signed_proposal() {
