@@ -123,9 +123,15 @@ where
         let (finished_name, _result) = gossip_tasks.select_next_some().await;
         if let Err(err) = _result {
             active_authority.set_failure_backoff(finished_name).await;
+            active_authority.state.metrics.gossip_task_error_count.inc();
             error!("Peer {:?} returned error: {:?}", finished_name, err);
         } else {
             active_authority.set_success_backoff(finished_name).await;
+            active_authority
+                .state
+                .metrics
+                .gossip_task_success_count
+                .inc();
             debug!("End gossip from peer {:?}", finished_name);
         }
         peer_names.remove(&finished_name);
@@ -194,7 +200,6 @@ where
         let result =
             tokio::task::spawn(async move { self.peer_gossip_for_duration(duration).await }).await;
 
-        // todo: log e
         match result {
             Err(_e) => (
                 peer_name,
@@ -236,6 +241,7 @@ where
                                     tokio::time::sleep(Duration::from_millis(EACH_ITEM_DELAY_MS)).await;
                                     digest
                                 });
+                                self.state.metrics.gossip_queued_count.inc();
 
                             }
                             self.max_seq = Some(seq + 1);
@@ -283,6 +289,7 @@ where
                     },
                 )
                 .await?;
+            self.state.metrics.gossip_sync_count.inc();
             Ok(())
         } else {
             // The authority did not return the certificate, despite returning info
