@@ -19,8 +19,6 @@ use sui_network::api::ValidatorServer;
 use sui_storage::IndexStore;
 use tracing::info;
 
-// TODO extract the important bits from AuthorityServer and FullNode so that we can have a single
-// unified node. See https://github.com/MystenLabs/sui/issues/2068 for more info.
 pub struct SuiNode {
     grpc_server: tokio::task::JoinHandle<Result<()>>,
     _json_rpc_service: Option<jsonrpsee::http_server::HttpServerHandle>,
