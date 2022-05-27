@@ -1,7 +1,8 @@
 {
   "sideMenu": {
     "title": "QUICK LINKS",
-    "items": [{
+    "items": [
+      {
         "label": "DevNet",
         "link": "explore/devnet"
       },
@@ -16,33 +17,61 @@
     ]
   },
   "docs": {
-    "learn": [{
+    "learn": [
+      {
         "label": "About Sui",
-        "fileName": "learn/about-sui"
-      },
-      {
-        "label": "Sui Glossary",
-        "fileName": "learn/sui-glossary"
-      },
-      {
-        "label": "Why Move?",
-        "fileName": "learn/why-move"
-      },
-      {
-        "label": "How Sui Move differs from Core Move",
-        "fileName": "learn/sui-move-diffs"
+        "fileName": "learn/about-sui",
+        "title": "About Sui",
+        "items": [
+          {
+            "label": "Sui Glossary",
+            "fileName": "learn/sui-glossary"
+          },
+          {
+            "label": "Sui Compared to Other Blockchains",
+            "fileName": "learn/sui-compared"
+          },
+          {
+            "label": "Why Move?",
+            "fileName": "learn/why-move"
+          },
+          {
+            "label": "How Sui Move differs from Core Move",
+            "fileName": "learn/sui-move-diffs"
+          },
+          {
+            "label": "Understand Sui Security",
+            "fileName": "learn/sui-security"
+          },
+          {
+            "label": "Sui White Paper",
+            "link": "https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf",
+            "external": true
+          }
+        ]
       },
       {
         "label": "How Sui Works",
-        "fileName": "learn/how-sui-works"
-      },
-      {
-        "label": "Sui Compared to Other Blockchains",
-        "fileName": "learn/sui-compared"
-      },
-      {
-        "label": "Sui Consensus Engine",
-        "fileName": "learn/architecture/consensus"
+        "fileName": "learn/how-sui-works",
+        "title": "How Sui Works",
+        "items": [
+          {
+            "label": "Manage Objects",
+            "fileName": "build/objects"
+          },
+          {
+            "label": "Conduct Transactions",
+            "fileName": "build/transactions"
+          },
+          {
+            "label": "Understand Validators",
+            "fileName": "learn/architecture/validators"
+          },
+          {
+            "label": "Sui Consensus Engine",
+            "fileName": "learn/architecture/consensus"
+          }
+        ]
       },
       {
         "label": "Sui Tokenomics",
@@ -50,20 +79,20 @@
         "title": "Sui Tokenomics",
         "items": [
           {
-          "label": "Sui Token",
-          "fileName": "learn/tokenomics/sui-token"
+            "label": "Sui Token",
+            "fileName": "learn/tokenomics/sui-token"
           },
           {
             "label": "Sui Gas Pricing",
             "fileName": "learn/tokenomics/gas-pricing"
           },
           {
-             "label": "Sui Storage Fund",
-             "fileName": "learn/tokenomics/storage-fund"
+            "label": "Sui Storage Fund",
+            "fileName": "learn/tokenomics/storage-fund"
           },
           {
-             "label": "Proof-of-Stake",
-             "fileName": "learn/tokenomics/proof-of-stake"
+            "label": "Proof-of-Stake",
+            "fileName": "learn/tokenomics/proof-of-stake"
           },
           {
             "label": "Tokenomics White Paper",
@@ -82,7 +111,8 @@
         "external": true
       }
     ],
-    "build": [{
+    "build": [
+      {
         "label": "Install Sui",
         "fileName": "build/install"
       },
@@ -100,20 +130,20 @@
         "title": "Program with Objects",
         "items": [
           {
-          "label": "Object Basics",
-          "fileName": "build/programming-with-objects/ch1-object-basics"
+            "label": "Object Basics",
+            "fileName": "build/programming-with-objects/ch1-object-basics"
           },
           {
             "label": "Using Objects",
             "fileName": "build/programming-with-objects/ch2-using-objects"
           },
           {
-             "label": "Immutable Objects",
-             "fileName": "build/programming-with-objects/ch3-immutable-objects"
+            "label": "Immutable Objects",
+            "fileName": "build/programming-with-objects/ch3-immutable-objects"
           },
           {
-             "label": "Object Wrapping",
-             "fileName": "build/programming-with-objects/ch4-object-wrapping"
+            "label": "Object Wrapping",
+            "fileName": "build/programming-with-objects/ch4-object-wrapping"
           },
           {
             "label": "Child Objects",
@@ -128,21 +158,10 @@
       {
         "label": "Employ SuiJSON Format",
         "fileName": "build/sui-json"
-      },
-      {
-        "label": "Understand Validators",
-        "fileName": "learn/architecture/validators"
-      },
-      {
-        "label": "Manage Objects",
-        "fileName": "build/objects"
-      },
-      {
-        "label": "Conduct Transactions",
-        "fileName": "build/transactions"
       }
     ],
-    "explore": [{
+    "explore": [
+      {
         "label": "DevNet",
         "fileName": "explore/devnet"
       },
@@ -167,7 +186,8 @@
         "fileName": "explore/sowork"
       }
     ],
-    "contribute": [{
+    "contribute": [
+      {
         "label": "Frequently Asked Questions",
         "fileName": "contribute/faq"
       },
