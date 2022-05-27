@@ -13,7 +13,7 @@
 
 use move_core_types::language_storage::ModuleId;
 use sui_types::base_types::TransactionDigest;
-use sui_types::event::{EventEnvelope, SuiEventType};
+use sui_types::event::{EventEnvelope, EventType};
 
 use flexstr::SharedStr;
 use serde_json::Value;
@@ -63,7 +63,7 @@ where
         &self,
         start_time: u64,
         end_time: u64,
-        event_type: SuiEventType,
+        event_type: EventType,
         limit: usize,
     ) -> Result<EventIt, EventStoreError>;
 

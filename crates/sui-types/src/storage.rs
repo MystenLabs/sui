@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use crate::{
     base_types::{ObjectID, SequenceNumber},
     error::SuiResult,
-    event::SuiEvent,
+    event::Event,
     object::Object,
 };
 
@@ -34,7 +34,7 @@ pub trait Storage {
     fn write_object(&mut self, object: Object);
 
     /// Record an event that happened during execution
-    fn log_event(&mut self, event: SuiEvent);
+    fn log_event(&mut self, event: Event);
 
     fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind);
 }

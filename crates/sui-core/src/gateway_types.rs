@@ -25,7 +25,7 @@ use sui_types::base_types::{
 };
 use sui_types::crypto::{AuthorityQuorumSignInfo, Signature};
 use sui_types::error::SuiError;
-use sui_types::event::SuiEvent as CoreSuiEvent;
+use sui_types::event::Event;
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
@@ -1000,7 +1000,7 @@ impl From<TransactionEffects> for SuiTransactionEffects {
                 .iter()
                 // TODO: figure out how to map the non-Move events
                 .filter_map(|event| match event {
-                    CoreSuiEvent::MoveEvent { type_, contents } => Some(SuiEvent {
+                    Event::MoveEvent { type_, contents } => Some(SuiEvent {
                         type_: type_.to_string(),
                         contents: contents.clone(),
                     }),

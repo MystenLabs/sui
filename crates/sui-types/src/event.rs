@@ -26,11 +26,11 @@ pub struct EventEnvelope {
     /// Transaction digest of associated transaction, if any
     tx_digest: Option<TransactionDigest>,
     /// Specific event type
-    event: SuiEvent,
+    event: Event,
 }
 
 impl EventEnvelope {
-    pub fn new(timestamp: u64, tx_digest: Option<TransactionDigest>, event: SuiEvent) -> Self {
+    pub fn new(timestamp: u64, tx_digest: Option<TransactionDigest>, event: Event) -> Self {
         Self {
             timestamp,
             tx_digest,
@@ -55,8 +55,8 @@ pub enum TransferType {
 #[derive(
     Eq, Debug, Clone, PartialEq, NamedVariant, Deserialize, Serialize, Hash, EnumDiscriminants,
 )]
-#[strum_discriminants(name(SuiEventType))]
-pub enum SuiEvent {
+#[strum_discriminants(name(EventType))]
+pub enum Event {
     /// Move-specific event
     MoveEvent {
         type_: StructTag,
@@ -78,15 +78,15 @@ pub enum SuiEvent {
     Checkpoint(CheckpointSequenceNumber),
 }
 
-impl SuiEvent {
+impl Event {
     pub fn move_event(type_: StructTag, contents: Vec<u8>) -> Self {
-        SuiEvent::MoveEvent { type_, contents }
+        Event::MoveEvent { type_, contents }
     }
 
     /// Extract a module ID, if available, from a SuiEvent
     pub fn module_id(&self) -> Option<ModuleId> {
         match self {
-            SuiEvent::MoveEvent {
+            Event::MoveEvent {
                 type_: struct_tag, ..
             } => Some(struct_tag.module_id()),
             _ => None,
@@ -99,7 +99,7 @@ impl SuiEvent {
         resolver: &impl GetModule,
     ) -> Result<Option<MoveStruct>, SuiError> {
         match self {
-            SuiEvent::MoveEvent { type_, contents } => {
+            Event::MoveEvent { type_, contents } => {
                 let typestruct = TypeTag::Struct(type_.clone());
                 let layout =
                     TypeLayoutBuilder::build_with_fields(&typestruct, resolver).map_err(|e| {

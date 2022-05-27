@@ -11,7 +11,7 @@ use move_package::BuildConfig;
 use sui_types::{
     crypto::KeyPair,
     crypto::{get_key_pair, Signature},
-    event::{SuiEvent, SuiEventType, TransferType},
+    event::{Event, EventType, TransferType},
     messages::ExecutionStatus,
     object::OBJECT_START_VERSION,
 };
@@ -356,7 +356,7 @@ async fn test_object_owning_another_object() {
     assert!(effects.status.is_ok());
     assert_eq!(effects.events.len(), 1);
     let event1 = effects.events[0].clone();
-    if let SuiEvent::TransferObject {
+    if let Event::TransferObject {
         object_id: _,
         version: _,
         destination_addr,
