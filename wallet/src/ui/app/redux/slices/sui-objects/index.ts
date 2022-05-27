@@ -9,10 +9,13 @@ import {
 } from '@reduxjs/toolkit';
 
 import type { SuiObject } from '@mysten/sui.js';
+import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
 const objectsAdapter = createEntityAdapter<SuiObject>({
     selectId: ({ reference }) => reference.objectId,
+    sortComparer: (a, b) =>
+        a.reference.objectId.localeCompare(b.reference.objectId),
 });
 
 export const fetchAllOwnedObjects = createAsyncThunk<
@@ -81,4 +84,6 @@ const slice = createSlice({
 
 export default slice.reducer;
 
-export const suiObjectsAdapterSelectors = objectsAdapter.getSelectors();
+export const suiObjectsAdapterSelectors = objectsAdapter.getSelectors(
+    (state: RootState) => state.suiObjects
+);
