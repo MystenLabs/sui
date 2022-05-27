@@ -4,13 +4,23 @@
 import cl from 'classnames';
 import { memo } from 'react';
 
+import type { MouseEventHandler } from 'react';
+
 export type BsIconProps = {
     className?: string;
     icon: string;
+    onClick?: MouseEventHandler<HTMLElement>;
+    title?: string;
 };
 
-function BsIcon({ className, icon }: BsIconProps) {
-    return <i className={cl(className, `bi-${icon}`, 'bi')}></i>;
+function BsIcon({ className, icon, onClick, title }: BsIconProps) {
+    return (
+        <i
+            className={cl(className, `bi-${icon}`, 'bi')}
+            onClick={onClick}
+            title={title}
+        ></i>
+    );
 }
 
 export default memo(BsIcon);

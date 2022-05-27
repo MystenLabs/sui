@@ -106,3 +106,10 @@ export const accountBalancesSelector = createSelector(
         }, {} as Record<string, number>);
     }
 );
+
+export const accountNftsSelector = createSelector(
+    suiObjectsAdapterSelectors.selectAll,
+    (allSuiObjects) => {
+        return allSuiObjects.filter((anObj) => !Coin.isCoin(anObj));
+    }
+);
