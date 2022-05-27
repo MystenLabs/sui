@@ -11,6 +11,7 @@ use move_package::BuildConfig;
 use sui_types::{
     crypto::KeyPair,
     crypto::{get_key_pair, Signature},
+    event::{SuiEvent, SuiEventType, TransferType},
     messages::ExecutionStatus,
     object::OBJECT_START_VERSION,
 };
@@ -225,6 +226,7 @@ async fn test_object_owning_another_object() {
     .await
     .unwrap();
     assert!(effects.status.is_ok());
+    assert_eq!(effects.events.len(), 0);
     let parent = effects.created[0].0;
 
     // Create a child.
@@ -242,6 +244,7 @@ async fn test_object_owning_another_object() {
     .await
     .unwrap();
     assert!(effects.status.is_ok());
+    assert_eq!(effects.events.len(), 0);
     let child = effects.created[0].0;
 
     // Mutate the child directly should work fine.
@@ -329,6 +332,7 @@ async fn test_object_owning_another_object() {
     .await
     .unwrap();
     assert!(effects.status.is_ok());
+    assert_eq!(effects.events.len(), 0);
     let new_parent = effects.created[0].0;
 
     // Transfer the child to the new_parent.
@@ -350,6 +354,21 @@ async fn test_object_owning_another_object() {
     .await
     .unwrap();
     assert!(effects.status.is_ok());
+    assert_eq!(effects.events.len(), 1);
+    let event1 = effects.events[0].clone();
+    if let SuiEvent::TransferObject {
+        object_id: _,
+        version: _,
+        destination_addr,
+        type_,
+    } = event1
+    {
+        assert_eq!(type_, TransferType::ToObject);
+        assert_eq!(destination_addr, new_parent.0.into());
+    } else {
+        panic!("Unexpected event type: {:?}", event1);
+    }
+
     let child_effect = effects
         .mutated
         .iter()
