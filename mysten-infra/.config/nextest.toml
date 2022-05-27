@@ -1,0 +1,10 @@
+[profile.ci]
+# Print out output for failing tests as soon as they fail, and also at the end
+# of the run (for easy scrollability).
+failure-output = "immediate-final"
+# Show skipped tests in the CI output.
+status-level = "skip"
+# Do not cancel the test run on the first failure.
+fail-fast = false
+# Retry failing tests in order to not block builds on flaky tests
+retries = 2
