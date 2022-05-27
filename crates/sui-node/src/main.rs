@@ -45,7 +45,8 @@ async fn main() -> Result<()> {
         config.network_address = listen_address;
     }
 
-    sui_node::SuiNode::start(&config).await?;
+    let node = sui_node::SuiNode::start(&config).await?;
+    node.wait().await?;
 
     Ok(())
 }

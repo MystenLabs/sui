@@ -4,19 +4,22 @@
 
 use crate::{
     authority::AuthorityState,
-    consensus_adapter::{ConsensusAdapter, ConsensusListenerMessage},
+    consensus_adapter::{ConsensusAdapter, ConsensusListener, ConsensusListenerMessage},
 };
+use anyhow::anyhow;
+use anyhow::Result;
 use async_trait::async_trait;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
 use std::{io, sync::Arc, time::Duration};
+use sui_config::NodeConfig;
 use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
 
 use sui_types::{crypto::VerificationObligation, error::*, messages::*};
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{channel, Sender};
 
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
@@ -123,7 +126,10 @@ impl AuthorityServer {
 
         let mut server = mysten_network::config::Config::new()
             .server_builder()
-            .add_service(ValidatorServer::new(self))
+            .add_service(ValidatorServer::new(ValidatorService {
+                state: self.state,
+                consensus_adapter: self.consensus_adapter,
+            }))
             .bind(&address)
             .await
             .unwrap();
@@ -138,8 +144,68 @@ impl AuthorityServer {
     }
 }
 
+pub struct ValidatorService {
+    state: Arc<AuthorityState>,
+    consensus_adapter: ConsensusAdapter,
+}
+
+impl ValidatorService {
+    /// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,
+    /// and a consensus listener bridging the consensus node and the sui authority.
+    pub async fn new(config: &NodeConfig, state: Arc<AuthorityState>) -> Result<Self> {
+        let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1_000);
+        let (tx_sui_to_consensus, rx_sui_to_consensus) = channel(1_000);
+
+        // Spawn the consensus node of this authority.
+        let consensus_config = config
+            .consensus_config()
+            .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
+        let consensus_keypair = config.key_pair().make_narwhal_keypair();
+        let consensus_name = consensus_keypair.name.clone();
+        let consensus_store = narwhal_node::NodeStorage::reopen(consensus_config.db_path());
+        narwhal_node::Node::spawn_primary(
+            consensus_keypair,
+            config.committee_config().narwhal_committee().to_owned(),
+            &consensus_store,
+            consensus_config.narwhal_config().to_owned(),
+            /* consensus */ true, // Indicate that we want to run consensus.
+            /* execution_state */ state.clone(),
+            /* tx_confirmation */ tx_consensus_to_sui,
+        )
+        .await?;
+        narwhal_node::Node::spawn_workers(
+            consensus_name,
+            /* ids */ vec![0], // We run a single worker with id '0'.
+            config.committee_config().narwhal_committee().to_owned(),
+            &consensus_store,
+            consensus_config.narwhal_config().to_owned(),
+        );
+
+        // Spawn a consensus listener. It listen for consensus outputs and notifies the
+        // authority server when a sequenced transaction is ready for execution.
+        ConsensusListener::spawn(
+            rx_sui_to_consensus,
+            rx_consensus_to_sui,
+            /* max_pending_transactions */ 1_000_000,
+        );
+
+        let consensus_adapter = ConsensusAdapter::new(
+            state.clone(),
+            consensus_config.address().to_owned(),
+            state.committee.clone(),
+            tx_sui_to_consensus,
+            /* max_delay */ Duration::from_millis(5_000),
+        );
+
+        Ok(Self {
+            state,
+            consensus_adapter,
+        })
+    }
+}
+
 #[async_trait]
-impl Validator for AuthorityServer {
+impl Validator for ValidatorService {
     async fn transaction(
         &self,
         request: tonic::Request<Transaction>,
