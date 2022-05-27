@@ -3,18 +3,15 @@
 
 use anyhow::{anyhow, Result};
 use futures::future::join_all;
-use parking_lot::Mutex;
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::NetworkConfig;
 use sui_config::NodeConfig;
-use sui_core::authority::{AuthorityState, AuthorityStore};
+use sui_core::authority::AuthorityState;
 use sui_core::authority_active::ActiveAuthority;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::authority_server::AuthorityServer;
-use sui_core::checkpoints::CheckpointStore;
 use sui_core::consensus_adapter::ConsensusListener;
 use sui_node::SuiNode;
 use tokio::sync::mpsc::channel;
@@ -62,37 +59,6 @@ impl SuiNetwork {
         info!("All servers stopped.");
         Ok(())
     }
-}
-
-pub async fn make_server(validator_config: &NodeConfig) -> Result<AuthorityServer> {
-    let mut store_path = PathBuf::from(validator_config.db_path());
-    store_path.push("store");
-    let store = Arc::new(AuthorityStore::open(store_path, None));
-    let name = validator_config.public_key();
-    let mut checkpoints_path = PathBuf::from(validator_config.db_path());
-    checkpoints_path.push("checkpoints");
-
-    let secret = Arc::pin(validator_config.key_pair().copy());
-    let checkpoints = CheckpointStore::open(
-        &checkpoints_path,
-        None,
-        name,
-        validator_config.committee_config().committee(),
-        secret.clone(),
-    )?;
-
-    let state = AuthorityState::new(
-        validator_config.committee_config().committee(),
-        name,
-        secret.clone(),
-        store,
-        None,
-        Some(Arc::new(Mutex::new(checkpoints))),
-        validator_config.genesis(),
-    )
-    .await;
-
-    make_authority(validator_config, state).await
 }
 
 /// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,
