@@ -478,6 +478,13 @@ impl<PublicKey: VerifyingKey> Affiliated for Certificate<PublicKey> {
     fn parents(&self) -> Vec<<Self as crypto::Hash>::TypedDigest> {
         self.header.parents.iter().cloned().collect()
     }
+
+    // This makes the genesis certificate and empty blocks compressible,
+    // so that they will never be reported by a DAG walk
+    // (`read_causal`, `node_read_causal`).
+    fn compressible(&self) -> bool {
+        self.header.payload.is_empty()
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

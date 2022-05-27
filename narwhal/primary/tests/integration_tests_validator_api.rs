@@ -531,16 +531,16 @@ async fn test_read_causal_signed_certificates() {
     assert_eq!(1, response.into_inner().collection_ids.len());
 
     // Test read causal for existing collection in Primary 1
-    // Collection is from round 1 so we expect BFT 1 + 1 * 4 vertices
+    // Collection is from round 1 so we expect BFT 1 + 0 * 4 vertices (genesis round elided)
     let request = tonic::Request::new(ReadCausalRequest {
         collection_id: Some(collection_ids[1].into()),
     });
 
     let response = client.read_causal(request).await.unwrap();
-    assert_eq!(5, response.into_inner().collection_ids.len());
+    assert_eq!(1, response.into_inner().collection_ids.len());
 
     // Test read causal for existing optimal certificates (we ack all of the prior round),
-    // we expect BFT 1 + 4 * 4 vertices
+    // we expect BFT 1 + 3 * 4 vertices
     for certificate in certificates {
         if certificate.round() == 4 {
             let request = tonic::Request::new(ReadCausalRequest {
@@ -548,19 +548,19 @@ async fn test_read_causal_signed_certificates() {
             });
 
             let response = client.read_causal(request).await.unwrap();
-            assert_eq!(17, response.into_inner().collection_ids.len());
+            assert_eq!(13, response.into_inner().collection_ids.len());
         }
     }
 
     // Test read causal for missing collection from Primary 1. Expect block synchronizer
-    // to handle retrieving the missing collections from Primary 2 before completing the
+    // to handle retrieving the missing collection from Primary 2 before completing the
     // request for read causal.
     let request = tonic::Request::new(ReadCausalRequest {
         collection_id: Some(collection_ids[0].into()),
     });
 
     let response = client.read_causal(request).await.unwrap();
-    assert_eq!(5, response.into_inner().collection_ids.len());
+    assert_eq!(1, response.into_inner().collection_ids.len());
 }
 
 #[tokio::test]
@@ -714,16 +714,16 @@ async fn test_read_causal_unsigned_certificates() {
     assert_eq!(1, response.into_inner().collection_ids.len());
 
     // Test read causal for existing collection in Primary 1
-    // Collection is from round 1 so we expect BFT 1 + 1 * 4 vertices
+    // Collection is from round 1 so we expect BFT 1 + 0 * 4 vertices (genesis round elided)
     let request = tonic::Request::new(ReadCausalRequest {
         collection_id: Some(collection_ids[1].into()),
     });
 
     let response = client.read_causal(request).await.unwrap();
-    assert_eq!(5, response.into_inner().collection_ids.len());
+    assert_eq!(1, response.into_inner().collection_ids.len());
 
     // Test read causal for existing optimal certificates (we ack all of the prior round),
-    // we expect BFT 1 + 4 * 4 vertices
+    // we expect BFT 1 + 3 * 4 vertices
     for certificate in certificates {
         if certificate.round() == 4 {
             let request = tonic::Request::new(ReadCausalRequest {
@@ -731,7 +731,7 @@ async fn test_read_causal_unsigned_certificates() {
             });
 
             let response = client.read_causal(request).await.unwrap();
-            assert_eq!(17, response.into_inner().collection_ids.len());
+            assert_eq!(13, response.into_inner().collection_ids.len());
         }
     }
 

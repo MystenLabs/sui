@@ -39,7 +39,7 @@ async fn inner_dag_insert_one() {
 }
 
 #[tokio::test]
-async fn test_dag_new_has_genesis() {
+async fn test_dag_new_has_genesis_and_its_not_live() {
     // Make certificates for rounds 1 to 4.
     let keys: Vec<_> = test_utils::keys(None)
         .into_iter()
@@ -56,8 +56,89 @@ async fn test_dag_new_has_genesis() {
     let (_tx_cert, rx_cert) = channel(1);
     let (_, dag) = Dag::new(&committee, rx_cert);
 
+    for certificate in genesis.clone() {
+        assert!(dag.contains(certificate).await);
+    }
+
+    // But the genesis does not come out in read_causal, as is is compressed the moment we add more nodes
+    let (certificates, _next_parents) = make_optimal_certificates(1..=1, &genesis, &keys);
+    let mut certs_to_insert = certificates.clone();
+
+    // Feed the additional certificates to the Dag
+    while let Some(certificate) = certs_to_insert.pop_front() {
+        dag.insert(certificate).await.unwrap();
+    }
+
+    // genesis is still here
+    for certificate in genesis.clone() {
+        assert!(dag.contains(certificate).await);
+    }
+
+    // we trigger read_causal on the newly inserted cert
+    for cert in certificates.clone() {
+        let res = dag.read_causal(cert.digest()).await.unwrap();
+        // the read_causals do not report genesis: we only walk one node, the start of the walk
+        assert_eq!(res, vec![cert.digest()]);
+    }
+
+    // genesis is no longer here
     for certificate in genesis {
-        assert!(dag.contains(certificate).await)
+        assert!(!dag.contains(certificate).await);
+    }
+}
+
+// `test_dag_new_has_genesis_and_its_not_live` relies on the fact that genesis produces empty blocks: we re-run it with non-genesis empty blocks to
+// check the invariants are the same
+#[tokio::test]
+async fn test_dag_compresses_empty_blocks() {
+    // Make certificates for rounds 1 to 4.
+    let keys: Vec<_> = test_utils::keys(None)
+        .into_iter()
+        .map(|kp| kp.public().clone())
+        .collect();
+    let committee = mock_committee(&keys.clone()[..]);
+    let genesis_certs = Certificate::genesis(&committee);
+    let genesis = genesis_certs
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+
+    // set up a Dag
+    let (_tx_cert, rx_cert) = channel(1);
+    let (_, dag) = Dag::new(&committee, rx_cert);
+
+    // insert one round of empty certificates
+    let (mut certificates, next_parents) = make_optimal_certificates(1..=1, &genesis, &keys);
+    // make those empty
+    for mut cert in certificates.iter_mut() {
+        cert.header.payload = std::collections::BTreeMap::new();
+    }
+
+    // Feed the certificates to the Dag
+    let mut certs_to_insert = certificates.clone();
+    while let Some(certificate) = certs_to_insert.pop_front() {
+        dag.insert(certificate).await.unwrap();
+    }
+
+    // certificates are still here
+    for certificate in certificates.clone() {
+        assert!(dag.contains(certificate.digest()).await);
+    }
+
+    // Add one round of non-empty certificates
+    let (additional_certificates, _next_parents) =
+        make_optimal_certificates(1..=1, &next_parents, &keys);
+    // Feed the additional certificates to the Dag
+    let mut additional_certs_to_insert = additional_certificates.clone();
+    while let Some(certificate) = additional_certs_to_insert.pop_front() {
+        dag.insert(certificate).await.unwrap();
+    }
+
+    // we trigger read_causal on the newly inserted certs
+    for cert in additional_certificates.clone() {
+        let res = dag.read_causal(cert.digest()).await.unwrap();
+        // the read_causals do not report genesis or the empty round we inserted: we only walk one node, the start of the walk
+        assert_eq!(res, vec![cert.digest()]);
     }
 }
 
@@ -137,7 +218,7 @@ async fn dag_insert_one_and_rounds_node_read() {
         .map(|kp| kp.public().clone())
         .collect();
     let committee = mock_committee(&keys.clone()[..]);
-    let mut genesis_certs = Certificate::genesis(&committee);
+    let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
@@ -150,9 +231,6 @@ async fn dag_insert_one_and_rounds_node_read() {
     let mut certs_to_insert = certificates.clone();
 
     // Feed the certificates to the Dag
-    while let Some(certificate) = genesis_certs.pop() {
-        dag.insert(certificate).await.unwrap();
-    }
     while let Some(certificate) = certs_to_insert.pop_front() {
         dag.insert(certificate).await.unwrap();
     }
@@ -162,19 +240,20 @@ async fn dag_insert_one_and_rounds_node_read() {
         assert_eq!(0..=4, dag.rounds(authority.clone()).await.unwrap());
     }
 
-    // on optimal certificates (we ack all of the prior round), we BFT 1 + 4 * 4 vertices
+    // on optimal certificates (we ack all of the prior round), we BFT 1 + 3 * 4 vertices:
+    // as genesis is compressible, that initial round is omitted
     for certificate in certificates {
         if certificate.round() == 4 {
             assert_eq!(
-                17,
+                13,
                 dag.read_causal(certificate.digest()).await.unwrap().len()
             );
         }
     }
 
-    // on optimal certificates (we ack all of the prior round), we BFT 1 + 4 * 4 vertices
+    // on optimal certificates (we ack all of the prior round), we BFT 1 + 3 * 4 vertices
     for authority in keys {
-        assert_eq!(17, dag.node_read_causal(authority, 4).await.unwrap().len());
+        assert_eq!(13, dag.node_read_causal(authority, 4).await.unwrap().len());
     }
 }
 

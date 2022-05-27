@@ -230,7 +230,7 @@ async fn test_node_read_causal_signed_certificates() {
     let dag = Arc::new(Dag::new(&committee, rx_new_certificates).1);
 
     // Populate genesis in the Dag
-    let mut genesis_certs = Certificate::genesis(&committee);
+    let genesis_certs = Certificate::genesis(&committee);
     assert!(join_all(
         genesis_certs
             .iter()
@@ -357,29 +357,24 @@ async fn test_node_read_causal_signed_certificates() {
     assert_eq!(1, response.into_inner().collection_ids.len());
 
     // Test node read causal for existing round in Primary 1
-    // Round 1 so we expect BFT 1 + 1 * 4 vertices
+    // Round 1 so we expect BFT 1 + 0 * 4 vertices (genesis round elided)
     let request = tonic::Request::new(NodeReadCausalRequest {
         public_key: Some(PublicKeyProto::from(name_1.clone())),
         round: 1,
     });
 
     let response = client.node_read_causal(request).await.unwrap();
-    assert_eq!(5, response.into_inner().collection_ids.len());
+    assert_eq!(1, response.into_inner().collection_ids.len());
 
     // Test node read causal for round 4 (we ack all of the prior round),
-    // we expect BFT 1 + 4 * 4 vertices
+    // we expect BFT 1 + 3 * 4 vertices (genesis round elided)
     let request = tonic::Request::new(NodeReadCausalRequest {
         public_key: Some(PublicKeyProto::from(name_1.clone())),
         round: 4,
     });
 
     let response = client.node_read_causal(request).await.unwrap();
-    assert_eq!(17, response.into_inner().collection_ids.len());
-
-    // remove round 0
-    while let Some(genesis_cert) = genesis_certs.pop() {
-        dag.remove(vec![genesis_cert.digest()]).await.unwrap();
-    }
+    assert_eq!(13, response.into_inner().collection_ids.len());
 
     // Test node read causal for removed round
     let request = tonic::Request::new(NodeReadCausalRequest {
@@ -389,11 +384,11 @@ async fn test_node_read_causal_signed_certificates() {
 
     let status = client.node_read_causal(request).await.unwrap_err();
     assert!(status.message().contains(
-        "Couldn't read causal for provided key & round: No known certificates for this authority"
+        "Couldn't read causal for provided key & round: Dag invariant violation The vertex known by this digest was dropped"
     ));
 
     // Test node read causal for round 4 (we ack all of the prior round),
-    // we expect BFT 1 + 3 * 4 vertices with round 0 removed.
+    // we expect BFT 1 + 3 * 4 vertices with round 0 removed. (genesis round elided)
     let request = tonic::Request::new(NodeReadCausalRequest {
         public_key: Some(PublicKeyProto::from(name_1.clone())),
         round: 4,
