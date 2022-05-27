@@ -34,6 +34,7 @@ use schemars::JsonSchema;
 use serde_with::serde_as;
 use serde_with::Bytes;
 
+use crate::committee::EpochId;
 use sha3::Sha3_256;
 
 #[cfg(test)]
@@ -224,15 +225,18 @@ pub struct TxContext {
     sender: AccountAddress,
     /// Digest of the current transaction
     digest: Vec<u8>,
+    /// The current epoch number
+    epoch: EpochId,
     /// Number of `ObjectID`'s generated during execution of the current transaction
     ids_created: u64,
 }
 
 impl TxContext {
-    pub fn new(sender: &SuiAddress, digest: &TransactionDigest) -> Self {
+    pub fn new(sender: &SuiAddress, digest: &TransactionDigest, epoch: EpochId) -> Self {
         Self {
             sender: AccountAddress::new(sender.0),
             digest: digest.0.to_vec(),
+            epoch,
             ids_created: 0,
         }
     }
@@ -274,6 +278,7 @@ impl TxContext {
         Self::new(
             &SuiAddress::random_for_testing_only(),
             &TransactionDigest::random(),
+            0,
         )
     }
 

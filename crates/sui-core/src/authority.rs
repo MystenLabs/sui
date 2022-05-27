@@ -471,6 +471,7 @@ impl AuthorityState {
             &self.move_vm,
             &self._native_functions,
             gas_status,
+            self.committee.epoch,
         )?;
 
         self.metrics.total_effects.inc();

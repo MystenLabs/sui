@@ -30,6 +30,8 @@ module Sui::TxContext {
         signer: signer,
         /// Hash of the current transaction
         tx_hash: vector<u8>,
+        /// The current epoch number.
+        epoch: u64,
         /// Counter recording the number of fresh id's created while executing
         /// this transaction. Always 0 at the start of a transaction
         ids_created: u64
@@ -44,6 +46,10 @@ module Sui::TxContext {
     /// Return a `signer` for the user that signed the current transaction
     public fun signer_(self: &TxContext): &signer {
         &self.signer
+    }
+
+    public fun epoch(self: &TxContext): u64 {
+        self.epoch
     }
 
     /// Generate a new, globally unique object ID with version 0
@@ -72,7 +78,17 @@ module Sui::TxContext {
             Vector::length(&tx_hash) == TX_HASH_LENGTH,
             Errors::invalid_argument(EBadTxHashLength)
         );
-        TxContext { signer, tx_hash, ids_created }
+        TxContext { signer, tx_hash, epoch: 0, ids_created }
+    }
+
+    #[test_only]
+    /// Create a `TxContext` for testing, with a potentially non-zero epoch number.
+    public fun new_with_epoch(signer: signer, tx_hash: vector<u8>, epoch: u64, ids_created: u64): TxContext {
+        assert!(
+            Vector::length(&tx_hash) == TX_HASH_LENGTH,
+            Errors::invalid_argument(EBadTxHashLength)
+        );
+        TxContext { signer, tx_hash, epoch, ids_created }
     }
 
     #[test_only]
