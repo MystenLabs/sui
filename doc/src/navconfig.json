@@ -158,18 +158,6 @@
       {
         "label": "Employ SuiJSON Format",
         "fileName": "build/sui-json"
-      },
-      {
-        "label": "Understand Validators",
-        "fileName": "learn/architecture/validators"
-      },
-      {
-        "label": "Manage Objects",
-        "fileName": "build/objects"
-      },
-      {
-        "label": "Conduct Transactions",
-        "fileName": "build/transactions"
       }
     ],
     "explore": [
