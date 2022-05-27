@@ -77,12 +77,13 @@ module ObjectOwner::ObjectOwner {
     }
 
     public(script) fun delete_parent_and_child(parent: Parent, child: Child, _ctx: &mut TxContext) {
-        let Parent { id, child: child_ref_opt } = parent;
+        let Parent { id: parent_id, child: child_ref_opt } = parent;
         let child_ref = Option::extract(&mut child_ref_opt);
         Option::destroy_none(child_ref_opt);
+        ID::delete(parent_id);
+
         let Child { id: child_id } = child;
         Transfer::delete_child_object(child_id, child_ref);
-        ID::delete(id);
     }
 
     public(script) fun create_another_parent(child: Child, ctx: &mut TxContext) {
