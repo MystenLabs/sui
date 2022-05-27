@@ -13,6 +13,5 @@ pub mod epoch;
 pub mod execution_engine;
 pub mod gateway_state;
 pub mod gateway_types;
-pub mod make;
 pub mod safe_client;
 pub mod transaction_input_checker;
