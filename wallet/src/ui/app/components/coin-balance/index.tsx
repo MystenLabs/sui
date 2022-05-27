@@ -10,7 +10,7 @@ import st from './CoinBalance.module.scss';
 
 export type CoinProps = {
     type: string;
-    balance: number;
+    balance: bigint;
 };
 
 function CoinBalance({ type, balance }: CoinProps) {
