@@ -88,6 +88,8 @@ pub struct ConsensusConfig {
     #[serde(skip_serializing)]
     #[serde(default)]
     pub narwhal_config: DebugIgnore<ConsensusParameters>,
+
+    narwhal_committee: DebugIgnore<ConsensusCommittee<Ed25519PublicKey>>,
 }
 
 impl ConsensusConfig {
@@ -102,6 +104,10 @@ impl ConsensusConfig {
     pub fn narwhal_config(&self) -> &ConsensusParameters {
         &self.narwhal_config
     }
+
+    pub fn narwhal_committee(&self) -> &ConsensusCommittee<Ed25519PublicKey> {
+        &self.narwhal_committee
+    }
 }
 
 //TODO get this information from on-chain + some way to do network discovery
@@ -109,7 +115,6 @@ impl ConsensusConfig {
 pub struct CommitteeConfig {
     epoch: EpochId,
     validator_set: Vec<ValidatorInfo>,
-    consensus_committee: DebugIgnore<ConsensusCommittee<Ed25519PublicKey>>,
 }
 
 impl CommitteeConfig {
@@ -119,10 +124,6 @@ impl CommitteeConfig {
 
     pub fn validator_set(&self) -> &[ValidatorInfo] {
         &self.validator_set
-    }
-
-    pub fn narwhal_committee(&self) -> &ConsensusCommittee<Ed25519PublicKey> {
-        &self.consensus_committee
     }
 
     pub fn committee(&self) -> Committee {
