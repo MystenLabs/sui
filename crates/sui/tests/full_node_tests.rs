@@ -3,11 +3,8 @@
 
 use futures::StreamExt;
 use std::sync::Arc;
-use sui::{
-    config::SUI_NETWORK_CONFIG,
-    wallet_commands::{WalletCommandResult, WalletCommands, WalletContext},
-};
-use sui_config::{NetworkConfig, PersistedConfig};
+use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
+use sui_config::{NetworkConfig, PersistedConfig, SUI_NETWORK_CONFIG};
 use sui_core::authority::AuthorityState;
 use sui_node::SuiNode;
 

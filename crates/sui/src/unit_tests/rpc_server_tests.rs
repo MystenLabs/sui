@@ -12,10 +12,11 @@ use std::{
     str::FromStr,
 };
 use sui::{
-    config::{PersistedConfig, WalletConfig, SUI_GATEWAY_CONFIG, SUI_WALLET_CONFIG},
+    config::{PersistedConfig, WalletConfig},
     keystore::{Keystore, SuiKeystore},
     sui_commands::SuiNetwork,
 };
+use sui_config::{SUI_GATEWAY_CONFIG, SUI_WALLET_CONFIG};
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_core::gateway_types::{
     GetObjectDataResponse, TransactionEffectsResponse, TransactionResponse,

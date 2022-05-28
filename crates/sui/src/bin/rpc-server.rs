@@ -6,8 +6,8 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
 };
-use sui::config::SUI_GATEWAY_CONFIG;
 use sui_config::sui_config_dir;
+use sui_config::SUI_GATEWAY_CONFIG;
 use sui_gateway::rpc_gateway::{create_client, GatewayReadApiImpl, TransactionBuilderImpl};
 use sui_gateway::{json_rpc::JsonRpcServerBuilder, rpc_gateway::RpcGatewayImpl};
 use tracing::info;

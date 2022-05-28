@@ -15,15 +15,14 @@ use tracing::debug;
 
 use colored::Colorize;
 use sui::{
-    config::{
-        sui_config_dir, Config, GatewayType, WalletConfig, SUI_DEV_NET_URL, SUI_WALLET_CONFIG,
-    },
+    config::{GatewayType, WalletConfig},
     keystore::KeystoreType,
     shell::{
         install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
     },
     wallet_commands::*,
 };
+use sui_config::{sui_config_dir, Config, SUI_DEV_NET_URL, SUI_WALLET_CONFIG};
 use sui_types::exit_main;
 
 const SUI: &str = "   _____       _    _       __      ____     __
