@@ -4,8 +4,8 @@
 use crate::{
     genesis,
     genesis_config::{GenesisConfig, ValidatorGenesisInfo},
-    new_network_address, utils, CommitteeConfig, ConsensusConfig, NetworkConfig, NodeConfig,
-    ValidatorInfo, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME, DEFAULT_STAKE,
+    utils, CommitteeConfig, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo,
+    AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME, DEFAULT_STAKE,
 };
 use debug_ignore::DebugIgnore;
 use narwhal_config::{
@@ -72,13 +72,13 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             .map(|_| get_key_pair_from_rng(&mut self.rng).1)
             .map(|key_pair| ValidatorGenesisInfo {
                 key_pair,
-                network_address: new_network_address(),
+                network_address: utils::new_network_address(),
                 stake: DEFAULT_STAKE,
-                narwhal_primary_to_primary: new_network_address(),
-                narwhal_worker_to_primary: new_network_address(),
-                narwhal_primary_to_worker: new_network_address(),
-                narwhal_worker_to_worker: new_network_address(),
-                narwhal_consensus_address: new_network_address(),
+                narwhal_primary_to_primary: utils::new_network_address(),
+                narwhal_worker_to_primary: utils::new_network_address(),
+                narwhal_primary_to_worker: utils::new_network_address(),
+                narwhal_worker_to_worker: utils::new_network_address(),
+                narwhal_consensus_address: utils::new_network_address(),
             })
             .collect::<Vec<_>>();
 
@@ -189,7 +189,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     narwhal_committee: narwhal_committee.clone(),
                 };
 
-                let metrics_address = new_network_address();
+                let metrics_address = utils::new_network_address();
 
                 NodeConfig {
                     key_pair: validator.key_pair,
