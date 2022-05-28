@@ -1,6 +1,6 @@
 //import { setInterval } from 'timers/promises';
 import { Network } from './api/rpcSetting';
-import { IS_LOCAL_ENV, IS_STATIC_ENV } from "./envUtil";
+import { IS_LOCAL_ENV, IS_STATIC_ENV } from './envUtil';
 
 const ENV_STUBS_IMG_CHECK = IS_STATIC_ENV || IS_LOCAL_ENV;
 
@@ -17,7 +17,7 @@ function getHost(network: Network | string): string {
     return '';
 }
 
-export type ImageCheckResponse = { ok : boolean };
+export type ImageCheckResponse = { ok: boolean };
 
 export interface IImageModClient {
     checkImage(url: string): Promise<ImageCheckResponse>;
@@ -33,14 +33,14 @@ export class ImageModClient implements IImageModClient {
     }
 
     async checkImage(url: string): Promise<ImageCheckResponse> {
-        if (ENV_STUBS_IMG_CHECK)
-            return { ok: true };
+        if (ENV_STUBS_IMG_CHECK) return { ok: true };
 
-        return (await fetch(this.imgEndpoint, {
-            method:'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ url })
-        }))
-        .json();
+        return (
+            await fetch(this.imgEndpoint, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ url }),
+            })
+        ).json();
     }
 }
