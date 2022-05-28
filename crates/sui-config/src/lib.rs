@@ -2,27 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use debug_ignore::DebugIgnore;
 use multiaddr::Multiaddr;
-use narwhal_config::Committee as ConsensusCommittee;
-use narwhal_config::Parameters as ConsensusParameters;
-use narwhal_crypto::ed25519::Ed25519PublicKey;
 use rand::rngs::OsRng;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
-use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::committee::{Committee, EpochId};
-use sui_types::crypto::{get_key_pair_from_rng, KeyPair, PublicKeyBytes};
+use sui_types::base_types::ObjectID;
+use sui_types::committee::Committee;
+use sui_types::crypto::{get_key_pair_from_rng, KeyPair};
 use tracing::trace;
 
 pub mod builder;
 pub mod genesis;
 pub mod genesis_config;
+pub mod node;
 pub mod utils;
+
+pub use node::{CommitteeConfig, ConsensusConfig, NodeConfig, ValidatorInfo};
 
 const SUI_DIR: &str = ".sui";
 const SUI_CONFIG_DIR: &str = "sui_config";
@@ -37,141 +35,6 @@ pub const CONSENSUS_DB_NAME: &str = "consensus_db";
 pub const FULL_NODE_DB_PATH: &str = "full_node_db";
 
 const DEFAULT_STAKE: usize = 1;
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct NodeConfig {
-    pub key_pair: KeyPair,
-    pub db_path: PathBuf,
-    pub network_address: Multiaddr,
-    pub metrics_address: Multiaddr,
-    pub json_rpc_address: SocketAddr,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub consensus_config: Option<ConsensusConfig>,
-    pub committee_config: CommitteeConfig,
-
-    genesis: genesis::Genesis,
-}
-
-impl Config for NodeConfig {}
-
-impl NodeConfig {
-    pub fn key_pair(&self) -> &KeyPair {
-        &self.key_pair
-    }
-
-    pub fn public_key(&self) -> PublicKeyBytes {
-        *self.key_pair.public_key_bytes()
-    }
-
-    pub fn sui_address(&self) -> SuiAddress {
-        SuiAddress::from(self.public_key())
-    }
-
-    pub fn db_path(&self) -> &Path {
-        &self.db_path
-    }
-
-    pub fn network_address(&self) -> &Multiaddr {
-        &self.network_address
-    }
-
-    pub fn consensus_config(&self) -> Option<&ConsensusConfig> {
-        self.consensus_config.as_ref()
-    }
-
-    pub fn committee_config(&self) -> &CommitteeConfig {
-        &self.committee_config
-    }
-
-    pub fn genesis(&self) -> &genesis::Genesis {
-        &self.genesis
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ConsensusConfig {
-    consensus_address: Multiaddr,
-    consensus_db_path: PathBuf,
-
-    //TODO make narwhal config serializable
-    #[serde(skip_serializing)]
-    #[serde(default)]
-    pub narwhal_config: DebugIgnore<ConsensusParameters>,
-
-    narwhal_committee: DebugIgnore<ConsensusCommittee<Ed25519PublicKey>>,
-}
-
-impl ConsensusConfig {
-    pub fn address(&self) -> &Multiaddr {
-        &self.consensus_address
-    }
-
-    pub fn db_path(&self) -> &Path {
-        &self.consensus_db_path
-    }
-
-    pub fn narwhal_config(&self) -> &ConsensusParameters {
-        &self.narwhal_config
-    }
-
-    pub fn narwhal_committee(&self) -> &ConsensusCommittee<Ed25519PublicKey> {
-        &self.narwhal_committee
-    }
-}
-
-//TODO get this information from on-chain + some way to do network discovery
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CommitteeConfig {
-    epoch: EpochId,
-    validator_set: Vec<ValidatorInfo>,
-}
-
-impl CommitteeConfig {
-    pub fn epoch(&self) -> EpochId {
-        self.epoch
-    }
-
-    pub fn validator_set(&self) -> &[ValidatorInfo] {
-        &self.validator_set
-    }
-
-    pub fn committee(&self) -> Committee {
-        let voting_rights = self
-            .validator_set()
-            .iter()
-            .map(|validator| (validator.public_key(), validator.stake()))
-            .collect();
-        Committee::new(self.epoch(), voting_rights)
-    }
-}
-
-/// Publicly known information about a validator
-/// TODO read most of this from on-chain
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ValidatorInfo {
-    public_key: PublicKeyBytes,
-    stake: usize,
-    network_address: Multiaddr,
-}
-
-impl ValidatorInfo {
-    pub fn sui_address(&self) -> SuiAddress {
-        SuiAddress::from(self.public_key())
-    }
-
-    pub fn public_key(&self) -> PublicKeyBytes {
-        self.public_key
-    }
-
-    pub fn stake(&self) -> usize {
-        self.stake
-    }
-
-    pub fn network_address(&self) -> &Multiaddr {
-        &self.network_address
-    }
-}
 
 /// This is a config that is used for testing or local use as it contains the config and keys for
 /// all validators
