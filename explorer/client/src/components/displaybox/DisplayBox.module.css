@@ -28,6 +28,7 @@ img.imageboxblur {
         filter: blur(40);
         opacity: 0.72;
     }
+
     to {
         filter: blur(28);
         opacity: 0.64;
