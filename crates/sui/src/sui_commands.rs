@@ -254,7 +254,7 @@ impl SuiCommand {
                     .enumerate()
                 {
                     let validator_config = validator
-                        .persisted(&sui_config_dir.join(format!("validator-config-{}.conf", i)));
+                        .persisted(&sui_config_dir.join(format!("validator-config-{}.yaml", i)));
                     validator_config.save()?;
                 }
 
