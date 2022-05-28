@@ -5,7 +5,7 @@ div.imagebox {
 img.imagebox {
     @apply object-scale-down w-[100%];
 
-    filter: blur(0px);
+    filter: blur(0);
     opacity: 1;
     transition: opacity ease-out 0.14s;
     transition: filter ease-in 0.14s;
