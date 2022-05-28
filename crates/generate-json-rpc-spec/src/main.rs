@@ -9,9 +9,9 @@ use serde_json::json;
 use std::fs::File;
 use std::io::Write;
 
-use sui::config::SUI_WALLET_CONFIG;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui::wallet_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
+use sui_config::SUI_WALLET_CONFIG;
 use sui_core::gateway_types::{
     GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
 };

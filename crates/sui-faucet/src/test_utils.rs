@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui::{
-    config::SUI_WALLET_CONFIG,
     sui_commands::SuiNetwork,
     wallet_commands::{WalletCommands, WalletContext},
 };
+use sui_config::SUI_WALLET_CONFIG;
 use sui_types::base_types::SuiAddress;
 use test_utils::network::start_test_network;
 

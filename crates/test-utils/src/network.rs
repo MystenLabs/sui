@@ -3,15 +3,13 @@
 
 use std::{num::NonZeroUsize, path::Path};
 use sui::{
-    config::{
-        Config, GatewayConfig, GatewayType, WalletConfig, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG,
-        SUI_WALLET_CONFIG,
-    },
+    config::{GatewayConfig, GatewayType, WalletConfig},
     keystore::{KeystoreType, SuiKeystore},
     sui_commands::SuiNetwork,
     wallet_commands::{WalletCommands, WalletContext},
 };
-use sui_config::{builder::ConfigBuilder, GenesisConfig};
+use sui_config::{builder::ConfigBuilder, genesis_config::GenesisConfig};
+use sui_config::{Config, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use sui_types::base_types::SuiAddress;
 use tempfile::TempDir;
 

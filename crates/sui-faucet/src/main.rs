@@ -15,10 +15,8 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use sui::{
-    config::{sui_config_dir, SUI_WALLET_CONFIG},
-    wallet_commands::{WalletCommands, WalletContext},
-};
+use sui::wallet_commands::{WalletCommands, WalletContext};
+use sui_config::{sui_config_dir, SUI_WALLET_CONFIG};
 use sui_faucet::{Faucet, FaucetRequest, FaucetResponse, SimpleFaucet};
 use tower::ServiceBuilder;
 use tracing::info;
