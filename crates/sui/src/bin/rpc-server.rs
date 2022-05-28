@@ -6,6 +6,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
 };
+use sui::config::SUI_GATEWAY_CONFIG;
 use sui_config::sui_config_dir;
 use sui_gateway::rpc_gateway::{create_client, GatewayReadApiImpl, TransactionBuilderImpl};
 use sui_gateway::{json_rpc::JsonRpcServerBuilder, rpc_gateway::RpcGatewayImpl};
@@ -48,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
     let options: RpcGatewayOpt = RpcGatewayOpt::parse();
     let config_path = options
         .config
-        .unwrap_or(sui_config_dir()?.join("gateway.conf"));
+        .unwrap_or(sui_config_dir()?.join(SUI_GATEWAY_CONFIG));
     info!(?config_path, "Gateway config file path");
 
     let prom_binding = PROM_PORT_ADDR.parse().unwrap();
