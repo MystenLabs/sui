@@ -4,10 +4,39 @@ div.imagebox {
 
 img.imagebox {
     @apply object-scale-down w-[100%];
+
+    filter: blur(0);
+    opacity: 1;
+    transition: filter ease-out 0.14s;
+}
+
+img.imageboxblur {
+    @apply object-scale-down w-[100%];
+
+    filter: blur(22px);
+    opacity: 0.5;
+    transition: filter opacity ease-out 0.14s;
+    animation-duration: 0.8s;
+    animation-name: changeblur;
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
+}
+
+/* ambient filter pattern for after image is loaded but hasn't been auto-modded yet */
+@keyframes changeblur {
+    from {
+        filter: blur(28);
+        opacity: 0.64;
+    }
+
+    to {
+        filter: blur(16);
+        opacity: 0.55;
+    }
 }
 
 .codebox {
-    @apply overflow-hidden 
+    @apply overflow-hidden
     border-solid border-stone-300 rounded-lg mt-[1vh] w-[88vw]
     w-[88vw] h-[88vw] lg:w-[35vw] lg:h-[35vw] mb-[10vh];
 }
