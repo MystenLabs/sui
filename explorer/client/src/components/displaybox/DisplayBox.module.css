@@ -7,15 +7,15 @@ img.imagebox {
 
     filter: blur(0);
     opacity: 1;
-    transition: filter ease-out 0.14s;
+    transition: filter ease-out 0.125s;
 }
 
 img.imageboxblur {
     @apply object-scale-down w-[100%];
 
-    filter: blur(22px);
+    filter: blur(18px);
     opacity: 0.5;
-    transition: filter opacity ease-out 0.14s;
+    transition: filter opacity ease-in 0.1s;
     animation-duration: 0.8s;
     animation-name: changeblur;
     animation-iteration-count: infinite;
@@ -25,14 +25,21 @@ img.imageboxblur {
 /* ambient filter pattern for after image is loaded but hasn't been auto-modded yet */
 @keyframes changeblur {
     from {
+        filter: blur(40);
+        opacity: 0.72;
+    }
+    to {
         filter: blur(28);
         opacity: 0.64;
     }
+}
 
-    to {
-        filter: blur(16);
-        opacity: 0.55;
-    }
+img.imageblurstill {
+    @apply object-scale-down w-[100%];
+
+    filter: blur(36px);
+    opacity: 0.9;
+    transition: filter opacity ease-out 0.14s;
 }
 
 .codebox {
