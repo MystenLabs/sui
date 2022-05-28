@@ -14,12 +14,12 @@ img.imagebox {
 /* ambient filter pattern for after image is loaded but hasn't been auto-modded yet */
 @keyframes changeblur {
     from {
-        filter: blur(28px);
+        filter: blur(22px);
         opacity: 0.72;
     }
 
     to {
-        filter: blur(24px);
+        filter: blur(18px);
         opacity: 0.64;
     }
 }
@@ -27,7 +27,7 @@ img.imagebox {
 img.imageboxblur {
     @apply object-scale-down w-[100%];
 
-    filter: blur(24px);
+    filter: blur(20px);
     opacity: 0.64;
     transition: filter opacity ease-in 0.14s;
     animation-duration: 1s;
