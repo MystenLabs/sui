@@ -3,7 +3,7 @@
 
 import mockObjectData from '../../../../crates/sui-open-rpc/samples/objects.json';
 
-import { isGetObjectInfoResponse } from '../../src/index.guard';
+import { isGetObjectDataResponse } from '../../src/index.guard';
 
 describe('Test Objects Definition', () => {
   it('Test against different object definitions', () => {
@@ -16,5 +16,5 @@ describe('Test Objects Definition', () => {
 
 function validate(key: 'coin' | 'example_nft' | 'move_package' | 'hero') {
   const data = mockObjectData[key];
-  expect(isGetObjectInfoResponse(data)).toBeTruthy();
+  expect(isGetObjectDataResponse(data)).toBeTruthy();
 }

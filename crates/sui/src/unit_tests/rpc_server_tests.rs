@@ -18,7 +18,7 @@ use sui::{
 };
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_core::gateway_types::{
-    GetObjectInfoResponse, TransactionEffectsResponse, TransactionResponse,
+    GetObjectDataResponse, TransactionEffectsResponse, TransactionResponse,
 };
 use sui_framework::build_move_package_to_bytes;
 use sui_gateway::rpc_gateway::{create_client, GatewayReadApiImpl, TransactionBuilderImpl};
@@ -27,7 +27,7 @@ use sui_gateway::{
         RpcGatewayApiClient, RpcGatewayApiServer, RpcReadApiClient, RpcReadApiServer,
         RpcTransactionBuilderClient, RpcTransactionBuilderServer, TransactionBytes,
     },
-    rpc_gateway::{responses::ObjectResponse, RpcGatewayImpl},
+    rpc_gateway::RpcGatewayImpl,
 };
 use sui_json::SuiJsonValue;
 use sui_types::sui_serde::Base64;
@@ -45,9 +45,8 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
     let address = test_network.accounts.first().unwrap();
 
     http_client.sync_account_state(*address).await?;
-    let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
-    let result = result.objects;
-    assert_eq!(5, result.len());
+    let objects = http_client.get_objects_owned_by_address(*address).await?;
+    assert_eq!(5, objects.len());
     Ok(())
 }
 
@@ -57,8 +56,7 @@ async fn test_transfer_coin() -> Result<(), anyhow::Error> {
     let http_client = test_network.http_client;
     let address = test_network.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
-    let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
-    let objects = result.objects;
+    let objects = http_client.get_objects_owned_by_address(*address).await?;
 
     let tx_data: TransactionBytes = http_client
         .transfer_coin(
@@ -94,9 +92,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let http_client = test_network.http_client;
     let address = test_network.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
-    let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
-    let objects = result.objects;
-
+    let objects = http_client.get_objects_owned_by_address(*address).await?;
     let gas = objects.first().unwrap();
 
     let compiled_modules = build_move_package_to_bytes(
@@ -134,9 +130,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let http_client = test_network.http_client;
     let address = test_network.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
-    let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
-    let objects = result.objects;
-
+    let objects = http_client.get_objects_owned_by_address(*address).await?;
     let gas = objects.first().unwrap();
 
     let package_id = ObjectID::new(SUI_FRAMEWORK_ADDRESS.into_bytes());
@@ -184,13 +178,12 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
     let http_client = test_network.http_client;
     let address = test_network.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
-    let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
-    let result = result.objects;
+    let objects = http_client.get_objects_owned_by_address(*address).await?;
 
-    for oref in result {
-        let result: GetObjectInfoResponse = http_client.get_object_info(oref.object_id).await?;
+    for oref in objects {
+        let result: GetObjectDataResponse = http_client.get_object(oref.object_id).await?;
         assert!(
-            matches!(result, GetObjectInfoResponse::Exists(object) if oref.object_id == object.id() && &object.owner.get_owner_address()? == address)
+            matches!(result, GetObjectDataResponse::Exists(object) if oref.object_id == object.id() && &object.owner.get_owner_address()? == address)
         );
     }
     Ok(())
@@ -204,9 +197,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
 
     http_client.sync_account_state(*address).await?;
 
-    let result: ObjectResponse = http_client.get_owned_objects(*address).await?;
-    let objects = result.objects;
-
+    let objects = http_client.get_objects_owned_by_address(*address).await?;
     let gas_id = objects.last().unwrap().object_id;
 
     // Make some transactions

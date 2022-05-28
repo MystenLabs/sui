@@ -3,7 +3,7 @@
 
 import { getObjectType, getMoveObjectType } from '@mysten/sui.js';
 
-import type { GetObjectInfoResponse } from '@mysten/sui.js';
+import type { GetObjectDataResponse } from '@mysten/sui.js';
 
 export function parseImageURL(data: any): string {
     return (
@@ -15,7 +15,7 @@ export function parseImageURL(data: any): string {
     );
 }
 
-export function parseObjectType(data: GetObjectInfoResponse): string {
+export function parseObjectType(data: GetObjectDataResponse): string {
     // TODO: define better naming and typing here
     const dataType = getObjectType(data);
     if (dataType === 'package') {

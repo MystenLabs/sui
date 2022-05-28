@@ -27,7 +27,7 @@ export const navigateWithUnknown = async (
     // allow navigating to the standard Move packages at 0x1 & 0x2 as a convenience
     else if (isValidSuiAddress(input) || isGenesisLibAddress(input)) {
         const addrPromise = rpc(network)
-            .getOwnedObjectRefs(input)
+            .getObjectsOwnedByAddress(input)
             .then((data) => {
                 if (data.length <= 0) throw new Error('No objects for Address');
 
@@ -37,7 +37,7 @@ export const navigateWithUnknown = async (
                 };
             });
         const objInfoPromise = rpc(network)
-            .getObjectInfo(input)
+            .getObject(input)
             .then((data) => {
                 if (data.status !== 'Exists') {
                     throw new Error('no object found');

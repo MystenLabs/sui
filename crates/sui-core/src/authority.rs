@@ -78,6 +78,7 @@ pub use temporary_store::AuthorityTemporaryStore;
 
 mod authority_store;
 pub use authority_store::{AuthorityStore, GatewayStore, ReplicaStore, SuiDataStore};
+use sui_types::object::Owner;
 
 use self::authority_store::{
     generate_genesis_system_object, store_package_and_init_modules_for_genesis,
@@ -827,7 +828,7 @@ impl AuthorityState {
             .compute_object_reference())
     }
 
-    pub async fn get_object_info(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
+    pub async fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
         match self.database.get_latest_parent_entry(*object_id)? {
             None => Ok(ObjectRead::NotExists(*object_id)),
             Some((obj_ref, _)) => {
@@ -853,8 +854,8 @@ impl AuthorityState {
         }
     }
 
-    pub async fn get_owned_objects(&self, account_addr: SuiAddress) -> SuiResult<Vec<ObjectRef>> {
-        self.database.get_account_objects(account_addr)
+    pub fn get_owner_objects(&self, owner: Owner) -> SuiResult<Vec<ObjectInfo>> {
+        self.database.get_owner_objects(owner)
     }
 
     pub fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
@@ -991,9 +992,9 @@ impl AuthorityState {
 
     fn make_account_info(&self, account: SuiAddress) -> Result<AccountInfoResponse, SuiError> {
         self.database
-            .get_account_objects(account)
+            .get_owner_objects(Owner::AddressOwner(account))
             .map(|object_ids| AccountInfoResponse {
-                object_ids,
+                object_ids: object_ids.into_iter().map(|id| id.into()).collect(),
                 owner: account,
             })
     }

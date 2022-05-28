@@ -54,8 +54,12 @@ const NoOwnedObjects = () => (
     <div className={styles.fail}>Failed to find Owned Objects</div>
 );
 
-const OwnedObject = ({ id }: { id: string }) =>
-    IS_STATIC_ENV ? <OwnedObjectStatic id={id} /> : <OwnedObjectAPI id={id} />;
+const OwnedObject = ({ id, byAddress }: { id: string; byAddress: boolean }) =>
+    IS_STATIC_ENV ? (
+        <OwnedObjectStatic id={id} />
+    ) : (
+        <OwnedObjectAPI id={id} byAddress={byAddress} />
+    );
 
 const NavigateFunctionContext = createContext<(id: string) => () => void>(
     (id: string) => () => {}
@@ -95,7 +99,7 @@ function OwnedObjectStatic({ id }: { id: string }) {
     }
 }
 
-function OwnedObjectAPI({ id }: { id: string }) {
+function OwnedObjectAPI({ id, byAddress }: { id: string; byAddress: boolean }) {
     const [results, setResults] = useState(DATATYPE_DEFAULT);
     const [isLoaded, setIsLoaded] = useState(false);
     const [isFail, setIsFail] = useState(false);
@@ -109,41 +113,41 @@ function OwnedObjectAPI({ id }: { id: string }) {
     useEffect(() => {
         setIsFail(false);
         setIsLoaded(false);
-        rpc(network)
-            .getOwnedObjectRefs(id)
-            .then((objects) => {
-                const ids = objects.map(({ objectId }) => objectId);
-                rpc(network)
-                    .getObjectInfoBatch(ids)
-                    .then((results) => {
-                        setResults(
-                            results
-                                .filter(({ status }) => status === 'Exists')
-                                .map(
-                                    (resp) => {
-                                        const contents = getObjectFields(resp);
-                                        const url = parseImageURL(contents);
-                                        const objType = parseObjectType(resp);
-                                        const balanceValue =
-                                            Coin.getBalance(resp);
-                                        return {
-                                            id: getObjectId(resp),
-                                            Type: objType,
-                                            _isCoin: Coin.isCoin(resp),
-                                            display: url
-                                                ? processDisplayValue(url)
-                                                : undefined,
-                                            balance: balanceValue,
-                                        };
-                                    }
-                                    // TODO - add back version
-                                )
-                        );
-                        setIsLoaded(true);
-                    });
-            })
-            .catch(() => setIsFail(true));
-    }, [id, network]);
+        const req = byAddress
+            ? rpc(network).getObjectsOwnedByAddress(id)
+            : rpc(network).getObjectsOwnedByObject(id);
+
+        req.then((objects) => {
+            const ids = objects.map(({ objectId }) => objectId);
+            rpc(network)
+                .getObjectBatch(ids)
+                .then((results) => {
+                    setResults(
+                        results
+                            .filter(({ status }) => status === 'Exists')
+                            .map(
+                                (resp) => {
+                                    const contents = getObjectFields(resp);
+                                    const url = parseImageURL(contents);
+                                    const objType = parseObjectType(resp);
+                                    const balanceValue = Coin.getBalance(resp);
+                                    return {
+                                        id: getObjectId(resp),
+                                        Type: objType,
+                                        _isCoin: Coin.isCoin(resp),
+                                        display: url
+                                            ? processDisplayValue(url)
+                                            : undefined,
+                                        balance: balanceValue,
+                                    };
+                                }
+                                // TODO - add back version
+                            )
+                    );
+                    setIsLoaded(true);
+                });
+        }).catch(() => setIsFail(true));
+    }, [id, network, byAddress]);
 
     if (isFail) return <NoOwnedObjects />;
 

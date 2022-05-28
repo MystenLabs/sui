@@ -13,6 +13,12 @@ export type SuiObjectRef = {
   version: number;
 };
 
+export type SuiObjectInfo = SuiObjectRef & {
+  type: string;
+  owner: ObjectOwner;
+  previousTransaction: TransactionDigest;
+};
+
 export type ObjectContentFields = Record<string, any>;
 
 export type MovePackageContent = Record<string, string>;
@@ -53,11 +59,9 @@ export type SuiObject = {
 export type ObjectStatus = 'Exists' | 'NotExists' | 'Deleted';
 export type ObjectType = 'moveObject' | 'package';
 
-export type GetOwnedObjectRefsResponse = {
-  objects: SuiObjectRef[];
-};
+export type GetOwnedObjectsResponse = SuiObjectInfo[];
 
-export type GetObjectInfoResponse = {
+export type GetObjectDataResponse = {
   status: ObjectStatus;
   details: SuiObject | ObjectId | SuiObjectRef;
 };
@@ -70,28 +74,28 @@ export type SequenceNumber = number;
 /*                              Helper functions                              */
 /* -------------------------------------------------------------------------- */
 
-/* -------------------------- GetObjectInfoResponse ------------------------- */
+/* -------------------------- GetObjectDataResponse ------------------------- */
 
 export function getObjectExistsResponse(
-  resp: GetObjectInfoResponse
+  resp: GetObjectDataResponse
 ): SuiObject | undefined {
   return resp.status !== 'Exists' ? undefined : (resp.details as SuiObject);
 }
 
 export function getObjectDeletedResponse(
-  resp: GetObjectInfoResponse
+  resp: GetObjectDataResponse
 ): SuiObjectRef | undefined {
   return resp.status !== 'Deleted' ? undefined : (resp.details as SuiObjectRef);
 }
 
 export function getObjectNotExistsResponse(
-  resp: GetObjectInfoResponse
+  resp: GetObjectDataResponse
 ): ObjectId | undefined {
   return resp.status !== 'NotExists' ? undefined : (resp.details as ObjectId);
 }
 
 export function getObjectReference(
-  resp: GetObjectInfoResponse
+  resp: GetObjectDataResponse
 ): SuiObjectRef | undefined {
   return (
     getObjectExistsResponse(resp)?.reference || getObjectDeletedResponse(resp)
@@ -101,7 +105,7 @@ export function getObjectReference(
 /* ------------------------------ SuiObjectRef ------------------------------ */
 
 export function getObjectId(
-  data: GetObjectInfoResponse | SuiObjectRef
+  data: GetObjectDataResponse | SuiObjectRef
 ): ObjectId {
   if ('objectId' in data) {
     return data.objectId;
@@ -112,7 +116,7 @@ export function getObjectId(
 }
 
 export function getObjectVersion(
-  data: GetObjectInfoResponse | SuiObjectRef
+  data: GetObjectDataResponse | SuiObjectRef
 ): number | undefined {
   if ('version' in data) {
     return data.version;
@@ -123,37 +127,37 @@ export function getObjectVersion(
 /* -------------------------------- SuiObject ------------------------------- */
 
 export function getObjectType(
-  resp: GetObjectInfoResponse
+  resp: GetObjectDataResponse
 ): ObjectType | undefined {
   return getObjectExistsResponse(resp)?.data.dataType;
 }
 
 export function getObjectPreviousTransactionDigest(
-  resp: GetObjectInfoResponse
+  resp: GetObjectDataResponse
 ): TransactionDigest | undefined {
   return getObjectExistsResponse(resp)?.previousTransaction;
 }
 
 export function getObjectOwner(
-  resp: GetObjectInfoResponse
+  resp: GetObjectDataResponse
 ): ObjectOwner | undefined {
   return getObjectExistsResponse(resp)?.owner;
 }
 
 export function getMoveObjectType(
-  resp: GetObjectInfoResponse
+  resp: GetObjectDataResponse
 ): string | undefined {
   return getMoveObject(resp)?.type;
 }
 
 export function getObjectFields(
-  resp: GetObjectInfoResponse
+  resp: GetObjectDataResponse
 ): ObjectContentFields | undefined {
   return getMoveObject(resp)?.fields;
 }
 
 export function getMoveObject(
-  resp: GetObjectInfoResponse
+  resp: GetObjectDataResponse
 ): SuiMoveObject | undefined {
   const suiObject = getObjectExistsResponse(resp);
   if (suiObject?.data.dataType !== 'moveObject') {
@@ -163,7 +167,7 @@ export function getMoveObject(
 }
 
 export function getMovePackageContent(
-  data: GetObjectInfoResponse | SuiMovePackage
+  data: GetObjectDataResponse | SuiMovePackage
 ): MovePackageContent | undefined {
   if ('disassembled' in data) {
     return data.disassembled;

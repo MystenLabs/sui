@@ -21,7 +21,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use sui_types::base_types::{
-    ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
+    ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use sui_types::crypto::{AuthorityQuorumSignInfo, Signature};
 use sui_types::error::SuiError;
@@ -419,13 +419,13 @@ impl Display for PublishResponse {
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "status", content = "details", rename = "ObjectRead")]
-pub enum GetObjectInfoResponse {
+pub enum GetObjectDataResponse {
     Exists(SuiObject),
     NotExists(ObjectID),
     Deleted(SuiObjectRef),
 }
 
-impl GetObjectInfoResponse {
+impl GetObjectDataResponse {
     /// Returns a reference to the object if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
     pub fn object(&self) -> Result<&SuiObject, SuiError> {
@@ -451,16 +451,16 @@ impl GetObjectInfoResponse {
     }
 }
 
-impl TryFrom<ObjectRead> for GetObjectInfoResponse {
+impl TryFrom<ObjectRead> for GetObjectDataResponse {
     type Error = anyhow::Error;
 
     fn try_from(value: ObjectRead) -> Result<Self, Self::Error> {
         match value {
-            ObjectRead::NotExists(id) => Ok(GetObjectInfoResponse::NotExists(id)),
-            ObjectRead::Exists(_, o, layout) => Ok(GetObjectInfoResponse::Exists(
+            ObjectRead::NotExists(id) => Ok(GetObjectDataResponse::NotExists(id)),
+            ObjectRead::Exists(_, o, layout) => Ok(GetObjectDataResponse::Exists(
                 SuiObject::try_from(o, layout)?,
             )),
-            ObjectRead::Deleted(oref) => Ok(GetObjectInfoResponse::Deleted(oref.into())),
+            ObjectRead::Deleted(oref) => Ok(GetObjectDataResponse::Deleted(oref.into())),
         }
     }
 }
@@ -1120,6 +1120,31 @@ impl From<InputObjectKind> for SuiInputObjectKind {
             InputObjectKind::MovePackage(id) => Self::MovePackage(id),
             InputObjectKind::ImmOrOwnedMoveObject(oref) => Self::ImmOrOwnedMoveObject(oref.into()),
             InputObjectKind::SharedMoveObject(id) => Self::SharedMoveObject(id),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Debug)]
+#[serde(rename = "ObjectInfo", rename_all = "camelCase")]
+pub struct SuiObjectInfo {
+    pub object_id: ObjectID,
+    pub version: SequenceNumber,
+    pub digest: ObjectDigest,
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub owner: Owner,
+    pub previous_transaction: TransactionDigest,
+}
+
+impl From<ObjectInfo> for SuiObjectInfo {
+    fn from(info: ObjectInfo) -> Self {
+        Self {
+            object_id: info.object_id,
+            version: info.version,
+            digest: info.digest,
+            type_: info.type_,
+            owner: info.owner,
+            previous_transaction: info.previous_transaction,
         }
     }
 }

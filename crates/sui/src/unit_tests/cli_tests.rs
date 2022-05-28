@@ -18,7 +18,7 @@ use sui::{
     wallet_commands::{WalletCommandResult, WalletCommands, WalletContext},
 };
 use sui_config::{AccountConfig, GenesisConfig, NetworkConfig, ObjectConfig, SUI_FULLNODE_CONFIG};
-use sui_core::gateway_types::{GetObjectInfoResponse, SuiObject, SuiTransactionEffects};
+use sui_core::gateway_types::{GetObjectDataResponse, SuiObject, SuiTransactionEffects};
 use sui_json::SuiJsonValue;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -170,7 +170,10 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     .await?
     .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address).await?;
+    let object_refs = context
+        .gateway
+        .get_objects_owned_by_address(address)
+        .await?;
 
     // Check log output contains all object ids.
     for oref in object_refs {
@@ -196,7 +199,7 @@ async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
     .await?;
 
     match result {
-        WalletCommandResult::CreateExampleNFT(GetObjectInfoResponse::Exists(obj)) => {
+        WalletCommandResult::CreateExampleNFT(GetObjectDataResponse::Exists(obj)) => {
             assert_eq!(obj.owner, address);
             assert_eq!(obj.data.type_().unwrap(), "0x2::DevNetNFT::DevNetNFT");
             Ok(obj)
@@ -306,7 +309,10 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
 async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
 
-    let object_refs = context.gateway.get_owned_objects(address).await?;
+    let object_refs = context
+        .gateway
+        .get_objects_owned_by_address(address)
+        .await?;
 
     // Check log output contains all object ids.
     let object_id = object_refs.first().unwrap().object_id;
@@ -331,7 +337,10 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
     let recipient = context.config.accounts.get(1).cloned().unwrap();
 
-    let object_refs = context.gateway.get_owned_objects(address).await?;
+    let object_refs = context
+        .gateway
+        .get_objects_owned_by_address(address)
+        .await?;
 
     let object_id = object_refs.first().unwrap().object_id;
     let object_to_send = object_refs.get(1).unwrap().object_id;
@@ -494,7 +503,7 @@ async fn get_move_object(
 
     match obj {
         WalletCommandResult::Object(obj) => match obj {
-            GetObjectInfoResponse::Exists(obj) => Ok(serde_json::to_value(obj)?),
+            GetObjectDataResponse::Exists(obj) => Ok(serde_json::to_value(obj)?),
             _ => panic!("WalletCommands::Object returns wrong type"),
         },
         _ => panic!("WalletCommands::Object returns wrong type {obj}"),
@@ -525,7 +534,10 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     .print(true);
     tokio::time::sleep(Duration::from_millis(2000)).await;
 
-    let object_refs = context.gateway.get_owned_objects(address1).await?;
+    let object_refs = context
+        .gateway
+        .get_objects_owned_by_address(address1)
+        .await?;
 
     // Check log output contains all object ids.
     for oref in &object_refs {
@@ -677,7 +689,10 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
 
-    let object_refs = context.gateway.get_owned_objects(address).await?;
+    let object_refs = context
+        .gateway
+        .get_objects_owned_by_address(address)
+        .await?;
 
     // Check log output contains all object ids.
     let gas_obj_id = object_refs.first().unwrap().object_id;
@@ -724,7 +739,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     .await?;
     assert!(matches!(
         resp,
-        WalletCommandResult::Object(GetObjectInfoResponse::Exists(..))
+        WalletCommandResult::Object(GetObjectDataResponse::Exists(..))
     ));
 
     let resp = WalletCommands::Object {
@@ -734,7 +749,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     .await?;
     assert!(matches!(
         resp,
-        WalletCommandResult::Object(GetObjectInfoResponse::Exists(..))
+        WalletCommandResult::Object(GetObjectDataResponse::Exists(..))
     ));
 
     Ok(())
@@ -747,7 +762,10 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
     let recipient = context.config.accounts.get(1).cloned().unwrap();
 
-    let object_refs = context.gateway.get_owned_objects(address).await?;
+    let object_refs = context
+        .gateway
+        .get_objects_owned_by_address(address)
+        .await?;
 
     // Check log output contains all object ids.
     let gas_obj_id = object_refs.first().unwrap().object_id;
@@ -804,7 +822,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let resp = WalletCommands::Object { id: mut_obj1 }
         .execute(&mut context)
         .await?;
-    let mut_obj1 = if let WalletCommandResult::Object(GetObjectInfoResponse::Exists(object)) = resp
+    let mut_obj1 = if let WalletCommandResult::Object(GetObjectDataResponse::Exists(object)) = resp
     {
         object
     } else {
@@ -816,7 +834,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let resp = WalletCommands::Object { id: mut_obj2 }
         .execute(&mut context)
         .await?;
-    let mut_obj2 = if let WalletCommandResult::Object(GetObjectInfoResponse::Exists(object)) = resp
+    let mut_obj2 = if let WalletCommandResult::Object(GetObjectDataResponse::Exists(object)) = resp
     {
         object
     } else {
@@ -842,7 +860,10 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     .await?
     .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address).await?;
+    let object_refs = context
+        .gateway
+        .get_objects_owned_by_address(address)
+        .await?;
 
     // Check log output contains all object ids.
     let obj_id = object_refs.get(1).unwrap().object_id;
@@ -886,7 +907,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 #[test]
 // Test for issue https://github.com/MystenLabs/sui/issues/1078
 fn test_bug_1078() {
-    let read = WalletCommandResult::Object(GetObjectInfoResponse::NotExists(ObjectID::random()));
+    let read = WalletCommandResult::Object(GetObjectDataResponse::NotExists(ObjectID::random()));
     let mut writer = String::new();
     // fmt ObjectRead should not fail.
     write!(writer, "{}", read).unwrap();
@@ -927,7 +948,11 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     };
 
     // Check that we indeed fetched for addr1
-    let mut actual_objs = context.gateway.get_owned_objects(addr1).await.unwrap();
+    let mut actual_objs = context
+        .gateway
+        .get_objects_owned_by_address(addr1)
+        .await
+        .unwrap();
     cmd_objs.sort();
     actual_objs.sort();
     assert_eq!(cmd_objs, actual_objs);
@@ -1046,7 +1071,7 @@ fn get_gas_value(o: &SuiObject) -> u64 {
 }
 
 async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<SuiObject> {
-    if let GetObjectInfoResponse::Exists(o) = context.gateway.get_object_info(id).await.unwrap() {
+    if let GetObjectDataResponse::Exists(o) = context.gateway.get_object(id).await.unwrap() {
         Some(o)
     } else {
         None
@@ -1059,7 +1084,10 @@ async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<SuiObje
 async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
 
-    let object_refs = context.gateway.get_owned_objects(address).await?;
+    let object_refs = context
+        .gateway
+        .get_objects_owned_by_address(address)
+        .await?;
 
     // Check log output contains all object ids.
     let gas = object_refs.first().unwrap().object_id;
@@ -1097,7 +1125,10 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     }
     .execute(&mut context)
     .await?;
-    let object_refs = context.gateway.get_owned_objects(address).await?;
+    let object_refs = context
+        .gateway
+        .get_objects_owned_by_address(address)
+        .await?;
 
     let primary_coin = object_refs.get(1).unwrap().object_id;
     let coin_to_merge = object_refs.get(2).unwrap().object_id;
@@ -1135,7 +1166,10 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn test_split_coin() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
-    let object_refs = context.gateway.get_owned_objects(address).await?;
+    let object_refs = context
+        .gateway
+        .get_objects_owned_by_address(address)
+        .await?;
 
     // Check log output contains all object ids.
     let gas = object_refs.first().unwrap().object_id;
@@ -1171,7 +1205,10 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .await?
     .print(true);
 
-    let object_refs = context.gateway.get_owned_objects(address).await?;
+    let object_refs = context
+        .gateway
+        .get_objects_owned_by_address(address)
+        .await?;
 
     // Get another coin
     for c in object_refs {
