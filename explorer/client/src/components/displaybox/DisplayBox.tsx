@@ -51,25 +51,9 @@ function DisplayBox({ display }: { display: string }) {
         [setHasFailedToLoad]
     );
 
-    console.log(
-        `img allow state: ${imgAllowState}`,
-        `checked state: ${imgAllowState}, has display loaded: ${hasDisplayLoaded}`
-    );
-
     // if we've loaded the display image but the check hasn't returned, display a blurry version
     const shouldBlur = hasDisplayLoaded && !hasImgBeenChecked && !imgAllowState;
-    if (shouldBlur)
-        console.log(
-            'SHOULD BLUR???',
-            hasDisplayLoaded,
-            hasImgBeenChecked,
-            imgAllowState
-        );
-
     const imgClass = shouldBlur ? styles.imageboxblur : styles.imagebox;
-    console.log('img class', imgClass);
-
-    const imgSrc = processDisplayValue(display);
 
     return (
         <div className={styles['display-container']}>
