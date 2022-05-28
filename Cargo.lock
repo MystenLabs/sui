@@ -5666,6 +5666,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "base64ct",
+ "bcs",
  "config 0.1.0",
  "crypto",
  "debug-ignore",
@@ -5676,7 +5677,6 @@ dependencies = [
  "rand 0.7.3",
  "serde 1.0.137",
  "serde_json",
- "serde_with",
  "sui-adapter",
  "sui-framework",
  "sui-types",
