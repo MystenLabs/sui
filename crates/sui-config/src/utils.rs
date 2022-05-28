@@ -37,3 +37,9 @@ pub fn new_network_address() -> multiaddr::Multiaddr {
         .parse()
         .unwrap()
 }
+
+pub fn available_local_socket_address() -> std::net::SocketAddr {
+    format!("127.0.0.1:{}", get_available_port())
+        .parse()
+        .unwrap()
+}
