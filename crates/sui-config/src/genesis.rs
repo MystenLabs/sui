@@ -225,8 +225,8 @@ mod test {
             genesis_ctx: sui_adapter::genesis::get_genesis_context(),
         };
 
-        let s = serde_json::to_string_pretty(&genesis).unwrap();
-        let from_s = serde_json::from_str(&s).unwrap();
+        let s = serde_yaml::to_string(&genesis).unwrap();
+        let from_s = serde_yaml::from_str(&s).unwrap();
         assert_eq!(genesis, from_s);
     }
 }
