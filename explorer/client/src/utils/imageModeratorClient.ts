@@ -1,4 +1,3 @@
-//import { setInterval } from 'timers/promises';
 import { Network } from './api/rpcSetting';
 import { IS_LOCAL_ENV, IS_STATIC_ENV } from './envUtil';
 
@@ -6,9 +5,8 @@ const ENV_STUBS_IMG_CHECK = IS_STATIC_ENV || IS_LOCAL_ENV;
 
 const ENDPOINTS = {
     [Network.Local]: 'http://127.0.0.1:9200',
-    [Network.Devnet]: 'http://127.0.0.1:9200',
-    // TODO - stand up this real instance
-    //[Network.Devnet]: 'https://explorer-imgmod.sui.io:443',
+    // TODO - https + domain and port 80 for this
+    [Network.Devnet]: 'http://54.146.132.43:9200',
 };
 
 function getHost(network: Network | string): string {
