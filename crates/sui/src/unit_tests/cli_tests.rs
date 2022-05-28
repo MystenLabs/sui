@@ -285,14 +285,8 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
 
     assert!(logs_contain("Loading 2 Move packages"));
     // Checks network config contains package ids
-    let network_conf =
+    let _network_conf =
         PersistedConfig::<NetworkConfig>::read(&working_dir.join(SUI_NETWORK_CONFIG))?;
-    // assert_eq!(2, network_conf.loaded_move_packages().len());
-
-    // Make sure we log out package id
-    for (_, id) in network_conf.loaded_move_packages() {
-        assert!(logs_contain(&*format!("{id}")));
-    }
 
     // Create Wallet context.
     let wallet_conf_path = working_dir.join(SUI_WALLET_CONFIG);
