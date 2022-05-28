@@ -9,15 +9,16 @@ use tracing_test::traced_test;
 
 use sui::wallet_commands::SwitchResponse;
 use sui::{
-    config::{
-        Config, GatewayConfig, GatewayType, PersistedConfig, WalletConfig, SUI_GATEWAY_CONFIG,
-        SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
-    },
+    config::{GatewayConfig, GatewayType, WalletConfig},
     keystore::KeystoreType,
     sui_commands::SuiCommand,
     wallet_commands::{WalletCommandResult, WalletCommands, WalletContext},
 };
-use sui_config::{AccountConfig, GenesisConfig, NetworkConfig, ObjectConfig, SUI_FULLNODE_CONFIG};
+use sui_config::genesis_config::{AccountConfig, GenesisConfig, ObjectConfig};
+use sui_config::{
+    Config, NetworkConfig, PersistedConfig, SUI_FULLNODE_CONFIG, SUI_GATEWAY_CONFIG,
+    SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
+};
 use sui_core::gateway_types::{GetObjectDataResponse, SuiObject, SuiTransactionEffects};
 use sui_json::SuiJsonValue;
 use sui_types::{

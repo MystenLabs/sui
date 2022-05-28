@@ -4,8 +4,8 @@
 #![allow(clippy::large_enum_variant)]
 use crate::benchmark::bench_types::RunningMode;
 use crate::benchmark::load_generator::spawn_authority_server;
+use sui_config::genesis_config::ObjectConfig;
 use sui_config::NetworkConfig;
-use sui_config::ObjectConfig;
 
 use multiaddr::Multiaddr;
 use rocksdb::Options;

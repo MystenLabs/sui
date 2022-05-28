@@ -1,21 +1,21 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    config::{
-        sui_config_dir, Config, GatewayConfig, GatewayType, PersistedConfig, WalletConfig,
-        SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
-    },
+    config::{GatewayConfig, GatewayType, WalletConfig},
     keystore::{Keystore, KeystoreType, SuiKeystore},
 };
 use anyhow::{anyhow, bail};
 use base64ct::{Base64, Encoding};
 use clap::*;
-
 use std::fs;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
+use sui_config::genesis_config::GenesisConfig;
 use sui_config::{builder::ConfigBuilder, NetworkConfig};
-use sui_config::{GenesisConfig, SUI_FULLNODE_CONFIG};
+use sui_config::{
+    sui_config_dir, Config, PersistedConfig, SUI_FULLNODE_CONFIG, SUI_GATEWAY_CONFIG,
+    SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
+};
 use sui_types::base_types::decode_bytes_hex;
 use sui_types::base_types::SuiAddress;
 use tracing::info;

@@ -1,6 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{
+    genesis,
+    genesis_config::{GenesisConfig, ValidatorGenesisInfo},
+    new_network_address, utils, CommitteeConfig, ConsensusConfig, NetworkConfig, NodeConfig,
+    ValidatorInfo, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME, DEFAULT_STAKE,
+};
 use debug_ignore::DebugIgnore;
 use narwhal_config::{
     Authority, Committee as ConsensusCommittee, PrimaryAddresses, Stake, WorkerAddresses,
@@ -11,12 +17,6 @@ use std::{
     path::{Path, PathBuf},
 };
 use sui_types::{base_types::encode_bytes_hex, crypto::get_key_pair_from_rng};
-
-use crate::{
-    genesis, new_network_address, utils, CommitteeConfig, ConsensusConfig, GenesisConfig,
-    NetworkConfig, NodeConfig, ValidatorGenesisInfo, ValidatorInfo, AUTHORITIES_DB_NAME,
-    CONSENSUS_DB_NAME, DEFAULT_STAKE,
-};
 
 pub struct ConfigBuilder<R = OsRng> {
     rng: R,
