@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
-use sui_types::base_types::ObjectID;
 use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair_from_rng, KeyPair};
 use tracing::trace;
@@ -41,7 +40,6 @@ const DEFAULT_STAKE: usize = 1;
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NetworkConfig {
     pub validator_configs: Vec<NodeConfig>,
-    loaded_move_packages: Vec<(PathBuf, ObjectID)>,
     genesis: genesis::Genesis,
     pub account_keys: Vec<KeyPair>,
 }
@@ -51,14 +49,6 @@ impl Config for NetworkConfig {}
 impl NetworkConfig {
     pub fn validator_configs(&self) -> &[NodeConfig] {
         &self.validator_configs
-    }
-
-    pub fn loaded_move_packages(&self) -> &[(PathBuf, ObjectID)] {
-        &self.loaded_move_packages
-    }
-
-    pub fn add_move_package(&mut self, path: PathBuf, object_id: ObjectID) {
-        self.loaded_move_packages.push((path, object_id))
     }
 
     pub fn validator_set(&self) -> &[ValidatorInfo] {
