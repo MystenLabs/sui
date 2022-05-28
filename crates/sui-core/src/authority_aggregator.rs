@@ -17,7 +17,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };
-use tracing::{debug, info, trace, Instrument};
+use tracing::{debug, info, instrument, trace, Instrument};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
@@ -104,6 +104,11 @@ where
     /// Note: Both source and destination may be byzantine, therefore one should always
     /// time limit the call to this function to avoid byzantine authorities consuming
     /// an unbounded amount of resources.
+    #[instrument(
+        name = "sync_authority_source_to_destination",
+        level = "trace",
+        skip_all
+    )]
     pub async fn sync_authority_source_to_destination<
         CertHandler: ConfirmationTransactionHandler,
     >(
@@ -119,18 +124,26 @@ where
         // represent certificates that earlier insertions depend on. Thus updating an
         // authority in the order we pop() the certificates from this stack should ensure
         // certificates are uploaded in causal order.
-        let digest = *cert.certificate.digest();
         let mut missing_certificates: Vec<_> = vec![cert.clone()];
 
         // We keep a list of certificates already processed to avoid duplicates
-        let mut candidate_certificates: HashSet<TransactionDigest> =
-            vec![digest].into_iter().collect();
+        let mut processed_certificates: HashSet<TransactionDigest> = HashSet::new();
         let mut attempted_certificates: HashSet<TransactionDigest> = HashSet::new();
 
         while let Some(target_cert) = missing_certificates.pop() {
-            debug!(?digest, authority =? cert_handler.destination_name(), "Running confirmation transaction for missing cert");
+            let cert_digest = *target_cert.certificate.digest();
+
+            if processed_certificates.contains(&cert_digest) {
+                continue;
+            }
+
+            debug!(digest = ?cert_digest, authority =? cert_handler.destination_name(), "Running confirmation transaction for missing cert");
+
             match cert_handler.handle(target_cert.clone()).await {
-                Ok(_) => continue,
+                Ok(_) => {
+                    processed_certificates.insert(cert_digest);
+                    continue;
+                }
                 Err(SuiError::LockErrors { .. }) => {}
                 Err(e) => return Err(e),
             }
@@ -139,18 +152,18 @@ where
             // the previous certificates, so we need to read them from the source
             // authority.
             debug!(
-                ?digest,
+                digest = ?cert_digest,
                 "Missing previous certificates, need to find parents from source authorities"
             );
 
             // The first time we cannot find the cert from the destination authority
             // we try to get its dependencies. But the second time we have already tried
             // to update its dependencies, so we should just admit failure.
-            let cert_digest = target_cert.certificate.digest();
-            if attempted_certificates.contains(cert_digest) {
+            if attempted_certificates.contains(&cert_digest) {
+                trace!(digest = ?cert_digest, "bailing out after second attempt to fetch");
                 return Err(SuiError::AuthorityInformationUnavailable);
             }
-            attempted_certificates.insert(*cert_digest);
+            attempted_certificates.insert(cert_digest);
 
             // TODO: Eventually the client will store more information, and we could
             // first try to read certificates and parents from a local cache before
@@ -188,7 +201,7 @@ where
                 );
                 source_client
                     .handle_transaction_info_request(TransactionInfoRequest {
-                        transaction_digest: *cert_digest,
+                        transaction_digest: cert_digest,
                     })
                     .await?
             };
@@ -199,30 +212,24 @@ where
                 .signed_effects
                 .ok_or(SuiError::AuthorityInformationUnavailable)?;
 
-            trace!(dependencies =? &signed_effects.effects.dependencies, "Got dependencies from source");
+            trace!(digest = ?cert_digest, dependencies =? &signed_effects.effects.dependencies, "Got dependencies from source");
             for returned_digest in &signed_effects.effects.dependencies {
                 trace!(digest =? returned_digest, "Found parent of missing cert");
-                // We check that we are not processing twice the same certificate, as
-                // it would be common if two objects used by one transaction, were also both
-                // mutated by the same preceding transaction.
-                if !candidate_certificates.contains(returned_digest) {
-                    // Add this cert to the set we have processed
-                    candidate_certificates.insert(*returned_digest);
 
-                    let inner_transaction_info = source_client
-                        .handle_transaction_info_request(TransactionInfoRequest {
-                            transaction_digest: *returned_digest,
-                        })
-                        .await?;
-                    trace!(?returned_digest, source =? source_authority, "Got transaction info from source");
+                let inner_transaction_info = source_client
+                    .handle_transaction_info_request(TransactionInfoRequest {
+                        transaction_digest: *returned_digest,
+                    })
+                    .await?;
+                trace!(?returned_digest, source =? source_authority, "Got transaction info from source");
 
-                    let returned_certificate = inner_transaction_info
-                        .certified_transaction
-                        .ok_or(SuiError::AuthorityInformationUnavailable)?;
+                let returned_certificate = inner_transaction_info
+                    .certified_transaction
+                    .ok_or(SuiError::AuthorityInformationUnavailable)?;
 
-                    // Add it to the list of certificates to sync
-                    missing_certificates.push(ConfirmationTransaction::new(returned_certificate));
-                }
+                // Add it to the list of certificates to sync
+                trace!(?returned_digest, source =? source_authority, "Pushing transaction onto stack");
+                missing_certificates.push(ConfirmationTransaction::new(returned_certificate));
             }
         }
 
