@@ -3,6 +3,7 @@
 
 use crate::genesis;
 use crate::Config;
+use anyhow::Result;
 use debug_ignore::DebugIgnore;
 use multiaddr::Multiaddr;
 use narwhal_config::Committee as ConsensusCommittee;
@@ -27,7 +28,7 @@ pub struct NodeConfig {
     pub consensus_config: Option<ConsensusConfig>,
     pub committee_config: CommitteeConfig,
 
-    pub genesis: genesis::Genesis,
+    pub genesis: Genesis,
 }
 
 impl Config for NodeConfig {}
@@ -61,8 +62,8 @@ impl NodeConfig {
         &self.committee_config
     }
 
-    pub fn genesis(&self) -> &genesis::Genesis {
-        &self.genesis
+    pub fn genesis(&self) -> Result<&genesis::Genesis> {
+        self.genesis.genesis()
     }
 }
 
@@ -147,5 +148,97 @@ impl ValidatorInfo {
 
     pub fn network_address(&self) -> &Multiaddr {
         &self.network_address
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct Genesis {
+    #[serde(flatten)]
+    location: GenesisLocation,
+
+    #[serde(skip)]
+    genesis: once_cell::sync::OnceCell<genesis::Genesis>,
+}
+
+impl Genesis {
+    pub fn new(genesis: genesis::Genesis) -> Self {
+        Self {
+            location: GenesisLocation::InPlace { genesis },
+            genesis: Default::default(),
+        }
+    }
+
+    pub fn new_from_file<P: Into<PathBuf>>(path: P) -> Self {
+        Self {
+            location: GenesisLocation::File {
+                genesis_file_location: path.into(),
+            },
+            genesis: Default::default(),
+        }
+    }
+
+    fn genesis(&self) -> Result<&genesis::Genesis> {
+        match &self.location {
+            GenesisLocation::InPlace { genesis } => Ok(genesis),
+            GenesisLocation::File {
+                genesis_file_location,
+            } => self
+                .genesis
+                .get_or_try_init(|| genesis::Genesis::load(&genesis_file_location)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(untagged)]
+enum GenesisLocation {
+    InPlace {
+        genesis: genesis::Genesis,
+    },
+    File {
+        #[serde(rename = "genesis-file-location")]
+        genesis_file_location: PathBuf,
+    },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Genesis;
+    use crate::genesis;
+
+    #[test]
+    fn serialize_genesis_config_from_file() {
+        let g = Genesis::new_from_file("path/to/file");
+
+        let s = serde_yaml::to_string(&g).unwrap();
+        assert_eq!("---\ngenesis-file-location: path/to/file\n", s);
+        let loaded_genesis: Genesis = serde_yaml::from_str(&s).unwrap();
+        assert_eq!(g, loaded_genesis);
+    }
+
+    #[test]
+    fn serialize_genesis_config_in_place() {
+        let g = Genesis::new(genesis::Genesis::get_default_genesis());
+
+        let mut s = serde_yaml::to_string(&g).unwrap();
+        let loaded_genesis: Genesis = serde_yaml::from_str(&s).unwrap();
+        assert_eq!(g, loaded_genesis);
+
+        // If both in-place and file location are provided, prefer the in-place variant
+        s.push_str("\ngenesis-file-location: path/to/file");
+        let loaded_genesis: Genesis = serde_yaml::from_str(&s).unwrap();
+        assert_eq!(g, loaded_genesis);
+    }
+
+    #[test]
+    fn load_genesis_config_from_file() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let genesis_config = Genesis::new_from_file(file.path());
+
+        let genesis = genesis::Genesis::get_default_genesis();
+        genesis.save(file.path()).unwrap();
+
+        let loaded_genesis = genesis_config.genesis().unwrap();
+        assert_eq!(&genesis, loaded_genesis);
     }
 }
