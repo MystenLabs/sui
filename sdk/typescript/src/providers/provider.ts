@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  GetObjectInfoResponse,
-  SuiObjectRef,
+  GetObjectDataResponse,
+  SuiObjectInfo,
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
   TransactionResponse,
@@ -16,12 +16,14 @@ export abstract class Provider {
   /**
    * Get all objects owned by an address
    */
-  abstract getOwnedObjectRefs(address: string): Promise<SuiObjectRef[]>;
+  abstract getObjectsOwnedByAddress(
+    addressOrObjectId: string
+  ): Promise<SuiObjectInfo[]>;
 
   /**
-   * Get information about an object
+   * Get details about an object
    */
-  abstract getObjectInfo(objectId: string): Promise<GetObjectInfoResponse>;
+  abstract getObject(objectId: string): Promise<GetObjectDataResponse>;
 
   // Transactions
   /**

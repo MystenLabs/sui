@@ -44,7 +44,7 @@ const ObjectResultAPI = ({ objID }: { objID: string }): JSX.Element => {
     const [network] = useContext(NetworkContext);
     useEffect(() => {
         rpc(network)
-            .getObjectInfo(objID as string)
+            .getObject(objID as string)
             .then((objState) => {
                 setObjectState({
                     ...(translate(objState) as DataType),

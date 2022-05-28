@@ -378,7 +378,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                     )}
                     {showConnectedEntities &&
                         data.objType !== 'Move Package' && (
-                            <OwnedObjects id={data.id} />
+                            <OwnedObjects id={data.id} byAddress={false} />
                         )}
                 </div>
             </div>

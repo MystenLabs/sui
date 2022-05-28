@@ -13,7 +13,7 @@ import {
 import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
 import { parseObjectType } from '../../utils/objectUtils';
 
-import type { GetObjectInfoResponse, ObjectOwner } from '@mysten/sui.js';
+import type { GetObjectDataResponse, ObjectOwner } from '@mysten/sui.js';
 
 export type DataType = {
     id: string;
@@ -45,7 +45,7 @@ export function instanceOfDataType(object: any): object is DataType {
  * TODO: We should redesign the rendering logic and data model
  * to make this more extensible and customizable for different Move types
  */
-export function translate(o: GetObjectInfoResponse): DataType {
+export function translate(o: GetObjectDataResponse): DataType {
     switch (o.status) {
         case 'Exists': {
             return {
