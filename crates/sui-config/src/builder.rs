@@ -159,14 +159,13 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 (name, authority)
             })
             .collect();
-        let consensus_committee = ConsensusCommittee {
+        let narwhal_committee = DebugIgnore(ConsensusCommittee {
             authorities: narwhal_committee,
-        };
+        });
 
         let committee_config = CommitteeConfig {
             epoch,
             validator_set,
-            consensus_committee: DebugIgnore(consensus_committee),
         };
 
         let validator_configs = validators
@@ -187,6 +186,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     consensus_address,
                     consensus_db_path,
                     narwhal_config: Default::default(),
+                    narwhal_committee: narwhal_committee.clone(),
                 };
 
                 let metrics_address = new_network_address();
