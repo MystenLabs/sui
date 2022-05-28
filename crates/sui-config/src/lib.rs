@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Context;
 use anyhow::Result;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -58,6 +59,23 @@ where
             path: path.to_path_buf(),
         }
     }
+
+    fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
+        let path = path.as_ref();
+        trace!("Reading config from {}", path.display());
+        let reader = fs::File::open(path)
+            .with_context(|| format!("Unable to load config from {}", path.display()))?;
+        Ok(serde_yaml::from_reader(reader)?)
+    }
+
+    fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), anyhow::Error> {
+        let path = path.as_ref();
+        trace!("Writing config to {}", path.display());
+        let config = serde_yaml::to_string(&self)?;
+        fs::write(path, config)
+            .with_context(|| format!("Unable to save config to {}", path.display()))?;
+        Ok(())
+    }
 }
 
 pub struct PersistedConfig<C> {
@@ -70,16 +88,11 @@ where
     C: Config,
 {
     pub fn read(path: &Path) -> Result<C, anyhow::Error> {
-        trace!("Reading config from '{:?}'", path);
-        let reader = fs::File::open(path)?;
-        Ok(serde_yaml::from_reader(reader)?)
+        Config::load(path)
     }
 
     pub fn save(&self) -> Result<(), anyhow::Error> {
-        trace!("Writing config to '{:?}'", &self.path);
-        let config = serde_yaml::to_string(&self.inner)?;
-        fs::write(&self.path, config)?;
-        Ok(())
+        self.inner.save(&self.path)
     }
 
     pub fn into_inner(self) -> C {
