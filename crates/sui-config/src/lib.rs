@@ -2,24 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use multiaddr::Multiaddr;
-use rand::rngs::OsRng;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::fs;
-use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
-use sui_types::committee::Committee;
-use sui_types::crypto::{get_key_pair_from_rng, KeyPair};
 use tracing::trace;
 
 pub mod builder;
 pub mod genesis;
 pub mod genesis_config;
 pub mod node;
+mod swarm;
 pub mod utils;
 
 pub use node::{CommitteeConfig, ConsensusConfig, NodeConfig, ValidatorInfo};
+pub use swarm::NetworkConfig;
 
 const SUI_DIR: &str = ".sui";
 const SUI_CONFIG_DIR: &str = "sui_config";
@@ -34,83 +31,6 @@ pub const CONSENSUS_DB_NAME: &str = "consensus_db";
 pub const FULL_NODE_DB_PATH: &str = "full_node_db";
 
 const DEFAULT_STAKE: usize = 1;
-
-/// This is a config that is used for testing or local use as it contains the config and keys for
-/// all validators
-#[derive(Debug, Deserialize, Serialize)]
-pub struct NetworkConfig {
-    pub validator_configs: Vec<NodeConfig>,
-    genesis: genesis::Genesis,
-    pub account_keys: Vec<KeyPair>,
-}
-
-impl Config for NetworkConfig {}
-
-impl NetworkConfig {
-    pub fn validator_configs(&self) -> &[NodeConfig] {
-        &self.validator_configs
-    }
-
-    pub fn validator_set(&self) -> &[ValidatorInfo] {
-        self.validator_configs()[0]
-            .committee_config()
-            .validator_set()
-    }
-
-    pub fn committee(&self) -> Committee {
-        self.validator_configs()[0].committee_config().committee()
-    }
-
-    pub fn into_validator_configs(self) -> Vec<NodeConfig> {
-        self.validator_configs
-    }
-
-    pub fn generate_with_rng<R: rand::CryptoRng + rand::RngCore>(
-        config_dir: &Path,
-        quorum_size: usize,
-        rng: R,
-    ) -> Self {
-        builder::ConfigBuilder::new(config_dir)
-            .committee_size(NonZeroUsize::new(quorum_size).unwrap())
-            .rng(rng)
-            .build()
-    }
-
-    pub fn generate(config_dir: &Path, quorum_size: usize) -> Self {
-        Self::generate_with_rng(config_dir, quorum_size, OsRng)
-    }
-
-    /// Generate a fullnode config based on this `NetworkConfig`. This is useful if you want to run
-    /// a fullnode and have it connect to a network defined by this `NetworkConfig`.
-    pub fn generate_fullnode_config(&self) -> NodeConfig {
-        let key_pair = get_key_pair_from_rng(&mut OsRng).1;
-        let validator_config = &self.validator_configs[0];
-
-        let mut db_path = validator_config.db_path.clone();
-        db_path.pop();
-
-        NodeConfig {
-            key_pair,
-            db_path: db_path.join("fullnode"),
-            network_address: new_network_address(),
-            metrics_address: new_network_address(),
-            json_rpc_address: format!("127.0.0.1:{}", utils::get_available_port())
-                .parse()
-                .unwrap(),
-
-            consensus_config: None,
-            committee_config: validator_config.committee_config.clone(),
-
-            genesis: validator_config.genesis.clone(),
-        }
-    }
-}
-
-fn new_network_address() -> Multiaddr {
-    format!("/dns/localhost/tcp/{}/http", utils::get_available_port())
-        .parse()
-        .unwrap()
-}
 
 pub fn sui_config_dir() -> Result<PathBuf, anyhow::Error> {
     match std::env::var_os("SUI_CONFIG_DIR") {
