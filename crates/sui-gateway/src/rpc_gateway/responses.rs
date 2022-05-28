@@ -6,17 +6,10 @@ use move_core_types::parser::parse_type_tag;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_with::serde_as;
 use sui_core::gateway_types::{SuiData, SuiObjectRef};
 
 use sui_types::base_types::TransactionDigest;
 use sui_types::object::Owner;
-
-#[serde_as]
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub struct ObjectResponse {
-    pub objects: Vec<SuiObjectRef>,
-}
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]

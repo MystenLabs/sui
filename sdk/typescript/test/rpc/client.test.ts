@@ -8,12 +8,18 @@ import {
   MOCK_ENDPOINT,
   MOCK_PORT,
 } from '../mocks/rpc-http';
-import { isGetOwnedObjectRefsResponse } from '../../src/index.guard';
+import { isGetOwnedObjectsResponse } from '../../src/index.guard';
+import { SuiObjectInfo } from '../../src';
 
-const EXAMPLE_OBJECT = {
+const EXAMPLE_OBJECT: SuiObjectInfo = {
   objectId: '8dc6a6f70564e29a01c7293a9c03818fda2d049f',
   version: 0,
   digest: 'CI8Sf+t3Xrt5h9ENlmyR8bbMVfg6df3vSDc08Gbk9/g=',
+  owner: {
+    AddressOwner: '0x215592226abfec8d03fbbeb8b30eb0d2129c94b0',
+  },
+  type: 'moveObject',
+  previousTransaction: '4RJfkN9SgLYdb0LqxBHh6lfRPicQ8FLJgzi9w2COcTo=',
 };
 
 describe('JSON-RPC Client', () => {
@@ -31,19 +37,17 @@ describe('JSON-RPC Client', () => {
 
   it('requestWithType', async () => {
     await mockRpcResponse({
-      method: 'sui_getOwnedObjects',
+      method: 'sui_getOwnedObjectsByAddress',
       params: [],
-      value: {
-        objects: [EXAMPLE_OBJECT],
-      },
+      value: [EXAMPLE_OBJECT],
     });
 
     const resp = await client.requestWithType(
-      'sui_getOwnedObjects',
+      'sui_getOwnedObjectsByAddress',
       [],
-      isGetOwnedObjectRefsResponse
+      isGetOwnedObjectsResponse
     );
-    expect(resp.objects.length).toEqual(1);
-    expect(resp.objects[0]).toEqual(EXAMPLE_OBJECT);
+    expect(resp.length).toEqual(1);
+    expect(resp[0]).toEqual(EXAMPLE_OBJECT);
   });
 });

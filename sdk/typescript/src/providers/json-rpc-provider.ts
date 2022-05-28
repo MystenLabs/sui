@@ -4,8 +4,8 @@
 import { Provider } from './provider';
 import { JsonRpcClient } from '../rpc/client';
 import {
-  isGetObjectInfoResponse,
-  isGetOwnedObjectRefsResponse,
+  isGetObjectDataResponse,
+  isGetOwnedObjectsResponse,
   isGetTxnDigestsResponse,
   isTransactionEffectsResponse,
   isTransactionResponse,
@@ -13,8 +13,8 @@ import {
 import {
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
-  GetObjectInfoResponse,
-  SuiObjectRef,
+  GetObjectDataResponse,
+  SuiObjectInfo,
   TransactionDigest,
   TransactionEffectsResponse,
   TransactionResponse,
@@ -36,44 +36,55 @@ export class JsonRpcProvider extends Provider {
   }
 
   // Objects
-  async getOwnedObjectRefs(address: string): Promise<SuiObjectRef[]> {
+  async getObjectsOwnedByAddress(address: string): Promise<SuiObjectInfo[]> {
     try {
-      const resp = await this.client.requestWithType(
-        'sui_getOwnedObjects',
+      return await this.client.requestWithType(
+        'sui_getObjectsOwnedByAddress',
         [address],
-        isGetOwnedObjectRefsResponse
+        isGetOwnedObjectsResponse
       );
-      return resp.objects;
     } catch (err) {
       throw new Error(
-        `Error fetching owned object refs: ${err} for address ${address}`
+        `Error fetching owned object: ${err} for address ${address}`
       );
     }
   }
 
-  async getObjectInfo(objectId: string): Promise<GetObjectInfoResponse> {
+  async getObjectsOwnedByObject(objectId: string): Promise<SuiObjectInfo[]> {
     try {
       return await this.client.requestWithType(
-        'sui_getObjectInfo',
+        'sui_getObjectsOwnedByObject',
         [objectId],
-        isGetObjectInfoResponse
+        isGetOwnedObjectsResponse
+      );
+    } catch (err) {
+      throw new Error(
+        `Error fetching owned object: ${err} for objectId ${objectId}`
+      );
+    }
+  }
+
+  async getObject(objectId: string): Promise<GetObjectDataResponse> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getObject',
+        [objectId],
+        isGetObjectDataResponse
       );
     } catch (err) {
       throw new Error(`Error fetching object info: ${err} for id ${objectId}`);
     }
   }
 
-  async getObjectInfoBatch(
-    objectIds: string[]
-  ): Promise<GetObjectInfoResponse[]> {
+  async getObjectBatch(objectIds: string[]): Promise<GetObjectDataResponse[]> {
     const requests = objectIds.map(id => ({
-      method: 'sui_getObjectInfo',
+      method: 'sui_getObject',
       args: [id],
     }));
     try {
       return await this.client.batchRequestWithType(
         requests,
-        isGetObjectInfoResponse
+        isGetObjectDataResponse
       );
     } catch (err) {
       throw new Error(`Error fetching object info: ${err} for id ${objectIds}`);

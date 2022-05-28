@@ -222,7 +222,9 @@ impl Data {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema)]
+#[derive(
+    Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
+)]
 pub enum Owner {
     /// Object is exclusively owned by a single address, and is mutable.
     AddressOwner(SuiAddress),
@@ -355,8 +357,8 @@ impl Object {
 
     // It's a common pattern to retrieve both the owner and object ID
     // together, if it's owned by a singler owner.
-    pub fn get_single_owner_and_id(&self) -> Option<(SuiAddress, ObjectID)> {
-        self.get_single_owner().map(|owner| (owner, self.id()))
+    pub fn get_owner_and_id(&self) -> Option<(Owner, ObjectID)> {
+        Some((self.owner, self.id()))
     }
 
     /// Return true if this object is a Move package, false if it is a Move value

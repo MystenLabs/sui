@@ -4,9 +4,6 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::api::{RpcGatewayApiServer, SuiRpcModule};
-use crate::rpc_gateway::responses::SuiTypeTag;
-use crate::{api::TransactionBytes, config::GatewayConfig, rpc_gateway::responses::ObjectResponse};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use ed25519_dalek::ed25519::signature::Signature;
@@ -16,8 +13,9 @@ use tracing::debug;
 
 use sui_config::PersistedConfig;
 use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
-use sui_core::gateway_types::GetObjectInfoResponse;
-use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
+use sui_core::gateway_types::{
+    GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
+};
 use sui_json::SuiJsonValue;
 use sui_open_rpc::Module;
 use sui_types::sui_serde::Base64;
@@ -28,8 +26,14 @@ use sui_types::{
     messages::{Transaction, TransactionData},
 };
 
-use crate::api::RpcReadApiServer;
-use crate::api::RpcTransactionBuilderServer;
+use crate::rpc_gateway::responses::SuiTypeTag;
+use crate::{
+    api::{
+        RpcGatewayApiServer, RpcReadApiServer, RpcTransactionBuilderServer, SuiRpcModule,
+        TransactionBytes,
+    },
+    config::GatewayConfig,
+};
 
 pub mod responses;
 
@@ -116,14 +120,24 @@ impl SuiRpcModule for RpcGatewayImpl {
 
 #[async_trait]
 impl RpcReadApiServer for GatewayReadApiImpl {
-    async fn get_owned_objects(&self, owner: SuiAddress) -> RpcResult<ObjectResponse> {
-        debug!("get_objects : {}", owner);
-        let objects = self.client.get_owned_objects(owner).await?;
-        Ok(ObjectResponse { objects })
+    async fn get_objects_owned_by_address(
+        &self,
+        address: SuiAddress,
+    ) -> RpcResult<Vec<SuiObjectInfo>> {
+        debug!("get_objects_own_by_address : {}", address);
+        Ok(self.client.get_objects_owned_by_address(address).await?)
     }
 
-    async fn get_object_info(&self, object_id: ObjectID) -> RpcResult<GetObjectInfoResponse> {
-        Ok(self.client.get_object_info(object_id).await?)
+    async fn get_objects_owned_by_object(
+        &self,
+        object_id: ObjectID,
+    ) -> RpcResult<Vec<SuiObjectInfo>> {
+        debug!("get_objects_own_by_object : {}", object_id);
+        Ok(self.client.get_objects_owned_by_object(object_id).await?)
+    }
+
+    async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
+        Ok(self.client.get_object(object_id).await?)
     }
 
     async fn get_recent_transactions(
