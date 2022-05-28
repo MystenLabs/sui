@@ -196,9 +196,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     db_path,
                     network_address,
                     metrics_address,
-                    json_rpc_address: format!("127.0.0.1:{}", utils::get_available_port())
-                        .parse()
-                        .unwrap(),
+                    json_rpc_address: utils::available_local_socket_address(),
                     consensus_config: Some(consensus_config),
                     committee_config: committee_config.clone(),
                     genesis: genesis.clone(),
