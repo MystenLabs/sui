@@ -208,7 +208,6 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
 
         NetworkConfig {
             validator_configs,
-            loaded_move_packages: vec![],
             genesis,
             account_keys,
         }
