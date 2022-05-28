@@ -66,11 +66,17 @@ function DisplayBox({ display }: { display: string }) {
                     image loading...
                 </div>
             )}
-            {hasFailedToLoad ? (
+            {hasFailedToLoad && (
                 <div className={styles.imagebox} id="noImage">
                     No Image was Found
                 </div>
-            ) : (
+            )}
+            {!hasFailedToLoad && hasImgBeenChecked && !imgAllowState && (
+                <div className={styles.automod} id="modnotice">
+                    image hidden by automod
+                </div>
+            )}
+            {!hasFailedToLoad && (
                 <img
                     id="loadedImage"
                     className={imgClass}

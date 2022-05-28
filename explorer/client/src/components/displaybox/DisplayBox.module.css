@@ -14,12 +14,12 @@ img.imagebox {
 /* ambient filter pattern for after image is loaded but hasn't been auto-modded yet */
 @keyframes changeblur {
     from {
-        filter: blur(22px);
+        filter: blur(15px) contrast(90%);
         opacity: 0.72;
     }
 
     to {
-        filter: blur(18px);
+        filter: blur(10px) contrast(60%);
         opacity: 0.64;
     }
 }
@@ -27,8 +27,8 @@ img.imagebox {
 img.imageboxblur {
     @apply object-scale-down w-[100%];
 
-    filter: blur(20px);
-    opacity: 0.64;
+    filter: blur(8px);
+    opacity: 0.72;
     transition: filter opacity ease-in 0.14s;
     animation-duration: 1s;
     animation-name: changeblur;
@@ -39,8 +39,8 @@ img.imageboxblur {
 img.imageblurstill {
     @apply object-scale-down w-[100%];
 
-    filter: blur(36px);
-    opacity: 0.9;
+    filter: blur(16px) contrast(60%);
+    opacity: 0.75;
     transition: filter opacity ease-out 0.14s;
 }
 
@@ -48,4 +48,17 @@ img.imageblurstill {
     @apply overflow-hidden
     border-solid border-stone-300 rounded-lg mt-[1vh] w-[88vw]
     w-[88vw] h-[88vw] lg:w-[35vw] lg:h-[35vw] mb-[10vh];
+}
+
+div.automod {
+    @apply border-0 border-b-2 border-solid border-gray-300;
+
+    background-color: #f0ecc1;
+    position: relative;
+    text-align: center;
+    z-index: 100;
+    align-content: center;
+    opacity: 0.45;
+    width: fit-content;
+    margin: auto;
 }

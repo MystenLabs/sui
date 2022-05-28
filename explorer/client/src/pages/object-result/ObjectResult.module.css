@@ -18,7 +18,7 @@ h1.title {
 }
 
 .display > div > div {
-    @apply p-1 pt-10;
+    @apply p-1 pt-2;
 }
 
 /* Text Box CSS */
