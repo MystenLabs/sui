@@ -141,9 +141,11 @@ pub async fn checkpoint_process<A>(
             // In either case try to upgrade the signed checkpoint to a certified one
             // if possible
             let result = {
-                state_checkpoints
-                    .lock()
-                    .handle_checkpoint_certificate(&checkpoint, &None)
+                state_checkpoints.lock().handle_checkpoint_certificate(
+                    &checkpoint,
+                    &None,
+                    &active_authority.state.committee.load(),
+                )
             }; // unlock
 
             if let Err(err) = result {
@@ -162,9 +164,11 @@ pub async fn checkpoint_process<A>(
                 .await
                 {
                     // Retry with contents
-                    let _ = state_checkpoints
-                        .lock()
-                        .handle_checkpoint_certificate(&checkpoint, &Some(contents));
+                    let _ = state_checkpoints.lock().handle_checkpoint_certificate(
+                        &checkpoint,
+                        &Some(contents),
+                        &active_authority.state.committee.load(),
+                    );
                 }
             }
         }
@@ -424,9 +428,10 @@ where
         let (past, _contents) =
             get_one_checkpoint(net.clone(), seq, false, &available_authorities).await?;
 
-        if let Err(err) = checkpoint_db
-            .lock()
-            .handle_checkpoint_certificate(&past, &None)
+        if let Err(err) =
+            checkpoint_db
+                .lock()
+                .handle_checkpoint_certificate(&past, &None, &net.committee)
         {
             warn!("Error handling certificate: {err:?}");
         }
@@ -445,9 +450,10 @@ where
         let (past, _contents) =
             get_one_checkpoint(net.clone(), seq, true, &available_authorities).await?;
 
-        if let Err(err) = checkpoint_db
-            .lock()
-            .handle_checkpoint_certificate(&past, &_contents)
+        if let Err(err) =
+            checkpoint_db
+                .lock()
+                .handle_checkpoint_certificate(&past, &_contents, &net.committee)
         {
             warn!("Sync Err: {err:?}");
         }
@@ -642,7 +648,10 @@ pub async fn diff_proposals<A>(
                             let proposer = &fragment.proposer.0.authority;
                             let other = &fragment.other.0.authority;
                             debug!("Send fragment: {proposer:?} -- {other:?}");
-                            let _ = checkpoint_db.lock().handle_receive_fragment(&fragment);
+                            let _ = checkpoint_db.lock().handle_receive_fragment(
+                                &fragment,
+                                &active_authority.state.committee.load(),
+                            );
                         }
                         Err(err) => {
                             // TODO: some error occurred -- log it.

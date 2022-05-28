@@ -82,6 +82,9 @@ mod authority_store;
 pub use authority_store::{
     AuthorityStore, AuthorityStoreWrapper, GatewayStore, ReplicaStore, SuiDataStore,
 };
+use sui_types::messages_checkpoint::{
+    CheckpointRequest, CheckpointRequestType, CheckpointResponse,
+};
 use sui_types::object::Owner;
 use sui_types::sui_system_state::SuiSystemState;
 
@@ -730,6 +733,32 @@ impl AuthorityState {
         Ok((items, (should_subscribe, start, end)))
     }
 
+    pub fn handle_checkpoint_request(
+        &self,
+        request: &CheckpointRequest,
+    ) -> Result<CheckpointResponse, SuiError> {
+        let mut checkpoint_store = self
+            .checkpoints
+            .as_ref()
+            .ok_or(SuiError::UnsupportedFeatureError {
+                error: "Checkpoint not supported".to_owned(),
+            })?
+            .lock();
+        match &request.request_type {
+            CheckpointRequestType::LatestCheckpointProposal => {
+                checkpoint_store.handle_latest_proposal(request)
+            }
+            CheckpointRequestType::PastCheckpoint(seq) => {
+                checkpoint_store.handle_past_checkpoint(request.detail, *seq)
+            }
+            CheckpointRequestType::SetCertificate(cert, opt_contents) => checkpoint_store
+                .handle_checkpoint_certificate(cert, opt_contents, &self.committee.load()),
+            CheckpointRequestType::SetFragment(fragment) => {
+                checkpoint_store.handle_receive_fragment(fragment, &self.committee.load())
+            }
+        }
+    }
+
     pub async fn new(
         committee: Committee,
         name: AuthorityName,
@@ -871,10 +900,6 @@ impl AuthorityState {
         })?;
         self.halted.store(false, Ordering::SeqCst);
         Ok(())
-    }
-
-    pub(crate) fn checkpoints(&self) -> Option<Arc<Mutex<CheckpointStore>>> {
-        self.checkpoints.clone()
     }
 
     pub(crate) fn db(&self) -> Arc<AuthorityStore> {
@@ -1251,7 +1276,7 @@ impl ExecutionState for AuthorityState {
                 if let Some(checkpoint) = &self.checkpoints {
                     checkpoint
                         .lock()
-                        .handle_internal_fragment(seq, *fragment)
+                        .handle_internal_fragment(seq, *fragment, &self.committee.load())
                         .map_err(|e| SuiError::from(&e.to_string()[..]))?;
 
                     // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
