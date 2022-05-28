@@ -1,11 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Context;
 use base64ct::Encoding;
 use move_binary_format::CompiledModule;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::{fs, path::Path};
 use sui_types::{base_types::TxContext, crypto::PublicKeyBytes, object::Object};
-use tracing::info;
+use tracing::{info, trace};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Genesis {
@@ -29,6 +31,23 @@ impl Genesis {
 
     pub fn get_default_genesis() -> Self {
         Builder::new(sui_adapter::genesis::get_genesis_context()).build()
+    }
+
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
+        let path = path.as_ref();
+        trace!("Reading Genesis from {}", path.display());
+        let bytes = fs::read(path)
+            .with_context(|| format!("Unable to load Genesis from {}", path.display()))?;
+        Ok(bcs::from_bytes(&bytes)?)
+    }
+
+    pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), anyhow::Error> {
+        let path = path.as_ref();
+        trace!("Writing Genesis to {}", path.display());
+        let bytes = bcs::to_bytes(&self)?;
+        fs::write(path, bytes)
+            .with_context(|| format!("Unable to save Genesis to {}", path.display()))?;
+        Ok(())
     }
 }
 
