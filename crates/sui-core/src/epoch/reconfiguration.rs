@@ -3,10 +3,11 @@
 
 use crate::authority_active::ActiveAuthority;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::time::Duration;
 use sui_types::committee::Committee;
 use sui_types::crypto::PublicKeyBytes;
-use sui_types::error::{SuiResult, SuiError};
+use sui_types::error::{SuiError, SuiResult};
 use sui_types::fp_ensure;
 use sui_types::messages::SignedTransaction;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -14,12 +15,12 @@ use tokio::time::Instant;
 use typed_store::Map;
 
 // TODO: Make last checkpoint number of each epoch more flexible.
-const CHECKPOINT_COUNT_PER_EPOCH: u64 = 200;
+pub const CHECKPOINT_COUNT_PER_EPOCH: u64 = 200;
 
 const MAX_START_EPOCH_WAIT_SECONDS: Duration = Duration::from_secs(5);
 
 impl<A> ActiveAuthority<A> {
-    pub async fn start_epoch_change(&mut self) -> SuiResult {
+    pub async fn start_epoch_change(&self) -> SuiResult {
         {
             let checkpoints = self.state.checkpoints.as_ref().unwrap().lock();
             let next_cp = checkpoints.get_locals().next_checkpoint;
@@ -32,27 +33,31 @@ impl<A> ActiveAuthority<A> {
             fp_ensure!(
                 checkpoints.lowest_unprocessed_checkpoint() == next_cp,
                 SuiError::InconsistentEpochState {
-                    error: "start_epoch_change called when there are still unprocessed transactions".to_owned(),
+                    error:
+                        "start_epoch_change called when there are still unprocessed transactions"
+                            .to_owned(),
                 }
             );
             // drop checkpoints lock
         }
-        
+
         self.state.halted.store(true, Ordering::SeqCst);
         let instant = Instant::now();
         while !self.state.batch_notifier.ticket_drained() {
-            tokio::time::sleep(Duration::from_millis(50)).await;
+            tokio::time::sleep(Duration::from_millis(10)).await;
             fp_ensure!(
                 instant.elapsed() <= MAX_START_EPOCH_WAIT_SECONDS,
                 SuiError::InconsistentEpochState {
-                    error: "Waiting for batch_notifier ticket to drain timed out in start_epoch_change".to_owned(),
+                    error:
+                        "Waiting for batch_notifier ticket to drain timed out in start_epoch_change"
+                            .to_owned(),
                 }
             );
         }
         Ok(())
     }
 
-    pub async fn finish_epoch_change(&mut self) -> SuiResult {
+    pub async fn finish_epoch_change(&self) -> SuiResult {
         fp_ensure!(
             self.state.halted.load(Ordering::SeqCst),
             SuiError::InconsistentEpochState {
@@ -71,7 +76,9 @@ impl<A> ActiveAuthority<A> {
             fp_ensure!(
                 checkpoints.lowest_unprocessed_checkpoint() == next_cp,
                 SuiError::InconsistentEpochState {
-                    error: "finish_epoch_change called when there are still unprocessed transactions".to_owned(),
+                    error:
+                        "finish_epoch_change called when there are still unprocessed transactions"
+                            .to_owned(),
                 }
             );
             if checkpoints.extra_transactions.iter().next().is_some() {
@@ -109,8 +116,7 @@ impl<A> ActiveAuthority<A> {
         );
         self.state
             .change_epoch_tx
-            .lock()
-            .insert(self.state.name, advance_epoch_tx);
+            .store(Some(Arc::new(advance_epoch_tx)));
 
         // TODO: Now ask every validator in the committee for this signed tx.
         // Aggregate them to obtain a cert, execute the cert, and then start the new epoch.

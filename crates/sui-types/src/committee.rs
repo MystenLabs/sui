@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, HashMap};
 
 pub type EpochId = u64;
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Committee {
     pub epoch: EpochId,
     pub voting_rights: BTreeMap<AuthorityName, u64>,
@@ -108,5 +108,13 @@ impl Committee {
             }
         }
         unreachable!();
+    }
+}
+
+impl PartialEq for Committee {
+    fn eq(&self, other: &Self) -> bool {
+        self.epoch == other.epoch
+            && self.voting_rights == other.voting_rights
+            && self.total_votes == other.total_votes
     }
 }

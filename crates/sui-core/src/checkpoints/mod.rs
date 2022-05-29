@@ -182,13 +182,18 @@ impl CheckpointStore {
 
     /// Set the local variables in memory and store
     fn set_locals(
-        &mut self,
+        &self,
         _previous: Arc<CheckpointLocals>,
         locals: CheckpointLocals,
     ) -> Result<(), SuiError> {
         self.locals.insert(&LOCALS, &locals)?;
         self.memory_locals.store(Some(Arc::new(locals)));
         Ok(())
+    }
+
+    #[cfg(test)]
+    pub fn set_locals_for_testing(&self, locals: CheckpointLocals) -> Result<(), SuiError> {
+        self.set_locals(Arc::new(locals.clone()), locals)
     }
 
     /// Read the local variables

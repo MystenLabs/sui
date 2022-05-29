@@ -12,7 +12,7 @@ use crate::{
     transaction_input_checker,
 };
 use anyhow::anyhow;
-use arc_swap::ArcSwap;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use async_trait::async_trait;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
@@ -226,11 +226,11 @@ pub struct AuthorityState {
     /// A global lock to halt all transaction/cert processing.
     #[allow(dead_code)]
     pub(crate) halted: AtomicBool,
-    pub(crate) change_epoch_tx: Mutex<BTreeMap<AuthorityName, SignedTransaction>>,
+    pub(crate) change_epoch_tx: ArcSwapOption<SignedTransaction>,
 
     /// Move native functions that are available to invoke
-    _native_functions: NativeFunctionTable,
-    move_vm: Arc<MoveVM>,
+    pub(crate) _native_functions: NativeFunctionTable,
+    pub(crate) move_vm: Arc<MoveVM>,
 
     /// The database
     pub(crate) database: Arc<AuthorityStore>, // TODO: remove pub
@@ -784,7 +784,7 @@ impl AuthorityState {
             secret,
             committee: ArcSwap::from(Arc::new(current_epoch_info.committee)),
             halted: AtomicBool::new(current_epoch_info.validator_halted),
-            change_epoch_tx: Mutex::new(BTreeMap::new()),
+            change_epoch_tx: ArcSwapOption::empty(),
             _native_functions: native_functions,
             move_vm,
             database: store.clone(),
@@ -1098,7 +1098,7 @@ impl AuthorityState {
     /// Update state and signals that a new transactions has been processed
     /// to the batch maker service.
     #[instrument(name = "db_update_state", level = "debug", skip_all)]
-    async fn update_state(
+    pub(crate) async fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore<AuthorityStore>,
         certificate: &CertifiedTransaction,
