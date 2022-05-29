@@ -17,6 +17,7 @@ use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::{KeyPair, PublicKeyBytes};
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct NodeConfig {
     pub key_pair: KeyPair,
     pub db_path: PathBuf,
@@ -68,6 +69,7 @@ impl NodeConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct ConsensusConfig {
     pub consensus_address: Multiaddr,
     pub consensus_db_path: PathBuf,
@@ -100,6 +102,7 @@ impl ConsensusConfig {
 
 //TODO get this information from on-chain + some way to do network discovery
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct CommitteeConfig {
     pub epoch: EpochId,
     pub validator_set: Vec<ValidatorInfo>,
@@ -127,6 +130,7 @@ impl CommitteeConfig {
 /// Publicly known information about a validator
 /// TODO read most of this from on-chain
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct ValidatorInfo {
     pub public_key: PublicKeyBytes,
     pub stake: usize,
