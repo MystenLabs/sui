@@ -33,6 +33,8 @@ impl SuiNode {
             "Initializing sui-node listening on {}", config.network_address
         );
 
+        let genesis = config.genesis()?;
+
         let secret = Arc::pin(config.key_pair().copy());
         let store = Arc::new(AuthorityStore::open(config.db_path().join("store"), None));
         let checkpoint_store = if config.consensus_config().is_some() {
@@ -40,7 +42,7 @@ impl SuiNode {
                 config.db_path().join("checkpoints"),
                 None,
                 config.public_key(),
-                config.committee_config().committee(),
+                genesis.committee(),
                 secret.clone(),
             )?)))
         } else {
@@ -58,13 +60,13 @@ impl SuiNode {
 
         let state = Arc::new(
             AuthorityState::new(
-                config.committee_config().committee(),
+                genesis.committee(),
                 config.public_key(),
                 secret,
                 store,
                 index_store,
                 checkpoint_store,
-                config.genesis()?,
+                genesis,
             )
             .await,
         );
@@ -77,7 +79,7 @@ impl SuiNode {
             net_config.request_timeout = Some(Duration::from_secs(5));
 
             let mut authority_clients = BTreeMap::new();
-            for validator in config.committee_config().validator_set() {
+            for validator in genesis.validator_set() {
                 let channel = net_config
                     .connect_lazy(validator.network_address())
                     .unwrap();

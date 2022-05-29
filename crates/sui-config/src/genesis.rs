@@ -1,12 +1,17 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::ValidatorInfo;
 use anyhow::Context;
 use base64ct::Encoding;
 use move_binary_format::CompiledModule;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{fs, path::Path};
-use sui_types::{base_types::TxContext, crypto::PublicKeyBytes, object::Object};
+use sui_types::{
+    base_types::TxContext,
+    committee::{Committee, EpochId},
+    object::Object,
+};
 use tracing::{info, trace};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -14,6 +19,7 @@ pub struct Genesis {
     modules: Vec<Vec<CompiledModule>>,
     objects: Vec<Object>,
     genesis_ctx: TxContext,
+    validator_set: Vec<ValidatorInfo>,
 }
 
 impl Genesis {
@@ -27,6 +33,23 @@ impl Genesis {
 
     pub fn genesis_ctx(&self) -> &TxContext {
         &self.genesis_ctx
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        self.genesis_ctx.epoch()
+    }
+
+    pub fn validator_set(&self) -> &[ValidatorInfo] {
+        &self.validator_set
+    }
+
+    pub fn committee(&self) -> Committee {
+        let voting_rights = self
+            .validator_set()
+            .iter()
+            .map(|validator| (validator.public_key(), validator.stake()))
+            .collect();
+        Committee::new(self.epoch(), voting_rights)
     }
 
     pub fn get_default_genesis() -> Self {
@@ -63,6 +86,7 @@ impl Serialize for Genesis {
             modules: Vec<Vec<Vec<u8>>>,
             objects: &'a [Object],
             genesis_ctx: &'a TxContext,
+            validator_set: &'a [ValidatorInfo],
         }
 
         let mut vec_serialized_modules = Vec::new();
@@ -82,6 +106,7 @@ impl Serialize for Genesis {
             modules: vec_serialized_modules,
             objects: &self.objects,
             genesis_ctx: &self.genesis_ctx,
+            validator_set: &self.validator_set,
         };
 
         let bytes = bcs::to_bytes(&raw_genesis).map_err(|e| Error::custom(e.to_string()))?;
@@ -107,6 +132,7 @@ impl<'de> Deserialize<'de> for Genesis {
             modules: Vec<Vec<Vec<u8>>>,
             objects: Vec<Object>,
             genesis_ctx: TxContext,
+            validator_set: Vec<ValidatorInfo>,
         }
 
         let bytes = if deserializer.is_human_readable() {
@@ -135,6 +161,7 @@ impl<'de> Deserialize<'de> for Genesis {
             modules,
             objects: raw_genesis.objects,
             genesis_ctx: raw_genesis.genesis_ctx,
+            validator_set: raw_genesis.validator_set,
         })
     }
 }
@@ -145,7 +172,7 @@ pub struct Builder {
     move_modules: Vec<Vec<CompiledModule>>,
     objects: Vec<Object>,
     genesis_ctx: TxContext,
-    validators: Vec<(PublicKeyBytes, usize)>,
+    validators: Vec<ValidatorInfo>,
 }
 
 impl Builder {
@@ -190,9 +217,8 @@ impl Builder {
     //     self
     // }
 
-    //TODO actually use the validators added to genesis
-    pub fn add_validator(mut self, public_key: PublicKeyBytes, stake: usize) -> Self {
-        self.validators.push((public_key, stake));
+    pub fn add_validator(mut self, validator: ValidatorInfo) -> Self {
+        self.validators.push(validator);
         self
     }
 
@@ -226,6 +252,7 @@ impl Builder {
             modules,
             objects,
             genesis_ctx: self.genesis_ctx,
+            validator_set: self.validators,
         }
     }
 }
@@ -242,6 +269,7 @@ mod test {
             modules: vec![sui_lib],
             objects: vec![],
             genesis_ctx: sui_adapter::genesis::get_genesis_context(),
+            validator_set: vec![],
         };
 
         let s = serde_yaml::to_string(&genesis).unwrap();

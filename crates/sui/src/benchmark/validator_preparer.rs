@@ -96,13 +96,14 @@ impl ValidatorPreparer {
             RunningMode::SingleValidatorThread => {
                 // Pick the first validator and create state.
                 let validator_config = &network_config.validator_configs()[0];
+                let committee = network_config.committee();
 
                 // Create a random directory to store the DB
                 let path = env::temp_dir().join(format!("DB_{:?}", ObjectID::random()));
                 let auth_state = make_authority_state(
                     &path,
                     db_cpus as i32,
-                    &validator_config.committee_config().committee(),
+                    &committee,
                     &validator_config.public_key(),
                     validator_config.key_pair().copy(),
                 );

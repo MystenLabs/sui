@@ -13,7 +13,6 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use sui_types::base_types::SuiAddress;
-use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::{KeyPair, PublicKeyBytes};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -30,7 +29,6 @@ pub struct NodeConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consensus_config: Option<ConsensusConfig>,
-    pub committee_config: CommitteeConfig,
 
     pub genesis: Genesis,
 }
@@ -77,10 +75,6 @@ impl NodeConfig {
         self.consensus_config.as_ref()
     }
 
-    pub fn committee_config(&self) -> &CommitteeConfig {
-        &self.committee_config
-    }
-
     pub fn genesis(&self) -> Result<&genesis::Genesis> {
         self.genesis.genesis()
     }
@@ -118,36 +112,9 @@ impl ConsensusConfig {
     }
 }
 
-//TODO get this information from on-chain + some way to do network discovery
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct CommitteeConfig {
-    pub epoch: EpochId,
-    pub validator_set: Vec<ValidatorInfo>,
-}
-
-impl CommitteeConfig {
-    pub fn epoch(&self) -> EpochId {
-        self.epoch
-    }
-
-    pub fn validator_set(&self) -> &[ValidatorInfo] {
-        &self.validator_set
-    }
-
-    pub fn committee(&self) -> Committee {
-        let voting_rights = self
-            .validator_set()
-            .iter()
-            .map(|validator| (validator.public_key(), validator.stake()))
-            .collect();
-        Committee::new(self.epoch(), voting_rights)
-    }
-}
-
 /// Publicly known information about a validator
 /// TODO read most of this from on-chain
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ValidatorInfo {
     pub public_key: PublicKeyBytes,
