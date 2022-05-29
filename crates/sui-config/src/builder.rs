@@ -189,13 +189,11 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     narwhal_committee: narwhal_committee.clone(),
                 };
 
-                let metrics_address = utils::new_network_address();
-
                 NodeConfig {
                     key_pair: validator.key_pair,
                     db_path,
                     network_address,
-                    metrics_address,
+                    metrics_address: utils::available_local_socket_address(),
                     json_rpc_address: utils::available_local_socket_address(),
                     consensus_config: Some(consensus_config),
                     committee_config: committee_config.clone(),
