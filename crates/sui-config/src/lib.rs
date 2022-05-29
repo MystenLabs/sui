@@ -25,6 +25,7 @@ pub const SUI_NETWORK_CONFIG: &str = "network.yaml";
 pub const SUI_FULLNODE_CONFIG: &str = "fullnode.yaml";
 pub const SUI_WALLET_CONFIG: &str = "wallet.yaml";
 pub const SUI_GATEWAY_CONFIG: &str = "gateway.yaml";
+pub const SUI_GENESIS_FILENAME: &str = "genesis.blob";
 pub const SUI_DEV_NET_URL: &str = "https://gateway.devnet.sui.io:443";
 
 pub const AUTHORITIES_DB_NAME: &str = "authorities_db";
