@@ -26,13 +26,11 @@ impl NetworkConfig {
     }
 
     pub fn validator_set(&self) -> &[ValidatorInfo] {
-        self.validator_configs()[0]
-            .committee_config()
-            .validator_set()
+        self.genesis.validator_set()
     }
 
     pub fn committee(&self) -> Committee {
-        self.validator_configs()[0].committee_config().committee()
+        self.genesis.committee()
     }
 
     pub fn into_validator_configs(self) -> Vec<NodeConfig> {
@@ -71,7 +69,6 @@ impl NetworkConfig {
             json_rpc_address: utils::available_local_socket_address(),
 
             consensus_config: None,
-            committee_config: validator_config.committee_config.clone(),
 
             genesis: validator_config.genesis.clone(),
         }

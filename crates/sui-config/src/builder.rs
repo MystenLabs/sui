@@ -4,8 +4,8 @@
 use crate::{
     genesis,
     genesis_config::{GenesisConfig, ValidatorGenesisInfo},
-    utils, CommitteeConfig, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo,
-    AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME, DEFAULT_STAKE,
+    utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
+    CONSENSUS_DB_NAME, DEFAULT_STAKE,
 };
 use debug_ignore::DebugIgnore;
 use narwhal_config::{
@@ -86,8 +86,6 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
     }
 
     pub fn build_with_validators(mut self, validators: Vec<ValidatorGenesisInfo>) -> NetworkConfig {
-        let epoch = 0;
-
         let validator_set = validators
             .iter()
             .map(|validator| {
@@ -121,8 +119,8 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 .add_move_modules(custom_modules)
                 .add_objects(objects);
 
-            for validator in &validator_set {
-                builder = builder.add_validator(validator.public_key(), validator.stake());
+            for validator in validator_set {
+                builder = builder.add_validator(validator);
             }
 
             builder.build()
@@ -163,11 +161,6 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             authorities: narwhal_committee,
         });
 
-        let committee_config = CommitteeConfig {
-            epoch,
-            validator_set,
-        };
-
         let validator_configs = validators
             .into_iter()
             .map(|validator| {
@@ -196,7 +189,6 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     metrics_address: utils::available_local_socket_address(),
                     json_rpc_address: utils::available_local_socket_address(),
                     consensus_config: Some(consensus_config),
-                    committee_config: committee_config.clone(),
                     genesis: crate::node::Genesis::new(genesis.clone()),
                 }
             })
