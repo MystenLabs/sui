@@ -17,7 +17,7 @@ use sui::{
 use sui_config::genesis_config::{AccountConfig, GenesisConfig, ObjectConfig};
 use sui_config::{
     Config, NetworkConfig, PersistedConfig, SUI_FULLNODE_CONFIG, SUI_GATEWAY_CONFIG,
-    SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
+    SUI_GENESIS_FILENAME, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
 };
 use sui_core::gateway_types::{GetObjectDataResponse, SuiObject, SuiTransactionEffects};
 use sui_json::SuiJsonValue;
@@ -75,11 +75,12 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         .flat_map(|r| r.map(|file| file.file_name().to_str().unwrap().to_owned()))
         .collect::<Vec<_>>();
 
-    assert_eq!(9, files.len());
+    assert_eq!(10, files.len());
     assert!(files.contains(&SUI_WALLET_CONFIG.to_string()));
     assert!(files.contains(&SUI_GATEWAY_CONFIG.to_string()));
     assert!(files.contains(&SUI_NETWORK_CONFIG.to_string()));
     assert!(files.contains(&SUI_FULLNODE_CONFIG.to_string()));
+    assert!(files.contains(&SUI_GENESIS_FILENAME.to_string()));
 
     assert!(files.contains(&"wallet.key".to_string()));
 
