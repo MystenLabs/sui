@@ -4,7 +4,9 @@
 import { isTransactionBytes } from '../../index.guard';
 import { JsonRpcClient } from '../../rpc/client';
 import { Base64DataBuffer } from '../../serialization/base64';
+import { SuiAddress } from '../../types';
 import {
+  MoveCallTransaction,
   TransferCoinTransaction,
   TxnDataSerializer,
 } from './txn-data-serializer';
@@ -28,16 +30,44 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
     this.client = new JsonRpcClient(endpoint);
   }
 
-  async newTransferCoin(t: TransferCoinTransaction): Promise<Base64DataBuffer> {
+  async newTransferCoin(
+    signerAddress: SuiAddress,
+    t: TransferCoinTransaction
+  ): Promise<Base64DataBuffer> {
     try {
       const resp = await this.client.requestWithType(
         'sui_transferCoin',
-        [t.signer, t.objectId, t.gasPayment, t.gasBudget, t.recipient],
+        [signerAddress, t.objectId, t.gasPayment, t.gasBudget, t.recipient],
         isTransactionBytes
       );
       return new Base64DataBuffer(resp.txBytes);
     } catch (err) {
-      throw new Error(`Error transferring coin: ${err}`);
+      throw new Error(`Error transferring coin: ${err} with args ${t}`);
+    }
+  }
+
+  async newMoveCall(
+    signerAddress: SuiAddress,
+    t: MoveCallTransaction
+  ): Promise<Base64DataBuffer> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_moveCall',
+        [
+          signerAddress,
+          t.packageObjectId,
+          t.module,
+          t.function,
+          t.typeArguments,
+          t.arguments,
+          t.gasPayment,
+          t.gasBudget,
+        ],
+        isTransactionBytes
+      );
+      return new Base64DataBuffer(resp.txBytes);
+    } catch (err) {
+      throw new Error(`Error executing a move call: ${err} with args ${t}`);
     }
   }
 
