@@ -18,6 +18,7 @@ use sui_types::crypto::{KeyPair, PublicKeyBytes};
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct NodeConfig {
+    #[serde(default = "default_key_pair")]
     pub key_pair: KeyPair,
     pub db_path: PathBuf,
     #[serde(default = "default_grpc_address")]
@@ -31,6 +32,10 @@ pub struct NodeConfig {
     pub consensus_config: Option<ConsensusConfig>,
 
     pub genesis: Genesis,
+}
+
+fn default_key_pair() -> KeyPair {
+    sui_types::crypto::get_key_pair().1
 }
 
 fn default_grpc_address() -> Multiaddr {
