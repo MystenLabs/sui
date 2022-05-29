@@ -21,8 +21,11 @@ use sui_types::crypto::{KeyPair, PublicKeyBytes};
 pub struct NodeConfig {
     pub key_pair: KeyPair,
     pub db_path: PathBuf,
+    #[serde(default = "default_grpc_address")]
     pub network_address: Multiaddr,
-    pub metrics_address: Multiaddr,
+    #[serde(default = "default_metrics_address")]
+    pub metrics_address: SocketAddr,
+    #[serde(default = "default_json_rpc_address")]
     pub json_rpc_address: SocketAddr,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -30,6 +33,21 @@ pub struct NodeConfig {
     pub committee_config: CommitteeConfig,
 
     pub genesis: Genesis,
+}
+
+fn default_grpc_address() -> Multiaddr {
+    use multiaddr::multiaddr;
+    multiaddr!(Ip4([0, 0, 0, 0]), Tcp(8080u16))
+}
+
+fn default_metrics_address() -> SocketAddr {
+    use std::net::{IpAddr, Ipv4Addr};
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9184)
+}
+
+fn default_json_rpc_address() -> SocketAddr {
+    use std::net::{IpAddr, Ipv4Addr};
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9000)
 }
 
 impl Config for NodeConfig {}
