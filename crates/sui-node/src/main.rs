@@ -8,8 +8,6 @@ use std::path::PathBuf;
 use sui_config::{NodeConfig, PersistedConfig};
 use tracing::info;
 
-const PROM_PORT_ADDR: &str = "0.0.0.0:9184";
-
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
 struct Args {
@@ -37,9 +35,12 @@ async fn main() -> Result<()> {
     let mut config = PersistedConfig::<NodeConfig>::read(&args.config_path)?;
 
     // TODO: Switch from prometheus exporter. See https://github.com/MystenLabs/sui/issues/1907
-    let prom_binding = PROM_PORT_ADDR.parse().unwrap();
-    info!("Starting Prometheus HTTP endpoint at {}", PROM_PORT_ADDR);
-    prometheus_exporter::start(prom_binding).expect("Failed to start Prometheus exporter");
+    info!(
+        "Starting Prometheus HTTP endpoint at {}",
+        config.metrics_address
+    );
+    prometheus_exporter::start(config.metrics_address)
+        .expect("Failed to start Prometheus exporter");
 
     if let Some(listen_address) = args.listen_address {
         config.network_address = listen_address;
