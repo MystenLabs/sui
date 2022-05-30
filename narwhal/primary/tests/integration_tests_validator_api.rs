@@ -24,10 +24,10 @@ use test_utils::{
 use tokio::sync::mpsc::channel;
 use tonic::transport::Channel;
 use types::{
-    serialized_batch_digest, Batch, BatchDigest, Certificate, CertificateDigest,
-    CertificateDigestProto, CollectionRetrievalResult, Empty, GetCollectionsRequest, Header,
-    HeaderDigest, ReadCausalRequest, RemoveCollectionsRequest, RetrievalResult,
-    SerializedBatchMessage, ValidatorClient,
+    Batch, BatchDigest, Certificate, CertificateDigest, CertificateDigestProto,
+    CollectionRetrievalResult, Empty, GetCollectionsRequest, Header, HeaderDigest,
+    ReadCausalRequest, RemoveCollectionsRequest, RetrievalResult, SerializedBatchMessage,
+    ValidatorClient,
 };
 use worker::{Worker, WorkerMessage};
 
@@ -742,10 +742,7 @@ async fn test_get_collections_with_missing_certificates() {
     let mut k = keys(None);
 
     let keypair_1 = k.pop().unwrap();
-    let name_1 = keypair_1.public().clone();
-
     let keypair_2 = k.pop().unwrap();
-    let name_2 = keypair_2.public().clone();
 
     let committee = committee(None);
     let parameters = Parameters {
@@ -757,14 +754,9 @@ async fn test_get_collections_with_missing_certificates() {
     let store_primary_1 = NodeStorage::reopen(temp_dir());
     let store_primary_2 = NodeStorage::reopen(temp_dir());
 
-    let worker_id = 0;
-
-    // AND generate and store the certificates
-    let signer_1 = keys(None).remove(0);
-
     // The certificate_1 will be stored in primary 1
-    let (certificate_1, batch_digest_1, batch_1) = fixture_certificate(
-        signer_1,
+    let (certificate_1, batch_1) = fixture_certificate(
+        &keypair_1,
         store_primary_1.header_store.clone(),
         store_primary_1.certificate_store.clone(),
         store_primary_1.payload_store.clone(),
@@ -772,12 +764,9 @@ async fn test_get_collections_with_missing_certificates() {
     )
     .await;
 
-    // pop first to skip
-    let signer_2 = keys(None).remove(1);
-
     // The certificate_2 will be stored in primary 2
-    let (certificate_2, batch_digest_2, batch_2) = fixture_certificate(
-        signer_2,
+    let (certificate_2, batch_2) = fixture_certificate(
+        &keypair_2,
         store_primary_2.header_store.clone(),
         store_primary_2.certificate_store.clone(),
         store_primary_2.payload_store.clone(),
@@ -785,10 +774,15 @@ async fn test_get_collections_with_missing_certificates() {
     )
     .await;
 
+    let name_1 = keypair_1.public().clone();
+    let name_2 = keypair_2.public().clone();
+
+    let worker_id = 0;
+
     // AND keep a map of batches and payload
     let mut batches_map = HashMap::new();
-    batches_map.insert(batch_digest_1, batch_1);
-    batches_map.insert(batch_digest_2, batch_2);
+    batches_map.insert(batch_1.digest(), batch_1);
+    batches_map.insert(batch_2.digest(), batch_2);
 
     let block_ids = vec![certificate_1.digest(), certificate_2.digest()];
 
@@ -820,7 +814,7 @@ async fn test_get_collections_with_missing_certificates() {
     );
 
     // Spawn the primary 2 - a peer to fetch missing certificates from
-    let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
+    let (tx_new_certificates_2, _) = channel(CHANNEL_CAPACITY);
     let (_tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
 
     Primary::spawn(
@@ -834,7 +828,7 @@ async fn test_get_collections_with_missing_certificates() {
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
         /* external_consensus */
-        Some(Arc::new(Dag::new(&committee, rx_new_certificates_2).1)),
+        None,
     );
 
     // Spawn a `Worker` instance for primary 2.
@@ -892,22 +886,18 @@ async fn test_get_collections_with_missing_certificates() {
 }
 
 async fn fixture_certificate(
-    key: Ed25519KeyPair,
+    key: &Ed25519KeyPair,
     header_store: Store<HeaderDigest, Header<Ed25519PublicKey>>,
     certificate_store: Store<CertificateDigest, Certificate<Ed25519PublicKey>>,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     batch_store: Store<BatchDigest, SerializedBatchMessage>,
-) -> (Certificate<Ed25519PublicKey>, BatchDigest, Batch) {
+) -> (Certificate<Ed25519PublicKey>, Batch) {
     let batch = fixture_batch_with_transactions(10);
     let worker_id = 0;
 
-    // We need to make sure that we calculate the batch digest based on the
-    // serialised message rather than the batch it self.
-    // See more info https://github.com/MystenLabs/narwhal/issues/188
-    // TODO: refactor this when the above is changed/fixed.
     let message = WorkerMessage::<Ed25519PublicKey>::Batch(batch.clone());
     let serialized_batch = bincode::serialize(&message).unwrap();
-    let batch_digest = serialized_batch_digest(&serialized_batch);
+    let batch_digest = batch.digest();
 
     let mut payload = BTreeMap::new();
     payload.insert(batch_digest, worker_id);
@@ -923,7 +913,7 @@ async fn fixture_certificate(
                 .collect(),
         )
         .payload(payload)
-        .build(&key)
+        .build(key)
         .unwrap();
 
     let certificate = certificate(&header);
@@ -945,7 +935,7 @@ async fn fixture_certificate(
     // Add a batch to the workers store
     batch_store.write(batch_digest, serialized_batch).await;
 
-    (certificate, batch_digest, batch)
+    (certificate, batch)
 }
 
 fn connect_to_validator_client(parameters: Parameters) -> ValidatorClient<Channel> {

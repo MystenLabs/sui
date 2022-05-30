@@ -7,7 +7,7 @@ use crypto::traits::VerifyingKey;
 use network::WorkerNetwork;
 use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};
-use tracing::{error, warn};
+use tracing::{error, trace, warn};
 use types::{BatchDigest, SerializedBatchMessage};
 
 #[cfg(test)]
@@ -73,7 +73,9 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                             Ok(Some(data)) => {
                                 let _ = self.network.unreliable_send_message(address.clone(), Bytes::from(data)).await;
                             }
-                            Ok(None) => (),
+                            Ok(None) => {
+                                trace!("No Batches found for requested digests {:?}", digest);
+                            },
                             Err(e) => error!("{e}"),
                         }
                     }

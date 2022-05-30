@@ -29,6 +29,10 @@ use types::{
     BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Round,
 };
 
+#[cfg(test)]
+#[path = "tests/header_waiter_tests.rs"]
+pub mod header_waiter_tests;
+
 /// The resolution of the timer that checks whether we received replies to our sync requests, and triggers
 /// new sync requests if we didn't.
 const TIMER_RESOLUTION: u64 = 1_000;
@@ -178,7 +182,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                             }
                             for (worker_id, digests) in requires_sync {
                                 let address = self.committee
-                                    .worker(&author, &worker_id)
+                                    .worker(&self.name, &worker_id)
                                     .expect("Author of valid header is not in the committee")
                                     .primary_to_worker;
                                 let message = PrimaryWorkerMessage::Synchronize(digests, author.clone());
