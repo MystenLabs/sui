@@ -1460,7 +1460,7 @@ dependencies = [
  "guppy",
  "guppy-workspace-hack",
  "once_cell",
- "petgraph 0.6.0",
+ "petgraph 0.6.2",
  "rayon",
  "serde 1.0.137",
  "toml",
@@ -2082,9 +2082,9 @@ dependencies = [
 
 [[package]]
 name = "guppy"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbbda4f76555041b3730035c987a24a9d41e8e0b2c7fe1d512c0cab82e753146"
+checksum = "c7225e3bb8e09a1ef73283a85d589174997acd9f8c36fe72d16c1fe8b9483288"
 dependencies = [
  "camino",
  "cargo_metadata",
@@ -2098,7 +2098,7 @@ dependencies = [
  "nested",
  "once_cell",
  "pathdiff",
- "petgraph 0.6.0",
+ "petgraph 0.6.2",
  "rayon",
  "semver 1.0.9",
  "serde 1.0.137",
@@ -2453,9 +2453,9 @@ checksum = "ce23b50ad8242c51a442f3ff322d56b02f08852c77e4c0b4d3fd684abc89c683"
 
 [[package]]
 name = "indexmap"
-version = "1.8.1"
+version = "1.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f647032dfaa1f8b6dc29bd3edb7bbef4861b8b8007ebb118d6db284fd59f6ee"
+checksum = "e6012d540c5baa3589337a98ce73408de9b5a25ec9fc2c6fd6be8f0d39e0ca5a"
 dependencies = [
  "autocfg",
  "hashbrown 0.11.2",
@@ -4306,9 +4306,9 @@ dependencies = [
 
 [[package]]
 name = "petgraph"
-version = "0.6.0"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a13a2fa9d0b63e5f22328828741e523766fff0ee9e779316902290dff3f824f"
+checksum = "e6d5014253a1331579ce62aa67443b4a658c5e7dd03d4bc6d302b94474888143"
 dependencies = [
  "fixedbitset 0.4.1",
  "indexmap",
@@ -4558,7 +4558,7 @@ dependencies = [
  "lazy_static 1.4.0",
  "log",
  "multimap",
- "petgraph 0.6.0",
+ "petgraph 0.6.2",
  "prost",
  "prost-types",
  "regex",
@@ -4599,7 +4599,7 @@ dependencies = [
  "atty",
  "config 0.11.0",
  "directories",
- "petgraph 0.6.0",
+ "petgraph 0.6.2",
  "serde 1.0.137",
  "serde-value",
  "tint",
@@ -6091,9 +6091,9 @@ checksum = "c02424087780c9b71cc96799eaeddff35af2bc513278cda5c99fc1f5d026d3c1"
 
 [[package]]
 name = "target-spec"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a479a83ee0f97d90b2ba593c696968c94d781835117362d9fcd42ca34faa5f1"
+checksum = "462215968f204588ef2d3499333d07729b692aa01f79f9b0925071127b3b353f"
 dependencies = [
  "cfg-expr",
  "guppy-workspace-hack",
@@ -7715,7 +7715,7 @@ dependencies = [
  "pest_generator",
  "pest_meta",
  "petgraph 0.5.1",
- "petgraph 0.6.0",
+ "petgraph 0.6.2",
  "phf",
  "phf_codegen",
  "phf_generator",
