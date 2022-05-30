@@ -651,9 +651,9 @@ pub mod worker_to_worker_client {
             &mut self,
             request: impl tonic::IntoRequest<super::BincodeEncodedPayload>,
         ) -> Result<
-                tonic::Response<tonic::codec::Streaming<super::BincodeEncodedPayload>>,
-                tonic::Status,
-            > {
+            tonic::Response<tonic::codec::Streaming<super::BincodeEncodedPayload>>,
+            tonic::Status,
+        > {
             self.inner
                 .ready()
                 .await
