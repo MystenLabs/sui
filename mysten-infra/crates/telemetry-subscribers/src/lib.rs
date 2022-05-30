@@ -26,10 +26,14 @@ use opentelemetry::global;
 #[cfg(feature = "jaeger")]
 use opentelemetry::sdk::propagation::TraceContextPropagator;
 
-use tracing::info;
 use tracing::subscriber::set_global_default;
+use tracing::{info, metadata::LevelFilter};
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
-use tracing_subscriber::{fmt, layer::SubscriberExt, EnvFilter, Registry};
+use tracing_subscriber::{
+    fmt::{self, format::FmtSpan},
+    layer::SubscriberExt,
+    EnvFilter, Registry,
+};
 
 #[cfg(feature = "chrome")]
 use tracing_chrome::ChromeLayerBuilder;
@@ -184,6 +188,7 @@ pub fn init(config: TelemetryConfig) -> TelemetryGuards {
         // Output to file or to stdout with ANSI colors
         let fmt_layer = fmt::layer()
             .with_ansi(config.log_file.is_none())
+            .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
             .with_writer(nb_output);
 
         // Standard env filter (RUST_LOG) with standard formatter
@@ -212,9 +217,15 @@ pub fn init_for_testing() {
 
     static LOGGER: Lazy<()> = Lazy::new(|| {
         let subscriber = ::tracing_subscriber::FmtSubscriber::builder()
-            .with_env_filter(EnvFilter::from_default_env())
+            .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                EnvFilter::builder()
+                    .with_default_directive(LevelFilter::DEBUG.into())
+                    .parse("debug,h2=off,hyper=off")
+                    .unwrap()
+            }))
             .with_file(true)
             .with_line_number(true)
+            .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
             .with_test_writer()
             .finish();
         ::tracing::subscriber::set_global_default(subscriber)
