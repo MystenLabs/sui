@@ -62,7 +62,7 @@ def seed(ctx, committee_path):
         'duration': 20,
     }
     try:
-        ret = SeedData(bench_params).run(Path(committee_path))
+        SeedData(bench_params).run(Path(committee_path))
     except BenchError as e:
         Print.error(e)
 

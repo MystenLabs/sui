@@ -1,6 +1,5 @@
 # Copyright (c) 2022, Mysten Labs, Inc.
 import subprocess
-import re
 from math import ceil
 from os.path import basename, splitext
 from time import sleep
@@ -8,8 +7,8 @@ from pathlib import Path
 import json
 
 from benchmark.commands import CommandMaker
-from benchmark.config import Key, LocalCommittee, NodeParameters, BenchParameters, ConfigError
-from benchmark.logs import LogParser, ParseError
+from benchmark.config import BenchParameters, ConfigError
+from benchmark.logs import ParseError
 from benchmark.utils import Print, BenchError, PathMaker
 
 
@@ -51,7 +50,7 @@ class SeedData:
                 [(0, transactions_address)])
 
         try:
-            nodes, rate = self.nodes[0], self.rate[0]
+            rate = self.rate[0]
 
             # Cleanup all files.
             cmd = f'{CommandMaker.clean_logs()} ; {CommandMaker.cleanup()}'
