@@ -38,18 +38,18 @@ pub struct CheckpointProcessControl {
     /// authorities to come online, to proceed with the checkpointing
     /// main loop.
     pub delay_on_quorum_failure: Duration,
-    
+
     /// The time between full iterations of the checkpointing
     /// logic loop.
-    pub long_pause_between_checkpoints : Duration,
+    pub long_pause_between_checkpoints: Duration,
 
     /// The time we allow until a quorum of responses
-    /// is received. 
+    /// is received.
     pub timeout_until_quorum: Duration,
 
     /// The time we allow after a quorum is received for
     /// additional responses to arrive.
-    pub extra_time_after_quorum : Duration,
+    pub extra_time_after_quorum: Duration,
 
     /// The estimate of the consensus delay.
     pub consensus_delay_estimate: Duration,
@@ -60,22 +60,23 @@ pub struct CheckpointProcessControl {
 }
 
 impl CheckpointProcessControl {
-
     /// Standard parameters (currenty set heuristically).
     pub fn standard() -> CheckpointProcessControl {
         CheckpointProcessControl {
             delay_on_quorum_failure: Duration::from_secs(10),
             long_pause_between_checkpoints: Duration::from_secs(60),
             timeout_until_quorum: Duration::from_secs(60),
-            extra_time_after_quorum : Duration::from_millis(200),
+            extra_time_after_quorum: Duration::from_millis(200),
             consensus_delay_estimate: Duration::from_secs(3),
             per_other_authority_delay: Duration::from_secs(30),
         }
     }
 }
 
-pub async fn checkpoint_process<A>(active_authority: &ActiveAuthority<A>, timing: &CheckpointProcessControl)
-where
+pub async fn checkpoint_process<A>(
+    active_authority: &ActiveAuthority<A>,
+    timing: &CheckpointProcessControl,
+) where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     if active_authority.state.checkpoints.is_none() {
@@ -86,12 +87,7 @@ where
     info!("Start active checkpoint process.");
 
     // Safe to unwrap due to check above
-    let state_checkpoints = active_authority
-        .state
-        .checkpoints
-        .as_ref()
-        .unwrap()
-        .clone();
+    let state_checkpoints = active_authority.state.checkpoints.as_ref().unwrap().clone();
 
     tokio::time::sleep(timing.long_pause_between_checkpoints).await;
 
@@ -129,7 +125,8 @@ where
                     state_checkpoints.clone(),
                     checkpoint.clone(),
                 )
-                .await {
+                .await
+                {
                     warn!("Failure to sync to checkpoint: {}", err);
                     // if there was an error we pause to wait for network to come up
                     tokio::time::sleep(timing.delay_on_quorum_failure).await;
@@ -168,8 +165,12 @@ where
 
         // (3) Process any unprocessed transactions. We do this before trying to move to the
         //     next proposal.
-        if let Err(err) =
-            process_unprocessed_digests(active_authority, state_checkpoints.clone(), timing.per_other_authority_delay).await
+        if let Err(err) = process_unprocessed_digests(
+            active_authority,
+            state_checkpoints.clone(),
+            timing.per_other_authority_delay,
+        )
+        .await
         {
             warn!("Error processing unprocessed: {:?}", err);
             // Nothing happens until we catch up with the unprocessed transactions of the
@@ -185,8 +186,7 @@ where
             .map(|(auth, _)| active_authority.state.committee.weight(auth))
             .sum();
 
-        let _start_checkpoint_making =
-            weight > active_authority.state.committee.quorum_threshold();
+        let _start_checkpoint_making = weight > active_authority.state.committee.quorum_threshold();
 
         let proposal = state_checkpoints.lock().new_proposal().clone();
         if let Ok(my_proposal) = proposal {
@@ -675,7 +675,9 @@ where
 
     // These are the transactions that the other node has, so we have to potentially
     // download them from the remote node.
-    let client = active_authority.net.clone_client(&fragment.other.0.authority);
+    let client = active_authority
+        .net
+        .clone_client(&fragment.other.0.authority);
     for tx_digest in &fragment.diff.first.items {
         let response = client
             .handle_transaction_info_request(TransactionInfoRequest::from(*tx_digest))
@@ -809,7 +811,7 @@ where
                 net.sync_certificate_to_authority_with_timeout(
                     ConfirmationTransaction::new(cert.clone()),
                     name,
-                    // Ok to have a fixed, and rather long timeout, since the future is controlled, 
+                    // Ok to have a fixed, and rather long timeout, since the future is controlled,
                     // and interupted by a global timeout as well, that can be controlled.
                     Duration::from_secs(60),
                     3,
@@ -831,7 +833,7 @@ where
                 net.sync_certificate_to_authority_with_timeout(
                     ConfirmationTransaction::new(cert.clone()),
                     name,
-                    // Ok to have a fixed, and rather long timeout, since the future is controlled, 
+                    // Ok to have a fixed, and rather long timeout, since the future is controlled,
                     // and interupted by a global timeout as well, that can be controlled.
                     Duration::from_secs(60),
                     3,

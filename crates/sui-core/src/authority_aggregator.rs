@@ -62,7 +62,7 @@ impl<A> AuthorityAggregator<A> {
     where
         A: Clone,
     {
-        self.authority_clients[&name].clone()
+        self.authority_clients[name].clone()
     }
 }
 
