@@ -14,7 +14,7 @@ publish = false
 tokio = { version = "1.15.0", features = ["sync", "macros", "rt", "rt-multi-thread"] }
 tracing = { version = "0.1.31", features = ["log"] }
 tracing-appender = "0.2"
-tracing-subscriber = { version = "0.3.9", features = ["time", "registry", "env-filter"] }
+tracing-subscriber = { version = "0.3.11", features = ["time", "registry", "env-filter"] }
 tracing-bunyan-formatter = { version = "0.3", optional = true }
 tracing-opentelemetry = { version = "0.17", optional = true }
 opentelemetry = { version = "*", features = ["rt-tokio"], optional = true }
