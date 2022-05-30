@@ -20,7 +20,7 @@ use sui_core::{
 };
 use sui_gateway::bcs_api::BcsApiImpl;
 use sui_gateway::event_api::EventApiServer;
-use sui_gateway::event_api::{EventApiImpl, EventType, SuiEventManager};
+use sui_gateway::event_api::{EventApiImpl, SuiEventManager};
 use sui_gateway::json_rpc::JsonRpcServerBuilder;
 use sui_gateway::read_api::{FullNodeApi, ReadApi};
 use sui_json_rpc::bcs_api::BcsApiImpl;
@@ -34,6 +34,7 @@ use sui_json_rpc::read_api::ReadApi;
 pub struct SuiNode {
     grpc_server: tokio::task::JoinHandle<Result<()>>,
     _json_rpc_service: Option<jsonrpsee::http_server::HttpServerHandle>,
+    _ws_subscription_service: Option<jsonrpsee::ws_server::WsServerHandle>,
     _batch_subsystem_handle: tokio::task::JoinHandle<Result<()>>,
     _post_processing_subsystem_handle: Option<tokio::task::JoinHandle<Result<()>>>,
     _gossip_handle: Option<tokio::task::JoinHandle<()>>,
@@ -161,12 +162,12 @@ impl SuiNode {
             tokio::spawn(server.serve().map_err(Into::into))
         };
 
-        let json_rpc_service = if config.consensus_config().is_some() {
-            None
+        let (json_rpc_service, ws_subscription_service) = if config.consensus_config().is_some() {
+            (None, None)
         } else {
             let mut server = JsonRpcServerBuilder::new()?;
-            server.register_module(ReadApi::new(fullnode.state.clone()))?;
-            server.register_module(FullNodeApi::new(fullnode.state))?;
+            server.register_module(ReadApi::new(state.clone()))?;
+            server.register_module(FullNodeApi::new(state.clone()))?;
             server.register_module(BcsApiImpl::new(state.clone()))?;
 
             let server_handle = server.start(config.json_rpc_address).await?;
@@ -174,7 +175,7 @@ impl SuiNode {
             let ws_server = WsServerBuilder::default().build("127.0.0.1:0").await?;
             let server_addr = ws_server.local_addr()?;
             let event_manager = Arc::new(SuiEventManager::default());
-            let handle = ws_server.start(EventApiImpl::new(event_manager.clone()).into_rpc())?;
+            let ws_handle = ws_server.start(EventApiImpl::new(event_manager.clone()).into_rpc())?;
 
             info!("Starting WS endpoint at ws://{}", server_addr);
 
@@ -183,32 +184,25 @@ impl SuiNode {
                 let mut num = 1;
                 loop {
                     std::thread::sleep(std::time::Duration::from_secs(1));
-                    event_manager.broadcast(
-                        EventType::Foo,
-                        SuiEvent {
-                            type_: "Foo".to_string(),
-                            contents: vec![num],
-                        },
-                    );
-                    event_manager.broadcast(
-                        EventType::Bar,
-                        SuiEvent {
-                            type_: "Bar".to_string(),
-                            contents: vec![num],
-                        },
-                    );
+                    event_manager.broadcast_event(SuiEvent {
+                        type_: "Foo".to_string(),
+                        contents: vec![num],
+                    });
+                    event_manager.broadcast_event(SuiEvent {
+                        type_: "Bar".to_string(),
+                        contents: vec![num],
+                    });
                     num += 1;
                 }
             });
 
-            server_handle.await;
-            handle.await;
-            Some(server_handle)
+            (Some(server_handle), Some(ws_handle))
         };
 
         let node = Self {
             grpc_server,
             _json_rpc_service: json_rpc_service,
+            _ws_subscription_service: ws_subscription_service,
             _gossip_handle: gossip_handle,
             _batch_subsystem_handle: batch_subsystem_handle,
             _post_processing_subsystem_handle: post_processing_subsystem_handle,

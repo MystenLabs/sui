@@ -30,4 +30,3 @@ sui-types = { path = "../sui-types" }
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223" }
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223" }
 workspace-hack = { path = "../workspace-hack"}
-jsonrpsee = { version = "0.13.1", features = ["full"] }
