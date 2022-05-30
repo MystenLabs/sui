@@ -32,6 +32,7 @@
     "author": "Mysten Labs <build@mystenlabs.com>",
     "license": "Apache-2.0",
     "devDependencies": {
+        "@types/dotenv-webpack": "^7.0.3",
         "@types/jest": "^27.5.0",
         "@types/node": "^17.0.31",
         "@types/react": "^18.0.8",
@@ -42,6 +43,7 @@
         "copy-webpack-plugin": "^10.2.4",
         "cross-env": "^7.0.3",
         "css-loader": "^6.7.1",
+        "dotenv-webpack": "^7.1.0",
         "eslint": "^8.14.0",
         "eslint-config-prettier": "^8.5.0",
         "eslint-config-react-app": "^7.0.1",

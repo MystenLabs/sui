@@ -3,6 +3,7 @@
 
 import { exec } from 'child_process';
 import CopyPlugin from 'copy-webpack-plugin';
+import DotEnv from 'dotenv-webpack';
 import HtmlWebpackPlugin from 'html-webpack-plugin';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
 import { resolve } from 'path';
@@ -149,6 +150,11 @@ const commonConfig: () => Promise<Configuration> = async () => {
                         },
                     },
                 ],
+            }),
+            new DotEnv({
+                path: resolve(CONFIGS_ROOT, 'environment', '.env'),
+                defaults: resolve(CONFIGS_ROOT, 'environment', '.env.defaults'),
+                expand: true,
             }),
             new DefinePlugin({
                 'typeof window': JSON.stringify(typeof {}),
