@@ -1007,7 +1007,7 @@ where
         // If we have some certificate return it, or return an error.
         state
             .certificate
-            .ok_or(SuiError::ErrorWhileProcessingTransactionTransaction {
+            .ok_or_else(|| SuiError::ErrorWhileProcessingTransactionTransaction {
                 err: format!("No certificate: {:?}", state.errors),
             })
     }
