@@ -9,7 +9,7 @@
 //! runtime.
 
 mod node;
-pub use node::Node;
+pub use node::{Node, RuntimeType};
 
 mod swarm;
 pub use swarm::{Swarm, SwarmBuilder};
