@@ -67,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rounds_response = response.unwrap().into_inner();
     let oldest_round = rounds_response.oldest_round;
     let newest_round = rounds_response.newest_round;
-    let round = oldest_round + 1;
+    let mut round = oldest_round + 1;
     println!("\n2) Find collections from earliest round and continue to add collections until gas limit is hit\n");
     println!("\n---- Use NodeReadCausal endpoint ----\n");
 
@@ -94,6 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Reached gas limit of {gas_limit}, stopping search for more collections\n");
             break;
         }
+        round += 1;
     }
 
     println!(
