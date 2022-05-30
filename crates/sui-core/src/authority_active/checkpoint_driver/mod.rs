@@ -60,6 +60,8 @@ pub struct CheckpointProcessControl {
 }
 
 impl CheckpointProcessControl {
+
+    /// Standard parameters (currenty set heuristically).
     pub fn standard() -> CheckpointProcessControl {
         CheckpointProcessControl {
             delay_on_quorum_failure: Duration::from_secs(10),
