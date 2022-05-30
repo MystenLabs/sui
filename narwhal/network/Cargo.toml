@@ -11,13 +11,13 @@ async-trait = "0.1.53"
 bytes = "1.1.0"
 futures = "0.3.21"
 rand = { version = "0.7.3", features = ["small_rng"] }
-thiserror = "1.0.30"
-tokio = { version = "1.17.0", features = ["rt", "net", "sync", "macros", "time"] }
-tokio-util = { version = "0.7.1", features = ["codec"] }
+thiserror = "1.0.31"
+tokio = { version = "1.18.2", features = ["rt", "net", "sync", "macros", "time"] }
+tokio-util = { version = "0.7.2", features = ["codec"] }
 tracing = "0.1.34"
 types = { path = "../types" }
 crypto = { path = "../crypto" }
-tonic = { version = "0.7", features = ["tls"] }
+tonic = { version = "0.7.2", features = ["tls"] }
 backoff = { version = "0.4.0", features = ["tokio"] }
 multiaddr = "0.14.0"
 

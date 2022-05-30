@@ -6,7 +6,7 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 edition = "2021"
 
 [dependencies]
-arc-swap = { version = "1.5.0", features = ["serde"]}
+arc-swap = { version = "1.5.0", features = ["serde"] }
 bincode = "1.3.3"
 blake2 = "0.9"
 bytes = "1.1.0"
@@ -14,11 +14,11 @@ match_opt = "0.1.2"
 rand = { version = "0.7.3", optional = true }
 # deactivation of bzip2 due to https://github.com/rust-rocksdb/rust-rocksdb/issues/609
 rocksdb = { version = "0.18.0", features = ["snappy", "lz4", "zstd", "zlib"], default-features = false }
-serde = { version = "1.0.136", features = ["derive"] }
-serde_bytes = "0.11.5"
+serde = { version = "1.0.137", features = ["derive"] }
+serde_bytes = "0.11.6"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
-thiserror = "1.0.30"
-tokio = { version = "1.17.0", features = ["sync"] }
+thiserror = "1.0.31"
+tokio = { version = "1.18.2", features = ["sync"] }
 tracing = "0.1.34"
 
 config = { path = "../config" }
@@ -31,7 +31,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 bincode = "1.3.3"
 criterion = "0.3.5"
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
-pprof = { version = "0.9.0", features = ["criterion", "flamegraph"] }
+pprof = { version = "0.9.1", features = ["criterion", "flamegraph"] }
 test_utils = { path = "../test_utils"}
 
 [features]

@@ -16,10 +16,10 @@ clap = "2.34"
 futures = "0.3.21"
 rand = "0.7.3"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
-thiserror = "1.0.30"
-tokio = { version = "1.17.0", features = ["full"] }
+thiserror = "1.0.31"
+tokio = { version = "1.18.2", features = ["full"] }
 tokio-stream = "0.1.8"
-tokio-util = { version = "0.7.1", features = ["codec"] }
+tokio-util = { version = "0.7.2", features = ["codec"] }
 tracing = "0.1.34"
 tracing-log = "0.1.3"
 tracing-subscriber = { version = "0.3.11", features = ["time", "env-filter"] }
@@ -39,7 +39,7 @@ ed25519-dalek = "1.0.1"
 hex = "0.4.3"
 pretty_assertions = "1.2.1"
 serde-reflection = "0.3.6"
-serde_yaml = "0.8.23"
+serde_yaml = "0.8.24"
 structopt = "0.3.26"
 test_utils = { path = "../test_utils" }
 
