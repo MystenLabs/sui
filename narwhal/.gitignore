@@ -1,4 +1,5 @@
-.json
+*.json
+*.python-version
 !Docker/**/*.json
 Docker/validators/**/db-*
 Docker/validators/**/logs*
